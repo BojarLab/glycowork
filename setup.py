@@ -4,8 +4,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="glycowork-Bribak", # Replace with your own username
-    version="0.0.1",
+    name="glycowork",
+    version="0.0.7",
     author="Daniel Bojar",
     author_email="daniel@bojar.net",
     description="Package containing helper functions for processing and analysis of glycans",
@@ -18,5 +18,5 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.8',
+    python_requires='>=3.6',
 )
