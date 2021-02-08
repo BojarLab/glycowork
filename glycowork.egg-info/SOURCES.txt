@@ -1,0 +1,8 @@
+README.md
+setup.py
+glycowork/__init__.py
+glycowork/glycowork.py
+glycowork.egg-info/PKG-INFO
+glycowork.egg-info/SOURCES.txt
+glycowork.egg-info/dependency_links.txt
+glycowork.egg-info/top_level.txt
