@@ -17,7 +17,7 @@ def get_namespace():
   """returns list of function names in this package"""
   return ['unwrap, find_nth, small_motif_find, min_process_glycans, motif_find, \
 process_glycans, character_to_label, string_to_labels, pad_sequence, get_lib, \
-glycan_to_graph, dataset_to_graphs, hierarchy_filter, compare_glycans']
+glycan_to_graph, dataset_to_graphs, hierarchy_filter, compare_glycans, subgraph_isomorphism']
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""
@@ -331,18 +331,63 @@ def hierarchy_filter(df_in, rank = 'domain', min_seq = 5):
 
   return train_x, val_x, train_y, val_y, id_val, class_list, class_converter
 
-def compare_glycans(glycan_a, glycan_b, libr = lib):
+def compare_glycans(glycan_a, glycan_b, libr = lib, wildcards = False, wildcard_list = []):
   """returns True if glycans are the same and False if not
-  glycan_a -- glycan in string format (IUPACcondensed)"""
+  glycan_a -- glycan in string format (IUPACcondensed)
+  glycan_b -- glycan in string format (IUPACcondensed)
+  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
+  wildcard_list -- list of indices for wildcards in libr"""
   glycan_graph_a = glycan_to_graph(glycan_a, libr)
   edgelist = list(zip(glycan_graph_a[1][0], glycan_graph_a[1][1]))
   g1 = nx.from_edgelist(edgelist)
-  nx.set_node_attributes(g1, glycan_graph_a[0],'labels')
+  nx.set_node_attributes(g1, {k:glycan_graph_a[0][k] for k in range(len(glycan_graph_a[0]))},'labels')
   
   glycan_graph_b = glycan_to_graph(glycan_b, libr)
   edgelist = list(zip(glycan_graph_b[1][0], glycan_graph_b[1][1]))
   g2 = nx.from_edgelist(edgelist)
-  nx.set_node_attributes(g2, glycan_graph_b[0],'labels')
-
-  return nx.is_isomorphic(g1, g2)
+  nx.set_node_attributes(g2, {k:glycan_graph_b[0][k] for k in range(len(glycan_graph_b[0]))},'labels')
   
+  if wildcards:
+    return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+  else:
+    return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+
+def categorical_node_match_wildcard(attr, default, wildcard_list):
+  if isinstance(attr, str):
+    def match(data1, data2):
+      if data1['labels'] in wildcard_list:
+        return True
+      elif data2['labels'] in wildcard_list:
+        return True
+      else:
+        return data1.get(attr, default) == data2.get(attr, default)
+  else:
+    attrs = list(zip(attr, default))  # Python 3
+    def match(data1, data2):
+      return all(data1.get(attr, d) == data2.get(attr, d) for attr, d in attrs)
+  return match
+
+def subgraph_isomorphism(glycan, motif, libr = lib, wildcards = False, wildcard_list = []):
+  """returns True if motif is in glycan and False if not
+  glycan -- glycan in string format (IUPACcondensed)
+  motif -- glycan motif in string format (IUPACcondensed)
+  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
+  wildcard_list -- list of indices for wildcards in libr"""
+  glycan_graph = glycan_to_graph(glycan, libr)
+  edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
+  g1 = nx.from_edgelist(edgelist)
+  nx.set_node_attributes(g1, {k:glycan_graph[0][k] for k in range(len(glycan_graph[0]))},'labels')
+  
+  motif_graph = glycan_to_graph(motif, libr)
+  edgelist = list(zip(motif_graph[1][0], motif_graph[1][1]))
+  g2 = nx.from_edgelist(edgelist)
+  nx.set_node_attributes(g2, {k:motif_graph[0][k] for k in range(len(motif_graph[0]))},'labels')7
+
+  if wildcards:
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+  else:
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+
+  return graph_pair.subgraph_is_isomorphic()

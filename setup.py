@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="glycowork",
-    version="0.0.13",
+    version="0.0.15",
     author="Daniel Bojar",
     author_email="daniel@bojar.net",
     description="Package containing helper functions for processing and analysis of glycans",
