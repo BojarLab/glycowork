@@ -27,7 +27,7 @@ def seed_wildcard_hierarchy(glycan_list, label_list, wildcard_list, wildcard_nam
 
 
 def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False, wildcard_list = None,
-                     wildcard_name = None, r = 0.1):
+                     wildcard_name = None, r = 0.1, col = 'target'):
   """stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes
   df_in -- dataframe of glycan sequences and taxonomic labels
   rank -- which rank should be filtered; default is 'domain'
@@ -35,7 +35,9 @@ def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False,
   wildcard_seed -- set to True if you want to seed wildcard glycoletters; default is False
   wildcard_list -- list which glycoletters a wildcard encompasses
   wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
-  r -- rate of replacement, default is 0.1 or 10%"""
+  r -- rate of replacement, default is 0.1 or 10%
+  col -- column name for glycan sequences; default: target
+  """
   df = copy.deepcopy(df_in)
   rank_list = ['species','genus','family','order','class','phylum','kingdom','domain']
   rank_list.remove(rank)
@@ -58,16 +60,16 @@ def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False,
   df[rank] = [class_converter[k] for k in df[rank].values.tolist()]
 
   sss = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2)
-  sss.get_n_splits(df.target.values.tolist(), df[rank].values.tolist())
-  for i, j in sss.split(df.target.values.tolist(), df[rank].values.tolist()):
-    train_x = [df.target.values.tolist()[k] for k in i]
+  sss.get_n_splits(df[col].values.tolist(), df[rank].values.tolist())
+  for i, j in sss.split(df[col].values.tolist(), df[rank].values.tolist()):
+    train_x = [df[col].values.tolist()[k] for k in i]
     train_y = [df[rank].values.tolist()[k] for k in i]
     if wildcard_seed:
       train_x, train_y = seed_wildcard_hierarchy(train_x, train_y, wildcard_list = wildcard_list,
                                                  wildcard_name = wildcard_name, r = r)
     len_train_x = [len(k) for k in train_x]
 
-    val_x = [df.target.values.tolist()[k] for k in j]
+    val_x = [df[col].values.tolist()[k] for k in j]
     val_y = [df[rank].values.tolist()[k] for k in j]
     if wildcard_seed:
       val_x, val_y = seed_wildcard_hierarchy(val_x, val_y, wildcard_list = wildcard_list,

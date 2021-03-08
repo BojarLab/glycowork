@@ -1,7 +1,6 @@
 README.md
 setup.py
 glycowork/__init__.py
-glycowork/glycowork.py
 glycowork.egg-info/PKG-INFO
 glycowork.egg-info/SOURCES.txt
 glycowork.egg-info/dependency_links.txt
@@ -12,6 +11,7 @@ glycowork/alignment/glysum.py
 glycowork/helper/__init__.py
 glycowork/helper/func.py
 glycowork/ml/__init__.py
+glycowork/ml/model_training.py
 glycowork/ml/processing.py
 glycowork/ml/train_test_split.py
 glycowork/motif/__init__.py
@@ -19,6 +19,7 @@ glycowork/motif/graph.py
 glycowork/motif/processing.py
 glycowork/motif/tokenization.py
 tests/__init__.py
+tests/test_alignment.py
 tests/test_graph.py
 tests/test_hierarchyfilter.py
 tests/test_processing.py

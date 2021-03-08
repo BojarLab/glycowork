@@ -75,7 +75,9 @@ def seed_wildcard(df_in, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
   df_in -- dataframe in which the glycan column is called "target" and is the first column
   wildcard_list -- list which glycoletters a wildcard encompasses
   wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
-  r -- rate of replacement, default is 0.1 or 10%"""
+  r -- rate of replacement, default is 0.1 or 10%
+  col -- column name for glycan sequences; default: target
+  """
   added_rows = []
   for k in range(len(df_in)):
     temp = df_in[col].values.tolist()[k]
