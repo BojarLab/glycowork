@@ -4,7 +4,7 @@ Version: 0.0.15
 Summary: Package containing helper functions for processing and analysis of glycans
 Home-page: https://github.com/BojarLab/glycowork
 Author: Daniel Bojar
-Author-email: daniel@bojar.net
+Author-email: daniel.bojar@gu.se
 License: UNKNOWN
 Description: # Glycowork - A package with helper functions for the processing and analysis of glycan sequences
         
