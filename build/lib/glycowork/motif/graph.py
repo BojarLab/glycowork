@@ -11,7 +11,7 @@ lib = get_lib(df_glycan.glycan.values.tolist())
 def glycan_to_graph(glycan, libr = lib):
   """the monumental function for converting glycans into graphs
   glycan -- IUPACcondensed glycan sequence (string)
-  lib -- sorted list of unique glycoletters observed in the glycans of our dataset
+  libr -- sorted list of unique glycoletters observed in the glycans of our dataset
 
   returns (1) a list of labeled glycoletters from the glycan / node list
           (2) two lists to indicate which glycoletters are connected in the glycan graph / edge list

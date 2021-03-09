@@ -23,3 +23,4 @@ tests/test_alignment.py
 tests/test_graph.py
 tests/test_hierarchyfilter.py
 tests/test_processing.py
+tests/test_tokenization.py
