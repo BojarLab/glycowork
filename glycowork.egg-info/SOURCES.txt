@@ -15,11 +15,13 @@ glycowork/ml/model_training.py
 glycowork/ml/processing.py
 glycowork/ml/train_test_split.py
 glycowork/motif/__init__.py
+glycowork/motif/analysis.py
 glycowork/motif/graph.py
 glycowork/motif/processing.py
 glycowork/motif/tokenization.py
 tests/__init__.py
 tests/test_alignment.py
+tests/test_analysis.py
 tests/test_graph.py
 tests/test_hierarchyfilter.py
 tests/test_processing.py

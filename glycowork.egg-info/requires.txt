@@ -1,3 +1,5 @@
 sklearn
 regex
 networkx
+statsmodels
+scipy

@@ -23,4 +23,8 @@ def load_file(file):
     """loads .csv files from glycowork package
     file -- name of the file to be loaded [string]
     """
-    return pd.read_csv('glycowork/glycan_data/' + file)
+    try:
+      temp = pd.read_csv("../glycan_data/" + file)
+    except:
+      temp = pd.read_csv("glycowork/glycan_data/" + file)
+    return temp

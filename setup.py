@@ -20,5 +20,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=["sklearn", "regex", "networkx"],
+    install_requires=["sklearn", "regex", "networkx",
+                      "statsmodels", "scipy"],
 )
