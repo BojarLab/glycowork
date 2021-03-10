@@ -1,5 +1,6 @@
 import glycowork
 
+from glycowork.glycan_data.loader import df_species
 from glycowork.ml.train_test_split import *
 
 train_x, val_x, train_y, val_y, id_val, class_list, class_converter = hierarchy_filter(df_species,

@@ -1,30 +1,31 @@
-from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
 import copy
 import random
 import pandas as pd
 
-from glycowork.glycan_data.loader import df_species
+linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3',
+            'b1-4','b1-6']
 
-linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3','b1-4','b1-6']
-
-def seed_wildcard_hierarchy(glycan_list, label_list, wildcard_list, wildcard_name, r = 0.1):
+def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
+                            wildcard_name, r = 0.1):
   """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards
-  df_in -- dataframe in which the glycan column is called "target" and is the first column
+  glycans -- list of IUPACcondensed glycan sequences (string)
+  labels -- list of labels used for prediction
   wildcard_list -- list which glycoletters a wildcard encompasses
   wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
   r -- rate of replacement, default is 0.1 or 10%"""
   added_glycans = []
   added_labels = []
-  for k in range(len(glycan_list)):
-    temp = glycan_list[k]
+  for k in range(len(glycans)):
+    temp = glycans[k]
     for j in wildcard_list:
       if j in temp:
         if random.uniform(0, 1) < r:
           added_glycans.append(temp.replace(j, wildcard_name))
-          added_labels.append(label_list[k])
-  glycan_list += added_glycans
-  label_list += added_labels
-  return glycan_list, label_list
+          added_labels.append(labels[k])
+  glycans += added_glycans
+  labels += added_labels
+  return glycans, labels
 
 
 def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False, wildcard_list = None,
@@ -82,3 +83,13 @@ def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False,
     id_val = [item for sublist in id_val for item in sublist]
 
   return train_x, val_x, train_y, val_y, id_val, class_list, class_converter
+
+def general_split(glycans, labels, test_size = 0.2):
+  """splits glycans and labels into train / test sets
+  glycans -- list of IUPACcondensed glycan sequences (string)
+  labels -- list of labels used for prediction
+  test_size -- % size of test set; default is 0.2 / 20%
+
+  returns X_train, X_test, y_train, y_test
+  """
+  return train_test_split(glycans, labels, shuffle = True, test_size = test_size)

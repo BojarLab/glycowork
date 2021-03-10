@@ -1,4 +1,7 @@
 import torch
+from torch_geometric.nn import TopKPooling, GraphConv
+from torch_geometric.nn import global_mean_pool as gap, global_max_pool as gmp
+import torch.nn.functional as F
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
