@@ -1,10 +1,8 @@
 import re
 import networkx as nx
-from glycowork.helper.func import *
-from glycowork.motif.processing import *
-from glycowork.motif.tokenization import *
-
-df_glycan = load_file("v3_sugarbase.csv")
+from glycowork.glycan_data.loader import df_glycan, unwrap, find_nth
+from glycowork.motif.processing import get_lib, min_process_glycans
+from glycowork.motif.tokenization import string_to_labels
 
 lib = get_lib(df_glycan.glycan.values.tolist())
 

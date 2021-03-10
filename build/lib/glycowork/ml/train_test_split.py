@@ -1,9 +1,10 @@
 from sklearn.model_selection import StratifiedShuffleSplit
 import copy
 import random
-from glycowork.helper.func import *
+import pandas as pd
 
-df_species = load_file("glyco_targets_species_seq_all_V3.csv")
+from glycowork.glycan_data.loader import df_species
+
 linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3','b1-4','b1-6']
 
 def seed_wildcard_hierarchy(glycan_list, label_list, wildcard_list, wildcard_name, r = 0.1):

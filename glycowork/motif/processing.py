@@ -1,7 +1,8 @@
-from glycowork.helper.func import *
+import pandas as pd
 import random
 
-df_species = load_file("glyco_targets_species_seq_all_V3.csv")
+from glycowork.glycan_data.loader import df_species, unwrap
+
 linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3','b1-4','b1-6']
 
 def small_motif_find(s):
@@ -70,22 +71,22 @@ def get_lib(glycan_list, mode = 'letter', exhaustive = True):
     lib = list(sorted(list(set([tuple(k) for k in lib]))))
   return lib
 
-def seed_wildcard(df_in, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
+def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
   """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards
-  df_in -- dataframe in which the glycan column is called "target" and is the first column
+  df -- dataframe in which the glycan column is called "target" and is the first column
   wildcard_list -- list which glycoletters a wildcard encompasses
   wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
   r -- rate of replacement, default is 0.1 or 10%
   col -- column name for glycan sequences; default: target
   """
   added_rows = []
-  for k in range(len(df_in)):
-    temp = df_in[col].values.tolist()[k]
+  for k in range(len(df)):
+    temp = df[col].values.tolist()[k]
     for j in wildcard_list:
       if j in temp:
         if random.uniform(0, 1) < r:
-          added_rows.append([temp.replace(j, wildcard_name)] + df_in.iloc[k, 1:].values.tolist())
-  added_rows = pd.DataFrame(added_rows, columns = df_in.columns.values.tolist())
-  df_out = pd.concat([df_in, added_rows], axis = 0, ignore_index = True)
+          added_rows.append([temp.replace(j, wildcard_name)] + df.iloc[k, 1:].values.tolist())
+  added_rows = pd.DataFrame(added_rows, columns = df.columns.values.tolist())
+  df_out = pd.concat([df, added_rows], axis = 0, ignore_index = True)
   return df_out
 

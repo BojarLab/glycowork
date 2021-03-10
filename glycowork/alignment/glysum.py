@@ -1,5 +1,5 @@
-from glycowork.helper.func import *
-from glycowork.motif.processing import *
+from glycowork.glycan_data.loader import df_glycan, df_glysum
+from glycowork.motif.processing import get_lib, small_motif_find
 try:
     import numpypy as np
 except ImportError:
@@ -7,9 +7,6 @@ except ImportError:
 import operator
 from abc import ABCMeta
 from abc import abstractmethod
-
-df_glysum = load_file("df_glyco_substitution_iso2.csv")
-df_glycan = load_file("v3_sugarbase.csv")
 
 lib = get_lib(df_glycan.glycan.values.tolist())
 
@@ -56,18 +53,19 @@ def pairwiseAlign(query, corpus = df_glycan, n = 5, vocab = lib,
   track.sort(key = operator.itemgetter(0), reverse = True)
   for k in track[:n]:
       score, encodeds, idx, species, length = k
-      for encoded in encodeds:
-        alignment = v.decodeSequenceAlignment(encoded)
-        print(str(a_in.index(alignment[0][0]) + 1),
-            len(alignment)*' '*5,
-            str((len(a) + 1) - (a_in[::-1].index(alignment[-1][0]) + 1)))
-        print(alignment)
-        print('Alignment Score:', alignment.score)
-        print('Percent Identity:', alignment.percentIdentity())
-        print('Percent Coverage:', min([(len(alignment)/len(a))*100, 100.0]))
-        print('Sequence Index:', idx)
-        print('Species:', species)
-        print()
+      if score > 0:
+          for encoded in encodeds:
+              alignment = v.decodeSequenceAlignment(encoded)
+              print(str(a_in.index(alignment[0][0]) + 1),
+                    len(alignment)*' '*5,
+                    str((len(a) + 1) - (a_in[::-1].index(alignment[-1][0]) + 1)))
+              print(alignment)
+              print('Alignment Score:', alignment.score)
+              print('Percent Identity:', alignment.percentIdentity())
+              print('Percent Coverage:', min([(len(alignment)/len(a))*100, 100.0]))
+              print('Sequence Index:', idx)
+              print('Species:', species)
+              print()
 
 class BaseSequence(object):
 

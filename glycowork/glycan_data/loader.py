@@ -1,5 +1,9 @@
 import pandas as pd
 
+df_species = pd.read_csv("glycowork/glycan_data/glyco_targets_species_seq_all_V3.csv")
+df_glycan = pd.read_csv("glycowork/glycan_data/v3_sugarbase.csv")
+df_glysum = pd.read_csv("glycowork/glycan_data/df_glyco_substitution_iso2.csv")
+
 def unwrap(nested_list):
   """converts a nested list into a flat list"""
   out = [item for sublist in nested_list for item in sublist]

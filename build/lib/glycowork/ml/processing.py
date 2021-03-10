@@ -1,4 +1,8 @@
-from glycowork.motif.graph import *
+from glycowork.motif.graph import glycan_to_graph
+from glycowork.glycan_data.loader import df_glycan
+from glycowork.motif.processing import get_lib
+
+lib = get_lib(df_glycan.glycan.values.tolist())
 
 try:
   from torch_geometric.data import Data, DataLoader
@@ -11,7 +15,7 @@ def dataset_to_graphs(glycan_list, labels, libr = lib, label_type = torch.long, 
   glycan_list -- list of IUPACcondensed glycan sequences (string)
   label_type -- which tensor type for label, default is torch.long for binary labels, change to torch.float for continuous
   separate -- True returns node list / edge list / label list as separate files; False returns list of data tuples; default is False
-  lib -- sorted list of unique glycoletters observed in the glycans of our dataset
+  libr -- sorted list of unique glycoletters observed in the glycans of our dataset
   context -- legacy-ish; used for generating graph context dataset for pre-training; keep at False
   error_catch -- troubleshooting option, True will print glycans that cannot be converted into graphs; default is False
   wo_labels -- change to True if you do not want to pass and receive labels; default is False

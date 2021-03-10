@@ -1,8 +1,8 @@
+import pandas as pd
 import re
-from glycowork.helper.func import *
-from glycowork.motif.processing import *
 
-df_glycan = load_file("v3_sugarbase.csv")
+from glycowork.glycan_data.loader import df_glycan
+from glycowork.motif.processing import get_lib, small_motif_find
 
 lib = get_lib(df_glycan.glycan.values.tolist())
 
