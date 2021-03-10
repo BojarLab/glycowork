@@ -24,7 +24,10 @@ def pairwiseAlign(query, corpus = df_glycan, n = 5, vocab = lib,
   submat -- GLYSUM substitution matrix
   mismatch -- mismatch penalty; default: -10
   gap -- gap penalty; default: -5
-  col -- column name where glycan sequences are; default: glycan"""
+  col -- column name where glycan sequences are; default: glycan
+
+  returns the n best alignments of query against corpus in text form with scores etc
+  """
   print("The function works but GLYSUM is deprecated; need to generate new GLYSUM matrix with recent data")
   if n == 0:
     n = len(corpus)

@@ -129,7 +129,10 @@ def compare_glycans(glycan_a, glycan_b, libr = lib, wildcards = False, wildcard_
   glycan_b -- glycan in string format (IUPACcondensed)
   libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
-  wildcard_list -- list of indices for wildcards in libr"""
+  wildcard_list -- list of indices for wildcards in libr
+  
+  returns True if two glycans are the same and False if not
+  """
   glycan_graph_a = glycan_to_graph(glycan_a, libr)
   edgelist = list(zip(glycan_graph_a[1][0], glycan_graph_a[1][1]))
   g1 = nx.from_edgelist(edgelist)
@@ -151,7 +154,10 @@ def subgraph_isomorphism(glycan, motif, libr = lib, wildcards = False, wildcard_
   motif -- glycan motif in string format (IUPACcondensed)
   libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
-  wildcard_list -- list of indices for wildcards in libr"""
+  wildcard_list -- list of indices for wildcards in libr
+  
+  returns True if motif is in glycan and False if not
+  """
   glycan_graph = glycan_to_graph(glycan, libr)
   edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
   g1 = nx.from_edgelist(edgelist)
@@ -172,7 +178,10 @@ def subgraph_isomorphism(glycan, motif, libr = lib, wildcards = False, wildcard_
 def glycan_to_nxGraph(glycan, libr = lib):
   """converts glycans into networkx graphs
   glycan -- glycan in string format (IUPACcondensed)
-  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used"""
+  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+
+  returns networkx graph object of glycan
+  """
   glycan_graph = glycan_to_graph(glycan, libr = libr)
   edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
   g1 = nx.from_edgelist(edgelist)

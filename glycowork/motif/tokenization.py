@@ -40,6 +40,8 @@ def convert_to_counts_glycoletter(glycan, libr = lib):
   """counts the occurrence of glycoletters in glycan
   glycan -- IUPACcondensed glycan sequence (string)
   libr -- sorted list of unique glycoletters observed in the glycans of our dataset
+
+  returns dictionary with counts per glycoletter in a glycan
   """
   letter_dict = dict.fromkeys(libr, 0)
   glycan = small_motif_find(glycan).split('*')
@@ -53,6 +55,8 @@ def glycoletter_count_matrix(glycans, target_col, target_col_name, libr = lib):
   target_col -- label columns used for prediction; list or pd.Series
   target_col_name -- name for target_col; string
   libr -- sorted list of unique glycoletters observed in the glycans of our dataset
+
+  returns dataframe with glycoletter counts (columns) for every glycan (rows)
   """
   counted_glycans = [convert_to_counts_glycoletter(i, libr) for i in glycans]
   out = pd.DataFrame(counted_glycans)
@@ -62,6 +66,8 @@ def glycoletter_count_matrix(glycans, target_col, target_col_name, libr = lib):
 def find_isomorphs(glycan):
   """returns a set of isomorphic glycans by swapping branches etc.
   glycan -- IUPACcondensed glycan sequence (string)
+
+  returns list of unique glycan notations (strings) for a glycan in IUPACcondensed
   """
   out_list = [glycan]
   #starting branch swapped with next side branch
@@ -85,6 +91,8 @@ def find_isomorphs(glycan):
 def link_find(glycan):
   """finds all disaccharide motifs in a glycan sequence using its isomorphs
   glycan -- IUPACcondensed glycan sequence (string)
+
+  returns list of unique disaccharides (strings) for a glycan in IUPACcondensed
   """
   ss = find_isomorphs(glycan)
   coll = []
@@ -109,6 +117,8 @@ def motif_matrix(df, glycan_col_name, label_col_name, libr = lib):
   glycan_col_name -- column name for glycan sequences; string
   label_col_name -- column name for labels; string
   libr -- sorted list of unique glycoletters observed in the glycans of our dataset
+
+  returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)
   """
   matrix_list = []
   di_dics = []

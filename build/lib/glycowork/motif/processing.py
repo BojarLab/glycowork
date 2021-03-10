@@ -6,7 +6,11 @@ from glycowork.glycan_data.loader import df_species, unwrap
 linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3','b1-4','b1-6']
 
 def small_motif_find(s):
-  """processes IUPACcondensed glycan sequence (string) without splitting it into glycowords"""
+  """processes IUPACcondensed glycan sequence (string) without splitting it into glycowords
+  s -- glycan in IUPACcondensed notation; string
+
+  returns string in which glycoletters are separated by asterisks
+  """
   b = s.split('(')
   b = [k.split(')') for k in b]
   b = [item for sublist in b for item in sublist]
@@ -18,7 +22,11 @@ def small_motif_find(s):
   return b
 
 def min_process_glycans(glycan_list):
-  """converts list of glycans into a nested lists of glycowords"""
+  """converts list of glycans into a nested lists of glycowords
+  glycan_list -- list of glycans in IUPACcondensed notation; string
+
+  returns list of glycowords (each as one list of glycoletters)
+  """
   glycan_motifs = [small_motif_find(k) for k in glycan_list]
   glycan_motifs = [i.split('*') for i in glycan_motifs]
   return glycan_motifs
@@ -59,8 +67,12 @@ def process_glycans(glycan_list, exhaustive = False):
 
 def get_lib(glycan_list, mode = 'letter', exhaustive = True):
   """returns sorted list of unique glycoletters in list of glycans
+  glycan_list -- list of IUPACcondensed glycan sequences (string)
   mode -- default is letter for glycoletters; change to obtain glycowords
-  exhaustive -- if True, processes glycans shorted than 1 glycoword; default is True"""
+  exhaustive -- if True, processes glycans shorted than 1 glycoword; default is True
+
+  returns sorted list of unique glycoletters (strings) in glycan_list
+  """
   proc = process_glycans(glycan_list, exhaustive = exhaustive)
   lib = unwrap(proc)
   lib = list(set([tuple(k) for k in lib]))
@@ -78,6 +90,8 @@ def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
   wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
   r -- rate of replacement, default is 0.1 or 10%
   col -- column name for glycan sequences; default: target
+
+  returns dataframe in which some glycoletters (from wildcard_list) have been replaced with wildcard_name
   """
   added_rows = []
   for k in range(len(df)):

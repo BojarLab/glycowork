@@ -46,6 +46,16 @@ class EarlyStopping:
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs = 25
                 mode = 'classification'):
+  """
+  model -- graph neural network (such as SweetNet) for analyzing glycans
+  criterion -- PyTorch loss function
+  optimizer -- PyTorch optimizer
+  scheduler -- PyTorch learning rate decay
+  num_epochs -- number of epochs for training; default is 25
+  mode -- 'classification' or 'regression'; default is binary classification
+
+  returns the best model seen during training
+  """
   since = time.time()
   best_model_wts = copy.deepcopy(model.state_dict())
   best_loss = 100.0

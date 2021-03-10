@@ -13,7 +13,10 @@ def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
   labels -- list of labels used for prediction
   wildcard_list -- list which glycoletters a wildcard encompasses
   wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
-  r -- rate of replacement, default is 0.1 or 10%"""
+  r -- rate of replacement, default is 0.1 or 10%
+
+  returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name
+  """
   added_glycans = []
   added_labels = []
   for k in range(len(glycans)):
@@ -39,6 +42,12 @@ def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False,
   wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
   r -- rate of replacement, default is 0.1 or 10%
   col -- column name for glycan sequences; default: target
+
+  returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)
+  train_y, val_y (lists of taxonomic labels (mapped integers))
+  id_val (taxonomic labels in text form (strings))
+  class_list (list of unique taxonomic classes (strings))
+  class_converter (dictionary to map mapped integers back to text labels)
   """
   df = copy.deepcopy(df_in)
   rank_list = ['species','genus','family','order','class','phylum','kingdom','domain']

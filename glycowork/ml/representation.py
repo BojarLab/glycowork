@@ -14,6 +14,8 @@ def glycans_to_emb(glycans, libr, model, batch_size = 32, rep = True):
     model -- trained graph neural network (such as SweetNet) for analyzing glycans
     batch_size -- change to batch_size used during training; default is 32
     rep -- True returns representations, False returns actual predicted labels; default is True
+
+    returns dataframe of learned representations (columns) for each glycan (rows)
     """
     glycan_graphs = dataset_to_graphs(glycans, range(len(glycans)), libr)
     glycan_loader = DataLoader(glycan_graphs,

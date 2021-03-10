@@ -17,6 +17,8 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
     label_col_name -- column name for labels; string
     libr -- sorted list of unique glycoletters observed in the glycans of our dataset
     thresh -- threshold value to separate positive/negative; default is 1.645 for Z-scores
+
+    returns dataframe with p-values and corrected p-values for every glycan motif
     """
     df_motif = motif_matrix(df, glycan_col_name, label_col_name, libr = libr)
     df_motif = df_motif.loc[:,~df_motif.columns.duplicated()]
