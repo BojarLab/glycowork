@@ -1,10 +1,6 @@
 import pandas as pd
 import pkg_resources
 
-#df_species = pd.read_csv("glycowork/glycan_data/glyco_targets_species_seq_all_V3.csv")
-#df_glycan = pd.read_csv("glycowork/glycan_data/v3_sugarbase.csv")
-#df_glysum = pd.read_csv("glycowork/glycan_data/df_glyco_substitution_iso2.csv")
-
 io = pkg_resources.resource_stream(__name__, "glyco_targets_species_seq_all_V3.csv")
 df_species = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "v3_sugarbase.csv")
