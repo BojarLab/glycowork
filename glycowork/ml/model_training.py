@@ -44,10 +44,12 @@ class EarlyStopping:
         #torch.save(model.state_dict(), 'drive/My Drive/checkpoint.pt')
         self.val_loss_min = val_loss
 
-def train_model(model, criterion, optimizer, scheduler, num_epochs = 25
+def train_model(model, dataloaders, criterion, optimizer,
+                scheduler, num_epochs = 25,
                 mode = 'classification'):
   """
   model -- graph neural network (such as SweetNet) for analyzing glycans
+  dataloaders -- dictionary of dataloader objects with keys 'train' and 'val'
   criterion -- PyTorch loss function
   optimizer -- PyTorch optimizer
   scheduler -- PyTorch learning rate decay
@@ -158,3 +160,11 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs = 25
   plt.xlabel('Number of Epochs')
   plt.legend(['Validation Accuracy'], loc = 'best')
   return model
+
+def init_weights(model, sparsity = 0.1):
+    """initializes linear layers of PyTorch model with a sparse initialization
+    model -- neural network (such as SweetNet) for analyzing glycans
+    sparsity -- proportion of sparsity after initialization; default:0.1 / 10%
+    """
+    if type(model) == torch.nn.Linear:
+        torch.nn.init.sparse_(model.weight, sparsity = sparsity)
