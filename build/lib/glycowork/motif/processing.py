@@ -1,9 +1,12 @@
 import pandas as pd
 import random
 
-from glycowork.glycan_data.loader import df_species, unwrap
-
 linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3','b1-4','b1-6']
+
+def unwrap(nested_list):
+  """converts a nested list into a flat list"""
+  out = [item for sublist in nested_list for item in sublist]
+  return out
 
 def small_motif_find(s):
   """processes IUPACcondensed glycan sequence (string) without splitting it into glycowords

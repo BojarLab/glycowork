@@ -1,10 +1,8 @@
 import re
 import networkx as nx
-from glycowork.glycan_data.loader import df_glycan, unwrap, find_nth
-from glycowork.motif.processing import get_lib, min_process_glycans
+from glycowork.glycan_data.loader import lib, unwrap, find_nth
+from glycowork.motif.processing import min_process_glycans
 from glycowork.motif.tokenization import string_to_labels
-
-lib = get_lib(df_glycan.glycan.values.tolist())
 
 def glycan_to_graph(glycan, libr = lib):
   """the monumental function for converting glycans into graphs
@@ -123,7 +121,8 @@ def categorical_node_match_wildcard(attr, default, wildcard_list):
       return all(data1.get(attr, d) == data2.get(attr, d) for attr, d in attrs)
   return match
 
-def compare_glycans(glycan_a, glycan_b, libr = lib, wildcards = False, wildcard_list = []):
+def compare_glycans(glycan_a, glycan_b, libr = lib,
+                    wildcards = False, wildcard_list = []):
   """returns True if glycans are the same and False if not
   glycan_a -- glycan in string format (IUPACcondensed)
   glycan_b -- glycan in string format (IUPACcondensed)
@@ -148,7 +147,8 @@ def compare_glycans(glycan_a, glycan_b, libr = lib, wildcards = False, wildcard_
   else:
     return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
 
-def subgraph_isomorphism(glycan, motif, libr = lib, wildcards = False, wildcard_list = []):
+def subgraph_isomorphism(glycan, motif, libr = lib,
+                         wildcards = False, wildcard_list = []):
   """returns True if motif is in glycan and False if not
   glycan -- glycan in string format (IUPACcondensed)
   motif -- glycan motif in string format (IUPACcondensed)

@@ -1,5 +1,5 @@
-from glycowork.glycan_data.loader import df_glycan, df_glysum
-from glycowork.motif.processing import get_lib, small_motif_find
+from glycowork.glycan_data.loader import lib, df_glysum, df_glycan
+from glycowork.motif.processing import small_motif_find
 try:
     import numpypy as np
 except ImportError:
@@ -7,8 +7,6 @@ except ImportError:
 import operator
 from abc import ABCMeta
 from abc import abstractmethod
-
-lib = get_lib(df_glycan.glycan.values.tolist())
 
 GAP_ELEMENT = '-'
 GAP_CODE = 0

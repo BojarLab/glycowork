@@ -1,8 +1,5 @@
 from glycowork.motif.graph import glycan_to_graph
-from glycowork.glycan_data.loader import df_glycan
-from glycowork.motif.processing import get_lib
-
-lib = get_lib(df_glycan.glycan.values.tolist())
+from glycowork.glycan_data.loader import lib
 
 try:
   import torch

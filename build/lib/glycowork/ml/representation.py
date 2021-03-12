@@ -1,25 +1,27 @@
 import pandas as pd
 import numpy as np
 import torch
+from glycowork.glycan_data.loader import lib
+from glycowork.ml.processing import dataset_to_dataloader
 
 try:
   from torch_geometric.data import Data, DataLoader
 except ImportError:
     raise ImportError('<torch_geometric missing; cannot do deep learning>')
 
-def glycans_to_emb(glycans, libr, model, batch_size = 32, rep = True):
+def glycans_to_emb(glycans, model, libr = lib, batch_size = 32, rep = True):
     """returns a dataframe of learned representations for a list of glycans
     glycans -- list of glycans in IUPACcondensed; strings
-    libr -- sorted list of unique glycoletters observed in the glycans of our dataset
     model -- trained graph neural network (such as SweetNet) for analyzing glycans
+    libr -- sorted list of unique glycoletters observed in the glycans of our dataset
     batch_size -- change to batch_size used during training; default is 32
     rep -- True returns representations, False returns actual predicted labels; default is True
 
     returns dataframe of learned representations (columns) for each glycan (rows)
     """
-    glycan_graphs = dataset_to_graphs(glycans, range(len(glycans)), libr)
-    glycan_loader = DataLoader(glycan_graphs,
-                               batch_size = batch_size, shuffle = False)
+    glycan_loader = dataset_to_dataloader(glycans, range(len(glycans)),
+                                          libr = libr, batch_size = batch_size,
+                                          shuffle = False)
     res = []
     for data in glycan_loader:
         x, y, edge_index, batch = data.x, data.y, data.edge_index, data.batch

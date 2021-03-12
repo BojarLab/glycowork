@@ -3,11 +3,8 @@ import numpy as np
 from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
 
-from glycowork.glycan_data.loader import df_glycan
-from glycowork.motif.processing import get_lib
+from glycowork.glycan_data.loader import lib
 from glycowork.motif.tokenization import motif_matrix
-
-lib = get_lib(df_glycan.glycan.values.tolist())
 
 def get_pvals_motifs(df, glycan_col_name, label_col_name,
                      libr = lib, thresh = 1.645):

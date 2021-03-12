@@ -1,9 +1,7 @@
 import glycowork
 
 from glycowork.motif.processing import *
-from glycowork.helper.func import *
-
-df_glycan = load_file("v3_sugarbase.csv")
+from glycowork.glycan_data.loader import *
 
 print("Length Glyco-Vocabulary")
 vocab = get_lib(df_glycan.glycan.values.tolist())
