@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error
 
+from glycowork.glycan_data.loader import lib
 from glycowork.ml.models import SweetNet
 
 class EarlyStopping:
