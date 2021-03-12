@@ -9,3 +9,5 @@ label = [1,1,0]
 test_df = pd.DataFrame({'glycan':glycans, 'eukaryotic':label})
 print("Glyco-Motif Test")
 print(motif_matrix(test_df, 'glycan', 'eukaryotic'))
+print("Annotate Test")
+print(annotate_dataset(glycans))

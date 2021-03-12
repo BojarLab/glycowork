@@ -9,8 +9,12 @@ io = pkg_resources.resource_stream(__name__, "v3_sugarbase.csv")
 df_glycan = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "df_glyco_substitution_iso2.csv")
 df_glysum = pd.read_csv(io)
+io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
+motif_list = pd.read_csv(io)
 
-lib = get_lib(list(set(df_glycan.glycan.values.tolist() + df_species.target.values.tolist())))
+lib = get_lib(list(set(df_glycan.glycan.values.tolist() +
+                       df_species.target.values.tolist() +
+                       motif_list.motif.values.tolist())))
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""

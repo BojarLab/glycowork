@@ -1,8 +1,9 @@
 import pandas as pd
 import re
 
-from glycowork.glycan_data.loader import lib
+from glycowork.glycan_data.loader import lib, motif_list
 from glycowork.motif.processing import small_motif_find
+
 
 def character_to_label(character, libr = lib):
   """tokenizes character by indexing passed library
@@ -137,3 +138,5 @@ def motif_matrix(df, glycan_col_name, label_col_name, libr = lib):
   out_matrix[label_col_name] = temp
   out_matrix.reset_index(drop = True, inplace = True)
   return out_matrix
+
+

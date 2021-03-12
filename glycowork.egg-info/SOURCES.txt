@@ -18,12 +18,14 @@ glycowork/ml/representation.py
 glycowork/ml/train_test_split.py
 glycowork/motif/__init__.py
 glycowork/motif/analysis.py
+glycowork/motif/annotate.py
 glycowork/motif/graph.py
 glycowork/motif/processing.py
 glycowork/motif/tokenization.py
 glycowork/tests/__init__.py
 glycowork/tests/test_alignment.py
 glycowork/tests/test_analysis.py
+glycowork/tests/test_annotate.py
 glycowork/tests/test_graph.py
 glycowork/tests/test_hierarchyfilter.py
 glycowork/tests/test_loader.py

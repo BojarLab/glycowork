@@ -1,6 +1,7 @@
 import copy
 import time
 import torch
+import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error
 
@@ -129,11 +130,6 @@ def train_model(model, dataloaders, criterion, optimizer,
         val_acc.append(epoch_acc)
         early_stopping(epoch_loss, model)
 
-      #if epoch > swa_start:
-      #  swa_model.update_parameters(model)
-      #  swa_scheduler.step()
-      #else:
-      #  scheduler.step()
       scheduler.step()
         
     if early_stopping.early_stop:
