@@ -5,6 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error
 
+from glycowork.ml.models import SweetNet
+
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
     def __init__(self, patience = 7, verbose = False):
@@ -47,7 +49,7 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 def train_model(model, dataloaders, criterion, optimizer,
-                scheduler, num_epochs = 25,
+                scheduler, num_epochs = 25, patience = 50,
                 mode = 'classification'):
   """
   model -- graph neural network (such as SweetNet) for analyzing glycans
@@ -55,12 +57,14 @@ def train_model(model, dataloaders, criterion, optimizer,
   criterion -- PyTorch loss function
   optimizer -- PyTorch optimizer
   scheduler -- PyTorch learning rate decay
-  num_epochs -- number of epochs for training; default is 25
+  num_epochs -- number of epochs for training; default: 25
+  patience -- number of epochs without improvement until early stop; default: 50
   mode -- 'classification' or 'regression'; default is binary classification
 
   returns the best model seen during training
   """
   since = time.time()
+  early_stopping = EarlyStopping(patience = patience, verbose = True)
   best_model_wts = copy.deepcopy(model.state_dict())
   best_loss = 100.0
   epoch_mcc = 0
@@ -165,3 +169,19 @@ def init_weights(model, sparsity = 0.1):
     """
     if type(model) == torch.nn.Linear:
         torch.nn.init.sparse_(model.weight, sparsity = sparsity)
+
+def prep_model(model_type, num_classes, libr = lib):
+    """wrapper to instantiate model, initialize it, and put it on the GPU
+    model_type -- string indicating the type of model
+    num_classes -- number of unique classes for classification
+    libr -- sorted list of unique glycoletters observed in the glycans of our dataset
+
+    returns PyTorch model object
+    """
+    if model_type == 'SweetNet':
+        model = SweetNet(len(libr), num_classes = num_classes)
+        model = model.apply(init_weights)
+        model = model.cuda()
+    else:
+        print("Invalid Model Type")
+    return model
