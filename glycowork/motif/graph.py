@@ -147,6 +147,22 @@ def compare_glycans(glycan_a, glycan_b, libr = lib,
   else:
     return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
 
+def fast_compare_glycans(g1, g2, libr = lib,
+                    wildcards = False, wildcard_list = []):
+  """returns True if glycans are the same and False if not
+  g1 -- glycan graph from glycan_to_nxGraph
+  g2 -- glycan graph from glycan_to_nxGraph
+  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
+  wildcard_list -- list of indices for wildcards in libr
+  
+  returns True if two glycans are the same and False if not
+  """
+  if wildcards:
+    return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+  else:
+    return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+
 def subgraph_isomorphism(glycan, motif, libr = lib,
                          wildcards = False, wildcard_list = []):
   """returns True if motif is in glycan and False if not
