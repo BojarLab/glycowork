@@ -207,11 +207,14 @@ def glycan_to_nxGraph(glycan, libr = lib):
   nx.set_node_attributes(g1, {k:glycan_graph[0][k] for k in range(len(glycan_graph[0]))},'labels')
   return g1
 
-def graph_features(g):
+def generate_graph_features(glycan, libr = lib):
     """compute graph features of glycan
-    input: graph representation of a glycan g (i.e., the output of the function glycan_to_nxGraph)
-    returns a numpy array of different graph features
+    glycan -- glycan in string format (IUPACcondensed)
+    libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+
+    returns a pandas dataframe with different graph features as columns and glycan as row
     """
+    g = glycan_to_nxGraph(glycan, libr = libr)
     #nbr of different node features:
     nbr_node_types = len(set(nx.get_node_attributes(g, "labels")))
     #adjacency matrix:
@@ -223,66 +226,66 @@ def graph_features(g):
     avgDeg = np.mean(deg)
     varDeg = np.var(deg)
     maxDeg = np.max(deg)
-    nbrDeg4 = np.sum(deg>3)
-    branching = np.sum(deg>2)
-    nbrLeaves = np.sum(deg==1)
-    deg_to_leaves = np.array([np.sum(A[:,deg==1]) for i in range(N)])
+    nbrDeg4 = np.sum(deg > 3)
+    branching = np.sum(deg > 2)
+    nbrLeaves = np.sum(deg == 1)
+    deg_to_leaves = np.array([np.sum(A[:,deg == 1]) for i in range(N)])
     max_deg_leaves = np.max(deg_to_leaves)
     mean_deg_leaves = np.mean(deg_to_leaves)
     deg_assort = nx.degree_assortativity_coefficient(g)
-    betweeness_centr = np.array(pd.DataFrame(nx.betweenness_centrality(g), index=[0]).iloc[0,:])
+    betweeness_centr = np.array(pd.DataFrame(nx.betweenness_centrality(g), index = [0]).iloc[0,:])
     betweeness = np.mean(betweeness_centr)
     betwVar = np.var(betweeness_centr)
     betwMax = np.max(betweeness_centr)
     betwMin = np.min(betweeness_centr)
-    eigen = np.array(pd.DataFrame(nx.katz_centrality_numpy(g), index=[0]).iloc[0,:])
+    eigen = np.array(pd.DataFrame(nx.katz_centrality_numpy(g), index = [0]).iloc[0,:])
     eigenMax = np.max(eigen)
     eigenMin = np.min(eigen)
     eigenAvg = np.mean(eigen)
     eigenVar = np.var(eigen)
-    close = np.array(pd.DataFrame(nx.closeness_centrality(g), index=[0]).iloc[0,:])
+    close = np.array(pd.DataFrame(nx.closeness_centrality(g), index = [0]).iloc[0,:])
     closeMax = np.max(close)
     closeMin = np.min(close)
     closeAvg = np.mean(close)
     closeVar = np.var(close)
-    flow = np.array(pd.DataFrame(nx.current_flow_betweenness_centrality(g), index=[0]).iloc[0,:])
+    flow = np.array(pd.DataFrame(nx.current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
     flowMax = np.max(flow)
     flowMin = np.min(flow)
     flowAvg = np.mean(flow)
     flowVar = np.var(flow)
-    flow_edge = np.array(pd.DataFrame(nx.edge_current_flow_betweenness_centrality(g), index=[0]).iloc[0,:])
+    flow_edge = np.array(pd.DataFrame(nx.edge_current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
     flow_edgeMax = np.max(flow_edge)
     flow_edgeMin = np.min(flow_edge)
     flow_edgeAvg = np.mean(flow_edge)
     flow_edgeVar = np.var(flow_edge)
-    load = np.array(pd.DataFrame(nx.load_centrality(g), index=[0]).iloc[0,:])
+    load = np.array(pd.DataFrame(nx.load_centrality(g), index = [0]).iloc[0,:])
     loadMax = np.max(load)
     loadMin = np.min(load)
     loadAvg = np.mean(load)
     loadVar = np.var(load)
-    harm = np.array(pd.DataFrame(nx.harmonic_centrality(g), index=[0]).iloc[0,:])
+    harm = np.array(pd.DataFrame(nx.harmonic_centrality(g), index = [0]).iloc[0,:])
     harmMax = np.max(harm)
     harmMin = np.min(harm)
     harmAvg = np.mean(harm)
     harmVar = np.var(harm)
-    secorder = np.array(pd.DataFrame(nx.second_order_centrality(g), index=[0]).iloc[0,:])
+    secorder = np.array(pd.DataFrame(nx.second_order_centrality(g), index = [0]).iloc[0,:])
     secorderMax = np.max(secorder)
     secorderMin = np.min(secorder)
     secorderAvg = np.mean(secorder)
     secorderVar = np.var(secorder)
     x = np.array([len(nx.k_corona(g,k).nodes()) for k in range(N)])
-    size_corona = x[x>0][-1]
-    k_corona = np.where(x==x[x>0][-1])[0][-1]
+    size_corona = x[x > 0][-1]
+    k_corona = np.where(x == x[x > 0][-1])[0][-1]
     x = np.array([len(nx.k_core(g,k).nodes()) for k in range(N)])
-    size_core = x[x>0][-1]
-    k_core = np.where(x==x[x>0][-1])[0][-1]
-    M = ((A+np.diag(np.ones(N))).T/(deg+1)).T
-    eigval, vec = eigsh(M, 2, which='LM')
-    egap = 1-eigval[0]
+    size_core = x[x > 0][-1]
+    k_core = np.where(x == x[x > 0][-1])[0][-1]
+    M = ((A + np.diag(np.ones(N))).T/(deg + 1)).T
+    eigval, vec = eigsh(M, 2, which = 'LM')
+    egap = 1 - eigval[0]
     distr = np.abs(vec[:,-1])
     distr = distr/sum(distr)
     entropyStation = np.sum(distr*np.log(distr))
-    return np.array(
+    features = np.array(
         [diameter, branching, nbrLeaves, avgDeg, varDeg, maxDeg, nbrDeg4, max_deg_leaves, mean_deg_leaves,
          deg_assort, betweeness, betwVar, betwMax, eigenMax, eigenMin, eigenAvg, eigenVar, closeMax, closeMin,
          closeAvg, closeVar, flowMax, flowAvg, flowVar,
@@ -293,4 +296,16 @@ def graph_features(g):
          size_corona, size_core, nbr_node_types,
          egap, entropyStation, N, dens
          ])
+    col_names = ['diameter', 'branching', 'nbrLeaves', 'avgDeg', 'varDeg',
+                 'maxDeg', 'nbrDeg4', 'max_deg_leaves', 'mean_deg_leaves',
+                 'deg_assort', 'betweeness', 'betwVar', 'betwMax', 'eigenMax',
+                 'eigenMin', 'eigenAvg', 'eigenVar', 'closeMax', 'closeMin',
+                 'closeAvg', 'closeVar', 'flowMax', 'flowAvg', 'flowVar',
+                 'flow_edgeMax', 'flow_edgeMin', 'flow_edgeAvg', 'flow_edgeVar',
+                 'loadMax', 'loadAvg', 'loadVar', 'harmMax', 'harmMin', 'harmAvg',
+                 'harmVar', 'secorderMax', 'secorderMin', 'secorderAvg', 'secorderVar',
+                 'size_corona', 'size_core', 'nbr_node_types', 'egap', 'entropyStation',
+                 'N', 'dens']
+    feat_dic = {col_names[k]:features[k] for k in range(len(features))}
+    return pd.DataFrame(feat_dic, index = [glycan])
 
