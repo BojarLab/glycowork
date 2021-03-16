@@ -22,6 +22,7 @@ glycowork/motif/analysis.py
 glycowork/motif/annotate.py
 glycowork/motif/graph.py
 glycowork/motif/processing.py
+glycowork/motif/query.py
 glycowork/motif/tokenization.py
 glycowork/tests/__init__.py
 glycowork/tests/test_alignment.py
@@ -32,4 +33,5 @@ glycowork/tests/test_graph.py
 glycowork/tests/test_hierarchyfilter.py
 glycowork/tests/test_loader.py
 glycowork/tests/test_processing.py
+glycowork/tests/test_query.py
 glycowork/tests/test_tokenization.py
