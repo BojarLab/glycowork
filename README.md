@@ -12,7 +12,7 @@
 
 ## Install
 
-```python
+```
 #later
 #`pip install glycowork`
 
@@ -37,7 +37,7 @@ Glycowork currently contains four main modules:
      
 Below are some examples of what you can do with glycowork, be sure to check out the full documentation for everything that's there.
 
-```python
+```
 #converting a glycan into a graph object (node list + edge lists)
 from glycowork.motif.graph import glycan_to_graph
 glycan_to_graph('Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc')
@@ -51,7 +51,7 @@ glycan_to_graph('Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc')
 
 
 
-```python
+```
 #using graphs, you can easily check whether two glycans are the same - even if they use different bracket notations!
 from glycowork.motif.graph import compare_glycans
 print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
@@ -64,7 +64,7 @@ print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNA
     False
     
 
-```python
+```
 #querying some of the stored databases
 from glycowork.motif.query import get_insight
 get_insight('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc')
@@ -79,7 +79,7 @@ get_insight('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc')
     That's all we can do for you at this point!
     
 
-```python
+```
 #get motifs, graph features, and sequence features of a set of glycan sequences to train models or analyze glycan properties
 glycans = ['Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc',
            'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-3)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
@@ -5056,7 +5056,7 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
 
 
 
-```python
+```
 #identify significant binding motifs with (for instance) Z-score data
 import pandas as pd
 from glycowork.motif.analysis import get_pvals_motifs
