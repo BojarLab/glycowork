@@ -1,6 +1,12 @@
+CONTRIBUTING.md
+LICENSE
+MANIFEST.in
 README.md
+settings.ini
 setup.py
 glycowork/__init__.py
+glycowork/_nbdev.py
+glycowork/core.py
 glycowork.egg-info/PKG-INFO
 glycowork.egg-info/SOURCES.txt
 glycowork.egg-info/dependency_links.txt

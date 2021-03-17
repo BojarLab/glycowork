@@ -6,6 +6,12 @@ from glycowork.motif.graph import glycan_to_nxGraph, fast_compare_glycans
 from glycowork.motif.annotate import annotate_glycan
 
 def get_insight(glycan, libr = lib, motifs = motif_list):
+    """prints out meta-information about a glycan
+    glycan -- glycan in string format (IUPACcondensed)
+    libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+    motifs -- motifs -- dataframe of glycan motifs (name + sequence)
+    """
+    print("Let's get rolling! Give us a few moments to crunch some numbers.")
     ggraph = glycan_to_nxGraph(glycan, libr = libr)
     df_glycan['graph'] = [glycan_to_nxGraph(k, libr = libr) for k in df_glycan.glycan.values.tolist()]
     idx = np.where([fast_compare_glycans(ggraph, k, libr = lib) for k in df_glycan.graph.values.tolist()])[0]

@@ -7,13 +7,14 @@ from glycowork.glycan_data.loader import lib
 from glycowork.motif.tokenization import motif_matrix
 
 def get_pvals_motifs(df, glycan_col_name, label_col_name,
-                     libr = lib, thresh = 1.645):
+                     libr = lib, thresh = 1.645, sorting = True):
     """returns enriched motifs based on label data or predicted data
     df -- dataframe containing glycan sequences and labels
     glycan_col_name -- column name for glycan sequences; string
     label_col_name -- column name for labels; string
     libr -- sorted list of unique glycoletters observed in the glycans of our dataset
     thresh -- threshold value to separate positive/negative; default is 1.645 for Z-scores
+    sorting -- whether p-value dataframe should be sorted ascendingly; default: True
 
     returns dataframe with p-values and corrected p-values for every glycan motif
     """
@@ -26,4 +27,7 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
     ttests_corr = multipletests(ttests, method = 'hs')[1].tolist()
     out = pd.DataFrame(list(zip(df_motif.columns.values.tolist()[:-1], ttests, ttests_corr)))
     out.columns = ['motif', 'pval', 'corr_pval']
-    return out
+    if sorting:
+        return out.sort_values(by = 'corr_pval')
+    else:
+        return out

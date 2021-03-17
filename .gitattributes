@@ -1,2 +1,2 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+**/*.ipynb filter=clean-nbs
+**/*.ipynb diff=ipynb
