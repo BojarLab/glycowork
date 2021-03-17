@@ -25,10 +25,10 @@ def small_motif_find(glycan):
   return b
 
 def min_process_glycans(glycan_list):
-  """converts list of glycans into a nested lists of glycowords\n
+  """converts list of glycans into a nested lists of glycoletters\n
   glycan_list -- list of glycans in IUPACcondensed notation; string\n
 
-  returns list of glycowords (each as one list of glycoletters)
+  returns list of glycoletter lists
   """
   glycan_motifs = [small_motif_find(k) for k in glycan_list]
   glycan_motifs = [i.split('*') for i in glycan_motifs]

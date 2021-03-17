@@ -61,7 +61,7 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long,
                  edge_index = torch.tensor([k[1][0],k[1][1]], dtype = torch.long)) for k in glycan_graphs]
         return data
 
-def dataset_to_dataloader(glycan_list, labels, libr = lib, batch_size = 32,
+def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
                           shuffle = True):
   """wrapper function to convert glycans and labels to a torch_geometric DataLoader\n
   glycan_list -- list of IUPACcondensed glycan sequences (string)\n
@@ -72,6 +72,8 @@ def dataset_to_dataloader(glycan_list, labels, libr = lib, batch_size = 32,
 
   returns a dataloader object used for training deep learning models
   """
+  if libr is None:
+    libr = lib
   glycan_graphs = dataset_to_graphs(glycan_list, labels, libr = libr)
   glycan_loader = DataLoader(glycan_graphs, batch_size = batch_size,
                              shuffle = shuffle)
