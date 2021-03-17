@@ -11,22 +11,28 @@ from abc import abstractmethod
 GAP_ELEMENT = '-'
 GAP_CODE = 0
 
-def pairwiseAlign(query, corpus = df_glycan, n = 5, vocab = lib,
-                  submat = df_glysum, mismatch = -10, gap = -5,
+def pairwiseAlign(query, corpus = None, n = 5, vocab = None,
+                  submat = None, mismatch = -10, gap = -5,
                   col = 'glycan'):
-  """aligns glycan sequence from database against rest of the database and returns the best n alignments
-  query -- glycan string in IUPACcondensed notation
-  corpus -- database to align query against; default is SugarBase
-  n -- how many alignments to show; default shows top 5
-  vocab -- list of glycowords used for mapping to tokens
-  submat -- GLYSUM substitution matrix
-  mismatch -- mismatch penalty; default: -10
-  gap -- gap penalty; default: -5
-  col -- column name where glycan sequences are; default: glycan
+  """aligns glycan sequence from database against rest of the database and returns the best n alignments\n
+  query -- glycan string in IUPACcondensed notation\n
+  corpus -- database to align query against; default is SugarBase\n
+  n -- how many alignments to show; default shows top 5\n
+  vocab -- list of glycowords used for mapping to tokens\n
+  submat -- GLYSUM substitution matrix\n
+  mismatch -- mismatch penalty; default: -10\n
+  gap -- gap penalty; default: -5\n
+  col -- column name where glycan sequences are; default: glycan\n
 
   returns the n best alignments of query against corpus in text form with scores etc
   """
   print("The function works but GLYSUM is deprecated; need to generate new GLYSUM matrix with recent data")
+  if corpus is None:
+      corpus = df_glycan
+  if vocab is None:
+      vocab = lib
+  if submat is None:
+      submat = df_glysum
   if n == 0:
     n = len(corpus)
   seqs = corpus[col].values.tolist()

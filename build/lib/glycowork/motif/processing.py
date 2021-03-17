@@ -8,13 +8,13 @@ def unwrap(nested_list):
   out = [item for sublist in nested_list for item in sublist]
   return out
 
-def small_motif_find(s):
-  """processes IUPACcondensed glycan sequence (string) without splitting it into glycowords
-  s -- glycan in IUPACcondensed notation; string
+def small_motif_find(glycan):
+  """processes IUPACcondensed glycan sequence (string) without splitting it into glycowords\n
+  glycan -- glycan in IUPACcondensed notation; string\n
 
   returns string in which glycoletters are separated by asterisks
   """
-  b = s.split('(')
+  b = glycan.split('(')
   b = [k.split(')') for k in b]
   b = [item for sublist in b for item in sublist]
   b = [k.strip('[') for k in b]
@@ -25,8 +25,8 @@ def small_motif_find(s):
   return b
 
 def min_process_glycans(glycan_list):
-  """converts list of glycans into a nested lists of glycowords
-  glycan_list -- list of glycans in IUPACcondensed notation; string
+  """converts list of glycans into a nested lists of glycowords\n
+  glycan_list -- list of glycans in IUPACcondensed notation; string\n
 
   returns list of glycowords (each as one list of glycoletters)
   """
@@ -34,14 +34,14 @@ def min_process_glycans(glycan_list):
   glycan_motifs = [i.split('*') for i in glycan_motifs]
   return glycan_motifs
 
-def motif_find(s, exhaustive = False):
-  """processes IUPACcondensed glycan sequence (string) into glycowords
-  s -- glycan string
-  exhaustive -- True for processing glycans shorter than one glycoword
+def motif_find(glycan, exhaustive = False):
+  """processes IUPACcondensed glycan sequence (string) into glycowords\n
+  glycan -- glycan in IUPACcondensed notation; string\n
+  exhaustive -- True for processing glycans shorter than one glycoword\n
 
   returns list of glycowords
   """
-  b = s.split('(')
+  b = glycan.split('(')
   b = [k.split(')') for k in b]
   b = [item for sublist in b for item in sublist]
   b = [k.strip('[') for k in b]
@@ -58,9 +58,9 @@ def motif_find(s, exhaustive = False):
   return b
 
 def process_glycans(glycan_list, exhaustive = False):
-  """wrapper function to process list of glycans into glycowords
-  glycan_list -- list of IUPACcondensed glycan sequences (string)
-  exhaustive -- True for processing glycans shorter than one glycoword
+  """wrapper function to process list of glycans into glycowords\n
+  glycan_list -- list of IUPACcondensed glycan sequences (string)\n
+  exhaustive -- True for processing glycans shorter than one glycoword\n
 
   returns nested list of glycowords for every glycan
   """
@@ -69,10 +69,10 @@ def process_glycans(glycan_list, exhaustive = False):
   return glycan_motifs
 
 def get_lib(glycan_list, mode = 'letter', exhaustive = True):
-  """returns sorted list of unique glycoletters in list of glycans
-  glycan_list -- list of IUPACcondensed glycan sequences (string)
-  mode -- default is letter for glycoletters; change to obtain glycowords
-  exhaustive -- if True, processes glycans shorted than 1 glycoword; default is True
+  """returns sorted list of unique glycoletters in list of glycans\n
+  glycan_list -- list of IUPACcondensed glycan sequences (string)\n
+  mode -- default is letter for glycoletters; change to obtain glycowords\n
+  exhaustive -- if True, processes glycans shorted than 1 glycoword; default is True\n
 
   returns sorted list of unique glycoletters (strings) in glycan_list
   """
@@ -87,12 +87,12 @@ def get_lib(glycan_list, mode = 'letter', exhaustive = True):
   return lib
 
 def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
-  """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards
-  df -- dataframe in which the glycan column is called "target" and is the first column
-  wildcard_list -- list which glycoletters a wildcard encompasses
-  wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
-  r -- rate of replacement, default is 0.1 or 10%
-  col -- column name for glycan sequences; default: target
+  """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards\n
+  df -- dataframe in which the glycan column is called "target" and is the first column\n
+  wildcard_list -- list which glycoletters a wildcard encompasses\n
+  wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature\n
+  r -- rate of replacement, default is 0.1 or 10%\n
+  col -- column name for glycan sequences; default: target\n
 
   returns dataframe in which some glycoletters (from wildcard_list) have been replaced with wildcard_name
   """

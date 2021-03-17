@@ -7,17 +7,19 @@ from glycowork.glycan_data.loader import lib
 from glycowork.motif.tokenization import motif_matrix
 
 def get_pvals_motifs(df, glycan_col_name, label_col_name,
-                     libr = lib, thresh = 1.645, sorting = True):
-    """returns enriched motifs based on label data or predicted data
-    df -- dataframe containing glycan sequences and labels
-    glycan_col_name -- column name for glycan sequences; string
-    label_col_name -- column name for labels; string
-    libr -- sorted list of unique glycoletters observed in the glycans of our dataset
-    thresh -- threshold value to separate positive/negative; default is 1.645 for Z-scores
-    sorting -- whether p-value dataframe should be sorted ascendingly; default: True
+                     libr = None, thresh = 1.645, sorting = True):
+    """returns enriched motifs based on label data or predicted data\n
+    df -- dataframe containing glycan sequences and labels\n
+    glycan_col_name -- column name for glycan sequences; string\n
+    label_col_name -- column name for labels; string\n
+    libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
+    thresh -- threshold value to separate positive/negative; default is 1.645 for Z-scores\n
+    sorting -- whether p-value dataframe should be sorted ascendingly; default: True\n
 
     returns dataframe with p-values and corrected p-values for every glycan motif
     """
+    if libr is None:
+        libr = lib
     df_motif = motif_matrix(df, glycan_col_name, label_col_name, libr = libr)
     df_motif = df_motif.loc[:,~df_motif.columns.duplicated()]
     df_motif.reset_index(drop = True, inplace = True)

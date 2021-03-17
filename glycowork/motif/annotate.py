@@ -4,14 +4,18 @@ from glycowork.glycan_data.loader import lib, motif_list, unwrap
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features
 from glycowork.motif.tokenization import motif_matrix
 
-def annotate_glycan(glycan, motifs = motif_list, libr = lib):
-  """searches for known motifs in glycan sequence
-  glycan -- IUPACcondensed glycan sequence (string)
-  motifs -- dataframe of glycan motifs (name + sequence)
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset
+def annotate_glycan(glycan, motifs = None, libr = None):
+  """searches for known motifs in glycan sequence\n
+  glycan -- IUPACcondensed glycan sequence (string)\n
+  motifs -- dataframe of glycan motifs (name + sequence)\n
+  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
 
   returns dataframe with absence/presence of motifs in glycan
   """
+  if motifs is None:
+    motifs = motif_list
+  if libr is None:
+    libr = lib
   res = [subgraph_isomorphism(glycan, k, libr = libr) for k in motifs.motif.values.tolist()]*1
   out = pd.DataFrame(columns = motifs.motif_name.values.tolist())
   out.loc[0] = res
@@ -19,18 +23,22 @@ def annotate_glycan(glycan, motifs = motif_list, libr = lib):
   out.index = [glycan]
   return out
 
-def annotate_dataset(glycans, motifs = motif_list, libr = lib,
+def annotate_dataset(glycans, motifs = None, libr = None,
                      feature_set = ['known']):
-  """wrapper function to annotate motifs in list of glycans
-  glycans -- list of IUPACcondensed glycan sequences (string)
-  motifs -- dataframe of glycan motifs (name + sequence)
-  libr -- sorted list of unique glycoletters observed in the glycans of our data
-  feature_set -- which feature set to use for annotations, add more to list to expand; default is 'known'
+  """wrapper function to annotate motifs in list of glycans\n
+  glycans -- list of IUPACcondensed glycan sequences (string)\n
+  motifs -- dataframe of glycan motifs (name + sequence)\n
+  libr -- sorted list of unique glycoletters observed in the glycans of our data\n
+  feature_set -- which feature set to use for annotations, add more to list to expand; default is 'known'\n
                  options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
-                               and 'exhaustive' (all mono- and disaccharide features)
+                               and 'exhaustive' (all mono- and disaccharide features)\n
                                
   returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
   """
+  if motifs is None:
+    motifs = motif_list
+  if libr is None:
+    libr = lib
   shopping_cart = []
   if 'known' in feature_set:
     shopping_cart.append(pd.concat([annotate_glycan(k, motifs = motifs, libr = libr) for k in glycans], axis = 0))

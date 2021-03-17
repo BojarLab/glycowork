@@ -2,18 +2,20 @@ import networkx as nx
 from glycowork.glycan_data.loader import lib
 from glycowork.motif.graph import glycan_to_graph, glycan_to_nxGraph, compare_glycans, fast_compare_glycans
 
-def check_presence(glycan, df, colname = 'target', libr = lib,
+def check_presence(glycan, df, colname = 'target', libr = None,
                    name = None, rank = 'species', fast = False):
-  """checks whether glycan (of that species) is already present in dataset
-  glycan -- IUPACcondensed glycan sequence (string)
-  df -- glycan dataframe where glycans are under colname and ideally taxonomic labels are columns
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset
-  name -- name of the species (etc.) of interest; string
-  rank -- column name for filtering; default: species
-  fast -- True uses precomputed glycan graphs, only use if df has column 'graph' with glycan graphs
+  """checks whether glycan (of that species) is already present in dataset\n
+  glycan -- IUPACcondensed glycan sequence (string)\n
+  df -- glycan dataframe where glycans are under colname and ideally taxonomic labels are columns\n
+  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
+  name -- name of the species (etc.) of interest; string\n
+  rank -- column name for filtering; default: species\n
+  fast -- True uses precomputed glycan graphs, only use if df has column 'graph' with glycan graphs\n
 
   returns text output regarding whether the glycan is already in df
   """
+  if libr is None:
+    libr = lib
   if name is not None:
     name = name.replace(" ", "_")
     df = df[df[rank] == name]

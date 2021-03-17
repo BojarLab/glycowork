@@ -8,12 +8,12 @@ linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3',
 
 def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
                             wildcard_name, r = 0.1):
-  """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards
-  glycans -- list of IUPACcondensed glycan sequences (string)
-  labels -- list of labels used for prediction
-  wildcard_list -- list which glycoletters a wildcard encompasses
-  wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
-  r -- rate of replacement, default is 0.1 or 10%
+  """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards\n
+  glycans -- list of IUPACcondensed glycan sequences (string)\n
+  labels -- list of labels used for prediction\n
+  wildcard_list -- list which glycoletters a wildcard encompasses\n
+  wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature\n
+  r -- rate of replacement, default is 0.1 or 10%\n
 
   returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name
   """
@@ -33,20 +33,20 @@ def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
 
 def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False, wildcard_list = None,
                      wildcard_name = None, r = 0.1, col = 'target'):
-  """stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes
-  df_in -- dataframe of glycan sequences and taxonomic labels
-  rank -- which rank should be filtered; default is 'domain'
-  min_seq -- how many glycans need to be present in class to keep it; default is 5
-  wildcard_seed -- set to True if you want to seed wildcard glycoletters; default is False
-  wildcard_list -- list which glycoletters a wildcard encompasses
-  wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature
-  r -- rate of replacement, default is 0.1 or 10%
-  col -- column name for glycan sequences; default: target
+  """stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes\n
+  df_in -- dataframe of glycan sequences and taxonomic labels\n
+  rank -- which rank should be filtered; default is 'domain'\n
+  min_seq -- how many glycans need to be present in class to keep it; default is 5\n
+  wildcard_seed -- set to True if you want to seed wildcard glycoletters; default is False\n
+  wildcard_list -- list which glycoletters a wildcard encompasses\n
+  wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature\n
+  r -- rate of replacement, default is 0.1 or 10%\n
+  col -- column name for glycan sequences; default: target\n
 
-  returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)
-  train_y, val_y (lists of taxonomic labels (mapped integers))
-  id_val (taxonomic labels in text form (strings))
-  class_list (list of unique taxonomic classes (strings))
+  returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)\n
+  train_y, val_y (lists of taxonomic labels (mapped integers))\n
+  id_val (taxonomic labels in text form (strings))\n
+  class_list (list of unique taxonomic classes (strings))\n
   class_converter (dictionary to map mapped integers back to text labels)
   """
   df = copy.deepcopy(df_in)
@@ -94,10 +94,10 @@ def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False,
   return train_x, val_x, train_y, val_y, id_val, class_list, class_converter
 
 def general_split(glycans, labels, test_size = 0.2):
-  """splits glycans and labels into train / test sets
-  glycans -- list of IUPACcondensed glycan sequences (string)
-  labels -- list of labels used for prediction
-  test_size -- % size of test set; default is 0.2 / 20%
+  """splits glycans and labels into train / test sets\n
+  glycans -- list of IUPACcondensed glycan sequences (string)\n
+  labels -- list of labels used for prediction\n
+  test_size -- % size of test set; default is 0.2 / 20%\n
 
   returns X_train, X_test, y_train, y_test
   """

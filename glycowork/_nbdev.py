@@ -4,7 +4,7 @@ __all__ = ["index", "modules", "custom_doc_links", "git_url"]
 
 index = {}
 
-modules = []
+modules = ["glycan_data.py"]
 
 doc_url = "https://BojarLab.github.io/glycowork/"
 

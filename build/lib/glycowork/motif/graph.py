@@ -7,14 +7,16 @@ import numpy as np
 import pandas as pd
 from scipy.sparse.linalg.eigen.arpack import eigsh
 
-def glycan_to_graph(glycan, libr = lib):
-  """the monumental function for converting glycans into graphs
-  glycan -- IUPACcondensed glycan sequence (string)
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset
+def glycan_to_graph(glycan, libr = None):
+  """the monumental function for converting glycans into graphs\n
+  glycan -- IUPACcondensed glycan sequence (string)\n
+  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
 
-  returns (1) a list of labeled glycoletters from the glycan / node list
+  returns (1) a list of labeled glycoletters from the glycan / node list\n
           (2) two lists to indicate which glycoletters are connected in the glycan graph / edge list
   """
+  if libr is None:
+    libr = lib
   bracket_count = glycan.count('[')
   parts = []
   branchbranch = []
@@ -124,17 +126,19 @@ def categorical_node_match_wildcard(attr, default, wildcard_list):
       return all(data1.get(attr, d) == data2.get(attr, d) for attr, d in attrs)
   return match
 
-def compare_glycans(glycan_a, glycan_b, libr = lib,
+def compare_glycans(glycan_a, glycan_b, libr = None,
                     wildcards = False, wildcard_list = []):
-  """returns True if glycans are the same and False if not
-  glycan_a -- glycan in string format (IUPACcondensed)
-  glycan_b -- glycan in string format (IUPACcondensed)
-  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
-  wildcard_list -- list of indices for wildcards in libr
+  """returns True if glycans are the same and False if not\n
+  glycan_a -- glycan in string format (IUPACcondensed)\n
+  glycan_b -- glycan in string format (IUPACcondensed)\n
+  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
+  wildcard_list -- list of indices for wildcards in libr\n
   
   returns True if two glycans are the same and False if not
   """
+  if libr is None:
+    libr = lib
   glycan_graph_a = glycan_to_graph(glycan_a, libr)
   edgelist = list(zip(glycan_graph_a[1][0], glycan_graph_a[1][1]))
   g1 = nx.from_edgelist(edgelist)
@@ -150,33 +154,37 @@ def compare_glycans(glycan_a, glycan_b, libr = lib,
   else:
     return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
 
-def fast_compare_glycans(g1, g2, libr = lib,
+def fast_compare_glycans(g1, g2, libr = None,
                     wildcards = False, wildcard_list = []):
-  """returns True if glycans are the same and False if not
-  g1 -- glycan graph from glycan_to_nxGraph
-  g2 -- glycan graph from glycan_to_nxGraph
-  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
-  wildcard_list -- list of indices for wildcards in libr
+  """returns True if glycans are the same and False if not\n
+  g1 -- glycan graph from glycan_to_nxGraph\n
+  g2 -- glycan graph from glycan_to_nxGraph\n
+  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
+  wildcard_list -- list of indices for wildcards in libr\n
   
   returns True if two glycans are the same and False if not
   """
+  if libr is None:
+    libr = lib
   if wildcards:
     return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
   else:
     return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
 
-def subgraph_isomorphism(glycan, motif, libr = lib,
+def subgraph_isomorphism(glycan, motif, libr = None,
                          wildcards = False, wildcard_list = []):
-  """returns True if motif is in glycan and False if not
-  glycan -- glycan in string format (IUPACcondensed)
-  motif -- glycan motif in string format (IUPACcondensed)
-  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
-  wildcard_list -- list of indices for wildcards in libr
+  """returns True if motif is in glycan and False if not\n
+  glycan -- glycan in string format (IUPACcondensed)\n
+  motif -- glycan motif in string format (IUPACcondensed)\n
+  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
+  wildcard_list -- list of indices for wildcards in libr\n
   
   returns True if motif is in glycan and False if not
   """
+  if libr is None:
+    libr = lib
   glycan_graph = glycan_to_graph(glycan, libr)
   edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
   g1 = nx.from_edgelist(edgelist)
@@ -194,26 +202,30 @@ def subgraph_isomorphism(glycan, motif, libr = lib,
 
   return graph_pair.subgraph_is_isomorphic()
 
-def glycan_to_nxGraph(glycan, libr = lib):
-  """converts glycans into networkx graphs
-  glycan -- glycan in string format (IUPACcondensed)
-  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+def glycan_to_nxGraph(glycan, libr = None):
+  """converts glycans into networkx graphs\n
+  glycan -- glycan in string format (IUPACcondensed)\n
+  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
 
   returns networkx graph object of glycan
   """
+  if libr is None:
+    libr = lib
   glycan_graph = glycan_to_graph(glycan, libr = libr)
   edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
   g1 = nx.from_edgelist(edgelist)
   nx.set_node_attributes(g1, {k:glycan_graph[0][k] for k in range(len(glycan_graph[0]))},'labels')
   return g1
 
-def generate_graph_features(glycan, libr = lib):
-    """compute graph features of glycan
-    glycan -- glycan in string format (IUPACcondensed)
-    libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+def generate_graph_features(glycan, libr = None):
+    """compute graph features of glycan\n
+    glycan -- glycan in string format (IUPACcondensed)\n
+    libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
 
     returns a pandas dataframe with different graph features as columns and glycan as row
     """
+    if libr is None:
+      libr = lib
     g = glycan_to_nxGraph(glycan, libr = libr)
     #nbr of different node features:
     nbr_node_types = len(set(nx.get_node_attributes(g, "labels")))

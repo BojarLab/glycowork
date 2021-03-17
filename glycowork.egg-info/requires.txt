@@ -3,3 +3,4 @@ regex
 networkx
 statsmodels
 scipy
+torch

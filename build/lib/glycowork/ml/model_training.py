@@ -53,14 +53,14 @@ def train_model(model, dataloaders, criterion, optimizer,
                 scheduler, num_epochs = 25, patience = 50,
                 mode = 'classification'):
   """
-  model -- graph neural network (such as SweetNet) for analyzing glycans
-  dataloaders -- dictionary of dataloader objects with keys 'train' and 'val'
-  criterion -- PyTorch loss function
-  optimizer -- PyTorch optimizer
-  scheduler -- PyTorch learning rate decay
-  num_epochs -- number of epochs for training; default: 25
-  patience -- number of epochs without improvement until early stop; default: 50
-  mode -- 'classification' or 'regression'; default is binary classification
+  model -- graph neural network (such as SweetNet) for analyzing glycans\n
+  dataloaders -- dictionary of dataloader objects with keys 'train' and 'val'\n
+  criterion -- PyTorch loss function\n
+  optimizer -- PyTorch optimizer\n
+  scheduler -- PyTorch learning rate decay\n
+  num_epochs -- number of epochs for training; default: 25\n
+  patience -- number of epochs without improvement until early stop; default: 50\n
+  mode -- 'classification' or 'regression'; default is binary classification\n
 
   returns the best model seen during training
   """
@@ -164,21 +164,23 @@ def train_model(model, dataloaders, criterion, optimizer,
   return model
 
 def init_weights(model, sparsity = 0.1):
-    """initializes linear layers of PyTorch model with a sparse initialization
-    model -- neural network (such as SweetNet) for analyzing glycans
+    """initializes linear layers of PyTorch model with a sparse initialization\n
+    model -- neural network (such as SweetNet) for analyzing glycans\n
     sparsity -- proportion of sparsity after initialization; default:0.1 / 10%
     """
     if type(model) == torch.nn.Linear:
         torch.nn.init.sparse_(model.weight, sparsity = sparsity)
 
-def prep_model(model_type, num_classes, libr = lib):
-    """wrapper to instantiate model, initialize it, and put it on the GPU
-    model_type -- string indicating the type of model
-    num_classes -- number of unique classes for classification
-    libr -- sorted list of unique glycoletters observed in the glycans of our dataset
+def prep_model(model_type, num_classes, libr = None):
+    """wrapper to instantiate model, initialize it, and put it on the GPU\n
+    model_type -- string indicating the type of model\n
+    num_classes -- number of unique classes for classification\n
+    libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
 
     returns PyTorch model object
     """
+    if libr is None:
+        libr = lib
     if model_type == 'SweetNet':
         model = SweetNet(len(libr), num_classes = num_classes)
         model = model.apply(init_weights)

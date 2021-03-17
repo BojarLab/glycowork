@@ -1,6 +1,7 @@
 {
   "glycowork": {
     "Overview": "/",
-    "Glycowork": "core.html"
+    "Glycowork": "core.html",
+    "glycan_data": "glycan_data.html"
   }
 }

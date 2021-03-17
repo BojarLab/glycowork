@@ -22,10 +22,10 @@ def unwrap(nested_list):
   return out
 
 def find_nth(haystack, needle, n):
-  """finds n-th instance of motif
-  haystack -- string to search for motif
-  needle -- motif
-  n -- n-th occurrence in string
+  """finds n-th instance of motif\n
+  haystack -- string to search for motif\n
+  needle -- motif\n
+  n -- n-th occurrence in string\n
 
   returns starting index of n-th occurrence in string 
   """
@@ -36,7 +36,7 @@ def find_nth(haystack, needle, n):
   return start
 
 def load_file(file):
-    """loads .csv files from glycowork package
+    """loads .csv files from glycowork package\n
     file -- name of the file to be loaded [string]
     """
     try:
