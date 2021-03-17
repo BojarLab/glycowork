@@ -6,8 +6,8 @@ title: Glycowork
 keywords: fastai
 sidebar: home_sidebar
 
-summary: "Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease."
-description: "Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease."
+
+
 nb_path: "index.ipynb"
 ---
 <!--
@@ -47,8 +47,8 @@ nb_path: "index.ipynb"
 <span class="c1">#if you don&#39;t have a security token</span>
 <span class="c1">#`pip install git+https://YOURUSERNAME:YOURPASSWORD@github.com/BojarLab/glycowork.git</span>
 
-<span class="err">`</span><span class="n">pip</span> <span class="n">install</span> <span class="n">git</span><span class="o">+</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">BojarLab</span><span class="o">/</span><span class="n">glycowork</span><span class="o">.</span><span class="n">git</span>
-<span class="kn">import</span> <span class="nn">glycowork</span><span class="err">`</span>
+<span class="c1">#`pip install git+https://github.com/BojarLab/glycowork.git</span>
+<span class="c1">#import glycowork`</span>
 </pre></div>
 
     </div>
@@ -210,7 +210,7 @@ That&#39;s all we can do for you at this point!
            <span class="s1">&#39;Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-3)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">,</span>
            <span class="s1">&#39;GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcOPN(b1-6)GlcOPN&#39;</span><span class="p">]</span>
 <span class="kn">from</span> <span class="nn">glycowork.motif.annotate</span> <span class="kn">import</span> <span class="n">annotate_dataset</span>
-<span class="n">annotate_dataset</span><span class="p">(</span><span class="n">glycans</span><span class="p">,</span> <span class="n">feature_set</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;known&#39;</span><span class="p">,</span> <span class="s1">&#39;graph&#39;</span><span class="p">,</span> <span class="s1">&#39;exhaustive&#39;</span><span class="p">])</span>
+<span class="n">display</span><span class="p">(</span><span class="n">annotate_dataset</span><span class="p">(</span><span class="n">glycans</span><span class="p">,</span> <span class="n">feature_set</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;known&#39;</span><span class="p">,</span> <span class="s1">&#39;graph&#39;</span><span class="p">,</span> <span class="s1">&#39;exhaustive&#39;</span><span class="p">]))</span>
 </pre></div>
 
     </div>
@@ -223,7 +223,7 @@ That&#39;s all we can do for you at this point!
 <div class="output_area">
 
 
-<div class="output_html rendered_html output_subarea output_execute_result">
+<div class="output_html rendered_html output_subarea ">
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -368,8 +368,7 @@ That&#39;s all we can do for you at this point!
            <span class="s1">&#39;Glc(b1-3)Glc(b1-3)Glc&#39;</span><span class="p">]</span>
 <span class="n">label</span> <span class="o">=</span> <span class="p">[</span><span class="mf">3.234</span><span class="p">,</span> <span class="mf">2.423</span><span class="p">,</span> <span class="mf">0.733</span><span class="p">,</span> <span class="mf">3.102</span><span class="p">,</span> <span class="mf">0.108</span><span class="p">]</span>
 <span class="n">test_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s1">&#39;glycan&#39;</span><span class="p">:</span><span class="n">glycans</span><span class="p">,</span> <span class="s1">&#39;binding&#39;</span><span class="p">:</span><span class="n">label</span><span class="p">})</span>
-<span class="n">out</span> <span class="o">=</span> <span class="n">get_pvals_motifs</span><span class="p">(</span><span class="n">test_df</span><span class="p">,</span> <span class="n">glycan_col_name</span> <span class="o">=</span> <span class="s1">&#39;glycan&#39;</span><span class="p">,</span> <span class="n">label_col_name</span> <span class="o">=</span> <span class="s1">&#39;binding&#39;</span><span class="p">)</span>
-<span class="n">out</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span> <span class="o">=</span> <span class="s1">&#39;corr_pval&#39;</span><span class="p">)</span>
+<span class="n">display</span><span class="p">(</span><span class="n">get_pvals_motifs</span><span class="p">(</span><span class="n">test_df</span><span class="p">,</span> <span class="n">glycan_col_name</span> <span class="o">=</span> <span class="s1">&#39;glycan&#39;</span><span class="p">,</span> <span class="n">label_col_name</span> <span class="o">=</span> <span class="s1">&#39;binding&#39;</span><span class="p">))</span>
 </pre></div>
 
     </div>
@@ -382,7 +381,7 @@ That&#39;s all we can do for you at this point!
 <div class="output_area">
 
 
-<div class="output_html rendered_html output_subarea output_execute_result">
+<div class="output_html rendered_html output_subarea ">
 <div>
 <style scoped>
     .dataframe tbody tr th:only-of-type {

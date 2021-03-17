@@ -1,5 +1,5 @@
 # Glycowork
-> Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.
+
 
 
 ## Install
@@ -11,8 +11,8 @@
 #if you don't have a security token
 #`pip install git+https://YOURUSERNAME:YOURPASSWORD@github.com/BojarLab/glycowork.git
 
-`pip install git+https://github.com/BojarLab/glycowork.git
-import glycowork`
+#`pip install git+https://github.com/BojarLab/glycowork.git
+#import glycowork`
 ```
 
 ## How to use
@@ -77,10 +77,8 @@ glycans = ['Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNA
            'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-3)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
            'GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcOPN(b1-6)GlcOPN']
 from glycowork.motif.annotate import annotate_dataset
-annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive'])
+display(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']))
 ```
-
-
 
 
 <div>
@@ -203,7 +201,6 @@ annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive'])
 </div>
 
 
-
 ```python
 #identify significant binding motifs with (for instance) Z-score data
 import pandas as pd
@@ -215,11 +212,8 @@ glycans = ['Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNA
            'Glc(b1-3)Glc(b1-3)Glc']
 label = [3.234, 2.423, 0.733, 3.102, 0.108]
 test_df = pd.DataFrame({'glycan':glycans, 'binding':label})
-out = get_pvals_motifs(test_df, glycan_col_name = 'glycan', label_col_name = 'binding')
-out.sort_values(by = 'corr_pval')
+display(get_pvals_motifs(test_df, glycan_col_name = 'glycan', label_col_name = 'binding'))
 ```
-
-
 
 
 <div>
@@ -316,5 +310,4 @@ out.sort_values(by = 'corr_pval')
 </table>
 <p>1077 rows × 3 columns</p>
 </div>
-
 
