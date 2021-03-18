@@ -9,6 +9,7 @@ io = pkg_resources.resource_stream(__name__, "v3_sugarbase.csv")
 df_glycan = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "df_glyco_substitution_iso2.csv")
 df_glysum = pd.read_csv(io)
+df_glysum = df_glysum.iloc[:,1:]
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
 motif_list = pd.read_csv(io)
 

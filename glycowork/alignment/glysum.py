@@ -26,7 +26,6 @@ def pairwiseAlign(query, corpus = None, n = 5, vocab = None,
 
   returns the n best alignments of query against corpus in text form with scores etc
   """
-  print("The function works but GLYSUM is deprecated; need to generate new GLYSUM matrix with recent data")
   if corpus is None:
       corpus = df_glycan
   if vocab is None:
@@ -44,7 +43,7 @@ def pairwiseAlign(query, corpus = None, n = 5, vocab = None,
   scoring = SubstitutionScoring(submat, mismatch)
   aligner = GlobalSequenceAligner(scoring, gap)
   specs = corpus.species.values.tolist()
-  corpus = [small_motif_find(k) for k in corpus]
+  corpus = [small_motif_find(k) for k in corpus[col].values.tolist()]
   track = []
 
   for k in range(len(corpus)):

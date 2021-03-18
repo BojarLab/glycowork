@@ -74,6 +74,8 @@ get_insight('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc')
     
     This glycan occurs in the following species: ['Antheraea_pernyi', 'Apis_mellifera', 'Autographa_californica_nucleopolyhedrovirus', 'AvianInfluenzaA_Virus', 'Bombyx_mori', 'Bos_taurus', 'Caenorhabditis_elegans', 'Drosophila_melanogaster', 'Homo_sapiens', 'HumanImmunoDeficiency_Virus', 'Mamestra_brassicae', 'Megathura_crenulata', 'Mus_musculus', 'Rattus_norvegicus', 'Spodoptera_frugiperda', 'Sus_scrofa', 'Trichinella_spiralis']
     
+    Puh, that's quite a lot! Here are the phyla of those species: ['Arthropoda', 'Chordata', 'Mollusca', 'Negarnaviricota', 'Nematoda', 'Virus']
+    
     This glycan contains the following motifs: ['Chitobiose', 'Trimannosylcore', 'core_fucose']
     
     That's all we can do for you at this point!
@@ -1492,8 +1494,8 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>4.0</td>
       <td>13.0</td>
       <td>13.0</td>
-      <td>0.018063</td>
-      <td>-2.422758</td>
+      <td>0.034262</td>
+      <td>-2.390521</td>
       <td>13.0</td>
       <td>12.0</td>
       <td>0</td>
@@ -2731,8 +2733,8 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>3.0</td>
       <td>15.0</td>
       <td>15.0</td>
-      <td>0.037370</td>
-      <td>-2.704610</td>
+      <td>0.043739</td>
+      <td>-2.621893</td>
       <td>15.0</td>
       <td>14.0</td>
       <td>0</td>
@@ -3970,8 +3972,8 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>4.0</td>
       <td>15.0</td>
       <td>15.0</td>
-      <td>0.016526</td>
-      <td>-2.692253</td>
+      <td>0.025865</td>
+      <td>-2.680266</td>
       <td>15.0</td>
       <td>14.0</td>
       <td>0</td>
@@ -5084,64 +5086,64 @@ HTML(get_pvals_motifs(test_df, glycan_col_name = 'glycan', label_col_name = 'bin
   </thead>
   <tbody>
     <tr>
-      <th>1075</th>
-      <td>Man*b1-4*GlcNAc</td>
-      <td>0.000000</td>
-      <td>0.0</td>
-    </tr>
-    <tr>
-      <th>1074</th>
-      <td>Man*a1-6*Man</td>
-      <td>0.000000</td>
-      <td>0.0</td>
-    </tr>
-    <tr>
-      <th>1073</th>
-      <td>Man*a1-3*Man</td>
-      <td>0.000000</td>
-      <td>0.0</td>
-    </tr>
-    <tr>
-      <th>450</th>
+      <th>4</th>
       <td>GlcNAc</td>
-      <td>0.000000</td>
-      <td>0.0</td>
+      <td>0.013469</td>
+      <td>0.394527</td>
     </tr>
     <tr>
-      <th>1015</th>
-      <td>a1-6</td>
-      <td>0.000000</td>
-      <td>0.0</td>
-    </tr>
-    <tr>
-      <th>1066</th>
-      <td>GlcNAc*b1-4*GlcNAc</td>
-      <td>0.000000</td>
-      <td>0.0</td>
-    </tr>
-    <tr>
-      <th>1045</th>
+      <th>19</th>
       <td>b1-4</td>
-      <td>0.000000</td>
-      <td>0.0</td>
+      <td>0.013469</td>
+      <td>0.394527</td>
     </tr>
     <tr>
-      <th>1012</th>
-      <td>a1-3</td>
-      <td>0.018875</td>
-      <td>1.0</td>
-    </tr>
-    <tr>
-      <th>794</th>
+      <th>8</th>
       <td>Man</td>
-      <td>0.019506</td>
-      <td>1.0</td>
+      <td>0.025198</td>
+      <td>0.590671</td>
     </tr>
     <tr>
-      <th>710</th>
-      <td>L-GulHep</td>
-      <td>1.000000</td>
-      <td>1.0</td>
+      <th>11</th>
+      <td>a1-3</td>
+      <td>0.025636</td>
+      <td>0.590671</td>
+    </tr>
+    <tr>
+      <th>34</th>
+      <td>Man*a1-6*Man</td>
+      <td>0.091752</td>
+      <td>0.958241</td>
+    </tr>
+    <tr>
+      <th>33</th>
+      <td>Man*a1-3*Man</td>
+      <td>0.091752</td>
+      <td>0.958241</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td>GlcNAc*b1-4*GlcNAc</td>
+      <td>0.091752</td>
+      <td>0.958241</td>
+    </tr>
+    <tr>
+      <th>35</th>
+      <td>Man*b1-4*GlcNAc</td>
+      <td>0.091752</td>
+      <td>0.958241</td>
+    </tr>
+    <tr>
+      <th>13</th>
+      <td>a1-6</td>
+      <td>0.091752</td>
+      <td>0.958241</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>a1-2</td>
+      <td>0.130826</td>
+      <td>0.980276</td>
     </tr>
   </tbody>
 </table>

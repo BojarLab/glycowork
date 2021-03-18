@@ -62,13 +62,14 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long,
         return data
 
 def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
-                          shuffle = True):
+                          shuffle = True, drop_last = False):
   """wrapper function to convert glycans and labels to a torch_geometric DataLoader\n
   glycan_list -- list of IUPACcondensed glycan sequences (string)\n
   labels -- list of labels\n
   libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
   batch_size -- how many samples should be in each batch; default:32\n
   shuffle -- if samples should be shuffled when making dataloader; default:True\n
+  drop_last -- whether last batch is dropped; default:False\n
 
   returns a dataloader object used for training deep learning models
   """
@@ -76,12 +77,12 @@ def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
     libr = lib
   glycan_graphs = dataset_to_graphs(glycan_list, labels, libr = libr)
   glycan_loader = DataLoader(glycan_graphs, batch_size = batch_size,
-                             shuffle = shuffle)
+                             shuffle = shuffle, drop_last = drop_last)
   return glycan_loader
 
 def split_data_to_train(glycan_list_train, glycan_list_val,
                         labels_train, labels_val, libr = None,
-                        batch_size = 32):
+                        batch_size = 32, drop_last = False):
   """wrapper function to convert split training/test data into dictionary of dataloaders\n
   glycan_list_train -- list of IUPACcondensed glycan sequences (string)\n
   glycan_list_val -- list of IUPACcondensed glycan sequences (string)\n
@@ -89,13 +90,16 @@ def split_data_to_train(glycan_list_train, glycan_list_val,
   labels_val -- list of labels\n
   libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
   batch_size -- how many samples should be in each batch; default:32\n
+  drop_last -- whether last batch is dropped; default:False\n
 
   returns a dictionary of dataloaders for training and testing deep learning models
   """
   if libr is None:
     libr = lib
   train_loader = dataset_to_dataloader(glycan_list_train, labels_train, libr = libr,
-                                       batch_size = batch_size, shuffle = True)
+                                       batch_size = batch_size, shuffle = True,
+                                       drop_last = drop_last)
   val_loader = dataset_to_dataloader(glycan_list_val, labels_val, libr = libr,
-                                       batch_size = batch_size, shuffle = False)
+                                       batch_size = batch_size, shuffle = False,
+                                       drop_last = drop_last)
   return {'train':train_loader, 'val':val_loader}
