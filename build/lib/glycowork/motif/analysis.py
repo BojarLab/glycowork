@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
 
@@ -41,3 +43,36 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
         return out.sort_values(by = 'corr_pval')
     else:
         return out
+
+def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known']):
+    """clusters samples based on glycan data (for instance glycan binding etc.)\n
+    df -- dataframe with glycan data, rows are samples and columns are glycans\n
+    mode -- whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence\n
+    libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
+    feature_set -- which feature set to use for annotations, add more to list to expand; default is 'exhaustive'\n
+                 options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
+                               and 'exhaustive' (all mono- and disaccharide features)\n
+
+    prints clustermap                         
+    """
+    if libr is None:
+        libr = lib
+    df = df.fillna(0)
+    if mode == 'motif':
+        df_motif = annotate_dataset(df.columns.values.tolist(),
+                                libr = lib, feature_set = feature_set)
+        df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
+        collect_dic = {}
+        for col in df_motif.columns.values.tolist():
+            indices = [i for i, x in enumerate(df_motif[col].values.tolist()) if x >= 1]
+            temp = np.mean(df.iloc[:, indices], axis = 1)
+            collect_dic[col] = temp
+        df = pd.DataFrame(collect_dic)
+    sns.clustermap(df.T)
+    plt.xlabel('Samples')
+    if mode == 'sequence':
+        plt.ylabel('Glycans')
+    else:
+        plt.ylabel('Motifs')
+    plt.tight_layout()
+    plt.show()

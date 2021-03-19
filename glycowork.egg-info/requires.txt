@@ -4,3 +4,4 @@ networkx
 statsmodels
 scipy
 torch
+seaborn

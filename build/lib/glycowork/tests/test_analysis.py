@@ -16,3 +16,11 @@ print(get_pvals_motifs(test_df, 'glycan', 'binding'))
 print("Glyco-Motif enrichment p-value test expanded")
 print(get_pvals_motifs(test_df, 'glycan', 'binding', feature_set = ['known',
                                                                     'exhaustive']))
+
+label2 = [0.134, 0.345, 1.15, 0.233, 2.981]
+label3 = [0.334, 0.245, 1.55, 0.133, 2.581]
+test_df2 = pd.DataFrame([label, label2, label3], columns = glycans)
+print("Test Glyco-Heatmap")
+make_heatmap(test_df2, mode = 'motif', feature_set = ['known', 'exhaustive'])
+
+

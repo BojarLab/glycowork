@@ -6,7 +6,11 @@ settings.ini
 setup.py
 glycowork/__init__.py
 glycowork/_nbdev.py
+glycowork/alignment.py
 glycowork/core.py
+glycowork/glycan_data.py
+glycowork/ml.py
+glycowork/motif.py
 glycowork.egg-info/PKG-INFO
 glycowork.egg-info/SOURCES.txt
 glycowork.egg-info/dependency_links.txt
@@ -17,6 +21,7 @@ glycowork/alignment/glysum.py
 glycowork/glycan_data/__init__.py
 glycowork/glycan_data/data_entry.py
 glycowork/glycan_data/loader.py
+glycowork/glycan_data/data/__init__.py
 glycowork/ml/__init__.py
 glycowork/ml/model_training.py
 glycowork/ml/models.py
@@ -31,6 +36,7 @@ glycowork/motif/processing.py
 glycowork/motif/query.py
 glycowork/motif/tokenization.py
 glycowork/tests/__init__.py
+glycowork/tests/temp.py
 glycowork/tests/test_alignment.py
 glycowork/tests/test_analysis.py
 glycowork/tests/test_annotate.py

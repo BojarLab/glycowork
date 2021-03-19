@@ -5149,3 +5149,15 @@ HTML(get_pvals_motifs(test_df, glycan_col_name = 'glycan', label_col_name = 'bin
 </table>
 
 
+
+```
+from nbdev.export import notebook2script; notebook2script()
+```
+
+    Converted 00_core.ipynb.
+    Converted 01_alignment.ipynb.
+    Converted 02_glycan_data.ipynb.
+    Converted 03_ml.ipynb.
+    Converted 04_motif.ipynb.
+    Converted index.ipynb.
+    
