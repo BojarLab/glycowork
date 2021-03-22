@@ -70,7 +70,7 @@ nb_path: "04_motif.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_pvals_motifs" class="doc_header"><code>get_pvals_motifs</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/analysis.py#L11" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_pvals_motifs</code>(<strong><code>df</code></strong>, <strong><code>glycan_col_name</code></strong>, <strong><code>label_col_name</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>thresh</code></strong>=<em><code>1.645</code></em>, <strong><code>sorting</code></strong>=<em><code>True</code></em>, <strong><code>feature_set</code></strong>=<em><code>['exhaustive']</code></em>)</p>
+<h4 id="get_pvals_motifs" class="doc_header"><code>get_pvals_motifs</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/analysis.py#L11" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_pvals_motifs</code>(<strong><code>df</code></strong>, <strong><code>glycan_col_name</code></strong>, <strong><code>label_col_name</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>thresh</code></strong>=<em><code>1.645</code></em>, <strong><code>sorting</code></strong>=<em><code>True</code></em>, <strong><code>feature_set</code></strong>=<em><code>['exhaustive']</code></em>, <strong><code>wildcards</code></strong>=<em><code>False</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>)</p>
 </blockquote>
 <p>returns enriched motifs based on label data or predicted data</p>
 <p>df -- dataframe containing glycan sequences and labels</p>
@@ -84,8 +84,9 @@ nb_path: "04_motif.ipynb"
 <pre><code>         options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
                        and 'exhaustive' (all mono- and disaccharide features)
 
-
 </code></pre>
+<p>wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False</p>
+<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
 <p>returns dataframe with p-values and corrected p-values for every glycan motif</p>
 
 </div>
@@ -229,7 +230,7 @@ nb_path: "04_motif.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="make_heatmap" class="doc_header"><code>make_heatmap</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/analysis.py#L47" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>make_heatmap</code>(<strong><code>df</code></strong>, <strong><code>mode</code></strong>=<em><code>'sequence'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known']</code></em>)</p>
+<h4 id="make_heatmap" class="doc_header"><code>make_heatmap</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/analysis.py#L51" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>make_heatmap</code>(<strong><code>df</code></strong>, <strong><code>mode</code></strong>=<em><code>'sequence'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known']</code></em>, <strong><code>wildcards</code></strong>=<em><code>False</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>, <strong>**<code>kwargs</code></strong>)</p>
 </blockquote>
 <p>clusters samples based on glycan data (for instance glycan binding etc.)</p>
 <p>df -- dataframe with glycan data, rows are samples and columns are glycans</p>
@@ -240,8 +241,10 @@ nb_path: "04_motif.ipynb"
 <pre><code>         options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
                        and 'exhaustive' (all mono- and disaccharide features)
 
-
 </code></pre>
+<p>wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False</p>
+<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
+<p>**kwargs -- keyword arguments that are directly passed on to seaborn clustermap</p>
 <p>prints clustermap</p>
 
 </div>
@@ -353,12 +356,14 @@ nb_path: "04_motif.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="annotate_glycan" class="doc_header"><code>annotate_glycan</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/annotate.py#L7" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>annotate_glycan</code>(<strong><code>glycan</code></strong>, <strong><code>motifs</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="annotate_glycan" class="doc_header"><code>annotate_glycan</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/annotate.py#L7" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>annotate_glycan</code>(<strong><code>glycan</code></strong>, <strong><code>motifs</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>wildcards</code></strong>=<em><code>False</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>)</p>
 </blockquote>
 <p>searches for known motifs in glycan sequence</p>
 <p>glycan -- IUPACcondensed glycan sequence (string)</p>
 <p>motifs -- dataframe of glycan motifs (name + sequence)</p>
 <p>libr -- sorted list of unique glycoletters observed in the glycans of our dataset</p>
+<p>wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False</p>
+<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
 <p>returns dataframe with absence/presence of motifs in glycan</p>
 
 </div>
@@ -653,7 +658,7 @@ nb_path: "04_motif.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="annotate_dataset" class="doc_header"><code>annotate_dataset</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/annotate.py#L26" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>annotate_dataset</code>(<strong><code>glycans</code></strong>, <strong><code>motifs</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known']</code></em>)</p>
+<h4 id="annotate_dataset" class="doc_header"><code>annotate_dataset</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/annotate.py#L31" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>annotate_dataset</code>(<strong><code>glycans</code></strong>, <strong><code>motifs</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known']</code></em>, <strong><code>wildcards</code></strong>=<em><code>False</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>, <strong><code>condense</code></strong>=<em><code>False</code></em>)</p>
 </blockquote>
 <p>wrapper function to annotate motifs in list of glycans</p>
 <p>glycans -- list of IUPACcondensed glycan sequences (string)</p>
@@ -664,8 +669,10 @@ nb_path: "04_motif.ipynb"
 <pre><code>           options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
                          and 'exhaustive' (all mono- and disaccharide features)
 
-
 </code></pre>
+<p>wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False</p>
+<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
+<p>condense -- if True, throws away columns with only zeroes; default:False</p>
 <p>returns dataframe of glycans (rows) and presence/absence of known motifs (columns)</p>
 
 </div>
@@ -7106,7 +7113,7 @@ True
 <p>motif -- glycan motif in string format (IUPACcondensed)</p>
 <p>libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</p>
 <p>wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False</p>
-<p>wildcard_list -- list of indices for wildcards in libr</p>
+<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
 <p>returns True if motif is in glycan and False if not</p>
 
 </div>
@@ -7164,7 +7171,7 @@ True
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="glycan_to_nxGraph" class="doc_header"><code>glycan_to_nxGraph</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L205" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>glycan_to_nxGraph</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="glycan_to_nxGraph" class="doc_header"><code>glycan_to_nxGraph</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L207" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>glycan_to_nxGraph</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>converts glycans into networkx graphs</p>
 <p>glycan -- glycan in string format (IUPACcondensed)</p>
@@ -7225,7 +7232,7 @@ True
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="generate_graph_features" class="doc_header"><code>generate_graph_features</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L220" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>generate_graph_features</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="generate_graph_features" class="doc_header"><code>generate_graph_features</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L222" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>generate_graph_features</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>compute graph features of glycan</p>
 <p>glycan -- glycan in string format (IUPACcondensed)</p>
@@ -18185,42 +18192,6 @@ That&#39;s all we can do for you at this point!
 </table>
 </div>
 
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="kn">from</span> <span class="nn">nbdev.export</span> <span class="kn">import</span> <span class="n">notebook2script</span><span class="p">;</span> <span class="n">notebook2script</span><span class="p">()</span>
-</pre></div>
-
-    </div>
-</div>
-</div>
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>Converted 00_core.ipynb.
-Converted 01_alignment.ipynb.
-Converted 02_glycan_data.ipynb.
-Converted 03_ml.ipynb.
-Converted 04_motif.ipynb.
-Converted index.ipynb.
-</pre>
-</div>
 </div>
 
 </div>

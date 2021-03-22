@@ -21,7 +21,6 @@ glycowork/alignment/glysum.py
 glycowork/glycan_data/__init__.py
 glycowork/glycan_data/data_entry.py
 glycowork/glycan_data/loader.py
-glycowork/glycan_data/data/__init__.py
 glycowork/ml/__init__.py
 glycowork/ml/model_training.py
 glycowork/ml/models.py

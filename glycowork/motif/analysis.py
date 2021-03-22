@@ -10,7 +10,8 @@ from glycowork.motif.annotate import annotate_dataset
 
 def get_pvals_motifs(df, glycan_col_name, label_col_name,
                      libr = None, thresh = 1.645, sorting = True,
-                     feature_set = ['exhaustive']):
+                     feature_set = ['exhaustive'], wildcards = False,
+                     wildcard_list = []):
     """returns enriched motifs based on label data or predicted data\n
     df -- dataframe containing glycan sequences and labels\n
     glycan_col_name -- column name for glycan sequences; string\n
@@ -21,13 +22,16 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
     feature_set -- which feature set to use for annotations, add more to list to expand; default is 'exhaustive'\n
                  options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
                                and 'exhaustive' (all mono- and disaccharide features)\n
+    wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
+    wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
 
     returns dataframe with p-values and corrected p-values for every glycan motif
     """
     if libr is None:
         libr = lib
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
-                                libr = lib, feature_set = feature_set)
+                                libr = lib, feature_set = feature_set,
+                                wildcards = wildcards, wildcard_list = wildcard_list)
     df_motif[label_col_name] = df[label_col_name].values.tolist()
     df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
     df_pos = df_motif[df_motif[label_col_name] > thresh]
@@ -44,7 +48,9 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
     else:
         return out
 
-def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known']):
+def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
+                 wildcards = False, wildcard_list = [],
+                 **kwargs):
     """clusters samples based on glycan data (for instance glycan binding etc.)\n
     df -- dataframe with glycan data, rows are samples and columns are glycans\n
     mode -- whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence\n
@@ -52,6 +58,9 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known']):
     feature_set -- which feature set to use for annotations, add more to list to expand; default is 'exhaustive'\n
                  options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
                                and 'exhaustive' (all mono- and disaccharide features)\n
+    wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
+    wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
+    **kwargs -- keyword arguments that are directly passed on to seaborn clustermap\n                          
 
     prints clustermap                         
     """
@@ -60,7 +69,8 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known']):
     df = df.fillna(0)
     if mode == 'motif':
         df_motif = annotate_dataset(df.columns.values.tolist(),
-                                libr = lib, feature_set = feature_set)
+                                libr = lib, feature_set = feature_set,
+                                    wildcards = wildcards, wildcard_list = wildcard_list)
         df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
         collect_dic = {}
         for col in df_motif.columns.values.tolist():
@@ -68,7 +78,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known']):
             temp = np.mean(df.iloc[:, indices], axis = 1)
             collect_dic[col] = temp
         df = pd.DataFrame(collect_dic)
-    sns.clustermap(df.T)
+    sns.clustermap(df.T, **kwargs)
     plt.xlabel('Samples')
     if mode == 'sequence':
         plt.ylabel('Glycans')

@@ -179,12 +179,14 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   motif -- glycan motif in string format (IUPACcondensed)\n
   libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
   wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
-  wildcard_list -- list of indices for wildcards in libr\n
+  wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
   
   returns True if motif is in glycan and False if not
   """
   if libr is None:
     libr = lib
+  if len(wildcard_list) >= 1:
+    wildcard_list = [libr.index(k) for k in wildcard_list]
   glycan_graph = glycan_to_graph(glycan, libr)
   edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
   g1 = nx.from_edgelist(edgelist)
