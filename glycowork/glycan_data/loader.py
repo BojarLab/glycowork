@@ -1,4 +1,6 @@
 import pandas as pd
+import os
+import pickle
 import pkg_resources
 
 from glycowork.motif.processing import get_lib
@@ -12,6 +14,9 @@ df_glysum = pd.read_csv(io)
 df_glysum = df_glysum.iloc[:,1:]
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
 motif_list = pd.read_csv(io)
+this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
+data_path = os.path.join(this_dir, 'glycan_representations_species.pkl')
+glycan_emb = pickle.load(open(data_path, 'rb'))
 
 lib = get_lib(list(set(df_glycan.glycan.values.tolist() +
                        df_species.target.values.tolist() +

@@ -45,6 +45,7 @@ nb_path: "02_glycan_data.ipynb"
 <li><code>df_species</code> loaded file for all glycans with species information, one row per glycan-species combination</li>
 <li><code>df_glycan</code> loaded file containing all unique glycans with lots of meta-information</li>
 <li><code>df_glysum</code> loaded glycan substitution matrix for glycan alignment</li>
+<li><code>glycan_emb</code> glycan representations for all glycans in df_species from a trained species-level SweetNet model</li>
 <li><code>lib</code> library of unique monosaccharides + linkages in stored datasets; generated with <code>get_lib</code></li>
 </ul>
 
@@ -68,7 +69,7 @@ nb_path: "02_glycan_data.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="unwrap" class="doc_header"><code>unwrap</code><a href="https://github.com/BojarLab/glycoworkglycowork/glycan_data/loader.py#L26" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>unwrap</code>(<strong><code>nested_list</code></strong>)</p>
+<h4 id="unwrap" class="doc_header"><code>unwrap</code><a href="https://github.com/BojarLab/glycoworkglycowork/glycan_data/loader.py#L31" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>unwrap</code>(<strong><code>nested_list</code></strong>)</p>
 </blockquote>
 <p>converts a nested list into a flat list</p>
 
@@ -126,7 +127,7 @@ nb_path: "02_glycan_data.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_nth" class="doc_header"><code>find_nth</code><a href="https://github.com/BojarLab/glycoworkglycowork/glycan_data/loader.py#L31" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_nth</code>(<strong><code>haystack</code></strong>, <strong><code>needle</code></strong>, <strong><code>n</code></strong>)</p>
+<h4 id="find_nth" class="doc_header"><code>find_nth</code><a href="https://github.com/BojarLab/glycoworkglycowork/glycan_data/loader.py#L36" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_nth</code>(<strong><code>haystack</code></strong>, <strong><code>needle</code></strong>, <strong><code>n</code></strong>)</p>
 </blockquote>
 <p>finds n-th instance of motif</p>
 <p>haystack -- string to search for motif</p>

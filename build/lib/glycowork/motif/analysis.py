@@ -4,8 +4,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
+from sklearn.manifold import TSNE
 
-from glycowork.glycan_data.loader import lib
+from glycowork.glycan_data.loader import lib, glycan_emb
 from glycowork.motif.annotate import annotate_dataset
 
 def get_pvals_motifs(df, glycan_col_name, label_col_name,
@@ -78,11 +79,29 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
             temp = np.mean(df.iloc[:, indices], axis = 1)
             collect_dic[col] = temp
         df = pd.DataFrame(collect_dic)
+    df.dropna(axis = 1, inplace = True)
     sns.clustermap(df.T, **kwargs)
     plt.xlabel('Samples')
     if mode == 'sequence':
         plt.ylabel('Glycans')
     else:
         plt.ylabel('Motifs')
+    plt.tight_layout()
+    plt.show()
+
+def plot_embeddings(glycans, emb = None, label_list = None):
+    """plots glycan representations for a list of glycans
+    glycans -- list of IUPACcondensed glycan sequences (string)\n
+    emb -- stored glycan representations; default takes them from trained species-level SweetNet model\n
+    label_list -- list of same length as glycans if coloring of the plot is desired\n
+    """
+    if emb is None:
+        emb = glycan_emb
+    embs = np.array([emb[k] for k in glycans])
+    embs = TSNE(random_state = 42).fit_transform(embs)
+    sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
+                    palette = 'colorblind')
+    plt.xlabel('Dim1')
+    plt.ylabel('Dim2')
     plt.tight_layout()
     plt.show()

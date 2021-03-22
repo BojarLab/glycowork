@@ -107,3 +107,17 @@ def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
   df_out = pd.concat([df, added_rows], axis = 0, ignore_index = True)
   return df_out
 
+def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'species'):
+  """converts a dataframe such as df_species to absence/presence matrix\n
+  df -- dataframe with glycan occurrence, rows are glycan-label pairs\n
+  glycan_col_name -- column name under which glycans are stored; default:target\n
+  label_col_name -- column name under which labels are stored; default:species\n
+
+  returns pandas dataframe with labels as rows and glycan occurrences as columns
+  """
+  glycans = list(sorted(list(set(df[glycan_col_name].values.tolist()))))
+  species = list(sorted(list(set(df[label_col_name].values.tolist()))))
+  mat_dic = {k:[df[df[label_col_name] == j][glycan_col_name].values.tolist().count(k) for j in species] for k in glycans}
+  mat = pd.DataFrame(mat_dic)
+  mat.index = species
+  return mat

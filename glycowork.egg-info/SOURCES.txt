@@ -35,7 +35,6 @@ glycowork/motif/processing.py
 glycowork/motif/query.py
 glycowork/motif/tokenization.py
 glycowork/tests/__init__.py
-glycowork/tests/temp.py
 glycowork/tests/test_alignment.py
 glycowork/tests/test_analysis.py
 glycowork/tests/test_annotate.py
