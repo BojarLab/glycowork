@@ -22,7 +22,7 @@ def get_insight(glycan, libr = None, motifs = None):
     species = df_glycan.species.values.tolist()[idx[0]]
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(species))
-    if len(species) > 5:
+    if len(eval(species)) > 5:
         phyla = df_glycan.phylum.values.tolist()[idx[0]]
         print("\nPuh, that's quite a lot! Here are the phyla of those species: " + str(phyla))
     found_motifs = annotate_glycan(glycan, motifs = motifs, libr = libr)

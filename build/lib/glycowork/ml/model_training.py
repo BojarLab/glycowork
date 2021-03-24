@@ -188,3 +188,30 @@ def prep_model(model_type, num_classes, libr = None):
     else:
         print("Invalid Model Type")
     return model
+
+def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.001,
+                   mode = 'multiclass'):
+    """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
+    model -- graph neural network (such as SweetNet) for analyzing glycans\n
+    epochs -- number of epochs for training the model\n
+    lr -- learning rate\n
+    lr_decay_length -- proportion of epochs over which to decay the learning rate;default:0.5\n
+    weight_decay -- regularization parameter for the optimizer; default:0.001\n
+    mode -- 'multiclass': classification with multiple classes, 'binary':binary classification\n
+            'regression': regression; default:'multiclass'\n
+
+    returns optimizer, learning rate scheduler, and loss criterion objects
+    """
+    lr_decay = np.round(epochs * lr_decay_length)
+    optimizer_ft = torch.optim.Adam(model.parameters(), lr = lr,
+                                    weight_decay = weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_ft, lr_decay)
+    if mode == 'multiclass':
+        criterion = torch.nn.CrossEntropyLoss().cuda()
+    elif mode == 'binary':
+        criterion = torch.nn.BCEWithLogitsLoss().cuda()
+    elif mode == 'regression':
+        criterion = torch.nn.MSELoss().cuda()
+    else:
+        print("Invalid option. Please pass 'multiclass', 'binary', or 'regression'.")
+    return optimizer_ft, scheduler, criterion

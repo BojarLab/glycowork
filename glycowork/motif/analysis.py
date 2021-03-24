@@ -70,7 +70,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     df = df.fillna(0)
     if mode == 'motif':
         df_motif = annotate_dataset(df.columns.values.tolist(),
-                                libr = lib, feature_set = feature_set,
+                                libr = libr, feature_set = feature_set,
                                     wildcards = wildcards, wildcard_list = wildcard_list)
         df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
         collect_dic = {}
