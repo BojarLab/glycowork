@@ -2,12 +2,14 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from collections import Counter
 from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
 
-from glycowork.glycan_data.loader import lib, glycan_emb
+from glycowork.glycan_data.loader import lib, glycan_emb, df_species
 from glycowork.motif.annotate import annotate_dataset
+from glycowork.motif.tokenization import link_find
 
 def get_pvals_motifs(df, glycan_col_name, label_col_name,
                      libr = None, thresh = 1.645, sorting = True,
@@ -50,7 +52,8 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
         return out
 
 def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
-                 wildcards = False, wildcard_list = [],
+                 wildcards = False, wildcard_list = [], datatype = 'response',
+                 rarity_filter = 0.05,
                  **kwargs):
     """clusters samples based on glycan data (for instance glycan binding etc.)\n
     df -- dataframe with glycan data, rows are samples and columns are glycans\n
@@ -61,6 +64,8 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
                                and 'exhaustive' (all mono- and disaccharide features)\n
     wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
     wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
+    datatype -- whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')\n
+    rarity_filter -- proportion of samples that need to have a non-zero value for a variable to be included; default:0.05\n
     **kwargs -- keyword arguments that are directly passed on to seaborn clustermap\n                          
 
     prints clustermap                         
@@ -72,13 +77,20 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
         df_motif = annotate_dataset(df.columns.values.tolist(),
                                 libr = libr, feature_set = feature_set,
                                     wildcards = wildcards, wildcard_list = wildcard_list)
-        df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
+        df_motif = df_motif.replace(0,np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
         collect_dic = {}
-        for col in df_motif.columns.values.tolist():
+        if datatype == 'response':
+          for col in df_motif.columns.values.tolist():
             indices = [i for i, x in enumerate(df_motif[col].values.tolist()) if x >= 1]
             temp = np.mean(df.iloc[:, indices], axis = 1)
             collect_dic[col] = temp
-        df = pd.DataFrame(collect_dic)
+          df = pd.DataFrame(collect_dic)
+        elif datatype == 'presence':
+          idx = df.index.values.tolist()
+          collecty = [[np.sum(df.iloc[row, [i for i, x in enumerate(df_motif[col].values.tolist()) if x >= 1]])/df.iloc[row, :].values.sum() for col in df_motif.columns.values.tolist()] for row in range(df.shape[0])]
+          df = pd.DataFrame(collecty)
+          df.columns = df_motif.columns.values.tolist()
+          df.index = idx
     df.dropna(axis = 1, inplace = True)
     sns.clustermap(df.T, **kwargs)
     plt.xlabel('Samples')
@@ -105,3 +117,69 @@ def plot_embeddings(glycans, emb = None, label_list = None):
     plt.ylabel('Dim2')
     plt.tight_layout()
     plt.show()
+
+def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_name = 'target',
+                                rank = None, focus = None, modifications = False):
+  """for a given monosaccharide/bond, return typical neighboring bond/monosaccharide\n
+  sugar -- monosaccharide or linkage as string\n
+  df -- dataframe to use for analysis; default:df_species\n
+  mode -- either 'sugar' (connected monosaccharides),\n
+          'bond' (monosaccharides making a provided linkage),\n
+          or 'sugarbond' (linkages that a provided monosaccharides makes); default:'sugar'\n
+  glycan_col_name -- column name under which glycans can be found; default:'target'\n
+  rank -- add column name as string if you want to filter for a group\n
+  focus -- add row value as string if you want to filter for a group\n
+  modifications -- set to True if you want to consider modified versions of a monosaccharide; default:False\n
+
+  plots typical neighboring bond/monosaccharide and modification distribution
+  """
+  if df is None:
+    df = df_species
+  if rank is not None:
+    df = df[df[rank] == focus]
+  pool = [link_find(k) for k in df[glycan_col_name].values.tolist()]
+  pool = [item for sublist in pool for item in sublist]
+
+  if mode == 'bond':
+    pool = [k.split('*')[0] for k in pool if k.split('*')[1] == sugar]
+    lab = 'Observed Monosaccharides Making Bond %s' % sugar
+  elif mode == 'sugar':
+    if modifications:
+      sugars = [k.split('*')[0] for k in pool if sugar in k.split('*')[0]]
+      pool = [k.split('*')[2] for k in pool if sugar in k.split('*')[0]]
+    else:
+      pool = [k.split('*')[2] for k in pool if k.split('*')[0] == sugar]
+    lab = 'Observed Monosaccharides Paired with %s' % sugar
+  elif mode == 'sugarbond':
+    if modifications:
+      sugars = [k.split('*')[0] for k in pool if sugar in k.split('*')[0]]
+      pool = [k.split('*')[1] for k in pool if sugar in k.split('*')[0]]
+    else:
+      pool = [k.split('*')[1] for k in pool if k.split('*')[0] == sugar]
+    lab = 'Observed Bonds Made by %s' % sugar
+    
+  cou = Counter(pool).most_common()
+  cou_k = [k[0] for k in cou if k[1] > 10]
+  cou_v = [k[1] for k in cou if k[1] > 10]
+  cou_v = [v / len(pool) for v in cou_v]
+
+  fig, (a0,a1) = plt.subplots(1, 2 , figsize = (8, 4), gridspec_kw = {'width_ratios': [1, 1]})
+  a0.bar(cou_k, cou_v)
+  a0.set_ylabel('Relative Proportion')
+  a0.set_xlabel(lab)
+  a0.set_title('Pairings')
+  if mode == 'sugar' or mode == 'bond':
+    plt.setp(a0.get_xticklabels(), rotation = 'vertical')
+  
+  if modifications:
+    cou = Counter(sugars).most_common()
+    cou_k = [k[0] for k in cou if k[1] > 10]
+    cou_v = [k[1] for k in cou if k[1] > 10]
+    cou_v = [v / len(sugars) for v in cou_v]
+    a1.bar(cou_k, cou_v)
+    a1.set_ylabel('Relative Proportion')
+    a1.set_xlabel(sugar + " Variants")
+    plt.setp(a1.get_xticklabels(), rotation = 'vertical')
+
+  fig.tight_layout()
+  plt.show()
