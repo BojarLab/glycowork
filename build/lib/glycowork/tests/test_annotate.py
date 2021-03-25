@@ -13,6 +13,8 @@ print(annotate_dataset(glycans, feature_set = ['known', 'graph']))
 print("Annotate Test with Everything")
 print(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']))
 print("Annotate Test with Wildcard Matching")
-temp = annotate_dataset(glycans, wildcards = True, wildcard_list = ['bond'])
-print(temp.loc[:, (temp != 0).any(axis = 0)])
-
+print(annotate_dataset(glycans, extra = 'wildcards', wildcard_list = ['bond'],
+                        condense = True))
+print("Annotate Test with Position Matching")
+print(annotate_dataset(glycans, extra = 'termini',
+                        condense = True))

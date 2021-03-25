@@ -46,7 +46,7 @@ glycan_to_graph('Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc')
 
 
 
-    ([794, 1045, 450, 1045, 450, 281, 1015],
+    ([794, 1046, 450, 1046, 450, 281, 1016],
      [(0, 1, 2, 3, 5, 6), (1, 2, 3, 4, 6, 4)])
 
 
@@ -137,15 +137,19 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <th>PI_antigen</th>
       <th>Chitobiose</th>
       <th>Trimannosylcore</th>
-      <th>LacNAc_type1</th>
-      <th>LacNAc_type2</th>
-      <th>LacdiNAc_type1</th>
-      <th>LacdiNAc_type2</th>
-      <th>bisecting</th>
+      <th>Internal_LacNAc_type1</th>
+      <th>Terminal_LacNAc_type1</th>
+      <th>Internal_LacNAc_type2</th>
+      <th>Terminal_LacNAc_type2</th>
+      <th>Internal_LacdiNAc_type1</th>
+      <th>Terminal_LacdiNAc_type1</th>
+      <th>Internal_LacdiNAc_type2</th>
+      <th>Terminal_LacdiNAc_type2</th>
+      <th>bisectingGlcNAc</th>
       <th>VIM</th>
       <th>PolyLacNAc</th>
       <th>Ganglio_Series</th>
-      <th>Lacto_Series</th>
+      <th>Lacto_Series(LewisC)</th>
       <th>NeoLacto_Series</th>
       <th>betaGlucan</th>
       <th>KeratanSulfate</th>
@@ -205,12 +209,38 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <th>bisSulfo-Lewis x</th>
       <th>para-Forssman</th>
       <th>core_fucose</th>
+      <th>core_fucose(a1-3)</th>
       <th>GP1c</th>
       <th>B-GD1b</th>
       <th>GP1ca</th>
       <th>Isoglobotetraosylceramide</th>
       <th>polySia</th>
       <th>high_mannose</th>
+      <th>Gala_series</th>
+      <th>LPS_core</th>
+      <th>Nglycan_complex</th>
+      <th>Nglycan_complex2</th>
+      <th>Oglycan_core2</th>
+      <th>Oglycan_core3</th>
+      <th>Oglycan_core4</th>
+      <th>Oglycan_core5</th>
+      <th>Oglycan_core6</th>
+      <th>Oglycan_core7</th>
+      <th>Xylogalacturonan</th>
+      <th>Sialosylparagloboside</th>
+      <th>LDNF</th>
+      <th>OFuc</th>
+      <th>Arabinogalactan_type2</th>
+      <th>EGF_repeat</th>
+      <th>Nglycan_hybrid</th>
+      <th>Arabinan</th>
+      <th>Xyloglucan</th>
+      <th>Acharan_Sulfate</th>
+      <th>M3FX</th>
+      <th>M3X</th>
+      <th>1-6betaGalactan</th>
+      <th>Arabinogalactan_type1</th>
+      <th>Galactomannan</th>
       <th>diameter</th>
       <th>branching</th>
       <th>nbrLeaves</th>
@@ -1232,6 +1262,7 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <th>RibfOAc</th>
       <th>Sed</th>
       <th>Sedf</th>
+      <th>Sia</th>
       <th>Sor</th>
       <th>Sorf</th>
       <th>Suc</th>
@@ -1318,7 +1349,9 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <th>b2-7</th>
       <th>b2-8</th>
       <th>b3-3</th>
+      <th>bond</th>
       <th>cNeu5Ac</th>
+      <th>monosaccharide</th>
       <th>Fuc*a1-3*GlcNAc</th>
       <th>GalNAc*a1-4*GlcNAcA</th>
       <th>GlcN*b1-7*Kdo</th>
@@ -1448,6 +1481,36 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>1</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -2488,6 +2551,7 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
       <td>1</td>
       <td>0</td>
       <td>0</td>
@@ -2544,6 +2608,8 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>1</td>
       <td>0</td>
       <td>2</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -2617,6 +2683,36 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>0</td>
       <td>1</td>
       <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -3748,6 +3844,7 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
       <td>2</td>
       <td>2</td>
       <td>0</td>
@@ -3783,6 +3880,8 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>0</td>
       <td>0</td>
       <td>2</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -3816,6 +3915,36 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
     </tr>
     <tr>
       <th>GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcOPN(b1-6)GlcOPN</th>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -4989,6 +5118,7 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
       <td>2</td>
       <td>0</td>
       <td>0</td>
@@ -5026,6 +5156,8 @@ HTML(annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).t
       <td>0</td>
       <td>1</td>
       <td>1</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>

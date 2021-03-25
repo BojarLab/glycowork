@@ -13,7 +13,7 @@ from glycowork.motif.tokenization import link_find
 
 def get_pvals_motifs(df, glycan_col_name, label_col_name,
                      libr = None, thresh = 1.645, sorting = True,
-                     feature_set = ['exhaustive'], wildcards = False,
+                     feature_set = ['exhaustive'], extra = 'termini',
                      wildcard_list = []):
     """returns enriched motifs based on label data or predicted data\n
     df -- dataframe containing glycan sequences and labels\n
@@ -25,7 +25,8 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
     feature_set -- which feature set to use for annotations, add more to list to expand; default is 'exhaustive'\n
                  options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
                                and 'exhaustive' (all mono- and disaccharide features)\n
-    wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
+    extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',\n
+           and 'termini' allows for positional matching; default:'termini'\n
     wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
 
     returns dataframe with p-values and corrected p-values for every glycan motif
@@ -34,7 +35,7 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
         libr = lib
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 libr = lib, feature_set = feature_set,
-                                wildcards = wildcards, wildcard_list = wildcard_list)
+                               extra = extra, wildcard_list = wildcard_list)
     df_motif[label_col_name] = df[label_col_name].values.tolist()
     df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
     df_pos = df_motif[df_motif[label_col_name] > thresh]
@@ -52,7 +53,7 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
         return out
 
 def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
-                 wildcards = False, wildcard_list = [], datatype = 'response',
+                 extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05,
                  **kwargs):
     """clusters samples based on glycan data (for instance glycan binding etc.)\n
@@ -62,7 +63,8 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     feature_set -- which feature set to use for annotations, add more to list to expand; default is 'exhaustive'\n
                  options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
                                and 'exhaustive' (all mono- and disaccharide features)\n
-    wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
+    extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',\n
+           and 'termini' allows for positional matching; default:'termini'\n
     wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
     datatype -- whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')\n
     rarity_filter -- proportion of samples that need to have a non-zero value for a variable to be included; default:0.05\n
@@ -76,7 +78,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     if mode == 'motif':
         df_motif = annotate_dataset(df.columns.values.tolist(),
                                 libr = libr, feature_set = feature_set,
-                                    wildcards = wildcards, wildcard_list = wildcard_list)
+                                    extra = extra, wildcard_list = wildcard_list)
         df_motif = df_motif.replace(0,np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
         collect_dic = {}
         if datatype == 'response':
