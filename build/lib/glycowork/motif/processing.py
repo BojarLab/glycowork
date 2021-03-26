@@ -107,11 +107,11 @@ def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
   df_out = pd.concat([df, added_rows], axis = 0, ignore_index = True)
   return df_out
 
-def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'species'):
+def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species'):
   """converts a dataframe such as df_species to absence/presence matrix\n
   df -- dataframe with glycan occurrence, rows are glycan-label pairs\n
   glycan_col_name -- column name under which glycans are stored; default:target\n
-  label_col_name -- column name under which labels are stored; default:species\n
+  label_col_name -- column name under which labels are stored; default:Species\n
 
   returns pandas dataframe with labels as rows and glycan occurrences as columns
   """
@@ -121,3 +121,22 @@ def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'species
   mat = pd.DataFrame(mat_dic)
   mat.index = species
   return mat
+
+def check_nomenclature(glycan):
+  """checks whether the proposed glycan has the correct nomenclature for glycowork\n
+  glycan -- glycan in IUPACcondensed notation; string
+  """
+  if not isinstance(glycan, str):
+    print("You need to format your glycan sequences as strings.")
+    return
+  if '?' in glycan:
+    print("You're likely using ? somewhere, to indicate linkage uncertainty. Glycowork uses 'bond' to indicate linkage uncertainty")
+    return
+  if '=' in glycan:
+    print("Could it be that you're using WURCS? Please convert to IUPACcondensed for using glycowork.")
+  if 'RES' in glycan:
+    print("Could it be that you're using GlycoCT? Please convert to IUPACcondensed for using glycowork.")
+    
+  print("Congrats, this looks like a great glycan to us!")
+  
+    

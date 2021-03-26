@@ -19,11 +19,11 @@ def get_insight(glycan, libr = None, motifs = None):
     ggraph = glycan_to_nxGraph(glycan, libr = libr)
     df_glycan['graph'] = [glycan_to_nxGraph(k, libr = libr) for k in df_glycan.glycan.values.tolist()]
     idx = np.where([fast_compare_glycans(ggraph, k, libr = lib) for k in df_glycan.graph.values.tolist()])[0]
-    species = df_glycan.species.values.tolist()[idx[0]]
+    species = df_glycan.Species.values.tolist()[idx[0]]
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(species))
     if len(eval(species)) > 5:
-        phyla = df_glycan.phylum.values.tolist()[idx[0]]
+        phyla = df_glycan.Phylum.values.tolist()[idx[0]]
         print("\nPuh, that's quite a lot! Here are the phyla of those species: " + str(phyla))
     found_motifs = annotate_glycan(glycan, motifs = motifs, libr = libr)
     found_motifs = found_motifs.loc[:, (found_motifs != 0).any(axis = 0)].columns.values.tolist()

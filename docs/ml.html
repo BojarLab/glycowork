@@ -263,50 +263,12 @@ nb_path: "03_ml.ipynb"
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="hierarchy_filter" class="doc_header"><code>hierarchy_filter</code><a href="https://github.com/BojarLab/glycoworkglycowork/ml/train_test_split.py#L34" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>hierarchy_filter</code>(<strong><code>df_in</code></strong>, <strong><code>rank</code></strong>=<em><code>'domain'</code></em>, <strong><code>min_seq</code></strong>=<em><code>5</code></em>, <strong><code>wildcard_seed</code></strong>=<em><code>False</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>None</code></em>, <strong><code>wildcard_name</code></strong>=<em><code>None</code></em>, <strong><code>r</code></strong>=<em><code>0.1</code></em>, <strong><code>col</code></strong>=<em><code>'target'</code></em>)</p>
-</blockquote>
-<p>stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes</p>
-<p>df_in -- dataframe of glycan sequences and taxonomic labels</p>
-<p>rank -- which rank should be filtered; default is 'domain'</p>
-<p>min_seq -- how many glycans need to be present in class to keep it; default is 5</p>
-<p>wildcard_seed -- set to True if you want to seed wildcard glycoletters; default is False</p>
-<p>wildcard_list -- list which glycoletters a wildcard encompasses</p>
-<p>wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature</p>
-<p>r -- rate of replacement, default is 0.1 or 10%</p>
-<p>col -- column name for glycan sequences; default: target</p>
-<p>returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)</p>
-<p>train_y, val_y (lists of taxonomic labels (mapped integers))</p>
-<p>id_val (taxonomic labels in text form (strings))</p>
-<p>class_list (list of unique taxonomic classes (strings))</p>
-<p>class_converter (dictionary to map mapped integers back to text labels)</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="n">train_x</span><span class="p">,</span> <span class="n">val_x</span><span class="p">,</span> <span class="n">train_y</span><span class="p">,</span> <span class="n">val_y</span><span class="p">,</span> <span class="n">id_val</span><span class="p">,</span> <span class="n">class_list</span><span class="p">,</span> <span class="n">class_converter</span> <span class="o">=</span> <span class="n">hierarchy_filter</span><span class="p">(</span><span class="n">df_species</span><span class="p">,</span>
-                                                                                       <span class="n">rank</span> <span class="o">=</span> <span class="s1">&#39;kingdom&#39;</span><span class="p">)</span>
+                                                                                       <span class="n">rank</span> <span class="o">=</span> <span class="s1">&#39;Kingdom&#39;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">train_x</span><span class="p">[:</span><span class="mi">10</span><span class="p">])</span>
 </pre></div>
 
@@ -334,43 +296,12 @@ nb_path: "03_ml.ipynb"
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="seed_wildcard_hierarchy" class="doc_header"><code>seed_wildcard_hierarchy</code><a href="https://github.com/BojarLab/glycoworkglycowork/ml/train_test_split.py#L9" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>seed_wildcard_hierarchy</code>(<strong><code>glycans</code></strong>, <strong><code>labels</code></strong>, <strong><code>wildcard_list</code></strong>, <strong><code>wildcard_name</code></strong>, <strong><code>r</code></strong>=<em><code>0.1</code></em>)</p>
-</blockquote>
-<p>adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards</p>
-<p>glycans -- list of IUPACcondensed glycan sequences (string)</p>
-<p>labels -- list of labels used for prediction</p>
-<p>wildcard_list -- list which glycoletters a wildcard encompasses</p>
-<p>wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature</p>
-<p>r -- rate of replacement, default is 0.1 or 10%</p>
-<p>returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="n">train_x</span><span class="p">,</span> <span class="n">val_x</span><span class="p">,</span> <span class="n">train_y</span><span class="p">,</span> <span class="n">val_y</span><span class="p">,</span> <span class="n">id_val</span><span class="p">,</span> <span class="n">class_list</span><span class="p">,</span> <span class="n">class_converter</span> <span class="o">=</span> <span class="n">hierarchy_filter</span><span class="p">(</span><span class="n">df_species</span><span class="p">,</span>
-                                                                                       <span class="n">rank</span> <span class="o">=</span> <span class="s1">&#39;kingdom&#39;</span><span class="p">,</span>
+                                                                                       <span class="n">rank</span> <span class="o">=</span> <span class="s1">&#39;Kingdom&#39;</span><span class="p">,</span>
                                                                                        <span class="n">wildcard_seed</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
                                                                                        <span class="n">wildcard_list</span> <span class="o">=</span> <span class="n">linkages</span><span class="p">,</span>
                                                                                        <span class="n">wildcard_name</span> <span class="o">=</span> <span class="s1">&#39;bond&#39;</span><span class="p">)</span>
@@ -401,41 +332,12 @@ nb_path: "03_ml.ipynb"
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="general_split" class="doc_header"><code>general_split</code><a href="https://github.com/BojarLab/glycoworkglycowork/ml/train_test_split.py#L96" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>general_split</code>(<strong><code>glycans</code></strong>, <strong><code>labels</code></strong>, <strong><code>test_size</code></strong>=<em><code>0.2</code></em>)</p>
-</blockquote>
-<p>splits glycans and labels into train / test sets</p>
-<p>glycans -- list of IUPACcondensed glycan sequences (string)</p>
-<p>labels -- list of labels used for prediction</p>
-<p>test_size -- % size of test set; default is 0.2 / 20%</p>
-<p>returns X_train, X_test, y_train, y_test</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="n">train_x</span><span class="p">,</span> <span class="n">val_x</span><span class="p">,</span> <span class="n">train_y</span><span class="p">,</span> <span class="n">val_y</span> <span class="o">=</span> <span class="n">general_split</span><span class="p">(</span><span class="n">df_species</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span>
-                                              <span class="n">df_species</span><span class="o">.</span><span class="n">species</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+                                              <span class="n">df_species</span><span class="o">.</span><span class="n">Species</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">train_x</span><span class="p">[:</span><span class="mi">10</span><span class="p">])</span>
 </pre></div>
 

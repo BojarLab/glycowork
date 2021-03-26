@@ -61,31 +61,6 @@ nb_path: "02_glycan_data.ipynb"
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="unwrap" class="doc_header"><code>unwrap</code><a href="https://github.com/BojarLab/glycoworkglycowork/glycan_data/loader.py#L31" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>unwrap</code>(<strong><code>nested_list</code></strong>)</p>
-</blockquote>
-<p>converts a nested list into a flat list</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -106,35 +81,6 @@ nb_path: "02_glycan_data.ipynb"
 
 <div class="output_text output_subarea output_execute_result">
 <pre>[1, 2, 3, 4]</pre>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_nth" class="doc_header"><code>find_nth</code><a href="https://github.com/BojarLab/glycoworkglycowork/glycan_data/loader.py#L36" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_nth</code>(<strong><code>haystack</code></strong>, <strong><code>needle</code></strong>, <strong><code>n</code></strong>)</p>
-</blockquote>
-<p>finds n-th instance of motif</p>
-<p>haystack -- string to search for motif</p>
-<p>needle -- motif</p>
-<p>n -- n-th occurrence in string</p>
-<p>returns starting index of n-th occurrence in string</p>
-
 </div>
 
 </div>
@@ -465,7 +411,7 @@ nb_path: "02_glycan_data.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="check_presence" class="doc_header"><code>check_presence</code><a href="https://github.com/BojarLab/glycoworkglycowork/glycan_data/data_entry.py#L5" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>check_presence</code>(<strong><code>glycan</code></strong>, <strong><code>df</code></strong>, <strong><code>colname</code></strong>=<em><code>'target'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>name</code></strong>=<em><code>None</code></em>, <strong><code>rank</code></strong>=<em><code>'species'</code></em>, <strong><code>fast</code></strong>=<em><code>False</code></em>)</p>
+<h4 id="check_presence" class="doc_header"><code>check_presence</code><a href="https://github.com/BojarLab/glycoworkglycowork/glycan_data/data_entry.py#L5" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>check_presence</code>(<strong><code>glycan</code></strong>, <strong><code>df</code></strong>, <strong><code>colname</code></strong>=<em><code>'target'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>name</code></strong>=<em><code>None</code></em>, <strong><code>rank</code></strong>=<em><code>'Species'</code></em>, <strong><code>fast</code></strong>=<em><code>False</code></em>)</p>
 </blockquote>
 <p>checks whether glycan (of that species) is already present in dataset</p>
 <p>glycan -- IUPACcondensed glycan sequence (string)</p>

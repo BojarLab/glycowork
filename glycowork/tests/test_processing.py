@@ -12,5 +12,5 @@ print(seed_wildcard(df_species, linkages, 'bond')[-10:])
 
 
 print("Convert Presence to Matrix")
-print(presence_to_matrix(df_species[df_species.order == 'Fabales'].reset_index(drop = True),
-                         label_col_name = 'genus'))
+print(presence_to_matrix(df_species[df_species.Order == 'Fabales'].reset_index(drop = True),
+                         label_col_name = 'Genus'))

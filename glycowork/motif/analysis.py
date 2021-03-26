@@ -54,7 +54,7 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
 
 def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
-                 rarity_filter = 0.05,
+                 rarity_filter = 0.05, filepath = '',
                  **kwargs):
     """clusters samples based on glycan data (for instance glycan binding etc.)\n
     df -- dataframe with glycan data, rows are samples and columns are glycans\n
@@ -68,6 +68,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
     datatype -- whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')\n
     rarity_filter -- proportion of samples that need to have a non-zero value for a variable to be included; default:0.05\n
+    filepath -- absolute path including full filename allows for saving the plot\n
     **kwargs -- keyword arguments that are directly passed on to seaborn clustermap\n                          
 
     prints clustermap                         
@@ -101,13 +102,18 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     else:
         plt.ylabel('Motifs')
     plt.tight_layout()
+    if len(filepath) > 1:
+      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+                  bbox_inches = 'tight')
     plt.show()
 
-def plot_embeddings(glycans, emb = None, label_list = None):
+def plot_embeddings(glycans, emb = None, label_list = None,
+                    filepath = ''):
     """plots glycan representations for a list of glycans
     glycans -- list of IUPACcondensed glycan sequences (string)\n
     emb -- stored glycan representations; default takes them from trained species-level SweetNet model\n
     label_list -- list of same length as glycans if coloring of the plot is desired\n
+    filepath -- absolute path including full filename allows for saving the plot\n
     """
     if emb is None:
         emb = glycan_emb
@@ -118,10 +124,14 @@ def plot_embeddings(glycans, emb = None, label_list = None):
     plt.xlabel('Dim1')
     plt.ylabel('Dim2')
     plt.tight_layout()
+    if len(filepath) > 1:
+      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+                  bbox_inches = 'tight')
     plt.show()
 
 def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_name = 'target',
-                                rank = None, focus = None, modifications = False):
+                                rank = None, focus = None, modifications = False,
+                                filepath = ''):
   """for a given monosaccharide/bond, return typical neighboring bond/monosaccharide\n
   sugar -- monosaccharide or linkage as string\n
   df -- dataframe to use for analysis; default:df_species\n
@@ -132,6 +142,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   rank -- add column name as string if you want to filter for a group\n
   focus -- add row value as string if you want to filter for a group\n
   modifications -- set to True if you want to consider modified versions of a monosaccharide; default:False\n
+  filepath -- absolute path including full filename allows for saving the plot\n
 
   plots typical neighboring bond/monosaccharide and modification distribution
   """
@@ -144,7 +155,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
 
   if mode == 'bond':
     pool = [k.split('*')[0] for k in pool if k.split('*')[1] == sugar]
-    lab = 'Observed Monosaccharides Making Bond %s' % sugar
+    lab = 'Observed Monosaccharides Making Linkage %s' % sugar
   elif mode == 'sugar':
     if modifications:
       sugars = [k.split('*')[0] for k in pool if sugar in k.split('*')[0]]
@@ -158,7 +169,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
       pool = [k.split('*')[1] for k in pool if sugar in k.split('*')[0]]
     else:
       pool = [k.split('*')[1] for k in pool if k.split('*')[0] == sugar]
-    lab = 'Observed Bonds Made by %s' % sugar
+    lab = 'Observed Linkages Made by %s' % sugar
     
   cou = Counter(pool).most_common()
   cou_k = [k[0] for k in cou if k[1] > 10]
@@ -184,4 +195,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
     plt.setp(a1.get_xticklabels(), rotation = 'vertical')
 
   fig.tight_layout()
+  if len(filepath) > 1:
+      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+                  bbox_inches = 'tight')
   plt.show()

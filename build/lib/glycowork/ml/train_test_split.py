@@ -31,7 +31,7 @@ def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
   return glycans, labels
 
 
-def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False, wildcard_list = None,
+def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False, wildcard_list = None,
                      wildcard_name = None, r = 0.1, col = 'target'):
   """stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes\n
   df_in -- dataframe of glycan sequences and taxonomic labels\n
@@ -50,7 +50,8 @@ def hierarchy_filter(df_in, rank = 'domain', min_seq = 5, wildcard_seed = False,
   class_converter (dictionary to map mapped integers back to text labels)
   """
   df = copy.deepcopy(df_in)
-  rank_list = ['species','genus','family','order','class','phylum','kingdom','domain']
+  rank_list = ['Species','Genus','Family','Order',
+               'Class','Phylum','Kingdom','Domain']
   rank_list.remove(rank)
   df.drop(rank_list, axis = 1, inplace = True)
   class_list = list(set(df[rank].values.tolist()))

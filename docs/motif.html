@@ -62,50 +62,6 @@ nb_path: "04_motif.ipynb"
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_pvals_motifs" class="doc_header"><code>get_pvals_motifs</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/analysis.py#L14" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_pvals_motifs</code>(<strong><code>df</code></strong>, <strong><code>glycan_col_name</code></strong>, <strong><code>label_col_name</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>thresh</code></strong>=<em><code>1.645</code></em>, <strong><code>sorting</code></strong>=<em><code>True</code></em>, <strong><code>feature_set</code></strong>=<em><code>['exhaustive']</code></em>, <strong><code>extra</code></strong>=<em><code>'termini'</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>)</p>
-</blockquote>
-<p>returns enriched motifs based on label data or predicted data</p>
-<p>df -- dataframe containing glycan sequences and labels</p>
-<p>glycan_col_name -- column name for glycan sequences; string</p>
-<p>label_col_name -- column name for labels; string</p>
-<p>libr -- sorted list of unique glycoletters observed in the glycans of our dataset</p>
-<p>thresh -- threshold value to separate positive/negative; default is 1.645 for Z-scores</p>
-<p>sorting -- whether p-value dataframe should be sorted ascendingly; default: True</p>
-<p>feature_set -- which feature set to use for annotations, add more to list to expand; default is 'exhaustive'</p>
-
-<pre><code>         options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
-                       and 'exhaustive' (all mono- and disaccharide features)
-
-</code></pre>
-<p>extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',</p>
-
-<pre><code>   and 'termini' allows for positional matching; default:'termini'
-
-</code></pre>
-<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
-<p>returns dataframe with p-values and corrected p-values for every glycan motif</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -226,50 +182,6 @@ nb_path: "04_motif.ipynb"
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="make_heatmap" class="doc_header"><code>make_heatmap</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/analysis.py#L55" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>make_heatmap</code>(<strong><code>df</code></strong>, <strong><code>mode</code></strong>=<em><code>'sequence'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known']</code></em>, <strong><code>extra</code></strong>=<em><code>'termini'</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>, <strong><code>datatype</code></strong>=<em><code>'response'</code></em>, <strong><code>rarity_filter</code></strong>=<em><code>0.05</code></em>, <strong>**<code>kwargs</code></strong>)</p>
-</blockquote>
-<p>clusters samples based on glycan data (for instance glycan binding etc.)</p>
-<p>df -- dataframe with glycan data, rows are samples and columns are glycans</p>
-<p>mode -- whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence</p>
-<p>libr -- sorted list of unique glycoletters observed in the glycans of our dataset</p>
-<p>feature_set -- which feature set to use for annotations, add more to list to expand; default is 'exhaustive'</p>
-
-<pre><code>         options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
-                       and 'exhaustive' (all mono- and disaccharide features)
-
-</code></pre>
-<p>extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',</p>
-
-<pre><code>   and 'termini' allows for positional matching; default:'termini'
-
-</code></pre>
-<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
-<p>datatype -- whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')</p>
-<p>rarity_filter -- proportion of samples that need to have a non-zero value for a variable to be included; default:0.05</p>
-<p>**kwargs -- keyword arguments that are directly passed on to seaborn clustermap</p>
-<p>prints clustermap</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -350,40 +262,12 @@ nb_path: "04_motif.ipynb"
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="plot_embeddings" class="doc_header"><code>plot_embeddings</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/analysis.py#L106" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>plot_embeddings</code>(<strong><code>glycans</code></strong>, <strong><code>emb</code></strong>=<em><code>None</code></em>, <strong><code>label_list</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>plots glycan representations for a list of glycans
-glycans -- list of IUPACcondensed glycan sequences (string)</p>
-<p>emb -- stored glycan representations; default takes them from trained species-level SweetNet model</p>
-<p>label_list -- list of same length as glycans if coloring of the plot is desired</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">df_fabales</span> <span class="o">=</span> <span class="n">df_species</span><span class="p">[</span><span class="n">df_species</span><span class="o">.</span><span class="n">order</span> <span class="o">==</span> <span class="s1">&#39;Fabales&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
-<span class="n">plot_embeddings</span><span class="p">(</span><span class="n">df_fabales</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="n">label_list</span> <span class="o">=</span> <span class="n">df_fabales</span><span class="o">.</span><span class="n">family</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">df_fabales</span> <span class="o">=</span> <span class="n">df_species</span><span class="p">[</span><span class="n">df_species</span><span class="o">.</span><span class="n">Order</span> <span class="o">==</span> <span class="s1">&#39;Fabales&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+<span class="n">plot_embeddings</span><span class="p">(</span><span class="n">df_fabales</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="n">label_list</span> <span class="o">=</span> <span class="n">df_fabales</span><span class="o">.</span><span class="n">Family</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
 </pre></div>
 
     </div>
@@ -414,50 +298,11 @@ glycans -- list of IUPACcondensed glycan sequences (string)</p>
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="characterize_monosaccharide" class="doc_header"><code>characterize_monosaccharide</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/analysis.py#L123" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>characterize_monosaccharide</code>(<strong><code>sugar</code></strong>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>mode</code></strong>=<em><code>'sugar'</code></em>, <strong><code>glycan_col_name</code></strong>=<em><code>'target'</code></em>, <strong><code>rank</code></strong>=<em><code>None</code></em>, <strong><code>focus</code></strong>=<em><code>None</code></em>, <strong><code>modifications</code></strong>=<em><code>False</code></em>)</p>
-</blockquote>
-<p>for a given monosaccharide/bond, return typical neighboring bond/monosaccharide</p>
-<p>sugar -- monosaccharide or linkage as string</p>
-<p>df -- dataframe to use for analysis; default:df_species</p>
-<p>mode -- either 'sugar' (connected monosaccharides),</p>
-
-<pre><code>    'bond' (monosaccharides making a provided linkage),
-
-    or 'sugarbond' (linkages that a provided monosaccharides makes); default:'sugar'
-
-</code></pre>
-<p>glycan_col_name -- column name under which glycans can be found; default:'target'</p>
-<p>rank -- add column name as string if you want to filter for a group</p>
-<p>focus -- add row value as string if you want to filter for a group</p>
-<p>modifications -- set to True if you want to consider modified versions of a monosaccharide; default:False</p>
-<p>plots typical neighboring bond/monosaccharide and modification distribution</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">characterize_monosaccharide</span><span class="p">(</span><span class="s1">&#39;D-Rha&#39;</span><span class="p">,</span> <span class="n">rank</span> <span class="o">=</span> <span class="s1">&#39;kingdom&#39;</span><span class="p">,</span> <span class="n">focus</span> <span class="o">=</span> <span class="s1">&#39;Bacteria&#39;</span><span class="p">,</span> <span class="n">modifications</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">characterize_monosaccharide</span><span class="p">(</span><span class="s1">&#39;D-Rha&#39;</span><span class="p">,</span> <span class="n">rank</span> <span class="o">=</span> <span class="s1">&#39;Kingdom&#39;</span><span class="p">,</span> <span class="n">focus</span> <span class="o">=</span> <span class="s1">&#39;Bacteria&#39;</span><span class="p">,</span> <span class="n">modifications</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
 </pre></div>
 
     </div>
@@ -493,42 +338,6 @@ glycans -- list of IUPACcondensed glycan sequences (string)</p>
 </div>
 </div>
 </div>
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="annotate_glycan" class="doc_header"><code>annotate_glycan</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/annotate.py#L7" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>annotate_glycan</code>(<strong><code>glycan</code></strong>, <strong><code>motifs</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>extra</code></strong>=<em><code>'termini'</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>, <strong><code>termini_list</code></strong>=<em><code>[]</code></em>)</p>
-</blockquote>
-<p>searches for known motifs in glycan sequence</p>
-<p>glycan -- IUPACcondensed glycan sequence (string)</p>
-<p>motifs -- dataframe of glycan motifs (name + sequence)</p>
-<p>libr -- sorted list of unique glycoletters observed in the glycans of our dataset</p>
-<p>extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',</p>
-
-<pre><code>     and 'termini' allows for positional matching; default:'termini'
-
-</code></pre>
-<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
-<p>termini_list -- list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')</p>
-<p>returns dataframe with absence/presence of motifs in glycan</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
@@ -850,49 +659,6 @@ glycans -- list of IUPACcondensed glycan sequences (string)</p>
     </tr>
   </tbody>
 </table>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="annotate_dataset" class="doc_header"><code>annotate_dataset</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/annotate.py#L45" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>annotate_dataset</code>(<strong><code>glycans</code></strong>, <strong><code>motifs</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known']</code></em>, <strong><code>extra</code></strong>=<em><code>'termini'</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>, <strong><code>termini_list</code></strong>=<em><code>[]</code></em>, <strong><code>condense</code></strong>=<em><code>False</code></em>)</p>
-</blockquote>
-<p>wrapper function to annotate motifs in list of glycans</p>
-<p>glycans -- list of IUPACcondensed glycan sequences (string)</p>
-<p>motifs -- dataframe of glycan motifs (name + sequence)</p>
-<p>libr -- sorted list of unique glycoletters observed in the glycans of our data</p>
-<p>feature_set -- which feature set to use for annotations, add more to list to expand; default is 'known'</p>
-
-<pre><code>           options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
-                         and 'exhaustive' (all mono- and disaccharide features)
-
-</code></pre>
-<p>extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',</p>
-
-<pre><code>     and 'termini' allows for positional matching; default:'termini'
-
-</code></pre>
-<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
-<p>termini_list -- list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')</p>
-<p>condense -- if True, throws away columns with only zeroes; default:False</p>
-<p>returns dataframe of glycans (rows) and presence/absence of known motifs (columns)</p>
-
 </div>
 
 </div>
@@ -7503,36 +7269,6 @@ glycans -- list of IUPACcondensed glycan sequences (string)</p>
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="glycan_to_graph" class="doc_header"><code>glycan_to_graph</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L10" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>glycan_to_graph</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>the monumental function for converting glycans into graphs</p>
-<p>glycan -- IUPACcondensed glycan sequence (string)</p>
-<p>libr -- sorted list of unique glycoletters observed in the glycans of our dataset</p>
-<p>returns (1) a list of labeled glycoletters from the glycan / node list</p>
-
-<pre><code>    (2) two lists to indicate which glycoletters are connected in the glycan graph / edge list</code></pre>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -7557,85 +7293,6 @@ Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc
 ([794, 1013, 794, 1046, 450, 1046, 450, 794, 1016, 281, 1016], [(0, 1, 2, 3, 4, 5, 7, 8, 9, 10), (1, 2, 3, 4, 5, 6, 8, 2, 10, 6)])
 </pre>
 </div>
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="categorical_node_match_wildcard" class="doc_header"><code>categorical_node_match_wildcard</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L114" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>categorical_node_match_wildcard</code>(<strong><code>attr</code></strong>, <strong><code>default</code></strong>, <strong><code>wildcard_list</code></strong>)</p>
-</blockquote>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="categorical_termini_match" class="doc_header"><code>categorical_termini_match</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L129" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>categorical_termini_match</code>(<strong><code>attr1</code></strong>, <strong><code>attr2</code></strong>, <strong><code>default1</code></strong>, <strong><code>default2</code></strong>)</p>
-</blockquote>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="compare_glycans" class="doc_header"><code>compare_glycans</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L144" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>compare_glycans</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>wildcards</code></strong>=<em><code>False</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>)</p>
-</blockquote>
-<p>returns True if glycans are the same and False if not</p>
-<p>glycan_a -- glycan in string format (IUPACcondensed)</p>
-<p>glycan_b -- glycan in string format (IUPACcondensed)</p>
-<p>libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</p>
-<p>wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False</p>
-<p>wildcard_list -- list of indices for wildcards in libr</p>
-<p>returns True if two glycans are the same and False if not</p>
-
-</div>
-
 </div>
 
 </div>
@@ -7681,73 +7338,6 @@ True
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="fast_compare_glycans" class="doc_header"><code>fast_compare_glycans</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L172" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>fast_compare_glycans</code>(<strong><code>g1</code></strong>, <strong><code>g2</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>wildcards</code></strong>=<em><code>False</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>)</p>
-</blockquote>
-<p>returns True if glycans are the same and False if not</p>
-<p>g1 -- glycan graph from glycan_to_nxGraph</p>
-<p>g2 -- glycan graph from glycan_to_nxGraph</p>
-<p>libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</p>
-<p>wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False</p>
-<p>wildcard_list -- list of indices for wildcards in libr</p>
-<p>returns True if two glycans are the same and False if not</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="subgraph_isomorphism" class="doc_header"><code>subgraph_isomorphism</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L190" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>subgraph_isomorphism</code>(<strong><code>glycan</code></strong>, <strong><code>motif</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>extra</code></strong>=<em><code>'ignore'</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>[]</code></em>, <strong><code>termini_list</code></strong>=<em><code>[]</code></em>)</p>
-</blockquote>
-<p>returns True if motif is in glycan and False if not</p>
-<p>glycan -- glycan in string format (IUPACcondensed)</p>
-<p>motif -- glycan motif in string format (IUPACcondensed)</p>
-<p>libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</p>
-<p>extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',</p>
-
-<pre><code>     and 'termini' allows for positional matching; default:'ignore'
-
-</code></pre>
-<p>wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')</p>
-<p>termini_list -- list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')</p>
-<p>returns True if motif is in glycan and False if not</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -7782,42 +7372,6 @@ True
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="glycan_to_nxGraph" class="doc_header"><code>glycan_to_nxGraph</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L224" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>glycan_to_nxGraph</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>termini</code></strong>=<em><code>'ignore'</code></em>, <strong><code>termini_list</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>converts glycans into networkx graphs</p>
-<p>glycan -- glycan in string format (IUPACcondensed)</p>
-<p>libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</p>
-<p>termini -- whether to encode terminal/internal position of monosaccharides,</p>
-
-<pre><code>       'ignore' for skipping, 'calc' for automatic annotation, or
-
-       'provided' if this information is provided in termini_list; default:'ignore'
-
-</code></pre>
-<p>termini_list -- list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')</p>
-<p>returns networkx graph object of glycan</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -7840,34 +7394,6 @@ True
 [(0, 1), (1, 2), (2, 3), (2, 8), (3, 4), (4, 5), (5, 6), (6, 10), (7, 8), (9, 10)]
 </pre>
 </div>
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="generate_graph_features" class="doc_header"><code>generate_graph_features</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/graph.py#L250" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>generate_graph_features</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>compute graph features of glycan</p>
-<p>glycan -- glycan in string format (IUPACcondensed)</p>
-<p>libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</p>
-<p>returns a pandas dataframe with different graph features as columns and glycan as row</p>
-
-</div>
-
 </div>
 
 </div>
@@ -8031,22 +7557,26 @@ True
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">check_nomenclature</span><span class="p">(</span><span class="s1">&#39;Glc(b1-4)Glc&#39;</span><span class="p">)</span>
+</pre></div>
+
+    </div>
+</div>
+</div>
 
 <div class="output_wrapper">
 <div class="output">
 
 <div class="output_area">
 
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="small_motif_find" class="doc_header"><code>small_motif_find</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/processing.py#L11" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>small_motif_find</code>(<strong><code>glycan</code></strong>)</p>
-</blockquote>
-<p>processes IUPACcondensed glycan sequence (string) without splitting it into glycowords</p>
-<p>glycan -- glycan in IUPACcondensed notation; string</p>
-<p>returns string in which glycoletters are separated by asterisks</p>
-
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>Congrats, this looks like a great glycan to us!
+</pre>
 </div>
-
 </div>
 
 </div>
@@ -8078,33 +7608,6 @@ True
 
 <div class="output_text output_subarea output_execute_result">
 <pre>&#39;Man*a1-3*Man*a1-6*Man*b1-4*GlcNAc*b1-4*GlcNAc&#39;</pre>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="min_process_glycans" class="doc_header"><code>min_process_glycans</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/processing.py#L27" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>min_process_glycans</code>(<strong><code>glycan_list</code></strong>)</p>
-</blockquote>
-<p>converts list of glycans into a nested lists of glycoletters</p>
-<p>glycan_list -- list of glycans in IUPACcondensed notation; string</p>
-<p>returns list of glycoletter lists</p>
-
 </div>
 
 </div>
@@ -8163,34 +7666,6 @@ True
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="motif_find" class="doc_header"><code>motif_find</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/processing.py#L37" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>motif_find</code>(<strong><code>glycan</code></strong>, <strong><code>exhaustive</code></strong>=<em><code>False</code></em>)</p>
-</blockquote>
-<p>processes IUPACcondensed glycan sequence (string) into glycowords</p>
-<p>glycan -- glycan in IUPACcondensed notation; string</p>
-<p>exhaustive -- True for processing glycans shorter than one glycoword</p>
-<p>returns list of glycowords</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -8213,34 +7688,6 @@ True
 <pre>[&#39;Man*a1-3*Man*a1-6*Man&#39;,
  &#39;Man*a1-6*Man*b1-4*GlcNAc&#39;,
  &#39;Man*b1-4*GlcNAc*b1-4*GlcNAc&#39;]</pre>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="process_glycans" class="doc_header"><code>process_glycans</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/processing.py#L60" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>process_glycans</code>(<strong><code>glycan_list</code></strong>, <strong><code>exhaustive</code></strong>=<em><code>False</code></em>)</p>
-</blockquote>
-<p>wrapper function to process list of glycans into glycowords</p>
-<p>glycan_list -- list of IUPACcondensed glycan sequences (string)</p>
-<p>exhaustive -- True for processing glycans shorter than one glycoword</p>
-<p>returns nested list of glycowords for every glycan</p>
-
 </div>
 
 </div>
@@ -8294,35 +7741,6 @@ True
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_lib" class="doc_header"><code>get_lib</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/processing.py#L71" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_lib</code>(<strong><code>glycan_list</code></strong>, <strong><code>mode</code></strong>=<em><code>'letter'</code></em>, <strong><code>exhaustive</code></strong>=<em><code>True</code></em>)</p>
-</blockquote>
-<p>returns sorted list of unique glycoletters in list of glycans</p>
-<p>glycan_list -- list of IUPACcondensed glycan sequences (string)</p>
-<p>mode -- default is letter for glycoletters; change to obtain glycowords</p>
-<p>exhaustive -- if True, processes glycans shorted than 1 glycoword; default is True</p>
-<p>returns sorted list of unique glycoletters (strings) in glycan_list</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -8344,37 +7762,6 @@ True
 
 <div class="output_text output_subarea output_execute_result">
 <pre>[&#39;GlcNAc&#39;, &#39;Man&#39;, &#39;a1-2&#39;, &#39;a1-3&#39;, &#39;a1-6&#39;, &#39;b1-4&#39;]</pre>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="seed_wildcard" class="doc_header"><code>seed_wildcard</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/processing.py#L89" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>seed_wildcard</code>(<strong><code>df</code></strong>, <strong><code>wildcard_list</code></strong>, <strong><code>wildcard_name</code></strong>, <strong><code>r</code></strong>=<em><code>0.1</code></em>, <strong><code>col</code></strong>=<em><code>'target'</code></em>)</p>
-</blockquote>
-<p>adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards</p>
-<p>df -- dataframe in which the glycan column is called "target" and is the first column</p>
-<p>wildcard_list -- list which glycoletters a wildcard encompasses</p>
-<p>wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature</p>
-<p>r -- rate of replacement, default is 0.1 or 10%</p>
-<p>col -- column name for glycan sequences; default: target</p>
-<p>returns dataframe in which some glycoletters (from wildcard_list) have been replaced with wildcard_name</p>
-
 </div>
 
 </div>
@@ -8577,41 +7964,12 @@ True
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="presence_to_matrix" class="doc_header"><code>presence_to_matrix</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/processing.py#L110" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>presence_to_matrix</code>(<strong><code>df</code></strong>, <strong><code>glycan_col_name</code></strong>=<em><code>'target'</code></em>, <strong><code>label_col_name</code></strong>=<em><code>'species'</code></em>)</p>
-</blockquote>
-<p>converts a dataframe such as df_species to absence/presence matrix</p>
-<p>df -- dataframe with glycan occurrence, rows are glycan-label pairs</p>
-<p>glycan_col_name -- column name under which glycans are stored; default:target</p>
-<p>label_col_name -- column name under which labels are stored; default:species</p>
-<p>returns pandas dataframe with labels as rows and glycan occurrences as columns</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">HTML</span><span class="p">(</span><span class="n">presence_to_matrix</span><span class="p">(</span><span class="n">df_species</span><span class="p">[</span><span class="n">df_species</span><span class="o">.</span><span class="n">order</span> <span class="o">==</span> <span class="s1">&#39;Fabales&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span> <span class="o">=</span> <span class="kc">True</span><span class="p">),</span>
-                         <span class="n">label_col_name</span> <span class="o">=</span> <span class="s1">&#39;family&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">to_html</span><span class="p">())</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">HTML</span><span class="p">(</span><span class="n">presence_to_matrix</span><span class="p">(</span><span class="n">df_species</span><span class="p">[</span><span class="n">df_species</span><span class="o">.</span><span class="n">Order</span> <span class="o">==</span> <span class="s1">&#39;Fabales&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span> <span class="o">=</span> <span class="kc">True</span><span class="p">),</span>
+                         <span class="n">label_col_name</span> <span class="o">=</span> <span class="s1">&#39;Family&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">to_html</span><span class="p">())</span>
 </pre></div>
 
     </div>
@@ -9916,34 +9274,6 @@ True
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_insight" class="doc_header"><code>get_insight</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/query.py#L8" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_insight</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>motifs</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>prints out meta-information about a glycan</p>
-<p>glycan -- glycan in string format (IUPACcondensed)</p>
-<p>libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</p>
-<p>motifs -- motifs -- dataframe of glycan motifs (name + sequence)</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -9993,34 +9323,6 @@ That&#39;s all we can do for you at this point!
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="character_to_label" class="doc_header"><code>character_to_label</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/tokenization.py#L8" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>character_to_label</code>(<strong><code>character</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>tokenizes character by indexing passed library</p>
-<p>character -- character to index</p>
-<p>libr -- list of library items</p>
-<p>returns index of character in library</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -10041,34 +9343,6 @@ That&#39;s all we can do for you at this point!
 
 <div class="output_text output_subarea output_execute_result">
 <pre>450</pre>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="string_to_labels" class="doc_header"><code>string_to_labels</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/tokenization.py#L20" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>string_to_labels</code>(<strong><code>character_string</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>tokenizes word by indexing characters in passed library</p>
-<p>character_string -- string of characters to index</p>
-<p>libr -- list of library items</p>
-<p>returns indexes of characters in library</p>
-
 </div>
 
 </div>
@@ -10115,35 +9389,6 @@ That&#39;s all we can do for you at this point!
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="pad_sequence" class="doc_header"><code>pad_sequence</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/tokenization.py#L31" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>pad_sequence</code>(<strong><code>seq</code></strong>, <strong><code>max_length</code></strong>, <strong><code>pad_label</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>brings all sequences to same length by adding padding token</p>
-<p>seq -- sequence to pad</p>
-<p>max_length -- sequence length to pad to</p>
-<p>pad_label -- which padding label to use</p>
-<p>returns padded sequence</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -10164,34 +9409,6 @@ That&#39;s all we can do for you at this point!
 
 <div class="output_text output_subarea output_execute_result">
 <pre>[794, 1013, 794, 1016, 794, 1065, 1065]</pre>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="convert_to_counts_glycoletter" class="doc_header"><code>convert_to_counts_glycoletter</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/tokenization.py#L44" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>convert_to_counts_glycoletter</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>counts the occurrence of glycoletters in glycan</p>
-<p>glycan -- IUPACcondensed glycan sequence (string)</p>
-<p>libr -- sorted list of unique glycoletters observed in the glycans of our dataset</p>
-<p>returns dictionary with counts per glycoletter in a glycan</p>
-
 </div>
 
 </div>
@@ -12366,36 +11583,6 @@ That&#39;s all we can do for you at this point!
     </tr>
   </tbody>
 </table>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="glycoletter_count_matrix" class="doc_header"><code>glycoletter_count_matrix</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/tokenization.py#L59" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>glycoletter_count_matrix</code>(<strong><code>glycans</code></strong>, <strong><code>target_col</code></strong>, <strong><code>target_col_name</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>creates dataframe of counted glycoletters in glycan list</p>
-<p>glycans -- list of IUPACcondensed glycan sequences (strings)</p>
-<p>target_col -- label columns used for prediction; list or pd.Series</p>
-<p>target_col_name -- name for target_col; string</p>
-<p>libr -- sorted list of unique glycoletters observed in the glycans of our dataset</p>
-<p>returns dataframe with glycoletter counts (columns) for every glycan (rows)</p>
-
 </div>
 
 </div>
@@ -15654,33 +14841,6 @@ That&#39;s all we can do for you at this point!
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_isomorphs" class="doc_header"><code>find_isomorphs</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/tokenization.py#L75" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_isomorphs</code>(<strong><code>glycan</code></strong>)</p>
-</blockquote>
-<p>returns a set of isomorphic glycans by swapping branches etc.</p>
-<p>glycan -- IUPACcondensed glycan sequence (string)</p>
-<p>returns list of unique glycan notations (strings) for a glycan in IUPACcondensed</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -15715,33 +14875,6 @@ That&#39;s all we can do for you at this point!
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="link_find" class="doc_header"><code>link_find</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/tokenization.py#L100" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>link_find</code>(<strong><code>glycan</code></strong>)</p>
-</blockquote>
-<p>finds all disaccharide motifs in a glycan sequence using its isomorphs</p>
-<p>glycan -- IUPACcondensed glycan sequence (string)</p>
-<p>returns list of unique disaccharides (strings) for a glycan in IUPACcondensed</p>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
@@ -15762,36 +14895,6 @@ That&#39;s all we can do for you at this point!
 
 <div class="output_text output_subarea output_execute_result">
 <pre>[&#39;Man*a1-6*Man&#39;, &#39;GlcNAc*b1-4*GlcNAc&#39;, &#39;Man*b1-4*GlcNAc&#39;, &#39;Man*a1-3*Man&#39;]</pre>
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="motif_matrix" class="doc_header"><code>motif_matrix</code><a href="https://github.com/BojarLab/glycoworkglycowork/motif/tokenization.py#L123" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>motif_matrix</code>(<strong><code>df</code></strong>, <strong><code>glycan_col_name</code></strong>, <strong><code>label_col_name</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>generates dataframe with counted glycoletters and disaccharides in glycans</p>
-<p>df -- dataframe containing glycan sequences and labels</p>
-<p>glycan_col_name -- column name for glycan sequences; string</p>
-<p>label_col_name -- column name for labels; string</p>
-<p>libr -- sorted list of unique glycoletters observed in the glycans of our dataset</p>
-<p>returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)</p>
-
 </div>
 
 </div>

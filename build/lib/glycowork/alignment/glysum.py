@@ -42,7 +42,7 @@ def pairwiseAlign(query, corpus = None, n = 5, vocab = None,
   a_enc = v.encodeSequence(a)
   scoring = SubstitutionScoring(submat, mismatch)
   aligner = GlobalSequenceAligner(scoring, gap)
-  specs = corpus.species.values.tolist()
+  specs = corpus.Species.values.tolist()
   corpus = [small_motif_find(k) for k in corpus[col].values.tolist()]
   track = []
 

@@ -1,4 +1,4 @@
-target,species,genus,family,order,class,phylum,kingdom,domain,ref
+target,Species,Genus,Family,Order,Class,Phylum,Kingdom,Domain,ref
 Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc,Acer_pseudoplatanus,Acer,Sapindaceae,Sapindales,Dicotyledons,Angiosperms,Plantae,Eukarya,
 GlcNAc(b1-2)Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc,Acer_pseudoplatanus,Acer,Sapindaceae,Sapindales,Dicotyledons,Angiosperms,Plantae,Eukarya,
 GlcNAc(b1-2)Man(a1-6)[Man(a1-3)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc,Acer_pseudoplatanus,Acer,Sapindaceae,Sapindales,Dicotyledons,Angiosperms,Plantae,Eukarya,

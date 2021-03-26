@@ -3,7 +3,7 @@ from glycowork.glycan_data.loader import lib
 from glycowork.motif.graph import glycan_to_graph, glycan_to_nxGraph, compare_glycans, fast_compare_glycans
 
 def check_presence(glycan, df, colname = 'target', libr = None,
-                   name = None, rank = 'species', fast = False):
+                   name = None, rank = 'Species', fast = False):
   """checks whether glycan (of that species) is already present in dataset\n
   glycan -- IUPACcondensed glycan sequence (string)\n
   df -- glycan dataframe where glycans are under colname and ideally taxonomic labels are columns\n

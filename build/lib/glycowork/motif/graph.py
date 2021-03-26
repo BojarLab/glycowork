@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse.linalg.eigen.arpack import eigsh
 
+
 def glycan_to_graph(glycan, libr = None):
   """the monumental function for converting glycans into graphs\n
   glycan -- IUPACcondensed glycan sequence (string)\n
@@ -154,15 +155,8 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   """
   if libr is None:
     libr = lib
-  glycan_graph_a = glycan_to_graph(glycan_a, libr)
-  edgelist = list(zip(glycan_graph_a[1][0], glycan_graph_a[1][1]))
-  g1 = nx.from_edgelist(edgelist)
-  nx.set_node_attributes(g1, {k:glycan_graph_a[0][k] for k in range(len(glycan_graph_a[0]))},'labels')
-  
-  glycan_graph_b = glycan_to_graph(glycan_b, libr)
-  edgelist = list(zip(glycan_graph_b[1][0], glycan_graph_b[1][1]))
-  g2 = nx.from_edgelist(edgelist)
-  nx.set_node_attributes(g2, {k:glycan_graph_b[0][k] for k in range(len(glycan_graph_b[0]))},'labels')
+  g1 = glycan_to_nxGraph(glycan_a, libr)
+  g2 = glycan_to_nxGraph(glycan_b, libr)
   
   if wildcards:
     return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
