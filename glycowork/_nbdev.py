@@ -9,8 +9,8 @@ modules = ["alignment.py",
            "ml.py",
            "motif.py"]
 
-doc_url = "https://BojarLab.github.io/glycowork/"
+doc_url = "https://BojarLab.github.io/"
 
-git_url = "https://github.com/BojarLab/glycowork"
+git_url = "https://github.com/BojarLab/glycowork/tree/master/"
 
 def custom_doc_links(name): return None

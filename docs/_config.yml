@@ -63,7 +63,7 @@ plugins:
     - jekyll-remote-theme
     
 remote_theme: fastai/nbdev-jekyll-theme
-baseurl: /glycowork/
+baseurl: /
 
 # This specifies what badges are turned on by default for notebook docs.
 default_badges:

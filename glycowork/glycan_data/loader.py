@@ -23,6 +23,7 @@ glycan_emb = pickle.load(open(data_path, 'rb'))
 lib = get_lib(list(set(df_glycan.glycan.values.tolist() +
                        df_species.target.values.tolist() +
                        motif_list.motif.values.tolist() +
+                       influenza_binding.columns.values.tolist()[:-1] +
                        ['bond', 'monosaccharide', 'Hex', 'HexNAc', 'Sia'])))
 
 linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3','b1-4','b1-6']
