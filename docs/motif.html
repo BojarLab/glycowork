@@ -38,7 +38,7 @@ nb_path: "04_motif.ipynb"
 
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p><a href="/glycowork/motif.html"><code>motif</code></a> contains many functions to process glycans in various ways and use this processing analyze glycans via curated motifs, graph features, and sequence features. It contains the following modules:</p>
+<p><a href="/motif.html"><code>motif</code></a> contains many functions to process glycans in various ways and use this processing analyze glycans via curated motifs, graph features, and sequence features. It contains the following modules:</p>
 <ul>
 <li><code>analysis</code> contains functions for downstream analyses of important glycan motifs etc.</li>
 <li><code>annotate</code> contains functions to extract curated motifs, graph features, and sequence features from glycan sequences</li>
@@ -7762,6 +7762,42 @@ True
 
 <div class="output_text output_subarea output_execute_result">
 <pre>[&#39;GlcNAc&#39;, &#39;Man&#39;, &#39;a1-2&#39;, &#39;a1-3&#39;, &#39;a1-6&#39;, &#39;b1-4&#39;]</pre>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">lib1</span> <span class="o">=</span> <span class="n">get_lib</span><span class="p">([</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;Man(a1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">])</span>
+<span class="n">lib2</span> <span class="o">=</span> <span class="n">expand_lib</span><span class="p">(</span><span class="n">lib1</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">])</span>
+<span class="n">lib2</span>
+</pre></div>
+
+    </div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+
+<div class="output_text output_subarea output_execute_result">
+<pre>[&#39;Fuc&#39;, &#39;GlcNAc&#39;, &#39;Man&#39;, &#39;a1-2&#39;, &#39;a1-3&#39;, &#39;a1-6&#39;, &#39;b1-4&#39;]</pre>
 </div>
 
 </div>

@@ -86,6 +86,16 @@ def get_lib(glycan_list, mode = 'letter', exhaustive = True):
     lib = list(sorted(list(set([tuple(k) for k in lib]))))
   return lib
 
+def expand_lib(libr, glycan_list):
+  """updates libr with newly introduced glycoletters
+  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
+  glycan_list -- list of IUPACcondensed glycan sequences (string)\n
+
+  returns new lib
+  """
+  new_lib = get_lib(glycan_list)
+  return list(sorted(list(set(libr + new_lib))))
+
 def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
   """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards\n
   df -- dataframe in which the glycan column is called "target" and is the first column\n

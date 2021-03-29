@@ -14,7 +14,7 @@ from glycowork.motif.tokenization import link_find
 def get_pvals_motifs(df, glycan_col_name, label_col_name,
                      libr = None, thresh = 1.645, sorting = True,
                      feature_set = ['exhaustive'], extra = 'termini',
-                     wildcard_list = []):
+                     wildcard_list = [], multiple_samples = False):
     """returns enriched motifs based on label data or predicted data\n
     df -- dataframe containing glycan sequences and labels\n
     glycan_col_name -- column name for glycan sequences; string\n
@@ -28,11 +28,16 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
     extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',\n
            and 'termini' allows for positional matching; default:'termini'\n
     wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
+    multiple_samples -- set to True if you have multiple samples (rows) with glycan information (columns); default:False\n
 
     returns dataframe with p-values and corrected p-values for every glycan motif
     """
     if libr is None:
         libr = lib
+    if multiple_samples:
+        df = pd.DataFrame(df.mean())
+        df.reset_index(inplace = True)
+        df.columns = [glycan_col_name, label_col_name]
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 libr = lib, feature_set = feature_set,
                                extra = extra, wildcard_list = wildcard_list)
@@ -54,7 +59,7 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
 
 def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
-                 rarity_filter = 0.05, filepath = '',
+                 rarity_filter = 0.05, filepath = '', index_col = 'target',
                  **kwargs):
     """clusters samples based on glycan data (for instance glycan binding etc.)\n
     df -- dataframe with glycan data, rows are samples and columns are glycans\n
@@ -69,12 +74,16 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     datatype -- whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')\n
     rarity_filter -- proportion of samples that need to have a non-zero value for a variable to be included; default:0.05\n
     filepath -- absolute path including full filename allows for saving the plot\n
+    index_col -- default column to convert to dataframe index; default:'target'\n
     **kwargs -- keyword arguments that are directly passed on to seaborn clustermap\n                          
 
     prints clustermap                         
     """
     if libr is None:
         libr = lib
+    if index_col in df.columns.values.tolist():
+        df.index = df[index_col]
+        df.drop([index_col], axis = 1, inplace = True)
     df = df.fillna(0)
     if mode == 'motif':
         df_motif = annotate_dataset(df.columns.values.tolist(),
