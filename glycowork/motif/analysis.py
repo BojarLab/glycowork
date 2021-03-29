@@ -129,17 +129,15 @@ def plot_embeddings(glycans, emb = None, label_list = None,
         emb = glycan_emb
     embs = np.array([emb[k] for k in glycans])
     embs = TSNE(random_state = 42).fit_transform(embs)
-    markers = True
+    markers = None
     if shape_feature is not None:
-      feature_list = [shape_feature if shape_feature in k else 'Absent' for k in glycans]
-      markers = {shape_feature: "X", "Absent": "o"}
-      sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
-                    palette = 'colorblind', style = feature_list, markers = markers)
-    if shape_feature is None:
-      sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
-                    palette = 'colorblind')
+        markers = {shape_feature: "X", "Absent": "o"}
+        shape_feature = [shape_feature if shape_feature in k else 'Absent' for k in glycans]
+    sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
+                    palette = 'colorblind', style = shape_feature, markers = markers)
     plt.xlabel('Dim1')
     plt.ylabel('Dim2')
+    plt.legend(bbox_to_anchor = (1.05, 1), loc = 2, borderaxespad = 0.)
     plt.tight_layout()
     if len(filepath) > 1:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
@@ -148,7 +146,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
 
 def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_name = 'target',
                                 rank = None, focus = None, modifications = False,
-                                filepath = ''):
+                                filepath = '', thresh = 10):
   """for a given monosaccharide/bond, return typical neighboring bond/monosaccharide\n
   sugar -- monosaccharide or linkage as string\n
   df -- dataframe to use for analysis; default:df_species\n
@@ -160,6 +158,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   focus -- add row value as string if you want to filter for a group\n
   modifications -- set to True if you want to consider modified versions of a monosaccharide; default:False\n
   filepath -- absolute path including full filename allows for saving the plot\n
+  thresh -- threshold count of when to include motifs in plot; default:10 occurrences\n
 
   plots typical neighboring bond/monosaccharide and modification distribution
   """
@@ -189,8 +188,8 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
     lab = 'Observed Linkages Made by %s' % sugar
     
   cou = Counter(pool).most_common()
-  cou_k = [k[0] for k in cou if k[1] > 10]
-  cou_v = [k[1] for k in cou if k[1] > 10]
+  cou_k = [k[0] for k in cou if k[1] > thresh]
+  cou_v = [k[1] for k in cou if k[1] > thresh]
   cou_v = [v / len(pool) for v in cou_v]
 
   fig, (a0,a1) = plt.subplots(1, 2 , figsize = (8, 4), gridspec_kw = {'width_ratios': [1, 1]})
@@ -203,8 +202,8 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   
   if modifications:
     cou = Counter(sugars).most_common()
-    cou_k = [k[0] for k in cou if k[1] > 10]
-    cou_v = [k[1] for k in cou if k[1] > 10]
+    cou_k = [k[0] for k in cou if k[1] > thresh]
+    cou_v = [k[1] for k in cou if k[1] > thresh]
     cou_v = [v / len(sugars) for v in cou_v]
     a1.bar(cou_k, cou_v)
     a1.set_ylabel('Relative Proportion')

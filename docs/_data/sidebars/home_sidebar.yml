@@ -27,7 +27,7 @@ entries:
     - output: web,pdf
       title: 'Example 1: Investigation of *N*-linked and *O*-linked glycosylations
         in animals <br>'
-      url: example.html
+      url: examples.html
     output: web
     title: glycowork
   output: web

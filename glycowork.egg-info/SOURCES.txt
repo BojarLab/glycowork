@@ -8,6 +8,7 @@ glycowork/__init__.py
 glycowork/_nbdev.py
 glycowork/alignment.py
 glycowork/core.py
+glycowork/examples.py
 glycowork/glycan_data.py
 glycowork/ml.py
 glycowork/motif.py
