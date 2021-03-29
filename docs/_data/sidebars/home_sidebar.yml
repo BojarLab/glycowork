@@ -24,6 +24,10 @@ entries:
     - output: web,pdf
       title: motif
       url: motif.html
+    - output: web,pdf
+      title: 'Example 1: Investigation of *N*-linked and *O*-linked glycosylations
+        in animals <br>'
+      url: example.html
     output: web
     title: glycowork
   output: web

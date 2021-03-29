@@ -31,7 +31,7 @@ nb_path: "00_core.ipynb"
 
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>All modules in glycowork, <strong>except</strong> for <a href="/glycowork/ml.html"><code>ml</code></a>, can be run on any machine. For most parts of <a href="/glycowork/ml.html"><code>ml</code></a>, however, a GPU is needed to load and run torch_geometric.</p>
+<p>All modules in glycowork, <strong>except</strong> for <a href="/ml.html"><code>ml</code></a>, can be run on any machine. For most parts of <a href="/ml.html"><code>ml</code></a>, however, a GPU is needed to load and run torch_geometric.</p>
 <p>If you want to run <code>glycowork.ml</code> in a Jupyter Notebook (in the cloud or wherever you have a GPU), just run this prior to importing glycowork:</p>
 
 <pre><code>!pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.8.0+cu101.html
@@ -1525,7 +1525,7 @@ Let's say you're interested in glycans of the plant order Fabales. that includes
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
 <p>Okay, we're ready for some heatmaps! In <code>glycowork.motif.analysis</code>, we have a function titled <code>make_heatmap</code>, which...makes heatmaps.<br></p>
-<p>Specifically, it will generate clustermaps, that are aiming to cluster samples based on their glycan profile. Calling <code>make_heatmap</code> with <code>df_map</code> without any other arguments will try to cluster the samples based on their full glycan sequences. But we also have the <a href="/glycowork/motif.html"><code>motif</code></a> mode, which extracts motifs from these glycans and clusters samples based on those. Here, I used the <code>known</code> (curated glycan motifs) and the <code>exhaustive</code> (all observed monosaccharides and disaccharides) options. Check out the documentation for more options! <br></p>
+<p>Specifically, it will generate clustermaps, that are aiming to cluster samples based on their glycan profile. Calling <code>make_heatmap</code> with <code>df_map</code> without any other arguments will try to cluster the samples based on their full glycan sequences. But we also have the <a href="/motif.html"><code>motif</code></a> mode, which extracts motifs from these glycans and clusters samples based on those. Here, I used the <code>known</code> (curated glycan motifs) and the <code>exhaustive</code> (all observed monosaccharides and disaccharides) options. Check out the documentation for more options! <br></p>
 <p>We can immediately see that we have a lot more <em>N</em>-linked glycans in Fabaceae, for instance based on the prominence of Trimannosylcore and Fuc(a1-3)GlcNAc. Glycans from Polygalaceae an Quillajaceae in <code>df_species</code> seem to mainly contain small molecule- and lipid-linked glycans, which of course are quite different from <em>N</em>-linked glycans and are more similar to each other than to glycans from Fabaceae in <code>df_species</code>.</p>
 
 </div>

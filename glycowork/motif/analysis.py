@@ -117,18 +117,26 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     plt.show()
 
 def plot_embeddings(glycans, emb = None, label_list = None,
-                    filepath = ''):
+                    shape_feature = None, filepath = ''):
     """plots glycan representations for a list of glycans
     glycans -- list of IUPACcondensed glycan sequences (string)\n
     emb -- stored glycan representations; default takes them from trained species-level SweetNet model\n
     label_list -- list of same length as glycans if coloring of the plot is desired\n
+    shape_feature -- monosaccharide/bond used to display alternative shapes for dots on the plot\n
     filepath -- absolute path including full filename allows for saving the plot\n
     """
     if emb is None:
         emb = glycan_emb
     embs = np.array([emb[k] for k in glycans])
     embs = TSNE(random_state = 42).fit_transform(embs)
-    sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
+    markers = True
+    if shape_feature is not None:
+      feature_list = [shape_feature if shape_feature in k else 'Absent' for k in glycans]
+      markers = {shape_feature: "X", "Absent": "o"}
+      sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
+                    palette = 'colorblind', style = feature_list, markers = markers)
+    if shape_feature is None:
+      sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
                     palette = 'colorblind')
     plt.xlabel('Dim1')
     plt.ylabel('Dim2')
