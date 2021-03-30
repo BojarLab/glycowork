@@ -35,12 +35,22 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
     if libr is None:
         libr = lib
     if multiple_samples:
-        df = pd.DataFrame(df.mean())
-        df.reset_index(inplace = True)
-        df.columns = [glycan_col_name, label_col_name]
+        if 'target' in df.columns.values.tolist():
+          df.drop(['target'], axis = 1, inplace = True)
+        df = df.T
+        samples = df.shape[1]
+        df = df.reset_index()
+        df.columns = [glycan_col_name] + df.columns.values.tolist()[1:]
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 libr = lib, feature_set = feature_set,
                                extra = extra, wildcard_list = wildcard_list)
+    if multiple_samples:
+        df.index = df[glycan_col_name].values.tolist()
+        df = df.drop([glycan_col_name], axis = 1)
+        df = pd.concat([df.iloc[:,k] for k in range(len(df.columns.values.tolist()))], axis = 0)
+        df = df.reset_index()
+        df.columns = [glycan_col_name, label_col_name]
+        df_motif = pd.concat([df_motif]*samples, axis = 0)
     df_motif[label_col_name] = df[label_col_name].values.tolist()
     df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
     df_pos = df_motif[df_motif[label_col_name] > thresh]
@@ -53,7 +63,7 @@ def get_pvals_motifs(df, glycan_col_name, label_col_name,
     out = pd.DataFrame(list(zip(df_motif.columns.values.tolist()[:-1], ttests, ttests_corr)))
     out.columns = ['motif', 'pval', 'corr_pval']
     if sorting:
-        return out.sort_values(by = 'corr_pval')
+        return out.sort_values(by = ['corr_pval', 'pval'])
     else:
         return out
 
