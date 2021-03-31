@@ -102,4 +102,5 @@ def general_split(glycans, labels, test_size = 0.2):
 
   returns X_train, X_test, y_train, y_test
   """
-  return train_test_split(glycans, labels, shuffle = True, test_size = test_size)
+  return train_test_split(glycans, labels, shuffle = True,
+                          test_size = test_size, random_state = 42)

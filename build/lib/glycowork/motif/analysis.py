@@ -11,14 +11,15 @@ from glycowork.glycan_data.loader import lib, glycan_emb, df_species
 from glycowork.motif.annotate import annotate_dataset
 from glycowork.motif.tokenization import link_find
 
-def get_pvals_motifs(df, glycan_col_name, label_col_name,
+
+def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      libr = None, thresh = 1.645, sorting = True,
                      feature_set = ['exhaustive'], extra = 'termini',
                      wildcard_list = [], multiple_samples = False):
     """returns enriched motifs based on label data or predicted data\n
     df -- dataframe containing glycan sequences and labels\n
-    glycan_col_name -- column name for glycan sequences; string\n
-    label_col_name -- column name for labels; string\n
+    glycan_col_name -- column name for glycan sequences; arbitrary if multiple_samples = True; default:'glycan'\n
+    label_col_name -- column name for labels; arbitrary if multiple_samples = True; default:'target'\n
     libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
     thresh -- threshold value to separate positive/negative; default is 1.645 for Z-scores\n
     sorting -- whether p-value dataframe should be sorted ascendingly; default: True\n
@@ -127,13 +128,15 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     plt.show()
 
 def plot_embeddings(glycans, emb = None, label_list = None,
-                    shape_feature = None, filepath = ''):
+                    shape_feature = None, filepath = '',
+                    **kwargs):
     """plots glycan representations for a list of glycans
     glycans -- list of IUPACcondensed glycan sequences (string)\n
     emb -- stored glycan representations; default takes them from trained species-level SweetNet model\n
     label_list -- list of same length as glycans if coloring of the plot is desired\n
     shape_feature -- monosaccharide/bond used to display alternative shapes for dots on the plot\n
     filepath -- absolute path including full filename allows for saving the plot\n
+    **kwargs -- keyword arguments that are directly passed on to matplotlib\n
     """
     if emb is None:
         emb = glycan_emb
@@ -144,7 +147,9 @@ def plot_embeddings(glycans, emb = None, label_list = None,
         markers = {shape_feature: "X", "Absent": "o"}
         shape_feature = [shape_feature if shape_feature in k else 'Absent' for k in glycans]
     sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
-                    palette = 'colorblind', style = shape_feature, markers = markers)
+                    palette = 'colorblind', style = shape_feature, markers = markers,
+                    alpha = 0.8, **kwargs)
+    sns.despine(left = True, bottom = True)
     plt.xlabel('Dim1')
     plt.ylabel('Dim2')
     plt.legend(bbox_to_anchor = (1.05, 1), loc = 2, borderaxespad = 0.)
@@ -176,46 +181,62 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
     df = df_species
   if rank is not None:
     df = df[df[rank] == focus]
-  pool = [link_find(k) for k in df[glycan_col_name].values.tolist()]
-  pool = [item for sublist in pool for item in sublist]
+  pool_in = [link_find(k) for k in df[glycan_col_name].values.tolist()]
+  pool_in = [item for sublist in pool_in for item in sublist]
+  pool_in = [k.replace('(', '*') for k in pool_in]
+  pool_in = [k.replace(')', '*') for k in pool_in]
 
   if mode == 'bond':
-    pool = [k.split('*')[0] for k in pool if k.split('*')[1] == sugar]
+    pool = [k.split('*')[0] for k in pool_in if k.split('*')[1] == sugar]
     lab = 'Observed Monosaccharides Making Linkage %s' % sugar
   elif mode == 'sugar':
     if modifications:
-      sugars = [k.split('*')[0] for k in pool if sugar in k.split('*')[0]]
-      pool = [k.split('*')[2] for k in pool if sugar in k.split('*')[0]]
+      sugars = [k.split('*')[0] for k in pool_in if sugar in k.split('*')[0]]
+      pool = [k.split('*')[2] for k in pool_in if sugar in k.split('*')[0]]
     else:
-      pool = [k.split('*')[2] for k in pool if k.split('*')[0] == sugar]
+      pool = [k.split('*')[2] for k in pool_in if k.split('*')[0] == sugar]
     lab = 'Observed Monosaccharides Paired with %s' % sugar
   elif mode == 'sugarbond':
     if modifications:
-      sugars = [k.split('*')[0] for k in pool if sugar in k.split('*')[0]]
-      pool = [k.split('*')[1] for k in pool if sugar in k.split('*')[0]]
+      sugars = [k.split('*')[0] for k in pool_in if sugar in k.split('*')[0]]
+      pool = [k.split('*')[1] for k in pool_in if sugar in k.split('*')[0]]
     else:
-      pool = [k.split('*')[1] for k in pool if k.split('*')[0] == sugar]
+      pool = [k.split('*')[1] for k in pool_in if k.split('*')[0] == sugar]
     lab = 'Observed Linkages Made by %s' % sugar
-    
+ 
   cou = Counter(pool).most_common()
   cou_k = [k[0] for k in cou if k[1] > thresh]
-  cou_v = [k[1] for k in cou if k[1] > thresh]
-  cou_v = [v / len(pool) for v in cou_v]
+  cou_v_in = [k[1] for k in cou if k[1] > thresh]
+  cou_v = [v / len(pool) for v in cou_v_in]
 
   fig, (a0,a1) = plt.subplots(1, 2 , figsize = (8, 4), gridspec_kw = {'width_ratios': [1, 1]})
-  a0.bar(cou_k, cou_v)
-  a0.set_ylabel('Relative Proportion')
+  if modifications:
+      cou2 = Counter(sugars).most_common()
+      cou_k2 = [k[0] for k in cou2 if k[1] > thresh]
+      cou_v2_in = [k[1] for k in cou2 if k[1] > thresh]
+      cou_v2 = [v / len(sugars) for v in cou_v2_in]
+      color_list =  plt.cm.get_cmap('tab20')
+      color_map = {cou_k2[k]:color_list(k/len(cou_k2)) for k in range(len(cou_k2))}
+      pool_in2 = [k for k in pool_in if k.split('*')[2] in cou_k]
+      for k in range(len(cou_k2)):
+          idx = [j.split('*')[2] for j in pool_in2 if j.split('*')[0] == cou_k2[k]]
+          cou_t = Counter(idx).most_common()
+          cou_v_t = {cou_t[j][0]:cou_t[j][1] for j in range(len(cou_t))}
+          cou_v_t = [cou_v_t[j] if j in list(cou_v_t.keys()) else 0 for j in cou_k]
+          sns.barplot(x = cou_k, y = cou_v_t, ax = a0, color = color_map[cou_k2[k]])
+      a0.set_ylabel('Absolute Occurrence')
+  else:
+      sns.barplot(x = cou_k, y = cou_v, ax = a0, color = "cornflowerblue")
+      a0.set_ylabel('Relative Proportion')
+  sns.despine(left = True, bottom = True)
   a0.set_xlabel(lab)
   a0.set_title('Pairings')
   if mode == 'sugar' or mode == 'bond':
     plt.setp(a0.get_xticklabels(), rotation = 'vertical')
   
   if modifications:
-    cou = Counter(sugars).most_common()
-    cou_k = [k[0] for k in cou if k[1] > thresh]
-    cou_v = [k[1] for k in cou if k[1] > thresh]
-    cou_v = [v / len(sugars) for v in cou_v]
-    a1.bar(cou_k, cou_v)
+    sns.barplot(x = cou_k2, y = cou_v2, ax = a1, palette = [color_map[k] for k in cou_k2])
+    sns.despine(left = True, bottom = True)
     a1.set_ylabel('Relative Proportion')
     a1.set_xlabel(sugar + " Variants")
     plt.setp(a1.get_xticklabels(), rotation = 'vertical')

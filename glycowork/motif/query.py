@@ -29,5 +29,15 @@ def get_insight(glycan, libr = None, motifs = None):
     found_motifs = found_motifs.loc[:, (found_motifs != 0).any(axis = 0)].columns.values.tolist()
     if len(found_motifs) > 0:
         print("\nThis glycan contains the following motifs: " + str(found_motifs))
+    if isinstance(df_glycan.immunogenicity.values.tolist()[idx[0]], float):
+        if df_glycan.immunogenicity.values.tolist()[idx[0]] > 0:
+            print("\nThis glycan is likely to be immunogenic to humans.")
+        elif df_glycan.immunogenicity.values.tolist()[idx[0]] < 1:
+            print("\nThis glycan is likely to be non-immunogenic to humans.")
+    if isinstance(df_glycan.ecoli_pathogenicity.values.tolist()[idx[0]], float):
+        if df_glycan.ecoli_pathogenicity.values.tolist()[idx[0]] > 0:
+            print("\nThis glycan is likely to contribute to E.coli pathogenicity.")
+        elif df_glycan.ecoli_pathogenicity.values.tolist()[idx[0]] < 1:
+            print("\nThis glycan is found in non-pathogenic E.coli strains.")
     print("\nThat's all we can do for you at this point!")
     

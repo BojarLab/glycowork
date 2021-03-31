@@ -48,8 +48,8 @@ def annotate_dataset(glycans, motifs = None, libr = None,
                      condense = False):
   """wrapper function to annotate motifs in list of glycans\n
   glycans -- list of IUPACcondensed glycan sequences (string)\n
-  motifs -- dataframe of glycan motifs (name + sequence)\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our data\n
+  motifs -- dataframe of glycan motifs (name + sequence); default:motif_list\n
+  libr -- sorted list of unique glycoletters observed in the glycans of our data; default:lib\n
   feature_set -- which feature set to use for annotations, add more to list to expand; default is 'known'\n
                  options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
                                and 'exhaustive' (all mono- and disaccharide features)\n

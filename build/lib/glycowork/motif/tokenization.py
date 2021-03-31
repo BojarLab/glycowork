@@ -1,7 +1,7 @@
 import pandas as pd
 import re
 
-from glycowork.glycan_data.loader import lib, motif_list
+from glycowork.glycan_data.loader import lib, motif_list, find_nth
 from glycowork.motif.processing import small_motif_find
 
 
@@ -117,6 +117,8 @@ def link_find(glycan):
       b = [k.strip(']') for k in b]
       b = [k.replace('[', '') for k in b]
       b = [k.replace(']', '') for k in b]
+      b = [k[:find_nth(k, '*', 1)] + '(' + k[find_nth(k, '*', 1)+1:] for k in b]
+      b = [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
       coll += b
   return list(set(coll))
 

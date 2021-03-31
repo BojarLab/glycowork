@@ -2,11 +2,14 @@ import copy
 import time
 import torch
 import numpy as np
+import pandas as pd
+import xgboost as xgb
+import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error
-
+from sklearn.ensemble import RandomForestClassifier
+from glycowork.motif.annotate import annotate_dataset
 from glycowork.glycan_data.loader import lib
-from glycowork.ml.models import SweetNet
 
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
@@ -163,32 +166,6 @@ def train_model(model, dataloaders, criterion, optimizer,
   plt.legend(['Validation Accuracy'], loc = 'best')
   return model
 
-def init_weights(model, sparsity = 0.1):
-    """initializes linear layers of PyTorch model with a sparse initialization\n
-    model -- neural network (such as SweetNet) for analyzing glycans\n
-    sparsity -- proportion of sparsity after initialization; default:0.1 / 10%
-    """
-    if type(model) == torch.nn.Linear:
-        torch.nn.init.sparse_(model.weight, sparsity = sparsity)
-
-def prep_model(model_type, num_classes, libr = None):
-    """wrapper to instantiate model, initialize it, and put it on the GPU\n
-    model_type -- string indicating the type of model\n
-    num_classes -- number of unique classes for classification\n
-    libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-
-    returns PyTorch model object
-    """
-    if libr is None:
-        libr = lib
-    if model_type == 'SweetNet':
-        model = SweetNet(len(libr), num_classes = num_classes)
-        model = model.apply(init_weights)
-        model = model.cuda()
-    else:
-        print("Invalid Model Type")
-    return model
-
 def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.001,
                    mode = 'multiclass'):
     """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
@@ -215,3 +192,72 @@ def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.00
     else:
         print("Invalid option. Please pass 'multiclass', 'binary', or 'regression'.")
     return optimizer_ft, scheduler, criterion
+
+def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
+                   feature_calc = False, libr = None,
+                   feature_set = ['known','exhaustive']):
+    """wrapper function to train standard machine learning models on glycans\n
+    X_train, X_test -- either lists of glycans (needs feature_calc = True) or\n
+                       motif dataframes such as from annotate_dataset\n
+    y_train, y_test -- lists of labels\n
+    mode -- 'classification' or 'regression'; default:'classification'\n
+    feature_calc -- set to True for calculating motifs from glycans; default:False\n
+    libr -- sorted list of unique glycoletters observed in the glycans of our data; default:lib\n
+    feature_set -- which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']\n
+                 options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)\n
+                               and 'exhaustive' (all mono- and disaccharide features)\n
+
+    returns trained model                           
+    """
+    if mode == 'classification':
+        model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,
+                                  max_depth = 3)
+    elif mode == 'regression':
+        model = xgb.XGBRegressor(random_state = 42, n_estimators = 100,
+                                 objective = 'reg:squarederror')
+    if feature_calc:
+        print("\nCalculating Glycan Features...")
+        if libr is None:
+            libr = lib
+        X_train = annotate_dataset(X_train, libr = libr, feature_set = feature_set,
+                                   condense = True)
+        X_test = annotate_dataset(X_test, libr = libr, feature_set = feature_set,
+                                   condense = True)
+        for k in X_test.columns.values.tolist():
+            if k not in X_train.columns.values.tolist():
+                X_train[k] = [0]*len(X_train)
+        for k in X_train.columns.values.tolist():
+            if k not in X_test.columns.values.tolist():
+                X_test[k] = [0]*len(X_test)
+        X_train = X_train.apply(pd.to_numeric)
+        X_test = X_test.apply(pd.to_numeric)
+    print("\nTraining model...")
+    model.fit(X_train, y_train)
+    print("\nEvaluating model...")
+    preds = model.predict(X_test)
+    if mode == 'classification':
+        out = accuracy_score(y_test, preds)
+        print("Accuracy of trained model on separate validation set: " + str(out))
+    elif mode == 'regression':
+        out = mean_squared_error(y_test, preds)
+        print("Mean squared error of trained model on separate validation set: " + str(out))
+    return model
+
+def analyze_ml_model(model):
+    """plots relevant features for model prediction\n
+    model -- trained machine learning model from train_ml_model
+    """
+    feat_imp = model.get_booster().get_score(importance_type = 'gain')
+    feat_imp = pd.DataFrame(feat_imp, index = [0]).T
+    feat_imp = feat_imp.sort_values(by = feat_imp.columns.values.tolist()[0], ascending = False)
+    feat_imp = feat_imp[:10]
+    sns.barplot(x = feat_imp.index.values.tolist(),
+                y = feat_imp[feat_imp.columns.values.tolist()[0]],
+                color = 'cornflowerblue')
+    sns.despine(left = True, bottom = True)
+    plt.xticks(rotation = 90)
+    plt.xlabel('Important Variables')
+    plt.ylabel('Relative Importance (Gain)')
+    plt.title('Feature Importance')
+    plt.tight_layout()
+    plt.show()

@@ -5,3 +5,4 @@ statsmodels
 scipy
 torch
 seaborn
+xgboost

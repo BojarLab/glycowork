@@ -2,6 +2,7 @@ import torch
 from torch_geometric.nn import TopKPooling, GraphConv
 from torch_geometric.nn import global_mean_pool as gap, global_max_pool as gmp
 import torch.nn.functional as F
+from glycowork.glycan_data.loader import lib
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
@@ -56,3 +57,29 @@ class SweetNet(torch.nn.Module):
           return x, x_out
         else:
           return x
+
+def init_weights(model, sparsity = 0.1):
+    """initializes linear layers of PyTorch model with a sparse initialization\n
+    model -- neural network (such as SweetNet) for analyzing glycans\n
+    sparsity -- proportion of sparsity after initialization; default:0.1 / 10%
+    """
+    if type(model) == torch.nn.Linear:
+        torch.nn.init.sparse_(model.weight, sparsity = sparsity)
+
+def prep_model(model_type, num_classes, libr = None):
+    """wrapper to instantiate model, initialize it, and put it on the GPU\n
+    model_type -- string indicating the type of model\n
+    num_classes -- number of unique classes for classification\n
+    libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
+
+    returns PyTorch model object
+    """
+    if libr is None:
+        libr = lib
+    if model_type == 'SweetNet':
+        model = SweetNet(len(libr), num_classes = num_classes)
+        model = model.apply(init_weights)
+        model = model.cuda()
+    else:
+        print("Invalid Model Type")
+    return model

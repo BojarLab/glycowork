@@ -88,7 +88,7 @@ Nglycolyl_GM2,Neu5Gc(a2-3)[GalNAc(b1-4)]Gal(b1-4)Glc,"['flexible','flexible','fl
 Fuc_LN3,Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-3)Gal(b1-4)GlcNAc,"['flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible']"
 GT1b,Neu5Ac(a2-8)Neu5Ac(a2-3)[Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)]Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','terminal','flexible','flexible','flexible','flexible','flexible','flexible']"
 GD1,Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','terminal']"
-GD1a,Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc(b1-4)Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','terminal','flexible','flexible']"
+GD1a_2,Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc(b1-4)Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','terminal','flexible','flexible']"
 LcGg4,GlcNAc(b1-3)[GalNAc(b1-4)]Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','terminal','flexible','flexible']"
 GT3,Neu5Ac(a2-8)Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','terminal']"
 Disialyl_T_antigen,Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc,"['flexible','flexible','flexible','flexible','flexible','flexible','flexible']"
