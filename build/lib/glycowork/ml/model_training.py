@@ -233,6 +233,8 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
         X_test = X_test.apply(pd.to_numeric)
     print("\nTraining model...")
     model.fit(X_train, y_train)
+    cols_when_model_builds = model.get_booster().feature_names
+    X_test = X_test[cols_when_model_builds]
     print("\nEvaluating model...")
     preds = model.predict(X_test)
     if mode == 'classification':
