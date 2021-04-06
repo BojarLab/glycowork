@@ -57,6 +57,40 @@ nb_path: "01_alignment.ipynb"
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="pairwiseAlign" class="doc_header"><code>pairwiseAlign</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/alignment/glysum.py#L14" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>pairwiseAlign</code>(<strong><code>query</code></strong>, <strong><code>corpus</code></strong>=<em><code>None</code></em>, <strong><code>n</code></strong>=<em><code>5</code></em>, <strong><code>vocab</code></strong>=<em><code>None</code></em>, <strong><code>submat</code></strong>=<em><code>None</code></em>, <strong><code>mismatch</code></strong>=<em><code>-10</code></em>, <strong><code>gap</code></strong>=<em><code>-5</code></em>, <strong><code>col</code></strong>=<em><code>'glycan'</code></em>)</p>
+</blockquote>
+<p>aligns glycan sequence from database against rest of the database and returns the best n alignments</p>
+<p>query -- glycan string in IUPACcondensed notation</p>
+<p>corpus -- database to align query against; default is SugarBase</p>
+<p>n -- how many alignments to show; default shows top 5</p>
+<p>vocab -- list of glycowords used for mapping to tokens</p>
+<p>submat -- GLYSUM substitution matrix</p>
+<p>mismatch -- mismatch penalty; default: -10</p>
+<p>gap -- gap penalty; default: -5</p>
+<p>col -- column name where glycan sequences are; default: glycan</p>
+<p>returns the n best alignments of query against corpus in text form with scores etc</p>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 
 <div class="inner_cell">
