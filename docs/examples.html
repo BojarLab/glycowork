@@ -4499,8 +4499,8 @@ Let's do one more analysis, in which we turn up the sensitivity of <code>charact
 </div>
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<h1 id="Example-3:-Glycans-classification-using-machine-learning-models">Example 3: Glycans classification using machine learning models<a class="anchor-link" href="#Example-3:-Glycans-classification-using-machine-learning-models"> </a></h1><p>Investigation of glycans from animals and viruses demonstrated how specific their presence in an organism can be. This particular characteristic can be exploited to predict the origin of a given glycan among living organisms. Machine learning models can be trained to learn which motifs are enriched in which species, allowing further classification of given glycans to the corresponding groups. <br></p>
-<p>Let's see how we can use <code>glycowork</code> to classify animals versus non-animal glycans! First, we need to annotate each known glycan using a binary code where <strong>1</strong> means <strong>animal glycan</strong> and <strong>0</strong> means <strong>non-animal glycan</strong>.</p>
+<h1 id="Example-3:-Glycan-classification-using-machine-learning-models">Example 3: Glycan classification using machine learning models<a class="anchor-link" href="#Example-3:-Glycan-classification-using-machine-learning-models"> </a></h1><p>Investigation of glycans from animals and viruses demonstrated how specific their presence in an organism can be. This particular characteristic can be exploited to predict the source of a given glycan among living organisms. By classifying which glycans stem from which species/taxonomic groups, machine learning models can be trained to learn which motifs are enriched in which species, allowing further insights. <br></p>
+<p>Let's see how we can use <code>glycowork</code> to classify animal versus non-animal glycans! First, we need to annotate each known glycan using a binary code where <strong>1</strong> means <strong>animal glycan</strong> and <strong>0</strong> means <strong>non-animal glycan</strong>.</p>
 
 </div>
 </div>
@@ -4524,7 +4524,7 @@ Let's do one more analysis, in which we turn up the sensitivity of <code>charact
 
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>Now, we have to generate two sets of glycans that we will use as train set and test set, as well as their corresponding class <strong>0</strong> or <strong>1</strong>. One way to do it is to use the <code>general_split</code> function from the <code>glycowork.ml.train_test_split</code> module. This function will separate the data with a 80/20 ratio for train and test sets respectively.</p>
+<p>Now, we have to generate two sets of glycans that we will use as train set and test set. In addition, we also need their corresponding sets with classes labelled as <strong>0</strong> or <strong>1</strong>. One way to do it is to use the <code>general_split</code> function from the <code>glycowork.ml.train_test_split</code> module. This function assigns the data with a 80/20 ratio to train and test sets respectively.</p>
 
 </div>
 </div>
@@ -4536,7 +4536,7 @@ Let's do one more analysis, in which we turn up the sensitivity of <code>charact
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">y_val</span> <span class="o">=</span> <span class="n">general_split</span><span class="p">(</span><span class="n">df_species</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="n">animal</span><span class="p">)</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span> <span class="o">=</span> <span class="n">general_split</span><span class="p">(</span><span class="n">df_species</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="n">animal</span><span class="p">)</span>
 </pre></div>
 
     </div>
@@ -4548,7 +4548,7 @@ Let's do one more analysis, in which we turn up the sensitivity of <code>charact
 
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>It is now time to train a machine learning model on these data! Different machine learning algorithms are available in <code>glycowork</code> and here we can use the <code>train_ml_model</code> function from the <code>glycowork.ml.model_training</code> module. This classification method uses a standard machine learning model which may not be the most accurate one, but which can be sufficient for a preliminary exploration of our problem. Plus, it has the advantage of running faster than other more complex algorithms such as deep learning ones so... let's give it a chance!</p>
+<p>It is now time to train a machine learning model on these data! Different machine learning algorithms are available in <code>glycowork</code> and here we can use the <code>train_ml_model</code> function from the <code>glycowork.ml.model_training</code> module. This classification method uses a standard machine learning model trained on short glycan motifs which may not be the most accurate, but can be sufficient for a preliminary exploration of our problem. Plus, it has the advantage of running faster than other more complex algorithms such as deep learning so... let's give it a try!</p>
 
 </div>
 </div>
@@ -4560,7 +4560,8 @@ Let's do one more analysis, in which we turn up the sensitivity of <code>charact
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">model_ft</span> <span class="o">=</span> <span class="n">train_ml_model</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">y_val</span><span class="p">,</span> <span class="n">feature_calc</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">feature_set</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;exhaustive&#39;</span><span class="p">])</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">model_ft</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">X_test</span> <span class="o">=</span> <span class="n">train_ml_model</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">y_train</span><span class="p">,</span> <span class="n">y_test</span><span class="p">,</span> <span class="n">feature_calc</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">feature_set</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;exhaustive&#39;</span><span class="p">],</span>
+                         <span class="n">return_features</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
 </pre></div>
 
     </div>
@@ -4577,7 +4578,7 @@ Let's do one more analysis, in which we turn up the sensitivity of <code>charact
 Calculating Glycan Features...
 
 Training model...
-[20:20:29] WARNING: /Users/travis/build/dmlc/xgboost/src/learner.cc:1061: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective &#39;binary:logistic&#39; was changed from &#39;error&#39; to &#39;logloss&#39;. Explicitly set eval_metric if you&#39;d like to restore the old behavior.
+[06:49:33] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.4.0/src/learner.cc:1095: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective &#39;binary:logistic&#39; was changed from &#39;error&#39; to &#39;logloss&#39;. Explicitly set eval_metric if you&#39;d like to restore the old behavior.
 
 Evaluating model...
 Accuracy of trained model on separate validation set: 0.9579863739591219
@@ -4593,8 +4594,8 @@ Accuracy of trained model on separate validation set: 0.9579863739591219
 
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>As you can see, even this (quite) simple algorithm is enough to rich around 96% of accuracy on the test set! It also confirm that glycans composition is highly representative of their origin and allows to efficiently separate animal from non-animal glycans! <br></p>
-<p>One more step we can do is to analyze the model we have generated. Indeed, we do not know what information is the most usefull for this model to predict the origin of a glycan. Fortunately, the <code>analyze_ml_model</code> function can help us to understand on which basis are made the model predictions.</p>
+<p>As you can see, even this (quite) simple algorithm is enough to reach around 96% prediction accuracy on the test set! It also confirms that glycan composition is highly representative of their origin and allows efficiently discriminating animal from non-animal glycans! <br></p>
+<p>One more step we can do is the analysis of the model we have generated. This is important, as we do not know yet what information is the most useful for this model to predict the origin of a glycan. Fortunately, the <code>analyze_ml_model</code> function can help us to understand on which basis the model predictions are made.</p>
 
 </div>
 </div>
@@ -4636,7 +4637,64 @@ Accuracy of trained model on separate validation set: 0.9579863739591219
 
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>Interesting! It appears that the presence of the Gal(b1-4)GlcNAc motif in glycans is quite discriminant of its belonging to the Animalia Kingdom!</p>
+<p>Interesting! It appears that the presence of the Gal(b1-4)GlcNAc motif in glycans is quite discriminant of its belonging to the Animalia Kingdom! <br></p>
+<p>Next to knowing what is important for model prediction, it is often also crucial to know the limits of a model. In <code>glycowork</code>, you can use <code>get_mismatch</code> from the <code>glycowork.ml.model_training</code> module to get a sense of wrong classifications. This could for instance inform you about potential model biases.</p>
+
+</div>
+</div>
+</div>
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">get_mismatch</span><span class="p">(</span><span class="n">model_ft</span><span class="p">,</span> <span class="n">X_test</span><span class="p">,</span> <span class="n">y_test</span><span class="p">)</span>
+</pre></div>
+
+    </div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+
+<div class="output_text output_subarea output_execute_result">
+<pre>[(&#39;Fuc(a1-2)Gal(b1-3)GlcNAc(b1-3)Gal(b1-4)Glc&#39;, 0.9352276921272278),
+ (&#39;Man(a1-2)Man(a1-2)Man&#39;, 0.007882402278482914),
+ (&#39;Fuc(a1-2)Gal(a1-3)Gal(a1-4)Gal(b1-3)GalNAc&#39;, 0.3958562910556793),
+ (&#39;Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)[Man(a1-2)Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;,
+  0.33273470401763916),
+ (&#39;Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;,
+  0.06631074100732803),
+ (&#39;Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)[Man(a1-2)Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;,
+  0.33273470401763916),
+ (&#39;GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc&#39;,
+  0.4787333905696869),
+ (&#39;Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;,
+  0.39137375354766846),
+ (&#39;Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)[Man(a1-2)Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;,
+  0.33273470401763916),
+ (&#39;Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)[Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;,
+  0.39137375354766846)]</pre>
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+<div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>Here we can see that our model was especially confused by oligo-/high-mannose <em>N</em>-linked glycans. The relatively low values indicate that the model thought it rather unlikely that these are animal glycans (remember: anything below 0.5 will default to 'not an animal glycan'). As these mannose-rich structures are also characteristic of fungi such as <em>Saccharomyces cerevisiae</em>, classification can be ambiguous. Maybe in these scenarios a more powerful, deep learning-based model might be able to differentiate!</p>
 
 </div>
 </div>

@@ -194,7 +194,7 @@ def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.00
     return optimizer_ft, scheduler, criterion
 
 def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
-                   feature_calc = False, libr = None,
+                   feature_calc = False, libr = None, return_features = False,
                    feature_set = ['known','exhaustive']):
     """wrapper function to train standard machine learning models on glycans\n
     X_train, X_test -- either lists of glycans (needs feature_calc = True) or\n
@@ -203,6 +203,7 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     mode -- 'classification' or 'regression'; default:'classification'\n
     feature_calc -- set to True for calculating motifs from glycans; default:False\n
     libr -- sorted list of unique glycoletters observed in the glycans of our data; default:lib\n
+    return_features -- whether to return calculated features; default:False\n
     feature_set -- which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']\n
                  options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)\n
                                and 'exhaustive' (all mono- and disaccharide features)\n
@@ -243,7 +244,10 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     elif mode == 'regression':
         out = mean_squared_error(y_test, preds)
         print("Mean squared error of trained model on separate validation set: " + str(out))
-    return model
+    if return_features:
+        return model, X_train, X_test
+    else:
+        return model
 
 def analyze_ml_model(model):
     """plots relevant features for model prediction\n
@@ -263,3 +267,20 @@ def analyze_ml_model(model):
     plt.title('Feature Importance')
     plt.tight_layout()
     plt.show()
+
+def get_mismatch(model, X_test, y_test, n = 10):
+    """analyzes misclassifications of trained machine learning model\n
+    model -- trained machine learning model from train_ml_model\n
+    X_test -- motif dataframe used for validating model\n
+    y_test -- list of labels\n
+    n -- number of returned misclassifications; default:10\n
+
+    returns tuples of misclassifications and their predicted probability
+    """
+    preds = model.predict(X_test)
+    preds_proba = model.predict_proba(X_test)
+    idx = [k for k in range(len(preds)) if preds[k] != y_test[k]]
+    preds = X_test.iloc[idx, :].index.values.tolist()
+    preds_proba = [preds_proba[k].tolist()[1] for k in idx]
+    mismatch = [tuple([i,j]) for i,j in zip(preds, preds_proba)]
+    return mismatch[:min(len(mismatch),n)]
