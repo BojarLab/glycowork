@@ -217,13 +217,22 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
       cou_v2 = [v / len(sugars) for v in cou_v2_in]
       color_list =  plt.cm.get_cmap('tab20')
       color_map = {cou_k2[k]:color_list(k/len(cou_k2)) for k in range(len(cou_k2))}
-      pool_in2 = [k for k in pool_in if k.split('*')[2] in cou_k]
+      if mode == 'sugar':
+          pool_in2 = [k for k in pool_in if k.split('*')[2] in cou_k]
+      elif mode == 'sugarbond':
+          pool_in2 = [k for k in pool_in if k.split('*')[1] in cou_k]
       for k in range(len(cou_k2)):
-          idx = [j.split('*')[2] for j in pool_in2 if j.split('*')[0] == cou_k2[k]]
+          if mode == 'sugar':
+              idx = [j.split('*')[2] for j in pool_in2 if j.split('*')[0] == cou_k2[k]]
+          elif mode == 'sugarbond':
+              idx = [j.split('*')[1] for j in pool_in2 if j.split('*')[0] == cou_k2[k]]
           cou_t = Counter(idx).most_common()
           cou_v_t = {cou_t[j][0]:cou_t[j][1] for j in range(len(cou_t))}
           cou_v_t = [cou_v_t[j] if j in list(cou_v_t.keys()) else 0 for j in cou_k]
-          sns.barplot(x = cou_k, y = cou_v_t, ax = a0, color = color_map[cou_k2[k]])
+          if len(cou_k2) > 1:
+              sns.barplot(x = cou_k, y = cou_v_t, ax = a0, color = color_map[cou_k2[k]])
+          else:
+              sns.barplot(x = cou_k, y = cou_v_t, ax = a0, color = "cornflowerblue")
       a0.set_ylabel('Absolute Occurrence')
   else:
       sns.barplot(x = cou_k, y = cou_v, ax = a0, color = "cornflowerblue")
@@ -235,7 +244,10 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
     plt.setp(a0.get_xticklabels(), rotation = 'vertical')
   
   if modifications:
-    sns.barplot(x = cou_k2, y = cou_v2, ax = a1, palette = [color_map[k] for k in cou_k2])
+    if len(cou_k2) > 1:
+        sns.barplot(x = cou_k2, y = cou_v2, ax = a1, palette = [color_map[k] for k in cou_k2])
+    else:
+        sns.barplot(x = cou_k2, y = cou_v2, ax = a1, color = "cornflowerblue")
     sns.despine(left = True, bottom = True)
     a1.set_ylabel('Relative Proportion')
     a1.set_xlabel(sugar + " Variants")
