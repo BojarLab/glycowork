@@ -251,8 +251,10 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
     sns.despine(left = True, bottom = True)
     a1.set_ylabel('Relative Proportion')
     a1.set_xlabel(sugar + " Variants")
+    a1.set_title('Observed Modifications')
     plt.setp(a1.get_xticklabels(), rotation = 'vertical')
 
+  fig.suptitle('Sequence context of ' + str(sugar))
   fig.tight_layout()
   if len(filepath) > 1:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
