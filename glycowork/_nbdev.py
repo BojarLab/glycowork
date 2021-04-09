@@ -9,7 +9,7 @@ modules = ["alignment.py",
            "ml.py",
            "motif.py"]
 
-doc_url = "https://BojarLab.github.io/"
+doc_url = "https://BojarLab.github.io/glycowork/"
 
 git_url = "https://github.com/BojarLab/glycowork/tree/master/"
 

@@ -5,7 +5,7 @@
 ![CI](https://github.com/BojarLab/glycowork/workflows/CI/badge.svg)
 
 
-<img src="glycowork_badge_wo_bg.jpg" width="200" height="200" style="max-width: 200px">
+<img src="glycowork_badge_wo_bg.jpg" width="200" style="max-width: 200px">
 
 - Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.
 
@@ -21,8 +21,8 @@ later: <br>
 `pip install glycowork`
 
 for now: <br>
-`pip install git+https://github.com/BojarLab/glycowork.git
-import glycowork`
+`pip install git+https://github.com/BojarLab/glycowork.git` <br>
+`import glycowork`
 
 ## How to use
 

@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+plt.style.use('default')
 from collections import Counter
 from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
@@ -217,10 +218,12 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
       cou_v2 = [v / len(sugars) for v in cou_v2_in]
       color_list =  plt.cm.get_cmap('tab20')
       color_map = {cou_k2[k]:color_list(k/len(cou_k2)) for k in range(len(cou_k2))}
+      palette = [color_map[k] for k in cou_k2]
       if mode == 'sugar':
           pool_in2 = [k for k in pool_in if k.split('*')[2] in cou_k]
       elif mode == 'sugarbond':
           pool_in2 = [k for k in pool_in if k.split('*')[1] in cou_k]
+      cou_for_df = []
       for k in range(len(cou_k2)):
           if mode == 'sugar':
               idx = [j.split('*')[2] for j in pool_in2 if j.split('*')[0] == cou_k2[k]]
@@ -230,9 +233,14 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
           cou_v_t = {cou_t[j][0]:cou_t[j][1] for j in range(len(cou_t))}
           cou_v_t = [cou_v_t[j] if j in list(cou_v_t.keys()) else 0 for j in cou_k]
           if len(cou_k2) > 1:
-              sns.barplot(x = cou_k, y = cou_v_t, ax = a0, color = color_map[cou_k2[k]])
+              cou_for_df.append(pd.DataFrame({'monosaccharides':cou_k, 'counts':cou_v_t, 'colors':[cou_k2[k]]*len(cou_k)}))
           else:
               sns.barplot(x = cou_k, y = cou_v_t, ax = a0, color = "cornflowerblue")
+      if len(cou_k2) > 1:
+          cou_df = pd.concat(cou_for_df)
+          sns.histplot(cou_df, x = 'monosaccharides', hue = 'colors', weights = 'counts',
+                       multiple = 'stack', palette = palette, ax = a0, legend = False,
+                   shrink = 0.8)
       a0.set_ylabel('Absolute Occurrence')
   else:
       sns.barplot(x = cou_k, y = cou_v, ax = a0, color = "cornflowerblue")
@@ -240,12 +248,14 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   sns.despine(left = True, bottom = True)
   a0.set_xlabel(lab)
   a0.set_title('Pairings')
-  if mode == 'sugar' or mode == 'bond':
-    plt.setp(a0.get_xticklabels(), rotation = 'vertical')
+  plt.setp(a0.get_xticklabels(), rotation = 'vertical')
   
   if modifications:
     if len(cou_k2) > 1:
-        sns.barplot(x = cou_k2, y = cou_v2, ax = a1, palette = [color_map[k] for k in cou_k2])
+        cou_df2 = pd.DataFrame({'monosaccharides': cou_k2, 'counts': cou_v2})
+        sns.histplot(cou_df2, x = 'monosaccharides', weights = 'counts',
+                     hue = 'monosaccharides', shrink = 0.8, legend = False,
+                     ax = a1, palette = palette, alpha = 0.75)
     else:
         sns.barplot(x = cou_k2, y = cou_v2, ax = a1, color = "cornflowerblue")
     sns.despine(left = True, bottom = True)
