@@ -5,7 +5,7 @@ import setuptools
 
 setuptools.setup(
     name="glycowork",
-    version="0.0.1",
+    version="0.1.0",
     author="Daniel Bojar",
     author_email="daniel.bojar@gu.se",
     description="Package containing helper functions for processing and analysis of glycans",
@@ -14,7 +14,7 @@ setuptools.setup(
     url="https://github.com/BojarLab/glycowork",
     packages=setuptools.find_packages(),
     include_package_data=True,
-    package_data={'': ['*.csv', '*.pkl', '*.jpg']},
+    package_data={'': ['*.csv', '*.pkl', '*.jpg', '*.pt']},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

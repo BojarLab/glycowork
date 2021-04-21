@@ -7,9 +7,11 @@ from glycowork.motif.annotate import annotate_glycan
 
 def get_insight(glycan, libr = None, motifs = None):
     """prints out meta-information about a glycan\n
-    glycan -- glycan in string format (IUPACcondensed)\n
-    libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
-    motifs -- motifs -- dataframe of glycan motifs (name + sequence)\n
+    | Arguments:
+    | :-
+    | glycan (string): glycan in IUPAC-condensed format
+    | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+    | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
     """
     if libr is None:
         libr = lib

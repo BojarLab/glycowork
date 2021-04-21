@@ -10,11 +10,14 @@ from scipy.sparse.linalg.eigen.arpack import eigsh
 
 def glycan_to_graph(glycan, libr = None):
   """the monumental function for converting glycans into graphs\n
-  glycan -- IUPACcondensed glycan sequence (string)\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-
-  returns (1) a list of labeled glycoletters from the glycan / node list\n
-          (2) two lists to indicate which glycoletters are connected in the glycan graph / edge list
+  | Arguments:
+  | :-
+  | glycan (string): IUPAC-condensed glycan sequence (string)
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | Returns:
+  | :-
+  | (1) a list of labeled glycoletters from the glycan / node list
+  | (2) two lists to indicate which glycoletters are connected in the glycan graph / edge list
   """
   if libr is None:
     libr = lib
@@ -145,13 +148,16 @@ def categorical_termini_match(attr1, attr2, default1, default2):
 def compare_glycans(glycan_a, glycan_b, libr = None,
                     wildcards = False, wildcard_list = []):
   """returns True if glycans are the same and False if not\n
-  glycan_a -- glycan in string format (IUPACcondensed)\n
-  glycan_b -- glycan in string format (IUPACcondensed)\n
-  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
-  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
-  wildcard_list -- list of indices for wildcards in libr\n
-  
-  returns True if two glycans are the same and False if not
+  | Arguments:
+  | :-
+  | glycan_a (string): glycan in IUPAC-condensed format
+  | glycan_b (string): glycan in IUPAC-condensed format
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | wildcards (bool): set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
+  | wildcard_list (list): list of indices for wildcards in libr\n
+  | Returns:
+  | :-  
+  | Returns True if two glycans are the same and False if not
   """
   if libr is None:
     libr = lib
@@ -166,13 +172,16 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
 def fast_compare_glycans(g1, g2, libr = None,
                     wildcards = False, wildcard_list = []):
   """returns True if glycans are the same and False if not\n
-  g1 -- glycan graph from glycan_to_nxGraph\n
-  g2 -- glycan graph from glycan_to_nxGraph\n
-  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
-  wildcards -- set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False\n
-  wildcard_list -- list of indices for wildcards in libr\n
-  
-  returns True if two glycans are the same and False if not
+  | Arguments:
+  | :-
+  | g1 (networkx object): glycan graph from glycan_to_nxGraph
+  | g2 (networkx object): glycan graph from glycan_to_nxGraph
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | wildcards (bool): set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
+  | wildcard_list (list): list of indices for wildcards in libr\n
+  | Returns:
+  | :-  
+  | Returns True if two glycans are the same and False if not
   """
   if libr is None:
     libr = lib
@@ -185,15 +194,17 @@ def subgraph_isomorphism(glycan, motif, libr = None,
                          extra = 'ignore', wildcard_list = [],
                          termini_list = []):
   """returns True if motif is in glycan and False if not\n
-  glycan -- glycan in string format (IUPACcondensed)\n
-  motif -- glycan motif in string format (IUPACcondensed)\n
-  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
-  extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',\n
-           and 'termini' allows for positional matching; default:'ignore'\n
-  wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
-  termini_list -- list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
-  
-  returns True if motif is in glycan and False if not
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | motif (string): glycan motif in IUPAC-condensed format
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
+  | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
+  | Returns:
+  | :-
+  | Returns True if motif is in glycan and False if not
   """
   if libr is None:
     libr = lib
@@ -218,14 +229,15 @@ def subgraph_isomorphism(glycan, motif, libr = None,
 def glycan_to_nxGraph(glycan, libr = None,
                       termini = 'ignore', termini_list = None):
   """converts glycans into networkx graphs\n
-  glycan -- glycan in string format (IUPACcondensed)\n
-  libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
-  termini -- whether to encode terminal/internal position of monosaccharides,\n
-             'ignore' for skipping, 'calc' for automatic annotation, or\n
-             'provided' if this information is provided in termini_list; default:'ignore'\n
-  termini_list -- list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
-
-  returns networkx graph object of glycan
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
+  | Returns:
+  | :-
+  | Returns networkx graph object of glycan
   """
   if libr is None:
     libr = lib
@@ -243,10 +255,13 @@ def glycan_to_nxGraph(glycan, libr = None,
 
 def generate_graph_features(glycan, libr = None):
     """compute graph features of glycan\n
-    glycan -- glycan in string format (IUPACcondensed)\n
-    libr -- library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
-
-    returns a pandas dataframe with different graph features as columns and glycan as row
+    | Arguments:
+    | :-
+    | glycan (string): glycan in IUPAC-condensed format
+    | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+    | Returns:
+    | :-
+    | Returns a pandas dataframe with different graph features as columns and glycan as row
     """
     if libr is None:
       libr = lib

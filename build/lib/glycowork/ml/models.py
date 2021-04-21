@@ -60,19 +60,24 @@ class SweetNet(torch.nn.Module):
 
 def init_weights(model, sparsity = 0.1):
     """initializes linear layers of PyTorch model with a sparse initialization\n
-    model -- neural network (such as SweetNet) for analyzing glycans\n
-    sparsity -- proportion of sparsity after initialization; default:0.1 / 10%
+    | Arguments:
+    | :-
+    | model (Pytorch object): neural network (such as SweetNet) for analyzing glycans
+    | sparsity (float): proportion of sparsity after initialization; default:0.1 / 10%
     """
     if type(model) == torch.nn.Linear:
         torch.nn.init.sparse_(model.weight, sparsity = sparsity)
 
 def prep_model(model_type, num_classes, libr = None):
     """wrapper to instantiate model, initialize it, and put it on the GPU\n
-    model_type -- string indicating the type of model\n
-    num_classes -- number of unique classes for classification\n
-    libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-
-    returns PyTorch model object
+    | Arguments:
+    | :-
+    | model_type (string): string indicating the type of model
+    | num_classes (int): number of unique classes for classification
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+    | Returns:
+    | :-
+    | Returns PyTorch model object
     """
     if libr is None:
         libr = lib

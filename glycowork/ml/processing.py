@@ -10,16 +10,19 @@ except ImportError:
 def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long, separate = False,
                       context = False, error_catch = False, wo_labels = False):
   """wrapper function to convert a whole list of glycans into a graph dataset\n
-  glycan_list -- list of IUPACcondensed glycan sequences (string)\n
-  labels -- list of labels\n
-  label_type -- which tensor type for label, default is torch.long for binary labels, change to torch.float for continuous\n
-  separate -- True returns node list / edge list / label list as separate files; False returns list of data tuples; default is False\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-  context -- legacy-ish; used for generating graph context dataset for pre-training; keep at False\n
-  error_catch -- troubleshooting option, True will print glycans that cannot be converted into graphs; default is False\n
-  wo_labels -- change to True if you do not want to pass and receive labels; default is False\n
-
-  returns list of node list / edge list / label list data tuples
+  | Arguments:
+  | :-
+  | glycan_list (list): list of IUPAC-condensed glycan sequences as strings
+  | labels (list): list of labels
+  | label_type (torch object): which tensor type for label, default is torch.long for binary labels, change to torch.float for continuous
+  | separate (bool): True returns node list / edge list / label list as separate files; False returns list of data tuples; default is False
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | context (bool): legacy-ish; used for generating graph context dataset for pre-training; keep at False
+  | error_catch (bool): troubleshooting option, True will print glycans that cannot be converted into graphs; default is False
+  | wo_labels (bool): change to True if you do not want to pass and receive labels; default is False\n
+  | Returns:
+  | :-
+  | Returns list of node list / edge list / label list data tuples
   """
   if libr is None:
     libr = lib
@@ -64,14 +67,17 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long,
 def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
                           shuffle = True, drop_last = False):
   """wrapper function to convert glycans and labels to a torch_geometric DataLoader\n
-  glycan_list -- list of IUPACcondensed glycan sequences (string)\n
-  labels -- list of labels\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-  batch_size -- how many samples should be in each batch; default:32\n
-  shuffle -- if samples should be shuffled when making dataloader; default:True\n
-  drop_last -- whether last batch is dropped; default:False\n
-
-  returns a dataloader object used for training deep learning models
+  | Arguments:
+  | :-
+  | glycan_list (list): list of IUPAC-condensed glycan sequences as strings
+  | labels (list): list of labels
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | batch_size (int): how many samples should be in each batch; default:32
+  | shuffle (bool): if samples should be shuffled when making dataloader; default:True
+  | drop_last (bool): whether last batch is dropped; default:False\n
+  | Returns:
+  | :-
+  | Returns a dataloader object used for training deep learning models
   """
   if libr is None:
     libr = lib
@@ -84,15 +90,18 @@ def split_data_to_train(glycan_list_train, glycan_list_val,
                         labels_train, labels_val, libr = None,
                         batch_size = 32, drop_last = False):
   """wrapper function to convert split training/test data into dictionary of dataloaders\n
-  glycan_list_train -- list of IUPACcondensed glycan sequences (string)\n
-  glycan_list_val -- list of IUPACcondensed glycan sequences (string)\n
-  labels_train -- list of labels\n
-  labels_val -- list of labels\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-  batch_size -- how many samples should be in each batch; default:32\n
-  drop_last -- whether last batch is dropped; default:False\n
-
-  returns a dictionary of dataloaders for training and testing deep learning models
+  | Arguments:
+  | :-
+  | glycan_list_train (list): list of IUPAC-condensed glycan sequences as strings
+  | glycan_list_val (list): list of IUPAC-condensed glycan sequences as strings
+  | labels_train (list): list of labels
+  | labels_val (list): list of labels
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | batch_size (int): how many samples should be in each batch; default:32
+  | drop_last (bool): whether last batch is dropped; default:False\n
+  | Returns:
+  | :-
+  | Returns a dictionary of dataloaders for training and testing deep learning models
   """
   if libr is None:
     libr = lib

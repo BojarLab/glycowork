@@ -18,21 +18,21 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      feature_set = ['exhaustive'], extra = 'termini',
                      wildcard_list = [], multiple_samples = False):
     """returns enriched motifs based on label data or predicted data\n
-    df -- dataframe containing glycan sequences and labels\n
-    glycan_col_name -- column name for glycan sequences; arbitrary if multiple_samples = True; default:'glycan'\n
-    label_col_name -- column name for labels; arbitrary if multiple_samples = True; default:'target'\n
-    libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-    thresh -- threshold value to separate positive/negative; default is 1.645 for Z-scores\n
-    sorting -- whether p-value dataframe should be sorted ascendingly; default: True\n
-    feature_set -- which feature set to use for annotations, add more to list to expand; default is 'exhaustive'\n
-                 options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
-                               and 'exhaustive' (all mono- and disaccharide features)\n
-    extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',\n
-           and 'termini' allows for positional matching; default:'termini'\n
-    wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
-    multiple_samples -- set to True if you have multiple samples (rows) with glycan information (columns); default:False\n
-
-    returns dataframe with p-values and corrected p-values for every glycan motif
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe containing glycan sequences and labels
+    | glycan_col_name (string): column name for glycan sequences; arbitrary if multiple_samples = True; default:'glycan'
+    | label_col_name (string): column name for labels; arbitrary if multiple_samples = True; default:'target'
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+    | thresh (float): threshold value to separate positive/negative; default is 1.645 for Z-scores
+    | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+    | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
+    | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+    | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False\n
+    | Returns:
+    | :-
+    | Returns dataframe with p-values and corrected p-values for every glycan motif
     """
     if libr is None:
         libr = lib
@@ -74,22 +74,22 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
                  **kwargs):
     """clusters samples based on glycan data (for instance glycan binding etc.)\n
-    df -- dataframe with glycan data, rows are samples and columns are glycans\n
-    mode -- whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence\n
-    libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-    feature_set -- which feature set to use for annotations, add more to list to expand; default is 'exhaustive'\n
-                 options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
-                               and 'exhaustive' (all mono- and disaccharide features)\n
-    extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',\n
-           and 'termini' allows for positional matching; default:'termini'\n
-    wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
-    datatype -- whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')\n
-    rarity_filter -- proportion of samples that need to have a non-zero value for a variable to be included; default:0.05\n
-    filepath -- absolute path including full filename allows for saving the plot\n
-    index_col -- default column to convert to dataframe index; default:'target'\n
-    **kwargs -- keyword arguments that are directly passed on to seaborn clustermap\n                          
-
-    prints clustermap                         
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans
+    | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+    | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
+    | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+    | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
+    | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
+    | filepath (string): absolute path including full filename allows for saving the plot
+    | index_col (string): default column to convert to dataframe index; default:'target'
+    | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                          
+    | Returns:
+    | :-
+    | Prints clustermap                         
     """
     if libr is None:
         libr = lib
@@ -131,13 +131,15 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
 def plot_embeddings(glycans, emb = None, label_list = None,
                     shape_feature = None, filepath = '',
                     **kwargs):
-    """plots glycan representations for a list of glycans
-    glycans -- list of IUPACcondensed glycan sequences (string)\n
-    emb -- stored glycan representations; default takes them from trained species-level SweetNet model\n
-    label_list -- list of same length as glycans if coloring of the plot is desired\n
-    shape_feature -- monosaccharide/bond used to display alternative shapes for dots on the plot\n
-    filepath -- absolute path including full filename allows for saving the plot\n
-    **kwargs -- keyword arguments that are directly passed on to matplotlib\n
+    """plots glycan representations for a list of glycans\n
+    | Arguments:
+    | :-
+    | glycans (list): list of IUPAC-condensed glycan sequences as strings
+    | emb (list): stored glycan representations; default takes them from trained species-level SweetNet model
+    | label_list (list): list of same length as glycans if coloring of the plot is desired
+    | shape_feature (string): monosaccharide/bond used to display alternative shapes for dots on the plot
+    | filepath (string): absolute path including full filename allows for saving the plot
+    | **kwargs: keyword arguments that are directly passed on to matplotlib\n
     """
     if emb is None:
         emb = glycan_emb
@@ -163,20 +165,21 @@ def plot_embeddings(glycans, emb = None, label_list = None,
 def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_name = 'target',
                                 rank = None, focus = None, modifications = False,
                                 filepath = '', thresh = 10):
-  """for a given monosaccharide/bond, return typical neighboring bond/monosaccharide\n
-  sugar -- monosaccharide or linkage as string\n
-  df -- dataframe to use for analysis; default:df_species\n
-  mode -- either 'sugar' (connected monosaccharides),\n
-          'bond' (monosaccharides making a provided linkage),\n
-          or 'sugarbond' (linkages that a provided monosaccharides makes); default:'sugar'\n
-  glycan_col_name -- column name under which glycans can be found; default:'target'\n
-  rank -- add column name as string if you want to filter for a group\n
-  focus -- add row value as string if you want to filter for a group\n
-  modifications -- set to True if you want to consider modified versions of a monosaccharide; default:False\n
-  filepath -- absolute path including full filename allows for saving the plot\n
-  thresh -- threshold count of when to include motifs in plot; default:10 occurrences\n
-
-  plots typical neighboring bond/monosaccharide and modification distribution
+  """for a given monosaccharide/linkage, return typical neighboring linkage/monosaccharide\n
+  | Arguments:
+  | :-
+  | sugar (string): monosaccharide or linkage
+  | df (dataframe): dataframe to use for analysis; default:df_species
+  | mode (string): either 'sugar' (connected monosaccharides), 'bond' (monosaccharides making a provided linkage), or 'sugarbond' (linkages that a provided monosaccharides makes); default:'sugar'
+  | glycan_col_name (string): column name under which glycans can be found; default:'target'
+  | rank (string): add column name as string if you want to filter for a group
+  | focus (string): add row value as string if you want to filter for a group
+  | modifications (bool): set to True if you want to consider modified versions of a monosaccharide; default:False
+  | filepath (string): absolute path including full filename allows for saving the plot
+  | thresh (int): threshold count of when to include motifs in plot; default:10 occurrences\n
+  | Returns:
+  | :-
+  | Plots typical neighboring bond/monosaccharide and modification distribution
   """
   if df is None:
     df = df_species

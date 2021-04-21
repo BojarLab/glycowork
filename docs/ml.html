@@ -38,7 +38,7 @@ nb_path: "03_ml.ipynb"
 
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p><a href="/ml.html"><code>ml</code></a> contains the code base to process glycan for machine learning, construct state-of-the-art machine learning models, train them, and analyze trained models + glycan reprsentations. It currently contains the following modules:</p>
+<p><a href="/glycowork/ml.html"><code>ml</code></a> contains the code base to process glycan for machine learning, construct state-of-the-art machine learning models, train them, and analyze trained models + glycan reprsentations. It currently contains the following modules:</p>
 <ul>
 <li><code>model_training</code> contains functions for training machine learning models</li>
 <li><code>models</code> describes some examples for machine learning architectures applicable to glycans</li>
@@ -96,15 +96,50 @@ nb_path: "03_ml.ipynb"
 <div class="output_markdown rendered_html output_subarea ">
 <h4 id="train_model" class="doc_header"><code>train_model</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L55" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>train_model</code>(<strong><code>model</code></strong>, <strong><code>dataloaders</code></strong>, <strong><code>criterion</code></strong>, <strong><code>optimizer</code></strong>, <strong><code>scheduler</code></strong>, <strong><code>num_epochs</code></strong>=<em><code>25</code></em>, <strong><code>patience</code></strong>=<em><code>50</code></em>, <strong><code>mode</code></strong>=<em><code>'classification'</code></em>)</p>
 </blockquote>
-<p>model -- graph neural network (such as SweetNet) for analyzing glycans</p>
-<p>dataloaders -- dictionary of dataloader objects with keys 'train' and 'val'</p>
-<p>criterion -- PyTorch loss function</p>
-<p>optimizer -- PyTorch optimizer</p>
-<p>scheduler -- PyTorch learning rate decay</p>
-<p>num_epochs -- number of epochs for training; default: 25</p>
-<p>patience -- number of epochs without improvement until early stop; default: 50</p>
-<p>mode -- 'classification' or 'regression'; default is binary classification</p>
-<p>returns the best model seen during training</p>
+<p>trains a deep learning model on predicting glycan properties</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans</td>
+</tr>
+<tr>
+<td style="text-align:left">dataloaders (PyTorch object): dictionary of dataloader objects with keys 'train' and 'val'</td>
+</tr>
+<tr>
+<td style="text-align:left">criterion (PyTorch object): PyTorch loss function</td>
+</tr>
+<tr>
+<td style="text-align:left">optimizer (PyTorch object): PyTorch optimizer</td>
+</tr>
+<tr>
+<td style="text-align:left">scheduler (PyTorch object): PyTorch learning rate decay</td>
+</tr>
+<tr>
+<td style="text-align:left">num_epochs (int): number of epochs for training; default: 25</td>
+</tr>
+<tr>
+<td style="text-align:left">patience (int): number of epochs without improvement until early stop; default: 50</td>
+</tr>
+<tr>
+<td style="text-align:left">mode (string): 'classification' or 'regression'; default is binary classification</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns the best model seen during training</td>
+</tr>
+</tbody>
+</table>
 
 </div>
 
@@ -127,21 +162,46 @@ nb_path: "03_ml.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="training_setup" class="doc_header"><code>training_setup</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L169" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>training_setup</code>(<strong><code>model</code></strong>, <strong><code>epochs</code></strong>, <strong><code>lr</code></strong>, <strong><code>lr_decay_length</code></strong>=<em><code>0.5</code></em>, <strong><code>weight_decay</code></strong>=<em><code>0.001</code></em>, <strong><code>mode</code></strong>=<em><code>'multiclass'</code></em>)</p>
+<h4 id="training_setup" class="doc_header"><code>training_setup</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L172" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>training_setup</code>(<strong><code>model</code></strong>, <strong><code>epochs</code></strong>, <strong><code>lr</code></strong>, <strong><code>lr_decay_length</code></strong>=<em><code>0.5</code></em>, <strong><code>weight_decay</code></strong>=<em><code>0.001</code></em>, <strong><code>mode</code></strong>=<em><code>'multiclass'</code></em>)</p>
 </blockquote>
 <p>prepares optimizer, learning rate scheduler, and loss criterion for model training</p>
-<p>model -- graph neural network (such as SweetNet) for analyzing glycans</p>
-<p>epochs -- number of epochs for training the model</p>
-<p>lr -- learning rate</p>
-<p>lr_decay_length -- proportion of epochs over which to decay the learning rate;default:0.5</p>
-<p>weight_decay -- regularization parameter for the optimizer; default:0.001</p>
-<p>mode -- 'multiclass': classification with multiple classes, 'binary':binary classification</p>
-
-<pre><code>    'regression': regression; default:'multiclass'
-
-
-</code></pre>
-<p>returns optimizer, learning rate scheduler, and loss criterion objects</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans</td>
+</tr>
+<tr>
+<td style="text-align:left">epochs (int): number of epochs for training the model</td>
+</tr>
+<tr>
+<td style="text-align:left">lr (float): learning rate</td>
+</tr>
+<tr>
+<td style="text-align:left">lr_decay_length (float): proportion of epochs over which to decay the learning rate;default:0.5</td>
+</tr>
+<tr>
+<td style="text-align:left">weight_decay (float): regularization parameter for the optimizer; default:0.001</td>
+</tr>
+<tr>
+<td style="text-align:left">mode (string): 'multiclass': classification with multiple classes, 'binary':binary classification, 'regression': regression; default:'multiclass'</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns optimizer, learning rate scheduler, and loss criterion objects</td>
+</tr>
+</tbody>
+</table>
 
 </div>
 
@@ -164,28 +224,49 @@ nb_path: "03_ml.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="train_ml_model" class="doc_header"><code>train_ml_model</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L196" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>train_ml_model</code>(<strong><code>X_train</code></strong>, <strong><code>X_test</code></strong>, <strong><code>y_train</code></strong>, <strong><code>y_test</code></strong>, <strong><code>mode</code></strong>=<em><code>'classification'</code></em>, <strong><code>feature_calc</code></strong>=<em><code>False</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>return_features</code></strong>=<em><code>False</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known', 'exhaustive']</code></em>)</p>
+<h4 id="train_ml_model" class="doc_header"><code>train_ml_model</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L201" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>train_ml_model</code>(<strong><code>X_train</code></strong>, <strong><code>X_test</code></strong>, <strong><code>y_train</code></strong>, <strong><code>y_test</code></strong>, <strong><code>mode</code></strong>=<em><code>'classification'</code></em>, <strong><code>feature_calc</code></strong>=<em><code>False</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>return_features</code></strong>=<em><code>False</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known', 'exhaustive']</code></em>)</p>
 </blockquote>
 <p>wrapper function to train standard machine learning models on glycans</p>
-<p>X_train, X_test -- either lists of glycans (needs feature_calc = True) or</p>
-
-<pre><code>               motif dataframes such as from annotate_dataset
-
-</code></pre>
-<p>y_train, y_test -- lists of labels</p>
-<p>mode -- 'classification' or 'regression'; default:'classification'</p>
-<p>feature_calc -- set to True for calculating motifs from glycans; default:False</p>
-<p>libr -- sorted list of unique glycoletters observed in the glycans of our data; default:lib</p>
-<p>return_features -- whether to return calculated features; default:False</p>
-<p>feature_set -- which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']</p>
-
-<pre><code>         options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
-
-                       and 'exhaustive' (all mono- and disaccharide features)
-
-
-</code></pre>
-<p>returns trained model</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">X_train, X_test (list or dataframe): either lists of glycans (needs feature_calc = True) or motif dataframes such as from annotate_dataset</td>
+</tr>
+<tr>
+<td style="text-align:left">y_train, y_test (list): lists of labels</td>
+</tr>
+<tr>
+<td style="text-align:left">mode (string): 'classification' or 'regression'; default:'classification'</td>
+</tr>
+<tr>
+<td style="text-align:left">feature_calc (bool): set to True for calculating motifs from glycans; default:False</td>
+</tr>
+<tr>
+<td style="text-align:left">libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib</td>
+</tr>
+<tr>
+<td style="text-align:left">return_features (bool): whether to return calculated features; default:False</td>
+</tr>
+<tr>
+<td style="text-align:left">feature_set (list): which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns trained model                           </td>
+</tr>
+</tbody>
+</table>
 
 </div>
 
@@ -224,7 +305,7 @@ nb_path: "03_ml.ipynb"
 Calculating Glycan Features...
 
 Training model...
-[09:18:23] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.4.0/src/learner.cc:1095: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective &#39;binary:logistic&#39; was changed from &#39;error&#39; to &#39;logloss&#39;. Explicitly set eval_metric if you&#39;d like to restore the old behavior.
+[09:50:20] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.4.0/src/learner.cc:1095: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective &#39;binary:logistic&#39; was changed from &#39;error&#39; to &#39;logloss&#39;. Explicitly set eval_metric if you&#39;d like to restore the old behavior.
 
 Evaluating model...
 Accuracy of trained model on separate validation set: 0.9549583648750947
@@ -249,10 +330,20 @@ Accuracy of trained model on separate validation set: 0.9549583648750947
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="analyze_ml_model" class="doc_header"><code>analyze_ml_model</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L252" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>analyze_ml_model</code>(<strong><code>model</code></strong>)</p>
+<h4 id="analyze_ml_model" class="doc_header"><code>analyze_ml_model</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L257" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>analyze_ml_model</code>(<strong><code>model</code></strong>)</p>
 </blockquote>
 <p>plots relevant features for model prediction</p>
-<p>model -- trained machine learning model from train_ml_model</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">model (model object): trained machine learning model from train_ml_model</td>
+</tr>
+</tbody>
+</table>
 
 </div>
 
@@ -310,14 +401,40 @@ Accuracy of trained model on separate validation set: 0.9549583648750947
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_mismatch" class="doc_header"><code>get_mismatch</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L271" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_mismatch</code>(<strong><code>model</code></strong>, <strong><code>X_test</code></strong>, <strong><code>y_test</code></strong>, <strong><code>n</code></strong>=<em><code>10</code></em>)</p>
+<h4 id="get_mismatch" class="doc_header"><code>get_mismatch</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L278" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_mismatch</code>(<strong><code>model</code></strong>, <strong><code>X_test</code></strong>, <strong><code>y_test</code></strong>, <strong><code>n</code></strong>=<em><code>10</code></em>)</p>
 </blockquote>
 <p>analyzes misclassifications of trained machine learning model</p>
-<p>model -- trained machine learning model from train_ml_model</p>
-<p>X_test -- motif dataframe used for validating model</p>
-<p>y_test -- list of labels</p>
-<p>n -- number of returned misclassifications; default:10</p>
-<p>returns tuples of misclassifications and their predicted probability</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">model (model object): trained machine learning model from train_ml_model</td>
+</tr>
+<tr>
+<td style="text-align:left">X_test (dataframe): motif dataframe used for validating model</td>
+</tr>
+<tr>
+<td style="text-align:left">y_test (list): list of labels</td>
+</tr>
+<tr>
+<td style="text-align:left">n (int): number of returned misclassifications; default:10</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns tuples of misclassifications and their predicted probability</td>
+</tr>
+</tbody>
+</table>
 
 </div>
 
@@ -537,22 +654,64 @@ Accuracy of trained model on separate validation set: 0.9549583648750947
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="hierarchy_filter" class="doc_header"><code>hierarchy_filter</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/train_test_split.py#L34" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>hierarchy_filter</code>(<strong><code>df_in</code></strong>, <strong><code>rank</code></strong>=<em><code>'Domain'</code></em>, <strong><code>min_seq</code></strong>=<em><code>5</code></em>, <strong><code>wildcard_seed</code></strong>=<em><code>False</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>None</code></em>, <strong><code>wildcard_name</code></strong>=<em><code>None</code></em>, <strong><code>r</code></strong>=<em><code>0.1</code></em>, <strong><code>col</code></strong>=<em><code>'target'</code></em>)</p>
+<h4 id="hierarchy_filter" class="doc_header"><code>hierarchy_filter</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/train_test_split.py#L37" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>hierarchy_filter</code>(<strong><code>df_in</code></strong>, <strong><code>rank</code></strong>=<em><code>'Domain'</code></em>, <strong><code>min_seq</code></strong>=<em><code>5</code></em>, <strong><code>wildcard_seed</code></strong>=<em><code>False</code></em>, <strong><code>wildcard_list</code></strong>=<em><code>None</code></em>, <strong><code>wildcard_name</code></strong>=<em><code>None</code></em>, <strong><code>r</code></strong>=<em><code>0.1</code></em>, <strong><code>col</code></strong>=<em><code>'target'</code></em>)</p>
 </blockquote>
 <p>stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes</p>
-<p>df_in -- dataframe of glycan sequences and taxonomic labels</p>
-<p>rank -- which rank should be filtered; default is 'domain'</p>
-<p>min_seq -- how many glycans need to be present in class to keep it; default is 5</p>
-<p>wildcard_seed -- set to True if you want to seed wildcard glycoletters; default is False</p>
-<p>wildcard_list -- list which glycoletters a wildcard encompasses</p>
-<p>wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature</p>
-<p>r -- rate of replacement, default is 0.1 or 10%</p>
-<p>col -- column name for glycan sequences; default: target</p>
-<p>returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)</p>
-<p>train_y, val_y (lists of taxonomic labels (mapped integers))</p>
-<p>id_val (taxonomic labels in text form (strings))</p>
-<p>class_list (list of unique taxonomic classes (strings))</p>
-<p>class_converter (dictionary to map mapped integers back to text labels)</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">df_in (dataframe): dataframe of glycan sequences and taxonomic labels</td>
+</tr>
+<tr>
+<td style="text-align:left">rank (string): which rank should be filtered; default is 'domain'</td>
+</tr>
+<tr>
+<td style="text-align:left">min_seq (int): how many glycans need to be present in class to keep it; default is 5</td>
+</tr>
+<tr>
+<td style="text-align:left">wildcard_seed (bool): set to True if you want to seed wildcard glycoletters; default is False</td>
+</tr>
+<tr>
+<td style="text-align:left">wildcard_list (list): list which glycoletters a wildcard encompasses</td>
+</tr>
+<tr>
+<td style="text-align:left">wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature</td>
+</tr>
+<tr>
+<td style="text-align:left">r (float): rate of replacement, default is 0.1 or 10%</td>
+</tr>
+<tr>
+<td style="text-align:left">col (string): column name for glycan sequences; default: target</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)</td>
+</tr>
+<tr>
+<td style="text-align:left">train_y, val_y (lists of taxonomic labels (mapped integers))</td>
+</tr>
+<tr>
+<td style="text-align:left">id_val (taxonomic labels in text form (strings))</td>
+</tr>
+<tr>
+<td style="text-align:left">class_list (list of unique taxonomic classes (strings))</td>
+</tr>
+<tr>
+<td style="text-align:left">class_converter (dictionary to map mapped integers back to text labels)</td>
+</tr>
+</tbody>
+</table>
 
 </div>
 
@@ -586,7 +745,7 @@ Accuracy of trained model on separate validation set: 0.9549583648750947
 <div class="output_area">
 
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>[&#39;Rha(a1-4)GalNAcAN(a1-4)GalNFoAN(a1-3)QuiNAc(a1-3)Rha&#39;, &#39;D-FucNAc(a1-3)Rha(a1-3)Rha(a1-3)RhaGro&#39;, &#39;GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[Man(a1-3)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;, &#39;Glc(a1-6)[Glc(b1-4)][LDManHep(a1-3)]LDManHep&#39;, &#39;D-RhaNBut(a1-2)D-RhaNBut(a1-2)D-RhaNBut(a1-2)D-RhaNButOMe&#39;, &#39;[ManNAc(a1-3)]Rha(a1-2)Rha(a1-3)Rha(a1-3)GlcNAc(a1-2)Rha&#39;, &#39;Man(a1-6)Man(a1-2)[Fuc(a1-6)]Man(a1-6)Man(a1-6)[Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAcN&#39;, &#39;Kdo(b2-3)Gal(a1-5)Kdo&#39;, &#39;Gal(b1-3)Glc(b1-4)Glc(b1-4)Glc(b1-6)Glc(a1-4)GlcA(b1-4)GlcA(b1-4)Glc&#39;, &#39;D-Araf(a1-3)[D-Araf(a1-5)]D-Araf&#39;]
+<pre>[&#39;GlcNAcOLacAla(a1-4)GlcNAc(b1-4)GlcNAcOLacAla&#39;, &#39;GalN(a1-2)[Glc(a1-3)]Man(b1-4)[Glc(b1-2)]Man(a1-5)Kdo(a2-6)GlcN(b1-6)GlcN-ol&#39;, &#39;Gal(b1-2)[Glc(b1-4)]GlcA&#39;, &#39;Glc(b1-3)Glc(b1-4)Glc(b1-4)Glc&#39;, &#39;Gal(b1-3)GalNAc(a1-4)Gal(b1-3)GalNAc(a1-4)Gal(b1-3)GalNAc&#39;, &#39;GlcNMeOSte(b1-4)GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc(b1-4)GlcNAcOAcOS-ol&#39;, &#39;Man(a1-3)Man(a1-6)GlcNAc&#39;, &#39;Pse5Ac7Ac(b2-4)Gal(b1-4)GlcNAc(b1-4)Pse5Ac7Ac&#39;, &#39;Man(a1-2)Man(a1-2)Man(a1-6)Man(a1-2)Man&#39;, &#39;GlcNAcOMe(b1-2)D-Rha(a1-3)D-Rha(a1-3)D-Rha(a1-3)D-Rha(a1-2))D-RhaGro&#39;]
 </pre>
 </div>
 </div>
@@ -611,12 +770,40 @@ Accuracy of trained model on separate validation set: 0.9549583648750947
 <h4 id="seed_wildcard_hierarchy" class="doc_header"><code>seed_wildcard_hierarchy</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/train_test_split.py#L9" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>seed_wildcard_hierarchy</code>(<strong><code>glycans</code></strong>, <strong><code>labels</code></strong>, <strong><code>wildcard_list</code></strong>, <strong><code>wildcard_name</code></strong>, <strong><code>r</code></strong>=<em><code>0.1</code></em>)</p>
 </blockquote>
 <p>adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards</p>
-<p>glycans -- list of IUPACcondensed glycan sequences (string)</p>
-<p>labels -- list of labels used for prediction</p>
-<p>wildcard_list -- list which glycoletters a wildcard encompasses</p>
-<p>wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature</p>
-<p>r -- rate of replacement, default is 0.1 or 10%</p>
-<p>returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">glycans (list): list of IUPAC-condensed glycan sequences as strings</td>
+</tr>
+<tr>
+<td style="text-align:left">labels (list): list of labels used for prediction</td>
+</tr>
+<tr>
+<td style="text-align:left">wildcard_list (list): list which glycoletters a wildcard encompasses</td>
+</tr>
+<tr>
+<td style="text-align:left">wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature</td>
+</tr>
+<tr>
+<td style="text-align:left">r (float): rate of replacement, default is 0.1 or 10%</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name</td>
+</tr>
+</tbody>
+</table>
 
 </div>
 
@@ -653,7 +840,7 @@ Accuracy of trained model on separate validation set: 0.9549583648750947
 <div class="output_area">
 
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>[&#39;Fuc(a1-2)[GalNAc(a1-3)]Gal(b1-4)GlcNAc(bond)Man(a1-3)[Gal(b1-4)GlcNAc(bond)[Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;, &#39;[Xyl(bond)]Man(a1-3)[Xyl(bond)]Man(a1-3)[GlcA(bond)][Xyl(b1-4)]Man(a1-3)[Xyl(bond)]Man(a1-3)[Xyl(bond)]Man(a1-3)[GlcA(bond)][Xyl(b1-4)]Man(a1-3)Man(a1-3)Man(a1-3)[Xyl(bond)]Man(a1-3)[Xyl(bond)]Man(a1-3)[GlcA(bond)]Man(a1-3)Man&#39;, &#39;Man(b1-3)GlcNAc(a1-2)GlcOAc(b1-3)6dTal(bond)GlcNAc(a1-2)Man&#39;, &#39;GalA(bond)Rha(b1-2)Rha&#39;, &#39;Fuc(a1-4)[Gal(b1-3)]GlcNAc(b1-3)Gal(b1-4)[Fuc(bond)]Glc&#39;, &#39;Gal(a1-6)Glc(bond)[Glc(b1-2)]LDManHep(bond)[Man(b1-4)][AraN(b1-7)]LDManHep(a1-5)Kdo&#39;, &#39;QuiNAcGroP(b3-3)[GlcNAcOAc(b1-2)][Glc(a1-4)]Gal(b1-3)GlcNAc(bond)QuiNAcGroP&#39;, &#39;Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(bond)]Man(b1-4)GlcNAc(b1-4)[Fuc(bond)]GlcNAc&#39;, &#39;Man(bond)Man(bond)[Glc(a1-3)]Man(b1-3)GlcNAc(a1-6)Man&#39;, &#39;Man(a1-3)[Man(bond)]Man(a1-4)GlcOEtnN&#39;]
+<pre>[&#39;Fuc(bond)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]GalNAc&#39;, &#39;Gal(bond)GlcNAc(b1-6)[Neu5Gc(a2-3)Gal(b1-3)]GalNAc&#39;, &#39;GlcOP(b1-2)GlcOPOOle(bond)GlcOP&#39;, &#39;Man(bond)[Man(bond)Galf(b1-2)Galf(b1-2)Galf(b1-6)]Man(bond)[Man(a1-6)]Man(bond)[GalA(b1-2)Galf(b1-6)]Man(bond)[Man(a1-4)Glc(b1-4)Glc(b1-4)Glc(b1-4)Glc(b1-6)]Man(bond)Man(bond)Man(bond)Man&#39;, &#39;Man(a1-2)[Man(a1-2)Galf(b1-2)Galf(b1-2)Galf(b1-6)]Man(a1-2)[Man(bond)]Man(a1-2)[GalA(b1-2)Galf(b1-6)]Man(a1-2)[Man(a1-4)Glc(b1-4)Glc(b1-4)Glc(b1-4)Glc(b1-6)]Man(a1-2)Man(a1-2)Man(a1-2)Man&#39;, &#39;Ara(a1-2)[Glc(bond)]Ara&#39;, &#39;GlcNAc(bond)GlcA(b1-3)Gal(b1-3)GalNAc&#39;, &#39;[Glc(bond)]RhaOAc(b1-4)Glc(b1-4)[Gal(bond)]Rha(bond)Gal(a1-4)RhaOAc&#39;, &#39;Gal(a1-2)Gal(a1-2)[Gal(b1-4)]Glc(bond)Glc(bond)[LDManHep(a1-7)]LDManHepOPPEtn(bond)LDManHepOPPEtn(a1-5)Kdo&#39;, &#39;Gal(a1-2)Gal(a1-2)[Gal(bond)]Glc(a1-3)Glc(a1-3)[LDManHep(a1-7)]LDManHepOPPEtn(a1-3)LDManHepOPPEtn(a1-5)Kdo&#39;]
 </pre>
 </div>
 </div>
@@ -675,13 +862,37 @@ Accuracy of trained model on separate validation set: 0.9549583648750947
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="general_split" class="doc_header"><code>general_split</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/train_test_split.py#L97" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>general_split</code>(<strong><code>glycans</code></strong>, <strong><code>labels</code></strong>, <strong><code>test_size</code></strong>=<em><code>0.2</code></em>)</p>
+<h4 id="general_split" class="doc_header"><code>general_split</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/train_test_split.py#L103" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>general_split</code>(<strong><code>glycans</code></strong>, <strong><code>labels</code></strong>, <strong><code>test_size</code></strong>=<em><code>0.2</code></em>)</p>
 </blockquote>
 <p>splits glycans and labels into train / test sets</p>
-<p>glycans -- list of IUPACcondensed glycan sequences (string)</p>
-<p>labels -- list of labels used for prediction</p>
-<p>test_size -- % size of test set; default is 0.2 / 20%</p>
-<p>returns X_train, X_test, y_train, y_test</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">glycans (list): list of IUPAC-condensed glycan sequences as strings</td>
+</tr>
+<tr>
+<td style="text-align:left">labels (list): list of labels used for prediction</td>
+</tr>
+<tr>
+<td style="text-align:left">test_size (float): % size of test set; default is 0.2 / 20%</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns X_train, X_test, y_train, y_test</td>
+</tr>
+</tbody>
+</table>
 
 </div>
 

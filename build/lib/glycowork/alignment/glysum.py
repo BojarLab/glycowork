@@ -15,16 +15,19 @@ def pairwiseAlign(query, corpus = None, n = 5, vocab = None,
                   submat = None, mismatch = -10, gap = -5,
                   col = 'glycan'):
   """aligns glycan sequence from database against rest of the database and returns the best n alignments\n
-  query -- glycan string in IUPACcondensed notation\n
-  corpus -- database to align query against; default is SugarBase\n
-  n -- how many alignments to show; default shows top 5\n
-  vocab -- list of glycowords used for mapping to tokens\n
-  submat -- GLYSUM substitution matrix\n
-  mismatch -- mismatch penalty; default: -10\n
-  gap -- gap penalty; default: -5\n
-  col -- column name where glycan sequences are; default: glycan\n
-
-  returns the n best alignments of query against corpus in text form with scores etc
+  | Arguments:
+  | :-
+  | query (string): glycan string in IUPAC-condensed notation
+  | corpus (dataframe): database to align query against; default is SugarBase
+  | n (int): how many alignments to show; default shows top 5
+  | vocab (list): list of glycowords used for mapping to tokens
+  | submat (dataframe): GLYSUM substitution matrix
+  | mismatch (int): mismatch penalty; default: -10
+  | gap (int): gap penalty; default: -5
+  | col (string): column name where glycan sequences are; default: glycan\n
+  | Returns:
+  | :-
+  | The n best alignments of query against corpus in text form with scores etc
   """
   if corpus is None:
       corpus = df_glycan

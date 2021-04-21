@@ -7,10 +7,13 @@ from glycowork.motif.processing import small_motif_find
 
 def character_to_label(character, libr = None):
   """tokenizes character by indexing passed library\n
-  character -- character to index\n
-  libr -- list of library items\n
-
-  returns index of character in library
+  | Arguments:
+  | :-
+  | character (string): character to index
+  | libr (list): list of library items\n
+  | Returns:
+  | :-
+  | Returns index of character in library
   """
   if libr is None:
     libr = lib
@@ -19,10 +22,13 @@ def character_to_label(character, libr = None):
 
 def string_to_labels(character_string, libr = None):
   """tokenizes word by indexing characters in passed library\n
-  character_string -- string of characters to index\n
-  libr -- list of library items\n
-
-  returns indexes of characters in library
+  | Arguments:
+  | :-
+  | character_string (string): string of characters to index
+  | libr (list): list of library items\n
+  | Returns:
+  | :-
+  | Returns indexes of characters in library
   """
   if libr is None:
     libr = lib
@@ -30,11 +36,14 @@ def string_to_labels(character_string, libr = None):
 
 def pad_sequence(seq, max_length, pad_label = None):
   """brings all sequences to same length by adding padding token\n
-  seq -- sequence to pad\n
-  max_length -- sequence length to pad to\n
-  pad_label -- which padding label to use\n
-
-  returns padded sequence
+  | Arguments:
+  | :-
+  | seq (list): sequence to pad (from string_to_labels)
+  | max_length (int): sequence length to pad to
+  | pad_label (int): which padding label to use\n
+  | Returns:
+  | :-
+  | Returns padded sequence
   """
   if pad_label is None:
     pad_label = len(lib)
@@ -43,10 +52,13 @@ def pad_sequence(seq, max_length, pad_label = None):
 
 def convert_to_counts_glycoletter(glycan, libr = None):
   """counts the occurrence of glycoletters in glycan\n
-  glycan -- IUPACcondensed glycan sequence (string)\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-
-  returns dictionary with counts per glycoletter in a glycan
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | Returns:
+  | :-
+  | Returns dictionary with counts per glycoletter in a glycan
   """
   if libr is None:
     libr = lib
@@ -58,12 +70,15 @@ def convert_to_counts_glycoletter(glycan, libr = None):
 
 def glycoletter_count_matrix(glycans, target_col, target_col_name, libr = None):
   """creates dataframe of counted glycoletters in glycan list\n
-  glycans -- list of IUPACcondensed glycan sequences (strings)\n
-  target_col -- label columns used for prediction; list or pd.Series\n
-  target_col_name -- name for target_col; string\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-
-  returns dataframe with glycoletter counts (columns) for every glycan (rows)
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed format as strings
+  | target_col (list or pd.Series): label columns used for prediction
+  | target_col_name (string): name for target_col
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | Returns:
+  | :-
+  | Returns dataframe with glycoletter counts (columns) for every glycan (rows)
   """
   if libr is None:
     libr = lib
@@ -74,9 +89,12 @@ def glycoletter_count_matrix(glycans, target_col, target_col_name, libr = None):
 
 def find_isomorphs(glycan):
   """returns a set of isomorphic glycans by swapping branches etc.\n
-  glycan -- IUPACcondensed glycan sequence (string)\n
-
-  returns list of unique glycan notations (strings) for a glycan in IUPACcondensed
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format\n
+  | Returns:
+  | :-
+  | Returns list of unique glycan notations (strings) for a glycan in IUPAC-condensed
   """
   out_list = [glycan]
   #starting branch swapped with next side branch
@@ -99,9 +117,12 @@ def find_isomorphs(glycan):
 
 def link_find(glycan):
   """finds all disaccharide motifs in a glycan sequence using its isomorphs\n
-  glycan -- IUPACcondensed glycan sequence (string)\n
-
-  returns list of unique disaccharides (strings) for a glycan in IUPACcondensed
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format\n
+  | Returns:
+  | :-
+  | Returns list of unique disaccharides (strings) for a glycan in IUPAC-condensed
   """
   ss = find_isomorphs(glycan)
   coll = []
@@ -124,12 +145,15 @@ def link_find(glycan):
 
 def motif_matrix(df, glycan_col_name, label_col_name, libr = None):
   """generates dataframe with counted glycoletters and disaccharides in glycans\n
-  df -- dataframe containing glycan sequences and labels\n
-  glycan_col_name -- column name for glycan sequences; string\n
-  label_col_name -- column name for labels; string\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-
-  returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences and labels
+  | glycan_col_name (string): column name for glycan sequences
+  | label_col_name (string): column name for labels; string
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | Returns:
+  | :-
+  | Returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)
   """
   if libr is None:
     libr = lib

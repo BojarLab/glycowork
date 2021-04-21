@@ -11,13 +11,16 @@ except ImportError:
 
 def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True):
     """returns a dataframe of learned representations for a list of glycans\n
-    glycans -- list of glycans in IUPACcondensed; strings\n
-    model -- trained graph neural network (such as SweetNet) for analyzing glycans\n
-    libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-    batch_size -- change to batch_size used during training; default is 32\n
-    rep -- True returns representations, False returns actual predicted labels; default is True\n
-
-    returns dataframe of learned representations (columns) for each glycan (rows)
+    | Arguments:
+    | :-
+    | glycans (list): list of glycans in IUPAC-condensed as strings
+    | model (PyTorch object): trained graph neural network (such as SweetNet) for analyzing glycans
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+    | batch_size (int): change to batch_size used during training; default is 32
+    | rep (bool): True returns representations, False returns actual predicted labels; default is True\n
+    | Returns:
+    | :-
+    | Returns dataframe of learned representations (columns) for each glycan (rows)
     """
     if libr is None:
       libr = lib

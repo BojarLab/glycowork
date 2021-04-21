@@ -38,11 +38,14 @@ def unwrap(nested_list):
 
 def find_nth(haystack, needle, n):
   """finds n-th instance of motif\n
-  haystack -- string to search for motif\n
-  needle -- motif\n
-  n -- n-th occurrence in string\n
-
-  returns starting index of n-th occurrence in string 
+  | Arguments:
+  | :-
+  | haystack (string): string to search for motif
+  | needle (string): motif
+  | n (int): n-th occurrence in string\n
+  | Returns:
+  | :-
+  | Returns starting index of n-th occurrence in string 
   """
   start = haystack.find(needle)
   while start >= 0 and n > 1:
@@ -51,11 +54,13 @@ def find_nth(haystack, needle, n):
   return start
 
 def load_file(file):
-    """loads .csv files from glycowork package\n
-    file -- name of the file to be loaded [string]
-    """
-    try:
-      temp = pd.read_csv("../glycan_data/" + file)
-    except:
-      temp = pd.read_csv("glycowork/glycan_data/" + file)
-    return temp
+  """loads .csv files from glycowork package\n
+  | Arguments:
+  | :-
+  | file (string): name of the file to be loaded
+  """
+  try:
+    temp = pd.read_csv("../glycan_data/" + file)
+  except:
+    temp = pd.read_csv("glycowork/glycan_data/" + file)
+  return temp

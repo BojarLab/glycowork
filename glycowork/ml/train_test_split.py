@@ -9,13 +9,16 @@ linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3',
 def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
                             wildcard_name, r = 0.1):
   """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards\n
-  glycans -- list of IUPACcondensed glycan sequences (string)\n
-  labels -- list of labels used for prediction\n
-  wildcard_list -- list which glycoletters a wildcard encompasses\n
-  wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature\n
-  r -- rate of replacement, default is 0.1 or 10%\n
-
-  returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name
+  | Arguments:
+  | :-
+  | glycans (list): list of IUPAC-condensed glycan sequences as strings
+  | labels (list): list of labels used for prediction
+  | wildcard_list (list): list which glycoletters a wildcard encompasses
+  | wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature
+  | r (float): rate of replacement, default is 0.1 or 10%\n
+  | Returns:
+  | :-
+  | Returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name
   """
   added_glycans = []
   added_labels = []
@@ -34,20 +37,23 @@ def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
 def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False, wildcard_list = None,
                      wildcard_name = None, r = 0.1, col = 'target'):
   """stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes\n
-  df_in -- dataframe of glycan sequences and taxonomic labels\n
-  rank -- which rank should be filtered; default is 'domain'\n
-  min_seq -- how many glycans need to be present in class to keep it; default is 5\n
-  wildcard_seed -- set to True if you want to seed wildcard glycoletters; default is False\n
-  wildcard_list -- list which glycoletters a wildcard encompasses\n
-  wildcard_name -- how the wildcard should be named in the IUPACcondensed nomenclature\n
-  r -- rate of replacement, default is 0.1 or 10%\n
-  col -- column name for glycan sequences; default: target\n
-
-  returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)\n
-  train_y, val_y (lists of taxonomic labels (mapped integers))\n
-  id_val (taxonomic labels in text form (strings))\n
-  class_list (list of unique taxonomic classes (strings))\n
-  class_converter (dictionary to map mapped integers back to text labels)
+  | Arguments:
+  | :-
+  | df_in (dataframe): dataframe of glycan sequences and taxonomic labels
+  | rank (string): which rank should be filtered; default is 'domain'
+  | min_seq (int): how many glycans need to be present in class to keep it; default is 5
+  | wildcard_seed (bool): set to True if you want to seed wildcard glycoletters; default is False
+  | wildcard_list (list): list which glycoletters a wildcard encompasses
+  | wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature
+  | r (float): rate of replacement, default is 0.1 or 10%
+  | col (string): column name for glycan sequences; default: target\n
+  | Returns:
+  | :-
+  | Returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)
+  | train_y, val_y (lists of taxonomic labels (mapped integers))
+  | id_val (taxonomic labels in text form (strings))
+  | class_list (list of unique taxonomic classes (strings))
+  | class_converter (dictionary to map mapped integers back to text labels)
   """
   df = copy.deepcopy(df_in)
   rank_list = ['Species','Genus','Family','Order',
@@ -96,11 +102,14 @@ def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False,
 
 def general_split(glycans, labels, test_size = 0.2):
   """splits glycans and labels into train / test sets\n
-  glycans -- list of IUPACcondensed glycan sequences (string)\n
-  labels -- list of labels used for prediction\n
-  test_size -- % size of test set; default is 0.2 / 20%\n
-
-  returns X_train, X_test, y_train, y_test
+  | Arguments:
+  | :-
+  | glycans (list): list of IUPAC-condensed glycan sequences as strings
+  | labels (list): list of labels used for prediction
+  | test_size (float): % size of test set; default is 0.2 / 20%\n
+  | Returns:
+  | :-
+  | Returns X_train, X_test, y_train, y_test
   """
   return train_test_split(glycans, labels, shuffle = True,
                           test_size = test_size, random_state = 42)

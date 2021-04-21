@@ -69,15 +69,49 @@ nb_path: "01_alignment.ipynb"
 <h4 id="pairwiseAlign" class="doc_header"><code>pairwiseAlign</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/alignment/glysum.py#L14" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>pairwiseAlign</code>(<strong><code>query</code></strong>, <strong><code>corpus</code></strong>=<em><code>None</code></em>, <strong><code>n</code></strong>=<em><code>5</code></em>, <strong><code>vocab</code></strong>=<em><code>None</code></em>, <strong><code>submat</code></strong>=<em><code>None</code></em>, <strong><code>mismatch</code></strong>=<em><code>-10</code></em>, <strong><code>gap</code></strong>=<em><code>-5</code></em>, <strong><code>col</code></strong>=<em><code>'glycan'</code></em>)</p>
 </blockquote>
 <p>aligns glycan sequence from database against rest of the database and returns the best n alignments</p>
-<p>query -- glycan string in IUPACcondensed notation</p>
-<p>corpus -- database to align query against; default is SugarBase</p>
-<p>n -- how many alignments to show; default shows top 5</p>
-<p>vocab -- list of glycowords used for mapping to tokens</p>
-<p>submat -- GLYSUM substitution matrix</p>
-<p>mismatch -- mismatch penalty; default: -10</p>
-<p>gap -- gap penalty; default: -5</p>
-<p>col -- column name where glycan sequences are; default: glycan</p>
-<p>returns the n best alignments of query against corpus in text form with scores etc</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">query (string): glycan string in IUPAC-condensed notation</td>
+</tr>
+<tr>
+<td style="text-align:left">corpus (dataframe): database to align query against; default is SugarBase</td>
+</tr>
+<tr>
+<td style="text-align:left">n (int): how many alignments to show; default shows top 5</td>
+</tr>
+<tr>
+<td style="text-align:left">vocab (list): list of glycowords used for mapping to tokens</td>
+</tr>
+<tr>
+<td style="text-align:left">submat (dataframe): GLYSUM substitution matrix</td>
+</tr>
+<tr>
+<td style="text-align:left">mismatch (int): mismatch penalty; default: -10</td>
+</tr>
+<tr>
+<td style="text-align:left">gap (int): gap penalty; default: -5</td>
+</tr>
+<tr>
+<td style="text-align:left">col (string): column name where glycan sequences are; default: glycan</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">The n best alignments of query against corpus in text form with scores etc</td>
+</tr>
+</tbody>
+</table>
 
 </div>
 

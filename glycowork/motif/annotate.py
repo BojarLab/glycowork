@@ -7,15 +7,17 @@ from glycowork.motif.tokenization import motif_matrix
 def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
                     wildcard_list = [], termini_list = []):
   """searches for known motifs in glycan sequence\n
-  glycan -- IUPACcondensed glycan sequence (string)\n
-  motifs -- dataframe of glycan motifs (name + sequence)\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our dataset\n
-  extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',\n
-           and 'termini' allows for positional matching; default:'termini'\n
-  wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
-  termini_list -- list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
-
-  returns dataframe with absence/presence of motifs in glycan
+  | Arguments:
+  | :-
+  | glycan (string): IUPAC-condensed glycan sequence
+  | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
+  | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
+  | Returns:
+  | :-
+  | Returns dataframe with absence/presence of motifs in glycan
   """
   if motifs is None:
     motifs = motif_list
@@ -47,19 +49,19 @@ def annotate_dataset(glycans, motifs = None, libr = None,
                      wildcard_list = [], termini_list = [],
                      condense = False):
   """wrapper function to annotate motifs in list of glycans\n
-  glycans -- list of IUPACcondensed glycan sequences (string)\n
-  motifs -- dataframe of glycan motifs (name + sequence); default:motif_list\n
-  libr -- sorted list of unique glycoletters observed in the glycans of our data; default:lib\n
-  feature_set -- which feature set to use for annotations, add more to list to expand; default is 'known'\n
-                 options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)
-                               and 'exhaustive' (all mono- and disaccharide features)\n
-  extra -- 'ignore' skips this, 'wildcards' allows for wildcard matching',\n
-           and 'termini' allows for positional matching; default:'termini'\n
-  wildcard_list -- list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')\n
-  termini_list -- list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
-  condense -- if True, throws away columns with only zeroes; default:False\n
-                               
-  returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
+  | Arguments:
+  | :-
+  | glycans (list): list of IUPAC-condensed glycan sequences as strings
+  | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
+  | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
+  | condense (bool): if True, throws away columns with only zeroes; default:False\n
+  | Returns:
+  | :-                               
+  | Returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
   """
   if motifs is None:
     motifs = motif_list

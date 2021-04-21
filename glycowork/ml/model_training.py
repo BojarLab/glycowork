@@ -55,17 +55,20 @@ class EarlyStopping:
 def train_model(model, dataloaders, criterion, optimizer,
                 scheduler, num_epochs = 25, patience = 50,
                 mode = 'classification'):
-  """
-  model -- graph neural network (such as SweetNet) for analyzing glycans\n
-  dataloaders -- dictionary of dataloader objects with keys 'train' and 'val'\n
-  criterion -- PyTorch loss function\n
-  optimizer -- PyTorch optimizer\n
-  scheduler -- PyTorch learning rate decay\n
-  num_epochs -- number of epochs for training; default: 25\n
-  patience -- number of epochs without improvement until early stop; default: 50\n
-  mode -- 'classification' or 'regression'; default is binary classification\n
-
-  returns the best model seen during training
+  """trains a deep learning model on predicting glycan properties\n
+  | Arguments:
+  | :-
+  | model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans
+  | dataloaders (PyTorch object): dictionary of dataloader objects with keys 'train' and 'val'
+  | criterion (PyTorch object): PyTorch loss function
+  | optimizer (PyTorch object): PyTorch optimizer
+  | scheduler (PyTorch object): PyTorch learning rate decay
+  | num_epochs (int): number of epochs for training; default: 25
+  | patience (int): number of epochs without improvement until early stop; default: 50
+  | mode (string): 'classification' or 'regression'; default is binary classification\n
+  | Returns:
+  | :-
+  | Returns the best model seen during training
   """
   since = time.time()
   early_stopping = EarlyStopping(patience = patience, verbose = True)
@@ -169,15 +172,17 @@ def train_model(model, dataloaders, criterion, optimizer,
 def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.001,
                    mode = 'multiclass'):
     """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
-    model -- graph neural network (such as SweetNet) for analyzing glycans\n
-    epochs -- number of epochs for training the model\n
-    lr -- learning rate\n
-    lr_decay_length -- proportion of epochs over which to decay the learning rate;default:0.5\n
-    weight_decay -- regularization parameter for the optimizer; default:0.001\n
-    mode -- 'multiclass': classification with multiple classes, 'binary':binary classification\n
-            'regression': regression; default:'multiclass'\n
-
-    returns optimizer, learning rate scheduler, and loss criterion objects
+    | Arguments:
+    | :-
+    | model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans
+    | epochs (int): number of epochs for training the model
+    | lr (float): learning rate
+    | lr_decay_length (float): proportion of epochs over which to decay the learning rate;default:0.5
+    | weight_decay (float): regularization parameter for the optimizer; default:0.001
+    | mode (string): 'multiclass': classification with multiple classes, 'binary':binary classification, 'regression': regression; default:'multiclass'\n
+    | Returns:
+    | :-
+    | Returns optimizer, learning rate scheduler, and loss criterion objects
     """
     lr_decay = np.round(epochs * lr_decay_length)
     optimizer_ft = torch.optim.Adam(model.parameters(), lr = lr,
@@ -197,18 +202,18 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
                    feature_calc = False, libr = None, return_features = False,
                    feature_set = ['known','exhaustive']):
     """wrapper function to train standard machine learning models on glycans\n
-    X_train, X_test -- either lists of glycans (needs feature_calc = True) or\n
-                       motif dataframes such as from annotate_dataset\n
-    y_train, y_test -- lists of labels\n
-    mode -- 'classification' or 'regression'; default:'classification'\n
-    feature_calc -- set to True for calculating motifs from glycans; default:False\n
-    libr -- sorted list of unique glycoletters observed in the glycans of our data; default:lib\n
-    return_features -- whether to return calculated features; default:False\n
-    feature_set -- which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']\n
-                 options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans)\n
-                               and 'exhaustive' (all mono- and disaccharide features)\n
-
-    returns trained model                           
+    | Arguments:
+    | :-
+    | X_train, X_test (list or dataframe): either lists of glycans (needs feature_calc = True) or motif dataframes such as from annotate_dataset
+    | y_train, y_test (list): lists of labels
+    | mode (string): 'classification' or 'regression'; default:'classification'
+    | feature_calc (bool): set to True for calculating motifs from glycans; default:False
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
+    | return_features (bool): whether to return calculated features; default:False
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)\n
+    | Returns:
+    | :-
+    | Returns trained model                           
     """
     if mode == 'classification':
         model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,
@@ -251,7 +256,9 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
 
 def analyze_ml_model(model):
     """plots relevant features for model prediction\n
-    model -- trained machine learning model from train_ml_model
+    | Arguments:
+    | :-
+    | model (model object): trained machine learning model from train_ml_model
     """
     feat_imp = model.get_booster().get_score(importance_type = 'gain')
     feat_imp = pd.DataFrame(feat_imp, index = [0]).T
@@ -270,12 +277,15 @@ def analyze_ml_model(model):
 
 def get_mismatch(model, X_test, y_test, n = 10):
     """analyzes misclassifications of trained machine learning model\n
-    model -- trained machine learning model from train_ml_model\n
-    X_test -- motif dataframe used for validating model\n
-    y_test -- list of labels\n
-    n -- number of returned misclassifications; default:10\n
-
-    returns tuples of misclassifications and their predicted probability
+    | Arguments:
+    | :-
+    | model (model object): trained machine learning model from train_ml_model
+    | X_test (dataframe): motif dataframe used for validating model
+    | y_test (list): list of labels
+    | n (int): number of returned misclassifications; default:10\n
+    | Returns:
+    | :-
+    | Returns tuples of misclassifications and their predicted probability
     """
     preds = model.predict(X_test)
     preds_proba = model.predict_proba(X_test)

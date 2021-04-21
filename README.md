@@ -7,20 +7,21 @@
 
 <img src="glycowork_badge_wo_bg.jpg" width="200" style="max-width: 200px">
 
-- Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.
+Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.
 
-- The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. `Glycowork` is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, `Glycowork` also contains glycan data that can be used for glycan alignments, model pre-training, motif comparisons, etc.
+The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. `Glycowork` is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, `Glycowork` also contains glycan data that can be used for glycan alignments, model pre-training, motif comparisons, etc.
 
-- The inspiration for `glycowork` can be found in [Bojar et al., 2020](https://doi.org/10.1016/j.chom.2020.10.004) and [Burkholz et al., 2021](https://www.biorxiv.org/content/10.1101/2021.03.01.433491v1). There, you can also find examples of possible use cases for the functions in `glycowork`.
+The inspiration for `glycowork` can be found in [Bojar et al., 2020](https://doi.org/10.1016/j.chom.2020.10.004) and [Burkholz et al., 2021](https://www.biorxiv.org/content/10.1101/2021.03.01.433491v1). There, you can also find examples of possible use cases for the functions in `glycowork`.
 
-- The full documentation for `glycowork` can be found here: https://bojarlab.github.io/glycowork/
+The full documentation for `glycowork` can be found here: https://bojarlab.github.io/glycowork/
 
 ## Install
 
-later: <br>
-`pip install glycowork`
+via pip: <br>
+`pip install glycowork` <br>
+`import glycowork`
 
-for now: <br>
+alternative: <br>
 `pip install git+https://github.com/BojarLab/glycowork.git` <br>
 `import glycowork`
 

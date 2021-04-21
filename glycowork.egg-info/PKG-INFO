@@ -1,6 +1,6 @@
 Metadata-Version: 1.2
 Name: glycowork
-Version: 0.0.1
+Version: 0.1.0
 Summary: Package containing helper functions for processing and analysis of glycans
 Home-page: https://github.com/BojarLab/glycowork
 Author: Daniel Bojar
