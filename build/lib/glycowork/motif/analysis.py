@@ -135,7 +135,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     | Arguments:
     | :-
     | glycans (list): list of IUPAC-condensed glycan sequences as strings
-    | emb (list): stored glycan representations; default takes them from trained species-level SweetNet model
+    | emb (dictionary): stored glycan representations; default takes them from trained species-level SweetNet model
     | label_list (list): list of same length as glycans if coloring of the plot is desired
     | shape_feature (string): monosaccharide/bond used to display alternative shapes for dots on the plot
     | filepath (string): absolute path including full filename allows for saving the plot
@@ -143,6 +143,8 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     """
     if emb is None:
         emb = glycan_emb
+    if isinstance(emb, pd.DataFrame):
+        emb = {glycan[k]:emb.iloc[k,:] for k in range(len(glycans))}
     embs = np.array([emb[k] for k in glycans])
     embs = TSNE(random_state = 42).fit_transform(embs)
     markers = None

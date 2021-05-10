@@ -360,3 +360,33 @@ def generate_graph_features(glycan, libr = None):
     feat_dic = {col_names[k]:features[k] for k in range(len(features))}
     return pd.DataFrame(feat_dic, index = [glycan])
 
+def graph_to_string(graph, libr = None):
+  """converts glycan graph back to IUPAC-condensed format\n
+  | Arguments:
+  | :-
+  | graph (networkx object): glycan graph (either linear glycan or branches with maximum size of 1)
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns glycan in IUPAC-condensed format (string)
+  """
+  if libr is None:
+    libr = lib
+  diffs = [k[1]-k[0] for k in list(graph.edges())]
+  if np.max(diffs)>1:
+    branch_idx = np.where([j>1 for j in diffs])[0].tolist()
+    branch_nodes = [list(graph.edges())[k][0] for k in branch_idx]
+    branch = [list(graph.edges())[k][1] for k in branch_idx]
+    branch_pool = [[k-1, k] for k in branch]
+    branch = [[list(nx.get_node_attributes(graph, 'labels').values())[j] for j in k] for k in branch_pool]
+    branch = [[libr[j] for j in k] for k in branch]
+    branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch]
+  else:
+    branch_pool = []
+  glycan_motif = [libr[list(nx.get_node_attributes(graph, 'labels').values())[k]] for k in range(len(graph.nodes)) if k not in unwrap(branch_pool)]
+  if len(branch_pool)>0:
+    for k in range(len(branch_nodes)):
+      glycan_motif.insert(np.max([branch_nodes[k]+k, 0]), '['+branch[k]+']')
+  glycan_motif = "".join([glycan_motif[k] if not ((glycan_motif[k].startswith('a')) or (glycan_motif[k].startswith('b')) or (re.match('^[0-9]+(-[0-9]+)+$', glycan_motif[k]))) \
+                          else '('+glycan_motif[k]+')' for k in range(len(glycan_motif))])
+  return glycan_motif

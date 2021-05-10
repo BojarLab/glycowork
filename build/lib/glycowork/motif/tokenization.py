@@ -1,8 +1,9 @@
 import pandas as pd
 import re
+import copy
 
-from glycowork.glycan_data.loader import lib, motif_list, find_nth
-from glycowork.motif.processing import small_motif_find
+from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap
+from glycowork.motif.processing import small_motif_find, min_process_glycans
 
 
 def character_to_label(character, libr = None):
@@ -177,4 +178,127 @@ def motif_matrix(df, glycan_col_name, label_col_name, libr = None):
   out_matrix.reset_index(drop = True, inplace = True)
   return out_matrix
 
+def get_core(sugar):
+  """retrieves core monosaccharide from modified monosaccharide\n
+  | Arguments:
+  | :-
+  | sugar (string): monosaccharide or linkage\n
+  | Returns:
+  | :-
+  | Returns core monosaccharide as string
+  """
+  easy_cores = ['GlcNAc', 'GalNAc', 'ManNAc', 'FucNAc', 'QuiNAc', 'RhaNAc', 'GulNAc',
+                'IdoNAc', 'MurNAc', 'HexNAc', '6dAltNAc', 'AcoNAc', 'GlcA', 'AltA',
+                'GalA', 'ManA', 'Tyv', 'Yer', 'Abe', 'GlcfNAc', 'GalfNAc', 'ManfNAc',
+                'FucfNAc', 'IdoA', 'GulA', 'LDManHep', 'DDManHep', 'DDGlcHep', 'LyxHep', 'ManHep',
+                'DDAltHep', 'IdoHep', 'DLGlcHep', 'GalHep']
+  next_cores = ['GlcN', 'GalN', 'ManN', 'FucN', 'QuiN', 'RhaN', 'AraN', 'IdoN' 'Glcf', 'Galf', 'Manf',
+                'Fucf', 'Araf', 'Lyxf', 'Xylf', '6dAltf', 'Ribf', 'Fruf', 'Apif', 'Kdof', 'Sedf',
+                '6dTal', 'AltNAc', '6dAlt']
+  hard_cores = ['Glc', 'Gal', 'Man', 'Fuc', 'Qui', 'Rha', 'Ara', 'Oli', 'Kdn', 'Gul', 'Lyx',
+                'Xyl', 'Dha', 'Rib', 'Kdo', 'Tal', 'All', 'Pse', 'Leg', 'Asc',
+                'Fru', 'Hex', 'Alt', 'Xluf', 'Api', 'Ko', 'Pau', 'Fus', 'Erwiniose',
+                'Aco', 'Bac', 'Dig', 'Thre-ol', 'Ery-ol']
+  if bool([ele for ele in easy_cores if(ele in sugar)]):
+    return [ele for ele in easy_cores if(ele in sugar)][0]
+  elif bool([ele for ele in next_cores if(ele in sugar)]):
+    return [ele for ele in next_cores if(ele in sugar)][0]
+  elif bool([ele for ele in hard_cores if(ele in sugar)]):
+    return [ele for ele in hard_cores if(ele in sugar)][0]
+  elif (('Neu' in sugar) and ('5Ac' in sugar)):
+    return 'Neu5Ac'
+  elif (('Neu' in sugar) and ('5Gc' in sugar)):
+    return 'Neu5Gc'
+  elif 'Neu' in sugar:
+    return 'Neu'
+  elif ((sugar.startswith('a')) or sugar.startswith('b')):
+    return sugar
+  elif re.match('^[0-9]+(-[0-9]+)+$', sugar):
+    return sugar
+  else:
+    return 'Sug'
 
+def get_stem_lib(libr):
+  """creates a mapping file to map modified monosaccharides to core monosaccharides\n
+  | Arguments:
+  | :-
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | Returns:
+  | :-
+  | Returns dictionary of form modified_monosaccharide:core_monosaccharide
+  """
+  return {k:get_core(k) for k in libr}
+
+def stemify_glycan(glycan, stem_lib):
+  """removes modifications from all monosaccharides in a glycan\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide\n
+  | Returns:
+  | :-
+  | Returns stemmed glycan as string
+  """
+  clean_list = list(stem_lib.values())
+  for k in list(stem_lib.keys())[::-1][:-1]:
+    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
+      while ((k in glycan) and (sum(1 for s in clean_list if k in s) <= 1)):
+        glycan_start = glycan[:glycan.rindex('(')]
+        glycan_part = glycan_start
+        if k in glycan_start:
+          cut = glycan_start[glycan_start.index(k):]
+          try:
+            cut = cut[:cut.index('(')]
+          except:
+            pass
+          if cut not in clean_list:
+            glycan_part = glycan_start[:glycan_start.index(k)]
+            glycan_part = glycan_part + stem_lib[k]
+          else:
+            glycan_part = glycan_start
+        try:
+          glycan_mid = glycan_start[glycan_start.index(k) + len(k):]
+          if ((cut not in clean_list) and (len(glycan_mid)>0)):
+            glycan_part = glycan_part + glycan_mid
+        except:
+          pass
+        glycan_end = glycan[glycan.rindex('('):]
+        if k in glycan_end:
+          if ']' in glycan_end:
+            filt = ']'
+          else:
+            filt = ')'
+          cut = glycan_end[glycan_end.index(filt)+1:]
+          if cut not in clean_list:
+            glycan_end = glycan_end[:glycan_end.index(filt)+1] + stem_lib[k]
+          else:
+            pass
+        glycan = glycan_part + glycan_end
+  return glycan
+
+def stemify_dataset(df, stem_lib = None, libr = None,
+                    glycan_col_name = 'target', rarity_filter = 1):
+  """stemifies all glycans in a dataset by removing monosaccharide modifications\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with glycans in IUPAC-condensed format in column glycan_col_name
+  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | glycan_col_name (string): column name under which glycans are stored; default:target
+  | rarity_filter (int): how often monosaccharide modification has to occur to not get removed; default:1\n
+  | Returns:
+  | :-
+  | Returns df with glycans stemified
+  """
+  if libr is None:
+    libr = lib
+  if stem_lib is None:
+    stem_lib = get_stem_lib(libr)
+  pool = unwrap(min_process_glycans(df[glycan_col_name].values.tolist()))
+  pool_count = Counter(pool)
+  for k in list(set(pool)):
+    if pool_count[k] > rarity_filter:
+      stem_lib[k] = k
+  df_out = copy.deepcopy(df)
+  df_out[glycan_col_name] = [stemify_glycan(k, stem_lib) for k in df_out[glycan_col_name].values.tolist()]
+  return df_out

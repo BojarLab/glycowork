@@ -5,7 +5,7 @@ import setuptools
 
 setuptools.setup(
     name="glycowork",
-    version="0.1.0",
+    version="0.2.0",
     author="Daniel Bojar",
     author_email="daniel.bojar@gu.se",
     description="Package containing helper functions for processing and analysis of glycans",
