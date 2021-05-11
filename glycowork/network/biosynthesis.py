@@ -50,7 +50,7 @@ def subgraph_to_string(subgraph, libr = None):
   """
   if libr is None:
     libr = lib
-  glycan_motif = [libr[k] for k in list(nx.get_node_attributes(subgraph, 'labels').values())]
+  glycan_motif = [libr[k] for k in list(sorted(list(nx.get_node_attributes(subgraph, 'labels').values())))]
   glycan_motif = glycan_motif[0] + '(' + glycan_motif[1] + ')'
   return glycan_motif
 

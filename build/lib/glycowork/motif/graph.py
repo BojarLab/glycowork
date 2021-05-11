@@ -360,6 +360,30 @@ def generate_graph_features(glycan, libr = None):
     feat_dic = {col_names[k]:features[k] for k in range(len(features))}
     return pd.DataFrame(feat_dic, index = [glycan])
 
+def branch_crawl(starting_node, main_chain_connect, graph):
+  """recursive function to ascertain branch length and collect all nodes\n
+  | Arguments:
+  | :-
+  | starting_node (int): first node of the branch
+  | main_chain_connect (int): main chain node to which branch is connected
+  | graph (networkx object): glycan graph\n
+  | Returns:
+  | :-
+  | Returns all nodes of the branch in the correct order
+  """
+  break_cond = True
+  node_pool = [starting_node]
+  node = starting_node
+  while break_cond:
+    try:
+      temp = [k for k in list(graph.edges()) if (node in k) and (k != tuple(sorted([node,main_chain_connect])))]
+      temp = [k for j in temp for k in j if k not in node_pool][0]
+      node_pool.append(temp)
+      node = temp
+    except:
+      break_cond = False
+  return list(sorted(node_pool))
+
 def graph_to_string(graph, libr = None):
   """converts glycan graph back to IUPAC-condensed format\n
   | Arguments:
@@ -377,7 +401,7 @@ def graph_to_string(graph, libr = None):
     branch_idx = np.where([j>1 for j in diffs])[0].tolist()
     branch_nodes = [list(graph.edges())[k][0] for k in branch_idx]
     branch = [list(graph.edges())[k][1] for k in branch_idx]
-    branch_pool = [[k-1, k] for k in branch]
+    branch_pool = [branch_crawl(branch[k], branch_nodes[k], graph) for k in range(len(branch))]
     branch = [[list(nx.get_node_attributes(graph, 'labels').values())[j] for j in k] for k in branch_pool]
     branch = [[libr[j] for j in k] for k in branch]
     branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch]
