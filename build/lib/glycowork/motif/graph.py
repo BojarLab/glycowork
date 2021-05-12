@@ -388,7 +388,7 @@ def graph_to_string(graph, libr = None):
   """converts glycan graph back to IUPAC-condensed format\n
   | Arguments:
   | :-
-  | graph (networkx object): glycan graph (either linear glycan or branches with maximum size of 1)
+  | graph (networkx object): glycan graph, works with branched glycans
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
   | Returns:
   | :-
@@ -398,19 +398,61 @@ def graph_to_string(graph, libr = None):
     libr = lib
   diffs = [k[1]-k[0] for k in list(graph.edges())]
   if np.max(diffs)>1:
+    branch_branch_pool = []
     branch_idx = np.where([j>1 for j in diffs])[0].tolist()
     branch_nodes = [list(graph.edges())[k][0] for k in branch_idx]
     branch = [list(graph.edges())[k][1] for k in branch_idx]
     branch_pool = [branch_crawl(branch[k], branch_nodes[k], graph) for k in range(len(branch))]
-    branch = [[list(nx.get_node_attributes(graph, 'labels').values())[j] for j in k] for k in branch_pool]
+    branch_branch_nodes = [k for k in branch_nodes if k in unwrap(branch_pool)]
+    if len(branch_branch_nodes)>0:
+      branch_branch_start = []
+      for j in branch_branch_nodes:
+        branch_branch = [list(graph.edges())[k][1] for k in range(len(list(graph.edges()))) if j in list(graph.edges())[k]]
+        branch_branch_start.append(np.max([k for k in branch_branch if k!=j]))
+      branch_branch_pool = [branch_crawl(branch_branch_start[k], branch_branch_nodes[k], graph) for k in range(len(branch_branch_start))]
+      branch_branch = [[list(nx.get_node_attributes(graph, 'labels').values())[j] for j in k] for k in branch_branch_pool]
+      branch_branch = [[libr[j] for j in k] for k in branch_branch]
+      branch_branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch_branch]
+    else:
+      branch_branch_pool = []
+    branch = [[list(nx.get_node_attributes(graph, 'labels').values())[j] for j in k] for k in branch_pool if k not in branch_branch_pool]
     branch = [[libr[j] for j in k] for k in branch]
     branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch]
   else:
     branch_pool = []
+    branch_branch_pool = []
   glycan_motif = [libr[list(nx.get_node_attributes(graph, 'labels').values())[k]] for k in range(len(graph.nodes)) if k not in unwrap(branch_pool)]
+  main_len = len(glycan_motif)
   if len(branch_pool)>0:
-    for k in range(len(branch_nodes)):
-      glycan_motif.insert(np.max([branch_nodes[k]+k, 0]), '['+branch[k]+']')
+    counter = 0
+    for k in range(len(branch)):
+      temp = min_process_glycans([branch[k]])[0]
+      temp = [m for m in temp if len(m)>0]
+      if branch[k].count('(')>1:
+        temp = ['[' + temp[0]] + temp[1:-1] + [temp[-1]+']']
+      else:
+        temp = ['[' + temp[0], temp[-1]+']']
+      glycan_motif = glycan_motif[:branch_nodes[k]+counter] + temp + glycan_motif[branch_nodes[k]+counter:]
+      counter += len(temp)
+  if len(branch_branch_pool)>0:
+    start_idxs = []
+    for k in range(len(branch_branch_nodes)):
+      running_idx = main_len
+      for i in range(sum(['[' in j for j in glycan_motif])):
+        opened = np.where(['[' in j for j in glycan_motif])[0].tolist()[i]
+        closed = np.where([']' in j for j in glycan_motif])[0].tolist()[i]
+        prev_running_idx = running_idx
+        running_idx += len(glycan_motif[opened:closed+1])
+        if running_idx > branch_branch_nodes[k]:
+          start_idx = i
+          break
+      start_idx = np.where(['[' in j for j in glycan_motif])[0].tolist()[start_idx]
+      branch_progress = prev_running_idx-main_len
+      start_idxs.append(start_idx+branch_branch_nodes[k]-(main_len+branch_progress))
+    for k in range(len(start_idxs)):
+      glycan_motif.insert(np.max([start_idxs[k]+k, 0]), '['+branch_branch[k]+']')
   glycan_motif = "".join([glycan_motif[k] if not ((glycan_motif[k].startswith('a')) or (glycan_motif[k].startswith('b')) or (re.match('^[0-9]+(-[0-9]+)+$', glycan_motif[k]))) \
                           else '('+glycan_motif[k]+')' for k in range(len(glycan_motif))])
+  if '])' in glycan_motif:
+    glycan_motif = glycan_motif.replace('])', ')]')
   return glycan_motif
