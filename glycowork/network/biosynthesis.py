@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import lib, unwrap
-from glycowork.motif.graph import fast_compare_glycans, glycan_to_nxGraph, graph_to_string
+from glycowork.motif.graph import fast_compare_glycans, compare_glycans, glycan_to_nxGraph, graph_to_string
 
 def safe_compare(g1, g2, libr = None):
   """fast_compare_glycans with try/except error catch\n
