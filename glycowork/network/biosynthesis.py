@@ -113,7 +113,7 @@ def get_neighbors(glycan, df, libr = None, graphs = None,
   return nb, diffs, idx
 
 def get_virtual_nodes(glycan, df, libr = None, graphs = None,
-                      glycan_col_name = 'target'):
+                      glycan_col_name = 'target', unphysiological = ['Glc(b1-4)']):
   """find unobserved biosynthetic precursors of a glycan\n
   | Arguments:
   | :-
@@ -121,7 +121,8 @@ def get_virtual_nodes(glycan, df, libr = None, graphs = None,
   | df (dataframe): glycan dataframe in which every row contains one glycan (under column: 'target') and labels
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | graphs (list): list of glycans in df as graphs; optional if you call get_neighbors often with the same df and want to provide it precomputed
-  | glycan_col_name (string): column name under which glycans are stored; default:target\n
+  | glycan_col_name (string): column name under which glycans are stored; default:target
+  | unphysiological (list): biosynthetic steps that should not be considered in virtual nodes; default:['Glc(b1-4)']\n
   | Returns:
   | :-
   | (1) a list of direct glycan precursors in IUPAC-condensed
@@ -144,6 +145,8 @@ def get_virtual_nodes(glycan, df, libr = None, graphs = None,
   diffs = [subgraph_to_string(k, libr = libr) for k in diffs]
   ggraph_nb = [ggraph_nb[k] for k in idx if diffs[k].split('(')[1][0] in ['a','b']]
   diffs = [diffs[k] for k in idx if diffs[k].split('(')[1][0] in ['a','b']]
+  ggraph_nb = [ggraph_nb[k] for k in range(len(diffs)) if diffs[k] not in unphysiological]
+  diffs = [diffs[k] for k in range(len(diffs)) if diffs[k] not in unphysiological]
   if len(ggraph_nb)>0:
     out = {}
     for k in range(len(diffs)):
@@ -156,7 +159,7 @@ def get_virtual_nodes(glycan, df, libr = None, graphs = None,
   return out
 
 def find_shared_virtuals(glycan_a, glycan_b, df, libr = None, graphs = None,
-                         glycan_col_name = 'target'):
+                         glycan_col_name = 'target', unphysiological = ['Glc(b1-4)']):
   """finds virtual nodes that are shared between two glycans (i.e., that connect these two glycans)\n
   | Arguments:
   | :-
@@ -165,7 +168,8 @@ def find_shared_virtuals(glycan_a, glycan_b, df, libr = None, graphs = None,
   | df (dataframe): glycan dataframe in which every row contains one glycan (under column: 'target') and labels
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | graphs (list): list of glycans in df as graphs; optional if you call get_neighbors often with the same df and want to provide it precomputed
-  | glycan_col_name (string): column name under which glycans are stored; default:target\n
+  | glycan_col_name (string): column name under which glycans are stored; default:target
+  | unphysiological (list): biosynthetic steps that should not be considered in virtual nodes; default:['Glc(b1-4)']\n
   | Returns:
   | :-
   | (1) list of edges between glycan and virtual node (if virtual node connects the two glycans)
@@ -174,9 +178,11 @@ def find_shared_virtuals(glycan_a, glycan_b, df, libr = None, graphs = None,
   if libr is None:
     libr = lib
   virtuals_a = get_virtual_nodes(glycan_a, df, libr = libr, graphs = graphs,
-                                 glycan_col_name = glycan_col_name)
+                                 glycan_col_name = glycan_col_name,
+                                 unphysiological = unphysiological)
   virtuals_b = get_virtual_nodes(glycan_b, df, libr = libr, graphs = graphs,
-                                 glycan_col_name = glycan_col_name)
+                                 glycan_col_name = glycan_col_name,
+                                 unphysiological = unphysiological)
   ggraph_nb_a = list(virtuals_a.values())
   ggraph_nb_b = list(virtuals_b.values())
   diffs_a = list(virtuals_a.keys())
@@ -189,14 +195,14 @@ def find_shared_virtuals(glycan_a, glycan_b, df, libr = None, graphs = None,
         if compare_glycans(ggraph_nb_a[k], ggraph_nb_b[j], libr = libr):
           if [glycan_a, ggraph_nb_a[k]] not in [list(m) for m in out]:
             out.append((glycan_a, ggraph_nb_a[k]))
-          if [glycan_b, ggraph_nb_b[k]] not in [list(m) for m in out]:
+          if [glycan_b, ggraph_nb_b[j]] not in [list(m) for m in out]:
             out.append((glycan_b, ggraph_nb_a[k]))
           out_diffs.append({df[glycan_col_name].values.tolist().index(glycan_a): diffs_a[k],
                                     df[glycan_col_name].values.tolist().index(glycan_b): diffs_b[j]})
   return out, out_diffs
 
 def fill_with_virtuals(glycans, df, libr = None, graphs = None,
-                         glycan_col_name = 'target'):
+                         glycan_col_name = 'target', unphysiological = ['Glc(b1-4)']):
   """for a list of glycans, identify virtual nodes connecting observed glycans and return their edges\n
   | Arguments:
   | :-
@@ -204,7 +210,8 @@ def fill_with_virtuals(glycans, df, libr = None, graphs = None,
   | df (dataframe): glycan dataframe in which every row contains one glycan (under column: 'target') and labels
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | graphs (list): list of glycans in df as graphs; optional if you call get_neighbors often with the same df and want to provide it precomputed
-  | glycan_col_name (string): column name under which glycans are stored; default:target\n
+  | glycan_col_name (string): column name under which glycans are stored; default:target
+  | unphysiological (list): biosynthetic steps that should not be considered in virtual nodes; default:['Glc(b1-4)']\n
   | Returns:
   | :-
   | (1) list of edges that connect observed glycans to virtual nodes
@@ -213,7 +220,8 @@ def fill_with_virtuals(glycans, df, libr = None, graphs = None,
   if libr is None:
     libr = lib
   virtuals = [find_shared_virtuals(k[0],k[1], df, libr = libr,
-                                   graphs = graphs, glycan_col_name = glycan_col_name) for k in list(itertools.combinations(glycans, 2))]
+                                   graphs = graphs, glycan_col_name = glycan_col_name,
+                                   unphysiological = unphysiological) for k in list(itertools.combinations(glycans, 2))]
   v_edges = unwrap([k[0] for k in virtuals])
   v_labels = [k[1][0] for k in virtuals if len(k[1])>0]
   end_edges = [m[1] for m in v_edges]
@@ -230,7 +238,7 @@ def fill_with_virtuals(glycans, df, libr = None, graphs = None,
   return v_edges, v_labels_out
 
 def create_adjacency_matrix(glycans, df, libr = None, virtual_nodes = False,
-                            glycan_col_name = 'target'):
+                            glycan_col_name = 'target', unphysiological = ['Glc(b1-4)']):
   """creates a biosynthetic adjacency matrix from a list of glycans\n
   | Arguments:
   | :-
@@ -238,7 +246,8 @@ def create_adjacency_matrix(glycans, df, libr = None, virtual_nodes = False,
   | df (dataframe): glycan dataframe in which every row contains one glycan (under column: 'target') and labels
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | virtual_nodes (bool): whether to include virtual nodes in network; default:False
-  | glycan_col_name (string): column name under which glycans are stored; default:target\n
+  | glycan_col_name (string): column name under which glycans are stored; default:target
+  | unphysiological (list): biosynthetic steps that should not be considered in virtual nodes; default:['Glc(b1-4)']\n
   | Returns:
   | :-
   | (1) adjacency matrix (glycan X glycan) denoting whether two glycans are connected by one biosynthetic step
@@ -264,7 +273,7 @@ def create_adjacency_matrix(glycans, df, libr = None, virtual_nodes = False,
   if virtual_nodes:
     virtual_edges, virtual_labels = fill_with_virtuals(glycans, libr = libr,
                                             df = df, glycan_col_name = glycan_col_name,
-                                            graphs = graphs)
+                                            graphs = graphs, unphysiological = unphysiological)
     edge_labels = {**edge_labels, **virtual_labels}
     unique_nodes = list(set([k[1] for k in virtual_edges]))
     new_nodes = [k+len(df_out) for k in range(len(unique_nodes))]
