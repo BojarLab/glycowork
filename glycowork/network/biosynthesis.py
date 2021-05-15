@@ -395,6 +395,21 @@ def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['G
                                                            limit = limit)
   return virtual_edges, edge_labels
 
+def get_unconnected_nodes(network, glycan_list):
+  """find nodes that are currently unconnected\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network from construct_network
+  | glycan_list (list): list of glycans in IUPAC-condensed format\n
+  | Returns:
+  | :-
+  | Returns list of unconnected nodes
+  """
+  connected_nodes = list(network.edges())
+  connected_nodes = list(sum(connected_nodes, ()))
+  unconnected = [k for k in glycan_list if k not in connected_nodes]
+  return unconnected
+
 def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing_end = ['Glc','GlcNAc'],
                  limit = 5):
   """visualize biosynthetic network\n
