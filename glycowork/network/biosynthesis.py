@@ -349,7 +349,7 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc', 'GlcNAc']):
   
   ggraph_nb_t = [k for k in ggraph_nb_t if any([k[-len(j):] == j for j in reducing_end])]
   ggraph_nb = [glycan_to_nxGraph(k, libr = libr) for k in ggraph_nb_t]
-  diffs = [find_diff(glycan, k) for k in ggraph_nb_t]
+  diffs = [find_diff(glycan, k, libr = libr) for k in ggraph_nb_t]
   idx = [k for k in range(len(ggraph_nb_t)) if ggraph_nb_t[k][0]!='(']
   return [ggraph_nb[i] for i in idx], [ggraph_nb_t[i] for i in idx]
   
