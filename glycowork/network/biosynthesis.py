@@ -113,7 +113,7 @@ def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
     virtual_edges = fill_with_virtuals(glycans, libr = libr, reducing_end = reducing_end)
     new_nodes = list(set([k[1] for k in virtual_edges]))
     new_nodes = [k for k in new_nodes if k not in df_out.columns.values.tolist()]
-    idx = np.where([any([compare_glycans(k,j, libr = lib) for j in df_out.columns.values.tolist()]) for k in new_nodes])[0].tolist()
+    idx = np.where([any([compare_glycans(k,j, libr = libr) for j in df_out.columns.values.tolist()]) for k in new_nodes])[0].tolist()
     if len(idx)>0:
       virtual_edges = [j for j in virtual_edges if j[1] not in [new_nodes[k] for k in idx]]
       new_nodes = [new_nodes[k] for k in range(len(new_nodes)) if k not in idx]
