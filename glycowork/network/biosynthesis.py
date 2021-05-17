@@ -152,17 +152,15 @@ def find_diff(glycan_a, glycan_b, libr = None):
   """
   if libr is None:
     libr = lib
+  glycan_a = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_a, libr = libr), 'labels').values())))]
+  glycan_b = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_b, libr = libr), 'labels').values())))]
   lens = [len(glycan_a), len(glycan_b)]
-  glycans = [glycan_a, glycan_b]
-  larger_graph = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycans[np.argmax(lens)], libr = libr), 'labels').values())))]
-  smaller_graph = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycans[np.argmin(lens)], libr = libr), 'labels').values())))]
-  lens = [len(larger_graph), len(smaller_graph)]
-  graphs = [larger_graph, smaller_graph]
-  larger_graph2 = graphs[np.argmax(lens)]
-  smaller_graph2 = graphs[np.argmin(lens)]
-  for k in smaller_graph2:
-    larger_graph2.remove(k)
-  return "".join(larger_graph2)
+  graphs = [glycan_a, glycan_b]
+  larger_graph = graphs[np.argmax(lens)]
+  smaller_graph = graphs[np.argmin(lens)]
+  for k in smaller_graph:
+    larger_graph.remove(k)
+  return "".join(larger_graph)
 
 def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing_end = ['Glc','GlcNAc'],
                  limit = 5):
@@ -209,7 +207,7 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
       if ed[0] in virtual_nodes and ed[1] in virtual_nodes:
         larger_ed = np.argmax([len(e) for e in [ed[0], ed[1]]])
         if network.degree(ed[larger_ed]) == 1:
-          network.remove_edge(ed)
+          network.remove_edge(ed[0], ed[1])
   edge_labels = {}
   for el in list(network.edges()):
     edge_labels[el] = find_diff(el[0], el[1], libr = libr)
