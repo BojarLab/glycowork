@@ -61,6 +61,7 @@ def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False,
   rank_list.remove(rank)
   df.drop(rank_list, axis = 1, inplace = True)
   class_list = list(set(df[rank].values.tolist()))
+  class_list= [k for k in class_list if k != 'undetermined']
   temp = []
 
   for i in range(len(class_list)):

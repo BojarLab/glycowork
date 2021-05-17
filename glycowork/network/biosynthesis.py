@@ -156,9 +156,13 @@ def find_diff(glycan_a, glycan_b, libr = None):
   glycans = [glycan_a, glycan_b]
   larger_graph = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycans[np.argmax(lens)], libr = libr), 'labels').values())))]
   smaller_graph = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycans[np.argmin(lens)], libr = libr), 'labels').values())))]
-  for k in smaller_graph:
-    larger_graph.remove(k)
-  return "".join(larger_graph)
+  lens = [len(larger_graph), len(smaller_graph)]
+  graphs = [larger_graph, smaller_graph]
+  larger_graph2 = graphs[np.argmax(lens)]
+  smaller_graph2 = graphs[np.argmin(lens)]
+  for k in smaller_graph2:
+    larger_graph2.remove(k)
+  return "".join(larger_graph2)
 
 def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing_end = ['Glc','GlcNAc'],
                  limit = 5):
@@ -172,7 +176,8 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
   | Returns:
   | :-
-  | Returns either a networkx object of the network (and a list of virtual nodes if add_virtual_nodes either 'simple' or 'exhaustive')
+  | (1) a networkx object of the network
+  | (2) a list of virtual nodes (empty list if add_virtual_nodes is set to 'none')
   """
   if libr is None:
     libr = lib
@@ -209,10 +214,7 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   for el in list(network.edges()):
     edge_labels[el] = find_diff(el[0], el[1], libr = libr)
   nx.set_edge_attributes(network, edge_labels, 'diffs')
-  if add_virtual_nodes in ['simple', 'exhaustive']:
-    return network, virtual_nodes
-  else:
-    return network
+  return network, virtual_nodes
 
 def plot_network(network, virtual_nodes = None, plot_format = 'kamada_kawai'):
   """visualizes biosynthetic network\n
