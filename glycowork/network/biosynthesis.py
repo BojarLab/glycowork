@@ -159,7 +159,10 @@ def find_diff(glycan_a, glycan_b, libr = None):
   larger_graph = graphs[np.argmax(lens)]
   smaller_graph = graphs[np.argmin(lens)]
   for k in smaller_graph:
-    larger_graph.remove(k)
+    try:
+      larger_graph.remove(k)
+    except:
+      larger_graph = ['dis', 'regard']
   return "".join(larger_graph)
 
 def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing_end = ['Glc','GlcNAc'],
