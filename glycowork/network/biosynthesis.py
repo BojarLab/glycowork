@@ -217,13 +217,15 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   nx.set_edge_attributes(network, edge_labels, 'diffs')
   return network, virtual_nodes
 
-def plot_network(network, virtual_nodes = None, plot_format = 'kamada_kawai'):
+def plot_network(network, virtual_nodes = None, plot_format = 'kamada_kawai',
+                 node_origins = False):
   """visualizes biosynthetic network\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
   | virtual_nodes (list): optional list of indicating which nodes are virtual nodes; default:None
-  | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'\n
+  | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'
+  | node_origins (bool): indicates whether nodes have an attribute 'origin' of where they are from (relevant for network alignment); default:False\n
   """
   mpld3.enable_notebook()
   fig, ax = plt.subplots(figsize = (16,16))
@@ -232,14 +234,29 @@ def plot_network(network, virtual_nodes = None, plot_format = 'kamada_kawai'):
   elif plot_format == 'spring':
     pos = nx.spring_layout(network, k = 1/4)
   if virtual_nodes is None:
-    scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7, ax = ax)
+    if node_origins is True:
+      scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7, ax = ax,
+                                       node_color = list(nx.get_node_attributes(network, 'origin').values()))
+    else:
+      scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7, ax = ax)
   else:
-    color_map = ['darkorange' if k in virtual_nodes else 'cornflowerblue' for k in (list(network.nodes()))]
-    scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7,
+    if node_origins:
+      alpha_map = [0.2 if k in virtual_nodes else 1 for k in (list(network.nodes()))]
+      scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, ax = ax,
+                                       node_color = list(nx.get_node_attributes(network, 'origin').values()),
+                                       alpha = alpha_map)
+    else:
+      color_map = ['darkorange' if k in virtual_nodes else 'cornflowerblue' for k in (list(network.nodes()))]
+      scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7,
                                      node_color = color_map, ax = ax)
   labels = list(network.nodes())
   nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
-  nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax)
+  if node_origins is None:
+    nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax)
+  else:
+    edge_labels = nx.get_edge_attributes(network, 'diffs')
+    edge_labels = {list(edge_labels.keys())[k][:-1]:list(edge_labels.values())[k] for k in range(len(list(edge_labels.keys())))}
+    nx.draw_networkx_edge_labels(network, pos, edge_labels = edge_labels, ax = ax)
   [sp.set_visible(False) for sp in ax.spines.values()]
   ax.set_xticks([])
   ax.set_yticks([])
@@ -497,3 +514,30 @@ def get_unconnected_nodes(network, glycan_list):
   connected_nodes = list(sum(connected_nodes, ()))
   unconnected = [k for k in glycan_list if k not in connected_nodes]
   return unconnected
+
+def network_alignment(network_a, network_b, virtual_nodes_a = None, virtual_nodes_b = None):
+  """combines two networks into a new network
+  | Arguments:
+  | :-
+  | network_a (networkx object): biosynthetic network from construct_network
+  | network_b (networkx object): biosynthetic network from construct_network
+  | virtual_nodes_a (list): list of which nodes are virtual nodes in network_a; default:None
+  | virtual_nodes_b (list): list of which nodes are virtual nodes in network_b; default:None\n
+  | Returns:
+  | :-
+  | (1) combined network as a networkx object
+  | (2) combined list of virtual nodes in (1) (empty list if no virtual nodes are provided)
+  """
+  U = nx.MultiGraph()
+  all_nodes = list(network_a.nodes(data = True)) + list(network_b.nodes(data = True))
+  network_a_nodes = [k[0] for k in list(network_a.nodes(data = True))]
+  network_b_nodes =  [k[0] for k in list(network_b.nodes(data = True))]
+  node_origin = ['cornflowerblue' if (k[0] in network_a_nodes and k[0] not in network_b_nodes) \
+            else 'darkorange' if (k[0] in network_b_nodes and k[0] not in network_a_nodes) else 'saddlebrown' for k in all_nodes]
+  U.add_nodes_from(all_nodes)
+  U.add_edges_from(list(network_a.edges(data = True))+list(network_b.edges(data = True)))
+  nx.set_node_attributes(U, {all_nodes[k][0]:node_origin[k] for k in range(len(all_nodes))}, name = 'origin')
+  virtual_nodes = []
+  if virtual_nodes_a is not None:
+    virtual_nodes = list(set(virtual_nodes_a + virtual_nodes_b))
+  return U, virtual_nodes
