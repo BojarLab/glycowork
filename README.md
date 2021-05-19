@@ -235,6 +235,8 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>Alginate</th>
       <th>FG</th>
       <th>XX</th>
+      <th>Difucosylated_core</th>
+      <th>GalFuc_core</th>
       <th>diameter</th>
       <th>branching</th>
       <th>nbrLeaves</th>
@@ -1514,6 +1516,8 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>1</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -2811,6 +2815,8 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>10.0</td>
       <td>1.0</td>
       <td>3.0</td>
@@ -3948,6 +3954,8 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
     </tr>
     <tr>
       <th>GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcOPN(b1-6)GlcOPN</th>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>

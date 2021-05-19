@@ -12,6 +12,7 @@ glycowork/examples.py
 glycowork/glycan_data.py
 glycowork/ml.py
 glycowork/motif.py
+glycowork/network.py
 glycowork.egg-info/PKG-INFO
 glycowork.egg-info/SOURCES.txt
 glycowork.egg-info/dependency_links.txt

@@ -251,7 +251,7 @@ def plot_network(network, virtual_nodes = None, plot_format = 'kamada_kawai',
                                      node_color = color_map, ax = ax)
   labels = list(network.nodes())
   nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
-  if node_origins is None:
+  if not node_origins:
     nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax)
   else:
     edge_labels = nx.get_edge_attributes(network, 'diffs')
@@ -326,11 +326,16 @@ def create_neighbors(ggraph, libr = None):
     libr = lib
   ra = range(len(ggraph.nodes()))
   ggraph_nb = [ggraph.subgraph(k) for k in itertools.combinations(ra, len(ggraph.nodes())-2) if safe_max(np.diff(k)) in [1,3]]
+  ggraph_nb = [k for k in ggraph_nb if nx.is_connected(k)]
   for k in range(len(ggraph_nb)):
     if list(ggraph_nb[k].nodes())[0] == 2:
       ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {j:j-2 for j in list(ggraph_nb[k].nodes())})
-  ggraph_nb = [k for k in ggraph_nb if nx.is_connected(k)]
-  ggraph_nb = [j for j in ggraph_nb if sum([nx.is_isomorphic(j, i, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr))) for i in ggraph_nb]) <= 1]
+    if any([j not in list(ggraph_nb[k].nodes()) for j in range(len(list(ggraph_nb[k].nodes())))]):
+      which = np.min(np.where([j not in list(ggraph_nb[k].nodes()) for j in range(len(list(ggraph_nb[k].nodes())))])[0].tolist())
+      diff = len(list(ggraph_nb[k].nodes()))-which
+      current_nodes = list(ggraph_nb[k].nodes())
+      ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {current_nodes[m]:current_nodes[m]-diff for m in range(which, len(current_nodes))})
+  #ggraph_nb = [j for j in ggraph_nb if sum([nx.is_isomorphic(j, i, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr))) for i in ggraph_nb]) <= 1]
   return ggraph_nb
 
 def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc', 'GlcNAc']):
@@ -359,18 +364,18 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc', 'GlcNAc']):
     except:
       pass
   ggraph_nb = []
-  for k in ggraph_nb_t:
+  for k in list(set(ggraph_nb_t)):
     try:
       ggraph_nb.append(glycan_to_nxGraph(k, libr = libr))
     except:
       pass
-  ggraph_nb_t = [graph_to_string(k,libr=libr) for k in ggraph_nb]
-  ggraph_nb_t = [k if k[0]!='[' else k.replace('[','',1).replace(']','',1) for k in ggraph_nb_t]
+  ggraph_nb_t = [graph_to_string(k,libr = libr) for k in ggraph_nb]
+  ggraph_nb_t = [k if k[0] != '[' else k.replace('[','',1).replace(']','',1) for k in ggraph_nb_t]
   
   ggraph_nb_t = [k for k in ggraph_nb_t if any([k[-len(j):] == j for j in reducing_end])]
   ggraph_nb = [glycan_to_nxGraph(k, libr = libr) for k in ggraph_nb_t]
   diffs = [find_diff(glycan, k, libr = libr) for k in ggraph_nb_t]
-  idx = [k for k in range(len(ggraph_nb_t)) if ggraph_nb_t[k][0]!='(']
+  idx = [k for k in range(len(ggraph_nb_t)) if ggraph_nb_t[k][0] != '(']
   return [ggraph_nb[i] for i in idx], [ggraph_nb_t[i] for i in idx]
   
 def propagate_virtuals(glycans, libr = None, reducing_end = ['Glc', 'GlcNAc']):
@@ -516,7 +521,7 @@ def get_unconnected_nodes(network, glycan_list):
   return unconnected
 
 def network_alignment(network_a, network_b, virtual_nodes_a = None, virtual_nodes_b = None):
-  """combines two networks into a new network
+  """combines two networks into a new network\n
   | Arguments:
   | :-
   | network_a (networkx object): biosynthetic network from construct_network
