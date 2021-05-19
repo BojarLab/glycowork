@@ -36,6 +36,8 @@ alternative: <br>
      - here are all the functions for training and using machine learning models, including train-test-split, getting glycan representations, etc.
  - **`motif`**
      - contains functions for processing glycan sequences, identifying motifs and features, and analyzing them
+ - **`network`**
+     - contains functions for constructing and analyzing glycan networks (e.g., biosynthetic networks)
      
 Below are some examples of what you can do with `glycowork`, be sure to check out the other `examples` in the full documentation for everything that's there.
 
