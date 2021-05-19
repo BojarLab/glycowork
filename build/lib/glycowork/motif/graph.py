@@ -253,25 +253,35 @@ def glycan_to_nxGraph(glycan, libr = None,
     nx.set_node_attributes(g1, {k:j for k,j in zip(range(len(glycan_graph[0])), termini_list)}, 'termini')
   return g1
 
-def generate_graph_features(glycan, libr = None):
+def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'network'):
     """compute graph features of glycan\n
     | Arguments:
     | :-
-    | glycan (string): glycan in IUPAC-condensed format
-    | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+    | glycan (string or networkx object): glycan in IUPAC-condensed format (or glycan network if glycan_graph=False)
+    | glycan_graph (bool): True expects a glycan, False expects a network (from construct_network); default:True
+    | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+    | label (string): Label to place in output dataframe if glycan_graph=False; default:'network'\n
     | Returns:
     | :-
     | Returns a pandas dataframe with different graph features as columns and glycan as row
     """
     if libr is None:
       libr = lib
-    g = glycan_to_nxGraph(glycan, libr = libr)
-    #nbr of different node features:
-    nbr_node_types = len(set(nx.get_node_attributes(g, "labels")))
+    if glycan_graph:
+      g = glycan_to_nxGraph(glycan, libr = libr)
+      #nbr of different node features:
+      nbr_node_types = len(set(nx.get_node_attributes(g, "labels")))
+    else:
+      g = glycan
+      glycan = label
+      nbr_node_types = len(set(list(g.nodes())))
     #adjacency matrix:
     A = nx.to_numpy_matrix(g)
     N = A.shape[0]
-    diameter = nx.algorithms.distance_measures.diameter(g)
+    if nx.is_connected(g):
+      diameter = nx.algorithms.distance_measures.diameter(g)
+    else:
+      diameter = np.nan
     deg = np.array([np.sum(A[i,:]) for i in range(N)])
     dens = np.sum(deg)/2
     avgDeg = np.mean(deg)
@@ -299,16 +309,28 @@ def generate_graph_features(glycan, libr = None):
     closeMin = np.min(close)
     closeAvg = np.mean(close)
     closeVar = np.var(close)
-    flow = np.array(pd.DataFrame(nx.current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
-    flowMax = np.max(flow)
-    flowMin = np.min(flow)
-    flowAvg = np.mean(flow)
-    flowVar = np.var(flow)
-    flow_edge = np.array(pd.DataFrame(nx.edge_current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
-    flow_edgeMax = np.max(flow_edge)
-    flow_edgeMin = np.min(flow_edge)
-    flow_edgeAvg = np.mean(flow_edge)
-    flow_edgeVar = np.var(flow_edge)
+    if nx.is_connected(g):
+      flow = np.array(pd.DataFrame(nx.current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
+      flowMax = np.max(flow)
+      flowMin = np.min(flow)
+      flowAvg = np.mean(flow)
+      flowVar = np.var(flow)
+      flow_edge = np.array(pd.DataFrame(nx.edge_current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
+      flow_edgeMax = np.max(flow_edge)
+      flow_edgeMin = np.min(flow_edge)
+      flow_edgeAvg = np.mean(flow_edge)
+      flow_edgeVar = np.var(flow_edge)
+    else:
+      flow = np.nan
+      flowMax = np.nan
+      flowMin = np.nan
+      flowAvg = np.nan
+      flowVar = np.nan
+      flow_edge = np.nan
+      flow_edgeMax = np.nan
+      flow_edgeMin = np.nan
+      flow_edgeAvg = np.nan
+      flow_edgeVar = np.nan
     load = np.array(pd.DataFrame(nx.load_centrality(g), index = [0]).iloc[0,:])
     loadMax = np.max(load)
     loadMin = np.min(load)
@@ -319,11 +341,18 @@ def generate_graph_features(glycan, libr = None):
     harmMin = np.min(harm)
     harmAvg = np.mean(harm)
     harmVar = np.var(harm)
-    secorder = np.array(pd.DataFrame(nx.second_order_centrality(g), index = [0]).iloc[0,:])
-    secorderMax = np.max(secorder)
-    secorderMin = np.min(secorder)
-    secorderAvg = np.mean(secorder)
-    secorderVar = np.var(secorder)
+    if nx.is_connected(g):
+      secorder = np.array(pd.DataFrame(nx.second_order_centrality(g), index = [0]).iloc[0,:])
+      secorderMax = np.max(secorder)
+      secorderMin = np.min(secorder)
+      secorderAvg = np.mean(secorder)
+      secorderVar = np.var(secorder)
+    else:
+      secorder = np.nan
+      secorderMax = np.nan
+      secorderMin = np.nan
+      secorderAvg = np.nan
+      secorderVar = np.nan
     x = np.array([len(nx.k_corona(g,k).nodes()) for k in range(N)])
     size_corona = x[x > 0][-1]
     k_corona = np.where(x == x[x > 0][-1])[0][-1]
