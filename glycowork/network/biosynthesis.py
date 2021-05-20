@@ -177,8 +177,7 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
   | Returns:
   | :-
-  | (1) a networkx object of the network
-  | (2) a list of virtual nodes (empty list if add_virtual_nodes is set to 'none')
+  | Returns a networkx object of the network
   """
   if libr is None:
     libr = lib
@@ -215,17 +214,17 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   for el in list(network.edges()):
     edge_labels[el] = find_diff(el[0], el[1], libr = libr)
   nx.set_edge_attributes(network, edge_labels, 'diffs')
-  return network, virtual_nodes
+  virtual_labels = {k:(1 if k in virtual_nodes else 0) for k in list(network.nodes())}
+  nx.set_node_attributes(network, virtual_labels, 'virtual')
+  return network
 
-def plot_network(network, virtual_nodes = None, plot_format = 'kamada_kawai',
-                 node_origins = False):
+def plot_network(network, plot_format = 'kamada_kawai'):
   """visualizes biosynthetic network\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
   | virtual_nodes (list): optional list of indicating which nodes are virtual nodes; default:None
-  | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'
-  | node_origins (bool): indicates whether nodes have an attribute 'origin' of where they are from (relevant for network alignment); default:False\n
+  | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'\n
   """
   mpld3.enable_notebook()
   fig, ax = plt.subplots(figsize = (16,16))
@@ -233,21 +232,18 @@ def plot_network(network, virtual_nodes = None, plot_format = 'kamada_kawai',
     pos = nx.kamada_kawai_layout(network)
   elif plot_format == 'spring':
     pos = nx.spring_layout(network, k = 1/4)
-  if virtual_nodes is None:
-    if node_origins is True:
-      scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7, ax = ax,
-                                       node_color = list(nx.get_node_attributes(network, 'origin').values()))
-    else:
-      scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7, ax = ax)
+  if len(list(nx.get_node_attributes(network, 'origin').values()))>0:
+    node_origins = True
   else:
-    if node_origins:
-      alpha_map = [0.2 if k in virtual_nodes else 1 for k in (list(network.nodes()))]
-      scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, ax = ax,
+    node_origins = False
+  if node_origins:
+    alpha_map = [0.2 if k==1 else 1 for k in list(nx.get_node_attributes(network, 'virtual').values())]
+    scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, ax = ax,
                                        node_color = list(nx.get_node_attributes(network, 'origin').values()),
                                        alpha = alpha_map)
-    else:
-      color_map = ['darkorange' if k in virtual_nodes else 'cornflowerblue' for k in (list(network.nodes()))]
-      scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7,
+  else:
+    color_map = ['darkorange' if k==1 else 'cornflowerblue' for k in list(nx.get_node_attributes(network, 'virtual').values())]
+    scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7,
                                      node_color = color_map, ax = ax)
   labels = list(network.nodes())
   nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
@@ -520,8 +516,8 @@ def get_unconnected_nodes(network, glycan_list):
   unconnected = [k for k in glycan_list if k not in connected_nodes]
   return unconnected
 
-def network_alignment(network_a, network_b, virtual_nodes_a = None, virtual_nodes_b = None):
-  """combines two networks into a new network\n
+def network_alignment(network_a, network_b):
+  """combines two networks into a new network
   | Arguments:
   | :-
   | network_a (networkx object): biosynthetic network from construct_network
@@ -542,7 +538,28 @@ def network_alignment(network_a, network_b, virtual_nodes_a = None, virtual_node
   U.add_nodes_from(all_nodes)
   U.add_edges_from(list(network_a.edges(data = True))+list(network_b.edges(data = True)))
   nx.set_node_attributes(U, {all_nodes[k][0]:node_origin[k] for k in range(len(all_nodes))}, name = 'origin')
-  virtual_nodes = []
-  if virtual_nodes_a is not None:
-    virtual_nodes = list(set(virtual_nodes_a + virtual_nodes_b))
-  return U, virtual_nodes
+  return U
+
+def infer_virtual_nodes(network_a, network_b, combined = None):
+  """identifies virtual nodes that have been observed in other species\n
+  | Arguments:
+  | :-
+  | network_a (networkx object): biosynthetic network from construct_network
+  | network_b (networkx object): biosynthetic network from construct_network
+  | combined (networkx object): merged network of network_a and network_b from network_alignment; default:None\n
+  | Returns:
+  | :-
+  | (1) tuple of (virtual nodes of network_a observed in network_b, virtual nodes occurring both network_a and network_b)
+  | (2) tuple of (virtual nodes of network_b observed in network_a, virtual nodes occurring both network_a and network_b)
+  """
+  if combined is None:
+    combined = network_alignment(network_a, network_b)
+  a_nodes = list(network_a.nodes())
+  b_nodes = list(network_b.nodes())
+  supported_a = [k for k in a_nodes if nx.get_node_attributes(network_a, 'virtual')[k] == 1 and k in list(network_b.nodes())]
+  supported_a = [k for k in supported_a if nx.get_node_attributes(network_b, 'virtual')[k] == 1]
+  supported_b = [k for k in b_nodes if nx.get_node_attributes(network_b, 'virtual')[k] == 1 and k in list(network_a.nodes())]
+  supported_b = [k for k in supported_b if nx.get_node_attributes(network_a, 'virtual')[k] == 1]
+  inferred_a = [k for k in a_nodes if nx.get_node_attributes(network_a, 'virtual')[k] == 1 and nx.get_node_attributes(combined, 'virtual')[k] == 0]
+  inferred_b = [k for k in b_nodes if nx.get_node_attributes(network_b, 'virtual')[k] == 1 and nx.get_node_attributes(combined, 'virtual')[k] == 0]
+  return (inferred_a, supported_a), (inferred_b, supported_b)

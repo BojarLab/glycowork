@@ -15,6 +15,8 @@ The inspiration for `glycowork` can be found in [Bojar et al., 2020](https://doi
 
 The full documentation for `glycowork` can be found here: https://bojarlab.github.io/glycowork/
 
+If you use `glycowork` in your project, please cite [Thomès et al., 2021](https://www.biorxiv.org/content/10.1101/2021.04.22.440981v1).
+
 ## Install
 
 via pip: <br>
