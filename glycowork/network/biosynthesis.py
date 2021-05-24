@@ -216,6 +216,7 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   nx.set_edge_attributes(network, edge_labels, 'diffs')
   virtual_labels = {k:(1 if k in virtual_nodes else 0) for k in list(network.nodes())}
   nx.set_node_attributes(network, virtual_labels, 'virtual')
+  network = filter_disregard(network)
   return network
 
 def plot_network(network, plot_format = 'kamada_kawai'):
@@ -242,7 +243,7 @@ def plot_network(network, plot_format = 'kamada_kawai'):
                                        node_color = list(nx.get_node_attributes(network, 'origin').values()),
                                        alpha = alpha_map)
   else:
-    color_map = ['darkorange' if k==1 else 'cornflowerblue' for k in list(nx.get_node_attributes(network, 'virtual').values())]
+    color_map = ['darkorange' if k==1 else 'cornflowerblue' if k==0 else 'seagreen' for k in list(nx.get_node_attributes(network, 'virtual').values())]
     scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7,
                                      node_color = color_map, ax = ax)
   labels = list(network.nodes())
@@ -563,3 +564,54 @@ def infer_virtual_nodes(network_a, network_b, combined = None):
   inferred_a = [k for k in a_nodes if nx.get_node_attributes(network_a, 'virtual')[k] == 1 and nx.get_node_attributes(combined, 'virtual')[k] == 0]
   inferred_b = [k for k in b_nodes if nx.get_node_attributes(network_b, 'virtual')[k] == 1 and nx.get_node_attributes(combined, 'virtual')[k] == 0]
   return (inferred_a, supported_a), (inferred_b, supported_b)
+
+def filter_disregard(network):
+  """filters out mistaken edges\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network from construct_network
+  | Returns:
+  | :-
+  | Returns network without mistaken edges
+  """
+  for k in list(network.edges()):
+    if nx.get_edge_attributes(network, 'diffs')[k] == 'disregard':
+      network.remove_edge(k[0], k[1])
+  return network
+
+def infer_network(network, network_species, species_list, filepath = None, df = None,
+                  add_virtual_nodes = 'exhaustive',
+                  libr = None, reducing_end = ['Glc', 'GlcNAc'], limit = 5):
+  """replaces virtual nodes if they are observed in other species\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network that should be inferred
+  | network_species (string): species from which the network stems
+  | species_list (list): list of species to compare network to
+  | filepath (string): filepath to load biosynthetic networks from other species, if precalculated (def. recommended, as calculation will take ~1.5 hours); default:None
+  | df (dataframe): dataframe containing species-specific glycans, only needed if filepath=None;default:None
+  | add_virtual_nodes (string): indicates whether no ('None'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added;only needed if filepath=None;default:'exhaustive'
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used;only needed if filepath=None
+  | reducing_end (list): monosaccharides at the reducing end that are allowed;only needed if filepath=None;default:['Glc','GlcNAc']
+  | limit (int): maximum number of virtual nodes between observed nodes;only needed if filepath=None;default:5\n
+  | Returns:
+  | :-
+  | Returns network with filled in virtual nodes
+  """
+  if libr is None:
+    libr = lib
+  inferences = []
+  for k in species_list:
+    if k != network_species:
+      if filepath is None:
+        temp_network = construct_network(df[df.Species == k].target.values.tolist(), add_virtual_nodes = add_virtual_nodes, libr = libr,
+                                         reducing_end = reducing_end, limit = limit)
+      else:
+        temp_network = nx.read_gpickle(filepath + k + '_graph_exhaustive.pkl')
+      temp_network = filter_disregard(temp_network)
+      infer_network, infer_other = infer_virtual_nodes(network, temp_network)
+      inferences.append(infer_network)
+  network2 = network.copy()
+  upd = {j:2 for j in list(set(unwrap([k[0] for k in inferences])))}
+  nx.set_node_attributes(network2, upd, 'virtual')
+  return network2

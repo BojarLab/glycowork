@@ -17,6 +17,8 @@ The full documentation for `glycowork` can be found here: https://bojarlab.githu
 
 If you use `glycowork` in your project, please cite [Thomès et al., 2021](https://www.biorxiv.org/content/10.1101/2021.04.22.440981v1).
 
+If you want to contribute to `glycowork`, the best place to start is to read our [contribution guidelines](https://github.com/BojarLab/glycowork/blob/master/CONTRIBUTING.md).
+
 ## Install
 
 via pip: <br>

@@ -31,3 +31,15 @@ nbdev_install_git_hooks
 
 * Docs are automatically created from the notebooks in the nbs folder.
 
+
+## Wishlist for future glycowork updates (last update: 2021-05-23)
+#### Urgent
+* Currently, annotation functions convert glycans to graphs on the fly, which is potentially wasteful computation. Rather, subgraph_isomorphism and related functions should be able to take pre-computed graphs (either provided or calculated in the wrapper functions)
+
+#### At some point
+* split motif_list into ‘core’ motifs (occurring frequently) and ‘extended’ motifs (that are rare / niche) for performance reasons
+* Currently, the glycan graph objects have, as node labels, numbers that indicate the glycoletters (which can be retrieved by indexing lib with this number). In the future, it might be more intuitive to provide the actual glycoletters as strings in the node labels. This would require a slight rewrite of all functions that currently work with the node labels.
+* characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context
+
+#### Not sure whether a good idea
+* instead of stemifying rare monosaccharide modifications, consider masking them with a ‘monosaccharide’ token
