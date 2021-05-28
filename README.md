@@ -31,7 +31,7 @@ alternative: <br>
 
 ## How to use
 
-`Glycowork` currently contains four main modules:
+`Glycowork` currently contains five main modules:
  - **`alignment`**
      - can be used to find similar glycan sequences by alignment according to a glycan-specific substitution matrix
  - **`glycan_data`**

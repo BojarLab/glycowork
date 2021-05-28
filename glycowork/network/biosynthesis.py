@@ -219,13 +219,13 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   network = filter_disregard(network)
   return network
 
-def plot_network(network, plot_format = 'kamada_kawai'):
+def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
   """visualizes biosynthetic network\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
-  | virtual_nodes (list): optional list of indicating which nodes are virtual nodes; default:None
-  | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'\n
+  | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'
+  | edge_label_draw (bool): draws edge labels if True; default:True\n
   """
   mpld3.enable_notebook()
   fig, ax = plt.subplots(figsize = (16,16))
@@ -248,12 +248,8 @@ def plot_network(network, plot_format = 'kamada_kawai'):
                                      node_color = color_map, ax = ax)
   labels = list(network.nodes())
   nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
-  if not node_origins:
+  if edge_label_draw:
     nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax)
-  else:
-    edge_labels = nx.get_edge_attributes(network, 'diffs')
-    edge_labels = {list(edge_labels.keys())[k][:-1]:list(edge_labels.values())[k] for k in range(len(list(edge_labels.keys())))}
-    nx.draw_networkx_edge_labels(network, pos, edge_labels = edge_labels, ax = ax)
   [sp.set_visible(False) for sp in ax.spines.values()]
   ax.set_xticks([])
   ax.set_yticks([])
@@ -522,15 +518,12 @@ def network_alignment(network_a, network_b):
   | Arguments:
   | :-
   | network_a (networkx object): biosynthetic network from construct_network
-  | network_b (networkx object): biosynthetic network from construct_network
-  | virtual_nodes_a (list): list of which nodes are virtual nodes in network_a; default:None
-  | virtual_nodes_b (list): list of which nodes are virtual nodes in network_b; default:None\n
+  | network_b (networkx object): biosynthetic network from construct_network\n
   | Returns:
   | :-
-  | (1) combined network as a networkx object
-  | (2) combined list of virtual nodes in (1) (empty list if no virtual nodes are provided)
+  | Returns combined network as a networkx object
   """
-  U = nx.MultiGraph()
+  U = nx.Graph()
   all_nodes = list(network_a.nodes(data = True)) + list(network_b.nodes(data = True))
   network_a_nodes = [k[0] for k in list(network_a.nodes(data = True))]
   network_b_nodes =  [k[0] for k in list(network_b.nodes(data = True))]
