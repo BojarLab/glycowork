@@ -247,9 +247,15 @@ def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
     scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7,
                                      node_color = color_map, ax = ax)
   labels = list(network.nodes())
-  nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
   if edge_label_draw:
+    nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
     nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax)
+  else:
+    diffs = list(nx.get_edge_attributes(network, 'diffs').values())
+    c_list = ['cornflowerblue' if 'Glc' in k else 'yellow' if 'Gal' in k else 'red' if 'Fuc' in k else 'mediumorchid' if '5Ac' in k \
+              else 'turquoise' if '5Gc' in k else 'silver' for k in diffs]
+    w_list = [1 if 'b1' in k else 3 for k in diffs]
+    nx.draw_networkx_edges(network, pos, ax = ax, edge_color = c_list, width = w_list)
   [sp.set_visible(False) for sp in ax.spines.values()]
   ax.set_xticks([])
   ax.set_yticks([])
@@ -543,8 +549,8 @@ def infer_virtual_nodes(network_a, network_b, combined = None):
   | combined (networkx object): merged network of network_a and network_b from network_alignment; default:None\n
   | Returns:
   | :-
-  | (1) tuple of (virtual nodes of network_a observed in network_b, virtual nodes occurring both network_a and network_b)
-  | (2) tuple of (virtual nodes of network_b observed in network_a, virtual nodes occurring both network_a and network_b)
+  | (1) tuple of (virtual nodes of network_a observed in network_b, virtual nodes occurring in both network_a and network_b)
+  | (2) tuple of (virtual nodes of network_b observed in network_a, virtual nodes occurring in both network_a and network_b)
   """
   if combined is None:
     combined = network_alignment(network_a, network_b)
@@ -608,3 +614,20 @@ def infer_network(network, network_species, species_list, filepath = None, df = 
   upd = {j:2 for j in list(set(unwrap([k[0] for k in inferences])))}
   nx.set_node_attributes(network2, upd, 'virtual')
   return network2
+
+def retrieve_inferred_nodes(network, species = None):
+  """returns the inferred virtual nodes of a network that has been used with infer_network\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network with inferred virtual nodes
+  | species (string): species from which the network stems (only relevant if multiple species in network); default:None\n
+  | Returns:
+  | :-
+  | Returns inferred nodes as list or dictionary (if species argument is used)
+  """
+  inferred_nodes = nx.get_node_attributes(network, 'virtual')
+  inferred_nodes = [k for k in list(inferred_nodes.keys()) if inferred_nodes[k] == 2]
+  if species is None:
+    return inferred_nodes
+  else:
+    return {species:inferred_nodes}
