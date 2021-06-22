@@ -129,7 +129,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     plt.show()
 
 def plot_embeddings(glycans, emb = None, label_list = None,
-                    shape_feature = None, filepath = '',
+                    shape_feature = None, filepath = '', alpha = 0.8,
                     **kwargs):
     """plots glycan representations for a list of glycans\n
     | Arguments:
@@ -139,6 +139,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     | label_list (list): list of same length as glycans if coloring of the plot is desired
     | shape_feature (string): monosaccharide/bond used to display alternative shapes for dots on the plot
     | filepath (string): absolute path including full filename allows for saving the plot
+    | alpha (float): transparency of points in plot; default:0.8
     | **kwargs: keyword arguments that are directly passed on to matplotlib\n
     """
     if emb is None:
@@ -153,7 +154,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
         shape_feature = [shape_feature if shape_feature in k else 'Absent' for k in glycans]
     sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
                     palette = 'colorblind', style = shape_feature, markers = markers,
-                    alpha = 0.8, **kwargs)
+                    alpha = alpha, **kwargs)
     sns.despine(left = True, bottom = True)
     plt.xlabel('Dim1')
     plt.ylabel('Dim2')

@@ -171,7 +171,7 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
-  | add_virtual_nodes (string): indicates whether no ('None'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added; default:'none'
+  | add_virtual_nodes (string): indicates whether no ('none'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added; default:'none'
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']
   | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
