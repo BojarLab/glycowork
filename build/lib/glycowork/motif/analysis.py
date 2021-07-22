@@ -16,7 +16,8 @@ from glycowork.motif.tokenization import link_find
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      libr = None, thresh = 1.645, sorting = True,
                      feature_set = ['exhaustive'], extra = 'termini',
-                     wildcard_list = [], multiple_samples = False):
+                     wildcard_list = [], multiple_samples = False,
+                     motifs = None):
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
     | :-
@@ -29,7 +30,8 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
     | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
-    | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False\n
+    | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
+    | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None\n
     | Returns:
     | :-
     | Returns dataframe with p-values and corrected p-values for every glycan motif
@@ -44,7 +46,8 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
         df = df.reset_index()
         df.columns = [glycan_col_name] + df.columns.values.tolist()[1:]
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
-                                libr = lib, feature_set = feature_set,
+                                motifs = motifs,
+                                libr = libr, feature_set = feature_set,
                                extra = extra, wildcard_list = wildcard_list)
     if multiple_samples:
         df.index = df[glycan_col_name].values.tolist()
