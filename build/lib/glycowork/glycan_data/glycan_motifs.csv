@@ -101,7 +101,7 @@ O_linked_mannose,Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man,"['flexible','flexible','f
 GT1aa,Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','terminal','flexible','flexible','flexible','flexible']"
 GQ1b,Neu5Ac(a2-8)Neu5Ac(a2-3)[Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)]Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','terminal','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible']"
 HNK1,GlcA3S(b1-3)Gal(b1-4)GlcNAc,"['flexible','flexible','flexible','flexible','flexible','flexible']"
-GQ1ba,Neu5Ac(a2-8)NeuNAc(a2-3)[Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc(b1-4)]Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','terminal','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible']"
+GQ1ba,Neu5Ac(a2-8)Neu5Ac(a2-3)[Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc(b1-4)]Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','terminal','flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible']"
 O_mannose_Lex,Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man,"['terminal','flexible','flexible','flexible','terminal','terminal','flexible']"
 2Fuc_GD1b,Neu5Ac(a2-8)Neu5Ac(a2-3)[Fuc(a1-2)Gal(b1-3)GalNAc(b1-4)]Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','terminal','flexible','flexible','flexible','flexible','flexible','flexible']"
 Sialopentaosylceramide,Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc,"['flexible','flexible','flexible','flexible','flexible','flexible','flexible','flexible','terminal','flexible','flexible']"

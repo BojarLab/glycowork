@@ -17,7 +17,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      libr = None, thresh = 1.645, sorting = True,
                      feature_set = ['exhaustive'], extra = 'termini',
                      wildcard_list = [], multiple_samples = False,
-                     motifs = None):
+                     motifs = None, estimate_speedup = False):
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
     | :-
@@ -31,7 +31,8 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
     | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
     | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
-    | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None\n
+    | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None
+    | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
     | Returns:
     | :-
     | Returns dataframe with p-values and corrected p-values for every glycan motif
@@ -75,6 +76,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
 def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
+                 estimate_speedup = False,
                  **kwargs):
     """clusters samples based on glycan data (for instance glycan binding etc.)\n
     | Arguments:
@@ -89,6 +91,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
     | filepath (string): absolute path including full filename allows for saving the plot
     | index_col (string): default column to convert to dataframe index; default:'target'
+    | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False
     | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                          
     | Returns:
     | :-
@@ -103,7 +106,8 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     if mode == 'motif':
         df_motif = annotate_dataset(df.columns.values.tolist(),
                                 libr = libr, feature_set = feature_set,
-                                    extra = extra, wildcard_list = wildcard_list)
+                                    extra = extra, wildcard_list = wildcard_list,
+                                    estimate_speedup = estimate_speedup)
         df_motif = df_motif.replace(0,np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
         collect_dic = {}
         if datatype == 'response':
@@ -133,6 +137,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
 
 def plot_embeddings(glycans, emb = None, label_list = None,
                     shape_feature = None, filepath = '', alpha = 0.8,
+                    palette = 'colorblind',
                     **kwargs):
     """plots glycan representations for a list of glycans\n
     | Arguments:
@@ -143,6 +148,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     | shape_feature (string): monosaccharide/bond used to display alternative shapes for dots on the plot
     | filepath (string): absolute path including full filename allows for saving the plot
     | alpha (float): transparency of points in plot; default:0.8
+    | palette (string): color palette to color different classes; default:'colorblind'
     | **kwargs: keyword arguments that are directly passed on to matplotlib\n
     """
     if emb is None:
@@ -156,7 +162,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
         markers = {shape_feature: "X", "Absent": "o"}
         shape_feature = [shape_feature if shape_feature in k else 'Absent' for k in glycans]
     sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
-                    palette = 'colorblind', style = shape_feature, markers = markers,
+                    palette = palette, style = shape_feature, markers = markers,
                     alpha = alpha, **kwargs)
     sns.despine(left = True, bottom = True)
     plt.xlabel('Dim1')

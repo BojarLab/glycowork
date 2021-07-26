@@ -5,9 +5,9 @@ import pkg_resources
 
 from glycowork.motif.processing import get_lib
 
-io = pkg_resources.resource_stream(__name__, "glyco_targets_species_seq_all_V3.csv")
+io = pkg_resources.resource_stream(__name__, "glyco_targets_species_seq_all_V4.csv")
 df_species = pd.read_csv(io)
-io = pkg_resources.resource_stream(__name__, "v3_sugarbase.csv")
+io = pkg_resources.resource_stream(__name__, "v4_sugarbase.csv")
 df_glycan = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "df_glyco_substitution_iso2.csv")
 df_glysum = pd.read_csv(io)

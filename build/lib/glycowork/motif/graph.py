@@ -485,3 +485,23 @@ def graph_to_string(graph, libr = None):
   if '])' in glycan_motif:
     glycan_motif = glycan_motif.replace('])', ')]')
   return glycan_motif
+
+
+def try_string_conversion(graph, libr = None):
+  """check whether glycan graph describes a valid glycan\n
+  | Arguments:
+  | :-
+  | graph (networkx object): glycan graph, works with branched glycans
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns glycan in IUPAC-condensed format (string) if glycan is valid, otherwise returns None
+  """
+  if libr is None:
+    libr = lib
+  try:
+    temp = graph_to_string(graph, libr = libr)
+    temp = glycan_to_nxGraph(temp, libr = libr)
+    return graph_to_string(temp, libr = libr)
+  except:
+    return None
