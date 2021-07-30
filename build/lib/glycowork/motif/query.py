@@ -24,6 +24,12 @@ def get_insight(glycan, libr = None, motifs = None):
     species = df_glycan.Species.values.tolist()[idx[0]]
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(species))
+    else:
+        try:
+            species = df_glycan.predicted_taxonomy.values.tolist()[idx[0]]
+            print("\nNo definitive information in our database but this glycan is predicted to occur here: " + str(species))
+        except:
+            pass
     if len(eval(species)) > 5:
         phyla = list(sorted(list(set(eval(df_glycan.Phylum.values.tolist()[idx[0]])))))
         print("\nPuh, that's quite a lot! Here are the phyla of those species: " + str(phyla))
