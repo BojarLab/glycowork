@@ -2700,8 +2700,8 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>4.0</td>
       <td>13.0</td>
       <td>13.0</td>
-      <td>0.018063</td>
-      <td>-2.422758</td>
+      <td>0.034262</td>
+      <td>-2.390521</td>
       <td>13.0</td>
       <td>12.0</td>
       <td>0</td>
@@ -5111,8 +5111,8 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>3.0</td>
       <td>15.0</td>
       <td>15.0</td>
-      <td>0.037370</td>
-      <td>-2.704610</td>
+      <td>0.043739</td>
+      <td>-2.621893</td>
       <td>15.0</td>
       <td>14.0</td>
       <td>0</td>
@@ -7522,8 +7522,8 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>4.0</td>
       <td>15.0</td>
       <td>15.0</td>
-      <td>0.016526</td>
-      <td>-2.692253</td>
+      <td>0.025865</td>
+      <td>-2.680266</td>
       <td>15.0</td>
       <td>14.0</td>
       <td>0</td>

@@ -1,8 +1,10 @@
 import pandas as pd
 import re
 import copy
+from itertools import combinations_with_replacement
+from collections import Counter
 
-from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap
+from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap, df_species, Hex, dHex, HexNAc, Sia
 from glycowork.motif.processing import small_motif_find, min_process_glycans
 
 
@@ -302,3 +304,133 @@ def stemify_dataset(df, stem_lib = None, libr = None,
   df_out = copy.deepcopy(df)
   df_out[glycan_col_name] = [stemify_glycan(k, stem_lib) for k in df_out[glycan_col_name].values.tolist()]
   return df_out
+
+def match_composition(composition, group, level, df = None,
+                      mode = "minimal", libr = None, glycans = None):
+    """Given a monosaccharide composition, it returns all corresponding glycans\n
+    | Arguments:
+    | :-
+    | composition (dict): a dictionary indicating the composition to match (for example {"Fuc":1, "Gal":1, "GlcNAc":1})
+    | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
+    | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
+    | df (dataframe): glycan dataframe for searching glycan structures; default:None
+    | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements
+    | glycans (list): custom list of glycans to check the composition in; default:None\n
+    | Returns:
+    | :-
+    | Returns list of glycans matching composition in IUPAC-condensed
+    """
+    if df is None:
+      df = df_species
+    if libr is None:
+      libr = lib
+    filtered_df = df[df[level] == group]
+        
+    exact_composition = {}
+    if mode == "minimal":
+        for element in libr:
+            if element in composition:
+                exact_composition[element] = composition.get(element)
+        if glycans is None:
+          glycan_list = filtered_df.target.values.tolist()
+        else:
+          glycan_list = glycans
+        to_remove = []
+        output_list = glycan_list
+        for glycan in glycan_list:
+            for key in exact_composition:
+                glycan_count = sum(1 for _ in re.finditer(r'\b%s\b' % re.escape(key), glycan))
+                if exact_composition[key] != glycan_count :
+                    to_remove.append(glycan)
+        for element in to_remove:
+            try :
+                output_list.remove(element)
+            except :
+                a = 1
+        output_list = list(set(output_list))
+        #print(str(len(output_list)) + " glycan structures match your composition.")
+        #for element in output_list:
+        #    print(element)
+        
+    if mode == "exact":
+        for element in libr:
+            if element in composition:
+                exact_composition[element] = composition.get(element)
+        if glycans is None:
+          glycan_list = filtered_df.target.values.tolist()
+        else:
+          glycan_list = glycans
+        to_remove = []
+        output_list = glycan_list
+        for glycan in glycan_list:
+            count_sum = 0
+            for key in exact_composition :
+                glycan_count = sum(1 for _ in re.finditer(r'\b%s\b' % re.escape(key), glycan))
+                count_sum = count_sum + exact_composition[key]
+                if exact_composition[key] != glycan_count:
+                    to_remove.append(glycan)
+            monosaccharide_number_in_glycan = glycan.count("(") + 1
+            if monosaccharide_number_in_glycan != count_sum:
+                to_remove.append(glycan)
+        for element in to_remove:
+            try :
+                output_list.remove(element)
+            except :
+                a = 1
+        output_list = list(set(output_list))
+        #print(str(len(output_list)) + " glycan structures match your composition.")
+        #for element in output_list:
+        #    print(element)
+            
+    return output_list
+
+def match_composition_relaxed(composition, group, level, df = None,
+                      mode = "minimal", libr = None):
+    """Given a coarse-grained monosaccharide composition (Hex, HexNAc, etc.), it returns all corresponding glycans\n
+    | Arguments:
+    | :-
+    | composition (dict): a dictionary indicating the composition to match (for example {"Fuc":1, "Gal":1, "GlcNAc":1})
+    | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
+    | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
+    | df (dataframe): glycan dataframe for searching glycan structures; default:None
+    | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements\n
+    | Returns:
+    | :-
+    | Returns list of glycans matching composition in IUPAC-condensed
+    """
+    if df is None:
+      df = df_species
+    if libr is None:
+      libr = lib
+    original_composition = copy.deepcopy(composition)
+    if 'Hex' in composition:
+      hex_pool = list(combinations_with_replacement(Hex, composition['Hex']))
+      hex_pool = [Counter(k) for k in hex_pool]
+      composition.pop('Hex')
+      output_list = [match_composition(k, group, level, df = df,
+                                     mode = 'minimal', libr = libr) for k in hex_pool]
+      output_list = list(set(unwrap(output_list)))
+    if 'dHex' in composition:
+      dhex_pool = list(combinations_with_replacement(dHex, composition['dHex']))
+      dhex_pool = [Counter(k) for k in dhex_pool]
+      composition.pop('dHex')
+      output_list = [match_composition(k, group, level, df = df,
+                                     mode = 'minimal', libr = libr,
+                                       glycans = output_list) for k in dhex_pool]
+      output_list = list(set(unwrap(output_list)))
+    if 'HexNAc' in composition:
+      hexnac_pool = list(combinations_with_replacement(HexNAc, composition['HexNAc']))
+      hexnac_pool = [Counter(k) for k in hexnac_pool]
+      composition.pop('HexNAc')
+      output_list = [match_composition(k, group, level, df = df,
+                                     mode = 'minimal', libr = libr,
+                                       glycans = output_list) for k in hexnac_pool]
+      output_list = list(set(unwrap(output_list)))
+    if len(composition)>0:
+      output_list = match_composition(k, group, level, df = df,
+                                     mode = 'minimal', libr = libr,
+                                       glycans = output_list)
+    if mode == 'exact':
+      monosaccharide_count = sum(original_composition.values())
+      output_list = [k for k in output_list if k.count('(') == monosaccharide_count-1]
+    return output_list

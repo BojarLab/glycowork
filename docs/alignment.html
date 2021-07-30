@@ -66,7 +66,7 @@ nb_path: "01_alignment.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="pairwiseAlign" class="doc_header"><code>pairwiseAlign</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/alignment/glysum.py#L14" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>pairwiseAlign</code>(<strong><code>query</code></strong>, <strong><code>corpus</code></strong>=<em><code>None</code></em>, <strong><code>n</code></strong>=<em><code>5</code></em>, <strong><code>vocab</code></strong>=<em><code>None</code></em>, <strong><code>submat</code></strong>=<em><code>None</code></em>, <strong><code>mismatch</code></strong>=<em><code>-10</code></em>, <strong><code>gap</code></strong>=<em><code>-5</code></em>, <strong><code>col</code></strong>=<em><code>'glycan'</code></em>)</p>
+<h4 id="pairwiseAlign" class="doc_header"><code>pairwiseAlign</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/alignment/glysum.py#L14" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>pairwiseAlign</code>(<strong><code>query</code></strong>, <strong><code>corpus</code></strong>=<em><code>None</code></em>, <strong><code>n</code></strong>=<em><code>5</code></em>, <strong><code>vocab</code></strong>=<em><code>None</code></em>, <strong><code>submat</code></strong>=<em><code>None</code></em>, <strong><code>mismatch</code></strong>=<em><code>-1</code></em>, <strong><code>gap</code></strong>=<em><code>-1</code></em>, <strong><code>col</code></strong>=<em><code>'glycan'</code></em>)</p>
 </blockquote>
 <p>aligns glycan sequence from database against rest of the database and returns the best n alignments</p>
 <table>
@@ -91,10 +91,10 @@ nb_path: "01_alignment.ipynb"
 <td style="text-align:left">submat (dataframe): GLYSUM substitution matrix</td>
 </tr>
 <tr>
-<td style="text-align:left">mismatch (int): mismatch penalty; default: -10</td>
+<td style="text-align:left">mismatch (int): mismatch penalty; default: -1</td>
 </tr>
 <tr>
-<td style="text-align:left">gap (int): gap penalty; default: -5</td>
+<td style="text-align:left">gap (int): gap penalty; default: -1</td>
 </tr>
 <tr>
 <td style="text-align:left">col (string): column name where glycan sequences are; default: glycan</td>
@@ -132,6 +132,7 @@ nb_path: "01_alignment.ipynb"
     <div class="input_area">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test Alignment&quot;</span><span class="p">)</span>
 <span class="n">pairwiseAlign</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)Man(a1-4)Glc(b1-4)Man(a1-5)Kdo&#39;</span><span class="p">)</span>
+<span class="c1">#pairwiseAlign(&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;)</span>
 </pre></div>
 
     </div>
@@ -147,48 +148,48 @@ nb_path: "01_alignment.ipynb"
 <pre>Test Alignment
 1                                               9
 Man a1-3 Man a1-4 Glc b1-4 Man a1-5 Kdo
+Man a1-3 Man a1-3 Glc b1-6 Man a1-5 Kdo
+Alignment Score: 21
+Percent Identity: 77.77777777777779
+Percent Coverage: 100.0
+Sequence Index: GalA1P*a1-4*Man*a1-3*Man*a1-3*Glc*b1-6*Man*a1-5*Kdo
+Species: []
+
+1                                               9
 Man a1-3 Man a1-4 Glc b1-4 Man a1-5 Kdo
-Alignment Score: 30
+Man a1-3 Man a1-4 Glc b1-4 Man a1-5 Kdo
+Alignment Score: 21
 Percent Identity: 100.0
 Percent Coverage: 100.0
 Sequence Index: Man*a1-3*Man*a1-4*Glc*b1-4*Man*a1-5*Kdo
 Species: [&#39;Xanthomonas_oryzae&#39;]
 
-1                           5
-Man a1-3 Man a1-4 Glc
-Man a1-3 Man a1-4 Rha
-Alignment Score: 21
-Percent Identity: 80.0
-Percent Coverage: 55.55555555555556
-Sequence Index: Man*a1-3*Man*a1-4*Rha
-Species: []
-
-1                                               9
-Man a1-3 Man a1-4 Glc b1-4 Man   a1-5 Kdo
-Man a1-3 Man a1-4 Glc b1-4 ManOP a1-5 Kdo
-Alignment Score: 20
-Percent Identity: 88.88888888888889
+1                                                         9
+Man a1-3 Man a1-4 Glc b1-4 Man -    -      a1-5 Kdo
+Man a1-3 Man a1-3 Glc b1-6 Man a1-5 GalAOP a1-4 Kdo
+Alignment Score: 19
+Percent Identity: 54.54545454545454
 Percent Coverage: 100.0
-Sequence Index: Man*a1-3*Man*a1-4*Glc*b1-4*ManOP*a1-5*Kdo*a2-6*GlcOPN*b1-6*GlcN
-Species: []
+Sequence Index: Man*a1-3*Man*a1-3*Glc*b1-6*Man*a1-5*GalAOP*a1-4*Kdo
+Species: [&#39;Xanthomonas_campestris&#39;]
 
-1                                               9
-Man a1-3 Man a1-4 Glc b1-4 Man a1-5 Kdo
-Man a1-3 Man a1-3 Glc b1-6 Man a1-5 Kdo
-Alignment Score: 20
-Percent Identity: 77.77777777777779
+1                                                         9
+Man a1-3 Man a1-4 Glc -    -       b1-4 Man a1-5 Kdo
+Man a1-3 Man a1-4 Glc b1-4 GalAOPN a1-3 Man a1-5 Kdo
+Alignment Score: 19
+Percent Identity: 72.72727272727273
 Percent Coverage: 100.0
-Sequence Index: GalA*a1-4*Man*a1-3*Man*a1-3*Glc*b1-6*Man*a1-5*Kdo
-Species: []
-
-1                                               9
-Man a1-3 Man a1-4 Glc b1-4 Man   a1-5 Kdo
-Man a1-3 Man a1-4 Glc b1-4 ManOP a1-5 Kdo
-Alignment Score: 20
-Percent Identity: 88.88888888888889
-Percent Coverage: 100.0
-Sequence Index: Man*a1-3*Man*a1-4*Glc*b1-4*ManOP*a1-5*Kdo
+Sequence Index: Man*a1-3*Man*a1-4*Glc*b1-4*GalAOPN*a1-3*Man*a1-5*Kdo
 Species: [&#39;Xanthomonas_oryzae&#39;]
+
+1                                                         9
+Man a1-3 Man a1-4 Glc b1-4 Man -    -    a1-5 Kdo
+Man bond Man bond Glc bond Man bond GalA bond Kdo
+Alignment Score: 19
+Percent Identity: 45.45454545454545
+Percent Coverage: 100.0
+Sequence Index: Man*bond*Man*bond*Glc*bond*Man*bond*GalA*bond*Kdo
+Species: []
 
 </pre>
 </div>
