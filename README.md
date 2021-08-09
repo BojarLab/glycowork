@@ -11,7 +11,7 @@ Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins.
 
 The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. `Glycowork` is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, `Glycowork` also contains glycan data that can be used for glycan alignments, model pre-training, motif comparisons, etc.
 
-If you use `glycowork` in your project, please cite [Thomès et al., 2021](https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240).
+If you use `glycowork` in your project, please cite [Thomes et al., 2021](https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240).
 
 The inspiration for `glycowork` can be found in [Bojar et al., 2020](https://doi.org/10.1016/j.chom.2020.10.004) and [Burkholz et al., 2021](https://www.cell.com/cell-reports/fulltext/S2211-1247(21)00616-1). There, you can also find examples of possible use cases for the functions in `glycowork`.
 
