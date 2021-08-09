@@ -253,25 +253,35 @@ def glycan_to_nxGraph(glycan, libr = None,
     nx.set_node_attributes(g1, {k:j for k,j in zip(range(len(glycan_graph[0])), termini_list)}, 'termini')
   return g1
 
-def generate_graph_features(glycan, libr = None):
+def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'network'):
     """compute graph features of glycan\n
     | Arguments:
     | :-
-    | glycan (string): glycan in IUPAC-condensed format
-    | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+    | glycan (string or networkx object): glycan in IUPAC-condensed format (or glycan network if glycan_graph=False)
+    | glycan_graph (bool): True expects a glycan, False expects a network (from construct_network); default:True
+    | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+    | label (string): Label to place in output dataframe if glycan_graph=False; default:'network'\n
     | Returns:
     | :-
     | Returns a pandas dataframe with different graph features as columns and glycan as row
     """
     if libr is None:
       libr = lib
-    g = glycan_to_nxGraph(glycan, libr = libr)
-    #nbr of different node features:
-    nbr_node_types = len(set(nx.get_node_attributes(g, "labels")))
+    if glycan_graph:
+      g = glycan_to_nxGraph(glycan, libr = libr)
+      #nbr of different node features:
+      nbr_node_types = len(set(nx.get_node_attributes(g, "labels")))
+    else:
+      g = glycan
+      glycan = label
+      nbr_node_types = len(set(list(g.nodes())))
     #adjacency matrix:
     A = nx.to_numpy_matrix(g)
     N = A.shape[0]
-    diameter = nx.algorithms.distance_measures.diameter(g)
+    if nx.is_connected(g):
+      diameter = nx.algorithms.distance_measures.diameter(g)
+    else:
+      diameter = np.nan
     deg = np.array([np.sum(A[i,:]) for i in range(N)])
     dens = np.sum(deg)/2
     avgDeg = np.mean(deg)
@@ -299,16 +309,28 @@ def generate_graph_features(glycan, libr = None):
     closeMin = np.min(close)
     closeAvg = np.mean(close)
     closeVar = np.var(close)
-    flow = np.array(pd.DataFrame(nx.current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
-    flowMax = np.max(flow)
-    flowMin = np.min(flow)
-    flowAvg = np.mean(flow)
-    flowVar = np.var(flow)
-    flow_edge = np.array(pd.DataFrame(nx.edge_current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
-    flow_edgeMax = np.max(flow_edge)
-    flow_edgeMin = np.min(flow_edge)
-    flow_edgeAvg = np.mean(flow_edge)
-    flow_edgeVar = np.var(flow_edge)
+    if nx.is_connected(g):
+      flow = np.array(pd.DataFrame(nx.current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
+      flowMax = np.max(flow)
+      flowMin = np.min(flow)
+      flowAvg = np.mean(flow)
+      flowVar = np.var(flow)
+      flow_edge = np.array(pd.DataFrame(nx.edge_current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
+      flow_edgeMax = np.max(flow_edge)
+      flow_edgeMin = np.min(flow_edge)
+      flow_edgeAvg = np.mean(flow_edge)
+      flow_edgeVar = np.var(flow_edge)
+    else:
+      flow = np.nan
+      flowMax = np.nan
+      flowMin = np.nan
+      flowAvg = np.nan
+      flowVar = np.nan
+      flow_edge = np.nan
+      flow_edgeMax = np.nan
+      flow_edgeMin = np.nan
+      flow_edgeAvg = np.nan
+      flow_edgeVar = np.nan
     load = np.array(pd.DataFrame(nx.load_centrality(g), index = [0]).iloc[0,:])
     loadMax = np.max(load)
     loadMin = np.min(load)
@@ -319,11 +341,18 @@ def generate_graph_features(glycan, libr = None):
     harmMin = np.min(harm)
     harmAvg = np.mean(harm)
     harmVar = np.var(harm)
-    secorder = np.array(pd.DataFrame(nx.second_order_centrality(g), index = [0]).iloc[0,:])
-    secorderMax = np.max(secorder)
-    secorderMin = np.min(secorder)
-    secorderAvg = np.mean(secorder)
-    secorderVar = np.var(secorder)
+    if nx.is_connected(g):
+      secorder = np.array(pd.DataFrame(nx.second_order_centrality(g), index = [0]).iloc[0,:])
+      secorderMax = np.max(secorder)
+      secorderMin = np.min(secorder)
+      secorderAvg = np.mean(secorder)
+      secorderVar = np.var(secorder)
+    else:
+      secorder = np.nan
+      secorderMax = np.nan
+      secorderMin = np.nan
+      secorderAvg = np.nan
+      secorderVar = np.nan
     x = np.array([len(nx.k_corona(g,k).nodes()) for k in range(N)])
     size_corona = x[x > 0][-1]
     k_corona = np.where(x == x[x > 0][-1])[0][-1]
@@ -360,3 +389,119 @@ def generate_graph_features(glycan, libr = None):
     feat_dic = {col_names[k]:features[k] for k in range(len(features))}
     return pd.DataFrame(feat_dic, index = [glycan])
 
+def branch_crawl(starting_node, main_chain_connect, graph):
+  """recursive function to ascertain branch length and collect all nodes\n
+  | Arguments:
+  | :-
+  | starting_node (int): first node of the branch
+  | main_chain_connect (int): main chain node to which branch is connected
+  | graph (networkx object): glycan graph\n
+  | Returns:
+  | :-
+  | Returns all nodes of the branch in the correct order
+  """
+  break_cond = True
+  node_pool = [starting_node]
+  node = starting_node
+  while break_cond:
+    try:
+      temp = [k for k in list(graph.edges()) if (node in k) and (k != tuple(sorted([node,main_chain_connect])))]
+      temp = [k for j in temp for k in j if k not in node_pool][0]
+      node_pool.append(temp)
+      node = temp
+    except:
+      break_cond = False
+  return list(sorted(node_pool))
+
+def graph_to_string(graph, libr = None):
+  """converts glycan graph back to IUPAC-condensed format\n
+  | Arguments:
+  | :-
+  | graph (networkx object): glycan graph, works with branched glycans
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns glycan in IUPAC-condensed format (string)
+  """
+  if libr is None:
+    libr = lib
+  diffs = [k[1]-k[0] for k in list(graph.edges())]
+  if np.max(diffs)>1:
+    branch_branch_pool = []
+    branch_idx = np.where([j>1 for j in diffs])[0].tolist()
+    branch_nodes = [list(graph.edges())[k][0] for k in branch_idx]
+    branch = [list(graph.edges())[k][1] for k in branch_idx]
+    branch_pool = [branch_crawl(branch[k], branch_nodes[k], graph) for k in range(len(branch))]
+    branch_branch_nodes = [k for k in branch_nodes if k in unwrap(branch_pool)]
+    if len(branch_branch_nodes)>0:
+      branch_branch_start = []
+      for j in branch_branch_nodes:
+        branch_branch = [list(graph.edges())[k][1] for k in range(len(list(graph.edges()))) if j in list(graph.edges())[k]]
+        branch_branch_start.append(np.max([k for k in branch_branch if k!=j]))
+      branch_branch_pool = [branch_crawl(branch_branch_start[k], branch_branch_nodes[k], graph) for k in range(len(branch_branch_start))]
+      branch_branch = [[list(nx.get_node_attributes(graph, 'labels').values())[j] for j in k] for k in branch_branch_pool]
+      branch_branch = [[libr[j] for j in k] for k in branch_branch]
+      branch_branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch_branch]
+    else:
+      branch_branch_pool = []
+    branch = [[list(nx.get_node_attributes(graph, 'labels').values())[j] for j in k] for k in branch_pool if k not in branch_branch_pool]
+    branch = [[libr[j] for j in k] for k in branch]
+    branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch]
+  else:
+    branch_pool = []
+    branch_branch_pool = []
+  glycan_motif = [libr[list(nx.get_node_attributes(graph, 'labels').values())[k]] for k in range(len(graph.nodes)) if k not in unwrap(branch_pool)]
+  main_len = len(glycan_motif)
+  if len(branch_pool)>0:
+    counter = 0
+    for k in range(len(branch)):
+      temp = min_process_glycans([branch[k]])[0]
+      temp = [m for m in temp if len(m)>0]
+      if branch[k].count('(')>1:
+        temp = ['[' + temp[0]] + temp[1:-1] + [temp[-1]+']']
+      else:
+        temp = ['[' + temp[0], temp[-1]+']']
+      glycan_motif = glycan_motif[:branch_nodes[k]+counter] + temp + glycan_motif[branch_nodes[k]+counter:]
+      counter += len(temp)
+  if len(branch_branch_pool)>0:
+    start_idxs = []
+    for k in range(len(branch_branch_nodes)):
+      running_idx = main_len
+      for i in range(sum(['[' in j for j in glycan_motif])):
+        opened = np.where(['[' in j for j in glycan_motif])[0].tolist()[i]
+        closed = np.where([']' in j for j in glycan_motif])[0].tolist()[i]
+        prev_running_idx = running_idx
+        running_idx += len(glycan_motif[opened:closed+1])
+        if running_idx > branch_branch_nodes[k]:
+          start_idx = i
+          break
+      start_idx = np.where(['[' in j for j in glycan_motif])[0].tolist()[start_idx]
+      branch_progress = prev_running_idx-main_len
+      start_idxs.append(start_idx+branch_branch_nodes[k]-(main_len+branch_progress))
+    for k in range(len(start_idxs)):
+      glycan_motif.insert(np.max([start_idxs[k]+k, 0]), '['+branch_branch[k]+']')
+  glycan_motif = "".join([glycan_motif[k] if not ((glycan_motif[k].startswith('a')) or (glycan_motif[k].startswith('b')) or (re.match('^[0-9]+(-[0-9]+)+$', glycan_motif[k]))) \
+                          else '('+glycan_motif[k]+')' for k in range(len(glycan_motif))])
+  if '])' in glycan_motif:
+    glycan_motif = glycan_motif.replace('])', ')]')
+  return glycan_motif
+
+
+def try_string_conversion(graph, libr = None):
+  """check whether glycan graph describes a valid glycan\n
+  | Arguments:
+  | :-
+  | graph (networkx object): glycan graph, works with branched glycans
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns glycan in IUPAC-condensed format (string) if glycan is valid, otherwise returns None
+  """
+  if libr is None:
+    libr = lib
+  try:
+    temp = graph_to_string(graph, libr = libr)
+    temp = glycan_to_nxGraph(temp, libr = libr)
+    return graph_to_string(temp, libr = libr)
+  except:
+    return None

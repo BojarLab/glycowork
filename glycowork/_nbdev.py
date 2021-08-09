@@ -7,7 +7,8 @@ index = {}
 modules = ["alignment.py",
            "glycan_data.py",
            "ml.py",
-           "motif.py"]
+           "motif.py",
+           "network.py"]
 
 doc_url = "https://BojarLab.github.io/glycowork/"
 

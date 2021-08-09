@@ -20,26 +20,49 @@ def get_insight(glycan, libr = None, motifs = None):
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
     ggraph = glycan_to_nxGraph(glycan, libr = libr)
     df_glycan['graph'] = [glycan_to_nxGraph(k, libr = libr) for k in df_glycan.glycan.values.tolist()]
-    idx = np.where([fast_compare_glycans(ggraph, k, libr = lib) for k in df_glycan.graph.values.tolist()])[0]
+    idx = np.where([fast_compare_glycans(ggraph, k, libr = libr) for k in df_glycan.graph.values.tolist()])[0]
     species = df_glycan.Species.values.tolist()[idx[0]]
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(species))
+    else:
+        try:
+            species = df_glycan.predicted_taxonomy.values.tolist()[idx[0]]
+            print("\nNo definitive information in our database but this glycan is predicted to occur here: " + str(species))
+        except:
+            pass
     if len(eval(species)) > 5:
-        phyla = df_glycan.Phylum.values.tolist()[idx[0]]
+        phyla = list(sorted(list(set(eval(df_glycan.Phylum.values.tolist()[idx[0]])))))
         print("\nPuh, that's quite a lot! Here are the phyla of those species: " + str(phyla))
     found_motifs = annotate_glycan(glycan, motifs = motifs, libr = libr)
     found_motifs = found_motifs.loc[:, (found_motifs != 0).any(axis = 0)].columns.values.tolist()
     if len(found_motifs) > 0:
         print("\nThis glycan contains the following motifs: " + str(found_motifs))
+    if isinstance(df_glycan.glytoucan_id.values.tolist()[idx[0]], str):
+        print("\nThis is the GlyTouCan ID for this glycan: " + str(df_glycan.glytoucan_id.values.tolist()[idx[0]]))
     if isinstance(df_glycan.immunogenicity.values.tolist()[idx[0]], float):
         if df_glycan.immunogenicity.values.tolist()[idx[0]] > 0:
             print("\nThis glycan is likely to be immunogenic to humans.")
         elif df_glycan.immunogenicity.values.tolist()[idx[0]] < 1:
             print("\nThis glycan is likely to be non-immunogenic to humans.")
-    if isinstance(df_glycan.ecoli_pathogenicity.values.tolist()[idx[0]], float):
-        if df_glycan.ecoli_pathogenicity.values.tolist()[idx[0]] > 0:
-            print("\nThis glycan is likely to contribute to E.coli pathogenicity.")
-        elif df_glycan.ecoli_pathogenicity.values.tolist()[idx[0]] < 1:
-            print("\nThis glycan is found in non-pathogenic E.coli strains.")
     print("\nThat's all we can do for you at this point!")
-    
+
+def glytoucan_to_glycan(ids, revert = False):
+    """interconverts GlyTouCan IDs and glycans in IUPAC-condensed\n
+    | Arguments:
+    | :-
+    | ids (list): list of GlyTouCan IDs as strings (if using glycans instead, change 'revert' to True
+    | revert (bool): whether glycans should be mapped to GlyTouCan IDs or vice versa; default:False\n
+    | Returns:
+    | :-
+    | Returns list of either GlyTouCan IDs or glycans in IUPAC-condensed
+    """
+    if revert:
+        ids = [df_glycan[df_glycan.glycan == k].glytoucan_id.values.tolist()[0] for k in ids]
+        if any([k not in df_glycan.glycan.values.tolist() for k in ids]):
+            print('These glycans are not in our database: ' + str([k for k in ids if k not in df_glycan.glycan.values.tolist()]))
+        return ids
+    else:
+        glycans = [df_glycan[df_glycan.glytoucan_id == k].glycan.values.tolist()[0] for k in ids]
+        if any([k not in df_glycan.glytoucan_id.values.tolist() for k in ids]):
+            print('These IDs are not in our database: ' + str([k for k in ids if k not in df_glycan.glytoucan_id.values.tolist()]))
+        return glycans

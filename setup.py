@@ -5,7 +5,7 @@ import setuptools
 
 setuptools.setup(
     name="glycowork",
-    version="0.1.0",
+    version="0.2.0",
     author="Daniel Bojar",
     author_email="daniel.bojar@gu.se",
     description="Package containing helper functions for processing and analysis of glycans",
@@ -23,5 +23,5 @@ setuptools.setup(
     python_requires='>=3.6',
     install_requires=["sklearn", "regex", "networkx",
                       "statsmodels", "scipy", "torch",
-                      "seaborn", "xgboost"],
+                      "seaborn", "xgboost", "mpld3"],
 )

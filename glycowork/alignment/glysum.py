@@ -12,7 +12,7 @@ GAP_ELEMENT = '-'
 GAP_CODE = 0
 
 def pairwiseAlign(query, corpus = None, n = 5, vocab = None,
-                  submat = None, mismatch = -10, gap = -5,
+                  submat = None, mismatch = -1, gap = -1,
                   col = 'glycan'):
   """aligns glycan sequence from database against rest of the database and returns the best n alignments\n
   | Arguments:
@@ -22,8 +22,8 @@ def pairwiseAlign(query, corpus = None, n = 5, vocab = None,
   | n (int): how many alignments to show; default shows top 5
   | vocab (list): list of glycowords used for mapping to tokens
   | submat (dataframe): GLYSUM substitution matrix
-  | mismatch (int): mismatch penalty; default: -10
-  | gap (int): gap penalty; default: -5
+  | mismatch (int): mismatch penalty; default: -1
+  | gap (int): gap penalty; default: -1
   | col (string): column name where glycan sequences are; default: glycan\n
   | Returns:
   | :-

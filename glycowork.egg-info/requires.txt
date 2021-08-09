@@ -6,3 +6,4 @@ scipy
 torch
 seaborn
 xgboost
+mpld3

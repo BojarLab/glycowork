@@ -16,7 +16,8 @@ from glycowork.motif.tokenization import link_find
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      libr = None, thresh = 1.645, sorting = True,
                      feature_set = ['exhaustive'], extra = 'termini',
-                     wildcard_list = [], multiple_samples = False):
+                     wildcard_list = [], multiple_samples = False,
+                     motifs = None, estimate_speedup = False):
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
     | :-
@@ -29,7 +30,9 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
     | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
-    | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False\n
+    | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
+    | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None
+    | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
     | Returns:
     | :-
     | Returns dataframe with p-values and corrected p-values for every glycan motif
@@ -44,7 +47,8 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
         df = df.reset_index()
         df.columns = [glycan_col_name] + df.columns.values.tolist()[1:]
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
-                                libr = lib, feature_set = feature_set,
+                                motifs = motifs,
+                                libr = libr, feature_set = feature_set,
                                extra = extra, wildcard_list = wildcard_list)
     if multiple_samples:
         df.index = df[glycan_col_name].values.tolist()
@@ -72,6 +76,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
 def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
+                 estimate_speedup = False,
                  **kwargs):
     """clusters samples based on glycan data (for instance glycan binding etc.)\n
     | Arguments:
@@ -86,6 +91,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
     | filepath (string): absolute path including full filename allows for saving the plot
     | index_col (string): default column to convert to dataframe index; default:'target'
+    | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False
     | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                          
     | Returns:
     | :-
@@ -100,7 +106,8 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     if mode == 'motif':
         df_motif = annotate_dataset(df.columns.values.tolist(),
                                 libr = libr, feature_set = feature_set,
-                                    extra = extra, wildcard_list = wildcard_list)
+                                    extra = extra, wildcard_list = wildcard_list,
+                                    estimate_speedup = estimate_speedup)
         df_motif = df_motif.replace(0,np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
         collect_dic = {}
         if datatype == 'response':
@@ -129,20 +136,25 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     plt.show()
 
 def plot_embeddings(glycans, emb = None, label_list = None,
-                    shape_feature = None, filepath = '',
+                    shape_feature = None, filepath = '', alpha = 0.8,
+                    palette = 'colorblind',
                     **kwargs):
     """plots glycan representations for a list of glycans\n
     | Arguments:
     | :-
     | glycans (list): list of IUPAC-condensed glycan sequences as strings
-    | emb (list): stored glycan representations; default takes them from trained species-level SweetNet model
+    | emb (dictionary): stored glycan representations; default takes them from trained species-level SweetNet model
     | label_list (list): list of same length as glycans if coloring of the plot is desired
     | shape_feature (string): monosaccharide/bond used to display alternative shapes for dots on the plot
     | filepath (string): absolute path including full filename allows for saving the plot
+    | alpha (float): transparency of points in plot; default:0.8
+    | palette (string): color palette to color different classes; default:'colorblind'
     | **kwargs: keyword arguments that are directly passed on to matplotlib\n
     """
     if emb is None:
         emb = glycan_emb
+    if isinstance(emb, pd.DataFrame):
+        emb = {glycan[k]:emb.iloc[k,:] for k in range(len(glycans))}
     embs = np.array([emb[k] for k in glycans])
     embs = TSNE(random_state = 42).fit_transform(embs)
     markers = None
@@ -150,8 +162,8 @@ def plot_embeddings(glycans, emb = None, label_list = None,
         markers = {shape_feature: "X", "Absent": "o"}
         shape_feature = [shape_feature if shape_feature in k else 'Absent' for k in glycans]
     sns.scatterplot(x = embs[:,0], y = embs[:,1], hue = label_list,
-                    palette = 'colorblind', style = shape_feature, markers = markers,
-                    alpha = 0.8, **kwargs)
+                    palette = palette, style = shape_feature, markers = markers,
+                    alpha = alpha, **kwargs)
     sns.despine(left = True, bottom = True)
     plt.xlabel('Dim1')
     plt.ylabel('Dim2')
@@ -179,7 +191,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   | thresh (int): threshold count of when to include motifs in plot; default:10 occurrences\n
   | Returns:
   | :-
-  | Plots typical neighboring bond/monosaccharide and modification distribution
+  | Plots modification distribution and typical neighboring bond/monosaccharide
   """
   if df is None:
     df = df_species
@@ -238,19 +250,20 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
           if len(cou_k2) > 1:
               cou_for_df.append(pd.DataFrame({'monosaccharides':cou_k, 'counts':cou_v_t, 'colors':[cou_k2[k]]*len(cou_k)}))
           else:
-              sns.barplot(x = cou_k, y = cou_v_t, ax = a0, color = "cornflowerblue")
+              sns.barplot(x = cou_k, y = cou_v_t, ax = a1, color = "cornflowerblue")
       if len(cou_k2) > 1:
           cou_df = pd.concat(cou_for_df)
           sns.histplot(cou_df, x = 'monosaccharides', hue = 'colors', weights = 'counts',
-                       multiple = 'stack', palette = palette, ax = a0, legend = False,
+                       multiple = 'stack', palette = palette, ax = a1, legend = False,
                    shrink = 0.8)
-      a0.set_ylabel('Absolute Occurrence')
+      a1.set_ylabel('Absolute Occurrence')
   else:
-      sns.barplot(x = cou_k, y = cou_v, ax = a0, color = "cornflowerblue")
-      a0.set_ylabel('Relative Proportion')
+      sns.barplot(x = cou_k, y = cou_v, ax = a1, color = "cornflowerblue")
+      a1.set_ylabel('Relative Proportion')
   sns.despine(left = True, bottom = True)
-  a0.set_xlabel(lab)
-  a0.set_title('Pairings')
+  #a1.set_xlabel(lab)
+  a1.set_xlabel('')
+  a1.set_title(str(sugar) + ' and variants are connected to')
   plt.setp(a0.get_xticklabels(), rotation = 'vertical')
   
   if modifications:
@@ -258,16 +271,17 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
         cou_df2 = pd.DataFrame({'monosaccharides': cou_k2, 'counts': cou_v2})
         sns.histplot(cou_df2, x = 'monosaccharides', weights = 'counts',
                      hue = 'monosaccharides', shrink = 0.8, legend = False,
-                     ax = a1, palette = palette, alpha = 0.75)
+                     ax = a0, palette = palette, alpha = 0.75)
     else:
-        sns.barplot(x = cou_k2, y = cou_v2, ax = a1, color = "cornflowerblue")
+        sns.barplot(x = cou_k2, y = cou_v2, ax = a0, color = "cornflowerblue")
     sns.despine(left = True, bottom = True)
-    a1.set_ylabel('Relative Proportion')
-    a1.set_xlabel(sugar + " Variants")
-    a1.set_title('Observed Modifications')
+    a0.set_ylabel('Relative Proportion')
+    #a0.set_xlabel(sugar + " Variants")
+    a0.set_xlabel('')
+    a0.set_title('Observed Modifications of ' + str(sugar))
     plt.setp(a1.get_xticklabels(), rotation = 'vertical')
 
-  fig.suptitle('Sequence context of ' + str(sugar))
+  fig.suptitle('Characterizing ' + str(sugar))
   fig.tight_layout()
   if len(filepath) > 1:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,

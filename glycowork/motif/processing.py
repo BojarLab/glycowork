@@ -174,5 +174,4 @@ def check_nomenclature(glycan):
     print("Could it be that you're using GlycoCT? Please convert to IUPACcondensed for using glycowork.")
     
   print("Congrats, this looks like a great glycan to us!")
-  
-    
+

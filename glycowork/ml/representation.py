@@ -9,7 +9,8 @@ try:
 except ImportError:
     raise ImportError('<torch_geometric missing; cannot do deep learning>')
 
-def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True):
+def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
+                   class_list = None):
     """returns a dataframe of learned representations for a list of glycans\n
     | Arguments:
     | :-
@@ -17,7 +18,8 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True):
     | model (PyTorch object): trained graph neural network (such as SweetNet) for analyzing glycans
     | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
     | batch_size (int): change to batch_size used during training; default is 32
-    | rep (bool): True returns representations, False returns actual predicted labels; default is True\n
+    | rep (bool): True returns representations, False returns actual predicted labels; default is True
+    | class_list (list): list of unique classes to map predictions\n
     | Returns:
     | :-
     | Returns dataframe of learned representations (columns) for each glycan (rows)
@@ -42,4 +44,9 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True):
             res.append(pred)
     res2 = [res[k].detach().cpu().numpy() for k in range(len(res))]
     res2 = pd.DataFrame(np.concatenate(res2))
-    return res2
+    if rep:
+      return res2
+    else:
+      idx = res2.idxmax(axis = "columns").values.tolist()
+      preds = [class_list[k] for k in idx]
+      return preds
