@@ -1,7 +1,7 @@
 import setuptools
 
-#with open("README.md", "r", encoding="utf-8") as fh:
-#    long_description = fh.read()
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
 
 setuptools.setup(
     name="glycowork",
@@ -9,8 +9,8 @@ setuptools.setup(
     author="Daniel Bojar",
     author_email="daniel.bojar@gu.se",
     description="Package containing helper functions for processing and analysis of glycans",
-    #long_description=long_description,
-    #long_description_content_type="text/markdown",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     url="https://github.com/BojarLab/glycowork",
     packages=setuptools.find_packages(),
     include_package_data=True,

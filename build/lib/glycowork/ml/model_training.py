@@ -200,7 +200,8 @@ def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.00
 
 def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
                    feature_calc = False, libr = None, return_features = False,
-                   feature_set = ['known','exhaustive']):
+                   feature_set = ['known','exhaustive'], additional_features_train = None,
+                   additional_features_test = None):
     """wrapper function to train standard machine learning models on glycans\n
     | Arguments:
     | :-
@@ -211,6 +212,8 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
     | return_features (bool): whether to return calculated features; default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)\n
+    | additional_features_train (dataframe): additional features (apart from glycans) to be used for training. Has to be of the same length as X_train; default:None
+    | additional_features_test (dataframe): additional features (apart from glycans) to be used for evaluation. Has to be of the same length as X_test; default:None
     | Returns:
     | :-
     | Returns trained model                           
@@ -237,6 +240,8 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
                 X_test[k] = [0]*len(X_test)
         X_train = X_train.apply(pd.to_numeric)
         X_test = X_test.apply(pd.to_numeric)
+        X_train = pd.concat([X_train, additional_features_train], axis = 1)
+        X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")
     model.fit(X_train, y_train)
     cols_when_model_builds = model.get_booster().feature_names
