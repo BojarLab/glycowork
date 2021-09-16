@@ -27,9 +27,9 @@ lib = get_lib(list(set(df_glycan.glycan.values.tolist() +
                        ['bond', 'monosaccharide', 'Hex', 'HexNAc', 'Sia'])))
 
 linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3','b1-4','b1-6']
-Hex = ['Glc', 'Gal', 'Man']
-dHex = ['Fuc', 'Qui', 'Rha']
-HexNAc = ['GlcNAc', 'GalNAc', 'ManNAc']
+Hex = ['Glc', 'Gal', 'Man', 'Hex']
+dHex = ['Fuc', 'Qui', 'Rha', 'dHex']
+HexNAc = ['GlcNAc', 'GalNAc', 'ManNAc', 'HexNAc']
 Sia = ['Neu5Ac', 'Neu5Gc', 'Kdn']
 
 def unwrap(nested_list):

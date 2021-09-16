@@ -1,11 +1,14 @@
 import pandas as pd
+import numpy as np
 import re
 import copy
 from itertools import combinations_with_replacement
 from collections import Counter
+from sklearn.cluster import DBSCAN
 
 from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap, df_species, Hex, dHex, HexNAc, Sia
 from glycowork.motif.processing import small_motif_find, min_process_glycans
+from glycowork.motif.graph import compare_glycans
 
 
 def character_to_label(character, libr = None):
@@ -315,6 +318,7 @@ def match_composition(composition, group, level, df = None,
     | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
     | df (dataframe): glycan dataframe for searching glycan structures; default:None
     | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
     | glycans (list): custom list of glycans to check the composition in; default:None\n
     | Returns:
     | :-
@@ -334,7 +338,7 @@ def match_composition(composition, group, level, df = None,
         if glycans is None:
           glycan_list = filtered_df.target.values.tolist()
         else:
-          glycan_list = glycans
+          glycan_list = copy.deepcopy(glycans)
         to_remove = []
         output_list = glycan_list
         for glycan in glycan_list:
@@ -385,7 +389,7 @@ def match_composition(composition, group, level, df = None,
     return output_list
 
 def match_composition_relaxed(composition, group, level, df = None,
-                      mode = "minimal", libr = None):
+                      mode = "exact", libr = None, reducing_end = None):
     """Given a coarse-grained monosaccharide composition (Hex, HexNAc, etc.), it returns all corresponding glycans\n
     | Arguments:
     | :-
@@ -393,13 +397,17 @@ def match_composition_relaxed(composition, group, level, df = None,
     | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
     | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
     | df (dataframe): glycan dataframe for searching glycan structures; default:None
-    | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements\n
+    | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements; default:"exact"
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+    | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None\n
     | Returns:
     | :-
     | Returns list of glycans matching composition in IUPAC-condensed
     """
     if df is None:
       df = df_species
+    if reducing_end is not None:
+      df = df[df.target.str.endswith(reducing_end)].reset_index(drop = True)
     if libr is None:
       libr = lib
     original_composition = copy.deepcopy(composition)
@@ -414,23 +422,58 @@ def match_composition_relaxed(composition, group, level, df = None,
       dhex_pool = list(combinations_with_replacement(dHex, composition['dHex']))
       dhex_pool = [Counter(k) for k in dhex_pool]
       composition.pop('dHex')
-      output_list = [match_composition(k, group, level, df = df,
+      temp = [match_composition(k, group, level, df = df,
                                      mode = 'minimal', libr = libr,
                                        glycans = output_list) for k in dhex_pool]
-      output_list = list(set(unwrap(output_list)))
+      output_list = list(set(unwrap(temp)))
     if 'HexNAc' in composition:
       hexnac_pool = list(combinations_with_replacement(HexNAc, composition['HexNAc']))
       hexnac_pool = [Counter(k) for k in hexnac_pool]
       composition.pop('HexNAc')
-      output_list = [match_composition(k, group, level, df = df,
+      temp = [match_composition(k, group, level, df = df,
                                      mode = 'minimal', libr = libr,
                                        glycans = output_list) for k in hexnac_pool]
-      output_list = list(set(unwrap(output_list)))
+      output_list = list(set(unwrap(temp)))
     if len(composition)>0:
-      output_list = match_composition(k, group, level, df = df,
+      output_list = match_composition(composition, group, level, df = df,
                                      mode = 'minimal', libr = libr,
                                        glycans = output_list)
     if mode == 'exact':
       monosaccharide_count = sum(original_composition.values())
       output_list = [k for k in output_list if k.count('(') == monosaccharide_count-1]
     return output_list
+
+def condense_composition_matching(matched_composition, libr = None):
+  """Given a list of glycans matching a composition, find the minimum number of glycans characterizing this set\n
+  | Arguments:
+  | :-
+  | matched_composition (list): list of glycans matching to a composition
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
+  | Returns:
+  | :-
+  | Returns minimal list of glycans that match a composition
+  """
+  if libr is None:
+    libr = lib
+  match_matrix = [[compare_glycans(k, j,libr = libr, wildcards = True,
+                                  wildcard_list = [libr.index('bond')]) for j in matched_composition] for k in matched_composition]
+  match_matrix = pd.DataFrame(match_matrix)
+  match_matrix.columns = matched_composition
+  clustering = DBSCAN(eps = 1, min_samples = 1).fit(match_matrix)
+  cluster_labels = clustering.labels_
+  num_clusters = len(list(set(cluster_labels)))
+  sum_glycans = []
+  for k in range(num_clusters):
+    cluster_glycans = [matched_composition[j] for j in range(len(cluster_labels)) if cluster_labels[j] == k]
+    #print(cluster_glycans)
+    #idx = np.argmin([j.count('bond') for j in cluster_glycans])
+    county = [j.count('bond') for j in cluster_glycans]
+    idx = np.where(county == np.array(county).min())[0]
+    if len(idx) == 1:
+      sum_glycans.append(cluster_glycans[idx[0]])
+    else:
+      for j in idx:
+        sum_glycans.append(cluster_glycans[j])
+    #sum_glycans.append(cluster_glycans[idx])
+  #print("This matching can be summarized by " + str(num_clusters) + " glycans.")
+  return sum_glycans
