@@ -519,3 +519,37 @@ def compositions_to_structures(composition_list, abundances, group, level,
   if verbose:
     print(not_matched)
   return df_out
+
+def structures_to_motifs(df, libr = None):
+  """function to convert relative intensities of glycan structures to those of glycan motifs\n
+  | Arguments:
+  | :-
+  | df (dataframe): function expects glycans in the first column and rel. intensities of each sample in a new column
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
+  | Returns:
+  | :-
+  | Returns dataframe of motifs, relative intensities, and sample IDs
+  """
+  if libr is None:
+    libr = lib
+  sample_dfs = []
+  for ele in range(1,df.shape[1]):
+    mot_mat = motif_matrix(df, df.columns.values.tolist()[0],
+                           df.columns.values.tolist()[ele],
+                           libr = libr)
+    mot_mat = mot_mat.loc[:, (mot_mat != 0).any(axis = 0)]
+    
+    out_tuples = []
+    for k in range(len(mot_mat)):
+      for j in range(mot_mat.shape[1]-1):
+        if mot_mat.iloc[k,j]>0:
+          out_tuples.append((mot_mat.columns.values.tolist()[j],
+                             mot_mat.iloc[k,-1]))
+
+    motif_df = pd.DataFrame(out_tuples)
+    motif_df.columns = ['glycan', 'rel_intensity']
+    motif_df = motif_df.groupby('glycan').mean().reset_index()
+    motif_df['sample_id'] = [ele]*len(motif_df)
+    sample_dfs.append(motif_df)
+  out_df = pd.concat(sample_dfs, axis = 0)
+  return out_df
