@@ -316,7 +316,7 @@ def match_composition(composition, group, level, df = None,
     | composition (dict): a dictionary indicating the composition to match (for example {"Fuc":1, "Gal":1, "GlcNAc":1})
     | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
     | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
-    | df (dataframe): glycan dataframe for searching glycan structures; default:None
+    | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
     | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements
     | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
     | glycans (list): custom list of glycans to check the composition in; default:None\n
@@ -396,7 +396,7 @@ def match_composition_relaxed(composition, group, level, df = None,
     | composition (dict): a dictionary indicating the composition to match (for example {"Fuc":1, "Gal":1, "GlcNAc":1})
     | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
     | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
-    | df (dataframe): glycan dataframe for searching glycan structures; default:None
+    | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
     | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements; default:"exact"
     | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
     | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None\n
@@ -410,32 +410,34 @@ def match_composition_relaxed(composition, group, level, df = None,
       df = df[df.target.str.endswith(reducing_end)].reset_index(drop = True)
     if libr is None:
       libr = lib
+    input_composition = copy.deepcopy(composition)
     original_composition = copy.deepcopy(composition)
-    if 'Hex' in composition:
-      hex_pool = list(combinations_with_replacement(Hex, composition['Hex']))
+    output_list = df[df[level] == group].target.values.tolist()
+    if 'Hex' in input_composition:
+      hex_pool = list(combinations_with_replacement(Hex, input_composition['Hex']))
       hex_pool = [Counter(k) for k in hex_pool]
-      composition.pop('Hex')
+      input_composition.pop('Hex')
       output_list = [match_composition(k, group, level, df = df,
                                      mode = 'minimal', libr = libr) for k in hex_pool]
       output_list = list(set(unwrap(output_list)))
-    if 'dHex' in composition:
-      dhex_pool = list(combinations_with_replacement(dHex, composition['dHex']))
+    if 'dHex' in input_composition:
+      dhex_pool = list(combinations_with_replacement(dHex, input_composition['dHex']))
       dhex_pool = [Counter(k) for k in dhex_pool]
-      composition.pop('dHex')
+      input_composition.pop('dHex')
       temp = [match_composition(k, group, level, df = df,
                                      mode = 'minimal', libr = libr,
                                        glycans = output_list) for k in dhex_pool]
       output_list = list(set(unwrap(temp)))
-    if 'HexNAc' in composition:
-      hexnac_pool = list(combinations_with_replacement(HexNAc, composition['HexNAc']))
+    if 'HexNAc' in input_composition:
+      hexnac_pool = list(combinations_with_replacement(HexNAc, input_composition['HexNAc']))
       hexnac_pool = [Counter(k) for k in hexnac_pool]
-      composition.pop('HexNAc')
+      input_composition.pop('HexNAc')
       temp = [match_composition(k, group, level, df = df,
                                      mode = 'minimal', libr = libr,
                                        glycans = output_list) for k in hexnac_pool]
       output_list = list(set(unwrap(temp)))
-    if len(composition)>0:
-      output_list = match_composition(composition, group, level, df = df,
+    if len(input_composition)>0:
+      output_list = match_composition(input_composition, group, level, df = df,
                                      mode = 'minimal', libr = libr,
                                        glycans = output_list)
     if mode == 'exact':
@@ -477,3 +479,43 @@ def condense_composition_matching(matched_composition, libr = None):
     #sum_glycans.append(cluster_glycans[idx])
   #print("This matching can be summarized by " + str(num_clusters) + " glycans.")
   return sum_glycans
+
+def compositions_to_structures(composition_list, abundances, group, level,
+                               df = None, libr = None, reducing_end = None,
+                               verbose = False):
+  """wrapper function to map compositions to structures, condense them, and match them with relative intensities\n
+  | Arguments:
+  | :-
+  | composition_list (list): list of composition dictionaries of the form {'Hex': 1, 'HexNAc': 1}
+  | abundances (dataframe): every row one glycan (matching composition_list in order), every column one sample; pd.DataFrame([range(len(composition_list))]*2).T if not applicable
+  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
+  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
+  | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None
+  | verbose (bool): whether to print any non-matching compositions; default:False\n
+  | Returns:
+  | :-
+  | Returns dataframe of (matched structures) x (relative intensities)
+  """
+  if libr is None:
+    libr = lib
+  if df is None:
+    df = df_species
+  out_df = []
+  not_matched = []
+  for k in range(len(composition_list)):
+    matched = match_composition_relaxed(composition_list[k], group, level,
+                                reducing_end = reducing_end, df = df, libr = libr)
+    if len(matched)>0:
+        condensed = condense_composition_matching(matched, libr = libr)
+        matched_data = [abundances.iloc[k,1:].values.tolist()]*len(condensed)
+        for ele in range(len(condensed)):
+            out_df.append([condensed[ele]] + matched_data[ele])
+    else:
+        not_matched.append(composition_list[k])
+  df_out = pd.DataFrame(out_df)
+  print(str(len(not_matched)) + " compositions could not be matched. Run with verbose = True to see which compositions.")
+  if verbose:
+    print(not_matched)
+  return df_out
