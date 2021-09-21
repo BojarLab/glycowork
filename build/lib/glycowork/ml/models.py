@@ -7,9 +7,9 @@ from glycowork.glycan_data.loader import lib
 
 this_dir, this_filename = os.path.split(__file__)  # Get path
 data_path = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
-SweetNet = torch.load(datapath)
+SweetNet = torch.load(data_path)
 data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565.pt')
-LectinOracle = torch.load(datapath)
+LectinOracle = torch.load(data_path)
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
@@ -21,7 +21,8 @@ class SweetNet(torch.nn.Module):
         self.pool2 = TopKPooling(128, ratio = 0.8)
         self.conv3 = GraphConv(128, 128)
         self.pool3 = TopKPooling(128, ratio = 0.8)
-        self.item_embedding = torch.nn.Embedding(num_embeddings = lib_size+1, embedding_dim = 128)
+        self.item_embedding = torch.nn.Embedding(num_embeddings = lib_size+1,
+                                                 embedding_dim = 128)
         self.lin1 = torch.nn.Linear(256, 1024)
         self.lin2 = torch.nn.Linear(1024, 64)
         self.lin3 = torch.nn.Linear(64, num_classes)
@@ -69,14 +70,14 @@ def sigmoid_range(x, low, high):
     "Sigmoid function with range `(low, high)`"
     return torch.sigmoid(x) * (high - low) + low
 
-class SigmoidRange(nn.Module):
+class SigmoidRange(torch.nn.Module):
     "Sigmoid module with range `(low, x_max)`"
     def __init__(self, low, high):
       super(SigmoidRange, self).__init__()
       self.low, self.high = low,high
     def forward(self, x): return sigmoid_range(x, self.low, self.high)
 
-class LectinOracle(nn.Module):
+class LectinOracle(torch.nn.Module):
   def __init__(self, input_size_glyco, hidden_size = 128, num_classes = 1, data_min = -11.355,
                data_max = 23.892, input_size_prot = 1280):
     super(LectinOracle,self).__init__()
@@ -95,16 +96,16 @@ class LectinOracle(nn.Module):
     self.pool3 = TopKPooling(self.hidden_size, ratio = 0.8)
     self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco,
                                              embedding_dim = self.hidden_size)
-    self.prot_encoder1 = nn.Linear(self.input_size_prot, 400)
-    self.prot_encoder2 = nn.Linear(400, 128)
-    self.dp1 = nn.Dropout(0.5)
-    self.dp_prot1 = nn.Dropout(0.2)
-    self.dp_prot2 = nn.Dropout(0.1)
-    self.fc1 = nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
-    self.fc2 = nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
-    self.bn1 = nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
-    self.bn_prot1 = nn.BatchNorm1d(400)
-    self.bn_prot2 = nn.BatchNorm1d(128)
+    self.prot_encoder1 = torch.nn.Linear(self.input_size_prot, 400)
+    self.prot_encoder2 = torch.nn.Linear(400, 128)
+    self.dp1 = torch.nn.Dropout(0.5)
+    self.dp_prot1 = torch.nn.Dropout(0.2)
+    self.dp_prot2 = torch.nn.Dropout(0.1)
+    self.fc1 = torch.nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
+    self.fc2 = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
+    self.bn1 = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
+    self.bn_prot1 = torch.nn.BatchNorm1d(400)
+    self.bn_prot2 = torch.nn.BatchNorm1d(128)
     self.act1 = torch.nn.LeakyReLU()
     self.act_prot1 = torch.nn.LeakyReLU()
     self.act_prot2 = torch.nn.LeakyReLU()
