@@ -8,9 +8,9 @@ from glycowork.glycan_data.loader import lib
 
 this_dir, this_filename = os.path.split(__file__)  # Get path
 data_path = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
-SweetNet = torch.load(data_path)
+trained_SweetNet = torch.load(data_path)
 data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565.pt')
-LectinOracle = torch.load(data_path)
+trained_LectinOracle = torch.load(data_path)
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
@@ -193,13 +193,13 @@ def prep_model(model_type, num_classes, libr = None,
         model = SweetNet(len(libr), num_classes = num_classes)
         model = model.apply(init_weights)
         if trained:
-            model.load_state_dict(SweetNet)
+            model.load_state_dict(trained_SweetNet)
         model = model.cuda()
     elif model_type == 'LectinOracle':
         model = LectinOracle(len(libr), num_classes = num_classes)
         model = model.apply(init_weights)
         if trained:
-            model.load_state_dict(LectinOracle)
+            model.load_state_dict(trained_LectinOracle)
         model = model.cuda()
     else:
         print("Invalid Model Type")
