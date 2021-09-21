@@ -196,7 +196,7 @@ def prep_model(model_type, num_classes, libr = None,
             model.load_state_dict(trained_SweetNet)
         model = model.cuda()
     elif model_type == 'LectinOracle':
-        model = LectinOracle(len(libr), num_classes = num_classes)
+        model = LectinOracle(len(libr)+1, num_classes = num_classes)
         model = model.apply(init_weights)
         if trained:
             model.load_state_dict(trained_LectinOracle)
