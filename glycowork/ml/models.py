@@ -7,9 +7,9 @@ from glycowork.glycan_data.loader import lib
 
 this_dir, this_filename = os.path.split(__file__)  # Get path
 data_path = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
-SweetNet = torch.load(datapath)
+SweetNet = torch.load(data_path)
 data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565.pt')
-LectinOracle = torch.load(datapath)
+LectinOracle = torch.load(data_path)
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
