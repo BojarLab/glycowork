@@ -551,5 +551,5 @@ def structures_to_motifs(df, libr = None):
     motif_df = motif_df.groupby('glycan').mean().reset_index()
     motif_df['sample_id'] = [ele]*len(motif_df)
     sample_dfs.append(motif_df)
-  out_df = pd.concat(sample_dfs, axis = 0)
+  out_df = pd.concat(sample_dfs, axis = 0).reset_index(drop = True)
   return out_df

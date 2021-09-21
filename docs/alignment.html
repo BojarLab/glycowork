@@ -32,23 +32,6 @@ nb_path: "01_alignment.ipynb"
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span> 
-</pre></div>
-
-    </div>
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
 
 </div>
     {% endraw %}
@@ -148,7 +131,7 @@ nb_path: "01_alignment.ipynb"
 <div class="inner_cell">
     <div class="input_area">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Test Alignment&quot;</span><span class="p">)</span>
-<span class="n">pairwiseAlign</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)Man(a1-4)Glc(b1-4)Man(a1-5)Kdo&#39;</span><span class="p">)</span>
+<span class="c1">#pairwiseAlign(&#39;Man(a1-3)Man(a1-4)Glc(b1-4)Man(a1-5)Kdo&#39;)</span>
 <span class="c1">#pairwiseAlign(&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;)</span>
 </pre></div>
 
@@ -163,51 +146,6 @@ nb_path: "01_alignment.ipynb"
 
 <div class="output_subarea output_stream output_stdout output_text">
 <pre>Test Alignment
-1                                               9
-Man a1-3 Man a1-4 Glc b1-4 Man a1-5 Kdo
-Man a1-3 Man a1-3 Glc b1-6 Man a1-5 Kdo
-Alignment Score: 21
-Percent Identity: 77.77777777777779
-Percent Coverage: 100.0
-Sequence Index: GalA1P*a1-4*Man*a1-3*Man*a1-3*Glc*b1-6*Man*a1-5*Kdo
-Species: []
-
-1                                               9
-Man a1-3 Man a1-4 Glc b1-4 Man a1-5 Kdo
-Man a1-3 Man a1-4 Glc b1-4 Man a1-5 Kdo
-Alignment Score: 21
-Percent Identity: 100.0
-Percent Coverage: 100.0
-Sequence Index: Man*a1-3*Man*a1-4*Glc*b1-4*Man*a1-5*Kdo
-Species: [&#39;Xanthomonas_oryzae&#39;]
-
-1                                                         9
-Man a1-3 Man a1-4 Glc b1-4 Man -    -      a1-5 Kdo
-Man a1-3 Man a1-3 Glc b1-6 Man a1-5 GalAOP a1-4 Kdo
-Alignment Score: 19
-Percent Identity: 54.54545454545454
-Percent Coverage: 100.0
-Sequence Index: Man*a1-3*Man*a1-3*Glc*b1-6*Man*a1-5*GalAOP*a1-4*Kdo
-Species: [&#39;Xanthomonas_campestris&#39;]
-
-1                                                         9
-Man a1-3 Man a1-4 Glc -    -       b1-4 Man a1-5 Kdo
-Man a1-3 Man a1-4 Glc b1-4 GalAOPN a1-3 Man a1-5 Kdo
-Alignment Score: 19
-Percent Identity: 72.72727272727273
-Percent Coverage: 100.0
-Sequence Index: Man*a1-3*Man*a1-4*Glc*b1-4*GalAOPN*a1-3*Man*a1-5*Kdo
-Species: [&#39;Xanthomonas_oryzae&#39;]
-
-1                                                         9
-Man a1-3 Man a1-4 Glc b1-4 Man -    -    a1-5 Kdo
-Man bond Man bond Glc bond Man bond GalA bond Kdo
-Alignment Score: 19
-Percent Identity: 45.45454545454545
-Percent Coverage: 100.0
-Sequence Index: Man*bond*Man*bond*Glc*bond*Man*bond*GalA*bond*Kdo
-Species: []
-
 </pre>
 </div>
 </div>

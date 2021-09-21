@@ -96,7 +96,11 @@ def train_model(model, dataloaders, criterion, optimizer,
       running_acc = []
       running_mcc = []
       for data in dataloaders[phase]:
-        x, y, edge_index, batch = data.x, data.y, data.edge_index, data.batch
+        try:
+            x, y, edge_index, prot, batch = data.x, data.y, data.edge_index, data.train_idx, data.batch
+            prot = prot.view(max(batch)+1, -1).cuda()
+        except:
+            x, y, edge_index, batch = data.x, data.y, data.edge_index, data.batch
         x = x.cuda()
         y = y.cuda()
         edge_index = edge_index.cuda()
@@ -104,8 +108,12 @@ def train_model(model, dataloaders, criterion, optimizer,
         optimizer.zero_grad()
 
         with torch.set_grad_enabled(phase == 'train'):
-          pred = model(x, edge_index, batch)
-          loss = criterion(pred, y)
+          try:
+              pred = model(prot, x, edge_index, batch)
+              loss = criterion(pred, y.view(-1,1))
+          except:
+              pred = model(x, edge_index, batch)
+              loss = criterion(pred, y)
 
           if phase == 'train':
             loss.backward()
@@ -240,8 +248,9 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
                 X_test[k] = [0]*len(X_test)
         X_train = X_train.apply(pd.to_numeric)
         X_test = X_test.apply(pd.to_numeric)
-        X_train = pd.concat([X_train, additional_features_train], axis = 1)
-        X_test = pd.concat([X_test, additional_features_test], axis = 1)
+        if additional_features_train is not None:
+            X_train = pd.concat([X_train, additional_features_train], axis = 1)
+            X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")
     model.fit(X_train, y_train)
     cols_when_model_builds = model.get_booster().feature_names
