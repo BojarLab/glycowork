@@ -1,8 +1,11 @@
 import os
 import torch
 import numpy as np
-from torch_geometric.nn import TopKPooling, GraphConv
-from torch_geometric.nn import global_mean_pool as gap, global_max_pool as gmp
+try:
+    from torch_geometric.nn import TopKPooling, GraphConv
+    from torch_geometric.nn import global_mean_pool as gap, global_max_pool as gmp
+except ImportError:
+    raise ImportError('<torch_geometric missing; cannot do deep learning>')
 import torch.nn.functional as F
 from glycowork.glycan_data.loader import lib
 

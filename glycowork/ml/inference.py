@@ -8,7 +8,12 @@ try:
   from torch_geometric.data import Data
   from torch_geometric.loader import DataLoader
 except ImportError:
-    raise ImportError('<torch_geometric missing; cannot do deep learning>')
+  raise ImportError('<torch_geometric missing; cannot do deep learning>')
+
+#try:
+#  import esm
+#except ImportError:
+#  print('<esm missing; cannot use get_esm1b_representations>')
 
 def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
                    class_list = None):
@@ -135,3 +140,35 @@ def get_lectin_preds(prot, glycans, model, prot_dic, background_correction = Fal
   if sort:
     df_pred.sort_values('pred', ascending = True, inplace = True)
   return df_pred
+
+def get_esm1b_representations(prots, model, alphabet):
+  """Retrieves ESM1b representations of protein for using them as input for LectinOracle\n
+  | Arguments:
+  | :-
+  | prots (list): list of protein sequences (strings) that should be converted
+  | model (ESM1b object): trained ESM1b model; from running esm.pretrained.esm1b_t33_650M_UR50S()
+  | alphabet (ESM1b object): used for converting sequences; from running esm.pretrained.esm1b_t33_650M_UR50S()\n
+  | Returns:
+  | :-
+  | Returns dictionary of the form protein sequence:ESM1b representation
+  """
+  #model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
+  batch_converter = alphabet.get_batch_converter()
+  prots = list(set(prots))
+  data_list = []
+  for k in range(0,len(prots)):
+    if len(prots[k])<1000:
+      data_list.append(('protein'+str(k), prots[k][:np.min([len(prots[k]),
+                                                               1000])]))
+    else:
+      data_list.append(('protein'+str(k), prots[k][:1000]))
+  batch_labels, batch_strs, batch_tokens = batch_converter(data_list)
+  with torch.no_grad():
+      results = model(batch_tokens,
+                      repr_layers = [33], return_contacts = False)
+  token_representations = results["representations"][33]
+  sequence_representations = []
+  for i, (_, seq) in enumerate(data_list):
+      sequence_representations.append(token_representations[i, 1 : len(seq) + 1].mean(0))
+  prot_dic =  {prots[k]:sequence_representations[k].tolist() for k in range(len(sequence_representations))}
+  return prot_dic
