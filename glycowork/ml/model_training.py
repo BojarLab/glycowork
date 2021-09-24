@@ -7,7 +7,6 @@ import xgboost as xgb
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error
-from sklearn.ensemble import RandomForestClassifier
 from glycowork.motif.annotate import annotate_dataset
 from glycowork.glycan_data.loader import lib
 

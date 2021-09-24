@@ -11,6 +11,7 @@ from sklearn.manifold import TSNE
 from glycowork.glycan_data.loader import lib, glycan_emb, df_species
 from glycowork.motif.annotate import annotate_dataset
 from glycowork.motif.tokenization import link_find
+from glycowork.motif.graph import subgraph_isomorphism
 
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
@@ -49,7 +50,8 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 motifs = motifs,
                                 libr = libr, feature_set = feature_set,
-                               extra = extra, wildcard_list = wildcard_list)
+                               extra = extra, wildcard_list = wildcard_list,
+                                estimate_speedup = estimate_speedup)
     if multiple_samples:
         df.index = df[glycan_col_name].values.tolist()
         df = df.drop([glycan_col_name], axis = 1)
@@ -72,6 +74,48 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
         return out.sort_values(by = ['corr_pval', 'pval'])
     else:
         return out
+
+def get_representative_substructures(enrichment_df, libr = None):
+    """builds minimal glycans that contain enriched motifs from get_pvals_motifs\n
+    | Arguments:
+    | :-
+    | enrichment_df (dataframe): output from get_pvals_motifs
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+    | Returns:
+    | :-
+    | Returns up to 10 minimal glycans in a list
+    """
+    if libr is None:
+        libr = lib
+    glycans = list(set(df_species.target.values.tolist()))
+    filtered_df = enrichment_df[enrichment_df.corr_pval<0.05].reset_index(drop = True)
+    pvals = filtered_df.pval.values.tolist()
+    weights = -np.log10(pvals) / max(-np.log10(pvals))
+    motifs = filtered_df.motif.values.tolist()
+
+    mono, mono_weights = list(zip(*[(motifs[k], weights[k]) for k in range(len(motifs)) if '(' not in motifs[k]]))
+    di, di_weights = list(zip(*[(motifs[k], weights[k]) for k in range(len(motifs)) if '(' in motifs[k]]))
+    mono_scores = [sum([mono_weights[j] for j in range(len(mono)) if mono[j] in k]) for k in glycans]
+    di_scores = [sum([di_weights[j] for j in range(len(di)) if subgraph_isomorphism(k, di[j],
+                                                                                    libr = libr)]) for k in glycans]
+    motif_scores = [a + b for a, b in zip(mono_scores, di_scores)]
+    length_scores = [len(k) for k in glycans]
+
+    combined_scores = [motif_scores[k] / length_scores[k] for k in range(len(motif_scores))]
+    df_score = pd.DataFrame(list(zip(glycans, motif_scores, length_scores, combined_scores)),
+                        columns = ['glycan', 'motif_score', 'length_score', 'combined_score'])
+    df_score = df_score.sort_values(by = 'combined_score',
+                                    ascending = False)
+    rep_motifs = df_score.glycan.values.tolist()[:10]
+    rep_motifs.sort(key = len)
+
+    clean_list = []
+    for k in rep_motifs:
+        if sum([subgraph_isomorphism(j, k, libr = libr) for j in rep_motifs])>1:
+            rep_motifs.remove(k)
+        else:
+            clean_list.append(k)
+    return clean_list
 
 def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
