@@ -30,7 +30,7 @@ linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3','b1-4
 Hex = ['Glc', 'Gal', 'Man', 'Hex']
 dHex = ['Fuc', 'Qui', 'Rha', 'dHex']
 HexNAc = ['GlcNAc', 'GalNAc', 'ManNAc', 'HexNAc']
-Sia = ['Neu5Ac', 'Neu5Gc', 'Kdn']
+Sia = ['Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia']
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""

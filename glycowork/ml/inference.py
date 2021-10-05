@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import pkg_resources
 import torch
 from glycowork.glycan_data.loader import lib, unwrap
 from glycowork.ml.processing import dataset_to_dataloader
@@ -9,6 +10,10 @@ try:
   from torch_geometric.loader import DataLoader
 except ImportError:
   raise ImportError('<torch_geometric missing; cannot do deep learning>')
+
+io = pkg_resources.resource_stream(__name__,
+                                   "glycowork_lectinoracle_background_correction.csv")
+df_corr = pd.read_csv(io)
 
 #try:
 #  import esm
@@ -117,7 +122,7 @@ def get_lectin_preds(prot, glycans, model, prot_dic, background_correction = Fal
   | model (PyTorch object): trained LectinOracle-type model
   | prot_dic (dictionary): dictionary of type protein sequence:ESM1b representation
   | background_correction (bool): whether to correct predictions for background; default:False
-  | correction_df (dataframe): background prediction for (ideally) all provided glycans; default:None
+  | correction_df (dataframe): background prediction for (ideally) all provided glycans; default:V4 correction file
   | batch_size (int): change to batch_size used during training; default:128
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
   | sort (bool): whether to sort prediction results descendingly; default:True\n
@@ -127,6 +132,8 @@ def get_lectin_preds(prot, glycans, model, prot_dic, background_correction = Fal
   """
   if libr is None:
       libr = lib
+  if correction_df is None:
+    correction_df = df_corr
   preds = get_multi_pred(prot, glycans, model, prot_dic,
                          batch_size = batch_size, libr = libr)
   df_pred = pd.DataFrame(glycans, columns = ['motif'])

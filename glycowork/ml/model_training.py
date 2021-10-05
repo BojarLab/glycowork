@@ -53,7 +53,7 @@ class EarlyStopping:
 
 def train_model(model, dataloaders, criterion, optimizer,
                 scheduler, num_epochs = 25, patience = 50,
-                mode = 'classification'):
+                mode = 'classification', mode2 = 'multi'):
   """trains a deep learning model on predicting glycan properties\n
   | Arguments:
   | :-
@@ -64,7 +64,8 @@ def train_model(model, dataloaders, criterion, optimizer,
   | scheduler (PyTorch object): PyTorch learning rate decay
   | num_epochs (int): number of epochs for training; default: 25
   | patience (int): number of epochs without improvement until early stop; default: 50
-  | mode (string): 'classification' or 'regression'; default is binary classification\n
+  | mode (string): 'classification' or 'regression'; default is multiclass classification
+  | mode2 (string): further specifying classification into 'multi' or 'binary' classification;default:'multi'\n
   | Returns:
   | :-
   | Returns the best model seen during training
@@ -120,7 +121,10 @@ def train_model(model, dataloaders, criterion, optimizer,
             
         running_loss.append(loss.item())
         if mode == 'classification':
-            pred2 = np.argmax(pred.cpu().detach().numpy(), axis = 1)
+            if mode2 == 'multi':
+                pred2 = np.argmax(pred.cpu().detach().numpy(), axis = 1)
+            else:
+                pred2 = np.round(pred.cpu().detach().numpy())
             running_acc.append(accuracy_score(
                                    y.cpu().detach().numpy().astype(int), pred2))
             running_mcc.append(matthews_corrcoef(y.detach().cpu().numpy(), pred2))
