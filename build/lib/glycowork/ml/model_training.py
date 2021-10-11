@@ -1,5 +1,6 @@
 import copy
 import time
+import math
 import torch
 import numpy as np
 import pandas as pd
@@ -50,6 +51,9 @@ class EarlyStopping:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
         #torch.save(model.state_dict(), 'drive/My Drive/checkpoint.pt')
         self.val_loss_min = val_loss
+
+def sigmoid(x):
+       return 1 / (1 + math.exp(-x))
 
 def train_model(model, dataloaders, criterion, optimizer,
                 scheduler, num_epochs = 25, patience = 50,
@@ -124,7 +128,8 @@ def train_model(model, dataloaders, criterion, optimizer,
             if mode2 == 'multi':
                 pred2 = np.argmax(pred.cpu().detach().numpy(), axis = 1)
             else:
-                pred2 = np.round(pred.cpu().detach().numpy())
+                pred2 = [sigmoid(x) for x in pred.cpu().detach().numpy()]
+                pred2 = [np.round(x) for x in pred2]
             running_acc.append(accuracy_score(
                                    y.cpu().detach().numpy().astype(int), pred2))
             running_mcc.append(matthews_corrcoef(y.detach().cpu().numpy(), pred2))

@@ -9,7 +9,7 @@ from sklearn.cluster import DBSCAN
 from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap, df_species, Hex, dHex, HexNAc, Sia
 from glycowork.motif.processing import small_motif_find, min_process_glycans
 from glycowork.motif.graph import compare_glycans
-
+from glycowork.motif.annotate import annotate_dataset
 
 def character_to_label(character, libr = None):
   """tokenizes character by indexing passed library\n
@@ -55,133 +55,6 @@ def pad_sequence(seq, max_length, pad_label = None):
     pad_label = len(lib)
   seq += [pad_label for i in range(max_length - len(seq))]
   return seq
-
-def convert_to_counts_glycoletter(glycan, libr = None):
-  """counts the occurrence of glycoletters in glycan\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dictionary with counts per glycoletter in a glycan
-  """
-  if libr is None:
-    libr = lib
-  letter_dict = dict.fromkeys(libr, 0)
-  glycan = small_motif_find(glycan).split('*')
-  for i in libr:
-    letter_dict[i] = glycan.count(i)
-  return letter_dict
-
-def glycoletter_count_matrix(glycans, target_col, target_col_name, libr = None):
-  """creates dataframe of counted glycoletters in glycan list\n
-  | Arguments:
-  | :-
-  | glycans (list): list of glycans in IUPAC-condensed format as strings
-  | target_col (list or pd.Series): label columns used for prediction
-  | target_col_name (string): name for target_col
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dataframe with glycoletter counts (columns) for every glycan (rows)
-  """
-  if libr is None:
-    libr = lib
-  counted_glycans = [convert_to_counts_glycoletter(i, libr) for i in glycans]
-  out = pd.DataFrame(counted_glycans)
-  out[target_col_name] = target_col
-  return out
-
-def find_isomorphs(glycan):
-  """returns a set of isomorphic glycans by swapping branches etc.\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns list of unique glycan notations (strings) for a glycan in IUPAC-condensed
-  """
-  out_list = [glycan]
-  #starting branch swapped with next side branch
-  if '[' in glycan and glycan.index('[') > 0 and not bool(re.search('\[[^\]]+\[', glycan)):
-    glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
-    out_list.append(glycan2)
-  #double branch swap
-  temp = []
-  for k in out_list:
-    if '][' in k:
-      glycan3 = re.sub('(\[.*?\])(\[.*?\])', r'\2\1', k)
-      temp.append(glycan3)
-  #starting branch swapped with next side branch again to also include double branch swapped isomorphs
-  temp2 = []
-  for k in temp:
-    if '[' in k and k.index('[') > 0 and not bool(re.search('\[[^\]]+\[', k)):
-      glycan4 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', k, 1)
-      temp2.append(glycan4)
-  return list(set(out_list + temp + temp2))
-
-def link_find(glycan):
-  """finds all disaccharide motifs in a glycan sequence using its isomorphs\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns list of unique disaccharides (strings) for a glycan in IUPAC-condensed
-  """
-  ss = find_isomorphs(glycan)
-  coll = []
-  for iso in ss:
-    b_re = re.sub('\[[^\]]+\]', '', iso)
-    for i in [iso, b_re]:
-      b = i.split('(')
-      b = [k.split(')') for k in b]
-      b = [item for sublist in b for item in sublist]
-      b = ['*'.join(b[i:i+3]) for i in range(0, len(b) - 2, 2)]
-      b = [k for k in b if (re.search('\*\[', k) is None and re.search('\*\]\[', k) is None)]
-      b = [k.strip('[') for k in b]
-      b = [k.strip(']') for k in b]
-      b = [k.replace('[', '') for k in b]
-      b = [k.replace(']', '') for k in b]
-      b = [k[:find_nth(k, '*', 1)] + '(' + k[find_nth(k, '*', 1)+1:] for k in b]
-      b = [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
-      coll += b
-  return list(set(coll))
-
-def motif_matrix(df, glycan_col_name, label_col_name, libr = None):
-  """generates dataframe with counted glycoletters and disaccharides in glycans\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences and labels
-  | glycan_col_name (string): column name for glycan sequences
-  | label_col_name (string): column name for labels; string
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)
-  """
-  if libr is None:
-    libr = lib
-  matrix_list = []
-  di_dics = []
-  wga_di = [link_find(i) for i in df[glycan_col_name].values.tolist()]
-  lib_di = list(sorted(list(set([item for sublist in wga_di for item in sublist]))))
-  for j in wga_di:
-    di_dict = dict.fromkeys(lib_di, 0)
-    for i in list(di_dict.keys()):
-      di_dict[i] = j.count(i)
-    di_dics.append(di_dict)
-  wga_di_out = pd.DataFrame(di_dics)
-  wga_letter = glycoletter_count_matrix(df[glycan_col_name].values.tolist(),
-                                          df[label_col_name].values.tolist(),
-                                   label_col_name, libr)
-  out_matrix = pd.concat([wga_letter, wga_di_out], axis = 1)
-  out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()]
-  temp = out_matrix.pop(label_col_name)
-  out_matrix[label_col_name] = temp
-  out_matrix.reset_index(drop = True, inplace = True)
-  return out_matrix
 
 def get_core(sugar):
   """retrieves core monosaccharide from modified monosaccharide\n
@@ -562,36 +435,37 @@ def compositions_to_structures(composition_list, abundances, group, level,
     print(not_matched)
   return df_out
 
-def structures_to_motifs(df, libr = None):
+def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
+                         form = 'wide'):
   """function to convert relative intensities of glycan structures to those of glycan motifs\n
   | Arguments:
   | :-
   | df (dataframe): function expects glycans in the first column and rel. intensities of each sample in a new column
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+  | form (string): whether to return 'wide' or 'long' dataframe; default:'wide'\n
   | Returns:
   | :-
   | Returns dataframe of motifs, relative intensities, and sample IDs
   """
   if libr is None:
     libr = lib
-  sample_dfs = []
-  for ele in range(1,df.shape[1]):
-    mot_mat = motif_matrix(df, df.columns.values.tolist()[0],
-                           df.columns.values.tolist()[ele],
-                           libr = libr)
-    mot_mat = mot_mat.loc[:, (mot_mat != 0).any(axis = 0)]
-    
-    out_tuples = []
-    for k in range(len(mot_mat)):
-      for j in range(mot_mat.shape[1]-1):
-        if mot_mat.iloc[k,j]>0:
-          out_tuples.append((mot_mat.columns.values.tolist()[j],
-                             mot_mat.iloc[k,-1]))
-
-    motif_df = pd.DataFrame(out_tuples)
-    motif_df.columns = ['glycan', 'rel_intensity']
-    motif_df = motif_df.groupby('glycan').mean().reset_index()
-    motif_df['sample_id'] = [ele]*len(motif_df)
-    sample_dfs.append(motif_df)
-  out_df = pd.concat(sample_dfs, axis = 0).reset_index(drop = True)
-  return out_df
+  annot = annotate_dataset(df.iloc[:,0].values.tolist(), libr = libr,
+                           feature_set = feature_set, condense = True)
+  annot2 = pd.concat([annot.reset_index(drop = True), df.iloc[:,1:]], axis = 1)
+  out_tuples = []
+  for k in range(len(annot2)):
+    for j in range(annot.shape[1]):
+      if annot2.iloc[k,j]>0:
+          out_tuples.append([annot2.columns.values.tolist()[j]] + df.iloc[k, 1:].values.tolist())
+  motif_df = pd.DataFrame(out_tuples)
+  motif_df = motif_df.groupby(motif_df.columns.values.tolist()[0]).mean().reset_index()
+  if form == 'wide':
+    motif_df.columns = ['glycan'] + ['sample'+str(k) for k in range(1, motif_df.shape[1])]
+    return motif_df
+  elif form == 'long':
+    motif_df.columns = ['glycan'] + ['rel_intensity' for k in range(1, motif_df.shape[1])]
+    sample_dfs = [pd.concat([motif_df.iloc[:,0], motif_df.iloc[:,k]], axis = 1) for k in range(1, motif_df.shape[1])]
+    out = pd.concat(sample_dfs, axis = 0, ignore_index = True)
+    out['sample_id'] = unwrap([[k]*len(sample_dfs[k]) for k in range(len(sample_dfs))])
+    return out

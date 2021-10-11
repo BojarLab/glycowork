@@ -143,7 +143,10 @@ def get_lectin_preds(prot, glycans, model, prot_dic, background_correction = Fal
                               index = correction_df.motif).to_dict()
     for j in df_pred.motif.values.tolist():
       motif_idx = df_pred.motif.values.tolist().index(j)
-      df_pred.at[motif_idx, 'pred'] = df_pred.iloc[motif_idx, 1] - correction_df[j]
+      try:
+        df_pred.at[motif_idx, 'pred'] = df_pred.iloc[motif_idx, 1] - correction_df[j]
+      except:
+        pass
   if sort:
     df_pred.sort_values('pred', ascending = True, inplace = True)
   return df_pred

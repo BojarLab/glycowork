@@ -9,8 +9,7 @@ from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
 
 from glycowork.glycan_data.loader import lib, glycan_emb, df_species
-from glycowork.motif.annotate import annotate_dataset
-from glycowork.motif.tokenization import link_find
+from glycowork.motif.annotate import annotate_dataset, link_find
 from glycowork.motif.graph import subgraph_isomorphism
 
 
