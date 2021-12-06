@@ -20,11 +20,11 @@ class SweetNet(torch.nn.Module):
         super(SweetNet, self).__init__() 
 
         self.conv1 = GraphConv(128, 128)
-        self.pool1 = TopKPooling(128, ratio = 0.8)
+        self.pool1 = TopKPooling(128, ratio = 1.0)
         self.conv2 = GraphConv(128, 128)
-        self.pool2 = TopKPooling(128, ratio = 0.8)
+        self.pool2 = TopKPooling(128, ratio = 1.0)
         self.conv3 = GraphConv(128, 128)
-        self.pool3 = TopKPooling(128, ratio = 0.8)
+        self.pool3 = TopKPooling(128, ratio = 1.0)
         self.item_embedding = torch.nn.Embedding(num_embeddings = lib_size+1,
                                                  embedding_dim = 128)
         self.lin1 = torch.nn.Linear(256, 1024)
@@ -93,11 +93,11 @@ class LectinOracle(torch.nn.Module):
     self.data_max = data_max
     
     self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool1 = TopKPooling(self.hidden_size, ratio = 0.8)
+    self.pool1 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool2 = TopKPooling(self.hidden_size, ratio = 0.8)
+    self.pool2 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool3 = TopKPooling(self.hidden_size, ratio = 0.8)
+    self.pool3 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco,
                                              embedding_dim = self.hidden_size)
     self.prot_encoder1 = torch.nn.Linear(self.input_size_prot, 400)
@@ -199,7 +199,10 @@ def prep_model(model_type, num_classes, libr = None,
             model.load_state_dict(trained_SweetNet)
         model = model.cuda()
     elif model_type == 'LectinOracle':
-        model = LectinOracle(len(libr)+1, num_classes = num_classes)
+        libr2 = libr + ['GlcNAc3Prop', '4d8dNeu5Ac', 'GalNBz', '3dGal',
+                        'HexA2S', '6dGalNAc', '3dFuc', '4dFuc', 'HexA6S',
+                        '3-Anhydro-Gal', '3-Anhydro-Gal2S'] 
+        model = LectinOracle(len(libr2)+1, num_classes = num_classes)
         model = model.apply(init_weights)
         if trained:
             model.load_state_dict(trained_LectinOracle)

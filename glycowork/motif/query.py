@@ -1,3 +1,4 @@
+import ast
 import numpy as np
 import pandas as pd
 
@@ -44,6 +45,18 @@ def get_insight(glycan, libr = None, motifs = None):
             print("\nThis glycan is likely to be immunogenic to humans.")
         elif df_glycan.immunogenicity.values.tolist()[idx[0]] < 1:
             print("\nThis glycan is likely to be non-immunogenic to humans.")
+    if len(df_glycan.tissue_sample.values.tolist()[idx[0]])>2:
+        tissue = ast.literal_eval(df_glycan.tissue_sample.values.tolist()[idx[0]])
+        print("\nThis glycan has been reported to be expressed in: " + str(tissue))
+    if len(df_glycan.disease_association.values.tolist()[idx[0]])>2:
+        disease = ast.literal_eval(df_glycan.disease_association.values.tolist()[idx[0]])
+        print(disease)
+        direction = ast.literal_eval(df_glycan.disease_direction.values.tolist()[idx[0]])
+        disease_sample = ast.literal_eval(df_glycan.disease_sample.values.tolist()[idx[0]])
+        print("\nThis glycan has been reported to be dysregulated in (disease, direction, sample): " \
+              + str([(disease[k],
+                     direction[k],
+                     disease_sample[k]) for k in range(len(disease))]))
     print("\nThat's all we can do for you at this point!")
 
 def glytoucan_to_glycan(ids, revert = False):

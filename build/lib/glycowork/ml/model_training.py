@@ -156,8 +156,10 @@ def train_model(model, dataloaders, criterion, optimizer,
         val_losses.append(epoch_loss)
         val_acc.append(epoch_acc)
         early_stopping(epoch_loss, model)
-
-      scheduler.step()
+        try:
+            scheduler.step(epoch_loss)
+        except:
+            scheduler.step()
         
     if early_stopping.early_stop:
       print("Early stopping")
@@ -185,7 +187,7 @@ def train_model(model, dataloaders, criterion, optimizer,
   plt.legend(['Validation Accuracy'], loc = 'best')
   return model
 
-def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.001,
+def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.001,
                    mode = 'multiclass'):
     """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
     | Arguments:
@@ -193,7 +195,8 @@ def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.00
     | model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans
     | epochs (int): number of epochs for training the model
     | lr (float): learning rate
-    | lr_decay_length (float): proportion of epochs over which to decay the learning rate;default:0.5
+    | lr_patience (int): number of epochs without validation loss improvement before reducing the learning rate;default:4
+    | factor (float): factor by which learning rate is multiplied upon reduction
     | weight_decay (float): regularization parameter for the optimizer; default:0.001
     | mode (string): 'multiclass': classification with multiple classes, 'binary':binary classification, 'regression': regression; default:'multiclass'\n
     | Returns:
@@ -201,9 +204,10 @@ def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.00
     | Returns optimizer, learning rate scheduler, and loss criterion objects
     """
     lr_decay = np.round(epochs * lr_decay_length)
-    optimizer_ft = torch.optim.Adam(model.parameters(), lr = lr,
+    optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
                                     weight_decay = weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_ft, lr_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
+                                                           factor = factor)
     if mode == 'multiclass':
         criterion = torch.nn.CrossEntropyLoss().cuda()
     elif mode == 'binary':
@@ -227,9 +231,9 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     | feature_calc (bool): set to True for calculating motifs from glycans; default:False
     | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
     | return_features (bool): whether to return calculated features; default:False
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)\n
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), and 'exhaustive' (all mono- and disaccharide features)
     | additional_features_train (dataframe): additional features (apart from glycans) to be used for training. Has to be of the same length as X_train; default:None
-    | additional_features_test (dataframe): additional features (apart from glycans) to be used for evaluation. Has to be of the same length as X_test; default:None
+    | additional_features_test (dataframe): additional features (apart from glycans) to be used for evaluation. Has to be of the same length as X_test; default:None\n
     | Returns:
     | :-
     | Returns trained model                           
