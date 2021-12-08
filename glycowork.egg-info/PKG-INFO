@@ -53,7 +53,7 @@ Description: # Glycowork
              
         Below are some examples of what you can do with `glycowork`, be sure to check out the other `examples` in the full documentation for everything that's there.
         
-        ```python
+        ```
         #using graphs, you can easily check whether two glycans are the same - even if they use different bracket notations!
         from glycowork.motif.graph import compare_glycans
         print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
@@ -66,7 +66,7 @@ Description: # Glycowork
             False
             
         
-        ```python
+        ```
         #querying some of the stored databases
         from glycowork.motif.query import get_insight
         get_insight('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc')
@@ -74,7 +74,7 @@ Description: # Glycowork
         
             Let's get rolling! Give us a few moments to crunch some numbers.
             
-            This glycan occurs in the following species: ['Antheraea_pernyi', 'Apis_mellifera', 'Ascaris_suum', 'Autographa_californica_nucleopolyhedrovirus', 'AvianInfluenzaA_Virus', 'Bombyx_mori', 'Bos_taurus', 'Caenorhabditis_elegans', 'Crassostrea_virginica', 'Cricetulus_griseus', 'Dirofilaria_immitis', 'Drosophila_melanogaster', 'Gallus_gallus', 'Glossina_morsitans', 'Haemonchus_contortus', 'Heligmosomoides_polygyrus', 'Homo_sapiens', 'HumanImmunoDeficiency_Virus', 'Lutzomyia_longipalpis', 'Lymantria_dispar', 'Mamestra_brassicae', 'Megathura_crenulata', 'Mus_musculus', 'Nilaparvata_lugens', 'Oesophagostomum_dentatum', 'Ophiactis_savignyi', 'Pristionchus_pacificus', 'Rattus_norvegicus', 'Spodoptera_frugiperda', 'Sus_scrofa', 'Tribolium_castaneum', 'Trichinella_spiralis', 'Trichoplusia_ni', 'Trichuris_suis', 'Volvarina_rubella', 'Schistosoma_mansoni', 'SemlikiForest_Virus', 'Cardicola_forsteri', 'Dictyocaulus_viviparus', 'Haliotis_tuberculata', 'Tick_borne_encephalitis_virus', 'Aedes_aegypti', 'Tropidolaemus_subannulatus', 'Hylesia_metabus', 'undetermined', 'Fasciola_hepatica', 'Angiostrongylus_cantonensis', 'unidentified_influenza_virus', 'Anopheles_gambiae', 'Opisthorchis_viverrini', 'Hydra_vulgaris']
+            This glycan occurs in the following species: ['Aedes_aegypti', 'Angiostrongylus_cantonensis', 'Anopheles_gambiae', 'Antheraea_pernyi', 'Apis_mellifera', 'Ascaris_suum', 'Autographa_californica_nucleopolyhedrovirus', 'AvianInfluenzaA_Virus', 'Bombyx_mori', 'Bos_taurus', 'Caenorhabditis_elegans', 'Cardicola_forsteri', 'Crassostrea_virginica', 'Cricetulus_griseus', 'Dictyocaulus_viviparus', 'Dirofilaria_immitis', 'Drosophila_melanogaster', 'Fasciola_hepatica', 'Gallus_gallus', 'Glossina_morsitans', 'Haemonchus_contortus', 'Haliotis_tuberculata', 'Heligmosomoides_polygyrus', 'Homo_sapiens', 'HumanImmunoDeficiency_Virus', 'Hydra_vulgaris', 'Hylesia_metabus', 'Lutzomyia_longipalpis', 'Lymantria_dispar', 'Mamestra_brassicae', 'Megathura_crenulata', 'Mus_musculus', 'Nilaparvata_lugens', 'Oesophagostomum_dentatum', 'Ophiactis_savignyi', 'Opisthorchis_viverrini', 'Pristionchus_pacificus', 'Rattus_norvegicus', 'Schistosoma_mansoni', 'SemlikiForest_Virus', 'Spodoptera_frugiperda', 'Sus_scrofa', 'Tick_borne_encephalitis_virus', 'Tribolium_castaneum', 'Trichinella_spiralis', 'Trichoplusia_ni', 'Trichuris_suis', 'Tropidolaemus_subannulatus', 'Volvarina_rubella', 'undetermined', 'unidentified_influenza_virus']
             
             Puh, that's quite a lot! Here are the phyla of those species: ['Arthropoda', 'Artverviricota', 'Chordata', 'Cnidaria', 'Echinodermata', 'Kitrinoviricota', 'Mollusca', 'Negarnaviricota', 'Nematoda', 'Platyhelminthes', 'Virus']
             
@@ -82,15 +82,14 @@ Description: # Glycowork
             
             This is the GlyTouCan ID for this glycan: G59003TN
             
-            This glycan has been reported to be expressed in: ['nerve_terminal', 'alveoli', 'colon', 'ovary', 'placenta', 'liver', 'pancreas', 'milk', 'kidney', 'CHO_K1_cell_line', 'iPS1A_cell_line', 'iPS2A_cell_line', 'A549_cell_line', 'HEK293_cell_line', 'prostate', 'brain', 'cerebellum', 'hippocampus', 'cortex']
-            ['benign_breast_tumor_tissues_vs_para_carcinoma_tissues', 'breast_cancer_tissues_vs_benign_breast_tumor_tissues', 'idiopathic_rapid_eye_movement_sleep_behavior_disorder', 'cystic_fibrosis', 'breast_cancer', 'prostate_cancer']
+            This glycan has been reported to be expressed in: ['A549_cell_line', 'CHO_K1_cell_line', 'HEK293_cell_line', 'alveoli', 'brain', 'cerebellum', 'colon', 'cortex', 'hippocampus', 'iPS1A_cell_line', 'iPS2A_cell_line', 'kidney', 'liver', 'milk', 'nerve_terminal', 'ovary', 'pancreas', 'placenta', 'prostate']
             
             This glycan has been reported to be dysregulated in (disease, direction, sample): [('benign_breast_tumor_tissues_vs_para_carcinoma_tissues', 'up', 'breast'), ('breast_cancer_tissues_vs_benign_breast_tumor_tissues', 'up', 'breast'), ('idiopathic_rapid_eye_movement_sleep_behavior_disorder', 'down', 'serum'), ('cystic_fibrosis', 'up', 'sputum'), ('breast_cancer', 'up', 'cell_line'), ('prostate_cancer', 'up', 'prostate_cancer_biopsy')]
             
             That's all we can do for you at this point!
             
         
-        ```python
+        ```
         #get motifs, graph features, and sequence features of a set of glycan sequences to train models or analyze glycan properties
         glycans = ['Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc',
                    'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-3)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
@@ -10335,7 +10334,7 @@ Description: # Glycowork
         
         
         
-        ```python
+        ```
         #identify significant binding motifs with (for instance) Z-score data
         from glycowork.motif.analysis import get_pvals_motifs
         glycans = ['Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc',
