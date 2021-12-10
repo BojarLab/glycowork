@@ -2,11 +2,38 @@ import re
 import networkx as nx
 from glycowork.glycan_data.loader import lib, unwrap, find_nth
 from glycowork.motif.processing import min_process_glycans
-from glycowork.motif.tokenization import string_to_labels
 import numpy as np
 import pandas as pd
 from scipy.sparse.linalg.eigen.arpack import eigsh
 
+def character_to_label(character, libr = None):
+  """tokenizes character by indexing passed library\n
+  | Arguments:
+  | :-
+  | character (string): character to index
+  | libr (list): list of library items\n
+  | Returns:
+  | :-
+  | Returns index of character in library
+  """
+  if libr is None:
+    libr = lib
+  character_label = libr.index(character)
+  return character_label
+
+def string_to_labels(character_string, libr = None):
+  """tokenizes word by indexing characters in passed library\n
+  | Arguments:
+  | :-
+  | character_string (string): string of characters to index
+  | libr (list): list of library items\n
+  | Returns:
+  | :-
+  | Returns indexes of characters in library
+  """
+  if libr is None:
+    libr = lib
+  return list(map(lambda character: character_to_label(character, libr), character_string))
 
 def glycan_to_graph(glycan, libr = None):
   """the monumental function for converting glycans into graphs\n

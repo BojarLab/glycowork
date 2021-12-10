@@ -1,12 +1,15 @@
 import pandas as pd
+import numpy as np
 import re
 import copy
 from itertools import combinations_with_replacement
 from collections import Counter
+from sklearn.cluster import DBSCAN
 
 from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap, df_species, Hex, dHex, HexNAc, Sia
 from glycowork.motif.processing import small_motif_find, min_process_glycans
-
+from glycowork.motif.graph import compare_glycans
+from glycowork.motif.annotate import annotate_dataset
 
 def character_to_label(character, libr = None):
   """tokenizes character by indexing passed library\n
@@ -52,133 +55,6 @@ def pad_sequence(seq, max_length, pad_label = None):
     pad_label = len(lib)
   seq += [pad_label for i in range(max_length - len(seq))]
   return seq
-
-def convert_to_counts_glycoletter(glycan, libr = None):
-  """counts the occurrence of glycoletters in glycan\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dictionary with counts per glycoletter in a glycan
-  """
-  if libr is None:
-    libr = lib
-  letter_dict = dict.fromkeys(libr, 0)
-  glycan = small_motif_find(glycan).split('*')
-  for i in libr:
-    letter_dict[i] = glycan.count(i)
-  return letter_dict
-
-def glycoletter_count_matrix(glycans, target_col, target_col_name, libr = None):
-  """creates dataframe of counted glycoletters in glycan list\n
-  | Arguments:
-  | :-
-  | glycans (list): list of glycans in IUPAC-condensed format as strings
-  | target_col (list or pd.Series): label columns used for prediction
-  | target_col_name (string): name for target_col
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dataframe with glycoletter counts (columns) for every glycan (rows)
-  """
-  if libr is None:
-    libr = lib
-  counted_glycans = [convert_to_counts_glycoletter(i, libr) for i in glycans]
-  out = pd.DataFrame(counted_glycans)
-  out[target_col_name] = target_col
-  return out
-
-def find_isomorphs(glycan):
-  """returns a set of isomorphic glycans by swapping branches etc.\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns list of unique glycan notations (strings) for a glycan in IUPAC-condensed
-  """
-  out_list = [glycan]
-  #starting branch swapped with next side branch
-  if '[' in glycan and glycan.index('[') > 0 and not bool(re.search('\[[^\]]+\[', glycan)):
-    glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
-    out_list.append(glycan2)
-  #double branch swap
-  temp = []
-  for k in out_list:
-    if '][' in k:
-      glycan3 = re.sub('(\[.*?\])(\[.*?\])', r'\2\1', k)
-      temp.append(glycan3)
-  #starting branch swapped with next side branch again to also include double branch swapped isomorphs
-  temp2 = []
-  for k in temp:
-    if '[' in k and k.index('[') > 0 and not bool(re.search('\[[^\]]+\[', k)):
-      glycan4 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', k, 1)
-      temp2.append(glycan4)
-  return list(set(out_list + temp + temp2))
-
-def link_find(glycan):
-  """finds all disaccharide motifs in a glycan sequence using its isomorphs\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns list of unique disaccharides (strings) for a glycan in IUPAC-condensed
-  """
-  ss = find_isomorphs(glycan)
-  coll = []
-  for iso in ss:
-    b_re = re.sub('\[[^\]]+\]', '', iso)
-    for i in [iso, b_re]:
-      b = i.split('(')
-      b = [k.split(')') for k in b]
-      b = [item for sublist in b for item in sublist]
-      b = ['*'.join(b[i:i+3]) for i in range(0, len(b) - 2, 2)]
-      b = [k for k in b if (re.search('\*\[', k) is None and re.search('\*\]\[', k) is None)]
-      b = [k.strip('[') for k in b]
-      b = [k.strip(']') for k in b]
-      b = [k.replace('[', '') for k in b]
-      b = [k.replace(']', '') for k in b]
-      b = [k[:find_nth(k, '*', 1)] + '(' + k[find_nth(k, '*', 1)+1:] for k in b]
-      b = [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
-      coll += b
-  return list(set(coll))
-
-def motif_matrix(df, glycan_col_name, label_col_name, libr = None):
-  """generates dataframe with counted glycoletters and disaccharides in glycans\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences and labels
-  | glycan_col_name (string): column name for glycan sequences
-  | label_col_name (string): column name for labels; string
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)
-  """
-  if libr is None:
-    libr = lib
-  matrix_list = []
-  di_dics = []
-  wga_di = [link_find(i) for i in df[glycan_col_name].values.tolist()]
-  lib_di = list(sorted(list(set([item for sublist in wga_di for item in sublist]))))
-  for j in wga_di:
-    di_dict = dict.fromkeys(lib_di, 0)
-    for i in list(di_dict.keys()):
-      di_dict[i] = j.count(i)
-    di_dics.append(di_dict)
-  wga_di_out = pd.DataFrame(di_dics)
-  wga_letter = glycoletter_count_matrix(df[glycan_col_name].values.tolist(),
-                                          df[label_col_name].values.tolist(),
-                                   label_col_name, libr)
-  out_matrix = pd.concat([wga_letter, wga_di_out], axis = 1)
-  out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()]
-  temp = out_matrix.pop(label_col_name)
-  out_matrix[label_col_name] = temp
-  out_matrix.reset_index(drop = True, inplace = True)
-  return out_matrix
 
 def get_core(sugar):
   """retrieves core monosaccharide from modified monosaccharide\n
@@ -306,16 +182,19 @@ def stemify_dataset(df, stem_lib = None, libr = None,
   return df_out
 
 def match_composition(composition, group, level, df = None,
-                      mode = "minimal", libr = None, glycans = None):
+                      mode = "minimal", libr = None, glycans = None,
+                      relaxed = False):
     """Given a monosaccharide composition, it returns all corresponding glycans\n
     | Arguments:
     | :-
     | composition (dict): a dictionary indicating the composition to match (for example {"Fuc":1, "Gal":1, "GlcNAc":1})
     | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
     | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
-    | df (dataframe): glycan dataframe for searching glycan structures; default:None
+    | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
     | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements
-    | glycans (list): custom list of glycans to check the composition in; default:None\n
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+    | glycans (list): custom list of glycans to check the composition in; default:None
+    | relaxed (bool): specify if "minimal" means exact counts (False) or _at least_ (True); default:False\n
     | Returns:
     | :-
     | Returns list of glycans matching composition in IUPAC-condensed
@@ -334,13 +213,17 @@ def match_composition(composition, group, level, df = None,
         if glycans is None:
           glycan_list = filtered_df.target.values.tolist()
         else:
-          glycan_list = glycans
+          glycan_list = copy.deepcopy(glycans)
         to_remove = []
         output_list = glycan_list
         for glycan in glycan_list:
             for key in exact_composition:
                 glycan_count = sum(1 for _ in re.finditer(r'\b%s\b' % re.escape(key), glycan))
-                if exact_composition[key] != glycan_count :
+                if relaxed:
+                  if exact_composition[key] > glycan_count:
+                    to_remove.append(glycan)
+                else:
+                  if exact_composition[key] != glycan_count :
                     to_remove.append(glycan)
         for element in to_remove:
             try :
@@ -385,52 +268,204 @@ def match_composition(composition, group, level, df = None,
     return output_list
 
 def match_composition_relaxed(composition, group, level, df = None,
-                      mode = "minimal", libr = None):
+                      mode = "exact", libr = None, reducing_end = None):
     """Given a coarse-grained monosaccharide composition (Hex, HexNAc, etc.), it returns all corresponding glycans\n
     | Arguments:
     | :-
     | composition (dict): a dictionary indicating the composition to match (for example {"Fuc":1, "Gal":1, "GlcNAc":1})
     | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
     | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
-    | df (dataframe): glycan dataframe for searching glycan structures; default:None
-    | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements\n
+    | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
+    | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements; default:"exact"
+    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+    | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None\n
     | Returns:
     | :-
     | Returns list of glycans matching composition in IUPAC-condensed
     """
     if df is None:
       df = df_species
+    if reducing_end is not None:
+      df = df[df.target.str.endswith(reducing_end)].reset_index(drop = True)
     if libr is None:
       libr = lib
+    input_composition = copy.deepcopy(composition)
+    input_composition2 = copy.deepcopy(composition)
     original_composition = copy.deepcopy(composition)
-    if 'Hex' in composition:
-      hex_pool = list(combinations_with_replacement(Hex, composition['Hex']))
+    output_list = df[df[level] == group].target.values.tolist()
+
+    input_composition2.pop('Hex', None)
+    input_composition2.pop('dHex', None)
+    input_composition2.pop('HexNAc', None)
+    if len(input_composition2)>0:
+      output_list = match_composition(input_composition2, group, level, df = df,
+                                     mode = 'minimal', libr = libr,
+                                       glycans = output_list, relaxed = True)
+    if 'Hex' in input_composition:
+      if any([j in input_composition for j in Hex]):
+        relaxed = True
+      else:
+        relaxed = False
+      hex_pool = list(combinations_with_replacement(Hex, input_composition['Hex']))
       hex_pool = [Counter(k) for k in hex_pool]
-      composition.pop('Hex')
+      input_composition.pop('Hex')
       output_list = [match_composition(k, group, level, df = df,
-                                     mode = 'minimal', libr = libr) for k in hex_pool]
+                                     mode = 'minimal', libr = libr,
+                                       glycans = output_list, relaxed = relaxed) for k in hex_pool]
       output_list = list(set(unwrap(output_list)))
-    if 'dHex' in composition:
-      dhex_pool = list(combinations_with_replacement(dHex, composition['dHex']))
+    if 'dHex' in input_composition:
+      if any([j in input_composition for j in dHex]):
+        relaxed = True
+      else:
+        relaxed = False
+      dhex_pool = list(combinations_with_replacement(dHex, input_composition['dHex']))
       dhex_pool = [Counter(k) for k in dhex_pool]
-      composition.pop('dHex')
-      output_list = [match_composition(k, group, level, df = df,
+      input_composition.pop('dHex')
+      temp = [match_composition(k, group, level, df = df,
                                      mode = 'minimal', libr = libr,
-                                       glycans = output_list) for k in dhex_pool]
-      output_list = list(set(unwrap(output_list)))
-    if 'HexNAc' in composition:
-      hexnac_pool = list(combinations_with_replacement(HexNAc, composition['HexNAc']))
+                                       glycans = output_list, relaxed = relaxed) for k in dhex_pool]
+      output_list = list(set(unwrap(temp)))
+    if 'HexNAc' in input_composition:
+      if any([j in input_composition for j in HexNAc]):
+        relaxed = True
+      else:
+        relaxed = False
+      hexnac_pool = list(combinations_with_replacement(HexNAc, input_composition['HexNAc']))
       hexnac_pool = [Counter(k) for k in hexnac_pool]
-      composition.pop('HexNAc')
-      output_list = [match_composition(k, group, level, df = df,
+      input_composition.pop('HexNAc')
+      temp = [match_composition(k, group, level, df = df,
                                      mode = 'minimal', libr = libr,
-                                       glycans = output_list) for k in hexnac_pool]
-      output_list = list(set(unwrap(output_list)))
-    if len(composition)>0:
-      output_list = match_composition(k, group, level, df = df,
-                                     mode = 'minimal', libr = libr,
-                                       glycans = output_list)
+                                       glycans = output_list, relaxed = relaxed) for k in hexnac_pool]
+      output_list = list(set(unwrap(temp)))
+      
     if mode == 'exact':
       monosaccharide_count = sum(original_composition.values())
+      monosaccharide_types = list(original_composition.keys())
+      if 'Hex' in original_composition:
+        monosaccharide_types = monosaccharide_types + Hex
+      if 'HexNAc' in original_composition:
+        monosaccharide_types = monosaccharide_types + HexNAc
+      if 'dHex' in original_composition:
+        monosaccharide_types = monosaccharide_types + dHex
       output_list = [k for k in output_list if k.count('(') == monosaccharide_count-1]
+      output_list = [k for k in output_list if not any([j not in monosaccharide_types for j in list(set(min_process_glycans([k])[0])) if j[0].isupper()])]
+      if 'Hex' in original_composition and len(input_composition2)>0:
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc[:-1] if j in original_composition])]
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex[:-1] if j in original_composition])]
+      elif 'dHex' in original_composition and len(input_composition2)>0:
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex[:-1] if j in original_composition])]
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc[:-1] if j in original_composition])]
+      elif 'HexNAc' in original_composition and len(input_composition2)>0:
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex[:-1] if j in original_composition])]
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex[:-1] if j in original_composition])]
     return output_list
+
+def condense_composition_matching(matched_composition, libr = None):
+  """Given a list of glycans matching a composition, find the minimum number of glycans characterizing this set\n
+  | Arguments:
+  | :-
+  | matched_composition (list): list of glycans matching to a composition
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
+  | Returns:
+  | :-
+  | Returns minimal list of glycans that match a composition
+  """
+  if libr is None:
+    libr = lib
+  match_matrix = [[compare_glycans(k, j,libr = libr, wildcards = True,
+                                  wildcard_list = [libr.index('bond')]) for j in matched_composition] for k in matched_composition]
+  match_matrix = pd.DataFrame(match_matrix)
+  match_matrix.columns = matched_composition
+  clustering = DBSCAN(eps = 1, min_samples = 1).fit(match_matrix)
+  cluster_labels = clustering.labels_
+  num_clusters = len(list(set(cluster_labels)))
+  sum_glycans = []
+  for k in range(num_clusters):
+    cluster_glycans = [matched_composition[j] for j in range(len(cluster_labels)) if cluster_labels[j] == k]
+    #print(cluster_glycans)
+    #idx = np.argmin([j.count('bond') for j in cluster_glycans])
+    county = [j.count('bond') for j in cluster_glycans]
+    idx = np.where(county == np.array(county).min())[0]
+    if len(idx) == 1:
+      sum_glycans.append(cluster_glycans[idx[0]])
+    else:
+      for j in idx:
+        sum_glycans.append(cluster_glycans[j])
+    #sum_glycans.append(cluster_glycans[idx])
+  #print("This matching can be summarized by " + str(num_clusters) + " glycans.")
+  return sum_glycans
+
+def compositions_to_structures(composition_list, abundances, group, level,
+                               df = None, libr = None, reducing_end = None,
+                               verbose = False):
+  """wrapper function to map compositions to structures, condense them, and match them with relative intensities\n
+  | Arguments:
+  | :-
+  | composition_list (list): list of composition dictionaries of the form {'Hex': 1, 'HexNAc': 1}
+  | abundances (dataframe): every row one glycan (matching composition_list in order), every column one sample; pd.DataFrame([range(len(composition_list))]*2).T if not applicable
+  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
+  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
+  | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None
+  | verbose (bool): whether to print any non-matching compositions; default:False\n
+  | Returns:
+  | :-
+  | Returns dataframe of (matched structures) x (relative intensities)
+  """
+  if libr is None:
+    libr = lib
+  if df is None:
+    df = df_species
+  out_df = []
+  not_matched = []
+  for k in range(len(composition_list)):
+    matched = match_composition_relaxed(composition_list[k], group, level,
+                                reducing_end = reducing_end, df = df, libr = libr)
+    if len(matched)>0:
+        condensed = condense_composition_matching(matched, libr = libr)
+        matched_data = [abundances.iloc[k,1:].values.tolist()]*len(condensed)
+        for ele in range(len(condensed)):
+            out_df.append([condensed[ele]] + matched_data[ele])
+    else:
+        not_matched.append(composition_list[k])
+  df_out = pd.DataFrame(out_df)
+  print(str(len(not_matched)) + " compositions could not be matched. Run with verbose = True to see which compositions.")
+  if verbose:
+    print(not_matched)
+  return df_out
+
+def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
+                         form = 'wide'):
+  """function to convert relative intensities of glycan structures to those of glycan motifs\n
+  | Arguments:
+  | :-
+  | df (dataframe): function expects glycans in the first column and rel. intensities of each sample in a new column
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+  | form (string): whether to return 'wide' or 'long' dataframe; default:'wide'\n
+  | Returns:
+  | :-
+  | Returns dataframe of motifs, relative intensities, and sample IDs
+  """
+  if libr is None:
+    libr = lib
+  annot = annotate_dataset(df.iloc[:,0].values.tolist(), libr = libr,
+                           feature_set = feature_set, condense = True)
+  annot2 = pd.concat([annot.reset_index(drop = True), df.iloc[:,1:]], axis = 1)
+  out_tuples = []
+  for k in range(len(annot2)):
+    for j in range(annot.shape[1]):
+      if annot2.iloc[k,j]>0:
+          out_tuples.append([annot2.columns.values.tolist()[j]] + df.iloc[k, 1:].values.tolist())
+  motif_df = pd.DataFrame(out_tuples)
+  motif_df = motif_df.groupby(motif_df.columns.values.tolist()[0]).mean().reset_index()
+  if form == 'wide':
+    motif_df.columns = ['glycan'] + ['sample'+str(k) for k in range(1, motif_df.shape[1])]
+    return motif_df
+  elif form == 'long':
+    motif_df.columns = ['glycan'] + ['rel_intensity' for k in range(1, motif_df.shape[1])]
+    sample_dfs = [pd.concat([motif_df.iloc[:,0], motif_df.iloc[:,k]], axis = 1) for k in range(1, motif_df.shape[1])]
+    out = pd.concat(sample_dfs, axis = 0, ignore_index = True)
+    out['sample_id'] = unwrap([[k]*len(sample_dfs[k]) for k in range(len(sample_dfs))])
+    return out

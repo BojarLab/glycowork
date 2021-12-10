@@ -5,11 +5,11 @@ import pkg_resources
 
 from glycowork.motif.processing import get_lib
 
-io = pkg_resources.resource_stream(__name__, "glyco_targets_species_seq_all_V4.csv")
+io = pkg_resources.resource_stream(__name__, "glyco_targets_species_seq_all_V5.csv")
 df_species = pd.read_csv(io)
-io = pkg_resources.resource_stream(__name__, "v4_sugarbase.csv")
+io = pkg_resources.resource_stream(__name__, "v5_sugarbase.csv")
 df_glycan = pd.read_csv(io)
-io = pkg_resources.resource_stream(__name__, "df_glysum_v4.csv")
+io = pkg_resources.resource_stream(__name__, "df_glysum_v5.csv")
 df_glysum = pd.read_csv(io)
 df_glysum = df_glysum.iloc[:,1:]
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
@@ -24,13 +24,13 @@ lib = get_lib(list(set(df_glycan.glycan.values.tolist() +
                        df_species.target.values.tolist() +
                        motif_list.motif.values.tolist() +
                        influenza_binding.columns.values.tolist()[:-1] +
-                       ['bond', 'monosaccharide', 'Hex', 'HexNAc', 'Sia'])))
+                       ['monosaccharide','Sia'])))
 
 linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3','b1-4','b1-6']
-Hex = ['Glc', 'Gal', 'Man']
-dHex = ['Fuc', 'Qui', 'Rha']
-HexNAc = ['GlcNAc', 'GalNAc', 'ManNAc']
-Sia = ['Neu5Ac', 'Neu5Gc', 'Kdn']
+Hex = ['Glc', 'Gal', 'Man', 'Hex']
+dHex = ['Fuc', 'Qui', 'Rha', 'dHex']
+HexNAc = ['GlcNAc', 'GalNAc', 'ManNAc', 'HexNAc']
+Sia = ['Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia']
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""

@@ -1,5 +1,6 @@
 import copy
 import time
+import math
 import torch
 import numpy as np
 import pandas as pd
@@ -7,7 +8,6 @@ import xgboost as xgb
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error
-from sklearn.ensemble import RandomForestClassifier
 from glycowork.motif.annotate import annotate_dataset
 from glycowork.glycan_data.loader import lib
 
@@ -52,9 +52,12 @@ class EarlyStopping:
         #torch.save(model.state_dict(), 'drive/My Drive/checkpoint.pt')
         self.val_loss_min = val_loss
 
+def sigmoid(x):
+       return 1 / (1 + math.exp(-x))
+
 def train_model(model, dataloaders, criterion, optimizer,
                 scheduler, num_epochs = 25, patience = 50,
-                mode = 'classification'):
+                mode = 'classification', mode2 = 'multi'):
   """trains a deep learning model on predicting glycan properties\n
   | Arguments:
   | :-
@@ -65,7 +68,8 @@ def train_model(model, dataloaders, criterion, optimizer,
   | scheduler (PyTorch object): PyTorch learning rate decay
   | num_epochs (int): number of epochs for training; default: 25
   | patience (int): number of epochs without improvement until early stop; default: 50
-  | mode (string): 'classification' or 'regression'; default is binary classification\n
+  | mode (string): 'classification' or 'regression'; default is multiclass classification
+  | mode2 (string): further specifying classification into 'multi' or 'binary' classification;default:'multi'\n
   | Returns:
   | :-
   | Returns the best model seen during training
@@ -96,7 +100,11 @@ def train_model(model, dataloaders, criterion, optimizer,
       running_acc = []
       running_mcc = []
       for data in dataloaders[phase]:
-        x, y, edge_index, batch = data.x, data.y, data.edge_index, data.batch
+        try:
+            x, y, edge_index, prot, batch = data.x, data.y, data.edge_index, data.train_idx, data.batch
+            prot = prot.view(max(batch)+1, -1).cuda()
+        except:
+            x, y, edge_index, batch = data.x, data.y, data.edge_index, data.batch
         x = x.cuda()
         y = y.cuda()
         edge_index = edge_index.cuda()
@@ -104,8 +112,12 @@ def train_model(model, dataloaders, criterion, optimizer,
         optimizer.zero_grad()
 
         with torch.set_grad_enabled(phase == 'train'):
-          pred = model(x, edge_index, batch)
-          loss = criterion(pred, y)
+          try:
+              pred = model(prot, x, edge_index, batch)
+              loss = criterion(pred, y.view(-1,1))
+          except:
+              pred = model(x, edge_index, batch)
+              loss = criterion(pred, y)
 
           if phase == 'train':
             loss.backward()
@@ -113,7 +125,11 @@ def train_model(model, dataloaders, criterion, optimizer,
             
         running_loss.append(loss.item())
         if mode == 'classification':
-            pred2 = np.argmax(pred.cpu().detach().numpy(), axis = 1)
+            if mode2 == 'multi':
+                pred2 = np.argmax(pred.cpu().detach().numpy(), axis = 1)
+            else:
+                pred2 = [sigmoid(x) for x in pred.cpu().detach().numpy()]
+                pred2 = [np.round(x) for x in pred2]
             running_acc.append(accuracy_score(
                                    y.cpu().detach().numpy().astype(int), pred2))
             running_mcc.append(matthews_corrcoef(y.detach().cpu().numpy(), pred2))
@@ -140,8 +156,10 @@ def train_model(model, dataloaders, criterion, optimizer,
         val_losses.append(epoch_loss)
         val_acc.append(epoch_acc)
         early_stopping(epoch_loss, model)
-
-      scheduler.step()
+        try:
+            scheduler.step(epoch_loss)
+        except:
+            scheduler.step()
         
     if early_stopping.early_stop:
       print("Early stopping")
@@ -169,7 +187,7 @@ def train_model(model, dataloaders, criterion, optimizer,
   plt.legend(['Validation Accuracy'], loc = 'best')
   return model
 
-def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.001,
+def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.001,
                    mode = 'multiclass'):
     """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
     | Arguments:
@@ -177,7 +195,8 @@ def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.00
     | model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans
     | epochs (int): number of epochs for training the model
     | lr (float): learning rate
-    | lr_decay_length (float): proportion of epochs over which to decay the learning rate;default:0.5
+    | lr_patience (int): number of epochs without validation loss improvement before reducing the learning rate;default:4
+    | factor (float): factor by which learning rate is multiplied upon reduction
     | weight_decay (float): regularization parameter for the optimizer; default:0.001
     | mode (string): 'multiclass': classification with multiple classes, 'binary':binary classification, 'regression': regression; default:'multiclass'\n
     | Returns:
@@ -185,9 +204,10 @@ def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.00
     | Returns optimizer, learning rate scheduler, and loss criterion objects
     """
     lr_decay = np.round(epochs * lr_decay_length)
-    optimizer_ft = torch.optim.Adam(model.parameters(), lr = lr,
+    optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
                                     weight_decay = weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_ft, lr_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
+                                                           factor = factor)
     if mode == 'multiclass':
         criterion = torch.nn.CrossEntropyLoss().cuda()
     elif mode == 'binary':
@@ -200,7 +220,8 @@ def training_setup(model, epochs, lr, lr_decay_length = 0.5, weight_decay = 0.00
 
 def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
                    feature_calc = False, libr = None, return_features = False,
-                   feature_set = ['known','exhaustive']):
+                   feature_set = ['known','exhaustive'], additional_features_train = None,
+                   additional_features_test = None):
     """wrapper function to train standard machine learning models on glycans\n
     | Arguments:
     | :-
@@ -210,7 +231,9 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     | feature_calc (bool): set to True for calculating motifs from glycans; default:False
     | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
     | return_features (bool): whether to return calculated features; default:False
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)\n
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), and 'exhaustive' (all mono- and disaccharide features)
+    | additional_features_train (dataframe): additional features (apart from glycans) to be used for training. Has to be of the same length as X_train; default:None
+    | additional_features_test (dataframe): additional features (apart from glycans) to be used for evaluation. Has to be of the same length as X_test; default:None\n
     | Returns:
     | :-
     | Returns trained model                           
@@ -237,6 +260,9 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
                 X_test[k] = [0]*len(X_test)
         X_train = X_train.apply(pd.to_numeric)
         X_test = X_test.apply(pd.to_numeric)
+        if additional_features_train is not None:
+            X_train = pd.concat([X_train, additional_features_train], axis = 1)
+            X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")
     model.fit(X_train, y_train)
     cols_when_model_builds = model.get_booster().feature_names

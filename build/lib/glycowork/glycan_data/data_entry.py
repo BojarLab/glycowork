@@ -26,9 +26,9 @@ def check_presence(glycan, df, colname = 'target', libr = None,
       print("This is the best: %s is not in dataset" % name)
   if fast:
     ggraph = glycan_to_nxGraph(glycan, libr = libr)
-    check_all = [fast_compare_glycans(ggraph, k) for k in df.graph.values.tolist()]
+    check_all = [fast_compare_glycans(ggraph, k, libr = libr) for k in df.graph.values.tolist()]
   else:
-    check_all = [compare_glycans(glycan, k) for k in df[colname].values.tolist()]
+    check_all = [compare_glycans(glycan, k, libr = libr) for k in df[colname].values.tolist()]
   if any(check_all):
     print("Glycan already in dataset.")
   else:
