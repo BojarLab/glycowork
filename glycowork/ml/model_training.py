@@ -203,7 +203,6 @@ def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_deca
     | :-
     | Returns optimizer, learning rate scheduler, and loss criterion objects
     """
-    lr_decay = np.round(epochs * lr_decay_length)
     optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
                                     weight_decay = weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
