@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 import pkg_resources
+import math
 import torch
+from torch.utils.data import Dataset
 from glycowork.glycan_data.loader import lib, unwrap
 from glycowork.ml.processing import dataset_to_dataloader
 
@@ -19,6 +21,20 @@ df_corr = pd.read_csv(io)
 #  import esm
 #except ImportError:
 #  print('<esm missing; cannot use get_esm1b_representations>')
+
+class SimpleDataset(Dataset):
+  def __init__(self, x, y):
+    self.x = x
+    self.y = y
+  def __len__(self):
+    return len(self.x)
+  def __getitem__(self, index):
+    inp = self.x[index]
+    out = self.y[index]
+    return torch.FloatTensor(inp), torch.FloatTensor([out])
+
+def sigmoid(x):
+       return 1 / (1 + math.exp(-x))
 
 def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
                    class_list = None):
@@ -182,3 +198,30 @@ def get_esm1b_representations(prots, model, alphabet):
       sequence_representations.append(token_representations[i, 1 : len(seq) + 1].mean(0))
   prot_dic =  {prots[k]:sequence_representations[k].tolist() for k in range(len(sequence_representations))}
   return prot_dic
+
+def get_Nsequon_preds(prots, model, prot_dic):
+  """Predicts whether an N-sequon will be glycosylated\n
+  | Arguments:
+  | :-
+  | prots (list): list of protein sequences (strings), in the form of 20 AA + N + 20 AA; replace missing sequence with corr. number of 'z'
+  | model (PyTorch object): trained NSequonPred-type model
+  | prot_dic (dictionary): dictionary of type protein sequence:ESM1b representation\n
+  | Returns:
+  | :-
+  | Returns dataframe of protein sequences and predicted likelihood of being an N-sequon
+  """
+  reps = [prot_dic[k] for k in prots]
+  dataset = SimpleDataset(reps, [0]*len(reps))
+  loader = torch.utils.data.DataLoader(dataset, batch_size = 32, shuffle = False)
+  model = model.eval()
+  preds = []
+  for k in loader:
+    x, y = k
+    x = x.cuda()
+    pred = model(x)
+    pred = [sigmoid(x) for x in pred.cpu().detach().numpy()]
+    preds.append(pred)
+  preds = unwrap(preds)
+  df_pred = pd.DataFrame([prots, preds]).T
+  df_pred.columns = ['seq', 'glycosylated']
+  return df_pred

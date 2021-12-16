@@ -14,6 +14,8 @@ data_path = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
 trained_SweetNet = torch.load(data_path)
 data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565.pt')
 trained_LectinOracle = torch.load(data_path)
+data_path = os.path.join(this_dir, 'NSequonPred_batch32.pt')
+trained_NSequonPred = torch.load(data_path)
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
@@ -69,6 +71,26 @@ class SweetNet(torch.nn.Module):
           return x, x_out
         else:
           return x
+
+class NSequonPred(torch.nn.Module):
+    def __init__(self):
+        super(NSequonPred, self).__init__() 
+
+        self.fc1 = torch.nn.Linear(1280, 512)
+        self.fc2 = torch.nn.Linear(512, 256)
+        self.fc3 = torch.nn.Linear(256, 64)
+        self.fc4 = torch.nn.Linear(64, 1)
+
+        self.bn1 = torch.nn.BatchNorm1d(512)
+        self.bn2 = torch.nn.BatchNorm1d(256)
+        self.bn3 = torch.nn.BatchNorm1d(64)
+
+    def forward(self, x):
+      x = self.bn1(F.dropout(F.rrelu(self.fc1(x)), p = 0.2, training = self.training))
+      x = self.bn2(F.dropout(F.rrelu(self.fc2(x)), p = 0.2, training = self.training))
+      x = self.bn3(F.dropout(F.rrelu(self.fc3(x)), p = 0.1, training = self.training))
+      x = self.fc4(x)
+      return x
 
 def sigmoid_range(x, low, high):
     "Sigmoid function with range `(low, high)`"
@@ -206,6 +228,12 @@ def prep_model(model_type, num_classes, libr = None,
         model = model.apply(init_weights)
         if trained:
             model.load_state_dict(trained_LectinOracle)
+        model = model.cuda()
+    elif model_type == 'NSequonPred':
+        model = NSequonPred()
+        model = model.apply(init_weights)
+        if trained:
+            model.load_state_dict(trained_NSequonPred)
         model = model.cuda()
     else:
         print("Invalid Model Type")
