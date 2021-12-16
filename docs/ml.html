@@ -165,7 +165,7 @@ nb_path: "03_ml.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="training_setup" class="doc_header"><code>training_setup</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L190" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>training_setup</code>(<strong><code>model</code></strong>, <strong><code>epochs</code></strong>, <strong><code>lr</code></strong>, <strong><code>lr_patience</code></strong>=<em><code>4</code></em>, <strong><code>factor</code></strong>=<em><code>0.2</code></em>, <strong><code>weight_decay</code></strong>=<em><code>0.001</code></em>, <strong><code>mode</code></strong>=<em><code>'multiclass'</code></em>)</p>
+<h4 id="training_setup" class="doc_header"><code>training_setup</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L190" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>training_setup</code>(<strong><code>model</code></strong>, <strong><code>epochs</code></strong>, <strong><code>lr</code></strong>, <strong><code>lr_patience</code></strong>=<em><code>4</code></em>, <strong><code>factor</code></strong>=<em><code>0.2</code></em>, <strong><code>weight_decay</code></strong>=<em><code>0.0001</code></em>, <strong><code>mode</code></strong>=<em><code>'multiclass'</code></em>)</p>
 </blockquote>
 <p>prepares optimizer, learning rate scheduler, and loss criterion for model training</p>
 <table>
@@ -317,7 +317,7 @@ nb_path: "03_ml.ipynb"
 Calculating Glycan Features...
 
 Training model...
-[13:25:05] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.4.0/src/learner.cc:1095: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective &#39;binary:logistic&#39; was changed from &#39;error&#39; to &#39;logloss&#39;. Explicitly set eval_metric if you&#39;d like to restore the old behavior.
+[16:52:19] WARNING: C:/Users/Administrator/workspace/xgboost-win64_release_1.4.0/src/learner.cc:1095: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective &#39;binary:logistic&#39; was changed from &#39;error&#39; to &#39;logloss&#39;. Explicitly set eval_metric if you&#39;d like to restore the old behavior.
 
 Evaluating model...
 Accuracy of trained model on separate validation set: 0.9186550976138829
@@ -821,7 +821,7 @@ model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()</code></p>
 <div class="output_area">
 
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>[&#39;Rha(a1-3)Gal(a1-3)GlcNAc(b1-3)Rha(a1-3)Rha(a1-3)Rha(a1-3)Rha(b1-4)GlcNAcOP(a1-6)MurNAc&#39;, &#39;Gal4S(b1-3)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;, &#39;Glc(b1-3)GalNAc(b1-3)[GlcNAcA3Ac4NAc(b1-4)][GlcNAc(b1-6)]Gal(a1-6)Glc&#39;, &#39;Gal(b1-4)GlcNAc(bond)[GalNAc(a1-3)Gal(bond)]GalNAc-ol&#39;, &#39;Fuc2Me3Me4Me(a1-3)Rha&#39;, &#39;Glc(a1-6)Glc(b1-4)Glc(a1-5)[Kdo(a2-4)]Kdo2Me&#39;, &#39;Xyl(bond)Glc&#39;, &#39;Gal(b1-4)GlcNAc6S(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)GalNAc-ol&#39;, &#39;Neu5Ac(bond)Gal(bond)GlcNAc(b1-2)Man(bond)[GlcNAc(b1-2)Man(bond)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;, &#39;Glc(a1-6)Glc(a1-1)Glc&#39;]
+<pre>[&#39;Rha(a1-4)Glc(a1-4)GlcA(a1-3)GlcNAc(b1-3)Rha&#39;, &#39;Neu5Ac(a2-3)Gal-ol&#39;, &#39;Gal(b1-4)Gal(b1-4)Gal&#39;, &#39;Gal(b1-4)Glc(b1-4)Glc(b1-4)[GlcNAc(a1-2)[Glc(a1-3)]LDManHep(a1-3)]LDManHep(a1-5)Kdo&#39;, &#39;Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GlcNAc(b1-4)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;, &#39;GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)[GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;, &#39;Gal3Pyr(b1-4)Man(b1-4)Gal2Ac(a1-3)GlcNAc(b1-2)Gal3Pyr&#39;, &#39;Kdo(a2-4)Kdo(a2-6)GlcNAc(b1-6)GlcNAc&#39;, &#39;Qui4NFo(b1-2)Ribf(b1-4)GlcA(b1-4)GlcA(b1-3)D-FucNAc4N(a1-2)Qui4NFo&#39;, &#39;GlcA(b1-4)FucOAc(a1-3)Ribf(b1-4)[Fuc(a1-2)]Gal(b1-3)GlcNAc(b1-4)GlcA&#39;]
 </pre>
 </div>
 </div>
@@ -916,7 +916,7 @@ model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()</code></p>
 <div class="output_area">
 
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>[&#39;Fuc(a1-2)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-3)Gal(bond)GlcNAc(b1-6)[Gal(b1-3)GlcNAc(b1-3)]Gal(bond)Glc-ol&#39;, &#39;GalNAc(bond)GlcA(b1-3)D-FucNAc4N(b1-3)GalNAc&#39;, &#39;Fuc(a1-2)Fuc(bond)GalNAc(b1-4)[Fuc(a1-2)Fuc(bond)]GlcNAc(bond)HexNAc(bond)[Fuc(a1-2)Fuc(bond)]HexNAc(bond)HexNAc-ol&#39;, &#39;GlcNAc(b1-2)Man(a1-3)[Man(bond)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;, &#39;GlcNAc(b1-2)Man(a1-3)[Man(a1-2)Man(bond)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;, &#39;Fuc(a1-2)Glc(b1-2)Ara(bond)Glc&#39;, &#39;Fuc(a1-2)Gal(bond)[Fuc(a1-4)]GlcNAc(bond)Gal(bond)[Fuc(a1-4)]GlcNAc&#39;, &#39;GlcNAcA3NFoAla6N(bond)ManNAcA3NAc6N(bond)L-GulNAcA3NAc(a1-3)QuiNAc4NAc(bond)GlcNAcA3NFoAla6N&#39;, &#39;Fuc(bond)[Gal(b1-4)]GlcNAc(b1-4)Gal(b1-3)GalNAc&#39;, &#39;Glc(bond)GalN(a1-3)LDManHep(a1-3)LDManHep(a1-5)[Kdo(a2-4)]Kdo(a2-6)GlcN(b1-6)GlcN&#39;]
+<pre>[&#39;Neu5Ac(a2-3)Gal(b1-4)GlcNAc(bond)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(bond)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;, &#39;Glc(b1-4)Rha(a1-4)Rha(a1-4)[Rha(bond)]Glc&#39;, &#39;Glc(b1-4)Rha(bond)Rha(bond)[Rha(a1-2)]Glc&#39;, &#39;Gal(bond)Gal(b1-4)GlcNAc(bond)Man(a1-3)[Gal(b1-4)GlcNAc(bond)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;, &#39;Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(bond)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;, &#39;Gal(b1-4)GlcNAc(bond)Man(a1-6)[GlcNAc(bond)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;, &#39;Man(a1-2)Man(bond)Man(bond)[Man(a1-2)Man(a1-2)]Man(a1-3)[Man(a1-2)Man(bond)[Man(a1-3)]Man(bond)]Man(b1-4)GlcNAc&#39;, &#39;ManNAcA(b1-4)ManNAcA(b1-3)D-FucNAcN(b1-2)DDManHep(a1-2)DDManHep(bond)DDManHep(a1-5)Kdo&#39;, &#39;Glc(bond)GalNAc(a1-3)GalNAc&#39;, &#39;Neu5Ac(a2-6)HexNAc(bond)GlcNAc(b1-2)Man(a1-6)[HexNAc(bond)GlcNAc(b1-2)Man(bond)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;]
 </pre>
 </div>
 </div>

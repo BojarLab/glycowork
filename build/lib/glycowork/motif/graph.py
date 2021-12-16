@@ -223,7 +223,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   """returns True if motif is in glycan and False if not\n
   | Arguments:
   | :-
-  | glycan (string): glycan in IUPAC-condensed format
+  | glycan (string): glycan in IUPAC-condensed format or as graph in NetworkX format
   | motif (string): glycan motif in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
@@ -237,13 +237,19 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     libr = lib
   if len(wildcard_list) >= 1:
     wildcard_list = [libr.index(k) for k in wildcard_list]
-  if extra == 'termini':
-    g1 = glycan_to_nxGraph(glycan, libr, termini = 'calc')
-    g2 = glycan_to_nxGraph(motif, libr, termini = 'provided', termini_list = termini_list)
+  if isinstance(glycan, str):
+    if extra == 'termini':
+      g1 = glycan_to_nxGraph(glycan, libr, termini = 'calc')
+      g2 = glycan_to_nxGraph(motif, libr, termini = 'provided', termini_list = termini_list)
+    else:
+      g1 = glycan_to_nxGraph(glycan, libr)
+      g2 = glycan_to_nxGraph(motif, libr)
   else:
-    g1 = glycan_to_nxGraph(glycan, libr)
-    g2 = glycan_to_nxGraph(motif, libr)
-
+    g1 = glycan
+    if extra == 'termini':
+      g2 = glycan_to_nxGraph(motif, libr, termini = 'provided', termini_list = termini_list)
+    else:
+      g2 = glycan_to_nxGraph(motif, libr)
   if extra == 'ignore':
     graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
   elif extra == 'wildcards':

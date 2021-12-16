@@ -34,7 +34,6 @@ nbdev_install_git_hooks
 
 ## Wishlist for future glycowork updates (last update: 2021-07-28)
 #### Urgent
-* Currently, annotation functions convert glycans to graphs on the fly, which is potentially wasteful computation. Rather, subgraph_isomorphism and related functions should be able to take pre-computed graphs (either provided or calculated in the wrapper functions)
 * get_trisaccharides needs to be reworked to ensure 100% completeness (and probably better efficiency)
 * ideally, we’d have a better heuristic than estimate_lower_bound for speeding up annotation
 

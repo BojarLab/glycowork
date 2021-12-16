@@ -187,7 +187,7 @@ def train_model(model, dataloaders, criterion, optimizer,
   plt.legend(['Validation Accuracy'], loc = 'best')
   return model
 
-def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.001,
+def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.0001,
                    mode = 'multiclass'):
     """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
     | Arguments:
@@ -206,7 +206,7 @@ def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_deca
     optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
                                     weight_decay = weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
-                                                           factor = factor)
+                                                           factor = factor, verbose = True)
     if mode == 'multiclass':
         criterion = torch.nn.CrossEntropyLoss().cuda()
     elif mode == 'binary':

@@ -190,15 +190,23 @@ class LectinOracle(torch.nn.Module):
     else:
       return out
 
-def init_weights(model, sparsity = 0.1):
+def init_weights(model, mode = 'sparse', sparsity = 0.1):
     """initializes linear layers of PyTorch model with a sparse initialization\n
     | Arguments:
     | :-
     | model (Pytorch object): neural network (such as SweetNet) for analyzing glycans
+    | mode (string): which initialization algorithm; choices are 'sparse','kaiming','xavier';default:'sparse'
     | sparsity (float): proportion of sparsity after initialization; default:0.1 / 10%
     """
     if type(model) == torch.nn.Linear:
-        torch.nn.init.sparse_(model.weight, sparsity = sparsity)
+        if mode == 'sparse':
+            torch.nn.init.sparse_(model.weight, sparsity = sparsity)
+        elif mode == 'kaiming':
+            torch.nn.init.kaiming_uniform_(model.weight)
+        elif mode == 'xavier':
+            torch.nn.init.xavier_uniform_(model.weight)
+        else:
+            print("This initialization option is not supported.")
 
 def prep_model(model_type, num_classes, libr = None,
                trained = False):
@@ -216,7 +224,7 @@ def prep_model(model_type, num_classes, libr = None,
         libr = lib
     if model_type == 'SweetNet':
         model = SweetNet(len(libr), num_classes = num_classes)
-        model = model.apply(init_weights)
+        model = model.apply(init_weights, mode = 'sparse')
         if trained:
             model.load_state_dict(trained_SweetNet)
         model = model.cuda()
@@ -225,13 +233,13 @@ def prep_model(model_type, num_classes, libr = None,
                         'HexA2S', '6dGalNAc', '3dFuc', '4dFuc', 'HexA6S',
                         '3-Anhydro-Gal', '3-Anhydro-Gal2S'] 
         model = LectinOracle(len(libr2)+1, num_classes = num_classes)
-        model = model.apply(init_weights)
+        model = model.apply(init_weights, mode = 'xavier')
         if trained:
             model.load_state_dict(trained_LectinOracle)
         model = model.cuda()
     elif model_type == 'NSequonPred':
         model = NSequonPred()
-        model = model.apply(init_weights)
+        model = model.apply(init_weights, mode = 'xavier')
         if trained:
             model.load_state_dict(trained_NSequonPred)
         model = model.cuda()
