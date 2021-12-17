@@ -40,19 +40,22 @@ def string_to_labels(character_string, libr = None):
     libr = lib
   return list(map(lambda character: character_to_label(character, libr), character_string))
 
-def pad_sequence(seq, max_length, pad_label = None):
+def pad_sequence(seq, max_length, pad_label = None, libr = None):
   """brings all sequences to same length by adding padding token\n
   | Arguments:
   | :-
   | seq (list): sequence to pad (from string_to_labels)
   | max_length (int): sequence length to pad to
-  | pad_label (int): which padding label to use\n
+  | pad_label (int): which padding label to use
+  | libr (list): list of library items\n\n
   | Returns:
   | :-
   | Returns padded sequence
   """
+  if libr is None:
+    libr = lib
   if pad_label is None:
-    pad_label = len(lib)
+    pad_label = len(libr)
   seq += [pad_label for i in range(max_length - len(seq))]
   return seq
 

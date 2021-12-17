@@ -12303,7 +12303,7 @@ That&#39;s all we can do for you at this point!
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="pad_sequence" class="doc_header"><code>pad_sequence</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L43" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>pad_sequence</code>(<strong><code>seq</code></strong>, <strong><code>max_length</code></strong>, <strong><code>pad_label</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="pad_sequence" class="doc_header"><code>pad_sequence</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L43" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>pad_sequence</code>(<strong><code>seq</code></strong>, <strong><code>max_length</code></strong>, <strong><code>pad_label</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>brings all sequences to same length by adding padding token</p>
 <table>
@@ -12320,6 +12320,9 @@ That&#39;s all we can do for you at this point!
 </tr>
 <tr>
 <td style="text-align:left">pad_label (int): which padding label to use</td>
+</tr>
+<tr>
+<td style="text-align:left">libr (list): list of library items</td>
 </tr>
 </tbody>
 </table>
@@ -12389,7 +12392,7 @@ That&#39;s all we can do for you at this point!
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="stemify_glycan" class="doc_header"><code>stemify_glycan</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L110" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>stemify_glycan</code>(<strong><code>glycan</code></strong>, <strong><code>stem_lib</code></strong>)</p>
+<h4 id="stemify_glycan" class="doc_header"><code>stemify_glycan</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L113" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>stemify_glycan</code>(<strong><code>glycan</code></strong>, <strong><code>stem_lib</code></strong>)</p>
 </blockquote>
 <p>removes modifications from all monosaccharides in a glycan</p>
 <table>
@@ -12439,7 +12442,7 @@ That&#39;s all we can do for you at this point!
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="stemify_dataset" class="doc_header"><code>stemify_dataset</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L157" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>stemify_dataset</code>(<strong><code>df</code></strong>, <strong><code>stem_lib</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>glycan_col_name</code></strong>=<em><code>'target'</code></em>, <strong><code>rarity_filter</code></strong>=<em><code>1</code></em>)</p>
+<h4 id="stemify_dataset" class="doc_header"><code>stemify_dataset</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L160" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>stemify_dataset</code>(<strong><code>df</code></strong>, <strong><code>stem_lib</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>glycan_col_name</code></strong>=<em><code>'target'</code></em>, <strong><code>rarity_filter</code></strong>=<em><code>1</code></em>)</p>
 </blockquote>
 <p>stemifies all glycans in a dataset by removing monosaccharide modifications</p>
 <table>
@@ -12498,7 +12501,7 @@ That&#39;s all we can do for you at this point!
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="match_composition" class="doc_header"><code>match_composition</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L184" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>match_composition</code>(<strong><code>composition</code></strong>, <strong><code>group</code></strong>, <strong><code>level</code></strong>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>mode</code></strong>=<em><code>'minimal'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>glycans</code></strong>=<em><code>None</code></em>, <strong><code>relaxed</code></strong>=<em><code>False</code></em>)</p>
+<h4 id="match_composition" class="doc_header"><code>match_composition</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L187" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>match_composition</code>(<strong><code>composition</code></strong>, <strong><code>group</code></strong>, <strong><code>level</code></strong>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>mode</code></strong>=<em><code>'minimal'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>glycans</code></strong>=<em><code>None</code></em>, <strong><code>relaxed</code></strong>=<em><code>False</code></em>)</p>
 </blockquote>
 <p>Given a monosaccharide composition, it returns all corresponding glycans</p>
 <table>
@@ -12599,7 +12602,7 @@ That&#39;s all we can do for you at this point!
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="match_composition_relaxed" class="doc_header"><code>match_composition_relaxed</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L270" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>match_composition_relaxed</code>(<strong><code>composition</code></strong>, <strong><code>group</code></strong>, <strong><code>level</code></strong>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>mode</code></strong>=<em><code>'exact'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="match_composition_relaxed" class="doc_header"><code>match_composition_relaxed</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L273" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>match_composition_relaxed</code>(<strong><code>composition</code></strong>, <strong><code>group</code></strong>, <strong><code>level</code></strong>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>mode</code></strong>=<em><code>'exact'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>Given a coarse-grained monosaccharide composition (Hex, HexNAc, etc.), it returns all corresponding glycans</p>
 <table>
@@ -12707,7 +12710,7 @@ That&#39;s all we can do for you at this point!
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="condense_composition_matching" class="doc_header"><code>condense_composition_matching</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L363" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>condense_composition_matching</code>(<strong><code>matched_composition</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="condense_composition_matching" class="doc_header"><code>condense_composition_matching</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L366" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>condense_composition_matching</code>(<strong><code>matched_composition</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>Given a list of glycans matching a composition, find the minimum number of glycans characterizing this set</p>
 <table>
@@ -12807,7 +12810,7 @@ That&#39;s all we can do for you at this point!
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="compositions_to_structures" class="doc_header"><code>compositions_to_structures</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L398" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>compositions_to_structures</code>(<strong><code>composition_list</code></strong>, <strong><code>abundances</code></strong>, <strong><code>group</code></strong>, <strong><code>level</code></strong>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>None</code></em>, <strong><code>verbose</code></strong>=<em><code>False</code></em>)</p>
+<h4 id="compositions_to_structures" class="doc_header"><code>compositions_to_structures</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L401" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>compositions_to_structures</code>(<strong><code>composition_list</code></strong>, <strong><code>abundances</code></strong>, <strong><code>group</code></strong>, <strong><code>level</code></strong>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>None</code></em>, <strong><code>verbose</code></strong>=<em><code>False</code></em>)</p>
 </blockquote>
 <p>wrapper function to map compositions to structures, condense them, and match them with relative intensities</p>
 <table>
@@ -12875,7 +12878,7 @@ That&#39;s all we can do for you at this point!
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="structures_to_motifs" class="doc_header"><code>structures_to_motifs</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L438" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>structures_to_motifs</code>(<strong><code>df</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>feature_set</code></strong>=<em><code>['exhaustive']</code></em>, <strong><code>form</code></strong>=<em><code>'wide'</code></em>)</p>
+<h4 id="structures_to_motifs" class="doc_header"><code>structures_to_motifs</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/motif/tokenization.py#L441" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>structures_to_motifs</code>(<strong><code>df</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>feature_set</code></strong>=<em><code>['exhaustive']</code></em>, <strong><code>form</code></strong>=<em><code>'wide'</code></em>)</p>
 </blockquote>
 <p>function to convert relative intensities of glycan structures to those of glycan motifs</p>
 <table>

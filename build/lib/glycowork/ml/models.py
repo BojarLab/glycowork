@@ -120,7 +120,7 @@ class LectinOracle(torch.nn.Module):
     self.pool2 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
     self.pool3 = TopKPooling(self.hidden_size, ratio = 1.0)
-    self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco,
+    self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
                                              embedding_dim = self.hidden_size)
     self.prot_encoder1 = torch.nn.Linear(self.input_size_prot, 400)
     self.prot_encoder2 = torch.nn.Linear(400, 128)
@@ -191,7 +191,7 @@ class LectinOracle(torch.nn.Module):
       return out
 
 def init_weights(model, mode = 'sparse', sparsity = 0.1):
-    """initializes linear layers of PyTorch model with a sparse initialization\n
+    """initializes linear layers of PyTorch model with a weight initialization\n
     | Arguments:
     | :-
     | model (Pytorch object): neural network (such as SweetNet) for analyzing glycans
@@ -229,10 +229,7 @@ def prep_model(model_type, num_classes, libr = None,
             model.load_state_dict(trained_SweetNet)
         model = model.cuda()
     elif model_type == 'LectinOracle':
-        libr2 = libr + ['GlcNAc3Prop', '4d8dNeu5Ac', 'GalNBz', '3dGal',
-                        'HexA2S', '6dGalNAc', '3dFuc', '4dFuc', 'HexA6S',
-                        '3-Anhydro-Gal', '3-Anhydro-Gal2S'] 
-        model = LectinOracle(len(libr2)+1, num_classes = num_classes)
+        model = LectinOracle(len(libr), num_classes = num_classes)
         model = model.apply(init_weights, mode = 'xavier')
         if trained:
             model.load_state_dict(trained_LectinOracle)
