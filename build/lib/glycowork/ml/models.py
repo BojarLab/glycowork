@@ -224,19 +224,19 @@ def prep_model(model_type, num_classes, libr = None,
         libr = lib
     if model_type == 'SweetNet':
         model = SweetNet(len(libr), num_classes = num_classes)
-        model = model.apply(init_weights, mode = 'sparse')
+        model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
         if trained:
             model.load_state_dict(trained_SweetNet)
         model = model.cuda()
     elif model_type == 'LectinOracle':
         model = LectinOracle(len(libr), num_classes = num_classes)
-        model = model.apply(init_weights, mode = 'xavier')
+        model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
             model.load_state_dict(trained_LectinOracle)
         model = model.cuda()
     elif model_type == 'NSequonPred':
         model = NSequonPred()
-        model = model.apply(init_weights, mode = 'xavier')
+        model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
             model.load_state_dict(trained_NSequonPred)
         model = model.cuda()
