@@ -11,6 +11,46 @@ from glycowork.motif.processing import small_motif_find, min_process_glycans
 from glycowork.motif.graph import compare_glycans
 from glycowork.motif.annotate import annotate_dataset
 
+chars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T',
+     'V','W','Y', 'X', 'Z'] + ['z']
+
+def constrain_prot(proteins, libr = None):
+  """Ensures that no characters outside of libr are present in proteins\n
+  | Arguments:
+  | :-
+  | proteins (list): list of proteins as strings
+  | libr (list): sorted list of amino acids occurring in proteins\n
+  | Returns:
+  | :-
+  | Returns list of proteins with only permitted amino acids
+  """
+  if libr is None:
+    libr = chars
+  mega_prot = list(set(list(''.join(proteins))))
+  forbidden = [k for k in mega_prot if k not in libr]
+  for k in forbidden:
+    proteins = [j.replace(k,'z') for j in proteins]
+  return proteins
+
+def prot_to_coded(proteins, libr = None):
+  """Encodes protein sequences to be used in LectinOracle-flex\n
+  | Arguments:
+  | :-
+  | proteins (list): list of proteins as strings
+  | libr (list): sorted list of amino acids occurring in proteins\n
+  | Returns:
+  | :-
+  | Returns list of encoded proteins with only permitted amino acids
+  """
+  if libr is None:
+    libr = chars
+  prots = [k[:min(len(k), 1000)] for k in proteins]
+  prots = constrain_prot(prots, libr = libr)
+  prots = [pad_sequence(string_to_labels(str(k).upper(),libr = libr),
+                        max_length = 1000,
+                        pad_label = len(libr)-1) for k in prots]
+  return prots
+
 def character_to_label(character, libr = None):
   """tokenizes character by indexing passed library\n
   | Arguments:

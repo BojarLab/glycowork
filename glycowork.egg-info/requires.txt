@@ -7,3 +7,4 @@ torch
 seaborn
 xgboost
 mpld3
+requests

@@ -23,5 +23,6 @@ setuptools.setup(
     python_requires='>=3.6',
     install_requires=["sklearn", "regex", "networkx",
                       "statsmodels", "scipy", "torch",
-                      "seaborn", "xgboost", "mpld3"],
+                      "seaborn", "xgboost", "mpld3",
+                      "requests"],
 )

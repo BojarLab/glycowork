@@ -1,5 +1,6 @@
 import os
 import torch
+import requests
 import numpy as np
 try:
     from torch_geometric.nn import TopKPooling, GraphConv
@@ -16,6 +17,35 @@ data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565.pt')
 trained_LectinOracle = torch.load(data_path)
 data_path = os.path.join(this_dir, 'NSequonPred_batch32.pt')
 trained_NSequonPred = torch.load(data_path)
+
+def download_file_from_google_drive(id, destination):
+    URL = "https://docs.google.com/uc?export=download"
+
+    session = requests.Session()
+
+    response = session.get(URL, params = { 'id' : id }, stream = True)
+    token = get_confirm_token(response)
+
+    if token:
+        params = { 'id' : id, 'confirm' : token }
+        response = session.get(URL, params = params, stream = True)
+
+    save_response_content(response, destination)    
+
+def get_confirm_token(response):
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            return value
+
+    return None
+
+def save_response_content(response, destination):
+    CHUNK_SIZE = 32768
+
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(CHUNK_SIZE):
+            if chunk: # filter out keep-alive new chunks
+                f.write(chunk)
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
@@ -190,6 +220,107 @@ class LectinOracle(torch.nn.Module):
     else:
       return out
 
+class LectinOracle_flex(nn.Module):
+  def __init__(self, input_size_glyco, hidden_size = 128, num_classes = 1, data_min = -11.355,
+               data_max = 23.892, input_size_prot = 1000):
+    super(LectinOracle_flex,self).__init__()
+    self.input_size_prot = input_size_prot
+    self.input_size_glyco = input_size_glyco
+    self.hidden_size = hidden_size
+    self.num_classes = num_classes
+    self.data_min = data_min
+    self.data_max = data_max
+    
+    self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
+    self.pool1 = TopKPooling(self.hidden_size, ratio=1.0)
+    self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
+    self.pool2 = TopKPooling(self.hidden_size, ratio=1.0)
+    self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
+    self.pool3 = TopKPooling(self.hidden_size, ratio=1.0)
+    self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
+                                             embedding_dim = self.hidden_size)
+    
+    self.fc1 = nn.Linear(self.input_size_prot, 4000)
+    self.fc2 = nn.Linear(4000, 2000)
+    self.fc3 = nn.Linear(2000, 1280)
+    self.dp1 = nn.Dropout(0.3)
+    self.dp2 = nn.Dropout(0.2)
+    self.act1 = nn.LeakyReLU()
+    self.act2 = nn.LeakyReLU()
+    self.bn1 = nn.BatchNorm1d(4000)
+    self.bn2 = nn.BatchNorm1d(2000)
+
+    self.prot_encoder1 = nn.Linear(1280, 400)
+    self.prot_encoder2 = nn.Linear(400, 128)
+    self.dp1_n = nn.Dropout(0.5)
+    self.dp_prot1 = nn.Dropout(0.2)
+    self.dp_prot2 = nn.Dropout(0.1)
+    self.fc1_n = nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
+    self.fc2_n = nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
+    self.bn1_n = nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
+    self.bn_prot1 = nn.BatchNorm1d(400)
+    self.bn_prot2 = nn.BatchNorm1d(128)
+    self.act1_n = torch.nn.LeakyReLU()
+    self.act_prot1 = torch.nn.LeakyReLU()
+    self.act_prot2 = torch.nn.LeakyReLU()
+    self.sigmoid = SigmoidRange(self.data_min, self.data_max)
+    
+    
+  def forward(self, prot, nodes, edge_index, batch, inference = False):
+    prot = self.bn1(self.act1(self.dp1(self.fc1(prot))))
+    prot = self.bn2(self.act2(self.dp2(self.fc2(prot))))
+    prot = self.fc3(prot)
+    embedded_prot = self.bn_prot1(self.act_prot1(self.dp_prot1(self.prot_encoder1(prot))))
+    embedded_prot = self.bn_prot2(self.act_prot2(self.dp_prot2(self.prot_encoder2(embedded_prot))))
+
+    x = self.item_embedding(nodes)
+    x = x.squeeze(1) 
+
+    x = F.leaky_relu(self.conv1(x, edge_index))
+
+    x, edge_index, _, batch, _, _= self.pool1(x, edge_index, None, batch)
+    x1 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
+
+    x = F.leaky_relu(self.conv2(x, edge_index))
+     
+    x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, None, batch)
+    x2 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
+
+    x = F.leaky_relu(self.conv3(x, edge_index))
+        
+    x, edge_index, _, batch, _, _ = self.pool3(x, edge_index, None, batch)
+    x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
+
+    x = x1 + x2 + x3
+
+    h_n = torch.cat((embedded_prot, x), 1)
+    
+    h_n = self.bn1_n(self.act1_n(self.fc1_n(h_n)))
+
+    #1
+    x1 = self.fc2_n(self.dp1_n(h_n))
+    #2
+    x2 = self.fc2_n(self.dp1_n(h_n))
+    #3
+    x3 = self.fc2_n(self.dp1_n(h_n))
+    #4
+    x4 = self.fc2_n(self.dp1_n(h_n))
+    #5
+    x5 = self.fc2_n(self.dp1_n(h_n))
+    #6
+    x6 = self.fc2_n(self.dp1_n(h_n))
+    #7
+    x7 = self.fc2_n(self.dp1_n(h_n))
+    #8
+    x8 = self.fc2_n(self.dp1_n(h_n))
+    
+    out =  self.sigmoid(torch.mean(torch.stack([x1, x2, x3, x4, x5, x6, x7, x8]), dim = 0))
+    
+    if inference:
+      return out, embedded_prot, x
+    else:
+      return out
+
 def init_weights(model, mode = 'sparse', sparsity = 0.1):
     """initializes linear layers of PyTorch model with a weight initialization\n
     | Arguments:
@@ -233,6 +364,15 @@ def prep_model(model_type, num_classes, libr = None,
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
             model.load_state_dict(trained_LectinOracle)
+        model = model.cuda()
+    elif model_type == 'LectinOracle_flex':
+        model = LectinOracle_flex(len(libr), num_classes = num_classes)
+        model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
+        if trained:
+            file_id = '1B5MntpMX1HaQ-SFqjxSPhVcFeo5jOJW2'
+            destination = 'leor_flex.pt'
+            download_file_from_google_drive(file_id, destination)
+            model.load_state_dict(torch.load('./leor_flex.pt'))
         model = model.cuda()
     elif model_type == 'NSequonPred':
         model = NSequonPred()
