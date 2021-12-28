@@ -220,7 +220,7 @@ class LectinOracle(torch.nn.Module):
     else:
       return out
 
-class LectinOracle_flex(nn.Module):
+class LectinOracle_flex(torch.nn.Module):
   def __init__(self, input_size_glyco, hidden_size = 128, num_classes = 1, data_min = -11.355,
                data_max = 23.892, input_size_prot = 1000):
     super(LectinOracle_flex,self).__init__()
@@ -240,26 +240,26 @@ class LectinOracle_flex(nn.Module):
     self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
                                              embedding_dim = self.hidden_size)
     
-    self.fc1 = nn.Linear(self.input_size_prot, 4000)
-    self.fc2 = nn.Linear(4000, 2000)
-    self.fc3 = nn.Linear(2000, 1280)
-    self.dp1 = nn.Dropout(0.3)
-    self.dp2 = nn.Dropout(0.2)
-    self.act1 = nn.LeakyReLU()
-    self.act2 = nn.LeakyReLU()
-    self.bn1 = nn.BatchNorm1d(4000)
-    self.bn2 = nn.BatchNorm1d(2000)
+    self.fc1 = torch.nn.Linear(self.input_size_prot, 4000)
+    self.fc2 = torch.nn.Linear(4000, 2000)
+    self.fc3 = torch.nn.Linear(2000, 1280)
+    self.dp1 = torch.nn.Dropout(0.3)
+    self.dp2 = torch.nn.Dropout(0.2)
+    self.act1 = torch.nn.LeakyReLU()
+    self.act2 = torch.nn.LeakyReLU()
+    self.bn1 = torch.nn.BatchNorm1d(4000)
+    self.bn2 = torch.nn.BatchNorm1d(2000)
 
-    self.prot_encoder1 = nn.Linear(1280, 400)
-    self.prot_encoder2 = nn.Linear(400, 128)
-    self.dp1_n = nn.Dropout(0.5)
-    self.dp_prot1 = nn.Dropout(0.2)
-    self.dp_prot2 = nn.Dropout(0.1)
-    self.fc1_n = nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
-    self.fc2_n = nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
-    self.bn1_n = nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
-    self.bn_prot1 = nn.BatchNorm1d(400)
-    self.bn_prot2 = nn.BatchNorm1d(128)
+    self.prot_encoder1 = torch.nn.Linear(1280, 400)
+    self.prot_encoder2 = torch.nn.Linear(400, 128)
+    self.dp1_n = torch.nn.Dropout(0.5)
+    self.dp_prot1 = torch.nn.Dropout(0.2)
+    self.dp_prot2 = torch.nn.Dropout(0.1)
+    self.fc1_n = torch.nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
+    self.fc2_n = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
+    self.bn1_n = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
+    self.bn_prot1 = torch.nn.BatchNorm1d(400)
+    self.bn_prot2 = torch.nn.BatchNorm1d(128)
     self.act1_n = torch.nn.LeakyReLU()
     self.act_prot1 = torch.nn.LeakyReLU()
     self.act_prot2 = torch.nn.LeakyReLU()
