@@ -150,16 +150,21 @@ def get_stem_lib(libr):
   """
   return {k:get_core(k) for k in libr}
 
-def stemify_glycan(glycan, stem_lib):
+def stemify_glycan(glycan, stem_lib = None, libr = None):
   """removes modifications from all monosaccharides in a glycan\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
-  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide\n
+  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
   | Returns:
   | :-
   | Returns stemmed glycan as string
   """
+  if libr is None:
+    libr = lib
+  if stem_lib is None:
+    stem_lib = get_stem_lib(libr)
   clean_list = list(stem_lib.values())
   for k in list(stem_lib.keys())[::-1][:-1]:
     if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
@@ -221,7 +226,8 @@ def stemify_dataset(df, stem_lib = None, libr = None,
     if pool_count[k] > rarity_filter:
       stem_lib[k] = k
   df_out = copy.deepcopy(df)
-  df_out[glycan_col_name] = [stemify_glycan(k, stem_lib) for k in df_out[glycan_col_name].values.tolist()]
+  df_out[glycan_col_name] = [stemify_glycan(k, stem_lib = stem_lib,
+                                            libr = libr) for k in df_out[glycan_col_name].values.tolist()]
   return df_out
 
 def match_composition(composition, group, level, df = None,

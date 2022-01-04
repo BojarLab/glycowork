@@ -7,6 +7,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import lib, unwrap
 from glycowork.motif.graph import fast_compare_glycans, compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
+from glycowork.motif.processing import min_process_glycans
+from glycowork.motif.tokenization import stemify_glycan
 
 def safe_compare(g1, g2, libr = None):
   """fast_compare_glycans with try/except error catch\n
@@ -169,7 +171,7 @@ def find_diff(glycan_a, glycan_b, libr = None):
 def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                                                         'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
                                                                                         'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
-                 limit = 5):
+                 limit = 5, ptm = False, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac']):
   """visualize biosynthetic network\n
   | Arguments:
   | :-
@@ -177,7 +179,9 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   | add_virtual_nodes (string): indicates whether no ('none'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added; default:'none'
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
-  | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
+  | limit (int): maximum number of virtual nodes between observed nodes; default:5
+  | ptm (bool): whether to consider post-translational modifications in the network construction; default:False
+  | allowed_ptms (list): list of PTMs to consider\n
   | Returns:
   | :-
   | Returns a networkx object of the network
@@ -220,6 +224,9 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   virtual_labels = {k:(1 if k in virtual_nodes else 0) for k in list(network.nodes())}
   nx.set_node_attributes(network, virtual_labels, 'virtual')
   network = filter_disregard(network)
+  if ptm:
+    ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr)
+    network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
   return network
 
 def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
@@ -648,3 +655,92 @@ def retrieve_inferred_nodes(network, species = None):
     return inferred_nodes
   else:
     return {species:inferred_nodes}
+
+def detect_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac']):
+  """identifies glycans that contain post-translational modifications\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed format
+  | allowed_ptms (list): list of PTMs to consider\n
+  | Returns:
+  | :-
+  | Returns glycans that contain PTMs
+  """
+  out = []
+  for glycan in glycans:
+    glycan_proc = 'x'.join(min_process_glycans([glycan])[0])
+    if any([ptm in glycan_proc for ptm in allowed_ptms]):
+      out.append(glycan)
+  return out
+
+def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
+               libr = None, ggraphs = None):
+  """identifies precursor glycans for a glycan with a PTM\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan with PTM in IUPAC-condensed format
+  | glycans (list): list of glycans in IUPAC-condensed format
+  | allowed_ptms (list): list of PTMs to consider
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | ggraphs (list): list of precomputed graphs of the glycan list\n
+  | Returns:
+  | :-
+  | (1) an edge tuple between input glycan and its biosynthetic precusor without PTM
+  | (2) the PTM that is contained in the input glycan
+  """
+  if libr is None:
+    libr = lib
+  glycan_proc = min_process_glycans([glycan])[0]
+  mod = [ptm for ptm in allowed_ptms if any([ptm in k for k in glycan_proc])][0]
+  glycan_stem = stemify_glycan(glycan, libr = libr) + '-ol'
+  g_stem = glycan_to_nxGraph(glycan_stem, libr = libr)
+  if ggraphs is None:
+    ggraphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
+  idx = np.where([safe_compare(k, g_stem, libr = libr) for k in ggraphs])[0].tolist()
+  if len(idx)>0:
+    nb = [glycans[k] for k in idx][0]
+    return ((glycan), (nb)), mod
+  else:
+    print("No neighbors found")
+    return 0
+
+def process_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
+               libr = None):
+  """identifies glycans that contain post-translational modifications and their biosynthetic precursor\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed format
+  | allowed_ptms (list): list of PTMs to consider
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | (1) list of edge tuples between input glycans and their biosynthetic precusor without PTM
+  | (2) list of the PTMs that are contained in the input glycans
+  """
+  if libr is None:
+    libr = lib
+  ptm_glycans = detect_ptm(glycans, allowed_ptms = allowed_ptms)
+  ggraphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
+  edges = [find_ptm(k, glycans, allowed_ptms = allowed_ptms,
+                                 libr = libr, ggraphs = ggraphs) for k in ptm_glycans]
+  edges, edge_labels = list(zip(*[k for k in edges if k!=0]))
+  return list(edges), list(edge_labels)
+
+def update_network(network_in, edge_list, edge_labels = None):
+  """updates a network with new edges and their labels\n
+  | Arguments:
+  | :-
+  | network (networkx object): network that should be modified
+  | edge_list (list): list of edges as node tuples
+  | edge_labels (list): list of edge labels as strings\n
+  | Returns:
+  | :-
+  | Returns network with added edges
+  """
+  network = network_in.copy()
+  if edge_labels is None:
+    network.add_edges_from(edge_list)
+  else:
+    network.add_edges_from(edge_list)
+    nx.set_edge_attributes(network, {edge_list[k]:edge_labels[k] for k in range(len(edge_list))}, 'diffs')
+  return network

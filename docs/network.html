@@ -65,7 +65,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="subgraph_to_string" class="doc_header"><code>subgraph_to_string</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L43" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>subgraph_to_string</code>(<strong><code>subgraph</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="subgraph_to_string" class="doc_header"><code>subgraph_to_string</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L45" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>subgraph_to_string</code>(<strong><code>subgraph</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>converts glycan subgraph back to IUPAC-condensed format</p>
 <table>
@@ -115,7 +115,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_neighbors" class="doc_header"><code>get_neighbors</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L59" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_neighbors</code>(<strong><code>glycan</code></strong>, <strong><code>glycans</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>graphs</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="get_neighbors" class="doc_header"><code>get_neighbors</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L61" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_neighbors</code>(<strong><code>glycan</code></strong>, <strong><code>glycans</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>graphs</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>find (observed) biosynthetic precursors of a glycan</p>
 <table>
@@ -208,7 +208,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="create_adjacency_matrix" class="doc_header"><code>create_adjacency_matrix</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L84" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>create_adjacency_matrix</code>(<strong><code>glycans</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>virtual_nodes</code></strong>=<em><code>False</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>)</p>
+<h4 id="create_adjacency_matrix" class="doc_header"><code>create_adjacency_matrix</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L86" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>create_adjacency_matrix</code>(<strong><code>glycans</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>virtual_nodes</code></strong>=<em><code>False</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>)</p>
 </blockquote>
 <p>creates a biosynthetic adjacency matrix from a list of glycans</p>
 <table>
@@ -267,7 +267,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_diff" class="doc_header"><code>find_diff</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L143" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_diff</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="find_diff" class="doc_header"><code>find_diff</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L145" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_diff</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>finds the subgraph that differs between glycans and returns it, will only work if the differing subgraph is connected</p>
 <table>
@@ -354,7 +354,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="construct_network" class="doc_header"><code>construct_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L169" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>construct_network</code>(<strong><code>glycans</code></strong>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'none'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
+<h4 id="construct_network" class="doc_header"><code>construct_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L171" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>construct_network</code>(<strong><code>glycans</code></strong>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'none'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>, <strong><code>ptm</code></strong>=<em><code>False</code></em>, <strong><code>allowed_ptms</code></strong>=<em><code>['OS', '3S', '6S', '1P', '6P', 'OAc', '4Ac']</code></em>)</p>
 </blockquote>
 <p>visualize biosynthetic network</p>
 <table>
@@ -377,6 +377,12 @@ nb_path: "06_network.ipynb"
 </tr>
 <tr>
 <td style="text-align:left">limit (int): maximum number of virtual nodes between observed nodes; default:5</td>
+</tr>
+<tr>
+<td style="text-align:left">ptm (bool): whether to consider post-translational modifications in the network construction; default:False</td>
+</tr>
+<tr>
+<td style="text-align:left">allowed_ptms (list): list of PTMs to consider</td>
 </tr>
 </tbody>
 </table>
@@ -413,7 +419,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="plot_network" class="doc_header"><code>plot_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L225" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>plot_network</code>(<strong><code>network</code></strong>, <strong><code>plot_format</code></strong>=<em><code>'kamada_kawai'</code></em>, <strong><code>edge_label_draw</code></strong>=<em><code>True</code></em>)</p>
+<h4 id="plot_network" class="doc_header"><code>plot_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L232" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>plot_network</code>(<strong><code>network</code></strong>, <strong><code>plot_format</code></strong>=<em><code>'kamada_kawai'</code></em>, <strong><code>edge_label_draw</code></strong>=<em><code>True</code></em>)</p>
 </blockquote>
 <p>visualizes biosynthetic network</p>
 <table>
@@ -455,7 +461,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_virtual_nodes" class="doc_header"><code>get_virtual_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L347" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_virtual_nodes</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>)</p>
+<h4 id="get_virtual_nodes" class="doc_header"><code>get_virtual_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L354" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_virtual_nodes</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>)</p>
 </blockquote>
 <p>find unobserved biosynthetic precursors of a glycan</p>
 <table>
@@ -522,12 +528,12 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_text output_subarea output_execute_result">
-<pre>([&lt;networkx.classes.graph.Graph at 0x192df435910&gt;,
-  &lt;networkx.classes.graph.Graph at 0x192df4245e0&gt;,
-  &lt;networkx.classes.graph.Graph at 0x192df424100&gt;],
- [&#39;Man(a1-6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol&#39;,
-  &#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol&#39;,
-  &#39;Man(a1-3)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol&#39;])</pre>
+<pre>([&lt;networkx.classes.graph.Graph at 0x1412d284130&gt;,
+  &lt;networkx.classes.graph.Graph at 0x1412d284070&gt;,
+  &lt;networkx.classes.graph.Graph at 0x1412d2844c0&gt;],
+ [&#39;Man(a1-3)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol&#39;,
+  &#39;Man(a1-6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol&#39;,
+  &#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol&#39;])</pre>
 </div>
 
 </div>
@@ -549,7 +555,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_shared_virtuals" class="doc_header"><code>find_shared_virtuals</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L268" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shared_virtuals</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>)</p>
+<h4 id="find_shared_virtuals" class="doc_header"><code>find_shared_virtuals</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L275" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shared_virtuals</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>)</p>
 </blockquote>
 <p>finds virtual nodes that are shared between two glycans (i.e., that connect these two glycans)</p>
 <table>
@@ -642,7 +648,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="fill_with_virtuals" class="doc_header"><code>fill_with_virtuals</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L302" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>fill_with_virtuals</code>(<strong><code>glycans</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>)</p>
+<h4 id="fill_with_virtuals" class="doc_header"><code>fill_with_virtuals</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L309" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>fill_with_virtuals</code>(<strong><code>glycans</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>)</p>
 </blockquote>
 <p>for a list of glycans, identify virtual nodes connecting observed glycans and return their edges</p>
 <table>
@@ -695,7 +701,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_path" class="doc_header"><code>find_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L426" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_path</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
+<h4 id="find_path" class="doc_header"><code>find_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L433" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_path</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
 </blockquote>
 <p>find virtual node path between two glycans</p>
 <table>
@@ -794,7 +800,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_shortest_path" class="doc_header"><code>find_shortest_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L484" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shortest_path</code>(<strong><code>goal_glycan</code></strong>, <strong><code>glycan_list</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
+<h4 id="find_shortest_path" class="doc_header"><code>find_shortest_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L491" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shortest_path</code>(<strong><code>goal_glycan</code></strong>, <strong><code>glycan_list</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
 </blockquote>
 <p>finds the glycan with the shortest path via virtual nodes to the goal glycan</p>
 <table>
@@ -894,7 +900,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="network_alignment" class="doc_header"><code>network_alignment</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L537" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>network_alignment</code>(<strong><code>network_a</code></strong>, <strong><code>network_b</code></strong>)</p>
+<h4 id="network_alignment" class="doc_header"><code>network_alignment</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L544" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>network_alignment</code>(<strong><code>network_a</code></strong>, <strong><code>network_b</code></strong>)</p>
 </blockquote>
 <p>combines two networks into a new network
 | Arguments:
@@ -934,7 +940,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="infer_virtual_nodes" class="doc_header"><code>infer_virtual_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L558" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infer_virtual_nodes</code>(<strong><code>network_a</code></strong>, <strong><code>network_b</code></strong>, <strong><code>combined</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="infer_virtual_nodes" class="doc_header"><code>infer_virtual_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L565" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infer_virtual_nodes</code>(<strong><code>network_a</code></strong>, <strong><code>network_b</code></strong>, <strong><code>combined</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>identifies virtual nodes that have been observed in other species</p>
 <table>
@@ -990,7 +996,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="infer_network" class="doc_header"><code>infer_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L596" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infer_network</code>(<strong><code>network</code></strong>, <strong><code>network_species</code></strong>, <strong><code>species_list</code></strong>, <strong><code>filepath</code></strong>=<em><code>None</code></em>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'exhaustive'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
+<h4 id="infer_network" class="doc_header"><code>infer_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L603" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infer_network</code>(<strong><code>network</code></strong>, <strong><code>network_species</code></strong>, <strong><code>species_list</code></strong>, <strong><code>filepath</code></strong>=<em><code>None</code></em>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'exhaustive'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
 </blockquote>
 <p>replaces virtual nodes if they are observed in other species</p>
 <table>
@@ -1036,6 +1042,115 @@ nb_path: "06_network.ipynb"
 <tbody>
 <tr>
 <td style="text-align:left">Returns network with filled in virtual nodes</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="process_ptm" class="doc_header"><code>process_ptm</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L707" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>process_ptm</code>(<strong><code>glycans</code></strong>, <strong><code>allowed_ptms</code></strong>=<em><code>['OS', '3S', '6S', '1P', '6P', 'OAc', '4Ac']</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+</blockquote>
+<p>identifies glycans that contain post-translational modifications and their biosynthetic precursor</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">glycans (list): list of glycans in IUPAC-condensed format</td>
+</tr>
+<tr>
+<td style="text-align:left">allowed_ptms (list): list of PTMs to consider</td>
+</tr>
+<tr>
+<td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">(1) list of edge tuples between input glycans and their biosynthetic precusor without PTM</td>
+</tr>
+<tr>
+<td style="text-align:left">(2) list of the PTMs that are contained in the input glycans</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="update_network" class="doc_header"><code>update_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L729" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>update_network</code>(<strong><code>network_in</code></strong>, <strong><code>edge_list</code></strong>, <strong><code>edge_labels</code></strong>=<em><code>None</code></em>)</p>
+</blockquote>
+<p>updates a network with new edges and their labels</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">network (networkx object): network that should be modified</td>
+</tr>
+<tr>
+<td style="text-align:left">edge_list (list): list of edges as node tuples</td>
+</tr>
+<tr>
+<td style="text-align:left">edge_labels (list): list of edge labels as strings</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns network with added edges</td>
 </tr>
 </tbody>
 </table>
