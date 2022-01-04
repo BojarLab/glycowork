@@ -9,9 +9,9 @@
 
 Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.
 
-The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. `Glycowork` is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, `Glycowork` also contains glycan data that can be used for glycan alignments, model pre-training, motif comparisons, etc.
+The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. `Glycowork` is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, `glycowork` also contains glycan data that can be used for glycan alignments, model pre-training, motif comparisons, etc.
 
-If you use `glycowork` in your project, please cite [Thomes et al., 2021](https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240).
+If you use `glycowork` or any of our datasets in your project, please cite [Thomes et al., 2021](https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240).
 
 The inspiration for `glycowork` can be found in [Bojar et al., 2020](https://doi.org/10.1016/j.chom.2020.10.004) and [Burkholz et al., 2021](https://www.cell.com/cell-reports/fulltext/S2211-1247(21)00616-1). There, you can also find examples of possible use cases for the functions in `glycowork`.
 
@@ -355,14 +355,20 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>3,6-Anhydro-L-Gal2Me</th>
       <th>3-1</th>
       <th>3-5</th>
+      <th>3-Anhydro-Gal</th>
+      <th>3-Anhydro-Gal2S</th>
+      <th>3dFuc</th>
+      <th>3dGal</th>
       <th>3dLyxHep-ulosaric</th>
       <th>4,7-Anhydro-Kdo</th>
       <th>4,7-Anhydro-KdoOPEtn</th>
       <th>4,8-Anhydro-Kdo</th>
       <th>4-1</th>
       <th>4-5</th>
+      <th>4d8dNeu5Ac</th>
       <th>4dAraHex</th>
       <th>4dEry-ol</th>
+      <th>4dFuc</th>
       <th>4dGal</th>
       <th>4dNeu5Ac</th>
       <th>4dThrHexNAcA4en</th>
@@ -393,6 +399,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>6dAltfOAc</th>
       <th>6dFruf</th>
       <th>6dGal</th>
+      <th>6dGalNAc</th>
       <th>6dGul</th>
       <th>6dHex</th>
       <th>6dHexN</th>
@@ -1086,6 +1093,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>GalNAcPGro</th>
       <th>GalNAla</th>
       <th>GalNAmA</th>
+      <th>GalNBz</th>
       <th>GalNCysGly</th>
       <th>GalNFoA</th>
       <th>GalNFoA3Ac6N</th>
@@ -1597,6 +1605,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>GlcNAc3N4Ac6N</th>
       <th>GlcNAc3NAc</th>
       <th>GlcNAc3NAc4Ac</th>
+      <th>GlcNAc3Prop</th>
       <th>GlcNAc3S</th>
       <th>GlcNAc3S-ol</th>
       <th>GlcNAc3S4S6S</th>
@@ -1684,7 +1693,6 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>GlcNAcOPGro</th>
       <th>GlcNAcOPGroA</th>
       <th>GlcNAcOPOAch</th>
-      <th>GlcNAcOProp</th>
       <th>GlcNAcOPyr</th>
       <th>GlcNAcOS</th>
       <th>GlcNAcOS-ol</th>
@@ -1756,7 +1764,6 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>GlcOPPEtn</th>
       <th>GlcOPyr</th>
       <th>GlcOS</th>
-      <th>GlcOSA</th>
       <th>GlcOSN</th>
       <th>GlcOSNMeOCm</th>
       <th>GlcOSin</th>
@@ -1784,6 +1791,8 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>Hex-ol</th>
       <th>HexA</th>
       <th>HexA2NAc3NAc</th>
+      <th>HexA2S</th>
+      <th>HexA6S</th>
       <th>HexN</th>
       <th>HexN2Me</th>
       <th>HexNAc</th>
@@ -3336,6 +3345,13 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
       <td>0</td>
       <td>0</td>
@@ -4109,7 +4125,9 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
       <td>2</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -5372,7 +5390,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0.0</td>
       <td>3.0</td>
       <td>3.0</td>
-      <td>-2.396231e-15</td>
+      <td>-2.331468e-15</td>
       <td>0.263004</td>
       <td>0.037282</td>
       <td>0.703297</td>
@@ -6665,7 +6683,16 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>2</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -8691,7 +8718,15 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -9208,6 +9243,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>2</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>

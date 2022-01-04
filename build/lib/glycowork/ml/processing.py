@@ -18,7 +18,6 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long,
   | label_type (torch object): which tensor type for label, default is torch.long for binary labels, change to torch.float for continuous
   | separate (bool): True returns node list / edge list / label list as separate files; False returns list of data tuples; default is False
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
-  | context (bool): legacy-ish; used for generating graph context dataset for pre-training; keep at False
   | error_catch (bool): troubleshooting option, True will print glycans that cannot be converted into graphs; default is False
   | wo_labels (bool): change to True if you do not want to pass and receive labels; default is False\n
   | Returns:
@@ -40,30 +39,19 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long,
     glycan_nodes, glycan_edges = zip(*glycan_graphs)
     return list(glycan_nodes), list(glycan_edges), labels
   else:
-    if context:
-      contexts = [ggraph_to_context(k, lib = lib) for k in glycan_graphs]
-      labels = [k[1] for k in contexts]
-      labels = [item for sublist in labels for item in sublist]
-      contexts = [k[0] for k in contexts]
-      contexts = [item for sublist in contexts for item in sublist]
-      data = [Data(x = torch.tensor(contexts[k][0], dtype = torch.long),
-                 y = torch.tensor(labels[k], dtype = label_type),
-                 edge_index = torch.tensor([contexts[k][1][0],contexts[k][1][1]], dtype = torch.long)) for k in range(len(contexts))]
+    if wo_labels:
+      glycan_nodes, glycan_edges = zip(*glycan_graphs)
+      glycan_graphs = list(zip(glycan_nodes, glycan_edges))
+      data = [Data(x = torch.tensor(k[0], dtype = torch.long),
+                     edge_index = torch.tensor([k[1][0],k[1][1]], dtype = torch.long)) for k in glycan_graphs]
       return data
     else:
-      if wo_labels:
-        glycan_nodes, glycan_edges = zip(*glycan_graphs)
-        glycan_graphs = list(zip(glycan_nodes, glycan_edges))
-        data = [Data(x = torch.tensor(k[0], dtype = torch.long),
-                     edge_index = torch.tensor([k[1][0],k[1][1]], dtype = torch.long)) for k in glycan_graphs]
-        return data
-      else:
-        glycan_nodes, glycan_edges = zip(*glycan_graphs)
-        glycan_graphs = list(zip(glycan_nodes, glycan_edges, labels))
-        data = [Data(x = torch.tensor(k[0], dtype = torch.long),
+      glycan_nodes, glycan_edges = zip(*glycan_graphs)
+      glycan_graphs = list(zip(glycan_nodes, glycan_edges, labels))
+      data = [Data(x = torch.tensor(k[0], dtype = torch.long),
                  y = torch.tensor([k[2]], dtype = label_type),
                  edge_index = torch.tensor([k[1][0],k[1][1]], dtype = torch.long)) for k in glycan_graphs]
-        return data
+      return data
 
 def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
                           shuffle = True, drop_last = False,
@@ -85,7 +73,8 @@ def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
   """
   if libr is None:
     libr = lib
-  glycan_graphs = dataset_to_graphs(glycan_list, labels, libr = libr, label_type = label_type)
+  glycan_graphs = dataset_to_graphs(glycan_list, labels,
+                                    libr = libr, label_type = label_type)
   if extra_feature is not None:
     for k in range(len(glycan_graphs)):
       glycan_graphs[k].train_idx = torch.tensor(extra_feature[k],

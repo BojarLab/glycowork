@@ -54,11 +54,18 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     if multiple_samples:
         df.index = df[glycan_col_name].values.tolist()
         df = df.drop([glycan_col_name], axis = 1)
-        df = pd.concat([df.iloc[:,k] for k in range(len(df.columns.values.tolist()))], axis = 0)
-        df = df.reset_index()
-        df.columns = [glycan_col_name, label_col_name]
-        df_motif = pd.concat([df_motif]*samples, axis = 0)
-    df_motif[label_col_name] = df[label_col_name].values.tolist()
+        df.columns = [label_col_name]*len(df.columns.values.tolist())
+        df_motif = pd.concat([pd.concat([df.iloc[:,k],
+                                   df_motif],axis=1).dropna() for k in range(len(df.columns.values.tolist()))], axis = 0)
+        cols = df_motif.columns.values.tolist()[1:] + [df_motif.columns.values.tolist()[0]]
+        df_motif = df_motif[cols]
+        #df = df.reset_index()
+        #df.columns = [glycan_col_name, label_col_name]
+        #print(df.shape)
+        #df_motif = pd.concat([df_motif]*samples, axis = 0)
+        #print(df_motif.shape)
+    else:
+        df_motif[label_col_name] = df[label_col_name].values.tolist()
     df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
     df_pos = df_motif[df_motif[label_col_name] > thresh]
     df_neg = df_motif[df_motif[label_col_name] <= thresh]

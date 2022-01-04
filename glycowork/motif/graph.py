@@ -180,7 +180,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   | glycan_a (string): glycan in IUPAC-condensed format
   | glycan_b (string): glycan in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | wildcards (bool): set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
+  | wildcards (bool): set to True to allow wildcards (e.g., 'z1-z', 'monosaccharide'); default is False
   | wildcard_list (list): list of indices for wildcards in libr\n
   | Returns:
   | :-  
@@ -204,7 +204,7 @@ def fast_compare_glycans(g1, g2, libr = None,
   | g1 (networkx object): glycan graph from glycan_to_nxGraph
   | g2 (networkx object): glycan graph from glycan_to_nxGraph
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | wildcards (bool): set to True to allow wildcards (e.g., 'bond', 'monosaccharide'); default is False
+  | wildcards (bool): set to True to allow wildcards (e.g., 'z1-z', 'monosaccharide'); default is False
   | wildcard_list (list): list of indices for wildcards in libr\n
   | Returns:
   | :-  
@@ -227,7 +227,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   | motif (string): glycan motif in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
-  | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+  | wildcard_list (list): list of wildcard names (such as 'z1-z', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
   | :-
