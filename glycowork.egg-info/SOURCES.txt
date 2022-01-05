@@ -38,6 +38,7 @@ glycowork/motif/query.py
 glycowork/motif/tokenization.py
 glycowork/network/__init__.py
 glycowork/network/biosynthesis.py
+glycowork/network/evolution.py
 glycowork/tests/__init__.py
 glycowork/tests/test_alignment.py
 glycowork/tests/test_analysis.py

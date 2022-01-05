@@ -226,7 +226,8 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   network = filter_disregard(network)
   if ptm:
     ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr)
-    network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
+    if len(ptm_links)>1:
+      network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
   return network
 
 def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
@@ -674,7 +675,7 @@ def detect_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac']):
   return out
 
 def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
-               libr = None, ggraphs = None):
+               libr = None, ggraphs = None, suffix = '-ol'):
   """identifies precursor glycans for a glycan with a PTM\n
   | Arguments:
   | :-
@@ -682,7 +683,8 @@ def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4A
   | glycans (list): list of glycans in IUPAC-condensed format
   | allowed_ptms (list): list of PTMs to consider
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | ggraphs (list): list of precomputed graphs of the glycan list\n
+  | ggraphs (list): list of precomputed graphs of the glycan list
+  | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'\n
   | Returns:
   | :-
   | (1) an edge tuple between input glycan and its biosynthetic precusor without PTM
@@ -692,7 +694,7 @@ def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4A
     libr = lib
   glycan_proc = min_process_glycans([glycan])[0]
   mod = [ptm for ptm in allowed_ptms if any([ptm in k for k in glycan_proc])][0]
-  glycan_stem = stemify_glycan(glycan, libr = libr) + '-ol'
+  glycan_stem = stemify_glycan(glycan, libr = libr) + suffix
   g_stem = glycan_to_nxGraph(glycan_stem, libr = libr)
   if ggraphs is None:
     ggraphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
@@ -705,13 +707,14 @@ def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4A
     return 0
 
 def process_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
-               libr = None):
+               libr = None, suffix = '-ol'):
   """identifies glycans that contain post-translational modifications and their biosynthetic precursor\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
   | allowed_ptms (list): list of PTMs to consider
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'\n
   | Returns:
   | :-
   | (1) list of edge tuples between input glycans and their biosynthetic precusor without PTM
@@ -722,9 +725,13 @@ def process_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
   ptm_glycans = detect_ptm(glycans, allowed_ptms = allowed_ptms)
   ggraphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
   edges = [find_ptm(k, glycans, allowed_ptms = allowed_ptms,
-                                 libr = libr, ggraphs = ggraphs) for k in ptm_glycans]
-  edges, edge_labels = list(zip(*[k for k in edges if k!=0]))
-  return list(edges), list(edge_labels)
+                                 libr = libr, ggraphs = ggraphs, suffix = suffix) for k in ptm_glycans]
+  if len([k for k in edges if k!=0])>0:
+    edges, edge_labels = list(zip(*[k for k in edges if k!=0]))
+    return list(edges), list(edge_labels)
+  else:
+    print("No unmatched PTMs to match for this species.")
+    return []
 
 def update_network(network_in, edge_list, edge_labels = None):
   """updates a network with new edges and their labels\n
