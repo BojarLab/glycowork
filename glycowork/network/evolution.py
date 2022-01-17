@@ -4,14 +4,16 @@ import matplotlib.pyplot as plt
 from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
 
-def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species'):
+def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
+                             averaging = 'median'):
   """calculates a cosine distance matrix from learned embeddings\n
   | Arguments:
   | :-
   | df (dataframe): dataframe with glycans as rows and taxonomic information as columns
   | embeddings (dataframe): dataframe with glycans as rows and learned embeddings as columns (e.g., from glycans_to_emb)
   | cut_off (int): how many glycans a rank (e.g., species) needs to have at least to be included; default:10
-  | rank (string): which taxonomic rank to use for grouping organisms; default:'Species'\n
+  | rank (string): which taxonomic rank to use for grouping organisms; default:'Species'
+  | averaging (string): how to average embeddings, by 'median' or 'mean'; default:'median'\n
   | Returns:
   | :-
   | Returns a rank x rank distance matrix
@@ -20,7 +22,12 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species'):
                            for k in range(len((df[rank].value_counts() >= cut_off).index.tolist()))
                            if (df[rank].value_counts() >= cut_off).values.tolist()[k]]))
   df_idx = [df.index[df[rank] == k].values.tolist() for k in df_min]
-  avgs = [np.mean(embeddings.iloc[k,:], axis = 0) for k in df_idx]
+  if averaging == 'median':
+    avgs = [np.median(embeddings.iloc[k,:], axis = 0) for k in df_idx]
+  elif averaging == 'mean':
+    avgs = [np.mean(embeddings.iloc[k,:], axis = 0) for k in df_idx]
+  else:
+    print("Only 'median' and 'mean' are permitted averaging choices.")
   dm = np.zeros((len(avgs), len(avgs)))
   dm = pd.DataFrame(dm, columns = df_min)
   for i in range(len(avgs)):

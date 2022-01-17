@@ -695,7 +695,7 @@ def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4A
   glycan_proc = min_process_glycans([glycan])[0]
   mod = [ptm for ptm in allowed_ptms if any([ptm in k for k in glycan_proc])][0]
   glycan_stem = stemify_glycan(glycan, libr = libr) + suffix
-  if 'Sug' in glycan_stem:
+  if ('Sug' in glycan_stem) or ('Neu(' in glycan_stem):
     print("Stemification fail. This is just information, no need to act.")
     return 0
   g_stem = glycan_to_nxGraph(glycan_stem, libr = libr)
