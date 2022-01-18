@@ -235,9 +235,17 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
     ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr)
     if len(ptm_links)>1:
       network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
-  if add_virtual_nodes == 'exhaustive':
+  if add_virtual_nodes == 'simple':
+    network = deorphanize_nodes(network, reducing_end = reducing_end,
+                              permitted_roots = permitted_roots, libr = libr, limit = 1)
+  elif add_virtual_nodes == 'exhaustive':
     network = deorphanize_nodes(network, reducing_end = reducing_end,
                               permitted_roots = permitted_roots, libr = libr, limit = limit)
+  if virtuals:
+    nodeDict = dict(network.nodes(data = True))
+    for node in list(network.nodes()):
+      if (network.degree[node] == 1) and (nodeDict[node]['virtual'] == 1):
+        network.remove_node(node)
   return network
 
 def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
