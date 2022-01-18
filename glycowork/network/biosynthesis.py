@@ -155,10 +155,11 @@ def find_diff(glycan_a, glycan_b, libr = None):
   """
   if libr is None:
     libr = lib
-  glycan_a = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_a, libr = libr), 'labels').values())))]
-  glycan_b = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_b, libr = libr), 'labels').values())))]
-  lens = [len(glycan_a), len(glycan_b)]
-  graphs = [glycan_a, glycan_b]
+  glycan_a2 = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_a, libr = libr), 'labels').values())))]
+  glycan_b2 = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_b, libr = libr), 'labels').values())))]
+  lens = [len(glycan_a2), len(glycan_b2)]
+  graphs = [glycan_a2, glycan_b2]
+  ggraphs = [glycan_a, glycan_b]
   larger_graph = graphs[np.argmax(lens)]
   smaller_graph = graphs[np.argmin(lens)]
   for k in smaller_graph:
@@ -166,7 +167,11 @@ def find_diff(glycan_a, glycan_b, libr = None):
       larger_graph.remove(k)
     except:
       larger_graph = ['dis', 'regard']
-  return "".join(larger_graph)
+  if subgraph_isomorphism(ggraphs[np.argmax(lens)], ggraphs[np.argmin(lens)], libr = libr):
+    return "".join(larger_graph)
+  else:
+    larger_graph = ['dis', 'regard']
+    return "".join(larger_graph)
 
 def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                                                         'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
