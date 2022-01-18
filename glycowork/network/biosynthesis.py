@@ -171,7 +171,8 @@ def find_diff(glycan_a, glycan_b, libr = None):
 def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                                                         'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
                                                                                         'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
-                 limit = 5, ptm = False, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac']):
+                 limit = 5, ptm = False, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
+                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]):
   """visualize biosynthetic network\n
   | Arguments:
   | :-
@@ -181,7 +182,8 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
   | limit (int): maximum number of virtual nodes between observed nodes; default:5
   | ptm (bool): whether to consider post-translational modifications in the network construction; default:False
-  | allowed_ptms (list): list of PTMs to consider\n
+  | allowed_ptms (list): list of PTMs to consider
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]\n
   | Returns:
   | :-
   | Returns a networkx object of the network
@@ -228,6 +230,8 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
     ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr)
     if len(ptm_links)>1:
       network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
+  network = deorphanize_nodes(network, reducing_end = reducing_end,
+                              permitted_roots = permitted_roots, libr = libr, limit = limit)
   return network
 
 def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
@@ -736,13 +740,14 @@ def process_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
     print("No unmatched PTMs to match for this species.")
     return []
 
-def update_network(network_in, edge_list, edge_labels = None):
+def update_network(network_in, edge_list, edge_labels = None, node_labels = None):
   """updates a network with new edges and their labels\n
   | Arguments:
   | :-
   | network (networkx object): network that should be modified
   | edge_list (list): list of edges as node tuples
-  | edge_labels (list): list of edge labels as strings\n
+  | edge_labels (list): list of edge labels as strings
+  | node_labels (dict): dictionary of form node:0 or 1 depending on whether the node is observed or virtual\n
   | Returns:
   | :-
   | Returns network with added edges
@@ -753,4 +758,59 @@ def update_network(network_in, edge_list, edge_labels = None):
   else:
     network.add_edges_from(edge_list)
     nx.set_edge_attributes(network, {edge_list[k]:edge_labels[k] for k in range(len(edge_list))}, 'diffs')
-  return network
+  if node_labels is None:
+    return network
+  else:
+    nx.set_node_attributes(network, node_labels, 'virtual')
+    return network
+
+def return_unconnected_to_root(network, permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]):
+  """finds observed nodes that are not connected to the root nodes\n
+  | Arguments:
+  | :-
+  | network (networkx object): network that should be analyzed
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]\n
+  | Returns:
+  | :-
+  | Returns list of nodes that are not connected to the root nodes
+  """
+  unconnected = []
+  nodeDict = dict(network.nodes(data = True))
+  for node in list(network.nodes()):
+    if nodeDict[node]['virtual'] == 0 and (node not in permitted_roots):
+      path_tracing = [nx.algorithms.shortest_paths.generic.has_path(network, node, k) for k in permitted_roots if k in list(network.nodes())]
+      if not any(path_tracing):
+        unconnected.append(node)
+  return unconnected
+
+def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                                'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                                'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                      permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"], libr = None, limit = 5):
+  """finds nodes unconnected to root nodes and tries to connect them\n
+  | Arguments:
+  | :-
+  | network (networkx object): network that should be modified
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
+  | Returns:
+  | :-
+  | Returns network with deorphanized nodes (if they can be connected to root nodes)
+  """
+  if libr is None:
+    libr = lib
+  permitted_roots = [k for k in permitted_roots if k in list(network.nodes())]
+  unconnected_nodes = return_unconnected_to_root(network, permitted_roots = permitted_roots)
+  nodeDict = dict(network.nodes(data = True))
+  real_nodes = [node for node in list(network.nodes()) if nodeDict[node]['virtual'] == 0]
+  real_nodes = [node for node in real_nodes if node not in unconnected_nodes]
+  edges, edge_labels = list(zip(*[find_shortest_path(node, real_nodes, reducing_end = reducing_end,
+                                                     libr = libr, limit = limit) for node in unconnected_nodes]))
+  edge_labels = unwrap([[edge_labels[k][edges[k][j]] for j in range(len(edges[k]))] for k in range(len(edge_labels))])
+  edges = unwrap(edges)
+  node_labels = {node:(nodeDict[node]['virtual'] if node in list(network.nodes()) else 1) for node in [i for sub in edges for i in sub]}
+  network_out = update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
+  network_out = filter_disregard(network_out)
+  return network_out
