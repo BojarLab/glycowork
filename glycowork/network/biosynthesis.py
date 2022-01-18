@@ -235,7 +235,8 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
     ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr)
     if len(ptm_links)>1:
       network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
-  network = deorphanize_nodes(network, reducing_end = reducing_end,
+  if add_virtual_nodes == 'exhaustive':
+    network = deorphanize_nodes(network, reducing_end = reducing_end,
                               permitted_roots = permitted_roots, libr = libr, limit = limit)
   return network
 
@@ -811,11 +812,20 @@ def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
   nodeDict = dict(network.nodes(data = True))
   real_nodes = [node for node in list(network.nodes()) if nodeDict[node]['virtual'] == 0]
   real_nodes = [node for node in real_nodes if node not in unconnected_nodes]
-  edges, edge_labels = list(zip(*[find_shortest_path(node, real_nodes, reducing_end = reducing_end,
-                                                     libr = libr, limit = limit) for node in unconnected_nodes]))
+  edges = []
+  edge_labels = []
+  for node in unconnected_nodes:
+    try:
+      e, el = find_shortest_path(node, real_nodes, reducing_end = reducing_end,
+                                                     libr = libr, limit = limit)
+      edges.append(e)
+      edge_labels.append(el)
+    except:
+      pass
   edge_labels = unwrap([[edge_labels[k][edges[k][j]] for j in range(len(edges[k]))] for k in range(len(edge_labels))])
   edges = unwrap(edges)
   node_labels = {node:(nodeDict[node]['virtual'] if node in list(network.nodes()) else 1) for node in [i for sub in edges for i in sub]}
   network_out = update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
   network_out = filter_disregard(network_out)
+  network_out.remove_nodes_from(list(nx.isolates(network_out)))
   return network_out
