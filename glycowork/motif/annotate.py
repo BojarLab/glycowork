@@ -85,7 +85,11 @@ def link_find(glycan):
   ss = find_isomorphs(glycan)
   coll = []
   for iso in ss:
-    b_re = re.sub('\[[^\]]+\]', '', iso)
+    if bool(re.search('\[[^\[\]]+\[[^\[\]]+\][^\]]+\]', iso)):
+      b_re = re.sub('\[[^\[\]]+\[[^\[\]]+\][^\]]+\]', '', iso)
+      b_re = re.sub('\[[^\]]+\]', '', b_re)
+    else:
+      b_re = re.sub('\[[^\]]+\]', '', iso)
     for i in [iso, b_re]:
       b = i.split('(')
       b = [k.split(')') for k in b]
