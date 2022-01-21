@@ -177,7 +177,8 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
                                                                                         'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
                                                                                         'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
                  limit = 5, ptm = False, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
-                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]):
+                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"],
+                      directed = False):
   """visualize biosynthetic network\n
   | Arguments:
   | :-
@@ -188,7 +189,8 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   | limit (int): maximum number of virtual nodes between observed nodes; default:5
   | ptm (bool): whether to consider post-translational modifications in the network construction; default:False
   | allowed_ptms (list): list of PTMs to consider
-  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]\n
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
+  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False\n
   | Returns:
   | :-
   | Returns a networkx object of the network
@@ -244,8 +246,14 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   if virtuals:
     nodeDict = dict(network.nodes(data = True))
     for node in list(network.nodes()):
-      if (network.degree[node] == 1) and (nodeDict[node]['virtual'] == 1):
+      if (network.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
         network.remove_node(node)
+    adj_matrix = create_adjacency_matrix(list(network.nodes()), libr = libr,
+                                         reducing_end = reducing_end)
+    filler_network = adjacencyMatrix_to_network(adj_matrix[0])
+    network.add_edges_from(list(filler_network.edges()))
+  if directed:
+    network = make_network_directed(network)
   return network
 
 def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
@@ -835,5 +843,34 @@ def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
   node_labels = {node:(nodeDict[node]['virtual'] if node in list(network.nodes()) else 1) for node in [i for sub in edges for i in sub]}
   network_out = update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
   network_out = filter_disregard(network_out)
-  network_out.remove_nodes_from(list(nx.isolates(network_out)))
+  #network_out.remove_nodes_from(list(nx.isolates(network_out)))
   return network_out
+
+def make_network_directed(network):
+  """converts a network with undirected edges to one with directed edges\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network\n
+  | Returns:
+  | :-
+  | Returns a network with directed edges in the direction of biosynthesis
+  """
+  dnetwork = network.to_directed()
+  dnetwork = prune_directed_edges(dnetwork)
+  return dnetwork
+
+def prune_directed_edges(network):
+  """removes edges that go against the direction of biosynthesis\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network with directed edges\n
+  | Returns:
+  | :-
+  | Returns a network with pruned edges that would go in the wrong direction
+  """
+  nodes = list(network.nodes())
+  for k in nodes:
+    for j in nodes:
+      if network.has_edge(k,j) and (len(k)>len(j)):
+        network.remove_edge(k,j)
+  return network
