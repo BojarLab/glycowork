@@ -252,6 +252,7 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
                                          reducing_end = reducing_end)
     filler_network = adjacencyMatrix_to_network(adj_matrix[0])
     network.add_edges_from(list(filler_network.edges()))
+    network = deorphanize_edge_labels(network, libr = libr)
   if directed:
     network = make_network_directed(network)
   return network
@@ -873,4 +874,23 @@ def prune_directed_edges(network):
     for j in nodes:
       if network.has_edge(k,j) and (len(k)>len(j)):
         network.remove_edge(k,j)
+  return network
+
+def deorphanize_edge_labels(network, libr = None):
+  """completes edge labels in newly added edges of a biosynthetic network\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns a network with completed edge labels
+  """
+  if libr is None:
+    libr = lib
+  edge_labels = nx.get_edge_attributes(network, 'diffs')
+  for k in list(network.edges()):
+    if k not in list(edge_labels.keys()):
+      diff = find_diff(k[0], k[1], libr = libr)
+      network.edges[k]['diffs'] = diff
   return network
