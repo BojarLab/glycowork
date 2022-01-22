@@ -311,8 +311,15 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     #adjacency matrix:
     A = nx.to_numpy_matrix(g)
     N = A.shape[0]
-    if nx.is_connected(g):
-      diameter = nx.algorithms.distance_measures.diameter(g)
+    if nx.is_directed(g):
+      directed = True
+    else:
+      directed = False
+    if not directed:
+      if nx.is_connected(g):
+        diameter = nx.algorithms.distance_measures.diameter(g)
+      else:
+        diameter = np.nan
     else:
       diameter = np.nan
     deg = np.array([np.sum(A[i,:]) for i in range(N)])
@@ -342,17 +349,29 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     closeMin = np.min(close)
     closeAvg = np.mean(close)
     closeVar = np.var(close)
-    if nx.is_connected(g):
-      flow = np.array(pd.DataFrame(nx.current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
-      flowMax = np.max(flow)
-      flowMin = np.min(flow)
-      flowAvg = np.mean(flow)
-      flowVar = np.var(flow)
-      flow_edge = np.array(pd.DataFrame(nx.edge_current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
-      flow_edgeMax = np.max(flow_edge)
-      flow_edgeMin = np.min(flow_edge)
-      flow_edgeAvg = np.mean(flow_edge)
-      flow_edgeVar = np.var(flow_edge)
+    if not directed:
+      if nx.is_connected(g):
+        flow = np.array(pd.DataFrame(nx.current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
+        flowMax = np.max(flow)
+        flowMin = np.min(flow)
+        flowAvg = np.mean(flow)
+        flowVar = np.var(flow)
+        flow_edge = np.array(pd.DataFrame(nx.edge_current_flow_betweenness_centrality(g), index = [0]).iloc[0,:])
+        flow_edgeMax = np.max(flow_edge)
+        flow_edgeMin = np.min(flow_edge)
+        flow_edgeAvg = np.mean(flow_edge)
+        flow_edgeVar = np.var(flow_edge)
+      else:
+        flow = np.nan
+        flowMax = np.nan
+        flowMin = np.nan
+        flowAvg = np.nan
+        flowVar = np.nan
+        flow_edge = np.nan
+        flow_edgeMax = np.nan
+        flow_edgeMin = np.nan
+        flow_edgeAvg = np.nan
+        flow_edgeVar = np.nan
     else:
       flow = np.nan
       flowMax = np.nan
@@ -374,12 +393,19 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     harmMin = np.min(harm)
     harmAvg = np.mean(harm)
     harmVar = np.var(harm)
-    if nx.is_connected(g):
-      secorder = np.array(pd.DataFrame(nx.second_order_centrality(g), index = [0]).iloc[0,:])
-      secorderMax = np.max(secorder)
-      secorderMin = np.min(secorder)
-      secorderAvg = np.mean(secorder)
-      secorderVar = np.var(secorder)
+    if not directed:
+      if nx.is_connected(g):
+        secorder = np.array(pd.DataFrame(nx.second_order_centrality(g), index = [0]).iloc[0,:])
+        secorderMax = np.max(secorder)
+        secorderMin = np.min(secorder)
+        secorderAvg = np.mean(secorder)
+        secorderVar = np.var(secorder)
+      else:
+        secorder = np.nan
+        secorderMax = np.nan
+        secorderMin = np.nan
+        secorderAvg = np.nan
+        secorderVar = np.nan
     else:
       secorder = np.nan
       secorderMax = np.nan

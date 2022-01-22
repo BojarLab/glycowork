@@ -569,12 +569,13 @@ def get_unconnected_nodes(network, glycan_list):
   unconnected = [k for k in glycan_list if k not in connected_nodes]
   return unconnected
 
-def network_alignment(network_a, network_b):
+def network_alignment(network_a, network_b, directed = False):
   """combines two networks into a new network
   | Arguments:
   | :-
   | network_a (networkx object): biosynthetic network from construct_network
-  | network_b (networkx object): biosynthetic network from construct_network\n
+  | network_b (networkx object): biosynthetic network from construct_network
+  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False\n
   | Returns:
   | :-
   | Returns combined network as a networkx object
@@ -588,6 +589,8 @@ def network_alignment(network_a, network_b):
   U.add_nodes_from(all_nodes)
   U.add_edges_from(list(network_a.edges(data = True))+list(network_b.edges(data = True)))
   nx.set_node_attributes(U, {all_nodes[k][0]:node_origin[k] for k in range(len(all_nodes))}, name = 'origin')
+  if directed:
+    U = make_network_directed(U)
   return U
 
 def infer_virtual_nodes(network_a, network_b, combined = None):
