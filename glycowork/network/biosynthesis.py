@@ -569,13 +569,12 @@ def get_unconnected_nodes(network, glycan_list):
   unconnected = [k for k in glycan_list if k not in connected_nodes]
   return unconnected
 
-def network_alignment(network_a, network_b, directed = False):
+def network_alignment(network_a, network_b):
   """combines two networks into a new network
   | Arguments:
   | :-
   | network_a (networkx object): biosynthetic network from construct_network
-  | network_b (networkx object): biosynthetic network from construct_network
-  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False\n
+  | network_b (networkx object): biosynthetic network from construct_network\n
   | Returns:
   | :-
   | Returns combined network as a networkx object
@@ -589,7 +588,7 @@ def network_alignment(network_a, network_b, directed = False):
   U.add_nodes_from(all_nodes)
   U.add_edges_from(list(network_a.edges(data = True))+list(network_b.edges(data = True)))
   nx.set_node_attributes(U, {all_nodes[k][0]:node_origin[k] for k in range(len(all_nodes))}, name = 'origin')
-  if directed:
+  if nx.is_directed(network_a):
     U = make_network_directed(U)
   return U
 
@@ -897,3 +896,28 @@ def deorphanize_edge_labels(network, libr = None):
       diff = find_diff(k[0], k[1], libr = libr)
       network.edges[k]['diffs'] = diff
   return network
+
+def export_network(network, filepath):
+  """converts NetworkX network into files usable by Gephi\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | filepath (string): should describe a valid path + file name prefix, will be appended by file description and type\n
+  | Returns:
+  | :-
+  | (1) saves a .csv dataframe containing the edge list and edge labels
+  | (2) saves a .csv dataframe containing node IDs and labels
+  """
+  edge_list = list(network.edges())
+  edge_list = pd.DataFrame(edge_list)
+  edge_list.columns = ['Source', 'Target']
+  edge_labels = nx.get_edge_attributes(network, 'diffs')
+  edge_list['Label'] = [edge_labels[k] for k in list(network.edges())]
+  edge_list = edge_list.replace('z', '?', regex = True)
+  edge_list.to_csv(filepath + 'edge_list.csv', index = False)
+
+  node_labels = nx.get_node_attributes(network, 'virtual')
+  node_labels = pd.DataFrame(node_labels, index = [0]).T.reset_index()
+  node_labels.columns = ['Id', 'Virtual']
+  node_labels = node_labels.replace('z', '?', regex = True)
+  node_labels.to_csv(filepath + 'node_labels.csv', index = False)
