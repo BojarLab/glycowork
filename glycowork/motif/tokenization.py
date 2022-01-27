@@ -6,7 +6,7 @@ from itertools import combinations_with_replacement
 from collections import Counter
 from sklearn.cluster import DBSCAN
 
-from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap, df_species, Hex, dHex, HexNAc, Sia
+from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap, df_species, Hex, dHex, HexNAc, Sia, linkages
 from glycowork.motif.processing import small_motif_find, min_process_glycans
 from glycowork.motif.graph import compare_glycans
 from glycowork.motif.annotate import annotate_dataset
@@ -518,3 +518,45 @@ def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
     out = pd.concat(sample_dfs, axis = 0, ignore_index = True)
     out['sample_id'] = unwrap([[k]*len(sample_dfs[k]) for k in range(len(sample_dfs))])
     return out
+
+def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkages = None):
+  """masks rare monosaccharides and linkages in a list of glycans\n 
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed form
+  | thresh_monosaccharides (int): threshold-value for monosaccharides seen as "rare"; default:(0.001*len(glycans))
+  | thresh_linkages (int): threshold-value for linkages seen as "rare"; default:(0.03*len(glycans))\n
+  | Returns:
+  | :-
+  | Returns list of glycans in IUPAC-condensed with masked rare monosaccharides and linkages
+  """
+  if thresh_monosaccharides is None:
+    thresh_monosaccharides = int(np.ceil(0.001*len(glycans)))
+  if thresh_linkages is None:
+    thresh_linkages = int(np.ceil(0.03*len(glycans)))
+  rares = unwrap(min_process_glycans(glycans))
+  rare_linkages, rare_monosaccharides = [], []
+  for x in rares:
+    (rare_monosaccharides, rare_linkages)[x in linkages].append(x)
+  rares = [rare_monosaccharides, rare_linkages]
+  thresh = [thresh_monosaccharides, thresh_linkages]
+  rares = [list({x: count for x, count in Counter(rares[k]).items() if count <= thresh[k]}.keys()) for k in range(len(rares))]
+  try:
+    rares[0].remove('')
+  except:
+    pass
+  out = []
+  for k in glycans:
+    for j in rares[0]:
+      if (j in k) and ('-'+j not in k):
+        k = k.replace(j+'(', 'monosaccharide(')
+        if k.endswith(j):
+          k = re.sub(j+'$', 'monosaccharide', k)
+    for m in rares[1]:
+      if m in k:
+        if m[1] == '1':
+          k = k.replace(m, '?1-?')
+        else:
+          k = k.replace(m, '?2-?')
+    out.append(k)
+  return out
