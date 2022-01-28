@@ -278,6 +278,7 @@ def glycan_to_nxGraph(glycan, libr = None,
   edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
   g1 = nx.from_edgelist(edgelist)
   nx.set_node_attributes(g1, {k:glycan_graph[0][k] for k in range(len(glycan_graph[0]))},'labels')
+  nx.set_node_attributes(g1, {k:libr[glycan_graph[0][k]] for k in range(len(glycan_graph[0]))},'string_labels')
   if termini == 'ignore':
     pass
   elif termini == 'calc':
@@ -498,18 +499,18 @@ def graph_to_string(graph, libr = None):
         branch_branch = [list(graph.edges())[k][1] for k in range(len(list(graph.edges()))) if j in list(graph.edges())[k]]
         branch_branch_start.append(np.max([k for k in branch_branch if k!=j]))
       branch_branch_pool = [branch_crawl(branch_branch_start[k], branch_branch_nodes[k], graph) for k in range(len(branch_branch_start))]
-      branch_branch = [[list(nx.get_node_attributes(graph, 'labels').values())[j] for j in k] for k in branch_branch_pool]
-      branch_branch = [[libr[j] for j in k] for k in branch_branch]
+      branch_branch = [[list(nx.get_node_attributes(graph, 'string_labels').values())[j] for j in k] for k in branch_branch_pool]
+      branch_branch = [[j for j in k] for k in branch_branch]
       branch_branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch_branch]
     else:
       branch_branch_pool = []
-    branch = [[list(nx.get_node_attributes(graph, 'labels').values())[j] for j in k] for k in branch_pool if k not in branch_branch_pool]
-    branch = [[libr[j] for j in k] for k in branch]
+    branch = [[list(nx.get_node_attributes(graph, 'string_labels').values())[j] for j in k] for k in branch_pool if k not in branch_branch_pool]
+    branch = [[j for j in k] for k in branch]
     branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch]
   else:
     branch_pool = []
     branch_branch_pool = []
-  glycan_motif = [libr[list(nx.get_node_attributes(graph, 'labels').values())[k]] for k in range(len(graph.nodes)) if k not in unwrap(branch_pool)]
+  glycan_motif = [list(nx.get_node_attributes(graph, 'string_labels').values())[k] for k in range(len(graph.nodes)) if k not in unwrap(branch_pool)]
   main_len = len(glycan_motif)
   if len(branch_pool)>0:
     counter = 0
@@ -544,7 +545,6 @@ def graph_to_string(graph, libr = None):
   if '])' in glycan_motif:
     glycan_motif = glycan_motif.replace('])', ')]')
   return glycan_motif
-
 
 def try_string_conversion(graph, libr = None):
   """check whether glycan graph describes a valid glycan\n

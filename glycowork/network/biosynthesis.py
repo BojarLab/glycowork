@@ -5,7 +5,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from glycowork.glycan_data.loader import lib, unwrap
+from glycowork.glycan_data.loader import lib, unwrap, linkages
 from glycowork.motif.graph import fast_compare_glycans, compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
 from glycowork.motif.processing import min_process_glycans
 from glycowork.motif.tokenization import stemify_glycan
@@ -54,7 +54,7 @@ def subgraph_to_string(subgraph, libr = None):
   """
   if libr is None:
     libr = lib
-  glycan_motif = [libr[k] for k in list(sorted(list(nx.get_node_attributes(subgraph, 'labels').values())))]
+  glycan_motif = [k for k in list(sorted(list(nx.get_node_attributes(subgraph, 'string_labels').values())))]
   glycan_motif = glycan_motif[0] + '(' + glycan_motif[1] + ')'
   return glycan_motif
 
@@ -157,8 +157,8 @@ def find_diff(glycan_a, glycan_b, libr = None):
     libr = lib
   if glycan_a == glycan_b:
     return ""
-  glycan_a2 = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_a, libr = libr), 'labels').values())))]
-  glycan_b2 = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_b, libr = libr), 'labels').values())))]
+  glycan_a2 = [k for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_a, libr = libr), 'string_labels').values())))]
+  glycan_b2 = [k for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_b, libr = libr), 'string_labels').values())))]
   lens = [len(glycan_a2), len(glycan_b2)]
   graphs = [glycan_a2, glycan_b2]
   ggraphs = [glycan_a, glycan_b]
@@ -170,7 +170,7 @@ def find_diff(glycan_a, glycan_b, libr = None):
     except:
       larger_graph = ['dis', 'regard']
   if subgraph_isomorphism(ggraphs[np.argmax(lens)], ggraphs[np.argmin(lens)], libr = libr):
-    return "".join(larger_graph)
+    return (larger_graph[0] + "(" + larger_graph[1] + ")")
   else:
     larger_graph = ['dis', 'regard']
     return "".join(larger_graph)
@@ -180,7 +180,7 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
                                                                                         'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
                  limit = 5, ptm = False, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
                  permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"],
-                      directed = False):
+                      directed = False, edge_type = 'monolink'):
   """visualize biosynthetic network\n
   | Arguments:
   | :-
@@ -192,7 +192,8 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   | ptm (bool): whether to consider post-translational modifications in the network construction; default:False
   | allowed_ptms (list): list of PTMs to consider
   | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
-  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False\n
+  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False
+  | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide')or monosaccharide(linkage) ('monolink'); default:'monolink'\n
   | Returns:
   | :-
   | Returns a networkx object of the network
@@ -255,6 +256,17 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
     filler_network = adjacencyMatrix_to_network(adj_matrix[0])
     network.add_edges_from(list(filler_network.edges()))
     network = deorphanize_edge_labels(network, libr = libr)
+  if edge_type != 'monolink':
+    ed = network.edges()
+    for e in ed :
+      elem = network.get_edge_data(e[0], e[1])
+      edge = elem['diffs']
+      for link in linkages:
+        if link in edge:
+          if edge_type == 'monosaccharide':
+            elem['diffs'] = edge.split('(')[0]
+          else:
+            pass
   if directed:
     network = make_network_directed(network)
   return network
@@ -855,7 +867,6 @@ def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
   node_labels = {node:(nodeDict[node]['virtual'] if node in list(network.nodes()) else 1) for node in [i for sub in edges for i in sub]}
   network_out = update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
   network_out = filter_disregard(network_out)
-  #network_out.remove_nodes_from(list(nx.isolates(network_out)))
   return network_out
 
 def make_network_directed(network):
@@ -930,3 +941,21 @@ def export_network(network, filepath):
   node_labels.columns = ['Id', 'Virtual']
   node_labels = node_labels.replace('z', '?', regex = True)
   node_labels.to_csv(filepath + 'node_labels.csv', index = False)
+
+def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme', monolink_column = 'monolink') :
+  """replaces monosaccharide(linkage) edge label by the name of the enzyme responsible for its synthesis\n
+  | Arguments:
+  | :-
+  | edge_label (str): 'monolink' edge label
+  | df (dataframe): dataframe containing the glycoenzymes and their corresponding 'monolink'
+  | enzyme_column (str): name of the column in df that indicates the enzyme; default:'glycoenzyme'
+  | monolink_column (str): name of the column in df that indicates the 'monolink'; default:'monolink'\n
+  | Returns:
+  | :-
+  | Returns a new edge label corresponding to the enzyme that catalyzes this reaction
+  """
+  new_edge_label = df[enzyme_column].values[df[monolink_column] == edge_label]
+  if str(new_edge_label) == 'None' or str(new_edge_label) == '[]' :
+    return(edge_label)
+  else :
+    return(str(new_edge_label))
