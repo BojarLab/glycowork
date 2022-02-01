@@ -186,13 +186,15 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
     res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
-                              termini_list = termini_list[k]) for k in range(len(motifs))]*1
+                              termini_list = termini_list[k],
+                                count = True) for k in range(len(motifs))]*1
   else:
     ggraph = glycan_to_nxGraph(glycan, libr = libr, termini = 'ignore')
     res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
-                              termini_list = termini_list) for k in range(len(motifs))]*1
+                              termini_list = termini_list,
+                                count = True) for k in range(len(motifs))]*1
       
   out = pd.DataFrame(columns = motifs.motif_name.values.tolist())
   out.loc[0] = res

@@ -219,7 +219,7 @@ def fast_compare_glycans(g1, g2, libr = None,
 
 def subgraph_isomorphism(glycan, motif, libr = None,
                          extra = 'ignore', wildcard_list = [],
-                         termini_list = []):
+                         termini_list = [], count = False):
   """returns True if motif is in glycan and False if not\n
   | Arguments:
   | :-
@@ -228,7 +228,8 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
   | wildcard_list (list): list of wildcard names (such as 'z1-z', 'Hex', 'HexNAc', 'Sia')
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
+  | count (bool): whether to return the number or absence/presence of motifs; default:False\n
   | Returns:
   | :-
   | Returns True if motif is in glycan and False if not
@@ -257,7 +258,21 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   elif extra == 'termini':
     graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
 
-  return graph_pair.subgraph_is_isomorphic()
+  if count:
+    counts = 0
+    while graph_pair.subgraph_is_isomorphic():
+      counts += 1
+      g1.remove_nodes_from(graph_pair.mapping.keys())
+      if extra == 'ignore':
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+      elif extra == 'wildcards':
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+      elif extra == 'termini':
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
+    return counts
+  else: return graph_pair.subgraph_is_isomorphic()
+
+
 
 def glycan_to_nxGraph(glycan, libr = None,
                       termini = 'ignore', termini_list = None):

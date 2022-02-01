@@ -35,12 +35,13 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
       dm.iloc[i,j] = cosine(avgs[i], avgs[j])
   return dm
 
-def dendrogram_from_distance(dm, ylabel = 'Mammalia'):
+def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
   """plots a dendrogram from distance matrix\n
   | Arguments:
   | :-
   | dm (dataframe): a rank x rank distance matrix (e.g., from distance_from_embeddings)
-  | ylabel (string): how to label the y-axis of the dendrogram; default:'Mammalia'\n
+  | ylabel (string): how to label the y-axis of the dendrogram; default:'Mammalia'
+  | filepath (string): absolute path including full filename allows for saving the plot\n
   """
   Z = linkage(dm)
   plt.figure(figsize = (10,10))
@@ -58,3 +59,6 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia'):
       leaf_font_size = 11.,
       show_contracted = True,  # to get a distribution impression in truncated branches
       )
+  if len(filepath) > 1:
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+                  bbox_inches = 'tight')
