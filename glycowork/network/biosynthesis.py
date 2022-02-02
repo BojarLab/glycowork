@@ -271,16 +271,22 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
     network = make_network_directed(network)
   return network
 
-def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
+def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True,
+                 node_size = False):
   """visualizes biosynthetic network\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
   | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'
-  | edge_label_draw (bool): draws edge labels if True; default:True\n
+  | edge_label_draw (bool): draws edge labels if True; default:True
+  | node_size (bool): whether nodes should be sized by an "abundance" attribute in network; default:False\n
   """
   mpld3.enable_notebook()
   fig, ax = plt.subplots(figsize = (16,16))
+  if node_size:
+    node_sizes = list(nx.get_node_attributes(network, 'abundance').values())
+  else:
+    node_sizes = 50
   if plot_format == 'kamada_kawai':
     pos = nx.kamada_kawai_layout(network)
   elif plot_format == 'spring':
@@ -291,12 +297,12 @@ def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
     node_origins = False
   if node_origins:
     alpha_map = [0.2 if k==1 else 1 for k in list(nx.get_node_attributes(network, 'virtual').values())]
-    scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, ax = ax,
+    scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, ax = ax,
                                        node_color = list(nx.get_node_attributes(network, 'origin').values()),
                                        alpha = alpha_map)
   else:
     color_map = ['darkorange' if k==1 else 'cornflowerblue' if k==0 else 'seagreen' for k in list(nx.get_node_attributes(network, 'virtual').values())]
-    scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7,
+    scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, alpha = 0.7,
                                      node_color = color_map, ax = ax)
   labels = list(network.nodes())
   if edge_label_draw:
@@ -959,3 +965,57 @@ def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme', monol
     return(edge_label)
   else :
     return(str(new_edge_label))
+
+def infuse_network(network, node_df, node_abundance = True, glycan_col = 'target',
+                   intensity_col = 'rel_intensity'):
+  """add new data to an existing network, such as glycomics abundance data\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | node_df (dataframe): dataframe containing glycans and their relative intensity
+  | node_abundance (bool): whether to add node abundance to the network as the node attribute "abundance"; default:True
+  | glycan_col (string): column name of the glycans in node_df
+  | intensity_col (string): column name of the relative intensities in node_df\n
+  | Returns:
+  | :-
+  | Returns a network with added information
+  """
+  if node_abundance:
+    for node in list(network.nodes()):
+      if node in node_df[glycan_col].values.tolist():
+        network.nodes[node]['abundance'] = node_df[intensity_col].values.tolist()[node_df[glycan_col].values.tolist().index(node)]*100
+      else:
+        network.nodes[node]['abundance'] = 50
+  return network
+
+def choose_path(source, target, species_list, filepath, libr = None):
+  """given a diamond-shape in biosynthetic networks (A->B,A->C,B->D,C->D), which path is taken from A to D?\n
+  | Arguments:
+  | :-
+  | source (string): glycan node that is the biosynthetic precursor
+  | target (string): glycan node that is the biosynthetic product; has to two biosynthetic steps away from source
+  | species_list (list): list of species to compare network to
+  | filepath (string): filepath to load biosynthetic networks from other species
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns dictionary of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
+  """
+  if libr is None:
+    libr = lib
+  network = construct_network([source, target], libr = libr, add_virtual_nodes = 'exhaustive',
+                              ptm = True, directed = True)
+  alternatives = [path[1] for path in nx.all_simple_paths(network, source = source, target = target)]
+  alt_a = []
+  alt_b = []
+  for k in species_list:
+    temp_network = nx.read_gpickle(filepath + k + '_graph_exhaustive.pkl')
+    if source in list(temp_network.nodes()) and target in list(temp_network.nodes()):
+      if alternatives[0] in list(temp_network.nodes()):
+        alt_a.append(temp_network.nodes[alternatives[0]]['virtual'])
+      if alternatives[1] in list(temp_network.nodes()):
+        alt_b.append(temp_network.nodes[alternatives[1]]['virtual'])
+  alt_a = alt_a.count(0)/len(alt_a)
+  alt_b = alt_b.count(0)/len(alt_b)
+  inferences = {alternatives[0]:alt_a, alternatives[1]:alt_b}
+  return inferences
