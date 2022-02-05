@@ -290,8 +290,12 @@ def glycan_to_nxGraph(glycan, libr = None,
   if libr is None:
     libr = lib
   glycan_graph = glycan_to_graph(glycan, libr = libr)
-  edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
-  g1 = nx.from_edgelist(edgelist)
+  if len(glycan_graph[1])>0:
+    edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
+    g1 = nx.from_edgelist(edgelist)
+  else:
+    g1 = nx.Graph()  
+    g1.add_node(0)
   nx.set_node_attributes(g1, {k:glycan_graph[0][k] for k in range(len(glycan_graph[0]))},'labels')
   nx.set_node_attributes(g1, {k:libr[glycan_graph[0][k]] for k in range(len(glycan_graph[0]))},'string_labels')
   if termini == 'ignore':
@@ -500,6 +504,8 @@ def graph_to_string(graph, libr = None):
   """
   if libr is None:
     libr = lib
+  if len(graph.nodes()) == 1:
+    return nx.get_node_attributes(graph, 'string_labels')[0]
   diffs = [k[1]-k[0] for k in list(graph.edges())]
   if np.max(diffs)>1:
     branch_branch_pool = []
