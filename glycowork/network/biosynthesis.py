@@ -58,14 +58,16 @@ def subgraph_to_string(subgraph, libr = None):
   glycan_motif = glycan_motif[0] + '(' + glycan_motif[1] + ')'
   return glycan_motif
 
-def get_neighbors(glycan, glycans, libr = None, graphs = None):
+def get_neighbors(glycan, glycans, libr = None, graphs = None,
+                  min_size = 0):
   """find (observed) biosynthetic precursors of a glycan\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | glycans (list): list of glycans in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | graphs (list): list of glycans in df as graphs; optional if you call get_neighbors often with the same df and want to provide it precomputed\n
+  | graphs (list): list of glycans in df as graphs; optional if you call get_neighbors often with the same df and want to provide it precomputed
+  | min_size (int): length of smallest root in biosynthetic network; default:0\n
   | Returns:
   | :-
   | (1) a list of direct glycan precursors in IUPAC-condensed
@@ -74,7 +76,9 @@ def get_neighbors(glycan, glycans, libr = None, graphs = None):
   if libr is None:
     libr = lib
   ggraph = glycan_to_nxGraph(glycan, libr = libr)
-  ggraph_nb = create_neighbors(ggraph, libr = libr)
+  if len(ggraph.nodes()) == 1:
+    return ([], [])
+  ggraph_nb = create_neighbors(ggraph, libr = libr, min_size = min_size)
   if graphs is None:
     temp = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
   else:
@@ -85,14 +89,16 @@ def get_neighbors(glycan, glycans, libr = None, graphs = None):
 
 def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
                             reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
-                                            'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']):
+                                            'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                            min_size = 0):
   """creates a biosynthetic adjacency matrix from a list of glycans\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | virtual_nodes (bool): whether to include virtual nodes in network; default:False
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | min_size (int): length of smallest root in biosynthetic network; default:0\n
   | Returns:
   | :-
   | (1) adjacency matrix (glycan X glycan) denoting whether two glycans are connected by one biosynthetic step
@@ -102,7 +108,8 @@ def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
     libr = lib
   df_out = pd.DataFrame(0, index = glycans, columns = glycans)
   graphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
-  neighbors_full = [get_neighbors(k, glycans, libr = libr, graphs = graphs) for k in glycans]
+  neighbors_full = [get_neighbors(k, glycans, libr = libr, graphs = graphs,
+                                  min_size = min_size) for k in glycans]
   neighbors = [k[0] for k in neighbors_full]
   idx = [k[1] for k in neighbors_full]
   for j in range(len(glycans)):
@@ -175,10 +182,10 @@ def find_diff(glycan_a, glycan_b, libr = None):
     larger_graph = ['dis', 'regard']
     return "".join(larger_graph)
 
-def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                                                         'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
                                                                                         'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
-                 limit = 5, ptm = False, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
+                 limit = 5, ptm = True, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
                  permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"],
                       directed = False, edge_type = 'monolink'):
   """visualize biosynthetic network\n
@@ -204,8 +211,9 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
     virtuals = True
   else:
     virtuals = False
+  min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
   adjacency_matrix, virtual_nodes = create_adjacency_matrix(glycans, libr = libr, virtual_nodes = virtuals,
-                            reducing_end = reducing_end)
+                            reducing_end = reducing_end, min_size = min_size)
   network = adjacencyMatrix_to_network(adjacency_matrix)
   if add_virtual_nodes == 'exhaustive':
     unconnected_nodes = get_unconnected_nodes(network, list(network.nodes()))
@@ -252,7 +260,8 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
       if (network.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
         network.remove_node(node)
     adj_matrix = create_adjacency_matrix(list(network.nodes()), libr = libr,
-                                         reducing_end = reducing_end)
+                                         reducing_end = reducing_end,
+                                         min_size = min_size)
     filler_network = adjacencyMatrix_to_network(adj_matrix[0])
     network.add_edges_from(list(filler_network.edges()))
     network = deorphanize_edge_labels(network, libr = libr)
@@ -373,21 +382,27 @@ def fill_with_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol
   v_edges = unwrap(v_edges)
   return v_edges
 
-def create_neighbors(ggraph, libr = None):
+def create_neighbors(ggraph, libr = None, min_size = 0):
   """creates biosynthetic precursor glycans\n
   | Arguments:
   | :-
   | ggraph (networkx object): glycan graph from glycan_to_nxGraph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | min_size (int): length of smallest root in biosynthetic network; default:0\n
   | Returns:
   | :-
   | Returns biosynthetic precursor glycans
   """
   if libr is None:
     libr = lib
-  ra = range(len(ggraph.nodes()))
-  ggraph_nb = [ggraph.subgraph(k) for k in itertools.combinations(ra, len(ggraph.nodes())-2) if safe_max(np.diff(k)) in [1,3]]
-  ggraph_nb = [k for k in ggraph_nb if nx.is_connected(k)]
+  if len(ggraph.nodes())<= min_size:
+    return []
+  if len(ggraph.nodes()) == 3:
+    ggraph_nb = [ggraph.subgraph([2])]
+  else:
+    ra = range(len(ggraph.nodes()))
+    ggraph_nb = [ggraph.subgraph(k) for k in itertools.combinations(ra, len(ggraph.nodes())-2) if safe_max(np.diff(k)) in [1,3]]
+    ggraph_nb = [k for k in ggraph_nb if nx.is_connected(k)]
   for k in range(len(ggraph_nb)):
     if list(ggraph_nb[k].nodes())[0] == 2:
       ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {j:j-2 for j in list(ggraph_nb[k].nodes())})
