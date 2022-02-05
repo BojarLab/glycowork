@@ -32,16 +32,19 @@ nbdev_install_git_hooks
 * Docs are automatically created from the notebooks in the nbs folder.
 
 
-## Wishlist for future glycowork updates (last update: 2021-07-28)
+## Wishlist for future glycowork updates (last update: 2022-02-05)
 #### Urgent
-* get_trisaccharides needs to be reworked to ensure 100% completeness (and probably better efficiency)
-* ideally, we’d have a better heuristic than estimate_lower_bound for speeding up annotation
+* add the possibility of drawing glycans on plots (e.g., have SNFG glycans on x-axis for a bar plot etc.)
+* more and more informative error messages
+
 
 #### At some point
-* split motif_list into ‘core’ motifs (occurring frequently) and ‘extended’ motifs (that are rare / niche) for performance reasons
-* Currently, the glycan graph objects have, as node labels, numbers that indicate the glycoletters (which can be retrieved by indexing lib with this number). In the future, it might be more intuitive to provide the actual glycoletters as strings in the node labels. This would require a slight rewrite of all functions that currently work with the node labels.
+* split motif_list into ‘core’ motifs (occurring frequently) and ‘extended’ motifs (that are rare or niche) for performance reasons
 * characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context
-* add the possibility of drawing glycans on plots (e.g., have SNFG glycans on x-axis for a bar plot etc.)
+* allow users to specify their own deep learning architecture in ml.models
+* implement multiple sequence alignment and other substitution matrices
+* glycan nomenclature conversion functions (WURCS/GlycoCT into IUPAC-condensed)
+
 
 #### Not sure whether a good idea
-* instead of stemifying rare monosaccharide modifications, consider masking them with a ‘monosaccharide’ token
+* ideally, we’d have a better heuristic than estimate_lower_bound for speeding up annotation
