@@ -3,9 +3,6 @@ import copy
 import random
 import pandas as pd
 
-linkages = ['a1-2','a1-3','a1-4','a1-6','a2-3','a2-6','a2-8','b1-2','b1-3',
-            'b1-4','b1-6']
-
 def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
                             wildcard_name, r = 0.1):
   """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards\n
@@ -15,7 +12,7 @@ def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
   | labels (list): list of labels used for prediction
   | wildcard_list (list): list which glycoletters a wildcard encompasses
   | wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature
-  | r (float): rate of replacement, default is 0.1 or 10%\n
+  | r (float): rate of replacement, default:0.1 or 10%\n
   | Returns:
   | :-
   | Returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name
@@ -40,13 +37,13 @@ def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False,
   | Arguments:
   | :-
   | df_in (dataframe): dataframe of glycan sequences and taxonomic labels
-  | rank (string): which rank should be filtered; default is 'domain'
-  | min_seq (int): how many glycans need to be present in class to keep it; default is 5
-  | wildcard_seed (bool): set to True if you want to seed wildcard glycoletters; default is False
+  | rank (string): which rank should be filtered; default:'domain'
+  | min_seq (int): how many glycans need to be present in class to keep it; default:5
+  | wildcard_seed (bool): set to True if you want to seed wildcard glycoletters; default:False
   | wildcard_list (list): list which glycoletters a wildcard encompasses
   | wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature
-  | r (float): rate of replacement, default is 0.1 or 10%
-  | col (string): column name for glycan sequences; default: target\n
+  | r (float): rate of replacement, default:0.1 or 10%
+  | col (string): column name for glycan sequences; default:target\n
   | Returns:
   | :-
   | Returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)
@@ -107,10 +104,31 @@ def general_split(glycans, labels, test_size = 0.2):
   | :-
   | glycans (list): list of IUPAC-condensed glycan sequences as strings
   | labels (list): list of labels used for prediction
-  | test_size (float): % size of test set; default is 0.2 / 20%\n
+  | test_size (float): % size of test set; default:0.2 / 20%\n
   | Returns:
   | :-
   | Returns X_train, X_test, y_train, y_test
   """
   return train_test_split(glycans, labels, shuffle = True,
                           test_size = test_size, random_state = 42)
+
+def taxonomic_multilabel(df, rank = 'Species', glycan_col = 'target'):
+  """converts a one row per glycan-species association file to a format of one glycan - all species associations\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe where each row is one glycan - species association
+  | rank (string): which taxonomic level should be used; default:Species
+  | glycan_col (string): column name of where the glycan sequences are stored; default:target\n
+  | Returns:
+  | :-
+  | (1) list of unique glycans in df
+  | (2) list of lists, where each inner list are all the taxonomic labels of a glycan
+  """
+  glycans = list(set(df[glycan_col]values.tolist()))
+  class_list = list(set(df[rank].values.tolist()))
+  labels = [[0.]*len(class_list) for k in range(len(glycans))]
+  for k in range(len(glycans)):
+    sub_classes = df[df.target==glycans[k]][rank].values.tolist()
+    for j in sub_classes:
+      labels[k][class_list.index(j)] = 1.
+  return glycans, labels

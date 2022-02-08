@@ -575,13 +575,16 @@ def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['G
   path_lengths = []
   for k in glycan_list:
     if subgraph_isomorphism(goal_glycan, k, libr = libr) and goal_glycan[-3:] == k[-3:]:
-      virtual_edges, edge_labels = find_path(goal_glycan, k, libr = libr,
+      try:
+        virtual_edges, edge_labels = find_path(goal_glycan, k, libr = libr,
                                                               reducing_end = reducing_end,
                                                                limit = limit)
-      network = make_network_from_edges(virtual_edges)
-      if k in list(network.nodes()) and goal_glycan in list(network.nodes()):
-        path_lengths.append(len(nx.algorithms.shortest_paths.generic.shortest_path(network, source = k, target = goal_glycan)))
-      else:
+        network = make_network_from_edges(virtual_edges)
+        if k in list(network.nodes()) and goal_glycan in list(network.nodes()):
+          path_lengths.append(len(nx.algorithms.shortest_paths.generic.shortest_path(network, source = k, target = goal_glycan)))
+        else:
+          path_lengths.append(99)
+      except:
         path_lengths.append(99)
     else:
       path_lengths.append(99)
