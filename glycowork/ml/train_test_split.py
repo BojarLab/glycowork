@@ -124,7 +124,7 @@ def taxonomic_multilabel(df, rank = 'Species', glycan_col = 'target'):
   | (1) list of unique glycans in df
   | (2) list of lists, where each inner list are all the taxonomic labels of a glycan
   """
-  glycans = list(set(df[glycan_col]values.tolist()))
+  glycans = list(set(df[glycan_col].values.tolist()))
   class_list = list(set(df[rank].values.tolist()))
   labels = [[0.]*len(class_list) for k in range(len(glycans))]
   for k in range(len(glycans)):

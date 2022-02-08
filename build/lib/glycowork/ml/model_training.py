@@ -307,7 +307,7 @@ def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_deca
     | lr_patience (int): number of epochs without validation loss improvement before reducing the learning rate;default:4
     | factor (float): factor by which learning rate is multiplied upon reduction
     | weight_decay (float): regularization parameter for the optimizer; default:0.001
-    | mode (string): 'multiclass': classification with multiple classes, 'binary':binary classification, 'regression': regression; default:'multiclass'\n
+    | mode (string): 'multiclass': classification with multiple classes, 'multilabel': predicting several labels at the same time, 'binary':binary classification, 'regression': regression; default:'multiclass'\n
     | Returns:
     | :-
     | Returns optimizer, learning rate scheduler, and loss criterion objects
@@ -318,12 +318,14 @@ def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_deca
                                                            factor = factor, verbose = True)
     if mode == 'multiclass':
         criterion = torch.nn.CrossEntropyLoss().cuda()
+    elif mode == 'multilabel':
+        criterion = torch.nn.BCEWithLogitsLoss().cuda()
     elif mode == 'binary':
         criterion = torch.nn.BCEWithLogitsLoss().cuda()
     elif mode == 'regression':
         criterion = torch.nn.MSELoss().cuda()
     else:
-        print("Invalid option. Please pass 'multiclass', 'binary', or 'regression'.")
+        print("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
     return optimizer_ft, scheduler, criterion
 
 def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
