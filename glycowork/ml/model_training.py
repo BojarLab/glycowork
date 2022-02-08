@@ -94,7 +94,7 @@ def train_model(model, dataloaders, criterion, optimizer,
   best_model_wts = copy.deepcopy(model.state_dict())
   best_loss = 100.0
   epoch_mcc = 0
-  if mode == 'classification':
+  if mode != 'regression':
       best_acc = 0.0
   else:
       best_acc = 100.0
@@ -296,13 +296,12 @@ class SAM(torch.optim.Optimizer):
         super().load_state_dict(state_dict)
         self.base_optimizer.param_groups = self.param_groups
 
-def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.0001,
+def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.0001,
                    mode = 'multiclass'):
     """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
     | Arguments:
     | :-
     | model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans
-    | epochs (int): number of epochs for training the model
     | lr (float): learning rate
     | lr_patience (int): number of epochs without validation loss improvement before reducing the learning rate;default:4
     | factor (float): factor by which learning rate is multiplied upon reduction

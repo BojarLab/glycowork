@@ -874,7 +874,9 @@ def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
   if libr is None:
     libr = lib
   permitted_roots = [k for k in permitted_roots if k in list(network.nodes())]
+  min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
   unconnected_nodes = return_unconnected_to_root(network, permitted_roots = permitted_roots)
+  unconnected_nodes = [k for k in unconnected_nodes if len(glycan_to_nxGraph(k, libr = libr))>min_size]
   nodeDict = dict(network.nodes(data = True))
   real_nodes = [node for node in list(network.nodes()) if nodeDict[node]['virtual'] == 0]
   real_nodes = [node for node in real_nodes if node not in unconnected_nodes]
