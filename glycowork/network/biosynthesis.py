@@ -120,7 +120,8 @@ def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
           df_out.iloc[inp[0], inp[1]] = 1
   new_nodes = []
   if virtual_nodes:
-    virtual_edges = fill_with_virtuals(glycans, libr = libr, reducing_end = reducing_end)
+    virtual_edges = fill_with_virtuals(glycans, libr = libr, reducing_end = reducing_end,
+                                       min_size = min_size)
     new_nodes = list(set([k[1] for k in virtual_edges]))
     new_nodes = [k for k in new_nodes if k not in df_out.columns.values.tolist()]
     idx = np.where([any([compare_glycans(k,j, libr = libr) for j in df_out.columns.values.tolist()]) for k in new_nodes])[0].tolist()
@@ -331,14 +332,16 @@ def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True,
 
 def find_shared_virtuals(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                                           'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
-                                                                          'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']):
+                                                                          'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                         min_size = 1):
   """finds virtual nodes that are shared between two glycans (i.e., that connect these two glycans)\n
   | Arguments:
   | :-
   | glycan_a (string): glycan in IUPAC-condensed format
   | glycan_b (string): glycan in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
   | Returns list of edges between glycan and virtual node (if virtual node connects the two glycans)
@@ -356,29 +359,33 @@ def find_shared_virtuals(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-o
   if len(ggraph_nb_a)>0:
     for k in range(len(ggraph_nb_a)):
       for j in range(len(ggraph_nb_b)):
-        if fast_compare_glycans(ggraph_nb_a[k], ggraph_nb_b[j], libr = libr):
-          if [glycan_a, glycans_a[k]] not in [list(m) for m in out]:
-            out.append((glycan_a, glycans_a[k]))
-          if [glycan_b, glycans_b[j]] not in [list(m) for m in out]:
-            out.append((glycan_b, glycans_a[k]))
+        if len(ggraph_nb_a[k])>=min_size:
+          if fast_compare_glycans(ggraph_nb_a[k], ggraph_nb_b[j], libr = libr):
+            if [glycan_a, glycans_a[k]] not in [list(m) for m in out]:
+              out.append((glycan_a, glycans_a[k]))
+            if [glycan_b, glycans_b[j]] not in [list(m) for m in out]:
+              out.append((glycan_b, glycans_a[k]))
   return out
 
 def fill_with_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                              'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
-                                                             'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']):
+                                                             'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                       min_size = 1):
   """for a list of glycans, identify virtual nodes connecting observed glycans and return their edges\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
   | Returns list of edges that connect observed glycans to virtual nodes
   """
   if libr is None:
     libr = lib
-  v_edges = [find_shared_virtuals(k[0],k[1], libr = libr, reducing_end = reducing_end) for k in list(itertools.combinations(glycans, 2))]
+  v_edges = [find_shared_virtuals(k[0],k[1], libr = libr, reducing_end = reducing_end,
+                                  min_size = min_size) for k in list(itertools.combinations(glycans, 2))]
   v_edges = unwrap(v_edges)
   return v_edges
 

@@ -585,3 +585,33 @@ def try_string_conversion(graph, libr = None):
     return graph_to_string(temp, libr = libr)
   except:
     return None
+
+def largest_subgraph(glycan_a, glycan_b, libr = None):
+  """find the largest common subgraph of two glycans\n
+  | Arguments:
+  | :-
+  | glycan_a (string): glycan in IUPAC-condensed format
+  | glycan_b (string): glycan in IUPAC-condensed format
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-  
+  | Returns the largest common subgraph as a string in IUPAC-condensed; returns empty string if there is no common subgraph
+  """
+  if libr is None:
+    libr = lib
+  graph_a = glycan_to_nxGraph(glycan_a, libr = libr)
+  graph_b = glycan_to_nxGraph(glycan_b, libr = libr)
+  ismags = nx.isomorphism.ISMAGS(graph_a, graph_b,
+                                 node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+  largest_common_subgraph = list(ismags.largest_common_subgraph())
+  lgs = graph_a.subgraph(list(largest_common_subgraph[0].keys()))
+  if nx.is_connected(lgs):
+    min_num = min(list(lgs.nodes()))
+    node_dic = {k:k-min_num for k in list(lgs.nodes())}
+    lgs = nx.relabel_nodes(lgs, node_dic)
+    if len(list(lgs.nodes()))>0:
+      return graph_to_string(lgs)
+    else:
+      return ""
+  else:
+    return ""
