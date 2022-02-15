@@ -207,7 +207,8 @@ def plot_embeddings(glycans, emb = None, label_list = None,
         emb = {glycan[k]:emb.iloc[k,:] for k in range(len(glycans))}
     embs = np.array([emb[k] for k in glycans])
     embs = TSNE(random_state = 42,
-                init = 'pca', learning_rate = 'auto').fit_transform(embs)
+                init = 'pca').fit_transform(embs)
+                #init = 'pca', learning_rate = 'auto').fit_transform(embs)
     markers = None
     if shape_feature is not None:
         markers = {shape_feature: "X", "Absent": "o"}

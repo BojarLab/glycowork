@@ -617,7 +617,7 @@ def get_unconnected_nodes(network, glycan_list):
   return unconnected
 
 def network_alignment(network_a, network_b):
-  """combines two networks into a new network
+  """combines two networks into a new network\n
   | Arguments:
   | :-
   | network_a (networkx object): biosynthetic network from construct_network

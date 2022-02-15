@@ -35,6 +35,48 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
       dm.iloc[i,j] = cosine(avgs[i], avgs[j])
   return dm
 
+def jaccard(list1, list2):
+  """calculates Jaccard distance from two networks\n
+  | Arguments:
+  | :-
+  | list1 (list or networkx graph): list containing objects to compare
+  | list2 (list or networkx graph): list containing objects to compare\n
+  | Returns:
+  | :-
+  | Returns Jaccard distance between list1 and list2
+  """
+  intersection = len(list(set(list1).intersection(list2)))
+  union = (len(list1) + len(list2)) - intersection
+  return 1- float(intersection) / union
+
+def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = "Species"):
+  """calculates a distance matrix of generated networks based on provided metric\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with glycans as rows and taxonomic information as columns
+  | networks (list): list of networks in networkx format
+  | metric (string): which metric to use, available: 'Jaccard'; default:'Jaccard'
+  | cut_off (int): how many glycans a rank (e.g., species) needs to have at least to be included; default:10
+  | rank (string): which taxonomic rank to use for grouping organisms; default:'Species'\n
+  | Returns:
+  | :-
+  | Returns a rank x rank distance matrix
+  """
+  if metric == "Jaccard":
+    dist_func = jaccard
+  else:
+    print("Not a defined metric. At the moment, only 'Jaccard' is available as a metric.")
+  specs = list(sorted(list(set(df[rank].values.tolist()))))
+  idx_min = [k for k in range(len(specs)) if len(df[df[rank] == specs[k]])>=cut_off]
+  specs_min = [specs[k] for k in idx_min]
+  networks_min = [networks[k] for k in idx_min]
+  dm = np.zeros((len(networks_min), len(networks_min)))
+  dm = pd.DataFrame(dm, columns = specs_min)
+  for i in range(len(networks_min)):
+    for j in range(len(networks_min)):
+      dm.iloc[i,j] = dist_func(networks_min[i], networks_min[j])
+  return dm
+
 def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
   """plots a dendrogram from distance matrix\n
   | Arguments:

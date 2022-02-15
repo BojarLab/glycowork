@@ -50,6 +50,7 @@ def motif_find(glycan, exhaustive = False):
   | :-
   | Returns list of glycowords
   """
+  #marked for deprecation
   b = glycan.split('(')
   b = [k.split(')') for k in b]
   b = [item for sublist in b for item in sublist]
@@ -76,6 +77,7 @@ def process_glycans(glycan_list, exhaustive = False):
   | :-
   | returns nested list of glycowords for every glycan
   """
+  #marked for deprecation; need to refactor get_lib
   glycan_motifs = [motif_find(k, exhaustive = exhaustive) for k in glycan_list]
   glycan_motifs = [[i.split('*') for i in k] for k in glycan_motifs]
   return glycan_motifs
