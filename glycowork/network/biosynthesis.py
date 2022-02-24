@@ -1,6 +1,7 @@
 import re
 import itertools
 import mpld3
+import pkg_resources
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -9,6 +10,9 @@ from glycowork.glycan_data.loader import lib, unwrap, linkages
 from glycowork.motif.graph import fast_compare_glycans, compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
 from glycowork.motif.processing import min_process_glycans
 from glycowork.motif.tokenization import stemify_glycan
+
+io = pkg_resources.resource_stream(__name__, "monolink_to_enzyme.csv")
+df_enzyme = pd.read_csv(io, sep = '\t')
 
 def safe_compare(g1, g2, libr = None):
   """fast_compare_glycans with try/except error catch\n
@@ -201,7 +205,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   | allowed_ptms (list): list of PTMs to consider
   | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
   | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False
-  | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide')or monosaccharide(linkage) ('monolink'); default:'monolink'\n
+  | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide'), monosaccharide(linkage) ('monolink'), or enzyme catalyzing the reaction ('enzyme'); default:'monolink'\n
   | Returns:
   | :-
   | Returns a networkx object of the network
@@ -212,10 +216,12 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
     virtuals = True
   else:
     virtuals = False
+  #generating graph from adjacency of observed glycans
   min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
   adjacency_matrix, virtual_nodes = create_adjacency_matrix(glycans, libr = libr, virtual_nodes = virtuals,
                             reducing_end = reducing_end, min_size = min_size)
   network = adjacencyMatrix_to_network(adjacency_matrix)
+  #connecting observed via virtual nodes
   if add_virtual_nodes == 'exhaustive':
     unconnected_nodes = get_unconnected_nodes(network, list(network.nodes()))
     new_nodes = []
@@ -238,6 +244,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
         larger_ed = np.argmax([len(e) for e in [ed[0], ed[1]]])
         if network.degree(ed[larger_ed]) == 1:
           network.remove_edge(ed[0], ed[1])
+  #create edge and node labels
   edge_labels = {}
   for el in list(network.edges()):
     edge_labels[el] = find_diff(el[0], el[1], libr = libr)
@@ -245,16 +252,19 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   virtual_labels = {k:(1 if k in virtual_nodes else 0) for k in list(network.nodes())}
   nx.set_node_attributes(network, virtual_labels, 'virtual')
   network = filter_disregard(network)
+  #connect post-translational modifications
   if ptm:
     ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr)
     if len(ptm_links)>1:
       network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
+  #find any remaining orphan nodes and connect them to the root(s)
   if add_virtual_nodes == 'simple':
     network = deorphanize_nodes(network, reducing_end = reducing_end,
                               permitted_roots = permitted_roots, libr = libr, limit = 1)
   elif add_virtual_nodes == 'exhaustive':
     network = deorphanize_nodes(network, reducing_end = reducing_end,
                               permitted_roots = permitted_roots, libr = libr, limit = limit)
+  #final clean-up / condensation step
   if virtuals:
     nodeDict = dict(network.nodes(data = True))
     for node in list(network.nodes()):
@@ -266,6 +276,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
     filler_network = adjacencyMatrix_to_network(adj_matrix[0])
     network.add_edges_from(list(filler_network.edges()))
     network = deorphanize_edge_labels(network, libr = libr)
+  #edge label specification
   if edge_type != 'monolink':
     ed = network.edges()
     for e in ed :
@@ -275,21 +286,25 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
         if link in edge:
           if edge_type == 'monosaccharide':
             elem['diffs'] = edge.split('(')[0]
+          elif edge_type == 'enzyme':
+            elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme)
           else:
             pass
+  #directed or undirected network
   if directed:
     network = make_network_directed(network)
   return network
 
-def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True,
-                 node_size = False):
+def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
+                 node_size = False, lfc_dict = None):
   """visualizes biosynthetic network\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
   | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'
   | edge_label_draw (bool): draws edge labels if True; default:True
-  | node_size (bool): whether nodes should be sized by an "abundance" attribute in network; default:False\n
+  | node_size (bool): whether nodes should be sized by an "abundance" attribute in network; default:False
+  | lfc_dict (dict): dictionary of enzyme:log2-fold-change to scale edge width; default:None\n
   """
   mpld3.enable_notebook()
   fig, ax = plt.subplots(figsize = (16,16))
@@ -297,7 +312,9 @@ def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True,
     node_sizes = list(nx.get_node_attributes(network, 'abundance').values())
   else:
     node_sizes = 50
-  if plot_format == 'kamada_kawai':
+  if plot_format == 'pydot2':
+    pos = nx.nx_pydot.pydot_layout(network, prog = "dot")
+  elif plot_format == 'kamada_kawai':
     pos = nx.kamada_kawai_layout(network)
   elif plot_format == 'spring':
     pos = nx.spring_layout(network, k = 1/4)
@@ -306,17 +323,26 @@ def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True,
   else:
     node_origins = False
   if node_origins:
-    alpha_map = [0.2 if k==1 else 1 for k in list(nx.get_node_attributes(network, 'virtual').values())]
+    alpha_map = [0.2 if k == 1 else 1 for k in list(nx.get_node_attributes(network, 'virtual').values())]
     scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, ax = ax,
                                        node_color = list(nx.get_node_attributes(network, 'origin').values()),
                                        alpha = alpha_map)
   else:
-    color_map = ['darkorange' if k==1 else 'cornflowerblue' if k==0 else 'seagreen' for k in list(nx.get_node_attributes(network, 'virtual').values())]
+    color_map = ['darkorange' if k == 1 else 'cornflowerblue' if k == 0 else 'seagreen' for k in list(nx.get_node_attributes(network, 'virtual').values())]
     scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, alpha = 0.7,
                                      node_color = color_map, ax = ax)
   labels = list(network.nodes())
   if edge_label_draw:
-    nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
+    if lfc_dict is None:
+      nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
+    else:
+      diffs = list(nx.get_edge_attributes(network, 'diffs').values())
+      for k in diffs:
+        if k not in lfc_dict.keys() :
+          lfc_dict[k] = 0
+      c_list = ['red' if (lfc_dict[k] < 0) else 'green' if (lfc_dict[k] > 0) else 'cornflowerblue' for k in diffs]
+      w_list = [abs(lfc_dict[k]) if abs(lfc_dict[k]) != 0 else 1 for k in diffs]
+      nx.draw_networkx_edges(network, pos, ax = ax, edge_color = c_list, width = w_list)
     nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax)
   else:
     diffs = list(nx.get_edge_attributes(network, 'diffs').values())
@@ -977,23 +1003,27 @@ def export_network(network, filepath):
   node_labels = node_labels.replace('z', '?', regex = True)
   node_labels.to_csv(filepath + 'node_labels.csv', index = False)
 
-def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme', monolink_column = 'monolink') :
+def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
+                            monolink_column = 'monolink', mode = 'condensed') :
   """replaces monosaccharide(linkage) edge label by the name of the enzyme responsible for its synthesis\n
   | Arguments:
   | :-
   | edge_label (str): 'monolink' edge label
   | df (dataframe): dataframe containing the glycoenzymes and their corresponding 'monolink'
   | enzyme_column (str): name of the column in df that indicates the enzyme; default:'glycoenzyme'
-  | monolink_column (str): name of the column in df that indicates the 'monolink'; default:'monolink'\n
+  | monolink_column (str): name of the column in df that indicates the 'monolink'; default:'monolink'
+  | mode (str): determine if all glycoenzymes must be represented (full) or if only glycoenzyme families are shown (condensed); default:'condensed'\n
   | Returns:
   | :-
   | Returns a new edge label corresponding to the enzyme that catalyzes this reaction
   """
+  if mode == 'condensed' :
+    enzyme_column = 'glycoclass'
   new_edge_label = df[enzyme_column].values[df[monolink_column] == edge_label]
   if str(new_edge_label) == 'None' or str(new_edge_label) == '[]' :
     return(edge_label)
   else :
-    return(str(new_edge_label))
+    return(str(list(set(new_edge_label))).replace("'","").replace("[","").replace("]","").replace(", ","_"))
 
 def infuse_network(network, node_df, node_abundance = True, glycan_col = 'target',
                    intensity_col = 'rel_intensity'):
