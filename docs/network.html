@@ -41,6 +41,7 @@ nb_path: "06_network.ipynb"
 <p><a href="/glycowork/network.html"><code>network</code></a> contains functions to arrange and analyze glycans in the context of networks. In such a network, each node represents a glycan and edges represent, for instance, their connection via a biosynthetic step. It should be noted, since <code>glycowork</code> treats glycans as molecular graphs, that these networks represent hierarchical graphs, with the network being one graph and each node within the network also a graph. <a href="/glycowork/network.html"><code>network</code></a> contains the following modules:</p>
 <ul>
 <li><code>biosynthesis</code> contains functions to construct and analyze biosynthetic glycan networks</li>
+<li><code>evolution</code> contains functions to compare (taxonomic) groups as to their glycan repertoires</li>
 </ul>
 
 </div>
@@ -48,7 +49,7 @@ nb_path: "06_network.ipynb"
 </div>
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<h1 id="biosynthesis">biosynthesis<a class="anchor-link" href="#biosynthesis"> </a></h1><blockquote><p>constructing and analyzing biosynthetic glycan networks</p>
+<h2 id="biosynthesis">biosynthesis<a class="anchor-link" href="#biosynthesis"> </a></h2><blockquote><p>constructing and analyzing biosynthetic glycan networks</p>
 </blockquote>
 
 </div>
@@ -65,9 +66,9 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="subgraph_to_string" class="doc_header"><code>subgraph_to_string</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L43" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>subgraph_to_string</code>(<strong><code>subgraph</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="construct_network" class="doc_header"><code>construct_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L190" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>construct_network</code>(<strong><code>glycans</code></strong>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'exhaustive'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>, <strong><code>ptm</code></strong>=<em><code>True</code></em>, <strong><code>allowed_ptms</code></strong>=<em><code>['OS', '3S', '6S', '1P', '6P', 'OAc', '4Ac']</code></em>, <strong><code>permitted_roots</code></strong>=<em><code>['Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol']</code></em>, <strong><code>directed</code></strong>=<em><code>False</code></em>, <strong><code>edge_type</code></strong>=<em><code>'monolink'</code></em>)</p>
 </blockquote>
-<p>converts glycan subgraph back to IUPAC-condensed format</p>
+<p>visualize biosynthetic network</p>
 <table>
 <thead><tr>
 <th style="text-align:left">Arguments:</th>
@@ -75,10 +76,34 @@ nb_path: "06_network.ipynb"
 </thead>
 <tbody>
 <tr>
-<td style="text-align:left">subgraph (networkx object): subgraph of one monosaccharide and its linkage</td>
+<td style="text-align:left">glycans (list): list of glycans in IUPAC-condensed format</td>
+</tr>
+<tr>
+<td style="text-align:left">add_virtual_nodes (string): indicates whether no ('none'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added; default:'exhaustive'</td>
 </tr>
 <tr>
 <td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
+</tr>
+<tr>
+<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends</td>
+</tr>
+<tr>
+<td style="text-align:left">limit (int): maximum number of virtual nodes between observed nodes; default:5</td>
+</tr>
+<tr>
+<td style="text-align:left">ptm (bool): whether to consider post-translational modifications in the network construction; default:True</td>
+</tr>
+<tr>
+<td style="text-align:left">allowed_ptms (list): list of PTMs to consider</td>
+</tr>
+<tr>
+<td style="text-align:left">permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]</td>
+</tr>
+<tr>
+<td style="text-align:left">directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False</td>
+</tr>
+<tr>
+<td style="text-align:left">edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide'), monosaccharide(linkage) ('monolink'), or enzyme catalyzing the reaction ('enzyme'); default:'monolink'</td>
 </tr>
 </tbody>
 </table>
@@ -89,7 +114,7 @@ nb_path: "06_network.ipynb"
 </thead>
 <tbody>
 <tr>
-<td style="text-align:left">Returns glycan motif in IUPAC-condensed format (string)</td>
+<td style="text-align:left">Returns a networkx object of the network</td>
 </tr>
 </tbody>
 </table>
@@ -115,9 +140,9 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_neighbors" class="doc_header"><code>get_neighbors</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L59" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_neighbors</code>(<strong><code>glycan</code></strong>, <strong><code>glycans</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>graphs</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="plot_network" class="doc_header"><code>plot_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L298" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>plot_network</code>(<strong><code>network</code></strong>, <strong><code>plot_format</code></strong>=<em><code>'pydot2'</code></em>, <strong><code>edge_label_draw</code></strong>=<em><code>True</code></em>, <strong><code>node_size</code></strong>=<em><code>False</code></em>, <strong><code>lfc_dict</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
-<p>find (observed) biosynthetic precursors of a glycan</p>
+<p>visualizes biosynthetic network</p>
 <table>
 <thead><tr>
 <th style="text-align:left">Arguments:</th>
@@ -125,30 +150,19 @@ nb_path: "06_network.ipynb"
 </thead>
 <tbody>
 <tr>
-<td style="text-align:left">glycan (string): glycan in IUPAC-condensed format</td>
+<td style="text-align:left">network (networkx object): biosynthetic network, returned from construct_network</td>
 </tr>
 <tr>
-<td style="text-align:left">glycans (list): list of glycans in IUPAC-condensed format</td>
+<td style="text-align:left">plot_format (string): how to layout network, either 'pydot2', 'kamada_kawai', or 'spring'; default:'pydot2'</td>
 </tr>
 <tr>
-<td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
+<td style="text-align:left">edge_label_draw (bool): draws edge labels if True; default:True</td>
 </tr>
 <tr>
-<td style="text-align:left">graphs (list): list of glycans in df as graphs; optional if you call get_neighbors often with the same df and want to provide it precomputed</td>
-</tr>
-</tbody>
-</table>
-<table>
-<thead><tr>
-<th style="text-align:left">Returns:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">(1) a list of direct glycan precursors in IUPAC-condensed</td>
+<td style="text-align:left">node_size (bool): whether nodes should be sized by an "abundance" attribute in network; default:False</td>
 </tr>
 <tr>
-<td style="text-align:left">(2) a list of indices where each precursor from (1) can be found in glycans</td>
+<td style="text-align:left">lfc_dict (dict): dictionary of enzyme:log2-fold-change to scale edge width; default:None</td>
 </tr>
 </tbody>
 </table>
@@ -170,8 +184,12 @@ nb_path: "06_network.ipynb"
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">get_neighbors</span><span class="p">(</span><span class="s1">&#39;Gal(b1-3)GlcNAc(b1-3)[Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)Glc&#39;</span><span class="p">,</span>
-             <span class="p">[</span><span class="s1">&#39;Gal(b1-3)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc&#39;</span><span class="p">,</span> <span class="s1">&#39;Gal(b1-4)Glc&#39;</span><span class="p">])</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">glycans</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Gal(b1-4)Glc-ol&quot;</span><span class="p">,</span> <span class="s2">&quot;GlcNAc(b1-3)Gal(b1-4)Glc-ol&quot;</span><span class="p">,</span>
+           <span class="s2">&quot;GlcNAc6S(b1-3)Gal(b1-4)Glc-ol&quot;</span><span class="p">,</span>
+           <span class="s2">&quot;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol&quot;</span><span class="p">,</span> <span class="s2">&quot;Fuc(a1-2)Gal(b1-4)Glc-ol&quot;</span><span class="p">,</span>
+          <span class="s2">&quot;Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol&quot;</span><span class="p">]</span>
+<span class="n">network</span> <span class="o">=</span> <span class="n">construct_network</span><span class="p">(</span><span class="n">glycans</span><span class="p">)</span>
+<span class="n">plot_network</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">plot_format</span> <span class="o">=</span> <span class="s1">&#39;kamada_kawai&#39;</span><span class="p">)</span>
 </pre></div>
 
     </div>
@@ -184,9 +202,50 @@ nb_path: "06_network.ipynb"
 <div class="output_area">
 
 
+<div class="output_html rendered_html output_subarea ">
 
-<div class="output_text output_subarea output_execute_result">
-<pre>([&#39;Gal(b1-3)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc&#39;], [[0], [], [], []])</pre>
+
+<style>
+
+</style>
+
+<div id="fig_el2592024930750545445139082967"></div>
+<script>
+function mpld3_load_lib(url, callback){
+  var s = document.createElement('script');
+  s.src = url;
+  s.async = true;
+  s.onreadystatechange = s.onload = callback;
+  s.onerror = function(){console.warn("failed to load library " + url);};
+  document.getElementsByTagName("head")[0].appendChild(s);
+}
+
+if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
+   // already loaded: just create the figure
+   !function(mpld3){
+       
+       mpld3.draw_figure("fig_el2592024930750545445139082967", {"width": 1152.0, "height": 1152.0, "axes": [{"bbox": [0.125, 0.125, 0.775, 0.755], "xlim": [-0.5364262264819477, 0.7239068796807482], "ylim": [-0.6436624596569476, 1.1561851206008864], "xdomain": [-0.5364262264819477, 0.7239068796807482], "ydomain": [-0.6436624596569476, 1.1561851206008864], "xscale": "linear", "yscale": "linear", "axes": [{"position": "top", "nticks": 0, "tickvalues": [], "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}, {"position": "right", "nticks": 0, "tickvalues": [], "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}], "axesbg": "#FFFFFF", "axesbgalpha": null, "zoomable": true, "id": "el259202491501157824", "lines": [], "paths": [], "markers": [], "texts": [{"text": "GlcNAc(b1-3)", "position": [0.22757056347679347, 0.3483785817642636], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -60.130825764003156, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502942240"}, {"text": "GlcNAc6S(b1-3)", "position": [0.34442844196663874, 0.3948432721369998], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -277.3402439377388, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502940944"}, {"text": "Fuc(a1-2)", "position": [0.4704467922806407, 0.800260240413796], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -43.39912388169132, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502978240"}, {"text": "Gal(b1-4)", "position": [-0.007266497538837846, 0.08508136115497096], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -3.2013904023972475, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502979824"}, {"text": "6S", "position": [0.24564455168101215, 0.14270137307367164], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -15.175979774114824, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503018048"}, {"text": "GlcNAc(b1-6)", "position": [0.12699064862044593, -0.04154366503811709], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -88.90528791226662, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491501241200"}, {"text": "Neu5Ac(a2-3)", "position": [-0.2784804190634905, 0.0651875240915793], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -2.5253594601310607, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503019344"}, {"text": "GlcNAc(b1-6)", "position": [-0.14728763574531148, -0.06519643604424341], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -87.60588112616585, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503020640"}, {"text": "Gal(b1-3)", "position": [-0.4196894113583787, -0.3517234222576746], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -274.5496054517382, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503050864"}, {"text": "Neu5Ac(a2-3)", "position": [-0.2764329932399345, -0.4840092186335284], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -0.9974445348753017, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503051968"}, {"text": "GlcNAc(b1-6)", "position": [-0.4203498237290997, -0.07976024844256802], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -85.8704416831508, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503053264"}, {"text": "Neu5Ac(a2-3)", "position": [-0.2891570404109206, -0.21014420857839072], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -1.6506180844484823, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503054704"}, {"text": "Gal(b1-3)", "position": [-0.14590062229247647, -0.34243000495424447], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -273.25304539944744, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503092784"}, {"text": "Gal(b1-4)", "position": [-0.0048910239537558325, -0.46460425308404085], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -4.582031273350441, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503094080"}, {"text": "Gal(b1-4)", "position": [-0.013030489586027705, -0.19182146223733146], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -3.529410133266986, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503095376"}, {"text": "Gal(b1-3)", "position": [0.12797910875269294, -0.3139957103671278], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -271.73605441951577, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503125408"}], "collections": [{"offsets": "data01", "xindex": 0, "yindex": 1, "paths": [[[[0.0, -0.5], [0.13260155, -0.5], [0.25978993539242673, -0.44731684579412084], [0.3535533905932738, -0.3535533905932738], [0.44731684579412084, -0.25978993539242673], [0.5, -0.13260155], [0.5, 0.0], [0.5, 0.13260155], [0.44731684579412084, 0.25978993539242673], [0.3535533905932738, 0.3535533905932738], [0.25978993539242673, 0.44731684579412084], [0.13260155, 0.5], [0.0, 0.5], [-0.13260155, 0.5], [-0.25978993539242673, 0.44731684579412084], [-0.3535533905932738, 0.3535533905932738], [-0.44731684579412084, 0.25978993539242673], [-0.5, 0.13260155], [-0.5, 0.0], [-0.5, -0.13260155], [-0.44731684579412084, -0.25978993539242673], [-0.3535533905932738, -0.3535533905932738], [-0.25978993539242673, -0.44731684579412084], [-0.13260155, -0.5], [0.0, -0.5]], ["M", "C", "C", "C", "C", "C", "C", "C", "C", "Z"]]], "pathtransforms": [[7.0710678118654755, 0.0, 0.0, 7.0710678118654755, 0.0, 0.0]], "alphas": [0.7], "edgecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "facecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "edgewidths": [1.0], "offsetcoordinates": "data", "pathcoordinates": "display", "zorder": 2, "id": "el259202491501243360"}, {"offsets": "data02", "xindex": 0, "yindex": 1, "paths": [[[[0.32635445376242006, 0.6005204808275918], [0.12878667319116688, 0.0962366827009354]], ["M", "L"]], [[[0.32635445376242006, 0.6005204808275918], [0.3625024301708574, 0.18916606344640788]], ["M", "L"]], [[[0.32635445376242006, 0.6005204808275918], [0.6145391307988614, 1.0]], ["M", "L"]], [[[0.12878667319116688, 0.0962366827009354], [-0.14331966826884257, 0.07392603960900652]], ["M", "L"]], [[[0.12878667319116688, 0.0962366827009354], [0.3625024301708574, 0.18916606344640788]], ["M", "L"]], [[[0.12878667319116688, 0.0962366827009354], [0.12519462404972498, -0.17932401277716958]], ["M", "L"]], [[[-0.14331966826884257, 0.07392603960900652], [-0.4136411698581384, 0.05644900857415206]], ["M", "L"]], [[[-0.14331966826884257, 0.07392603960900652], [-0.1512556032217804, -0.20431891169749333]], ["M", "L"]], [[[-0.4123203451166964, -0.4874773390560611], [-0.4270584776000609, -0.21596950545928809]], ["M", "L"]], [[[-0.4123203451166964, -0.4874773390560611], [-0.14054564136317257, -0.48054109821099567]], ["M", "L"]], [[[-0.4270584776000609, -0.21596950545928809], [-0.4136411698581384, 0.05644900857415206]], ["M", "L"]], [[[-0.4270584776000609, -0.21596950545928809], [-0.1512556032217804, -0.20431891169749333]], ["M", "L"]], [[[-0.14054564136317257, -0.48054109821099567], [-0.1512556032217804, -0.20431891169749333]], ["M", "L"]], [[[-0.14054564136317257, -0.48054109821099567], [0.1307635934556609, -0.448667407957086]], ["M", "L"]], [[[-0.1512556032217804, -0.20431891169749333], [0.12519462404972498, -0.17932401277716958]], ["M", "L"]], [[[0.1307635934556609, -0.448667407957086], [0.12519462404972498, -0.17932401277716958]], ["M", "L"]]], "pathtransforms": [], "alphas": [null], "edgecolors": ["#6495ED"], "facecolors": [], "edgewidths": [1.0], "offsetcoordinates": "display", "pathcoordinates": "data", "zorder": 1, "id": "el259202491450540480"}], "images": [], "sharex": [], "sharey": []}], "data": {"data01": [[0.32635445376242006, 0.6005204808275918], [0.12878667319116688, 0.0962366827009354], [0.3625024301708574, 0.18916606344640788], [-0.14331966826884257, 0.07392603960900652], [0.6145391307988614, 1.0], [-0.4123203451166964, -0.4874773390560611], [-0.4270584776000609, -0.21596950545928809], [-0.14054564136317257, -0.48054109821099567], [-0.4136411698581384, 0.05644900857415206], [-0.1512556032217804, -0.20431891169749333], [0.1307635934556609, -0.448667407957086], [0.12519462404972498, -0.17932401277716958]], "data02": [[0.0, 0.0]]}, "id": "el259202493075054544", "plugins": [{"type": "reset"}, {"type": "zoom", "button": true, "enabled": false}, {"type": "boxzoom", "button": true, "enabled": false}, {"type": "tooltip", "id": "el259202491501243360", "labels": ["Gal(b1-4)Glc-ol", "GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc6S(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol"], "hoffset": 0, "voffset": 10, "location": "mouse"}]});
+   }(mpld3);
+}else if(typeof define === "function" && define.amd){
+   // require.js is available: use it to load d3/mpld3
+   require.config({paths: {d3: "https://d3js.org/d3.v5"}});
+   require(["d3"], function(d3){
+      window.d3 = d3;
+      mpld3_load_lib("https://mpld3.github.io/js/mpld3.v0.5.2.js", function(){
+         
+         mpld3.draw_figure("fig_el2592024930750545445139082967", {"width": 1152.0, "height": 1152.0, "axes": [{"bbox": [0.125, 0.125, 0.775, 0.755], "xlim": [-0.5364262264819477, 0.7239068796807482], "ylim": [-0.6436624596569476, 1.1561851206008864], "xdomain": [-0.5364262264819477, 0.7239068796807482], "ydomain": [-0.6436624596569476, 1.1561851206008864], "xscale": "linear", "yscale": "linear", "axes": [{"position": "top", "nticks": 0, "tickvalues": [], "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}, {"position": "right", "nticks": 0, "tickvalues": [], "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}], "axesbg": "#FFFFFF", "axesbgalpha": null, "zoomable": true, "id": "el259202491501157824", "lines": [], "paths": [], "markers": [], "texts": [{"text": "GlcNAc(b1-3)", "position": [0.22757056347679347, 0.3483785817642636], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -60.130825764003156, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502942240"}, {"text": "GlcNAc6S(b1-3)", "position": [0.34442844196663874, 0.3948432721369998], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -277.3402439377388, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502940944"}, {"text": "Fuc(a1-2)", "position": [0.4704467922806407, 0.800260240413796], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -43.39912388169132, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502978240"}, {"text": "Gal(b1-4)", "position": [-0.007266497538837846, 0.08508136115497096], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -3.2013904023972475, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502979824"}, {"text": "6S", "position": [0.24564455168101215, 0.14270137307367164], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -15.175979774114824, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503018048"}, {"text": "GlcNAc(b1-6)", "position": [0.12699064862044593, -0.04154366503811709], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -88.90528791226662, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491501241200"}, {"text": "Neu5Ac(a2-3)", "position": [-0.2784804190634905, 0.0651875240915793], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -2.5253594601310607, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503019344"}, {"text": "GlcNAc(b1-6)", "position": [-0.14728763574531148, -0.06519643604424341], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -87.60588112616585, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503020640"}, {"text": "Gal(b1-3)", "position": [-0.4196894113583787, -0.3517234222576746], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -274.5496054517382, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503050864"}, {"text": "Neu5Ac(a2-3)", "position": [-0.2764329932399345, -0.4840092186335284], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -0.9974445348753017, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503051968"}, {"text": "GlcNAc(b1-6)", "position": [-0.4203498237290997, -0.07976024844256802], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -85.8704416831508, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503053264"}, {"text": "Neu5Ac(a2-3)", "position": [-0.2891570404109206, -0.21014420857839072], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -1.6506180844484823, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503054704"}, {"text": "Gal(b1-3)", "position": [-0.14590062229247647, -0.34243000495424447], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -273.25304539944744, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503092784"}, {"text": "Gal(b1-4)", "position": [-0.0048910239537558325, -0.46460425308404085], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -4.582031273350441, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503094080"}, {"text": "Gal(b1-4)", "position": [-0.013030489586027705, -0.19182146223733146], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -3.529410133266986, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503095376"}, {"text": "Gal(b1-3)", "position": [0.12797910875269294, -0.3139957103671278], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -271.73605441951577, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503125408"}], "collections": [{"offsets": "data01", "xindex": 0, "yindex": 1, "paths": [[[[0.0, -0.5], [0.13260155, -0.5], [0.25978993539242673, -0.44731684579412084], [0.3535533905932738, -0.3535533905932738], [0.44731684579412084, -0.25978993539242673], [0.5, -0.13260155], [0.5, 0.0], [0.5, 0.13260155], [0.44731684579412084, 0.25978993539242673], [0.3535533905932738, 0.3535533905932738], [0.25978993539242673, 0.44731684579412084], [0.13260155, 0.5], [0.0, 0.5], [-0.13260155, 0.5], [-0.25978993539242673, 0.44731684579412084], [-0.3535533905932738, 0.3535533905932738], [-0.44731684579412084, 0.25978993539242673], [-0.5, 0.13260155], [-0.5, 0.0], [-0.5, -0.13260155], [-0.44731684579412084, -0.25978993539242673], [-0.3535533905932738, -0.3535533905932738], [-0.25978993539242673, -0.44731684579412084], [-0.13260155, -0.5], [0.0, -0.5]], ["M", "C", "C", "C", "C", "C", "C", "C", "C", "Z"]]], "pathtransforms": [[7.0710678118654755, 0.0, 0.0, 7.0710678118654755, 0.0, 0.0]], "alphas": [0.7], "edgecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "facecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "edgewidths": [1.0], "offsetcoordinates": "data", "pathcoordinates": "display", "zorder": 2, "id": "el259202491501243360"}, {"offsets": "data02", "xindex": 0, "yindex": 1, "paths": [[[[0.32635445376242006, 0.6005204808275918], [0.12878667319116688, 0.0962366827009354]], ["M", "L"]], [[[0.32635445376242006, 0.6005204808275918], [0.3625024301708574, 0.18916606344640788]], ["M", "L"]], [[[0.32635445376242006, 0.6005204808275918], [0.6145391307988614, 1.0]], ["M", "L"]], [[[0.12878667319116688, 0.0962366827009354], [-0.14331966826884257, 0.07392603960900652]], ["M", "L"]], [[[0.12878667319116688, 0.0962366827009354], [0.3625024301708574, 0.18916606344640788]], ["M", "L"]], [[[0.12878667319116688, 0.0962366827009354], [0.12519462404972498, -0.17932401277716958]], ["M", "L"]], [[[-0.14331966826884257, 0.07392603960900652], [-0.4136411698581384, 0.05644900857415206]], ["M", "L"]], [[[-0.14331966826884257, 0.07392603960900652], [-0.1512556032217804, -0.20431891169749333]], ["M", "L"]], [[[-0.4123203451166964, -0.4874773390560611], [-0.4270584776000609, -0.21596950545928809]], ["M", "L"]], [[[-0.4123203451166964, -0.4874773390560611], [-0.14054564136317257, -0.48054109821099567]], ["M", "L"]], [[[-0.4270584776000609, -0.21596950545928809], [-0.4136411698581384, 0.05644900857415206]], ["M", "L"]], [[[-0.4270584776000609, -0.21596950545928809], [-0.1512556032217804, -0.20431891169749333]], ["M", "L"]], [[[-0.14054564136317257, -0.48054109821099567], [-0.1512556032217804, -0.20431891169749333]], ["M", "L"]], [[[-0.14054564136317257, -0.48054109821099567], [0.1307635934556609, -0.448667407957086]], ["M", "L"]], [[[-0.1512556032217804, -0.20431891169749333], [0.12519462404972498, -0.17932401277716958]], ["M", "L"]], [[[0.1307635934556609, -0.448667407957086], [0.12519462404972498, -0.17932401277716958]], ["M", "L"]]], "pathtransforms": [], "alphas": [null], "edgecolors": ["#6495ED"], "facecolors": [], "edgewidths": [1.0], "offsetcoordinates": "display", "pathcoordinates": "data", "zorder": 1, "id": "el259202491450540480"}], "images": [], "sharex": [], "sharey": []}], "data": {"data01": [[0.32635445376242006, 0.6005204808275918], [0.12878667319116688, 0.0962366827009354], [0.3625024301708574, 0.18916606344640788], [-0.14331966826884257, 0.07392603960900652], [0.6145391307988614, 1.0], [-0.4123203451166964, -0.4874773390560611], [-0.4270584776000609, -0.21596950545928809], [-0.14054564136317257, -0.48054109821099567], [-0.4136411698581384, 0.05644900857415206], [-0.1512556032217804, -0.20431891169749333], [0.1307635934556609, -0.448667407957086], [0.12519462404972498, -0.17932401277716958]], "data02": [[0.0, 0.0]]}, "id": "el259202493075054544", "plugins": [{"type": "reset"}, {"type": "zoom", "button": true, "enabled": false}, {"type": "boxzoom", "button": true, "enabled": false}, {"type": "tooltip", "id": "el259202491501243360", "labels": ["Gal(b1-4)Glc-ol", "GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc6S(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol"], "hoffset": 0, "voffset": 10, "location": "mouse"}]});
+      });
+    });
+}else{
+    // require.js not available: dynamically load d3 & mpld3
+    mpld3_load_lib("https://d3js.org/d3.v5.js", function(){
+         mpld3_load_lib("https://mpld3.github.io/js/mpld3.v0.5.2.js", function(){
+                 
+                 mpld3.draw_figure("fig_el2592024930750545445139082967", {"width": 1152.0, "height": 1152.0, "axes": [{"bbox": [0.125, 0.125, 0.775, 0.755], "xlim": [-0.5364262264819477, 0.7239068796807482], "ylim": [-0.6436624596569476, 1.1561851206008864], "xdomain": [-0.5364262264819477, 0.7239068796807482], "ydomain": [-0.6436624596569476, 1.1561851206008864], "xscale": "linear", "yscale": "linear", "axes": [{"position": "top", "nticks": 0, "tickvalues": [], "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}, {"position": "right", "nticks": 0, "tickvalues": [], "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}], "axesbg": "#FFFFFF", "axesbgalpha": null, "zoomable": true, "id": "el259202491501157824", "lines": [], "paths": [], "markers": [], "texts": [{"text": "GlcNAc(b1-3)", "position": [0.22757056347679347, 0.3483785817642636], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -60.130825764003156, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502942240"}, {"text": "GlcNAc6S(b1-3)", "position": [0.34442844196663874, 0.3948432721369998], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -277.3402439377388, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502940944"}, {"text": "Fuc(a1-2)", "position": [0.4704467922806407, 0.800260240413796], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -43.39912388169132, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502978240"}, {"text": "Gal(b1-4)", "position": [-0.007266497538837846, 0.08508136115497096], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -3.2013904023972475, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491502979824"}, {"text": "6S", "position": [0.24564455168101215, 0.14270137307367164], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -15.175979774114824, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503018048"}, {"text": "GlcNAc(b1-6)", "position": [0.12699064862044593, -0.04154366503811709], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -88.90528791226662, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491501241200"}, {"text": "Neu5Ac(a2-3)", "position": [-0.2784804190634905, 0.0651875240915793], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -2.5253594601310607, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503019344"}, {"text": "GlcNAc(b1-6)", "position": [-0.14728763574531148, -0.06519643604424341], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -87.60588112616585, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503020640"}, {"text": "Gal(b1-3)", "position": [-0.4196894113583787, -0.3517234222576746], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -274.5496054517382, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503050864"}, {"text": "Neu5Ac(a2-3)", "position": [-0.2764329932399345, -0.4840092186335284], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -0.9974445348753017, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503051968"}, {"text": "GlcNAc(b1-6)", "position": [-0.4203498237290997, -0.07976024844256802], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -85.8704416831508, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503053264"}, {"text": "Neu5Ac(a2-3)", "position": [-0.2891570404109206, -0.21014420857839072], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -1.6506180844484823, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503054704"}, {"text": "Gal(b1-3)", "position": [-0.14590062229247647, -0.34243000495424447], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -273.25304539944744, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503092784"}, {"text": "Gal(b1-4)", "position": [-0.0048910239537558325, -0.46460425308404085], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -4.582031273350441, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503094080"}, {"text": "Gal(b1-4)", "position": [-0.013030489586027705, -0.19182146223733146], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -3.529410133266986, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503095376"}, {"text": "Gal(b1-3)", "position": [0.12797910875269294, -0.3139957103671278], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -271.73605441951577, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el259202491503125408"}], "collections": [{"offsets": "data01", "xindex": 0, "yindex": 1, "paths": [[[[0.0, -0.5], [0.13260155, -0.5], [0.25978993539242673, -0.44731684579412084], [0.3535533905932738, -0.3535533905932738], [0.44731684579412084, -0.25978993539242673], [0.5, -0.13260155], [0.5, 0.0], [0.5, 0.13260155], [0.44731684579412084, 0.25978993539242673], [0.3535533905932738, 0.3535533905932738], [0.25978993539242673, 0.44731684579412084], [0.13260155, 0.5], [0.0, 0.5], [-0.13260155, 0.5], [-0.25978993539242673, 0.44731684579412084], [-0.3535533905932738, 0.3535533905932738], [-0.44731684579412084, 0.25978993539242673], [-0.5, 0.13260155], [-0.5, 0.0], [-0.5, -0.13260155], [-0.44731684579412084, -0.25978993539242673], [-0.3535533905932738, -0.3535533905932738], [-0.25978993539242673, -0.44731684579412084], [-0.13260155, -0.5], [0.0, -0.5]], ["M", "C", "C", "C", "C", "C", "C", "C", "C", "Z"]]], "pathtransforms": [[7.0710678118654755, 0.0, 0.0, 7.0710678118654755, 0.0, 0.0]], "alphas": [0.7], "edgecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "facecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "edgewidths": [1.0], "offsetcoordinates": "data", "pathcoordinates": "display", "zorder": 2, "id": "el259202491501243360"}, {"offsets": "data02", "xindex": 0, "yindex": 1, "paths": [[[[0.32635445376242006, 0.6005204808275918], [0.12878667319116688, 0.0962366827009354]], ["M", "L"]], [[[0.32635445376242006, 0.6005204808275918], [0.3625024301708574, 0.18916606344640788]], ["M", "L"]], [[[0.32635445376242006, 0.6005204808275918], [0.6145391307988614, 1.0]], ["M", "L"]], [[[0.12878667319116688, 0.0962366827009354], [-0.14331966826884257, 0.07392603960900652]], ["M", "L"]], [[[0.12878667319116688, 0.0962366827009354], [0.3625024301708574, 0.18916606344640788]], ["M", "L"]], [[[0.12878667319116688, 0.0962366827009354], [0.12519462404972498, -0.17932401277716958]], ["M", "L"]], [[[-0.14331966826884257, 0.07392603960900652], [-0.4136411698581384, 0.05644900857415206]], ["M", "L"]], [[[-0.14331966826884257, 0.07392603960900652], [-0.1512556032217804, -0.20431891169749333]], ["M", "L"]], [[[-0.4123203451166964, -0.4874773390560611], [-0.4270584776000609, -0.21596950545928809]], ["M", "L"]], [[[-0.4123203451166964, -0.4874773390560611], [-0.14054564136317257, -0.48054109821099567]], ["M", "L"]], [[[-0.4270584776000609, -0.21596950545928809], [-0.4136411698581384, 0.05644900857415206]], ["M", "L"]], [[[-0.4270584776000609, -0.21596950545928809], [-0.1512556032217804, -0.20431891169749333]], ["M", "L"]], [[[-0.14054564136317257, -0.48054109821099567], [-0.1512556032217804, -0.20431891169749333]], ["M", "L"]], [[[-0.14054564136317257, -0.48054109821099567], [0.1307635934556609, -0.448667407957086]], ["M", "L"]], [[[-0.1512556032217804, -0.20431891169749333], [0.12519462404972498, -0.17932401277716958]], ["M", "L"]], [[[0.1307635934556609, -0.448667407957086], [0.12519462404972498, -0.17932401277716958]], ["M", "L"]]], "pathtransforms": [], "alphas": [null], "edgecolors": ["#6495ED"], "facecolors": [], "edgewidths": [1.0], "offsetcoordinates": "display", "pathcoordinates": "data", "zorder": 1, "id": "el259202491450540480"}], "images": [], "sharex": [], "sharey": []}], "data": {"data01": [[0.32635445376242006, 0.6005204808275918], [0.12878667319116688, 0.0962366827009354], [0.3625024301708574, 0.18916606344640788], [-0.14331966826884257, 0.07392603960900652], [0.6145391307988614, 1.0], [-0.4123203451166964, -0.4874773390560611], [-0.4270584776000609, -0.21596950545928809], [-0.14054564136317257, -0.48054109821099567], [-0.4136411698581384, 0.05644900857415206], [-0.1512556032217804, -0.20431891169749333], [0.1307635934556609, -0.448667407957086], [0.12519462404972498, -0.17932401277716958]], "data02": [[0.0, 0.0]]}, "id": "el259202493075054544", "plugins": [{"type": "reset"}, {"type": "zoom", "button": true, "enabled": false}, {"type": "boxzoom", "button": true, "enabled": false}, {"type": "tooltip", "id": "el259202491501243360", "labels": ["Gal(b1-4)Glc-ol", "GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc6S(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol"], "hoffset": 0, "voffset": 10, "location": "mouse"}]});
+            })
+         });
+}
+</script>
 </div>
 
 </div>
@@ -208,66 +267,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="create_adjacency_matrix" class="doc_header"><code>create_adjacency_matrix</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L84" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>create_adjacency_matrix</code>(<strong><code>glycans</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>virtual_nodes</code></strong>=<em><code>False</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc', 'GlcNAc']</code></em>)</p>
-</blockquote>
-<p>creates a biosynthetic adjacency matrix from a list of glycans</p>
-<table>
-<thead><tr>
-<th style="text-align:left">Arguments:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">glycans (list): list of glycans in IUPAC-condensed format</td>
-</tr>
-<tr>
-<td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
-</tr>
-<tr>
-<td style="text-align:left">virtual_nodes (bool): whether to include virtual nodes in network; default:False</td>
-</tr>
-<tr>
-<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']</td>
-</tr>
-</tbody>
-</table>
-<table>
-<thead><tr>
-<th style="text-align:left">Returns:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">(1) adjacency matrix (glycan X glycan) denoting whether two glycans are connected by one biosynthetic step</td>
-</tr>
-<tr>
-<td style="text-align:left">(2) list of which nodes are virtual nodes (empty list if virtual_nodes is False)</td>
-</tr>
-</tbody>
-</table>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_diff" class="doc_header"><code>find_diff</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L142" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_diff</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="find_diff" class="doc_header"><code>find_diff</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L157" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_diff</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>finds the subgraph that differs between glycans and returns it, will only work if the differing subgraph is connected</p>
 <table>
@@ -332,7 +332,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_text output_subarea output_execute_result">
-<pre>&#39;Fuca1-6&#39;</pre>
+<pre>&#39;Fuc(a1-6)&#39;</pre>
 </div>
 
 </div>
@@ -354,108 +354,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="construct_network" class="doc_header"><code>construct_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L168" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>construct_network</code>(<strong><code>glycans</code></strong>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'none'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc', 'GlcNAc']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
-</blockquote>
-<p>visualize biosynthetic network</p>
-<table>
-<thead><tr>
-<th style="text-align:left">Arguments:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">glycans (list): list of glycans in IUPAC-condensed format</td>
-</tr>
-<tr>
-<td style="text-align:left">add_virtual_nodes (string): indicates whether no ('none'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added; default:'none'</td>
-</tr>
-<tr>
-<td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
-</tr>
-<tr>
-<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']</td>
-</tr>
-<tr>
-<td style="text-align:left">limit (int): maximum number of virtual nodes between observed nodes; default:5</td>
-</tr>
-</tbody>
-</table>
-<table>
-<thead><tr>
-<th style="text-align:left">Returns:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">Returns a networkx object of the network</td>
-</tr>
-</tbody>
-</table>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="plot_network" class="doc_header"><code>plot_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L222" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>plot_network</code>(<strong><code>network</code></strong>, <strong><code>plot_format</code></strong>=<em><code>'kamada_kawai'</code></em>, <strong><code>edge_label_draw</code></strong>=<em><code>True</code></em>)</p>
-</blockquote>
-<p>visualizes biosynthetic network</p>
-<table>
-<thead><tr>
-<th style="text-align:left">Arguments:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">network (networkx object): biosynthetic network, returned from construct_network</td>
-</tr>
-<tr>
-<td style="text-align:left">plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'</td>
-</tr>
-<tr>
-<td style="text-align:left">edge_label_draw (bool): draws edge labels if True; default:True</td>
-</tr>
-</tbody>
-</table>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_virtual_nodes" class="doc_header"><code>get_virtual_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L340" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_virtual_nodes</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc', 'GlcNAc']</code></em>)</p>
+<h4 id="get_virtual_nodes" class="doc_header"><code>get_virtual_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L455" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_virtual_nodes</code>(<strong><code>glycan</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>)</p>
 </blockquote>
 <p>find unobserved biosynthetic precursors of a glycan</p>
 <table>
@@ -471,7 +370,7 @@ nb_path: "06_network.ipynb"
 <td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
 </tr>
 <tr>
-<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']</td>
+<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends</td>
 </tr>
 </tbody>
 </table>
@@ -507,7 +406,7 @@ nb_path: "06_network.ipynb"
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">get_virtual_nodes</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">)</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">get_virtual_nodes</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol&#39;</span><span class="p">)</span>
 </pre></div>
 
     </div>
@@ -522,12 +421,12 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_text output_subarea output_execute_result">
-<pre>([&lt;networkx.classes.graph.Graph at 0x1f231e922b0&gt;,
-  &lt;networkx.classes.graph.Graph at 0x1f231e923a0&gt;,
-  &lt;networkx.classes.graph.Graph at 0x1f231e92160&gt;],
- [&#39;Man(a1-3)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;,
-  &#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;,
-  &#39;Man(a1-6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;])</pre>
+<pre>([&lt;networkx.classes.graph.Graph at 0x2441643d5e0&gt;,
+  &lt;networkx.classes.graph.Graph at 0x2441643d6d0&gt;,
+  &lt;networkx.classes.graph.Graph at 0x2441928ae80&gt;],
+ [&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol&#39;,
+  &#39;Man(a1-6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol&#39;,
+  &#39;Man(a1-3)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol&#39;])</pre>
 </div>
 
 </div>
@@ -549,7 +448,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_shared_virtuals" class="doc_header"><code>find_shared_virtuals</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L265" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shared_virtuals</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc', 'GlcNAc']</code></em>)</p>
+<h4 id="find_shared_virtuals" class="doc_header"><code>find_shared_virtuals</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L364" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shared_virtuals</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>min_size</code></strong>=<em><code>1</code></em>)</p>
 </blockquote>
 <p>finds virtual nodes that are shared between two glycans (i.e., that connect these two glycans)</p>
 <table>
@@ -568,7 +467,10 @@ nb_path: "06_network.ipynb"
 <td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
 </tr>
 <tr>
-<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']</td>
+<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends</td>
+</tr>
+<tr>
+<td style="text-align:left">min_size (int): length of smallest root in biosynthetic network; default:1</td>
 </tr>
 </tbody>
 </table>
@@ -601,8 +503,8 @@ nb_path: "06_network.ipynb"
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">find_shared_virtuals</span><span class="p">(</span><span class="s1">&#39;GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">,</span>
-                    <span class="s1">&#39;GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">)</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">find_shared_virtuals</span><span class="p">(</span><span class="s1">&#39;GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol&#39;</span><span class="p">)</span>
 </pre></div>
 
     </div>
@@ -617,10 +519,10 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_text output_subarea output_execute_result">
-<pre>[(&#39;GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;,
-  &#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;),
- (&#39;GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;,
-  &#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;)]</pre>
+<pre>[(&#39;GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol&#39;,
+  &#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol&#39;),
+ (&#39;GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol&#39;,
+  &#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol&#39;)]</pre>
 </div>
 
 </div>
@@ -642,60 +544,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="fill_with_virtuals" class="doc_header"><code>fill_with_virtuals</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L297" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>fill_with_virtuals</code>(<strong><code>glycans</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc', 'GlcNAc']</code></em>)</p>
-</blockquote>
-<p>for a list of glycans, identify virtual nodes connecting observed glycans and return their edges</p>
-<table>
-<thead><tr>
-<th style="text-align:left">Arguments:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">glycans (list): list of glycans in IUPAC-condensed</td>
-</tr>
-<tr>
-<td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
-</tr>
-<tr>
-<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']</td>
-</tr>
-</tbody>
-</table>
-<table>
-<thead><tr>
-<th style="text-align:left">Returns:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">Returns list of edges that connect observed glycans to virtual nodes</td>
-</tr>
-</tbody>
-</table>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_path" class="doc_header"><code>find_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L415" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_path</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc', 'GlcNAc']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
+<h4 id="find_path" class="doc_header"><code>find_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L536" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_path</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
 </blockquote>
 <p>find virtual node path between two glycans</p>
 <table>
@@ -714,7 +563,7 @@ nb_path: "06_network.ipynb"
 <td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
 </tr>
 <tr>
-<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']</td>
+<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends</td>
 </tr>
 <tr>
 <td style="text-align:left">limit (int): maximum number of virtual nodes between observed nodes; default:5</td>
@@ -753,7 +602,7 @@ nb_path: "06_network.ipynb"
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">find_path</span><span class="p">(</span><span class="s1">&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc&#39;</span><span class="p">,</span><span class="s1">&#39;Gal(b1-4)Glc&#39;</span><span class="p">)</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">find_path</span><span class="p">(</span><span class="s1">&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;</span><span class="p">,</span><span class="s1">&#39;Gal(b1-4)Glc-ol&#39;</span><span class="p">)</span>
 </pre></div>
 
     </div>
@@ -768,10 +617,11 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_text output_subarea output_execute_result">
-<pre>([(&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc&#39;, &#39;GlcNAc(b1-3)Gal(b1-4)Glc&#39;),
-  (&#39;GlcNAc(b1-3)Gal(b1-4)Glc&#39;, &#39;Gal(b1-4)Glc&#39;)],
- {(&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc&#39;, &#39;GlcNAc(b1-3)Gal(b1-4)Glc&#39;): &#39;Galb1-4&#39;,
-  (&#39;GlcNAc(b1-3)Gal(b1-4)Glc&#39;, &#39;Gal(b1-4)Glc&#39;): &#39;GlcNAcb1-3&#39;})</pre>
+<pre>([(&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;, &#39;GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;),
+  (&#39;GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;, &#39;Gal(b1-4)Glc-ol&#39;)],
+ {(&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;,
+   &#39;GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;): &#39;Gal(b1-4)&#39;,
+  (&#39;GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;, &#39;Gal(b1-4)Glc-ol&#39;): &#39;GlcNAc(b1-3)&#39;})</pre>
 </div>
 
 </div>
@@ -793,7 +643,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_shortest_path" class="doc_header"><code>find_shortest_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L471" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shortest_path</code>(<strong><code>goal_glycan</code></strong>, <strong><code>glycan_list</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc', 'GlcNAc']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
+<h4 id="find_shortest_path" class="doc_header"><code>find_shortest_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L594" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shortest_path</code>(<strong><code>goal_glycan</code></strong>, <strong><code>glycan_list</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
 </blockquote>
 <p>finds the glycan with the shortest path via virtual nodes to the goal glycan</p>
 <table>
@@ -812,7 +662,7 @@ nb_path: "06_network.ipynb"
 <td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
 </tr>
 <tr>
-<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']</td>
+<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends</td>
 </tr>
 <tr>
 <td style="text-align:left">limit (int): maximum number of virtual nodes between observed nodes; default:5</td>
@@ -851,8 +701,8 @@ nb_path: "06_network.ipynb"
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="n">find_shortest_path</span><span class="p">(</span><span class="s1">&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc&#39;</span><span class="p">,</span>
-                  <span class="p">[</span><span class="s1">&#39;Gal(b1-4)Glc&#39;</span><span class="p">,</span> <span class="s1">&#39;Gal(b1-4)GlcNAc&#39;</span><span class="p">])</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="n">find_shortest_path</span><span class="p">(</span><span class="s1">&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;</span><span class="p">,</span>
+                  <span class="p">[</span><span class="s1">&#39;Gal(b1-4)Glc-ol&#39;</span><span class="p">,</span> <span class="s1">&#39;Gal(b1-4)GlcNAc-ol&#39;</span><span class="p">])</span>
 </pre></div>
 
     </div>
@@ -867,10 +717,11 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_text output_subarea output_execute_result">
-<pre>([(&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc&#39;, &#39;GlcNAc(b1-3)Gal(b1-4)Glc&#39;),
-  (&#39;GlcNAc(b1-3)Gal(b1-4)Glc&#39;, &#39;Gal(b1-4)Glc&#39;)],
- {(&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc&#39;, &#39;GlcNAc(b1-3)Gal(b1-4)Glc&#39;): &#39;Galb1-4&#39;,
-  (&#39;GlcNAc(b1-3)Gal(b1-4)Glc&#39;, &#39;Gal(b1-4)Glc&#39;): &#39;GlcNAcb1-3&#39;})</pre>
+<pre>([(&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;, &#39;GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;),
+  (&#39;GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;, &#39;Gal(b1-4)Glc-ol&#39;)],
+ {(&#39;Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;,
+   &#39;GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;): &#39;Gal(b1-4)&#39;,
+  (&#39;GlcNAc(b1-3)Gal(b1-4)Glc-ol&#39;, &#39;Gal(b1-4)Glc-ol&#39;): &#39;GlcNAc(b1-3)&#39;})</pre>
 </div>
 
 </div>
@@ -892,13 +743,23 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="network_alignment" class="doc_header"><code>network_alignment</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L522" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>network_alignment</code>(<strong><code>network_a</code></strong>, <strong><code>network_b</code></strong>)</p>
+<h4 id="network_alignment" class="doc_header"><code>network_alignment</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L650" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>network_alignment</code>(<strong><code>network_a</code></strong>, <strong><code>network_b</code></strong>)</p>
 </blockquote>
-<p>combines two networks into a new network
-| Arguments:
-| :-
-| network_a (networkx object): biosynthetic network from construct_network
-| network_b (networkx object): biosynthetic network from construct_network</p>
+<p>combines two networks into a new network</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">network_a (networkx object): biosynthetic network from construct_network</td>
+</tr>
+<tr>
+<td style="text-align:left">network_b (networkx object): biosynthetic network from construct_network</td>
+</tr>
+</tbody>
+</table>
 <table>
 <thead><tr>
 <th style="text-align:left">Returns:</th>
@@ -932,63 +793,7 @@ nb_path: "06_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="infer_virtual_nodes" class="doc_header"><code>infer_virtual_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L543" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infer_virtual_nodes</code>(<strong><code>network_a</code></strong>, <strong><code>network_b</code></strong>, <strong><code>combined</code></strong>=<em><code>None</code></em>)</p>
-</blockquote>
-<p>identifies virtual nodes that have been observed in other species</p>
-<table>
-<thead><tr>
-<th style="text-align:left">Arguments:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">network_a (networkx object): biosynthetic network from construct_network</td>
-</tr>
-<tr>
-<td style="text-align:left">network_b (networkx object): biosynthetic network from construct_network</td>
-</tr>
-<tr>
-<td style="text-align:left">combined (networkx object): merged network of network_a and network_b from network_alignment; default:None</td>
-</tr>
-</tbody>
-</table>
-<table>
-<thead><tr>
-<th style="text-align:left">Returns:</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left">(1) tuple of (virtual nodes of network_a observed in network_b, virtual nodes occurring in both network_a and network_b)</td>
-</tr>
-<tr>
-<td style="text-align:left">(2) tuple of (virtual nodes of network_b observed in network_a, virtual nodes occurring in both network_a and network_b)</td>
-</tr>
-</tbody>
-</table>
-
-</div>
-
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-
-<div class="output_markdown rendered_html output_subarea ">
-<h4 id="infer_network" class="doc_header"><code>infer_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L581" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infer_network</code>(<strong><code>network</code></strong>, <strong><code>network_species</code></strong>, <strong><code>species_list</code></strong>, <strong><code>filepath</code></strong>=<em><code>None</code></em>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'exhaustive'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc', 'GlcNAc']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>)</p>
+<h4 id="infer_network" class="doc_header"><code>infer_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L711" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infer_network</code>(<strong><code>network</code></strong>, <strong><code>network_species</code></strong>, <strong><code>species_list</code></strong>, <strong><code>filepath</code></strong>=<em><code>None</code></em>, <strong><code>df</code></strong>=<em><code>None</code></em>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'exhaustive'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>, <strong><code>ptm</code></strong>=<em><code>False</code></em>, <strong><code>allowed_ptms</code></strong>=<em><code>['OS', '3S', '6S', '1P', '6P', 'OAc', '4Ac']</code></em>, <strong><code>permitted_roots</code></strong>=<em><code>['Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol']</code></em>, <strong><code>directed</code></strong>=<em><code>False</code></em>)</p>
 </blockquote>
 <p>replaces virtual nodes if they are observed in other species</p>
 <table>
@@ -1019,10 +824,22 @@ nb_path: "06_network.ipynb"
 <td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used;only needed if filepath=None</td>
 </tr>
 <tr>
-<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed;only needed if filepath=None;default:['Glc','GlcNAc']</td>
+<td style="text-align:left">reducing_end (list): monosaccharides at the reducing end that are allowed;only needed if filepath=None;default:milk glycan reducing ends</td>
 </tr>
 <tr>
 <td style="text-align:left">limit (int): maximum number of virtual nodes between observed nodes;only needed if filepath=None;default:5</td>
+</tr>
+<tr>
+<td style="text-align:left">ptm (bool): whether to consider post-translational modifications in the network construction; default:False</td>
+</tr>
+<tr>
+<td style="text-align:left">allowed_ptms (list): list of PTMs to consider</td>
+</tr>
+<tr>
+<td style="text-align:left">permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]</td>
+</tr>
+<tr>
+<td style="text-align:left">directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False</td>
 </tr>
 </tbody>
 </table>
@@ -1034,6 +851,451 @@ nb_path: "06_network.ipynb"
 <tbody>
 <tr>
 <td style="text-align:left">Returns network with filled in virtual nodes</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="retrieve_inferred_nodes" class="doc_header"><code>retrieve_inferred_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L757" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>retrieve_inferred_nodes</code>(<strong><code>network</code></strong>, <strong><code>species</code></strong>=<em><code>None</code></em>)</p>
+</blockquote>
+<p>returns the inferred virtual nodes of a network that has been used with infer_network</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">network (networkx object): biosynthetic network with inferred virtual nodes</td>
+</tr>
+<tr>
+<td style="text-align:left">species (string): species from which the network stems (only relevant if multiple species in network); default:None</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns inferred nodes as list or dictionary (if species argument is used)</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="update_network" class="doc_header"><code>update_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L853" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>update_network</code>(<strong><code>network_in</code></strong>, <strong><code>edge_list</code></strong>, <strong><code>edge_labels</code></strong>=<em><code>None</code></em>, <strong><code>node_labels</code></strong>=<em><code>None</code></em>)</p>
+</blockquote>
+<p>updates a network with new edges and their labels</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">network (networkx object): network that should be modified</td>
+</tr>
+<tr>
+<td style="text-align:left">edge_list (list): list of edges as node tuples</td>
+</tr>
+<tr>
+<td style="text-align:left">edge_labels (list): list of edge labels as strings</td>
+</tr>
+<tr>
+<td style="text-align:left">node_labels (dict): dictionary of form node:0 or 1 depending on whether the node is observed or virtual</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns network with added edges</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="choose_path" class="doc_header"><code>choose_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1055" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>choose_path</code>(<strong><code>source</code></strong>, <strong><code>target</code></strong>, <strong><code>species_list</code></strong>, <strong><code>filepath</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+</blockquote>
+<p>given a diamond-shape in biosynthetic networks (A-&gt;B,A-&gt;C,B-&gt;D,C-&gt;D), which path is taken from A to D?</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">source (string): glycan node that is the biosynthetic precursor</td>
+</tr>
+<tr>
+<td style="text-align:left">target (string): glycan node that is the biosynthetic product; has to two biosynthetic steps away from source</td>
+</tr>
+<tr>
+<td style="text-align:left">species_list (list): list of species to compare network to</td>
+</tr>
+<tr>
+<td style="text-align:left">filepath (string): filepath to load biosynthetic networks from other species</td>
+</tr>
+<tr>
+<td style="text-align:left">libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns dictionary of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="infuse_network" class="doc_header"><code>infuse_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1033" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infuse_network</code>(<strong><code>network</code></strong>, <strong><code>node_df</code></strong>, <strong><code>node_abundance</code></strong>=<em><code>True</code></em>, <strong><code>glycan_col</code></strong>=<em><code>'target'</code></em>, <strong><code>intensity_col</code></strong>=<em><code>'rel_intensity'</code></em>)</p>
+</blockquote>
+<p>add new data to an existing network, such as glycomics abundance data</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr>
+<td style="text-align:left">node_df (dataframe): dataframe containing glycans and their relative intensity</td>
+</tr>
+<tr>
+<td style="text-align:left">node_abundance (bool): whether to add node abundance to the network as the node attribute "abundance"; default:True</td>
+</tr>
+<tr>
+<td style="text-align:left">glycan_col (string): column name of the glycans in node_df</td>
+</tr>
+<tr>
+<td style="text-align:left">intensity_col (string): column name of the relative intensities in node_df</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns a network with added information</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="export_network" class="doc_header"><code>export_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L986" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>export_network</code>(<strong><code>network</code></strong>, <strong><code>filepath</code></strong>)</p>
+</blockquote>
+<p>converts NetworkX network into files usable by Gephi</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr>
+<td style="text-align:left">filepath (string): should describe a valid path + file name prefix, will be appended by file description and type</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">(1) saves a .csv dataframe containing the edge list and edge labels</td>
+</tr>
+<tr>
+<td style="text-align:left">(2) saves a .csv dataframe containing node IDs and labels</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+<div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="evolution">evolution<a class="anchor-link" href="#evolution"> </a></h2><blockquote><p>constructing evolutionary networks based on glycans</p>
+</blockquote>
+
+</div>
+</div>
+</div>
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="distance_from_embeddings" class="doc_header"><code>distance_from_embeddings</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/evolution.py#L7" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>distance_from_embeddings</code>(<strong><code>df</code></strong>, <strong><code>embeddings</code></strong>, <strong><code>cut_off</code></strong>=<em><code>10</code></em>, <strong><code>rank</code></strong>=<em><code>'Species'</code></em>, <strong><code>averaging</code></strong>=<em><code>'median'</code></em>)</p>
+</blockquote>
+<p>calculates a cosine distance matrix from learned embeddings</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">df (dataframe): dataframe with glycans as rows and taxonomic information as columns</td>
+</tr>
+<tr>
+<td style="text-align:left">embeddings (dataframe): dataframe with glycans as rows and learned embeddings as columns (e.g., from glycans_to_emb)</td>
+</tr>
+<tr>
+<td style="text-align:left">cut_off (int): how many glycans a rank (e.g., species) needs to have at least to be included; default:10</td>
+</tr>
+<tr>
+<td style="text-align:left">rank (string): which taxonomic rank to use for grouping organisms; default:'Species'</td>
+</tr>
+<tr>
+<td style="text-align:left">averaging (string): how to average embeddings, by 'median' or 'mean'; default:'median'</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns a rank x rank distance matrix</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="distance_from_metric" class="doc_header"><code>distance_from_metric</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/evolution.py#L52" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>distance_from_metric</code>(<strong><code>df</code></strong>, <strong><code>networks</code></strong>, <strong><code>metric</code></strong>=<em><code>'Jaccard'</code></em>, <strong><code>cut_off</code></strong>=<em><code>10</code></em>, <strong><code>rank</code></strong>=<em><code>'Species'</code></em>)</p>
+</blockquote>
+<p>calculates a distance matrix of generated networks based on provided metric</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">df (dataframe): dataframe with glycans as rows and taxonomic information as columns</td>
+</tr>
+<tr>
+<td style="text-align:left">networks (list): list of networks in networkx format</td>
+</tr>
+<tr>
+<td style="text-align:left">metric (string): which metric to use, available: 'Jaccard'; default:'Jaccard'</td>
+</tr>
+<tr>
+<td style="text-align:left">cut_off (int): how many glycans a rank (e.g., species) needs to have at least to be included; default:10</td>
+</tr>
+<tr>
+<td style="text-align:left">rank (string): which taxonomic rank to use for grouping organisms; default:'Species'</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead><tr>
+<th style="text-align:left">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Returns a rank x rank distance matrix</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+
+<div class="output_markdown rendered_html output_subarea ">
+<h4 id="dendrogram_from_distance" class="doc_header"><code>dendrogram_from_distance</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/evolution.py#L80" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>dendrogram_from_distance</code>(<strong><code>dm</code></strong>, <strong><code>ylabel</code></strong>=<em><code>'Mammalia'</code></em>, <strong><code>filepath</code></strong>=<em><code>''</code></em>)</p>
+</blockquote>
+<p>plots a dendrogram from distance matrix</p>
+<table>
+<thead><tr>
+<th style="text-align:left">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">dm (dataframe): a rank x rank distance matrix (e.g., from distance_from_embeddings)</td>
+</tr>
+<tr>
+<td style="text-align:left">ylabel (string): how to label the y-axis of the dendrogram; default:'Mammalia'</td>
+</tr>
+<tr>
+<td style="text-align:left">filepath (string): absolute path including full filename allows for saving the plot</td>
 </tr>
 </tbody>
 </table>

@@ -1,8 +1,11 @@
 import pandas as pd
 import numpy as np
 import pkg_resources
+import math
 import torch
+from torch.utils.data import Dataset
 from glycowork.glycan_data.loader import lib, unwrap
+from glycowork.motif.tokenization import prot_to_coded
 from glycowork.ml.processing import dataset_to_dataloader
 
 try:
@@ -19,6 +22,22 @@ df_corr = pd.read_csv(io)
 #  import esm
 #except ImportError:
 #  print('<esm missing; cannot use get_esm1b_representations>')
+
+
+
+class SimpleDataset(Dataset):
+  def __init__(self, x, y):
+    self.x = x
+    self.y = y
+  def __len__(self):
+    return len(self.x)
+  def __getitem__(self, index):
+    inp = self.x[index]
+    out = self.y[index]
+    return torch.FloatTensor(inp), torch.FloatTensor([out])
+
+def sigmoid(x):
+       return 1 / (1 + math.exp(-x))
 
 def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
                    class_list = None):
@@ -64,7 +83,7 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
 
 def get_multi_pred(prot, glycans, model, prot_dic,
                    background_correction = False, correction_df = None,
-                   batch_size = 128, libr = None):
+                   batch_size = 128, libr = None, flex = False):
   """Inner function to actually get predictions for lectin-glycan binding from LectinOracle-type model\n
   | Arguments:
   | :-
@@ -75,18 +94,25 @@ def get_multi_pred(prot, glycans, model, prot_dic,
   | background_correction (bool): whether to correct predictions for background; default:False
   | correction_df (dataframe): background prediction for (ideally) all provided glycans; default:None
   | batch_size (int): change to batch_size used during training; default:128
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | flex (bool): depends on whether you use LectinOracle (False) or LectinOracle_flex (True); default:False\n
   | Returns:
   | :-
   | Returns dataframe of glycan sequences and predicted binding to prot
   """
   if libr is None:
       libr = lib
-  try:
-    rep = prot_dic[prot]
-  except:
-    print('new protein, no stored embedding')
-  train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
+  if flex:
+    prot = prot_to_coded([prot])
+    train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
+                                       libr = libr, batch_size = batch_size,
+                                       shuffle = False, extra_feature = prot*len(glycans))
+  else:
+    try:
+      rep = prot_dic[prot]
+    except:
+      print('new protein, no stored embedding')
+    train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
                                        libr = libr, batch_size = batch_size,
                                        shuffle = False, extra_feature = [rep]*len(glycans))
   model = model.eval()
@@ -95,12 +121,11 @@ def get_multi_pred(prot, glycans, model, prot_dic,
     x, y, edge_index, prot, batch = k.x, k.y, k.edge_index, k.train_idx, k.batch
     x = x.cuda()
     y = y.cuda()
-    prot = prot.view(max(batch)+1, -1).cuda()
+    prot = prot.view(max(batch)+1, -1).float().cuda()
     edge_index = edge_index.cuda()
     batch = batch.cuda()
     pred = model(prot, x, edge_index, batch)
     res.append(pred)
-  #res = unwrap([res[k].detach().cpu().numpy() for k in range(len(res))][0].tolist())
   res = unwrap([res[k].detach().cpu().numpy() for k in range(len(res))])
   res = [k.tolist()[0] for k in res]
   if background_correction:
@@ -112,8 +137,9 @@ def get_multi_pred(prot, glycans, model, prot_dic,
     res = [a_i - b_i for a_i, b_i in zip(res, bg_res)]
   return res
 
-def get_lectin_preds(prot, glycans, model, prot_dic, background_correction = False,
-                     correction_df = None, batch_size = 128, libr = None, sort = True):
+def get_lectin_preds(prot, glycans, model, prot_dic = {}, background_correction = False,
+                     correction_df = None, batch_size = 128, libr = None, sort = True,
+                     flex = False):
   """Wrapper that uses LectinOracle-type model for predicting binding of protein to glycans\n
   | Arguments:
   | :-
@@ -125,7 +151,8 @@ def get_lectin_preds(prot, glycans, model, prot_dic, background_correction = Fal
   | correction_df (dataframe): background prediction for (ideally) all provided glycans; default:V4 correction file
   | batch_size (int): change to batch_size used during training; default:128
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
-  | sort (bool): whether to sort prediction results descendingly; default:True\n
+  | sort (bool): whether to sort prediction results descendingly; default:True
+  | flex (bool): depends on whether you use LectinOracle (False) or LectinOracle_flex (True); default:False\n
   | Returns:
   | :-
   | Returns dataframe of glycan sequences and predicted binding to prot
@@ -134,8 +161,11 @@ def get_lectin_preds(prot, glycans, model, prot_dic, background_correction = Fal
       libr = lib
   if correction_df is None:
     correction_df = df_corr
+  if len(prot_dic)<1 and not flex:
+    print("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
   preds = get_multi_pred(prot, glycans, model, prot_dic,
-                         batch_size = batch_size, libr = libr)
+                         batch_size = batch_size, libr = libr,
+                         flex = flex)
   df_pred = pd.DataFrame(glycans, columns = ['motif'])
   df_pred['pred'] = preds
   if background_correction:
@@ -182,3 +212,30 @@ def get_esm1b_representations(prots, model, alphabet):
       sequence_representations.append(token_representations[i, 1 : len(seq) + 1].mean(0))
   prot_dic =  {prots[k]:sequence_representations[k].tolist() for k in range(len(sequence_representations))}
   return prot_dic
+
+def get_Nsequon_preds(prots, model, prot_dic):
+  """Predicts whether an N-sequon will be glycosylated\n
+  | Arguments:
+  | :-
+  | prots (list): list of protein sequences (strings), in the form of 20 AA + N + 20 AA; replace missing sequence with corr. number of 'z'
+  | model (PyTorch object): trained NSequonPred-type model
+  | prot_dic (dictionary): dictionary of type protein sequence:ESM1b representation\n
+  | Returns:
+  | :-
+  | Returns dataframe of protein sequences and predicted likelihood of being an N-sequon
+  """
+  reps = [prot_dic[k] for k in prots]
+  dataset = SimpleDataset(reps, [0]*len(reps))
+  loader = torch.utils.data.DataLoader(dataset, batch_size = 32, shuffle = False)
+  model = model.eval()
+  preds = []
+  for k in loader:
+    x, y = k
+    x = x.cuda()
+    pred = model(x)
+    pred = [sigmoid(x) for x in pred.cpu().detach().numpy()]
+    preds.append(pred)
+  preds = unwrap(preds)
+  df_pred = pd.DataFrame([prots, preds]).T
+  df_pred.columns = ['seq', 'glycosylated']
+  return df_pred

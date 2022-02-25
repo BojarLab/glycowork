@@ -1,12 +1,18 @@
 import re
 import itertools
 import mpld3
+import pkg_resources
 import networkx as nx
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from glycowork.glycan_data.loader import lib, unwrap
+from glycowork.glycan_data.loader import lib, unwrap, linkages
 from glycowork.motif.graph import fast_compare_glycans, compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
+from glycowork.motif.processing import min_process_glycans
+from glycowork.motif.tokenization import stemify_glycan
+
+io = pkg_resources.resource_stream(__name__, "monolink_to_enzyme.csv")
+df_enzyme = pd.read_csv(io, sep = '\t')
 
 def safe_compare(g1, g2, libr = None):
   """fast_compare_glycans with try/except error catch\n
@@ -22,7 +28,7 @@ def safe_compare(g1, g2, libr = None):
   if libr is None:
     libr = lib
   try:
-    return fast_compare_glycans(g1, g2, libr = lib)
+    return fast_compare_glycans(g1, g2, libr = libr)
   except:
     return False
 
@@ -52,27 +58,31 @@ def subgraph_to_string(subgraph, libr = None):
   """
   if libr is None:
     libr = lib
-  glycan_motif = [libr[k] for k in list(sorted(list(nx.get_node_attributes(subgraph, 'labels').values())))]
+  glycan_motif = [k for k in list(sorted(list(nx.get_node_attributes(subgraph, 'string_labels').values())))]
   glycan_motif = glycan_motif[0] + '(' + glycan_motif[1] + ')'
   return glycan_motif
 
-def get_neighbors(glycan, glycans, libr = None, graphs = None):
+def get_neighbors(glycan, glycans, libr = None, graphs = None,
+                  min_size = 1):
   """find (observed) biosynthetic precursors of a glycan\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | glycans (list): list of glycans in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | graphs (list): list of glycans in df as graphs; optional if you call get_neighbors often with the same df and want to provide it precomputed\n
+  | graphs (list): list of glycans in df as graphs; optional if you call get_neighbors often with the same df and want to provide it precomputed
+  | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
   | (1) a list of direct glycan precursors in IUPAC-condensed
   | (2) a list of indices where each precursor from (1) can be found in glycans
   """
   if libr is None:
-    libr = libr
+    libr = lib
   ggraph = glycan_to_nxGraph(glycan, libr = libr)
-  ggraph_nb = create_neighbors(ggraph, libr = libr)
+  if len(ggraph.nodes()) == 1:
+    return ([], [])
+  ggraph_nb = create_neighbors(ggraph, libr = libr, min_size = min_size)
   if graphs is None:
     temp = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
   else:
@@ -82,14 +92,17 @@ def get_neighbors(glycan, glycans, libr = None, graphs = None):
   return nb, idx
 
 def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
-                            reducing_end = ['Glc', 'GlcNAc']):
+                            reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                            'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                            min_size = 1):
   """creates a biosynthetic adjacency matrix from a list of glycans\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | virtual_nodes (bool): whether to include virtual nodes in network; default:False
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
   | (1) adjacency matrix (glycan X glycan) denoting whether two glycans are connected by one biosynthetic step
@@ -99,7 +112,8 @@ def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
     libr = lib
   df_out = pd.DataFrame(0, index = glycans, columns = glycans)
   graphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
-  neighbors_full = [get_neighbors(k, glycans, libr = libr, graphs = graphs) for k in glycans]
+  neighbors_full = [get_neighbors(k, glycans, libr = libr, graphs = graphs,
+                                  min_size = min_size) for k in glycans]
   neighbors = [k[0] for k in neighbors_full]
   idx = [k[1] for k in neighbors_full]
   for j in range(len(glycans)):
@@ -110,7 +124,8 @@ def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
           df_out.iloc[inp[0], inp[1]] = 1
   new_nodes = []
   if virtual_nodes:
-    virtual_edges = fill_with_virtuals(glycans, libr = libr, reducing_end = reducing_end)
+    virtual_edges = fill_with_virtuals(glycans, libr = libr, reducing_end = reducing_end,
+                                       min_size = min_size)
     new_nodes = list(set([k[1] for k in virtual_edges]))
     new_nodes = [k for k in new_nodes if k not in df_out.columns.values.tolist()]
     idx = np.where([any([compare_glycans(k,j, libr = libr) for j in df_out.columns.values.tolist()]) for k in new_nodes])[0].tolist()
@@ -152,10 +167,13 @@ def find_diff(glycan_a, glycan_b, libr = None):
   """
   if libr is None:
     libr = lib
-  glycan_a = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_a, libr = libr), 'labels').values())))]
-  glycan_b = [libr[k] for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_b, libr = libr), 'labels').values())))]
-  lens = [len(glycan_a), len(glycan_b)]
-  graphs = [glycan_a, glycan_b]
+  if glycan_a == glycan_b:
+    return ""
+  glycan_a2 = [k for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_a, libr = libr), 'string_labels').values())))]
+  glycan_b2 = [k for k in list(sorted(list(nx.get_node_attributes(glycan_to_nxGraph(glycan_b, libr = libr), 'string_labels').values())))]
+  lens = [len(glycan_a2), len(glycan_b2)]
+  graphs = [glycan_a2, glycan_b2]
+  ggraphs = [glycan_a, glycan_b]
   larger_graph = graphs[np.argmax(lens)]
   smaller_graph = graphs[np.argmin(lens)]
   for k in smaller_graph:
@@ -163,18 +181,31 @@ def find_diff(glycan_a, glycan_b, libr = None):
       larger_graph.remove(k)
     except:
       larger_graph = ['dis', 'regard']
-  return "".join(larger_graph)
+  if subgraph_isomorphism(ggraphs[np.argmax(lens)], ggraphs[np.argmin(lens)], libr = libr):
+    return (larger_graph[0] + "(" + larger_graph[1] + ")")
+  else:
+    larger_graph = ['dis', 'regard']
+    return "".join(larger_graph)
 
-def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing_end = ['Glc','GlcNAc'],
-                 limit = 5):
+def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                                                                        'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                                                                        'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                 limit = 5, ptm = True, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
+                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"],
+                      directed = False, edge_type = 'monolink'):
   """visualize biosynthetic network\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
-  | add_virtual_nodes (string): indicates whether no ('none'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added; default:'none'
+  | add_virtual_nodes (string): indicates whether no ('none'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added; default:'exhaustive'
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']
-  | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | limit (int): maximum number of virtual nodes between observed nodes; default:5
+  | ptm (bool): whether to consider post-translational modifications in the network construction; default:True
+  | allowed_ptms (list): list of PTMs to consider
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
+  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False
+  | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide'), monosaccharide(linkage) ('monolink'), or enzyme catalyzing the reaction ('enzyme'); default:'monolink'\n
   | Returns:
   | :-
   | Returns a networkx object of the network
@@ -185,9 +216,12 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
     virtuals = True
   else:
     virtuals = False
+  #generating graph from adjacency of observed glycans
+  min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
   adjacency_matrix, virtual_nodes = create_adjacency_matrix(glycans, libr = libr, virtual_nodes = virtuals,
-                            reducing_end = reducing_end)
+                            reducing_end = reducing_end, min_size = min_size)
   network = adjacencyMatrix_to_network(adjacency_matrix)
+  #connecting observed via virtual nodes
   if add_virtual_nodes == 'exhaustive':
     unconnected_nodes = get_unconnected_nodes(network, list(network.nodes()))
     new_nodes = []
@@ -210,6 +244,7 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
         larger_ed = np.argmax([len(e) for e in [ed[0], ed[1]]])
         if network.degree(ed[larger_ed]) == 1:
           network.remove_edge(ed[0], ed[1])
+  #create edge and node labels
   edge_labels = {}
   for el in list(network.edges()):
     edge_labels[el] = find_diff(el[0], el[1], libr = libr)
@@ -217,19 +252,73 @@ def construct_network(glycans, add_virtual_nodes = 'none', libr = None, reducing
   virtual_labels = {k:(1 if k in virtual_nodes else 0) for k in list(network.nodes())}
   nx.set_node_attributes(network, virtual_labels, 'virtual')
   network = filter_disregard(network)
+  #connect post-translational modifications
+  if ptm:
+    ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr)
+    if len(ptm_links)>1:
+      network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
+  #find any remaining orphan nodes and connect them to the root(s)
+  if add_virtual_nodes == 'simple':
+    network = deorphanize_nodes(network, reducing_end = reducing_end,
+                              permitted_roots = permitted_roots, libr = libr, limit = 1)
+  elif add_virtual_nodes == 'exhaustive':
+    network = deorphanize_nodes(network, reducing_end = reducing_end,
+                              permitted_roots = permitted_roots, libr = libr, limit = limit)
+  #final clean-up / condensation step
+  if virtuals:
+    nodeDict = dict(network.nodes(data = True))
+    for node in list(network.nodes()):
+      if (network.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
+        network.remove_node(node)
+    adj_matrix = create_adjacency_matrix(list(network.nodes()), libr = libr,
+                                         reducing_end = reducing_end,
+                                         min_size = min_size)
+    filler_network = adjacencyMatrix_to_network(adj_matrix[0])
+    network.add_edges_from(list(filler_network.edges()))
+    network = deorphanize_edge_labels(network, libr = libr)
+  #edge label specification
+  if edge_type != 'monolink':
+    ed = network.edges()
+    for e in ed :
+      elem = network.get_edge_data(e[0], e[1])
+      edge = elem['diffs']
+      for link in linkages:
+        if link in edge:
+          if edge_type == 'monosaccharide':
+            elem['diffs'] = edge.split('(')[0]
+          elif edge_type == 'enzyme':
+            elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme)
+          else:
+            pass
+  #directed or undirected network
+  if directed:
+    network = make_network_directed(network)
   return network
 
-def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
+def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
+                 node_size = False, lfc_dict = None):
   """visualizes biosynthetic network\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
-  | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'
-  | edge_label_draw (bool): draws edge labels if True; default:True\n
+  | plot_format (string): how to layout network, either 'pydot2', 'kamada_kawai', or 'spring'; default:'pydot2'
+  | edge_label_draw (bool): draws edge labels if True; default:True
+  | node_size (bool): whether nodes should be sized by an "abundance" attribute in network; default:False
+  | lfc_dict (dict): dictionary of enzyme:log2-fold-change to scale edge width; default:None\n
   """
   mpld3.enable_notebook()
   fig, ax = plt.subplots(figsize = (16,16))
-  if plot_format == 'kamada_kawai':
+  if node_size:
+    node_sizes = list(nx.get_node_attributes(network, 'abundance').values())
+  else:
+    node_sizes = 50
+  if plot_format == 'pydot2':
+    try:
+      pos = nx.nx_pydot.pydot_layout(network, prog = "dot")
+    except:
+      print("pydot2 threw an error (maybe you're using Windows?); we'll use kamada_kawai instead")
+      pos = nx.kamada_kawai_layout(network)
+  elif plot_format == 'kamada_kawai':
     pos = nx.kamada_kawai_layout(network)
   elif plot_format == 'spring':
     pos = nx.spring_layout(network, k = 1/4)
@@ -238,18 +327,28 @@ def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
   else:
     node_origins = False
   if node_origins:
-    alpha_map = [0.2 if k==1 else 1 for k in list(nx.get_node_attributes(network, 'virtual').values())]
-    scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, ax = ax,
+    alpha_map = [0.2 if k == 1 else 1 for k in list(nx.get_node_attributes(network, 'virtual').values())]
+    scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, ax = ax,
                                        node_color = list(nx.get_node_attributes(network, 'origin').values()),
                                        alpha = alpha_map)
   else:
-    color_map = ['darkorange' if k==1 else 'cornflowerblue' if k==0 else 'seagreen' for k in list(nx.get_node_attributes(network, 'virtual').values())]
-    scatter = nx.draw_networkx_nodes(network, pos, node_size = 50, alpha = 0.7,
+    color_map = ['darkorange' if k == 1 else 'cornflowerblue' if k == 0 else 'seagreen' for k in list(nx.get_node_attributes(network, 'virtual').values())]
+    scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, alpha = 0.7,
                                      node_color = color_map, ax = ax)
   labels = list(network.nodes())
   if edge_label_draw:
-    nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
-    nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax)
+    if lfc_dict is None:
+      nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
+    else:
+      diffs = list(nx.get_edge_attributes(network, 'diffs').values())
+      for k in diffs:
+        if k not in lfc_dict.keys() :
+          lfc_dict[k] = 0
+      c_list = ['red' if (lfc_dict[k] < 0) else 'green' if (lfc_dict[k] > 0) else 'cornflowerblue' for k in diffs]
+      w_list = [abs(lfc_dict[k]) if abs(lfc_dict[k]) != 0 else 1 for k in diffs]
+      nx.draw_networkx_edges(network, pos, ax = ax, edge_color = c_list, width = w_list)
+    nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax,
+                                 verticalalignment = 'baseline')
   else:
     diffs = list(nx.get_edge_attributes(network, 'diffs').values())
     c_list = ['cornflowerblue' if 'Glc' in k else 'yellow' if 'Gal' in k else 'red' if 'Fuc' in k else 'mediumorchid' if '5Ac' in k \
@@ -262,14 +361,18 @@ def plot_network(network, plot_format = 'kamada_kawai', edge_label_draw = True):
   tooltip = mpld3.plugins.PointLabelTooltip(scatter, labels = labels)
   mpld3.plugins.connect(fig, tooltip)
 
-def find_shared_virtuals(glycan_a, glycan_b, libr = None, reducing_end = ['Glc', 'GlcNAc']):
+def find_shared_virtuals(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                                                          'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                                                          'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                         min_size = 1):
   """finds virtual nodes that are shared between two glycans (i.e., that connect these two glycans)\n
   | Arguments:
   | :-
   | glycan_a (string): glycan in IUPAC-condensed format
   | glycan_b (string): glycan in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
   | Returns list of edges between glycan and virtual node (if virtual node connects the two glycans)
@@ -287,45 +390,57 @@ def find_shared_virtuals(glycan_a, glycan_b, libr = None, reducing_end = ['Glc',
   if len(ggraph_nb_a)>0:
     for k in range(len(ggraph_nb_a)):
       for j in range(len(ggraph_nb_b)):
-        if fast_compare_glycans(ggraph_nb_a[k], ggraph_nb_b[j], libr = libr):
-          if [glycan_a, glycans_a[k]] not in [list(m) for m in out]:
-            out.append((glycan_a, glycans_a[k]))
-          if [glycan_b, glycans_b[j]] not in [list(m) for m in out]:
-            out.append((glycan_b, glycans_a[k]))
+        if len(ggraph_nb_a[k])>=min_size:
+          if fast_compare_glycans(ggraph_nb_a[k], ggraph_nb_b[j], libr = libr):
+            if [glycan_a, glycans_a[k]] not in [list(m) for m in out]:
+              out.append((glycan_a, glycans_a[k]))
+            if [glycan_b, glycans_b[j]] not in [list(m) for m in out]:
+              out.append((glycan_b, glycans_a[k]))
   return out
 
-def fill_with_virtuals(glycans, libr = None, reducing_end = ['Glc', 'GlcNAc']):
+def fill_with_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                                             'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                                             'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                       min_size = 1):
   """for a list of glycans, identify virtual nodes connecting observed glycans and return their edges\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
   | Returns list of edges that connect observed glycans to virtual nodes
   """
   if libr is None:
     libr = lib
-  v_edges = [find_shared_virtuals(k[0],k[1], libr = libr, reducing_end = reducing_end) for k in list(itertools.combinations(glycans, 2))]
+  v_edges = [find_shared_virtuals(k[0],k[1], libr = libr, reducing_end = reducing_end,
+                                  min_size = min_size) for k in list(itertools.combinations(glycans, 2))]
   v_edges = unwrap(v_edges)
   return v_edges
 
-def create_neighbors(ggraph, libr = None):
+def create_neighbors(ggraph, libr = None, min_size = 1):
   """creates biosynthetic precursor glycans\n
   | Arguments:
   | :-
   | ggraph (networkx object): glycan graph from glycan_to_nxGraph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
   | Returns biosynthetic precursor glycans
   """
   if libr is None:
     libr = lib
-  ra = range(len(ggraph.nodes()))
-  ggraph_nb = [ggraph.subgraph(k) for k in itertools.combinations(ra, len(ggraph.nodes())-2) if safe_max(np.diff(k)) in [1,3]]
-  ggraph_nb = [k for k in ggraph_nb if nx.is_connected(k)]
+  if len(ggraph.nodes())<= min_size:
+    return []
+  if len(ggraph.nodes()) == 3:
+    ggraph_nb = [ggraph.subgraph([2])]
+  else:
+    ra = range(len(ggraph.nodes()))
+    ggraph_nb = [ggraph.subgraph(k) for k in itertools.combinations(ra, len(ggraph.nodes())-2) if safe_max(np.diff(k)) in [1,3]]
+    ggraph_nb = [k for k in ggraph_nb if nx.is_connected(k)]
   for k in range(len(ggraph_nb)):
     if list(ggraph_nb[k].nodes())[0] == 2:
       ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {j:j-2 for j in list(ggraph_nb[k].nodes())})
@@ -337,13 +452,15 @@ def create_neighbors(ggraph, libr = None):
   #ggraph_nb = [j for j in ggraph_nb if sum([nx.is_isomorphic(j, i, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr))) for i in ggraph_nb]) <= 1]
   return ggraph_nb
 
-def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc', 'GlcNAc']):
+def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                                           'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                                           'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']):
   """find unobserved biosynthetic precursors of a glycan\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends\n
   | Returns:
   | :-
   | (1) list of virtual node graphs
@@ -355,6 +472,8 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc', 'GlcNAc']):
     ggraph = glycan_to_nxGraph(glycan, libr = libr)
   except:
     return [], []
+  if len(ggraph.nodes()) == 1:
+    return ([], [])
   ggraph_nb = create_neighbors(ggraph, libr = libr)
   ggraph_nb_t = []
   for k in ggraph_nb:
@@ -368,7 +487,7 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc', 'GlcNAc']):
       ggraph_nb.append(glycan_to_nxGraph(k, libr = libr))
     except:
       pass
-  ggraph_nb_t = [graph_to_string(k,libr = libr) for k in ggraph_nb]
+  ggraph_nb_t = [graph_to_string(k, libr = libr) for k in ggraph_nb]
   ggraph_nb_t = [k if k[0] != '[' else k.replace('[','',1).replace(']','',1) for k in ggraph_nb_t]
   
   ggraph_nb_t = [k for k in ggraph_nb_t if any([k[-len(j):] == j for j in reducing_end])]
@@ -377,13 +496,15 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc', 'GlcNAc']):
   idx = [k for k in range(len(ggraph_nb_t)) if ggraph_nb_t[k][0] != '(']
   return [ggraph_nb[i] for i in idx], [ggraph_nb_t[i] for i in idx]
   
-def propagate_virtuals(glycans, libr = None, reducing_end = ['Glc', 'GlcNAc']):
+def propagate_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                                             'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                                             'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']):
   """do one step of virtual node generation\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends\n
   | Returns:
   | :-
   | (1) list of virtual node graphs
@@ -412,7 +533,9 @@ def shells_to_edges(prev_shell, next_shell):
   return edges_out
 
 
-def find_path(glycan_a, glycan_b, libr = None, reducing_end = ['Glc', 'GlcNAc'],
+def find_path(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                                               'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                                               'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
               limit = 5):
   """find virtual node path between two glycans\n
   | Arguments:
@@ -420,7 +543,7 @@ def find_path(glycan_a, glycan_b, libr = None, reducing_end = ['Glc', 'GlcNAc'],
   | glycan_a (string): glycan in IUPAC-condensed format
   | glycan_b (string): glycan in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
   | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
   | Returns:
   | :-
@@ -468,7 +591,9 @@ def make_network_from_edges(edges, edge_labels = None):
     nx.set_edge_attributes(network, edge_labels, 'diffs')
   return network
 
-def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['Glc','GlcNAc'],
+def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                                                              'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                                                              'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
                        limit = 5):
   """finds the glycan with the shortest path via virtual nodes to the goal glycan\n
   | Arguments:
@@ -476,7 +601,7 @@ def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['G
   | goal_glycan (string): glycan in IUPAC-condensed format
   | glycan_list (list): list of glycans in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:['Glc','GlcNAc']
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
   | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
   | Returns:
   | :-
@@ -488,13 +613,16 @@ def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['G
   path_lengths = []
   for k in glycan_list:
     if subgraph_isomorphism(goal_glycan, k, libr = libr) and goal_glycan[-3:] == k[-3:]:
-      virtual_edges, edge_labels = find_path(goal_glycan, k, libr = libr,
+      try:
+        virtual_edges, edge_labels = find_path(goal_glycan, k, libr = libr,
                                                               reducing_end = reducing_end,
                                                                limit = limit)
-      network = make_network_from_edges(virtual_edges)
-      if k in list(network.nodes()) and goal_glycan in list(network.nodes()):
-        path_lengths.append(len(nx.algorithms.shortest_paths.generic.shortest_path(network, source = k, target = goal_glycan)))
-      else:
+        network = make_network_from_edges(virtual_edges)
+        if k in list(network.nodes()) and goal_glycan in list(network.nodes()):
+          path_lengths.append(len(nx.algorithms.shortest_paths.generic.shortest_path(network, source = k, target = goal_glycan)))
+        else:
+          path_lengths.append(99)
+      except:
         path_lengths.append(99)
     else:
       path_lengths.append(99)
@@ -520,7 +648,7 @@ def get_unconnected_nodes(network, glycan_list):
   return unconnected
 
 def network_alignment(network_a, network_b):
-  """combines two networks into a new network
+  """combines two networks into a new network\n
   | Arguments:
   | :-
   | network_a (networkx object): biosynthetic network from construct_network
@@ -538,6 +666,8 @@ def network_alignment(network_a, network_b):
   U.add_nodes_from(all_nodes)
   U.add_edges_from(list(network_a.edges(data = True))+list(network_b.edges(data = True)))
   nx.set_node_attributes(U, {all_nodes[k][0]:node_origin[k] for k in range(len(all_nodes))}, name = 'origin')
+  if nx.is_directed(network_a):
+    U = make_network_directed(U)
   return U
 
 def infer_virtual_nodes(network_a, network_b, combined = None):
@@ -580,7 +710,11 @@ def filter_disregard(network):
 
 def infer_network(network, network_species, species_list, filepath = None, df = None,
                   add_virtual_nodes = 'exhaustive',
-                  libr = None, reducing_end = ['Glc', 'GlcNAc'], limit = 5):
+                  libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                               'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                               'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'], limit = 5,
+                  ptm = False, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
+                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"], directed = False):
   """replaces virtual nodes if they are observed in other species\n
   | Arguments:
   | :-
@@ -591,8 +725,12 @@ def infer_network(network, network_species, species_list, filepath = None, df = 
   | df (dataframe): dataframe containing species-specific glycans, only needed if filepath=None;default:None
   | add_virtual_nodes (string): indicates whether no ('None'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added;only needed if filepath=None;default:'exhaustive'
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used;only needed if filepath=None
-  | reducing_end (list): monosaccharides at the reducing end that are allowed;only needed if filepath=None;default:['Glc','GlcNAc']
-  | limit (int): maximum number of virtual nodes between observed nodes;only needed if filepath=None;default:5\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed;only needed if filepath=None;default:milk glycan reducing ends
+  | limit (int): maximum number of virtual nodes between observed nodes;only needed if filepath=None;default:5
+  | ptm (bool): whether to consider post-translational modifications in the network construction; default:False
+  | allowed_ptms (list): list of PTMs to consider
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
+  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False\n
   | Returns:
   | :-
   | Returns network with filled in virtual nodes
@@ -604,7 +742,8 @@ def infer_network(network, network_species, species_list, filepath = None, df = 
     if k != network_species:
       if filepath is None:
         temp_network = construct_network(df[df.Species == k].target.values.tolist(), add_virtual_nodes = add_virtual_nodes, libr = libr,
-                                         reducing_end = reducing_end, limit = limit)
+                                         reducing_end = reducing_end, limit = limit, ptm = ptm, allowed_ptms = allowed_ptms,
+                                         permitted_roots = permitted_roots, directed = directed)
       else:
         temp_network = nx.read_gpickle(filepath + k + '_graph_exhaustive.pkl')
       temp_network = filter_disregard(temp_network)
@@ -631,3 +770,316 @@ def retrieve_inferred_nodes(network, species = None):
     return inferred_nodes
   else:
     return {species:inferred_nodes}
+
+def detect_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac']):
+  """identifies glycans that contain post-translational modifications\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed format
+  | allowed_ptms (list): list of PTMs to consider\n
+  | Returns:
+  | :-
+  | Returns glycans that contain PTMs
+  """
+  out = []
+  for glycan in glycans:
+    glycan_proc = 'x'.join(min_process_glycans([glycan])[0])
+    if any([ptm in glycan_proc for ptm in allowed_ptms]):
+      out.append(glycan)
+  return out
+
+def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
+               libr = None, ggraphs = None, suffix = '-ol'):
+  """identifies precursor glycans for a glycan with a PTM\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan with PTM in IUPAC-condensed format
+  | glycans (list): list of glycans in IUPAC-condensed format
+  | allowed_ptms (list): list of PTMs to consider
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | ggraphs (list): list of precomputed graphs of the glycan list
+  | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'\n
+  | Returns:
+  | :-
+  | (1) an edge tuple between input glycan and its biosynthetic precusor without PTM
+  | (2) the PTM that is contained in the input glycan
+  """
+  if libr is None:
+    libr = lib
+  glycan_proc = min_process_glycans([glycan])[0]
+  mod = [ptm for ptm in allowed_ptms if any([ptm in k for k in glycan_proc])][0]
+  glycan_stem = stemify_glycan(glycan, libr = libr) + suffix
+  if ('Sug' in glycan_stem) or ('Neu(' in glycan_stem):
+    print("Stemification fail. This is just information, no need to act.")
+    return 0
+  g_stem = glycan_to_nxGraph(glycan_stem, libr = libr)
+  if ggraphs is None:
+    ggraphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
+  idx = np.where([safe_compare(k, g_stem, libr = libr) for k in ggraphs])[0].tolist()
+  if len(idx)>0:
+    nb = [glycans[k] for k in idx][0]
+    return ((glycan), (nb)), mod
+  else:
+    print("No neighbors found. This is just information, no need to act.")
+    return 0
+
+def process_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
+               libr = None, suffix = '-ol'):
+  """identifies glycans that contain post-translational modifications and their biosynthetic precursor\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed format
+  | allowed_ptms (list): list of PTMs to consider
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'\n
+  | Returns:
+  | :-
+  | (1) list of edge tuples between input glycans and their biosynthetic precusor without PTM
+  | (2) list of the PTMs that are contained in the input glycans
+  """
+  if libr is None:
+    libr = lib
+  ptm_glycans = detect_ptm(glycans, allowed_ptms = allowed_ptms)
+  ggraphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
+  edges = [find_ptm(k, glycans, allowed_ptms = allowed_ptms,
+                                 libr = libr, ggraphs = ggraphs, suffix = suffix) for k in ptm_glycans]
+  if len([k for k in edges if k!=0])>0:
+    edges, edge_labels = list(zip(*[k for k in edges if k!=0]))
+    return list(edges), list(edge_labels)
+  else:
+    print("No unmatched PTMs to match for this species.")
+    return []
+
+def update_network(network_in, edge_list, edge_labels = None, node_labels = None):
+  """updates a network with new edges and their labels\n
+  | Arguments:
+  | :-
+  | network (networkx object): network that should be modified
+  | edge_list (list): list of edges as node tuples
+  | edge_labels (list): list of edge labels as strings
+  | node_labels (dict): dictionary of form node:0 or 1 depending on whether the node is observed or virtual\n
+  | Returns:
+  | :-
+  | Returns network with added edges
+  """
+  network = network_in.copy()
+  if edge_labels is None:
+    network.add_edges_from(edge_list)
+  else:
+    network.add_edges_from(edge_list)
+    nx.set_edge_attributes(network, {edge_list[k]:edge_labels[k] for k in range(len(edge_list))}, 'diffs')
+  if node_labels is None:
+    return network
+  else:
+    nx.set_node_attributes(network, node_labels, 'virtual')
+    return network
+
+def return_unconnected_to_root(network, permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]):
+  """finds observed nodes that are not connected to the root nodes\n
+  | Arguments:
+  | :-
+  | network (networkx object): network that should be analyzed
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]\n
+  | Returns:
+  | :-
+  | Returns list of nodes that are not connected to the root nodes
+  """
+  unconnected = []
+  nodeDict = dict(network.nodes(data = True))
+  for node in list(network.nodes()):
+    if nodeDict[node]['virtual'] == 0 and (node not in permitted_roots):
+      path_tracing = [nx.algorithms.shortest_paths.generic.has_path(network, node, k) for k in permitted_roots if k in list(network.nodes())]
+      if not any(path_tracing):
+        unconnected.append(node)
+  return unconnected
+
+def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
+                                                'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
+                                                'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                      permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"], libr = None, limit = 5):
+  """finds nodes unconnected to root nodes and tries to connect them\n
+  | Arguments:
+  | :-
+  | network (networkx object): network that should be modified
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
+  | Returns:
+  | :-
+  | Returns network with deorphanized nodes (if they can be connected to root nodes)
+  """
+  if libr is None:
+    libr = lib
+  permitted_roots = [k for k in permitted_roots if k in list(network.nodes())]
+  min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
+  unconnected_nodes = return_unconnected_to_root(network, permitted_roots = permitted_roots)
+  unconnected_nodes = [k for k in unconnected_nodes if len(glycan_to_nxGraph(k, libr = libr))>min_size]
+  nodeDict = dict(network.nodes(data = True))
+  real_nodes = [node for node in list(network.nodes()) if nodeDict[node]['virtual'] == 0]
+  real_nodes = [node for node in real_nodes if node not in unconnected_nodes]
+  edges = []
+  edge_labels = []
+  for node in unconnected_nodes:
+    try:
+      e, el = find_shortest_path(node, real_nodes, reducing_end = reducing_end,
+                                                     libr = libr, limit = limit)
+      edges.append(e)
+      edge_labels.append(el)
+    except:
+      pass
+  edge_labels = unwrap([[edge_labels[k][edges[k][j]] for j in range(len(edges[k]))] for k in range(len(edge_labels))])
+  edges = unwrap(edges)
+  node_labels = {node:(nodeDict[node]['virtual'] if node in list(network.nodes()) else 1) for node in [i for sub in edges for i in sub]}
+  network_out = update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
+  network_out = filter_disregard(network_out)
+  return network_out
+
+def make_network_directed(network):
+  """converts a network with undirected edges to one with directed edges\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network\n
+  | Returns:
+  | :-
+  | Returns a network with directed edges in the direction of biosynthesis
+  """
+  dnetwork = network.to_directed()
+  dnetwork = prune_directed_edges(dnetwork)
+  return dnetwork
+
+def prune_directed_edges(network):
+  """removes edges that go against the direction of biosynthesis\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network with directed edges\n
+  | Returns:
+  | :-
+  | Returns a network with pruned edges that would go in the wrong direction
+  """
+  nodes = list(network.nodes())
+  for k in nodes:
+    for j in nodes:
+      if network.has_edge(k,j) and (len(k)>len(j)):
+        network.remove_edge(k,j)
+  return network
+
+def deorphanize_edge_labels(network, libr = None):
+  """completes edge labels in newly added edges of a biosynthetic network\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns a network with completed edge labels
+  """
+  if libr is None:
+    libr = lib
+  edge_labels = nx.get_edge_attributes(network, 'diffs')
+  for k in list(network.edges()):
+    if k not in list(edge_labels.keys()):
+      diff = find_diff(k[0], k[1], libr = libr)
+      network.edges[k]['diffs'] = diff
+  return network
+
+def export_network(network, filepath):
+  """converts NetworkX network into files usable by Gephi\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | filepath (string): should describe a valid path + file name prefix, will be appended by file description and type\n
+  | Returns:
+  | :-
+  | (1) saves a .csv dataframe containing the edge list and edge labels
+  | (2) saves a .csv dataframe containing node IDs and labels
+  """
+  edge_list = list(network.edges())
+  edge_list = pd.DataFrame(edge_list)
+  edge_list.columns = ['Source', 'Target']
+  edge_labels = nx.get_edge_attributes(network, 'diffs')
+  edge_list['Label'] = [edge_labels[k] for k in list(network.edges())]
+  edge_list = edge_list.replace('z', '?', regex = True)
+  edge_list.to_csv(filepath + 'edge_list.csv', index = False)
+
+  node_labels = nx.get_node_attributes(network, 'virtual')
+  node_labels = pd.DataFrame(node_labels, index = [0]).T.reset_index()
+  node_labels.columns = ['Id', 'Virtual']
+  node_labels = node_labels.replace('z', '?', regex = True)
+  node_labels.to_csv(filepath + 'node_labels.csv', index = False)
+
+def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
+                            monolink_column = 'monolink', mode = 'condensed') :
+  """replaces monosaccharide(linkage) edge label by the name of the enzyme responsible for its synthesis\n
+  | Arguments:
+  | :-
+  | edge_label (str): 'monolink' edge label
+  | df (dataframe): dataframe containing the glycoenzymes and their corresponding 'monolink'
+  | enzyme_column (str): name of the column in df that indicates the enzyme; default:'glycoenzyme'
+  | monolink_column (str): name of the column in df that indicates the 'monolink'; default:'monolink'
+  | mode (str): determine if all glycoenzymes must be represented (full) or if only glycoenzyme families are shown (condensed); default:'condensed'\n
+  | Returns:
+  | :-
+  | Returns a new edge label corresponding to the enzyme that catalyzes this reaction
+  """
+  if mode == 'condensed' :
+    enzyme_column = 'glycoclass'
+  new_edge_label = df[enzyme_column].values[df[monolink_column] == edge_label]
+  if str(new_edge_label) == 'None' or str(new_edge_label) == '[]' :
+    return(edge_label)
+  else :
+    return(str(list(set(new_edge_label))).replace("'","").replace("[","").replace("]","").replace(", ","_"))
+
+def infuse_network(network, node_df, node_abundance = True, glycan_col = 'target',
+                   intensity_col = 'rel_intensity'):
+  """add new data to an existing network, such as glycomics abundance data\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | node_df (dataframe): dataframe containing glycans and their relative intensity
+  | node_abundance (bool): whether to add node abundance to the network as the node attribute "abundance"; default:True
+  | glycan_col (string): column name of the glycans in node_df
+  | intensity_col (string): column name of the relative intensities in node_df\n
+  | Returns:
+  | :-
+  | Returns a network with added information
+  """
+  if node_abundance:
+    for node in list(network.nodes()):
+      if node in node_df[glycan_col].values.tolist():
+        network.nodes[node]['abundance'] = node_df[intensity_col].values.tolist()[node_df[glycan_col].values.tolist().index(node)]*100
+      else:
+        network.nodes[node]['abundance'] = 50
+  return network
+
+def choose_path(source, target, species_list, filepath, libr = None):
+  """given a diamond-shape in biosynthetic networks (A->B,A->C,B->D,C->D), which path is taken from A to D?\n
+  | Arguments:
+  | :-
+  | source (string): glycan node that is the biosynthetic precursor
+  | target (string): glycan node that is the biosynthetic product; has to two biosynthetic steps away from source
+  | species_list (list): list of species to compare network to
+  | filepath (string): filepath to load biosynthetic networks from other species
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns dictionary of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
+  """
+  if libr is None:
+    libr = lib
+  network = construct_network([source, target], libr = libr, add_virtual_nodes = 'exhaustive',
+                              ptm = True, directed = True)
+  alternatives = [path[1] for path in nx.all_simple_paths(network, source = source, target = target)]
+  alt_a = []
+  alt_b = []
+  for k in species_list:
+    temp_network = nx.read_gpickle(filepath + k + '_graph_exhaustive.pkl')
+    if source in list(temp_network.nodes()) and target in list(temp_network.nodes()):
+      if alternatives[0] in list(temp_network.nodes()):
+        alt_a.append(temp_network.nodes[alternatives[0]]['virtual'])
+      if alternatives[1] in list(temp_network.nodes()):
+        alt_b.append(temp_network.nodes[alternatives[1]]['virtual'])
+  alt_a = alt_a.count(0)/len(alt_a)
+  alt_b = alt_b.count(0)/len(alt_b)
+  inferences = {alternatives[0]:alt_a, alternatives[1]:alt_b}
+  return inferences

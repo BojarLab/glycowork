@@ -7,7 +7,7 @@ import pandas as pd
 import xgboost as xgb
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error
+from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error, label_ranking_average_precision_score, ndcg_score
 from glycowork.motif.annotate import annotate_dataset
 from glycowork.glycan_data.loader import lib
 
@@ -55,6 +55,21 @@ class EarlyStopping:
 def sigmoid(x):
        return 1 / (1 + math.exp(-x))
 
+def disable_running_stats(model):
+    def _disable(module):
+        if isinstance(module, torch.nn.BatchNorm1d):
+            module.backup_momentum = module.momentum
+            module.momentum = 0
+
+    model.apply(_disable)
+
+def enable_running_stats(model):
+    def _enable(module):
+        if isinstance(module, torch.nn.BatchNorm1d) and hasattr(module, "backup_momentum"):
+            module.momentum = module.backup_momentum
+
+    model.apply(_enable)
+
 def train_model(model, dataloaders, criterion, optimizer,
                 scheduler, num_epochs = 25, patience = 50,
                 mode = 'classification', mode2 = 'multi'):
@@ -66,10 +81,10 @@ def train_model(model, dataloaders, criterion, optimizer,
   | criterion (PyTorch object): PyTorch loss function
   | optimizer (PyTorch object): PyTorch optimizer
   | scheduler (PyTorch object): PyTorch learning rate decay
-  | num_epochs (int): number of epochs for training; default: 25
-  | patience (int): number of epochs without improvement until early stop; default: 50
-  | mode (string): 'classification' or 'regression'; default is multiclass classification
-  | mode2 (string): further specifying classification into 'multi' or 'binary' classification;default:'multi'\n
+  | num_epochs (int): number of epochs for training; default:25
+  | patience (int): number of epochs without improvement until early stop; default:50
+  | mode (string): 'classification', 'multilabel', or 'regression'; default:classification
+  | mode2 (string): further specifying classification into 'multi' or 'binary' classification;default:multi\n
   | Returns:
   | :-
   | Returns the best model seen during training
@@ -79,7 +94,7 @@ def train_model(model, dataloaders, criterion, optimizer,
   best_model_wts = copy.deepcopy(model.state_dict())
   best_loss = 100.0
   epoch_mcc = 0
-  if mode == 'classification':
+  if mode != 'regression':
       best_acc = 0.0
   else:
       best_acc = 100.0
@@ -112,6 +127,7 @@ def train_model(model, dataloaders, criterion, optimizer,
         optimizer.zero_grad()
 
         with torch.set_grad_enabled(phase == 'train'):
+          enable_running_stats(model)
           try:
               pred = model(prot, x, edge_index, batch)
               loss = criterion(pred, y.view(-1,1))
@@ -121,7 +137,13 @@ def train_model(model, dataloaders, criterion, optimizer,
 
           if phase == 'train':
             loss.backward()
-            optimizer.step()
+            optimizer.first_step(zero_grad = True)
+            disable_running_stats(model)
+            try:
+                criterion(model(prot, x, edge_index, batch), y).backward()
+            except:
+                criterion(model(x, edge_index, batch), y).backward()
+            optimizer.second_step(zero_grad = True)
             
         running_loss.append(loss.item())
         if mode == 'classification':
@@ -133,20 +155,34 @@ def train_model(model, dataloaders, criterion, optimizer,
             running_acc.append(accuracy_score(
                                    y.cpu().detach().numpy().astype(int), pred2))
             running_mcc.append(matthews_corrcoef(y.detach().cpu().numpy(), pred2))
+        elif mode == 'multilabel':
+            running_acc.append(label_ranking_average_precision_score(y.cpu().detach().numpy().astype(int),
+                                                                 pred.cpu().detach().numpy()))
+            running_mcc.append(ndcg_score(y.cpu().detach().numpy().astype(int),
+                                                                 pred.cpu().detach().numpy()))
         else:
-            running_acc.append(y.cpu().detach().numpy(), pred.cpu().detach().numpy())
+            running_acc.append(mean_squared_error(y.cpu().detach().numpy(), pred.cpu().detach().numpy()))
         
       epoch_loss = np.mean(running_loss)
       epoch_acc = np.mean(running_acc)
-      if mode == 'classification':
+      if mode != 'regression':
           epoch_mcc = np.mean(running_mcc)
-      print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(
-          phase, epoch_loss, epoch_acc, epoch_mcc))
+      else:
+          epoch_mcc = 0
+      if mode == 'classification':
+          print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(
+              phase, epoch_loss, epoch_acc, epoch_mcc))
+      elif mode == 'multilabel':
+          print('{} Loss: {:.4f} LRAP: {:.4f} NDCG: {:.4f}'.format(
+              phase, epoch_loss, epoch_acc, epoch_mcc))
+      else:
+          print('{} Loss: {:.4f} MSE: {:.4f}'.format(
+              phase, epoch_loss, epoch_acc))
       
       if phase == 'val' and epoch_loss <= best_loss:
         best_loss = epoch_loss
         best_model_wts = copy.deepcopy(model.state_dict())
-      if mode == 'classification':
+      if mode != 'regression':
           if phase == 'val' and epoch_acc > best_acc:
               best_acc = epoch_acc
       else:
@@ -169,52 +205,126 @@ def train_model(model, dataloaders, criterion, optimizer,
   time_elapsed = time.time() - since
   print('Training complete in {:.0f}m {:.0f}s'.format(
       time_elapsed // 60, time_elapsed % 60))
-  print('Best val loss: {:4f}, best Accuracy score: {:.4f}'.format(best_loss, best_acc))
+  if mode == 'classification':
+      print('Best val loss: {:4f}, best Accuracy score: {:.4f}'.format(best_loss, best_acc))
+  elif mode == 'multilabel':
+      print('Best val loss: {:4f}, best LRAP score: {:.4f}'.format(best_loss, best_acc))
+  else:
+      print('Best val loss: {:4f}, best MSE score: {:.4f}'.format(best_loss, best_acc))
   model.load_state_dict(best_model_wts)
 
-  ## plot loss & accuracy score over the course of training 
+  ## plot loss & score over the course of training 
   fig, ax = plt.subplots(nrows = 2, ncols = 1) 
   plt.subplot(2, 1, 1)
   plt.plot(range(epoch+1), val_losses)
-  plt.title('Training of SweetNet')
+  plt.title('Model Training')
   plt.ylabel('Validation Loss')
   plt.legend(['Validation Loss'],loc = 'best')
 
   plt.subplot(2, 1, 2)
   plt.plot(range(epoch+1), val_acc)
-  plt.ylabel('Validation Accuracy')
   plt.xlabel('Number of Epochs')
-  plt.legend(['Validation Accuracy'], loc = 'best')
+  if mode == 'classification':
+      plt.ylabel('Validation Accuracy')
+      plt.legend(['Validation Accuracy'], loc = 'best')
+  elif mode == 'multilabel':
+      plt.ylabel('Validation LRAP')
+      plt.legend(['Validation LRAP'], loc = 'best')
+  else:
+      plt.ylabel('Validation MSE')
+      plt.legend(['Validation MSE'], loc = 'best')
   return model
 
-def training_setup(model, epochs, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.001,
+class SAM(torch.optim.Optimizer):
+    #adapted from https://github.com/davda54/sam
+    def __init__(self, params, base_optimizer, rho = 0.5, adaptive = False, **kwargs):
+        assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
+
+        defaults = dict(rho = rho, adaptive = adaptive, **kwargs)
+        super(SAM, self).__init__(params, defaults)
+
+        self.base_optimizer = base_optimizer(self.param_groups, **kwargs)
+        self.param_groups = self.base_optimizer.param_groups
+
+    @torch.no_grad()
+    def first_step(self, zero_grad = False):
+        grad_norm = self._grad_norm()
+        for group in self.param_groups:
+            scale = group["rho"] / (grad_norm + 1e-12)
+
+            for p in group["params"]:
+                if p.grad is None: continue
+                self.state[p]["old_p"] = p.data.clone()
+                e_w = (torch.pow(p, 2) if group["adaptive"] else 1.0) * p.grad * scale.to(p)
+                p.add_(e_w)  # climb to the local maximum "w + e(w)"
+
+        if zero_grad: self.zero_grad()
+
+    @torch.no_grad()
+    def second_step(self, zero_grad=False):
+        for group in self.param_groups:
+            for p in group["params"]:
+                if p.grad is None: continue
+                p.data = self.state[p]["old_p"]  # get back to "w" from "w + e(w)"
+
+        self.base_optimizer.step()  # do the actual "sharpness-aware" update
+
+        if zero_grad: self.zero_grad()
+
+    @torch.no_grad()
+    def step(self, closure = None):
+        assert closure is not None, "Sharpness Aware Minimization requires closure, but it was not provided"
+        closure = torch.enable_grad()(closure)  # the closure should do a full forward-backward pass
+
+        self.first_step(zero_grad = True)
+        closure()
+        self.second_step()
+
+    def _grad_norm(self):
+        shared_device = self.param_groups[0]["params"][0].device  # put everything on the same device, in case of model parallelism
+        norm = torch.norm(
+                    torch.stack([
+                        ((torch.abs(p) if group["adaptive"] else 1.0) * p.grad).norm(p=2).to(shared_device)
+                        for group in self.param_groups for p in group["params"]
+                        if p.grad is not None
+                    ]),
+                    p = 2
+               )
+        return norm
+
+    def load_state_dict(self, state_dict):
+        super().load_state_dict(state_dict)
+        self.base_optimizer.param_groups = self.param_groups
+
+def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.0001,
                    mode = 'multiclass'):
     """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
     | Arguments:
     | :-
     | model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans
-    | epochs (int): number of epochs for training the model
     | lr (float): learning rate
     | lr_patience (int): number of epochs without validation loss improvement before reducing the learning rate;default:4
     | factor (float): factor by which learning rate is multiplied upon reduction
     | weight_decay (float): regularization parameter for the optimizer; default:0.001
-    | mode (string): 'multiclass': classification with multiple classes, 'binary':binary classification, 'regression': regression; default:'multiclass'\n
+    | mode (string): 'multiclass': classification with multiple classes, 'multilabel': predicting several labels at the same time, 'binary':binary classification, 'regression': regression; default:'multiclass'\n
     | Returns:
     | :-
     | Returns optimizer, learning rate scheduler, and loss criterion objects
     """
-    optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
-                                    weight_decay = weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
-                                                           factor = factor)
+    optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, lr = lr,
+                       weight_decay = weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
+                                                           factor = factor, verbose = True)
     if mode == 'multiclass':
         criterion = torch.nn.CrossEntropyLoss().cuda()
+    elif mode == 'multilabel':
+        criterion = torch.nn.BCEWithLogitsLoss().cuda()
     elif mode == 'binary':
         criterion = torch.nn.BCEWithLogitsLoss().cuda()
     elif mode == 'regression':
         criterion = torch.nn.MSELoss().cuda()
     else:
-        print("Invalid option. Please pass 'multiclass', 'binary', or 'regression'.")
+        print("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
     return optimizer_ft, scheduler, criterion
 
 def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',

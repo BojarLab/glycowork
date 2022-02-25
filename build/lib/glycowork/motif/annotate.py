@@ -3,8 +3,8 @@ import pandas as pd
 import itertools
 import re
 
-from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, try_string_conversion
+from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, try_string_conversion, compare_glycans
 from glycowork.motif.processing import small_motif_find
 
 
@@ -85,7 +85,11 @@ def link_find(glycan):
   ss = find_isomorphs(glycan)
   coll = []
   for iso in ss:
-    b_re = re.sub('\[[^\]]+\]', '', iso)
+    if bool(re.search('\[[^\[\]]+\[[^\[\]]+\][^\]]+\]', iso)):
+      b_re = re.sub('\[[^\[\]]+\[[^\[\]]+\][^\]]+\]', '', iso)
+      b_re = re.sub('\[[^\]]+\]', '', b_re)
+    else:
+      b_re = re.sub('\[[^\]]+\]', '', iso)
     for i in [iso, b_re]:
       b = i.split('(')
       b = [k.split(')') for k in b]
@@ -178,15 +182,19 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   if libr is None:
     libr = lib
   if extra == 'termini':
-    res = [subgraph_isomorphism(glycan, motifs.motif.values.tolist()[k], libr = libr,
+    ggraph = glycan_to_nxGraph(glycan, libr = libr, termini = 'calc')
+    res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
-                              termini_list = termini_list[k]) for k in range(len(motifs))]*1
+                              termini_list = termini_list[k],
+                                count = True) for k in range(len(motifs))]*1
   else:
-    res = [subgraph_isomorphism(glycan, motifs.motif.values.tolist()[k], libr = libr,
+    ggraph = glycan_to_nxGraph(glycan, libr = libr, termini = 'ignore')
+    res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
-                              termini_list = termini_list) for k in range(len(motifs))]*1
+                              termini_list = termini_list,
+                                count = True) for k in range(len(motifs))]*1
       
   out = pd.DataFrame(columns = motifs.motif_name.values.tolist())
   out.loc[0] = res
@@ -244,29 +252,51 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   else:
     return pd.concat(shopping_cart, axis = 1)
 
-def get_trisaccharides(glycan, libr = None):
-  """function to retrieve trisaccharides occurring in a glycan (probably incomplete)\n
+def pretend_connect(glycoletter_list):
+  """makes all permutations of the list of glycoletters\n
+  | Arguments:
+  | :-
+  | glycoletter_list (list): list of monosaccharides or linkages in IUPAC-condensed\n
+  | Returns:
+  | :-                               
+  | Returns a list of connected glycoletters
+  """
+  glycoletter_list = ['('+k+')' if k in linkages else k for k in glycoletter_list]
+  pool = []
+  for k in list(itertools.permutations(glycoletter_list)):
+    glycan = "".join(k)
+    if glycan[0]!='(' and glycan[-1]!=')':
+      pool.append(glycan)
+  return pool
+
+def get_k_saccharides(glycan, libr = None, k = 3):
+  """function to retrieve k-saccharides (default:trisaccharides) occurring in a glycan\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed nomenclature
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib\n
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
+  | k (int): number of monosaccharides per -saccharide, default:3 (for trisaccharides)\n
   | Returns:
   | :-                               
   | Returns list of trisaccharides in glycan in IUPAC-condensed nomenclature
   """
   if libr is None:
     libr = lib
+  actual_k = k + (k-1)
   ggraph = glycan_to_nxGraph(glycan, libr = libr)
-  ra = list(ggraph.nodes())
-  subgraphs = [ggraph.subgraph(k) for k in itertools.combinations(ra, 5)]
-  subgraphs = [k for k in subgraphs if nx.is_connected(k)]
-  forbidden_list = ['2(', '3(', '4(', '6(', ')(']
-  for k in range(len(subgraphs)):
-      if list(subgraphs[k].nodes())[0] == 2:
-        subgraphs[k] = nx.relabel_nodes(subgraphs[k], {j:j-2 for j in list(subgraphs[k].nodes())})
-  t_subgraphs = [try_string_conversion(k, libr = libr) for k in subgraphs]
-  t_subgraphs = [k for k in t_subgraphs if k is not None]
-  t_subgraphs = [k for k in t_subgraphs if k[0] != '(']
-  t_subgraphs = [k if k[0] != '[' else k.replace('[','',1).replace(']','',1) for k in t_subgraphs]
-  t_subgraphs = [k for k in t_subgraphs if not any([m in k for m in forbidden_list])]
-  return t_subgraphs
+  out = []
+  for nodes in itertools.combinations(list(ggraph.nodes()), actual_k):
+    sub_g = ggraph.subgraph(nodes)
+    if nx.is_connected(sub_g):
+      pool = pretend_connect(list(nx.get_node_attributes(sub_g, 'string_labels').values()))
+      for p in pool:
+        try:
+          if subgraph_isomorphism(ggraph, p, libr = libr):
+            if not any([compare_glycans(p, j, libr = libr) for j in out]):
+              out.append(p)
+        except:
+          pass
+  out = list(set(out))
+  out = [k.replace('GlcNAc(b1-4)GlcNAc(a1-6)Fuc', 'GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc') for k in out]
+  out = [k.replace('Man(a1-3)Man(a1-6)Man', 'Man(a1-3)[Man(a1-6)]Man') for k in out]
+  return out

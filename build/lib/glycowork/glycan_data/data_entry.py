@@ -1,5 +1,6 @@
 import networkx as nx
 from glycowork.glycan_data.loader import lib
+from glycowork.motif.processing import check_nomenclature
 from glycowork.motif.graph import glycan_to_graph, glycan_to_nxGraph, compare_glycans, fast_compare_glycans
 
 def check_presence(glycan, df, colname = 'target', libr = None,
@@ -19,17 +20,20 @@ def check_presence(glycan, df, colname = 'target', libr = None,
   """
   if libr is None:
     libr = lib
-  if name is not None:
-    name = name.replace(" ", "_")
-    df = df[df[rank] == name]
-    if len(df) == 0:
-      print("This is the best: %s is not in dataset" % name)
-  if fast:
-    ggraph = glycan_to_nxGraph(glycan, libr = libr)
-    check_all = [fast_compare_glycans(ggraph, k, libr = libr) for k in df.graph.values.tolist()]
+  if check_nomenclature(glycan):
+    if name is not None:
+      name = name.replace(" ", "_")
+      df = df[df[rank] == name]
+      if len(df) == 0:
+        print("This is the best: %s is not in dataset" % name)
+    if fast:
+      ggraph = glycan_to_nxGraph(glycan, libr = libr)
+      check_all = [fast_compare_glycans(ggraph, k, libr = libr) for k in df.graph.values.tolist()]
+    else:
+      check_all = [compare_glycans(glycan, k, libr = libr) for k in df[colname].values.tolist()]
+    if any(check_all):
+      print("Glycan already in dataset.")
+    else:
+      print("It's your lucky day, this glycan is new!")
   else:
-    check_all = [compare_glycans(glycan, k, libr = libr) for k in df[colname].values.tolist()]
-  if any(check_all):
-    print("Glycan already in dataset.")
-  else:
-    print("It's your lucky day, this glycan is new!")
+    print("Glycan not correctly formatted.")

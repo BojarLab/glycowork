@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: glycowork
-Version: 0.3.0
+Version: 0.4.0
 Summary: Package containing helper functions for processing and analysis of glycans
 Home-page: https://github.com/BojarLab/glycowork
 Author: Daniel Bojar
@@ -17,9 +17,9 @@ Description: # Glycowork
         
         Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.
         
-        The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. `Glycowork` is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, `Glycowork` also contains glycan data that can be used for glycan alignments, model pre-training, motif comparisons, etc.
+        The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. `Glycowork` is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, `glycowork` also contains glycan data that can be used for model training, motif comparisons, etc.
         
-        If you use `glycowork` in your project, please cite [Thomes et al., 2021](https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240).
+        If you use `glycowork` or any of our datasets in your project, please cite [Thomes et al., 2021](https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240).
         
         The inspiration for `glycowork` can be found in [Bojar et al., 2020](https://doi.org/10.1016/j.chom.2020.10.004) and [Burkholz et al., 2021](https://www.cell.com/cell-reports/fulltext/S2211-1247(21)00616-1). There, you can also find examples of possible use cases for the functions in `glycowork`.
         
@@ -37,6 +37,26 @@ Description: # Glycowork
         `pip install git+https://github.com/BojarLab/glycowork.git` <br>
         `import glycowork`
         
+        ## Data & Models
+        
+        `Glycowork` currently contains the following main datasets that are freely available to everyone:
+        - **`df_species`**
+            - contains >31,500 glycans with species association
+        - **`df_glycan`**
+            - contains >50,500 unique glycan sequences, including labels such as >2,500 tissue associations and >500 disease associations
+        - **`glycan_binding`**
+            - contains >550,000 protein-glycan binding interactions, from 1,392 unique glycan-binding proteins
+            
+        Additionally, we store these trained deep learning models for easy usage, which can be retrieved with the `prep_model` function:
+        - **`LectinOracle`**
+            - can be used to predict glycan-binding specificity of a protein, given its ESM-1b representation; from [Lundstrom et al., 2021](https://onlinelibrary.wiley.com/doi/10.1002/advs.202103807)
+        - **`LectinOracle_flex`**
+            - operates the same as LectinOracle but can directly use the raw protein sequence as input (no ESM-1b representation required)
+        - **`SweetNet`**
+            - a graph convolutional neural network trained to predict species from glycan, can be used to generate learned glycan representations; from [Burkholz et al., 2021](https://www.cell.com/cell-reports/fulltext/S2211-1247(21)00616-1)
+        - **`NSequonPred`**
+            - given the ESM-1b representation of an N-sequon (+/- 20 AA), this model can predict whether the sequon will be glycosylated
+        
         ## How to use
         
         `Glycowork` currently contains five main modules:
@@ -51,43 +71,7 @@ Description: # Glycowork
          - **`network`**
              - contains functions for constructing and analyzing glycan networks (e.g., biosynthetic networks)
              
-        Below are some examples of what you can do with `glycowork`, be sure to check out the other `examples` in the full documentation for everything that's there.
-        
-        ```
-        #using graphs, you can easily check whether two glycans are the same - even if they use different bracket notations!
-        from glycowork.motif.graph import compare_glycans
-        print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-                             'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'))
-        print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-                             'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'))
-        ```
-        
-            True
-            False
-            
-        
-        ```
-        #querying some of the stored databases
-        from glycowork.motif.query import get_insight
-        get_insight('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc')
-        ```
-        
-            Let's get rolling! Give us a few moments to crunch some numbers.
-            
-            This glycan occurs in the following species: ['Aedes_aegypti', 'Angiostrongylus_cantonensis', 'Anopheles_gambiae', 'Antheraea_pernyi', 'Apis_mellifera', 'Ascaris_suum', 'Autographa_californica_nucleopolyhedrovirus', 'AvianInfluenzaA_Virus', 'Bombyx_mori', 'Bos_taurus', 'Caenorhabditis_elegans', 'Cardicola_forsteri', 'Crassostrea_virginica', 'Cricetulus_griseus', 'Dictyocaulus_viviparus', 'Dirofilaria_immitis', 'Drosophila_melanogaster', 'Fasciola_hepatica', 'Gallus_gallus', 'Glossina_morsitans', 'Haemonchus_contortus', 'Haliotis_tuberculata', 'Heligmosomoides_polygyrus', 'Homo_sapiens', 'HumanImmunoDeficiency_Virus', 'Hydra_vulgaris', 'Hylesia_metabus', 'Lutzomyia_longipalpis', 'Lymantria_dispar', 'Mamestra_brassicae', 'Megathura_crenulata', 'Mus_musculus', 'Nilaparvata_lugens', 'Oesophagostomum_dentatum', 'Ophiactis_savignyi', 'Opisthorchis_viverrini', 'Pristionchus_pacificus', 'Rattus_norvegicus', 'Schistosoma_mansoni', 'SemlikiForest_Virus', 'Spodoptera_frugiperda', 'Sus_scrofa', 'Tick_borne_encephalitis_virus', 'Tribolium_castaneum', 'Trichinella_spiralis', 'Trichoplusia_ni', 'Trichuris_suis', 'Tropidolaemus_subannulatus', 'Volvarina_rubella', 'undetermined', 'unidentified_influenza_virus']
-            
-            Puh, that's quite a lot! Here are the phyla of those species: ['Arthropoda', 'Artverviricota', 'Chordata', 'Cnidaria', 'Echinodermata', 'Kitrinoviricota', 'Mollusca', 'Negarnaviricota', 'Nematoda', 'Platyhelminthes', 'Virus']
-            
-            This glycan contains the following motifs: ['Chitobiose', 'Trimannosylcore', 'core_fucose']
-            
-            This is the GlyTouCan ID for this glycan: G59003TN
-            
-            This glycan has been reported to be expressed in: ['A549_cell_line', 'CHO_K1_cell_line', 'HEK293_cell_line', 'alveoli', 'brain', 'cerebellum', 'colon', 'cortex', 'hippocampus', 'iPS1A_cell_line', 'iPS2A_cell_line', 'kidney', 'liver', 'milk', 'nerve_terminal', 'ovary', 'pancreas', 'placenta', 'prostate']
-            
-            This glycan has been reported to be dysregulated in (disease, direction, sample): [('benign_breast_tumor_tissues_vs_para_carcinoma_tissues', 'up', 'breast'), ('breast_cancer_tissues_vs_benign_breast_tumor_tissues', 'up', 'breast'), ('idiopathic_rapid_eye_movement_sleep_behavior_disorder', 'down', 'serum'), ('cystic_fibrosis', 'up', 'sputum'), ('breast_cancer', 'up', 'cell_line'), ('prostate_cancer', 'up', 'prostate_cancer_biopsy')]
-            
-            That's all we can do for you at this point!
-            
+        Below are some examples of what you can do with `glycowork`; be sure to check out the other `examples` in the full documentation for everything that's there.
         
         ```
         #get motifs, graph features, and sequence features of a set of glycan sequences to train models or analyze glycan properties
@@ -363,14 +347,20 @@ Description: # Glycowork
               <th>3,6-Anhydro-L-Gal2Me</th>
               <th>3-1</th>
               <th>3-5</th>
+              <th>3-Anhydro-Gal</th>
+              <th>3-Anhydro-Gal2S</th>
+              <th>3dFuc</th>
+              <th>3dGal</th>
               <th>3dLyxHep-ulosaric</th>
               <th>4,7-Anhydro-Kdo</th>
               <th>4,7-Anhydro-KdoOPEtn</th>
               <th>4,8-Anhydro-Kdo</th>
               <th>4-1</th>
               <th>4-5</th>
+              <th>4d8dNeu5Ac</th>
               <th>4dAraHex</th>
               <th>4dEry-ol</th>
+              <th>4dFuc</th>
               <th>4dGal</th>
               <th>4dNeu5Ac</th>
               <th>4dThrHexNAcA4en</th>
@@ -401,6 +391,7 @@ Description: # Glycowork
               <th>6dAltfOAc</th>
               <th>6dFruf</th>
               <th>6dGal</th>
+              <th>6dGalNAc</th>
               <th>6dGul</th>
               <th>6dHex</th>
               <th>6dHexN</th>
@@ -1094,6 +1085,7 @@ Description: # Glycowork
               <th>GalNAcPGro</th>
               <th>GalNAla</th>
               <th>GalNAmA</th>
+              <th>GalNBz</th>
               <th>GalNCysGly</th>
               <th>GalNFoA</th>
               <th>GalNFoA3Ac6N</th>
@@ -1605,6 +1597,7 @@ Description: # Glycowork
               <th>GlcNAc3N4Ac6N</th>
               <th>GlcNAc3NAc</th>
               <th>GlcNAc3NAc4Ac</th>
+              <th>GlcNAc3Prop</th>
               <th>GlcNAc3S</th>
               <th>GlcNAc3S-ol</th>
               <th>GlcNAc3S4S6S</th>
@@ -1692,7 +1685,6 @@ Description: # Glycowork
               <th>GlcNAcOPGro</th>
               <th>GlcNAcOPGroA</th>
               <th>GlcNAcOPOAch</th>
-              <th>GlcNAcOProp</th>
               <th>GlcNAcOPyr</th>
               <th>GlcNAcOS</th>
               <th>GlcNAcOS-ol</th>
@@ -1764,7 +1756,6 @@ Description: # Glycowork
               <th>GlcOPPEtn</th>
               <th>GlcOPyr</th>
               <th>GlcOS</th>
-              <th>GlcOSA</th>
               <th>GlcOSN</th>
               <th>GlcOSNMeOCm</th>
               <th>GlcOSin</th>
@@ -1792,6 +1783,8 @@ Description: # Glycowork
               <th>Hex-ol</th>
               <th>HexA</th>
               <th>HexA2NAc3NAc</th>
+              <th>HexA2S</th>
+              <th>HexA6S</th>
               <th>HexN</th>
               <th>HexN2Me</th>
               <th>HexNAc</th>
@@ -2702,7 +2695,6 @@ Description: # Glycowork
               <td>0</td>
               <td>0</td>
               <td>1</td>
-              <td>1</td>
               <td>0</td>
               <td>0</td>
               <td>0</td>
@@ -2775,7 +2767,6 @@ Description: # Glycowork
               <td>0</td>
               <td>0</td>
               <td>0</td>
-              <td>1</td>
               <td>0</td>
               <td>0</td>
               <td>0</td>
@@ -2802,7 +2793,9 @@ Description: # Glycowork
               <td>0</td>
               <td>0</td>
               <td>0</td>
-              <td>1</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
               <td>0</td>
               <td>0</td>
               <td>0</td>
@@ -3344,7 +3337,15 @@ Description: # Glycowork
               <td>0</td>
               <td>0</td>
               <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
               <td>1</td>
+              <td>0</td>
               <td>0</td>
               <td>0</td>
               <td>0</td>
@@ -4118,6 +4119,7 @@ Description: # Glycowork
               <td>0</td>
               <td>0</td>
               <td>2</td>
+              <td>0</td>
               <td>0</td>
               <td>0</td>
               <td>0</td>
@@ -5258,7 +5260,7 @@ Description: # Glycowork
               <td>0</td>
               <td>0</td>
               <td>1</td>
-              <td>1</td>
+              <td>0</td>
               <td>0</td>
               <td>0</td>
               <td>0</td>
@@ -5380,7 +5382,7 @@ Description: # Glycowork
               <td>0.0</td>
               <td>3.0</td>
               <td>3.0</td>
-              <td>-2.396231e-15</td>
+              <td>-2.331468e-15</td>
               <td>0.263004</td>
               <td>0.037282</td>
               <td>0.703297</td>
@@ -6673,7 +6675,16 @@ Description: # Glycowork
               <td>0</td>
               <td>0</td>
               <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
               <td>2</td>
+              <td>0</td>
               <td>0</td>
               <td>0</td>
               <td>0</td>
@@ -8699,7 +8710,15 @@ Description: # Glycowork
               <td>0</td>
               <td>0</td>
               <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
+              <td>0</td>
               <td>1</td>
+              <td>0</td>
               <td>0</td>
               <td>0</td>
               <td>0</td>
@@ -9216,6 +9235,7 @@ Description: # Glycowork
               <td>0</td>
               <td>0</td>
               <td>2</td>
+              <td>0</td>
               <td>0</td>
               <td>0</td>
               <td>0</td>
@@ -10333,6 +10353,24 @@ Description: # Glycowork
         </table>
         
         
+        
+        ```
+        #using graphs, you can easily check whether two glycans are the same - even if they use different bracket notations!
+        from glycowork.motif.graph import compare_glycans
+        print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+                             'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'))
+        print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+                             'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'))
+        #or you could find the largest common subgraph of two glycans
+        from glycowork.motif.graph import largest_subgraph
+        print(largest_subgraph('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+                             'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'))
+        ```
+        
+            True
+            False
+            Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc
+            
         
         ```
         #identify significant binding motifs with (for instance) Z-score data

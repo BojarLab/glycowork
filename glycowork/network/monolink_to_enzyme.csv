@@ -1,0 +1,355 @@
+glycoenzyme	glycoclass	monolink	species	cell_type_tissue	subcell_loc	glycan_type(?)	Other
+A4GALT	A4GALT	Gal(a1-4)	Homo_sapiens
+A4GNT	A4GNT	GlcNAc(a1-4)	Homo_sapiens
+ABO	ABO	GalNAc(a1-3)	Homo_sapiens
+AGA	AGA	GlcNAc-Asn	Homo_sapiens
+AGL
+ALG1	ALG1	Man(b1-4)	Homo_sapiens
+ALG10	ALG10	Glc(a1-2)	Homo_sapiens
+ALG11	ALG11	Man(a1-2)	Homo_sapiens
+ALG12	ALG12	Man(a1-6)	Homo_sapiens
+ALG13	ALG13	GlcNAc(b1-4)	Homo_sapiens
+ALG14	ALG14	- (helps ALG13)	Homo_sapiens
+ALG2	ALG2	Man(a1-3)	Homo_sapiens
+ALG3	ALG3	Man(a1-3)	Homo_sapiens
+ALG5 ALG5	-	Homo_sapiens
+ALG6	ALG6	Glc(a1-3)	Homo_sapiens
+ALG8	ALG8	Glc(a1-3)	Homo_sapiens
+ALG9	ALG9	Man(a1-2)	Homo_sapiens
+AMY1A	AMY1	Glc(a1-4)	Homo_sapiens			The catalyzed reaction is the hydrolysis of internal Glc(a1-4) monolink in polysaccharides containing three or more (1->4)-alpha-linked D-glucose units
+AMY1B	AMY1	Glc(a1-4)	Homo_sapiens			The catalyzed reaction is the hydrolysis of internal Glc(a1-4) monolink in polysaccharides containing three or more (1->4)-alpha-linked D-glucose units
+AMY1C	AMY1	Glc(a1-4)	Homo_sapiens			The catalyzed reaction is the hydrolysis of internal Glc(a1-4) monolink in polysaccharides containing three or more (1->4)-alpha-linked D-glucose units
+ARSG	ARSG	GlcNAc3S	Homo_sapiens			Hydrolysis of the 3-sulfate groups of the N-sulfo-D-glucosamine 3-O-sulfate units of heparin.
+ARSK	ARSK	GlcA2S	Homo_sapiens			 Hydrolysis of the 2-sulfate groups of the 2-O-sulfo-D-glucuronate residues of chondroitin sulfate, heparin and heparitin sulfate
+ATHL1 
+B3GALNT1	B3GALNT	GalNAc(b1-3)	Homo_sapiens
+B3GALNT2	B3GALNT	GalNAc(b1-3)	Homo_sapiens
+B3GALT1	B3GALT	Gal(b1-3)	Homo_sapiens
+B3GALT2	B3GALT	Gal(b1-3)	Homo_sapiens
+B3GALT4	B3GALT	Gal(b1-3)	Homo_sapiens
+B3GALT5	B3GALT	Gal(b1-3)	Homo_sapiens
+B3GALT6	B3GALT	Gal(b1-3)	Homo_sapiens
+B3GAT1	B3GAT	GlcA(b1-3)	Homo_sapiens
+B3GAT2	B3GAT	GlcA(b1-3)	Homo_sapiens
+B3GAT3	B3GAT	GlcA(b1-3)	Homo_sapiens
+B3GLCT	B3GLCT	Glc(b1-3)	Homo_sapiens
+B3GNT2	B3GNT	GlcNAc(b1-3)	Homo_sapiens
+B3GNT3	B3GNT	GlcNAc(b1-3)	Homo_sapiens
+B3GNT4	B3GNT	GlcNAc(b1-3)	Homo_sapiens
+B3GNT5	B3GNT	GlcNAc(b1-3)	Homo_sapiens
+B3GNT6	B3GNT	GlcNAc(b1-3)	Homo_sapiens
+B3GNT7	B3GNT	GlcNAc(b1-3)	Homo_sapiens
+B3GNT8	B3GNT	GlcNAc(b1-3)	Homo_sapiens
+B3GNT9	B3GNT	GlcNAc(b1-3)	Homo_sapiens
+B3GNTL1
+B4GALNT1	B4GALNT	GalNAc(b1-4)	Homo_sapiens
+B4GALNT2	B4GALNT	GalNAc(b1-4)	Homo_sapiens
+B4GALNT3	B4GALNT	GalNAc(b1-4)	Homo_sapiens
+B4GALNT4	B4GALNT	GalNAc(b1-4)	Homo_sapiens
+B4GALT1	B4GALT	Gal(b1-4)	Homo_sapiens
+B4GALT2	B4GALT	Gal(b1-4)	Homo_sapiens
+B4GALT3	B4GALT	Gal(b1-4)	Homo_sapiens
+B4GALT4	B4GALT	Gal(b1-4)	Homo_sapiens
+B4GALT5	B4GALT	Gal(b1-4)	Homo_sapiens
+B4GALT6	B4GALT	Gal(b1-4)	Homo_sapiens
+B4GALT7	B4GALT	Gal(b1-4)	Homo_sapiens
+B4GAT1	B4GAT1	GlcA(b1-4)	Homo_sapiens
+C1GALT1	C1GALT1	Gal(b1-3)	Homo_sapiens
+C1GALT1C1	-	Homo_sapiens			C1GALT1-specific chaperone
+CERCAM
+CHI3L1 
+CHI3L2
+CHIA	CHIA	GlcNAc(b1-4)	Homo_sapiens			Random endo-hydrolysis of N-acetyl-beta-D-glucosaminide (1->4)-beta-linkages in chitin and chitodextrins
+CHIT1 
+CHPF
+CHPF
+CHPF2
+CHPF2
+CHST1
+CHST10
+CHST11
+CHST12
+CHST13
+CHST14
+CHST15
+CHST2
+CHST3
+CHST4
+CHST5
+CHST6
+CHST7
+CHST8
+CHST9
+CHSY1
+CHSY1 
+CHSY3
+CHSY3
+COLGALT1
+COLGALT2
+CSGALNACT1
+CSGALNACT2
+CTBS 
+DPAGT1
+DPM1
+DPM2
+DPM3
+DPY19L1
+DPY19L2
+DPY19L3
+EDEM1 
+EDEM2
+EDEM3 
+ENGASE
+EOGT
+ERLEC1
+EXT1
+EXT1
+EXT2
+EXT2
+EXTL1
+EXTL1
+EXTL2
+EXTL3
+EXTL3
+FKRP
+FKTN
+FUCA1 
+FUCA2 
+FUT1
+FUT10
+FUT11
+FUT2
+FUT3
+FUT4
+FUT5
+FUT6
+FUT7
+FUT8	Fuc(a1-6)	Homo_sapiens
+FUT9
+GAA 
+GAL3ST1
+GAL3ST2
+GAL3ST3
+GAL3ST4
+GALC 
+GALNT1
+GALNT10
+GALNT11
+GALNT12
+GALNT13
+GALNT14
+GALNT15
+GALNT16
+GALNT17
+GALNT18
+GALNT2
+GALNT20
+GALNT3
+GALNT4
+GALNT5
+GALNT6
+GALNT7
+GALNT8 
+GALNT9
+GANAB
+GANC 
+GBA 
+GBA2
+GBA3 
+GBE1 
+GBGT1
+GCNT1
+GCNT2A
+GCNT2B
+GCNT2C
+GCNT3
+GCNT4
+GCNT7
+GLA 
+GLB1 
+GLB1L 
+GLB1L2
+GLB1L3
+GLCE
+GLT1D1
+GLT6D1
+GLT8D1
+GLT8D2
+GNPTAB
+GNPTG
+GTDC1
+GUSB 
+GXYLT1
+GXYLT2
+GYG1
+GYG2
+GYS1
+GYS2
+HAS1
+HAS2
+HAS3
+HEXA
+HEXB
+HEXDC
+HPSE 
+HPSE2
+HS2ST1
+HS3ST1
+HS3ST2
+HS3ST3A1
+HS3ST3B1
+HS3ST4
+HS3ST5
+HS3ST6
+HS6ST1
+HS6ST2
+HS6ST3
+HSPA5
+HYAL1 
+HYAL2 
+HYAL3 
+HYAL4 
+IDUA 
+ISPD
+KDELC1
+KDELC2
+KIAA1161
+KL
+KLB
+LARGE1
+LARGE1
+LARGE2
+LARGE2
+LCT
+LCTL
+LFNG
+LYG1
+LYG2
+LYZ
+LYZL1
+LYZL4 
+LYZL6 
+MAN1A1
+MAN1A2
+MAN1B1
+MAN1C1
+MAN2A1 
+MAN2A2 
+MAN2B1 
+MAN2B2 
+MAN2C1 
+MANBA 
+MANEA
+MANEAL
+MFNG
+MGAM 
+MGAM2
+MGAT1
+MGAT2
+MGAT3
+MGAT4A
+MGAT4B
+MGAT4C
+MGAT4D
+MGAT5
+MGAT5B
+MOGS
+NAGA 
+NAGLU 
+NAGPA
+NDST1
+NDST2
+NDST3
+NDST4
+NEU1 
+NEU2 
+NEU3 
+NEU4 
+OGA
+OGT
+OS9
+OVGP1 
+P4HB
+PDIA2
+PDIA3
+PDIA4
+PDIA6
+PIGA
+PIGB
+PIGM
+PIGV
+PIGZ
+POFUT1
+POFUT2
+POGLUT1
+POMGNT1
+POMGNT2
+POMK
+POMT1
+POMT2
+PRKCSH
+PYGB
+PYGL
+PYGM
+RFNG
+RTFDC1
+SI
+SLC3A1 
+SLC3A2 
+SPACA3
+SPAM1 
+ST3GAL1
+ST3GAL2
+ST3GAL3
+ST3GAL4
+ST3GAL5
+ST3GAL6
+ST6GAL1
+ST6GAL2
+ST6GALNAC1
+ST6GALNAC2
+ST6GALNAC3
+ST6GALNAC4
+ST6GALNAC5
+ST6GALNAC6
+ST8SIA1
+ST8SIA2
+ST8SIA3
+ST8SIA4
+ST8SIA5
+ST8SIA6
+STT3A
+STT3B
+SULF1
+SULF2
+TMEM5
+TREH 
+UGCG
+UGGT1
+UGGT2
+UGT1A1
+UGT1A10
+UGT1A3
+UGT1A4
+UGT1A5
+UGT1A6
+UGT1A7
+UGT1A8
+UGT1A9
+UGT2A1
+UGT2A3
+UGT2B10
+UGT2B11
+UGT2B15
+UGT2B17
+UGT2B28
+UGT2B4
+UGT2B7
+UGT3A1
+UGT3A2
+UGT8
+UST
+WBSCR17
+XXYLT1
+XYLT1
+XYLT2

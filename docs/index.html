@@ -46,8 +46,8 @@ nb_path: "index.ipynb"
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
 <p>Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.</p>
-<p>The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. <code>Glycowork</code> is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, <code>Glycowork</code> also contains glycan data that can be used for glycan alignments, model pre-training, motif comparisons, etc.</p>
-<p>If you use <code>glycowork</code> in your project, please cite <a href="https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240">Thomes et al., 2021</a>.</p>
+<p>The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. <code>Glycowork</code> is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, <code>glycowork</code> also contains glycan data that can be used for model training, motif comparisons, etc.</p>
+<p>If you use <code>glycowork</code> or any of our datasets in your project, please cite <a href="https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240">Thomes et al., 2021</a>.</p>
 <p>The inspiration for <code>glycowork</code> can be found in <a href="https://doi.org/10.1016/j.chom.2020.10.004">Bojar et al., 2020</a> and <a href="https://www.cell.com/cell-reports/fulltext/S2211-1247(21">Burkholz et al., 2021</a>00616-1). There, you can also find examples of possible use cases for the functions in <code>glycowork</code>.</p>
 <p>The full documentation for <code>glycowork</code> can be found here: <a href="https://bojarlab.github.io/glycowork/">https://bojarlab.github.io/glycowork/</a></p>
 <p>If you want to contribute to <code>glycowork</code>, the best place to start is to read our <a href="https://github.com/BojarLab/glycowork/blob/master/CONTRIBUTING.md">contribution guidelines</a>.</p>
@@ -69,6 +69,52 @@ nb_path: "index.ipynb"
 <p>alternative: <br>
 <code>pip install git+https://github.com/BojarLab/glycowork.git</code> <br>
 <code>import glycowork</code></p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Data-&amp;-Models">Data &amp; Models<a class="anchor-link" href="#Data-&amp;-Models"> </a></h2>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p><code>Glycowork</code> currently contains the following main datasets that are freely available to everyone:</p>
+<ul>
+<li><strong><code>df_species</code></strong><ul>
+<li>contains &gt;31,500 glycans with species association</li>
+</ul>
+</li>
+<li><strong><code>df_glycan</code></strong><ul>
+<li>contains &gt;50,500 unique glycan sequences, including labels such as &gt;2,500 tissue associations and &gt;500 disease associations</li>
+</ul>
+</li>
+<li><strong><code>glycan_binding</code></strong><ul>
+<li>contains &gt;550,000 protein-glycan binding interactions, from 1,392 unique glycan-binding proteins</li>
+</ul>
+</li>
+</ul>
+<p>Additionally, we store these trained deep learning models for easy usage, which can be retrieved with the <code>prep_model</code> function:</p>
+<ul>
+<li><strong><code>LectinOracle</code></strong><ul>
+<li>can be used to predict glycan-binding specificity of a protein, given its ESM-1b representation; from <a href="https://onlinelibrary.wiley.com/doi/10.1002/advs.202103807">Lundstrom et al., 2021</a></li>
+</ul>
+</li>
+<li><strong><code>LectinOracle_flex</code></strong><ul>
+<li>operates the same as LectinOracle but can directly use the raw protein sequence as input (no ESM-1b representation required)</li>
+</ul>
+</li>
+<li><strong><code>SweetNet</code></strong><ul>
+<li>a graph convolutional neural network trained to predict species from glycan, can be used to generate learned glycan representations; from <a href="https://www.cell.com/cell-reports/fulltext/S2211-1247(21">Burkholz et al., 2021</a>00616-1)</li>
+</ul>
+</li>
+<li><strong><code>NSequonPred</code></strong><ul>
+<li>given the ESM-1b representation of an N-sequon (+/- 20 AA), this model can predict whether the sequon will be glycosylated</li>
+</ul>
+</li>
+</ul>
 
 </div>
 </div>
@@ -104,93 +150,11 @@ nb_path: "index.ipynb"
 </ul>
 </li>
 </ul>
-<p>Below are some examples of what you can do with <code>glycowork</code>, be sure to check out the other <a href="/glycowork/examples.html"><code>examples</code></a> in the full documentation for everything that's there.</p>
+<p>Below are some examples of what you can do with <code>glycowork</code>; be sure to check out the other <a href="/glycowork/examples.html"><code>examples</code></a> in the full documentation for everything that's there.</p>
 
 </div>
 </div>
 </div>
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="kn">from</span> <span class="nn">glycowork.motif.graph</span> <span class="kn">import</span> <span class="n">compare_glycans</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">compare_glycans</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">,</span>
-                     <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">))</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">compare_glycans</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">,</span>
-                     <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">))</span>
-</pre></div>
-
-    </div>
-</div>
-</div>
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>True
-False
-</pre>
-</div>
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-
-<div class="inner_cell">
-    <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="kn">from</span> <span class="nn">glycowork.motif.query</span> <span class="kn">import</span> <span class="n">get_insight</span>
-<span class="n">get_insight</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">)</span>
-</pre></div>
-
-    </div>
-</div>
-</div>
-
-<div class="output_wrapper">
-<div class="output">
-
-<div class="output_area">
-
-<div class="output_subarea output_stream output_stdout output_text">
-<pre>Let&#39;s get rolling! Give us a few moments to crunch some numbers.
-
-This glycan occurs in the following species: [&#39;Aedes_aegypti&#39;, &#39;Angiostrongylus_cantonensis&#39;, &#39;Anopheles_gambiae&#39;, &#39;Antheraea_pernyi&#39;, &#39;Apis_mellifera&#39;, &#39;Ascaris_suum&#39;, &#39;Autographa_californica_nucleopolyhedrovirus&#39;, &#39;AvianInfluenzaA_Virus&#39;, &#39;Bombyx_mori&#39;, &#39;Bos_taurus&#39;, &#39;Caenorhabditis_elegans&#39;, &#39;Cardicola_forsteri&#39;, &#39;Crassostrea_virginica&#39;, &#39;Cricetulus_griseus&#39;, &#39;Dictyocaulus_viviparus&#39;, &#39;Dirofilaria_immitis&#39;, &#39;Drosophila_melanogaster&#39;, &#39;Fasciola_hepatica&#39;, &#39;Gallus_gallus&#39;, &#39;Glossina_morsitans&#39;, &#39;Haemonchus_contortus&#39;, &#39;Haliotis_tuberculata&#39;, &#39;Heligmosomoides_polygyrus&#39;, &#39;Homo_sapiens&#39;, &#39;HumanImmunoDeficiency_Virus&#39;, &#39;Hydra_vulgaris&#39;, &#39;Hylesia_metabus&#39;, &#39;Lutzomyia_longipalpis&#39;, &#39;Lymantria_dispar&#39;, &#39;Mamestra_brassicae&#39;, &#39;Megathura_crenulata&#39;, &#39;Mus_musculus&#39;, &#39;Nilaparvata_lugens&#39;, &#39;Oesophagostomum_dentatum&#39;, &#39;Ophiactis_savignyi&#39;, &#39;Opisthorchis_viverrini&#39;, &#39;Pristionchus_pacificus&#39;, &#39;Rattus_norvegicus&#39;, &#39;Schistosoma_mansoni&#39;, &#39;SemlikiForest_Virus&#39;, &#39;Spodoptera_frugiperda&#39;, &#39;Sus_scrofa&#39;, &#39;Tick_borne_encephalitis_virus&#39;, &#39;Tribolium_castaneum&#39;, &#39;Trichinella_spiralis&#39;, &#39;Trichoplusia_ni&#39;, &#39;Trichuris_suis&#39;, &#39;Tropidolaemus_subannulatus&#39;, &#39;Volvarina_rubella&#39;, &#39;undetermined&#39;, &#39;unidentified_influenza_virus&#39;]
-
-Puh, that&#39;s quite a lot! Here are the phyla of those species: [&#39;Arthropoda&#39;, &#39;Artverviricota&#39;, &#39;Chordata&#39;, &#39;Cnidaria&#39;, &#39;Echinodermata&#39;, &#39;Kitrinoviricota&#39;, &#39;Mollusca&#39;, &#39;Negarnaviricota&#39;, &#39;Nematoda&#39;, &#39;Platyhelminthes&#39;, &#39;Virus&#39;]
-
-This glycan contains the following motifs: [&#39;Chitobiose&#39;, &#39;Trimannosylcore&#39;, &#39;core_fucose&#39;]
-
-This is the GlyTouCan ID for this glycan: G59003TN
-
-This glycan has been reported to be expressed in: [&#39;A549_cell_line&#39;, &#39;CHO_K1_cell_line&#39;, &#39;HEK293_cell_line&#39;, &#39;alveoli&#39;, &#39;brain&#39;, &#39;cerebellum&#39;, &#39;colon&#39;, &#39;cortex&#39;, &#39;hippocampus&#39;, &#39;iPS1A_cell_line&#39;, &#39;iPS2A_cell_line&#39;, &#39;kidney&#39;, &#39;liver&#39;, &#39;milk&#39;, &#39;nerve_terminal&#39;, &#39;ovary&#39;, &#39;pancreas&#39;, &#39;placenta&#39;, &#39;prostate&#39;]
-
-This glycan has been reported to be dysregulated in (disease, direction, sample): [(&#39;benign_breast_tumor_tissues_vs_para_carcinoma_tissues&#39;, &#39;up&#39;, &#39;breast&#39;), (&#39;breast_cancer_tissues_vs_benign_breast_tumor_tissues&#39;, &#39;up&#39;, &#39;breast&#39;), (&#39;idiopathic_rapid_eye_movement_sleep_behavior_disorder&#39;, &#39;down&#39;, &#39;serum&#39;), (&#39;cystic_fibrosis&#39;, &#39;up&#39;, &#39;sputum&#39;), (&#39;breast_cancer&#39;, &#39;up&#39;, &#39;cell_line&#39;), (&#39;prostate_cancer&#39;, &#39;up&#39;, &#39;prostate_cancer_biopsy&#39;)]
-
-That&#39;s all we can do for you at this point!
-</pre>
-</div>
-</div>
-
-</div>
-</div>
-
-</div>
-    {% endraw %}
-
     {% raw %}
     
 <div class="cell border-box-sizing code_cell rendered">
@@ -485,14 +449,20 @@ That&#39;s all we can do for you at this point!
       <th>3,6-Anhydro-L-Gal2Me</th>
       <th>3-1</th>
       <th>3-5</th>
+      <th>3-Anhydro-Gal</th>
+      <th>3-Anhydro-Gal2S</th>
+      <th>3dFuc</th>
+      <th>3dGal</th>
       <th>3dLyxHep-ulosaric</th>
       <th>4,7-Anhydro-Kdo</th>
       <th>4,7-Anhydro-KdoOPEtn</th>
       <th>4,8-Anhydro-Kdo</th>
       <th>4-1</th>
       <th>4-5</th>
+      <th>4d8dNeu5Ac</th>
       <th>4dAraHex</th>
       <th>4dEry-ol</th>
+      <th>4dFuc</th>
       <th>4dGal</th>
       <th>4dNeu5Ac</th>
       <th>4dThrHexNAcA4en</th>
@@ -523,6 +493,7 @@ That&#39;s all we can do for you at this point!
       <th>6dAltfOAc</th>
       <th>6dFruf</th>
       <th>6dGal</th>
+      <th>6dGalNAc</th>
       <th>6dGul</th>
       <th>6dHex</th>
       <th>6dHexN</th>
@@ -1216,6 +1187,7 @@ That&#39;s all we can do for you at this point!
       <th>GalNAcPGro</th>
       <th>GalNAla</th>
       <th>GalNAmA</th>
+      <th>GalNBz</th>
       <th>GalNCysGly</th>
       <th>GalNFoA</th>
       <th>GalNFoA3Ac6N</th>
@@ -1727,6 +1699,7 @@ That&#39;s all we can do for you at this point!
       <th>GlcNAc3N4Ac6N</th>
       <th>GlcNAc3NAc</th>
       <th>GlcNAc3NAc4Ac</th>
+      <th>GlcNAc3Prop</th>
       <th>GlcNAc3S</th>
       <th>GlcNAc3S-ol</th>
       <th>GlcNAc3S4S6S</th>
@@ -1814,7 +1787,6 @@ That&#39;s all we can do for you at this point!
       <th>GlcNAcOPGro</th>
       <th>GlcNAcOPGroA</th>
       <th>GlcNAcOPOAch</th>
-      <th>GlcNAcOProp</th>
       <th>GlcNAcOPyr</th>
       <th>GlcNAcOS</th>
       <th>GlcNAcOS-ol</th>
@@ -1886,7 +1858,6 @@ That&#39;s all we can do for you at this point!
       <th>GlcOPPEtn</th>
       <th>GlcOPyr</th>
       <th>GlcOS</th>
-      <th>GlcOSA</th>
       <th>GlcOSN</th>
       <th>GlcOSNMeOCm</th>
       <th>GlcOSin</th>
@@ -1914,6 +1885,8 @@ That&#39;s all we can do for you at this point!
       <th>Hex-ol</th>
       <th>HexA</th>
       <th>HexA2NAc3NAc</th>
+      <th>HexA2S</th>
+      <th>HexA6S</th>
       <th>HexN</th>
       <th>HexN2Me</th>
       <th>HexNAc</th>
@@ -2824,7 +2797,6 @@ That&#39;s all we can do for you at this point!
       <td>0</td>
       <td>0</td>
       <td>1</td>
-      <td>1</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -2897,7 +2869,6 @@ That&#39;s all we can do for you at this point!
       <td>0</td>
       <td>0</td>
       <td>0</td>
-      <td>1</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -2924,7 +2895,9 @@ That&#39;s all we can do for you at this point!
       <td>0</td>
       <td>0</td>
       <td>0</td>
-      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -3466,7 +3439,15 @@ That&#39;s all we can do for you at this point!
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -4240,6 +4221,7 @@ That&#39;s all we can do for you at this point!
       <td>0</td>
       <td>0</td>
       <td>2</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -5380,7 +5362,7 @@ That&#39;s all we can do for you at this point!
       <td>0</td>
       <td>0</td>
       <td>1</td>
-      <td>1</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -5502,7 +5484,7 @@ That&#39;s all we can do for you at this point!
       <td>0.0</td>
       <td>3.0</td>
       <td>3.0</td>
-      <td>-2.396231e-15</td>
+      <td>-2.331468e-15</td>
       <td>0.263004</td>
       <td>0.037282</td>
       <td>0.703297</td>
@@ -6795,7 +6777,16 @@ That&#39;s all we can do for you at this point!
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>2</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -8821,7 +8812,15 @@ That&#39;s all we can do for you at this point!
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -9338,6 +9337,7 @@ That&#39;s all we can do for you at this point!
       <td>0</td>
       <td>0</td>
       <td>2</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -10455,6 +10455,47 @@ That&#39;s all we can do for you at this point!
 </table>
 </div>
 
+</div>
+
+</div>
+</div>
+
+</div>
+    {% endraw %}
+
+    {% raw %}
+    
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython3"><pre><span></span><span class="kn">from</span> <span class="nn">glycowork.motif.graph</span> <span class="kn">import</span> <span class="n">compare_glycans</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">compare_glycans</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">compare_glycans</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">))</span>
+<span class="c1">#or you could find the largest common subgraph of two glycans</span>
+<span class="kn">from</span> <span class="nn">glycowork.motif.graph</span> <span class="kn">import</span> <span class="n">largest_subgraph</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">largest_subgraph</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">,</span>
+                     <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">))</span>
+</pre></div>
+
+    </div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+<div class="output_area">
+
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>True
+False
+Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc
+</pre>
+</div>
 </div>
 
 </div>

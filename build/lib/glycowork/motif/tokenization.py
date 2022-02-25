@@ -6,10 +6,50 @@ from itertools import combinations_with_replacement
 from collections import Counter
 from sklearn.cluster import DBSCAN
 
-from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap, df_species, Hex, dHex, HexNAc, Sia
+from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap, df_species, Hex, dHex, HexNAc, Sia, linkages
 from glycowork.motif.processing import small_motif_find, min_process_glycans
 from glycowork.motif.graph import compare_glycans
 from glycowork.motif.annotate import annotate_dataset
+
+chars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T',
+     'V','W','Y', 'X', 'Z'] + ['z']
+
+def constrain_prot(proteins, libr = None):
+  """Ensures that no characters outside of libr are present in proteins\n
+  | Arguments:
+  | :-
+  | proteins (list): list of proteins as strings
+  | libr (list): sorted list of amino acids occurring in proteins\n
+  | Returns:
+  | :-
+  | Returns list of proteins with only permitted amino acids
+  """
+  if libr is None:
+    libr = chars
+  mega_prot = list(set(list(''.join(proteins))))
+  forbidden = [k for k in mega_prot if k not in libr]
+  for k in forbidden:
+    proteins = [j.replace(k,'z') for j in proteins]
+  return proteins
+
+def prot_to_coded(proteins, libr = None):
+  """Encodes protein sequences to be used in LectinOracle-flex\n
+  | Arguments:
+  | :-
+  | proteins (list): list of proteins as strings
+  | libr (list): sorted list of amino acids occurring in proteins\n
+  | Returns:
+  | :-
+  | Returns list of encoded proteins with only permitted amino acids
+  """
+  if libr is None:
+    libr = chars
+  prots = [k[:min(len(k), 1000)] for k in proteins]
+  prots = constrain_prot(prots, libr = libr)
+  prots = [pad_sequence(string_to_labels(str(k).upper(),libr = libr),
+                        max_length = 1000,
+                        pad_label = len(libr)-1) for k in prots]
+  return prots
 
 def character_to_label(character, libr = None):
   """tokenizes character by indexing passed library\n
@@ -40,19 +80,22 @@ def string_to_labels(character_string, libr = None):
     libr = lib
   return list(map(lambda character: character_to_label(character, libr), character_string))
 
-def pad_sequence(seq, max_length, pad_label = None):
+def pad_sequence(seq, max_length, pad_label = None, libr = None):
   """brings all sequences to same length by adding padding token\n
   | Arguments:
   | :-
   | seq (list): sequence to pad (from string_to_labels)
   | max_length (int): sequence length to pad to
-  | pad_label (int): which padding label to use\n
+  | pad_label (int): which padding label to use
+  | libr (list): list of library items\n\n
   | Returns:
   | :-
   | Returns padded sequence
   """
+  if libr is None:
+    libr = lib
   if pad_label is None:
-    pad_label = len(lib)
+    pad_label = len(libr)
   seq += [pad_label for i in range(max_length - len(seq))]
   return seq
 
@@ -107,16 +150,21 @@ def get_stem_lib(libr):
   """
   return {k:get_core(k) for k in libr}
 
-def stemify_glycan(glycan, stem_lib):
+def stemify_glycan(glycan, stem_lib = None, libr = None):
   """removes modifications from all monosaccharides in a glycan\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
-  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide\n
+  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
   | Returns:
   | :-
   | Returns stemmed glycan as string
   """
+  if libr is None:
+    libr = lib
+  if stem_lib is None:
+    stem_lib = get_stem_lib(libr)
   clean_list = list(stem_lib.values())
   for k in list(stem_lib.keys())[::-1][:-1]:
     if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
@@ -178,7 +226,8 @@ def stemify_dataset(df, stem_lib = None, libr = None,
     if pool_count[k] > rarity_filter:
       stem_lib[k] = k
   df_out = copy.deepcopy(df)
-  df_out[glycan_col_name] = [stemify_glycan(k, stem_lib) for k in df_out[glycan_col_name].values.tolist()]
+  df_out[glycan_col_name] = [stemify_glycan(k, stem_lib = stem_lib,
+                                            libr = libr) for k in df_out[glycan_col_name].values.tolist()]
   return df_out
 
 def match_composition(composition, group, level, df = None,
@@ -469,3 +518,45 @@ def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
     out = pd.concat(sample_dfs, axis = 0, ignore_index = True)
     out['sample_id'] = unwrap([[k]*len(sample_dfs[k]) for k in range(len(sample_dfs))])
     return out
+
+def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkages = None):
+  """masks rare monosaccharides and linkages in a list of glycans\n 
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed form
+  | thresh_monosaccharides (int): threshold-value for monosaccharides seen as "rare"; default:(0.001*len(glycans))
+  | thresh_linkages (int): threshold-value for linkages seen as "rare"; default:(0.03*len(glycans))\n
+  | Returns:
+  | :-
+  | Returns list of glycans in IUPAC-condensed with masked rare monosaccharides and linkages
+  """
+  if thresh_monosaccharides is None:
+    thresh_monosaccharides = int(np.ceil(0.001*len(glycans)))
+  if thresh_linkages is None:
+    thresh_linkages = int(np.ceil(0.03*len(glycans)))
+  rares = unwrap(min_process_glycans(glycans))
+  rare_linkages, rare_monosaccharides = [], []
+  for x in rares:
+    (rare_monosaccharides, rare_linkages)[x in linkages].append(x)
+  rares = [rare_monosaccharides, rare_linkages]
+  thresh = [thresh_monosaccharides, thresh_linkages]
+  rares = [list({x: count for x, count in Counter(rares[k]).items() if count <= thresh[k]}.keys()) for k in range(len(rares))]
+  try:
+    rares[0].remove('')
+  except:
+    pass
+  out = []
+  for k in glycans:
+    for j in rares[0]:
+      if (j in k) and ('-'+j not in k):
+        k = k.replace(j+'(', 'monosaccharide(')
+        if k.endswith(j):
+          k = re.sub(j+'$', 'monosaccharide', k)
+    for m in rares[1]:
+      if m in k:
+        if m[1] == '1':
+          k = k.replace(m, '?1-?')
+        else:
+          k = k.replace(m, '?2-?')
+    out.append(k)
+  return out

@@ -4,3 +4,4 @@ __all__ = []
 
 # Cell
 from .network.biosynthesis import *
+from .network.evolution import *

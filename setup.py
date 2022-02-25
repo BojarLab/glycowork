@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="glycowork",
-    version="0.3.0",
+    version="0.4.0",
     author="Daniel Bojar",
     author_email="daniel.bojar@gu.se",
     description="Package containing helper functions for processing and analysis of glycans",
@@ -23,5 +23,6 @@ setuptools.setup(
     python_requires='>=3.6',
     install_requires=["sklearn", "regex", "networkx",
                       "statsmodels", "scipy", "torch",
-                      "seaborn", "xgboost", "mpld3"],
+                      "seaborn", "xgboost", "mpld3",
+                      "requests"],
 )
