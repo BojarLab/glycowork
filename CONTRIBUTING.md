@@ -32,9 +32,10 @@ nbdev_install_git_hooks
 * Docs are automatically created from the notebooks in the nbs folder.
 
 
-## Wishlist for future glycowork updates (last update: 2022-02-05)
+## Wishlist for future glycowork updates (last update: 2022-02-24)
 #### Urgent
 * add the possibility of drawing glycans on plots (e.g., have SNFG glycans on x-axis for a bar plot etc.)
+* add a function to get monosaccharide composition from m/z values
 * more and more informative error messages
 
 

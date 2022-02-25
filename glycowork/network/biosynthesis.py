@@ -301,7 +301,7 @@ def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
-  | plot_format (string): how to layout network, either 'kamada_kawai' or 'spring'; default:'kamada_kawai'
+  | plot_format (string): how to layout network, either 'pydot2', 'kamada_kawai', or 'spring'; default:'pydot2'
   | edge_label_draw (bool): draws edge labels if True; default:True
   | node_size (bool): whether nodes should be sized by an "abundance" attribute in network; default:False
   | lfc_dict (dict): dictionary of enzyme:log2-fold-change to scale edge width; default:None\n
@@ -313,7 +313,11 @@ def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
   else:
     node_sizes = 50
   if plot_format == 'pydot2':
-    pos = nx.nx_pydot.pydot_layout(network, prog = "dot")
+    try:
+      pos = nx.nx_pydot.pydot_layout(network, prog = "dot")
+    except:
+      print("pydot2 threw an error (maybe you're using Windows?); we'll use kamada_kawai instead")
+      pos = nx.kamada_kawai_layout(network)
   elif plot_format == 'kamada_kawai':
     pos = nx.kamada_kawai_layout(network)
   elif plot_format == 'spring':
@@ -343,7 +347,8 @@ def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
       c_list = ['red' if (lfc_dict[k] < 0) else 'green' if (lfc_dict[k] > 0) else 'cornflowerblue' for k in diffs]
       w_list = [abs(lfc_dict[k]) if abs(lfc_dict[k]) != 0 else 1 for k in diffs]
       nx.draw_networkx_edges(network, pos, ax = ax, edge_color = c_list, width = w_list)
-    nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax)
+    nx.draw_networkx_edge_labels(network, pos, edge_labels = nx.get_edge_attributes(network, 'diffs'), ax = ax,
+                                 verticalalignment = 'baseline')
   else:
     diffs = list(nx.get_edge_attributes(network, 'diffs').values())
     c_list = ['cornflowerblue' if 'Glc' in k else 'yellow' if 'Gal' in k else 'red' if 'Fuc' in k else 'mediumorchid' if '5Ac' in k \
