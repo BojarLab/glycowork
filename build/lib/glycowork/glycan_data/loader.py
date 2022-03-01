@@ -105,10 +105,11 @@ def build_df_species(df):
   df.columns = ['target'] + df.columns.values.tolist()[1:]
   df.index = df.target
   df.drop(['target'], axis = 1, inplace = True)
-  df = df.explode('Species')
+  df = df.explode(['Species','Genus','Family','Order','Class',
+                   'Phylum','Kingdom','Domain'])
   df = df.applymap(lambda x: x[0] if isinstance(x, list) else x)
   df.reset_index(inplace = True)
-  df = df.sort_values(['Species', 'target'], ascending = [True, True])
+  df = df.sort_values(['Species', 'target'], ascending = [True, True]).reset_index(drop = True)
   return df
 
 df_species = build_df_species(df_glycan)
