@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 import re
 import copy
-from itertools import combinations_with_replacement
+import pkg_resources
+from itertools import combinations_with_replacement, product
 from collections import Counter
 from sklearn.cluster import DBSCAN
 
@@ -13,6 +14,9 @@ from glycowork.motif.annotate import annotate_dataset
 
 chars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T',
      'V','W','Y', 'X', 'Z'] + ['z']
+
+io = pkg_resources.resource_stream(__name__, "mz_to_composition.csv")
+mapping_file = pd.read_csv(io)
 
 def constrain_prot(proteins, libr = None):
   """Ensures that no characters outside of libr are present in proteins\n
@@ -229,6 +233,96 @@ def stemify_dataset(df, stem_lib = None, libr = None,
   df_out[glycan_col_name] = [stemify_glycan(k, stem_lib = stem_lib,
                                             libr = libr) for k in df_out[glycan_col_name].values.tolist()]
   return df_out
+
+def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
+                      sample_prep = 'underivatized', mass_tolerance = 0.2, human = True,
+                      glycan_class = 'N', check_all_adducts = False, check_specific_adduct = None,
+                      ptm = False):
+  """mapping a m/z value to one or more matching monosaccharide compositions\n
+  | Arguments:
+  | :-
+  | mz_value (float): the actual m/z value from mass spectrometry
+  | mode (string): whether mz_value comes from MS in 'positive' or 'negative' mode; default:'positive'
+  | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
+  | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
+  | mass_tolerance (float): how much deviation to tolerate for a match; default:0.2
+  | human (bool): whether to only consider human monosaccharide types; default:True
+  | glycan_class (string): which glycan class does the m/z value stem from, 'N' or 'O' linked glycans; default:'N'
+  | check_all_adducts (bool): whether to also check for matches with ion adducts (depending on mode); default:False
+  | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
+  | ptm (bool): whether to check for post-translational modification (sulfation, phosphorylation); default:False\n
+  | Returns:
+  | :-
+  | Returns a list of matching compositions in dict form
+  """
+  idx = sample_prep + '_' + mass_value
+  free_reducing_end = 18.0105546
+
+  #Hex,HexNAc,dHex,Neu5Ac,Neu5Gc,Pen,Kdn,HexA,S,P
+  if glycan_class == 'N':
+    ranges = [21,21,7,6,4,5,3,3,4,3]
+  elif glycan_class == 'O':
+    ranges = [15,15,7,8,8,4,3,3,7,7]
+  else:
+    print("Invalid glycan class; only N and O are allowed.")
+
+  if human:
+    pools = [list(range(k)) for k in ranges[:4]]
+  else:
+    pools = [list(range(k)) for k in ranges[:-2]]
+  if ptm:
+    ptm_pools = [list(range(k)) for k in ranges[8:]]
+    pools = pools + ptm_pools
+  pools = list(product(*pools))
+
+  compositions = []
+  if mode == 'positive':
+    adducts = ['H+', 'Na+', 'K+']
+  elif mode == 'negative':
+    adducts = ['H', 'Acetate', 'Trifluoroacetic acid']
+  else:
+    print("Only positive or negative mode allowed.")
+  if not check_all_adducts:
+    if check_specific_adduct is None:
+      adducts = []
+    else:
+      adducts = [check_specific_adduct]
+  mass_dict = dict(zip(mapping_file.composition, mapping_file[idx]))
+  if human:
+    precursors = [sum([mass_dict['Hex']*k[0], mass_dict['HexNAc']*k[1], mass_dict['dHex']*k[2],
+                       mass_dict['Neu5Ac']*k[3], free_reducing_end]) for k in pools]
+  else:
+    precursors = [sum([mass_dict['Hex']*k[0], mass_dict['HexNAc']*k[1], mass_dict['dHex']*k[2],
+                       mass_dict['Neu5Ac']*k[3], mass_dict['Neu5Gc']*k[4], mass_dict['Pen']*k[5],
+                       mass_dict['Kdn']*k[6], mass_dict['HexA']*k[7], free_reducing_end]) for k in pools]
+  if ptm:
+    precursors = [precursors[k] + mass_dict['Sulphate']*pools[k][-2] + mass_dict['Phosphate']*pools[k][-1] for k in range(len(precursors))]
+
+  for k in range(len(precursors)):
+    precursor = precursors[k]
+    pool = pools[k]
+    if precursor < 1.2*mz_value:
+      candidates = [precursor] + [precursor + mass_dict[j] for j in adducts]
+      if any([abs(j - mz_value) < mass_tolerance for j in candidates]):
+        if human:
+          composition = {'Hex':pool[0], 'HexNAc':pool[1], 'dHex':pool[2],
+                         'Neu5Ac':pool[3]}
+        else:
+          composition = {'Hex':pool[0], 'HexNAc':pool[1], 'dHex':pool[2],
+                         'Neu5Ac':pool[3], 'Neu5Gc':pool[4],
+                         'Pen':pool[5], 'Kdn':pool[6], 'HexA':pool[7]}
+        if ptm:
+          composition['S'] = pool[-2]
+          composition['P'] = pool[-1]
+        compositions.append(composition)
+          
+  compositions = [dict(t) for t in {tuple(d.items()) for d in compositions}]
+  compositions = [k for k in compositions if (k['Hex'] + k['HexNAc']) > 0]
+  compositions = [k for k in compositions if (k['dHex'] + 1) <= (k['Hex'] + k['HexNAc'])]
+  if ptm:
+    compositions = [k for k in compositions if not all([(k['S'] > 0), (k['P'] > 0)])]
+    compositions = [k for k in compositions if (k['S'] + k['P']) <= (k['Hex'] + k['HexNAc'])]
+  return compositions
 
 def match_composition(composition, group, level, df = None,
                       mode = "minimal", libr = None, glycans = None,
