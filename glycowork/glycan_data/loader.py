@@ -107,7 +107,7 @@ def build_df_species(df):
   df.drop(['target'], axis = 1, inplace = True)
   df = df.explode('Species')
   df = df.applymap(lambda x: x[0] if isinstance(x, list) else x)
-  df.reset_index()
+  df.reset_index(inplace = True)
   df = df.sort_values(['Species', 'target'], ascending = [True, True])
   return df
 
