@@ -97,7 +97,7 @@ def get_lib(glycan_list, mode = 'letter', exhaustive = True):
   lib = unwrap(proc)
   lib = list(set([tuple(k) for k in lib]))
   lib = [list(k) for k in lib]
-  if mode=='letter':
+  if mode == 'letter':
     lib = list(sorted(list(set(unwrap(lib)))))
   else:
     lib = list(sorted(list(set([tuple(k) for k in lib]))))

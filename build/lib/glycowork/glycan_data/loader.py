@@ -1,12 +1,11 @@
 import pandas as pd
 import os
+import ast
 import pickle
 import pkg_resources
 
 from glycowork.motif.processing import get_lib
 
-io = pkg_resources.resource_stream(__name__, "glyco_targets_species_seq_all_V5.csv")
-df_species = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "v5_sugarbase.csv")
 df_glycan = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "df_glysum_v5.csv")
@@ -21,7 +20,6 @@ data_path = os.path.join(this_dir, 'glycan_representations_species.pkl')
 glycan_emb = pickle.load(open(data_path, 'rb'))
 
 lib = get_lib(list(set(df_glycan.glycan.values.tolist() +
-                       df_species.target.values.tolist() +
                        motif_list.motif.values.tolist() +
                        glycan_binding.columns.values.tolist()[:-1] +
                        ['monosaccharide','Sia'])))
@@ -83,3 +81,34 @@ def load_file(file):
   except:
     temp = pd.read_csv("glycowork/glycan_data/" + file)
   return temp
+
+def build_df_species(df):
+  """creates df_species from df_glycan\n
+  | Arguments:
+  | :-
+  | df (dataframe): df_glycan / sugarbase\n
+  | Returns:
+  | :-
+  | Returns df_species
+  """
+  df = df[df.Species.str.len()>2].reset_index(drop = True)
+  df = df.iloc[:,:10]
+  df.Species = [ast.literal_eval(k) for k in df.Species.values.tolist()]
+  df.Genus = [ast.literal_eval(k) for k in df.Genus.values.tolist()]
+  df.Family = [ast.literal_eval(k) for k in df.Family.values.tolist()]
+  df.Order = [ast.literal_eval(k) for k in df.Order.values.tolist()]
+  df.Class = [ast.literal_eval(k) for k in df.Class.values.tolist()]
+  df.Phylum = [ast.literal_eval(k) for k in df.Phylum.values.tolist()]
+  df.Kingdom = [ast.literal_eval(k) for k in df.Kingdom.values.tolist()]
+  df.Domain = [ast.literal_eval(k) for k in df.Domain.values.tolist()]
+  df.ref = [ast.literal_eval(k) for k in df.ref.values.tolist()]
+  df.columns = ['target'] + df.columns.values.tolist()[1:]
+  df.index = df.target
+  df.drop(['target'], axis = 1, inplace = True)
+  df = df.explode('Species')
+  df = df.applymap(lambda x: x[0] if isinstance(x, list) else x)
+  df.reset_index()
+  df = df.sort_values(['Species', 'target'], ascending = [True, True])
+  return df
+
+df_species = build_df_species(df_glycan)
