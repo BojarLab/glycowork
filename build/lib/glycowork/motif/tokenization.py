@@ -319,6 +319,12 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   compositions = [dict(t) for t in {tuple(d.items()) for d in compositions}]
   compositions = [k for k in compositions if (k['Hex'] + k['HexNAc']) > 0]
   compositions = [k for k in compositions if (k['dHex'] + 1) <= (k['Hex'] + k['HexNAc'])]
+  if glycan_class == 'N':
+    compositions = [k for k in compositions if k['HexNAc'] >= 2]
+    compositions = [k for k in compositions if any([(k['HexNAc'] > 2),
+                                                    (k['HexNAc'] == 2 and k['Neu5Ac'] == 0)])]
+  if glycan_class == 'O':
+    compositions = [k for k in compositions if k['HexNAc'] >= 1]
   if ptm:
     compositions = [k for k in compositions if not all([(k['S'] > 0), (k['P'] > 0)])]
     compositions = [k for k in compositions if (k['S'] + k['P']) <= (k['Hex'] + k['HexNAc'])]
