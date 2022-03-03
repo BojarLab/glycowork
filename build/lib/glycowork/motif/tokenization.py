@@ -551,7 +551,7 @@ def compositions_to_structures(composition_list, abundances, group, level,
   | Arguments:
   | :-
   | composition_list (list): list of composition dictionaries of the form {'Hex': 1, 'HexNAc': 1}
-  | abundances (dataframe): every row one glycan (matching composition_list in order), every column one sample; pd.DataFrame([range(len(composition_list))]*2).T if not applicable
+  | abundances (dataframe): every row one composition (matching composition_list in order), every column one sample; pd.DataFrame([range(len(composition_list))]*2).T if not applicable
   | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
   | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
   | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
@@ -579,6 +579,7 @@ def compositions_to_structures(composition_list, abundances, group, level,
     else:
         not_matched.append(composition_list[k])
   df_out = pd.DataFrame(out_df)
+  df_out.columns = ['composition'] + ['abundance']*(abundances.shape[1]-1)
   print(str(len(not_matched)) + " compositions could not be matched. Run with verbose = True to see which compositions.")
   if verbose:
     print(not_matched)

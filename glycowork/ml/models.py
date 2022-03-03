@@ -15,6 +15,8 @@ data_path = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
 trained_SweetNet = torch.load(data_path)
 data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565.pt')
 trained_LectinOracle = torch.load(data_path)
+data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565_flex.pt')
+trained_LectinOracle_flex = torch.load(data_path)
 data_path = os.path.join(this_dir, 'NSequonPred_batch32.pt')
 trained_NSequonPred = torch.load(data_path)
 
@@ -369,10 +371,11 @@ def prep_model(model_type, num_classes, libr = None,
         model = LectinOracle_flex(len(libr), num_classes = num_classes)
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
-            file_id = '1B5MntpMX1HaQ-SFqjxSPhVcFeo5jOJW2'
-            destination = 'leor_flex.pt'
-            download_file_from_google_drive(file_id, destination)
-            model.load_state_dict(torch.load('./leor_flex.pt'))
+            model.load_state_dict(trained_LectinOracle_flex)
+            #file_id = '1B5MntpMX1HaQ-SFqjxSPhVcFeo5jOJW2'
+            #destination = 'leor_flex.pt'
+            #download_file_from_google_drive(file_id, destination)
+            #model.load_state_dict(torch.load('./leor_flex.pt'))
         model = model.cuda()
     elif model_type == 'NSequonPred':
         model = NSequonPred()
