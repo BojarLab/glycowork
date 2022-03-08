@@ -579,11 +579,68 @@ def compositions_to_structures(composition_list, abundances, group, level,
     else:
         not_matched.append(composition_list[k])
   df_out = pd.DataFrame(out_df)
-  df_out.columns = ['composition'] + ['abundance']*(abundances.shape[1]-1)
+  df_out.columns = ['glycan'] + ['abundance']*(abundances.shape[1]-1)
   print(str(len(not_matched)) + " compositions could not be matched. Run with verbose = True to see which compositions.")
   if verbose:
     print(not_matched)
   return df_out
+
+def mz_to_structures(mz_list, abundances, group, level, reducing_end, mode = 'positive',
+                     mass_value = 'monoisotopic', sample_prep = 'underivatized', mass_tolerance = 0.2,
+                     check_all_adducts = False, check_specific_adduct = None,
+                      ptm = False, df = None, libr = None, verbose = False):
+  """wrapper function to map precursor masses to structures, condense them, and match them with relative intensities\n
+  | Arguments:
+  | :-
+  | mz_list (list): list of precursor masses
+  | abundances (dataframe): every row one composition (matching mz_list in order), every column one sample; pd.DataFrame([range(len(mz_list))]*2).T if not applicable
+  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
+  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
+  | reducing_end (string): filters possible glycans by reducing end monosaccharide
+  | mode (string): whether mz_value comes from MS in 'positive' or 'negative' mode; default:'positive'
+  | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
+  | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
+  | mass_tolerance (float): how much deviation to tolerate for a match; default:0.2
+  | check_all_adducts (bool): whether to also check for matches with ion adducts (depending on mode); default:False
+  | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
+  | ptm (bool): whether to check for post-translational modification (sulfation, phosphorylation); default:False
+  | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | verbose (bool): whether to print any non-matching compositions; default:False\n
+  | Returns:
+  | :-
+  | Returns dataframe of (matched structures) x (relative intensities)
+  """
+  if libr is None:
+    libr = lib
+  if df is None:
+    df = df_species
+  if group == 'Homo_sapiens':
+    human = True
+  else:
+    human = False
+  if 'GlcNAc' in reducing_end:
+    glycan_class = 'N'
+  elif 'GalNAc' in reducing_end:
+    glycan_class = 'O'
+  else:
+    print("Not a valid class for mz_to_composition; currently N/O matching is supported. For everything else run composition_to_structures separately.")
+  out_structures = []
+  compositions = [mz_to_composition(mz, mode = mode, mass_value = mass_value, sample_prep = sample_prep,
+                                    mass_tolerance = mass_tolerance, human = human, glycan_class = glycan_class,
+                                    check_all_adducts = check_all_adducts, check_specific_adduct = check_specific_adduct,
+                                    ptm = ptm) for mz in mz_list]
+  for m in range(len(compositions)):
+    structures = [compositions_to_structures([k], abundances.iloc[[m]], group, level, df = df,
+                                             libr = libr, reducing_end = reducing_end, verbose = verbose) for k in compositions[m]]
+    structures = [k for k in structures if not k.empty]
+    if len(structures) == 1:
+      out_structures.append(structures[0])
+    else:
+      if verbose:
+        print("m/z value " + str(mz_list[m]) + " with multiple matched compositions that each would have matching structures is filtered out.")
+  out_structures = pd.concat(out_structures, axis = 0)
+  return out_structures
 
 def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
                          form = 'wide'):

@@ -24,5 +24,5 @@ setuptools.setup(
     install_requires=["sklearn", "regex", "networkx",
                       "statsmodels", "scipy", "torch",
                       "seaborn", "xgboost", "mpld3",
-                      "requests", "pandas>=1.3.0"],
+                      "requests", "pandas"],
 )

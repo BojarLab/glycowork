@@ -911,29 +911,32 @@ def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
   """
   if libr is None:
     libr = lib
-  permitted_roots = [k for k in permitted_roots if k in list(network.nodes())]
   min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
-  unconnected_nodes = return_unconnected_to_root(network, permitted_roots = permitted_roots)
-  unconnected_nodes = [k for k in unconnected_nodes if len(glycan_to_nxGraph(k, libr = libr))>min_size]
-  nodeDict = dict(network.nodes(data = True))
-  real_nodes = [node for node in list(network.nodes()) if nodeDict[node]['virtual'] == 0]
-  real_nodes = [node for node in real_nodes if node not in unconnected_nodes]
-  edges = []
-  edge_labels = []
-  for node in unconnected_nodes:
-    try:
-      e, el = find_shortest_path(node, real_nodes, reducing_end = reducing_end,
-                                                     libr = libr, limit = limit)
-      edges.append(e)
-      edge_labels.append(el)
-    except:
-      pass
-  edge_labels = unwrap([[edge_labels[k][edges[k][j]] for j in range(len(edges[k]))] for k in range(len(edge_labels))])
-  edges = unwrap(edges)
-  node_labels = {node:(nodeDict[node]['virtual'] if node in list(network.nodes()) else 1) for node in [i for sub in edges for i in sub]}
-  network_out = update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
-  network_out = filter_disregard(network_out)
-  return network_out
+  permitted_roots = [k for k in permitted_roots if k in list(network.nodes())]
+  if len(permitted_roots > 0):
+    unconnected_nodes = return_unconnected_to_root(network, permitted_roots = permitted_roots)
+    unconnected_nodes = [k for k in unconnected_nodes if len(glycan_to_nxGraph(k, libr = libr))>min_size]
+    nodeDict = dict(network.nodes(data = True))
+    real_nodes = [node for node in list(network.nodes()) if nodeDict[node]['virtual'] == 0]
+    real_nodes = [node for node in real_nodes if node not in unconnected_nodes]
+    edges = []
+    edge_labels = []
+    for node in unconnected_nodes:
+      try:
+        e, el = find_shortest_path(node, real_nodes, reducing_end = reducing_end,
+                                                       libr = libr, limit = limit)
+        edges.append(e)
+        edge_labels.append(el)
+      except:
+        pass
+    edge_labels = unwrap([[edge_labels[k][edges[k][j]] for j in range(len(edges[k]))] for k in range(len(edge_labels))])
+    edges = unwrap(edges)
+    node_labels = {node:(nodeDict[node]['virtual'] if node in list(network.nodes()) else 1) for node in [i for sub in edges for i in sub]}
+    network_out = update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
+    network_out = filter_disregard(network_out)
+    return network_out
+  else:
+    return network
 
 def make_network_directed(network):
   """converts a network with undirected edges to one with directed edges\n
