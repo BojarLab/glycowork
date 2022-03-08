@@ -1062,7 +1062,7 @@ def choose_path(source, target, species_list, filepath, libr = None):
   | source (string): glycan node that is the biosynthetic precursor
   | target (string): glycan node that is the biosynthetic product; has to two biosynthetic steps away from source
   | species_list (list): list of species to compare network to
-  | filepath (string): filepath to load biosynthetic networks from other species
+  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + '_graph_exhaustive.pkl'
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
   | Returns:
   | :-
@@ -1086,3 +1086,39 @@ def choose_path(source, target, species_list, filepath, libr = None):
   alt_b = alt_b.count(0)/len(alt_b)
   inferences = {alternatives[0]:alt_a, alternatives[1]:alt_b}
   return inferences
+
+def trace_diamonds(network, species_list, filepath, libr = None):
+  """extracts diamond-shape motifs from biosynthetic networks (A->B,A->C,B->D,C->D) and uses evolutionary information to determine which path is taken from A to D\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | species_list (list): list of species to compare network to
+  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + '_graph_exhaustive.pkl'
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns dataframe of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
+  """
+  if libr is None:
+    libr = lib
+  g1 = nx.DiGraph()
+  nx.add_path(g1, [1,2,3])
+  nx.add_path(g1, [1,4,3])
+  graph_pair = nx.algorithms.isomorphism.GraphMatcher(network, g1)
+  matchings_list = list(graph_pair.subgraph_isomorphisms_iter())
+  unique_keys = list(set([tuple(list(sorted(list(k.keys())))) for k in matchings_list]))
+  matchings_list = [[d for d in matchings_list if k == tuple(list(sorted(list(d.keys()))))][0] for k in unique_keys]
+  matchings_list2 = []
+  for d in matchings_list:
+    d_rev = dict((v, k) for k, v in d.items())
+    middle_nodes = [d_rev[2], d_rev[4]]
+    virtual_state = [nx.get_node_attributes(network, 'virtual')[j] for j in middle_nodes]
+    if any([j == 1 for j in virtual_state]):
+      matchings_list2.append(d)
+  paths = []
+  for d in matchings_list2:
+    d_rev = dict((v, k) for k, v in d.items())
+    paths.append(choose_path(d_rev[1], d_rev[3], species_list, filepath, libr = libr))
+  df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
+  df_out.columns = ['target', 'probability']
+  return df_out
