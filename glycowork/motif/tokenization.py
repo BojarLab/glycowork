@@ -544,16 +544,16 @@ def condense_composition_matching(matched_composition, libr = None):
   #print("This matching can be summarized by " + str(num_clusters) + " glycans.")
   return sum_glycans
 
-def compositions_to_structures(composition_list, abundances, group, level,
+def compositions_to_structures(composition_list, group = 'Homo_sapiens', level = 'Species', abundances = None,
                                df = None, libr = None, reducing_end = None,
                                verbose = False):
   """wrapper function to map compositions to structures, condense them, and match them with relative intensities\n
   | Arguments:
   | :-
   | composition_list (list): list of composition dictionaries of the form {'Hex': 1, 'HexNAc': 1}
-  | abundances (dataframe): every row one composition (matching composition_list in order), every column one sample; pd.DataFrame([range(len(composition_list))]*2).T if not applicable
-  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
-  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
+  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter; default:Homo_sapiens
+  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain; default:Species
+  | abundances (dataframe): every row one composition (matching composition_list in order), every column one sample;default:pd.DataFrame([range(len(composition_list))]*2).T
   | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
   | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None
@@ -566,6 +566,8 @@ def compositions_to_structures(composition_list, abundances, group, level,
     libr = lib
   if df is None:
     df = df_species
+  if abundances is None:
+    abundances = pd.DataFrame([range(len(composition_list))]*2).T
   out_df = []
   not_matched = []
   for k in range(len(composition_list)):
@@ -578,8 +580,9 @@ def compositions_to_structures(composition_list, abundances, group, level,
             out_df.append([condensed[ele]] + matched_data[ele])
     else:
         not_matched.append(composition_list[k])
-  df_out = pd.DataFrame(out_df)
-  df_out.columns = ['glycan'] + ['abundance']*(abundances.shape[1]-1)
+  if len(df_out)>0:
+    df_out = pd.DataFrame(out_df)
+    df_out.columns = ['glycan'] + ['abundance']*(abundances.shape[1]-1)
   print(str(len(not_matched)) + " compositions could not be matched. Run with verbose = True to see which compositions.")
   if verbose:
     print(not_matched)

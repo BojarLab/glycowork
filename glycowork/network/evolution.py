@@ -104,3 +104,36 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
   if len(filepath) > 1:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
+
+def check_conservation(glycan, df, rank = 'Order', filepath = None, threshold = 5,
+                       motif = False):
+  """estimates evolutionary conservation of glycans and glycan motifs via biosynthetic networks\n
+  | Arguments:
+  | :-
+  | glycan (string): full glycan or glycan motif in IUPAC-condensed nomenclature
+  | df (dataframe): dataframe in the style of df_species, each row one glycan and columns are the taxonomic levels
+  | rank (string): at which taxonomic level to assess conservation; default:Order
+  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + '_graph_exhaustive.pkl'
+  | threshold (int): threshold of how many glycans a species needs to have to consider the species;default:5
+  | motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False\n
+  | Returns:
+  | :-
+  | Returns a dictionary of taxonomic group : degree of conservation
+  """
+  all_specs = list(sorted(list(set(df.Species.values.tolist()))))
+  allowed = [k for k in all_specs if df.Species.values.tolist().count(k) >= threshold]
+  df_freq = df[df.Species.isin(allowed)].reset_index(drop = True)
+  all_specs = list(sorted(list(set(df_freq.Species.values.tolist()))))
+  pool = list(set(df_freq[rank].values.tolist()))
+  pool = [k for k in pool if len(list(set(df_freq[df_freq[rank] == k].Species.tolist()))) > 1]
+  networks = {k:nx.read_gpickle(filepath + k + '_graph_exhaustive.pkl') for k in all_specs}
+  conserved = {}
+  for k in pool:
+    specs = list(set(df_freq[df_freq[rank] == k].Species.values.tolist()))
+    nets = [networks[j] for j in specs]
+    nets = [list(j.nodes()) for j in nets]
+    if motif:
+      conserved[k] = sum([glycan in "".join(j) for j in nets]) / len(nets)
+    else:
+      conserved[k] = sum([glycan in j for j in nets]) / len(nets)
+  return conserved
