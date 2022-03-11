@@ -568,7 +568,7 @@ def compositions_to_structures(composition_list, group = 'Homo_sapiens', level =
     df = df_species
   if abundances is None:
     abundances = pd.DataFrame([range(len(composition_list))]*2).T
-  out_df = []
+  df_out = []
   not_matched = []
   for k in range(len(composition_list)):
     matched = match_composition_relaxed(composition_list[k], group, level,
@@ -577,11 +577,11 @@ def compositions_to_structures(composition_list, group = 'Homo_sapiens', level =
         condensed = condense_composition_matching(matched, libr = libr)
         matched_data = [abundances.iloc[k,1:].values.tolist()]*len(condensed)
         for ele in range(len(condensed)):
-            out_df.append([condensed[ele]] + matched_data[ele])
+            df_out.append([condensed[ele]] + matched_data[ele])
     else:
         not_matched.append(composition_list[k])
   if len(df_out)>0:
-    df_out = pd.DataFrame(out_df)
+    df_out = pd.DataFrame(df_out)
     df_out.columns = ['glycan'] + ['abundance']*(abundances.shape[1]-1)
   print(str(len(not_matched)) + " compositions could not be matched. Run with verbose = True to see which compositions.")
   if verbose:
