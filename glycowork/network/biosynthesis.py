@@ -1073,6 +1073,8 @@ def choose_path(source, target, species_list, filepath, libr = None):
   network = construct_network([source, target], libr = libr, add_virtual_nodes = 'exhaustive',
                               ptm = True, directed = True)
   alternatives = [path[1] for path in nx.all_simple_paths(network, source = source, target = target)]
+  if len(alternatives)<2:
+    return {}
   alt_a = []
   alt_b = []
   for k in species_list:
@@ -1086,6 +1088,32 @@ def choose_path(source, target, species_list, filepath, libr = None):
   alt_b = alt_b.count(0)/len(alt_b)
   inferences = {alternatives[0]:alt_a, alternatives[1]:alt_b}
   return inferences
+
+def find_diamonds(network):
+  """automatically extracts diamond-shaped motifs (A->B,A->C,B->D,C->D) from biosynthetic networks\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network\n
+  | Returns:
+  | :-
+  | Returns list of dictionaries, with each dictionary a diamond motif in the form of position in the diamond : glycan
+  """
+  g1 = nx.DiGraph()
+  nx.add_path(g1, [1,2,3])
+  nx.add_path(g1, [1,4,3])
+  graph_pair = nx.algorithms.isomorphism.GraphMatcher(network, g1)
+  matchings_list = list(graph_pair.subgraph_isomorphisms_iter())
+  unique_keys = list(set([tuple(list(sorted(list(k.keys())))) for k in matchings_list]))
+  matchings_list = [[d for d in matchings_list if k == tuple(list(sorted(list(d.keys()))))][0] for k in unique_keys]
+  matchings_list2 = []
+  for d in matchings_list:
+    d_rev = dict((v, k) for k, v in d.items())
+    middle_nodes = [d_rev[2], d_rev[4]]
+    virtual_state = [nx.get_node_attributes(network, 'virtual')[j] for j in middle_nodes]
+    if any([j == 1 for j in virtual_state]):
+      d = dict((v, k) for k, v in d.items())
+      matchings_list2.append(d)
+  return matchings_list2
 
 def trace_diamonds(network, species_list, filepath, libr = None):
   """extracts diamond-shape motifs from biosynthetic networks (A->B,A->C,B->D,C->D) and uses evolutionary information to determine which path is taken from A to D\n
@@ -1101,24 +1129,8 @@ def trace_diamonds(network, species_list, filepath, libr = None):
   """
   if libr is None:
     libr = lib
-  g1 = nx.DiGraph()
-  nx.add_path(g1, [1,2,3])
-  nx.add_path(g1, [1,4,3])
-  graph_pair = nx.algorithms.isomorphism.GraphMatcher(network, g1)
-  matchings_list = list(graph_pair.subgraph_isomorphisms_iter())
-  unique_keys = list(set([tuple(list(sorted(list(k.keys())))) for k in matchings_list]))
-  matchings_list = [[d for d in matchings_list if k == tuple(list(sorted(list(d.keys()))))][0] for k in unique_keys]
-  matchings_list2 = []
-  for d in matchings_list:
-    d_rev = dict((v, k) for k, v in d.items())
-    middle_nodes = [d_rev[2], d_rev[4]]
-    virtual_state = [nx.get_node_attributes(network, 'virtual')[j] for j in middle_nodes]
-    if any([j == 1 for j in virtual_state]):
-      matchings_list2.append(d)
-  paths = []
-  for d in matchings_list2:
-    d_rev = dict((v, k) for k, v in d.items())
-    paths.append(choose_path(d_rev[1], d_rev[3], species_list, filepath, libr = libr))
+  matchings_list = find_diamonds(network)
+  paths = [choose_path(d[1], d[3], species_list, filepath, libr = libr) for d in matchings_list]
   df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
   df_out.columns = ['target', 'probability']
   return df_out
