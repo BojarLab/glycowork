@@ -40,67 +40,18 @@ def min_process_glycans(glycan_list):
   glycan_motifs = [i.split('*') for i in glycan_motifs]
   return glycan_motifs
 
-def motif_find(glycan, exhaustive = False):
-  """processes IUPACcondensed glycan sequence (string) into glycowords\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format
-  | exhaustive (bool): True for processing glycans shorter than one glycoword\n
-  | Returns:
-  | :-
-  | Returns list of glycowords
-  """
-  #marked for deprecation
-  b = glycan.split('(')
-  b = [k.split(')') for k in b]
-  b = [item for sublist in b for item in sublist]
-  b = [k.strip('[') for k in b]
-  b = [k.strip(']') for k in b]
-  b = [k.replace('[', '') for k in b]
-  b = [k.replace(']', '') for k in b]
-  if exhaustive:
-    if len(b) >= 5:
-      b = ['*'.join(b[i:i+5]) for i in range(0, len(b)-4, 2)]
-    else:
-      b = ['*'.join(b)]
-  else:
-    b = ['*'.join(b[i:i+5]) for i in range(0, len(b)-4, 2)]
-  return b
-
-def process_glycans(glycan_list, exhaustive = False):
-  """wrapper function to process list of glycans into glycowords\n
-  | Arguments:
-  | :-
-  | glycan_list (list): list of IUPAC-condensed glycan sequences as strings
-  | exhaustive (bool): True for processing glycans shorter than one glycoword\n
-  | Returns:
-  | :-
-  | returns nested list of glycowords for every glycan
-  """
-  #marked for deprecation; need to refactor get_lib
-  glycan_motifs = [motif_find(k, exhaustive = exhaustive) for k in glycan_list]
-  glycan_motifs = [[i.split('*') for i in k] for k in glycan_motifs]
-  return glycan_motifs
-
-def get_lib(glycan_list, mode = 'letter', exhaustive = True):
+def get_lib(glycan_list):
   """returns sorted list of unique glycoletters in list of glycans\n
   | Arguments:
   | :-
-  | glycan_list (list): list of IUPAC-condensed glycan sequences as strings
-  | mode (string): default is letter for glycoletters; change to obtain glycowords
-  | exhaustive (bool): if True, processes glycans shorter than 1 glycoword; default is True\n
+  | glycan_list (list): list of IUPAC-condensed glycan sequences as strings\n
   | Returns:
   | :-
   | Returns sorted list of unique glycoletters (strings) in glycan_list
   """
-  proc = process_glycans(glycan_list, exhaustive = exhaustive)
+  proc = min_process_glycans(glycan_list)
   lib = unwrap(proc)
-  lib = list(set([tuple(k) for k in lib]))
-  lib = [list(k) for k in lib]
-  if mode == 'letter':
-    lib = list(sorted(list(set(unwrap(lib)))))
-  else:
-    lib = list(sorted(list(set([tuple(k) for k in lib]))))
+  lib = list(sorted(list(set(lib))))
   return lib
 
 def expand_lib(libr, glycan_list):

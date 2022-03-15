@@ -171,7 +171,7 @@ def stemify_glycan(glycan, stem_lib = None, libr = None):
     stem_lib = get_stem_lib(libr)
   clean_list = list(stem_lib.values())
   for k in list(stem_lib.keys())[::-1][:-1]:
-    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
+    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b','z'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
       while ((k in glycan) and (sum(1 for s in clean_list if k in s) <= 1)):
         glycan_start = glycan[:glycan.rindex('(')]
         glycan_part = glycan_start
