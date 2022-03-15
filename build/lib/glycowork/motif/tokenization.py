@@ -588,7 +588,7 @@ def compositions_to_structures(composition_list, group = 'Homo_sapiens', level =
     print(not_matched)
   return df_out
 
-def mz_to_structures(mz_list, abundances, group, level, reducing_end, mode = 'positive',
+def mz_to_structures(mz_list, reducing_end, group = 'Homo_sapiens', level = 'Species', abundances = None, mode = 'positive',
                      mass_value = 'monoisotopic', sample_prep = 'underivatized', mass_tolerance = 0.2,
                      check_all_adducts = False, check_specific_adduct = None,
                       ptm = False, df = None, libr = None, verbose = False):
@@ -596,10 +596,10 @@ def mz_to_structures(mz_list, abundances, group, level, reducing_end, mode = 'po
   | Arguments:
   | :-
   | mz_list (list): list of precursor masses
-  | abundances (dataframe): every row one composition (matching mz_list in order), every column one sample; pd.DataFrame([range(len(mz_list))]*2).T if not applicable
-  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
-  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
   | reducing_end (string): filters possible glycans by reducing end monosaccharide
+  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter; default:Homo_sapiens
+  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain; default:Species
+  | abundances (dataframe): every row one composition (matching mz_list in order), every column one sample; default:pd.DataFrame([range(len(mz_list))]*2).T
   | mode (string): whether mz_value comes from MS in 'positive' or 'negative' mode; default:'positive'
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
@@ -618,6 +618,8 @@ def mz_to_structures(mz_list, abundances, group, level, reducing_end, mode = 'po
     libr = lib
   if df is None:
     df = df_species
+  if abundances is None:
+    abundances = pd.DataFrame([range(len(mz_list))]*2).T
   if group == 'Homo_sapiens':
     human = True
   else:

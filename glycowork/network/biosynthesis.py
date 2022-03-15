@@ -254,7 +254,11 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   network = filter_disregard(network)
   #connect post-translational modifications
   if ptm:
-    ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr)
+    if '-ol' in ''.join(glycans):
+      suffix = '-ol'
+    else:
+      suffix = ''
+    ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr, suffix = suffix)
     if len(ptm_links)>1:
       network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
   #find any remaining orphan nodes and connect them to the root(s)
@@ -322,7 +326,7 @@ def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
     pos = nx.kamada_kawai_layout(network)
   elif plot_format == 'spring':
     pos = nx.spring_layout(network, k = 1/4)
-  if len(list(nx.get_node_attributes(network, 'origin').values()))>0:
+  if len(list(nx.get_node_attributes(network, 'origin').values())) > 0:
     node_origins = True
   else:
     node_origins = False
@@ -387,10 +391,10 @@ def find_shared_virtuals(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-o
   glycans_a = virtuals_a[1]
   glycans_b = virtuals_b[1]
   out = []
-  if len(ggraph_nb_a)>0:
+  if len(ggraph_nb_a) > 0:
     for k in range(len(ggraph_nb_a)):
       for j in range(len(ggraph_nb_b)):
-        if len(ggraph_nb_a[k])>=min_size:
+        if len(ggraph_nb_a[k]) >= min_size:
           if fast_compare_glycans(ggraph_nb_a[k], ggraph_nb_b[j], libr = libr):
             if [glycan_a, glycans_a[k]] not in [list(m) for m in out]:
               out.append((glycan_a, glycans_a[k]))
@@ -415,7 +419,7 @@ def fill_with_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol
   """
   if libr is None:
     libr = lib
-  v_edges = [find_shared_virtuals(k[0],k[1], libr = libr, reducing_end = reducing_end,
+  v_edges = [find_shared_virtuals(k[0], k[1], libr = libr, reducing_end = reducing_end,
                                   min_size = min_size) for k in list(itertools.combinations(glycans, 2))]
   v_edges = unwrap(v_edges)
   return v_edges
@@ -433,7 +437,7 @@ def create_neighbors(ggraph, libr = None, min_size = 1):
   """
   if libr is None:
     libr = lib
-  if len(ggraph.nodes())<= min_size:
+  if len(ggraph.nodes()) <= min_size:
     return []
   if len(ggraph.nodes()) == 3:
     ggraph_nb = [ggraph.subgraph([2])]
@@ -512,7 +516,7 @@ def propagate_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol
   """
   if libr is None:
     libr = lib
-  virtuals = [get_virtual_nodes(k, libr = libr, reducing_end = reducing_end) for k in glycans if k.count('(')>1]
+  virtuals = [get_virtual_nodes(k, libr = libr, reducing_end = reducing_end) for k in glycans if k.count('(') > 1]
   virtuals_t = [k[1] for k in virtuals]
   virtuals = [k[0] for k in virtuals]
   return virtuals, virtuals_t
@@ -816,7 +820,7 @@ def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4A
   if ggraphs is None:
     ggraphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
   idx = np.where([safe_compare(k, g_stem, libr = libr) for k in ggraphs])[0].tolist()
-  if len(idx)>0:
+  if len(idx) > 0:
     nb = [glycans[k] for k in idx][0]
     return ((glycan), (nb)), mod
   else:
@@ -824,14 +828,15 @@ def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4A
     return 0
 
 def process_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
-               libr = None, suffix = '-ol'):
+               libr = None, suffix = '-ol', verbose = False):
   """identifies glycans that contain post-translational modifications and their biosynthetic precursor\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
   | allowed_ptms (list): list of PTMs to consider
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'\n
+  | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'
+  | verbose (string): whether to write when no PTMs are presently unmatched; default:False\n
   | Returns:
   | :-
   | (1) list of edge tuples between input glycans and their biosynthetic precusor without PTM
@@ -843,11 +848,12 @@ def process_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
   ggraphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
   edges = [find_ptm(k, glycans, allowed_ptms = allowed_ptms,
                                  libr = libr, ggraphs = ggraphs, suffix = suffix) for k in ptm_glycans]
-  if len([k for k in edges if k!=0])>0:
-    edges, edge_labels = list(zip(*[k for k in edges if k!=0]))
+  if len([k for k in edges if k != 0]) > 0:
+    edges, edge_labels = list(zip(*[k for k in edges if k != 0]))
     return list(edges), list(edge_labels)
   else:
-    print("No unmatched PTMs to match for this species.")
+    if verbose:
+      print("No unmatched PTMs to match for this species.")
     return []
 
 def update_network(network_in, edge_list, edge_labels = None, node_labels = None):
@@ -915,7 +921,7 @@ def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
   permitted_roots = [k for k in permitted_roots if k in list(network.nodes())]
   if len(permitted_roots) > 0:
     unconnected_nodes = return_unconnected_to_root(network, permitted_roots = permitted_roots)
-    unconnected_nodes = [k for k in unconnected_nodes if len(glycan_to_nxGraph(k, libr = libr))>min_size]
+    unconnected_nodes = [k for k in unconnected_nodes if len(glycan_to_nxGraph(k, libr = libr)) > min_size]
     nodeDict = dict(network.nodes(data = True))
     real_nodes = [node for node in list(network.nodes()) if nodeDict[node]['virtual'] == 0]
     real_nodes = [node for node in real_nodes if node not in unconnected_nodes]
@@ -1084,8 +1090,8 @@ def choose_path(source, target, species_list, filepath, libr = None):
         alt_a.append(temp_network.nodes[alternatives[0]]['virtual'])
       if alternatives[1] in list(temp_network.nodes()):
         alt_b.append(temp_network.nodes[alternatives[1]]['virtual'])
-  alt_a = alt_a.count(0)/len(alt_a)
-  alt_b = alt_b.count(0)/len(alt_b)
+  alt_a = alt_a.count(0)/max([len(alt_a), 1])
+  alt_b = alt_b.count(0)/max([len(alt_b), 1])
   inferences = {alternatives[0]:alt_a, alternatives[1]:alt_b}
   return inferences
 

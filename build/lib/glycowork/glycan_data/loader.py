@@ -70,18 +70,6 @@ def reindex(df_new, df_old, out_col, ind_col, inp_col):
   out = [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
   return out
 
-def load_file(file):
-  """loads .csv files from glycowork package\n
-  | Arguments:
-  | :-
-  | file (string): name of the file to be loaded
-  """
-  try:
-    temp = pd.read_csv("../glycan_data/" + file)
-  except:
-    temp = pd.read_csv("glycowork/glycan_data/" + file)
-  return temp
-
 def build_df_species(df):
   """creates df_species from df_glycan\n
   | Arguments:
@@ -91,7 +79,7 @@ def build_df_species(df):
   | :-
   | Returns df_species
   """
-  df = df[df.Species.str.len()>2].reset_index(drop = True)
+  df = df[df.Species.str.len() > 2].reset_index(drop = True)
   df = df.iloc[:,:10]
   df.Species = [ast.literal_eval(k) for k in df.Species.values.tolist()]
   df.Genus = [ast.literal_eval(k) for k in df.Genus.values.tolist()]
