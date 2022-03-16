@@ -22,7 +22,7 @@ nbdev_install_git_hooks
 ## PR submission guidelines
 
 * Keep each PR focused. While it's more convenient, do not combine several unrelated fixes together. Create as many branches as needing to keep each PR focused.
-* Do not mix style changes/fixes with "functional" changes. It's very difficult to review such PRs and it most likely get rejected.
+* Do not mix style changes/fixes with "functional" changes. It's very difficult to review such PRs and it most likely gets rejected.
 * Do not add/remove vertical whitespace. Preserve the original style of the file you edit as much as you can.
 * Do not turn an already submitted PR into your development playground. If after you submitted PR, you discovered that more work is needed - close the PR, do the required work and then submit a new PR. Otherwise each of your commits requires attention from maintainers of the project.
 * If, however, you submitted a PR and received a request for changes, you should proceed with commits inside that PR, so that the maintainer can see the incremental fixes and won't need to review the whole PR again. In the exception case where you realize it'll take many many commits to complete the requests, then it's probably best to close the PR, do the work and then submit it again. Use common sense where you'd choose one way over another.
@@ -32,10 +32,10 @@ nbdev_install_git_hooks
 * Docs are automatically created from the notebooks in the nbs folder.
 
 
-## Wishlist for future glycowork updates (last update: 2022-02-24)
+## Wishlist for future glycowork updates (last update: 2022-03-16)
 #### Urgent
 * add the possibility of drawing glycans on plots (e.g., have SNFG glycans on x-axis for a bar plot etc.)
-* add a function to get monosaccharide composition from m/z values
+* add functions to convert other nomenclatures (WURCS, GlycoCT, etc.) into IUPAC-condensed
 * more and more informative error messages
 
 
@@ -44,7 +44,6 @@ nbdev_install_git_hooks
 * characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context
 * allow users to specify their own deep learning architecture in ml.models
 * implement multiple sequence alignment and other substitution matrices
-* glycan nomenclature conversion functions (WURCS/GlycoCT into IUPAC-condensed)
 
 
 #### Not sure whether a good idea

@@ -13,7 +13,7 @@ The analysis of glycans is made difficult by their nonlinearity and their astoun
 
 If you use `glycowork` or any of our datasets in your project, please cite [Thomes et al., 2021](https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240).
 
-The inspiration for `glycowork` can be found in [Bojar et al., 2020](https://doi.org/10.1016/j.chom.2020.10.004) and [Burkholz et al., 2021](https://www.cell.com/cell-reports/fulltext/S2211-1247(21)00616-1). There, you can also find examples of possible use cases for the functions in `glycowork`.
+The inspiration for `glycowork` can be found in [Bojar et al., 2020](https://doi.org/10.1016/j.chom.2020.10.004) and [Burkholz et al., 2021](https://pubmed.ncbi.nlm.nih.gov/34133929/). There, you can also find examples of possible use cases for the functions in `glycowork`.
 
 The full documentation for `glycowork` can be found here: https://bojarlab.github.io/glycowork/
 
@@ -32,10 +32,8 @@ alternative: <br>
 ## Data & Models
 
 `Glycowork` currently contains the following main datasets that are freely available to everyone:
-- **`df_species`**
-    - contains >31,500 glycans with species association
 - **`df_glycan`**
-    - contains >50,500 unique glycan sequences, including labels such as >2,500 tissue associations and >500 disease associations
+    - contains >50,500 unique glycan sequences, including labels such as >31,500 species associations, >2,500 tissue associations, and >500 disease associations
 - **`glycan_binding`**
     - contains >550,000 protein-glycan binding interactions, from 1,392 unique glycan-binding proteins
     
@@ -45,7 +43,7 @@ Additionally, we store these trained deep learning models for easy usage, which 
 - **`LectinOracle_flex`**
     - operates the same as LectinOracle but can directly use the raw protein sequence as input (no ESM-1b representation required)
 - **`SweetNet`**
-    - a graph convolutional neural network trained to predict species from glycan, can be used to generate learned glycan representations; from [Burkholz et al., 2021](https://www.cell.com/cell-reports/fulltext/S2211-1247(21)00616-1)
+    - a graph convolutional neural network trained to predict species from glycan, can be used to generate learned glycan representations; from [Burkholz et al., 2021](https://pubmed.ncbi.nlm.nih.gov/34133929/)
 - **`NSequonPred`**
     - given the ESM-1b representation of an N-sequon (+/- 20 AA), this model can predict whether the sequon will be glycosylated
 
@@ -10353,14 +10351,18 @@ print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNA
                      'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'))
 print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
                      'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'))
+
 #or you could find the largest common subgraph of two glycans
 from glycowork.motif.graph import largest_subgraph
+print("\nLargest Common Subgraph:")
 print(largest_subgraph('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
                      'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'))
 ```
 
     True
     False
+    
+    Largest Common Subgraph:
     Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc
     
 

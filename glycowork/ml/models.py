@@ -1,6 +1,5 @@
 import os
 import torch
-import requests
 import numpy as np
 try:
     from torch_geometric.nn import TopKPooling, GraphConv
@@ -19,35 +18,6 @@ data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565_flex.pt')
 trained_LectinOracle_flex = torch.load(data_path)
 data_path = os.path.join(this_dir, 'NSequonPred_batch32.pt')
 trained_NSequonPred = torch.load(data_path)
-
-def download_file_from_google_drive(id, destination):
-    URL = "https://docs.google.com/uc?export=download"
-
-    session = requests.Session()
-
-    response = session.get(URL, params = { 'id' : id }, stream = True)
-    token = get_confirm_token(response)
-
-    if token:
-        params = { 'id' : id, 'confirm' : token }
-        response = session.get(URL, params = params, stream = True)
-
-    save_response_content(response, destination)    
-
-def get_confirm_token(response):
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            return value
-
-    return None
-
-def save_response_content(response, destination):
-    CHUNK_SIZE = 32768
-
-    with open(destination, "wb") as f:
-        for chunk in response.iter_content(CHUNK_SIZE):
-            if chunk: # filter out keep-alive new chunks
-                f.write(chunk)
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
@@ -234,11 +204,11 @@ class LectinOracle_flex(torch.nn.Module):
     self.data_max = data_max
     
     self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool1 = TopKPooling(self.hidden_size, ratio=1.0)
+    self.pool1 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool2 = TopKPooling(self.hidden_size, ratio=1.0)
+    self.pool2 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool3 = TopKPooling(self.hidden_size, ratio=1.0)
+    self.pool3 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
                                              embedding_dim = self.hidden_size)
     
@@ -372,10 +342,6 @@ def prep_model(model_type, num_classes, libr = None,
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
             model.load_state_dict(trained_LectinOracle_flex)
-            #file_id = '1B5MntpMX1HaQ-SFqjxSPhVcFeo5jOJW2'
-            #destination = 'leor_flex.pt'
-            #download_file_from_google_drive(file_id, destination)
-            #model.load_state_dict(torch.load('./leor_flex.pt'))
         model = model.cuda()
     elif model_type == 'NSequonPred':
         model = NSequonPred()

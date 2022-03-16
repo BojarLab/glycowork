@@ -495,10 +495,17 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol',
   ggraph_nb_t = [k if k[0] != '[' else k.replace('[','',1).replace(']','',1) for k in ggraph_nb_t]
   
   ggraph_nb_t = [k for k in ggraph_nb_t if any([k[-len(j):] == j for j in reducing_end])]
-  ggraph_nb = [glycan_to_nxGraph(k, libr = libr) for k in ggraph_nb_t]
-  diffs = [find_diff(glycan, k, libr = libr) for k in ggraph_nb_t]
-  idx = [k for k in range(len(ggraph_nb_t)) if ggraph_nb_t[k][0] != '(']
-  return [ggraph_nb[i] for i in idx], [ggraph_nb_t[i] for i in idx]
+  ggraph_nb_t2 = []
+  ggraph_nb = []
+  for k in range(len(ggraph_nb_t)):
+    try:
+      ggraph_nb.append(glycan_to_nxGraph(ggraph_nb_t[k], libr = libr))
+      ggraph_nb_t2.append(ggraph_nb_t[k])
+    except:
+      pass
+  diffs = [find_diff(glycan, k, libr = libr) for k in ggraph_nb_t2]
+  idx = [k for k in range(len(ggraph_nb_t2)) if ggraph_nb_t2[k][0] != '(']
+  return [ggraph_nb[i] for i in idx], [ggraph_nb_t2[i] for i in idx]
   
 def propagate_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                              'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',

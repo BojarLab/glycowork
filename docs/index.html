@@ -48,7 +48,7 @@ nb_path: "index.ipynb"
 <p>Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.</p>
 <p>The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. <code>Glycowork</code> is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, <code>glycowork</code> also contains glycan data that can be used for model training, motif comparisons, etc.</p>
 <p>If you use <code>glycowork</code> or any of our datasets in your project, please cite <a href="https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240">Thomes et al., 2021</a>.</p>
-<p>The inspiration for <code>glycowork</code> can be found in <a href="https://doi.org/10.1016/j.chom.2020.10.004">Bojar et al., 2020</a> and <a href="https://www.cell.com/cell-reports/fulltext/S2211-1247(21">Burkholz et al., 2021</a>00616-1). There, you can also find examples of possible use cases for the functions in <code>glycowork</code>.</p>
+<p>The inspiration for <code>glycowork</code> can be found in <a href="https://doi.org/10.1016/j.chom.2020.10.004">Bojar et al., 2020</a> and <a href="https://pubmed.ncbi.nlm.nih.gov/34133929/">Burkholz et al., 2021</a>. There, you can also find examples of possible use cases for the functions in <code>glycowork</code>.</p>
 <p>The full documentation for <code>glycowork</code> can be found here: <a href="https://bojarlab.github.io/glycowork/">https://bojarlab.github.io/glycowork/</a></p>
 <p>If you want to contribute to <code>glycowork</code>, the best place to start is to read our <a href="https://github.com/BojarLab/glycowork/blob/master/CONTRIBUTING.md">contribution guidelines</a>.</p>
 
@@ -83,12 +83,8 @@ nb_path: "index.ipynb"
 <div class="text_cell_render border-box-sizing rendered_html">
 <p><code>Glycowork</code> currently contains the following main datasets that are freely available to everyone:</p>
 <ul>
-<li><strong><code>df_species</code></strong><ul>
-<li>contains &gt;31,500 glycans with species association</li>
-</ul>
-</li>
 <li><strong><code>df_glycan</code></strong><ul>
-<li>contains &gt;50,500 unique glycan sequences, including labels such as &gt;2,500 tissue associations and &gt;500 disease associations</li>
+<li>contains &gt;50,500 unique glycan sequences, including labels such as &gt;31,500 species associations, &gt;2,500 tissue associations, and &gt;500 disease associations</li>
 </ul>
 </li>
 <li><strong><code>glycan_binding</code></strong><ul>
@@ -107,7 +103,7 @@ nb_path: "index.ipynb"
 </ul>
 </li>
 <li><strong><code>SweetNet</code></strong><ul>
-<li>a graph convolutional neural network trained to predict species from glycan, can be used to generate learned glycan representations; from <a href="https://www.cell.com/cell-reports/fulltext/S2211-1247(21">Burkholz et al., 2021</a>00616-1)</li>
+<li>a graph convolutional neural network trained to predict species from glycan, can be used to generate learned glycan representations; from <a href="https://pubmed.ncbi.nlm.nih.gov/34133929/">Burkholz et al., 2021</a></li>
 </ul>
 </li>
 <li><strong><code>NSequonPred</code></strong><ul>
@@ -10475,8 +10471,10 @@ nb_path: "index.ipynb"
                      <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">))</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">compare_glycans</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">,</span>
                      <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">))</span>
+
 <span class="c1">#or you could find the largest common subgraph of two glycans</span>
 <span class="kn">from</span> <span class="nn">glycowork.motif.graph</span> <span class="kn">import</span> <span class="n">largest_subgraph</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Largest Common Subgraph:&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">largest_subgraph</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">,</span>
                      <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">))</span>
 </pre></div>
@@ -10493,6 +10491,8 @@ nb_path: "index.ipynb"
 <div class="output_subarea output_stream output_stdout output_text">
 <pre>True
 False
+
+Largest Common Subgraph:
 Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc
 </pre>
 </div>
