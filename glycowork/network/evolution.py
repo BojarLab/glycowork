@@ -3,6 +3,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
+from glycowork.glycan_data.loader import lib
+from glycowork.motif.graph import subgraph_isomorphism
 
 def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
                              averaging = 'median'):
@@ -105,13 +107,14 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
 
-def check_conservation(glycan, df, rank = 'Order', filepath = None, threshold = 5,
+def check_conservation(glycan, df, libr = None, rank = 'Order', filepath = None, threshold = 5,
                        motif = False):
   """estimates evolutionary conservation of glycans and glycan motifs via biosynthetic networks\n
   | Arguments:
   | :-
   | glycan (string): full glycan or glycan motif in IUPAC-condensed nomenclature
   | df (dataframe): dataframe in the style of df_species, each row one glycan and columns are the taxonomic levels
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | rank (string): at which taxonomic level to assess conservation; default:Order
   | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + '_graph_exhaustive.pkl'
   | threshold (int): threshold of how many glycans a species needs to have to consider the species;default:5
@@ -120,6 +123,8 @@ def check_conservation(glycan, df, rank = 'Order', filepath = None, threshold = 
   | :-
   | Returns a dictionary of taxonomic group : degree of conservation
   """
+  if libr is None:
+    libr = lib
   all_specs = list(sorted(list(set(df.Species.values.tolist()))))
   allowed = [k for k in all_specs if df.Species.values.tolist().count(k) >= threshold]
   df_freq = df[df.Species.isin(allowed)].reset_index(drop = True)
@@ -133,7 +138,10 @@ def check_conservation(glycan, df, rank = 'Order', filepath = None, threshold = 
     nets = [networks[j] for j in specs]
     nets = [list(j.nodes()) for j in nets]
     if motif:
-      conserved[k] = sum([glycan in "".join(j) for j in nets]) / len(nets)
+      if glycan[-1] == ')':
+        conserved[k] = sum([glycan in "".join(j) for j in nets]) / len(nets)
+      else:
+        conserved[k] = sum([any([subgraph_isomorphism(m, glycan, libr = libr) for m in j]) for j in nets]) / len(nets)
     else:
       conserved[k] = sum([glycan in j for j in nets]) / len(nets)
   return conserved

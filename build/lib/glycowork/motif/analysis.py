@@ -304,8 +304,8 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
           else:
               sns.barplot(x = cou_k, y = cou_v_t, ax = a1, color = "cornflowerblue")
       if len(cou_k2) > 1:
-          cou_df = pd.concat(cou_for_df)
-          sns.histplot(cou_df, x = 'monosaccharides', hue = 'colors', weights = 'counts',
+          cou_df = pd.concat(cou_for_df).reset_index(drop = True)
+          sns.histplot(data = cou_df, x = 'monosaccharides', hue = 'colors', weights = 'counts',
                        multiple = 'stack', palette = palette, ax = a1, legend = False,
                    shrink = 0.8)
       a1.set_ylabel('Absolute Occurrence')
@@ -313,7 +313,6 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
       sns.barplot(x = cou_k, y = cou_v, ax = a1, color = "cornflowerblue")
       a1.set_ylabel('Relative Proportion')
   sns.despine(left = True, bottom = True)
-  #a1.set_xlabel(lab)
   a1.set_xlabel('')
   a1.set_title(str(sugar) + ' and variants are connected to')
   plt.setp(a0.get_xticklabels(), rotation = 'vertical')
@@ -321,14 +320,13 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   if modifications:
     if len(cou_k2) > 1:
         cou_df2 = pd.DataFrame({'monosaccharides': cou_k2, 'counts': cou_v2})
-        sns.histplot(cou_df2, x = 'monosaccharides', weights = 'counts',
+        sns.histplot(data = cou_df2, x = 'monosaccharides', weights = 'counts',
                      hue = 'monosaccharides', shrink = 0.8, legend = False,
                      ax = a0, palette = palette, alpha = 0.75)
     else:
         sns.barplot(x = cou_k2, y = cou_v2, ax = a0, color = "cornflowerblue")
     sns.despine(left = True, bottom = True)
     a0.set_ylabel('Relative Proportion')
-    #a0.set_xlabel(sugar + " Variants")
     a0.set_xlabel('')
     a0.set_title('Observed Modifications of ' + str(sugar))
     plt.setp(a1.get_xticklabels(), rotation = 'vertical')
