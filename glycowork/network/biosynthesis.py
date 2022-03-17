@@ -1155,3 +1155,22 @@ def trace_diamonds(network, species_list, filepath, libr = None):
   df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
   df_out.columns = ['target', 'probability']
   return df_out
+
+def prune_network(network, node_attr = 'abundance', threshold = 0.):
+  """pruning a network by dismissing unlikely virtual paths\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network such as from construct_network
+  | node_attr (string): which (numerical) node attribute to use for pruning; default:'abundance'
+  | threshold (float): everything below or equal to that threshold will be cut; default:0.\n
+  | Returns:
+  | :-
+  | Returns pruned network
+  """
+  to_cut = [k for k in list(network.nodes()) if nx.get_node_attributes(network, node_attr)[k] <= threshold]
+  network.remove_nodes_from(to_cut)
+  nodeDict = dict(network.nodes(data = True))
+  for node in list(network.nodes()):
+    if (network.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
+      network.remove_node(node)
+  return network
