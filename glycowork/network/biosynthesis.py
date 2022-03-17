@@ -523,7 +523,7 @@ def propagate_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol
   """
   if libr is None:
     libr = lib
-  virtuals = [get_virtual_nodes(k, libr = libr, reducing_end = reducing_end) for k in glycans if k.count('(') > 1]
+  virtuals = [get_virtual_nodes(k, libr = libr, reducing_end = reducing_end) for k in glycans if k.count('(') >= 1]
   virtuals_t = [k[1] for k in virtuals]
   virtuals = [k[0] for k in virtuals]
   return virtuals, virtuals_t

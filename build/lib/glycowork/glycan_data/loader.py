@@ -81,24 +81,15 @@ def build_df_species(df):
   """
   df = df[df.Species.str.len() > 2].reset_index(drop = True)
   df = df.iloc[:,:10]
-  df.Species = [ast.literal_eval(k) for k in df.Species.values.tolist()]
-  df.Genus = [ast.literal_eval(k) for k in df.Genus.values.tolist()]
-  df.Family = [ast.literal_eval(k) for k in df.Family.values.tolist()]
-  df.Order = [ast.literal_eval(k) for k in df.Order.values.tolist()]
-  df.Class = [ast.literal_eval(k) for k in df.Class.values.tolist()]
-  df.Phylum = [ast.literal_eval(k) for k in df.Phylum.values.tolist()]
-  df.Kingdom = [ast.literal_eval(k) for k in df.Kingdom.values.tolist()]
-  df.Domain = [ast.literal_eval(k) for k in df.Domain.values.tolist()]
-  df.ref = [ast.literal_eval(k) for k in df.ref.values.tolist()]
   df.columns = ['target'] + df.columns.values.tolist()[1:]
   df.index = df.target
   df.drop(['target'], axis = 1, inplace = True)
+  df = df.applymap(lambda x: ast.literal_eval(x))
   try:
     df = df.explode(['Species','Genus','Family','Order','Class',
-                   'Phylum','Kingdom','Domain'])
+                   'Phylum','Kingdom','Domain', 'ref'])
   except:
     raise ImportError("Seems like you're using pandas<1.3.0; please upgrade to allow for multi-column explode")
-  df = df.applymap(lambda x: x[0] if isinstance(x, list) else x)
   df.reset_index(inplace = True)
   df = df.sort_values(['Species', 'target'], ascending = [True, True]).reset_index(drop = True)
   return df
