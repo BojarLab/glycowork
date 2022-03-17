@@ -230,7 +230,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
     for k in list(sorted(unconnected_nodes)):
       try:
         virtual_edges, edge_labels = find_shortest_path(k, [j for j in list(network.nodes()) if j != k], libr = libr,
-                                                      reducing_end = reducing_end, limit = limit)
+                                                      reducing_end = reducing_end, limit = limit, permitted_roots = permitted_roots)
         total_nodes = list(set(list(sum(virtual_edges, ()))))
         new_nodes.append([j for j in total_nodes if j not in list(network.nodes())])
         new_edges.append(virtual_edges)
@@ -509,13 +509,15 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol',
   
 def propagate_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                              'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
-                                                             'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']):
+                                                             'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
+                       permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]):
   """do one step of virtual node generation\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends\n
+  | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]\n
   | Returns:
   | :-
   | (1) list of virtual node graphs
@@ -523,7 +525,8 @@ def propagate_virtuals(glycans, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol
   """
   if libr is None:
     libr = lib
-  virtuals = [get_virtual_nodes(k, libr = libr, reducing_end = reducing_end) for k in glycans if k.count('(') >= 1]
+  linkage_count = min([k.count('(') for k in permitted_roots])
+  virtuals = [get_virtual_nodes(k, libr = libr, reducing_end = reducing_end) for k in glycans if k.count('(') > linkage_count]
   virtuals_t = [k[1] for k in virtuals]
   virtuals = [k[0] for k in virtuals]
   return virtuals, virtuals_t
@@ -547,7 +550,7 @@ def shells_to_edges(prev_shell, next_shell):
 def find_path(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                                'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
                                                                'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
-              limit = 5):
+              limit = 5, permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]):
   """find virtual node path between two glycans\n
   | Arguments:
   | :-
@@ -555,7 +558,8 @@ def find_path(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-ol','GlcNAc-
   | glycan_b (string): glycan in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
-  | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
+  | limit (int): maximum number of virtual nodes between observed nodes; default:5
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]\n
   | Returns:
   | :-
   | (1) list of edges to connect glycan_a and glycan_b via virtual nodes
@@ -569,12 +573,14 @@ def find_path(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-ol','GlcNAc-
   larger_glycan = true_nodes[np.argmax([len(j) for j in true_nodes])]
   virtual_shells = [glycan_to_nxGraph(larger_glycan, libr = libr)]
   virtual_shells_t = [[[larger_glycan]]]
-  virtuals, virtuals_t = propagate_virtuals([larger_glycan], libr = libr, reducing_end = reducing_end)
+  virtuals, virtuals_t = propagate_virtuals([larger_glycan], libr = libr, reducing_end = reducing_end,
+                                            permitted_roots = permitted_roots)
   virtual_shells.append(virtuals)
   virtual_shells_t.append(virtuals_t)
   county = 0
   while ((not any([fast_compare_glycans(glycan_to_nxGraph(smaller_glycan, libr = libr), k) for k in unwrap(virtuals)])) and (county < limit)):
-    virtuals, virtuals_t = propagate_virtuals(unwrap(virtuals_t), libr = libr, reducing_end = reducing_end)
+    virtuals, virtuals_t = propagate_virtuals(unwrap(virtuals_t), libr = libr, reducing_end = reducing_end,
+                                              permitted_roots = permitted_roots)
     virtual_shells.append(virtuals)
     virtual_shells_t.append(virtuals_t)
     county += 1
@@ -605,7 +611,7 @@ def make_network_from_edges(edges, edge_labels = None):
 def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                                               'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
                                                                               'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
-                       limit = 5):
+                       limit = 5, permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]):
   """finds the glycan with the shortest path via virtual nodes to the goal glycan\n
   | Arguments:
   | :-
@@ -613,7 +619,8 @@ def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['G
   | glycan_list (list): list of glycans in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | reducing_end (list): monosaccharides at the reducing end that are allowed; default:milk glycan reducing ends
-  | limit (int): maximum number of virtual nodes between observed nodes; default:5\n
+  | limit (int): maximum number of virtual nodes between observed nodes; default:5
+  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]\n
   | Returns:
   | :-
   | (1) list of edges of shortest path to connect goal_glycan and glycan via virtual nodes
@@ -627,7 +634,7 @@ def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['G
       try:
         virtual_edges, edge_labels = find_path(goal_glycan, k, libr = libr,
                                                               reducing_end = reducing_end,
-                                                               limit = limit)
+                                                               limit = limit, permitted_roots = permitted_roots)
         network = make_network_from_edges(virtual_edges)
         if k in list(network.nodes()) and goal_glycan in list(network.nodes()):
           path_lengths.append(len(nx.algorithms.shortest_paths.generic.shortest_path(network, source = k, target = goal_glycan)))
@@ -640,7 +647,7 @@ def find_shortest_path(goal_glycan, glycan_list, libr = None, reducing_end = ['G
   idx = np.argmin(path_lengths)
   virtual_edges, edge_labels = find_path(goal_glycan, glycan_list[idx], libr = libr,
                                                              reducing_end = reducing_end,
-                                                           limit = limit)
+                                                           limit = limit, permitted_roots = permitted_roots)
   return virtual_edges, edge_labels
 
 def get_unconnected_nodes(network, glycan_list):
@@ -937,7 +944,8 @@ def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
     for node in unconnected_nodes:
       try:
         e, el = find_shortest_path(node, real_nodes, reducing_end = reducing_end,
-                                                       libr = libr, limit = limit)
+                                                       libr = libr, limit = limit,
+                                   permitted_roots = permitted_roots)
         edges.append(e)
         edge_labels.append(el)
       except:
@@ -1086,7 +1094,7 @@ def choose_path(source, target, species_list, filepath, libr = None):
   network = construct_network([source, target], libr = libr, add_virtual_nodes = 'exhaustive',
                               ptm = True, directed = True)
   alternatives = [path[1] for path in nx.all_simple_paths(network, source = source, target = target)]
-  if len(alternatives)<2:
+  if len(alternatives) < 2:
     return {}
   alt_a = []
   alt_b = []
