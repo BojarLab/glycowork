@@ -188,7 +188,7 @@ def stemify_glycan(glycan, stem_lib = None, libr = None):
             glycan_part = glycan_start
         try:
           glycan_mid = glycan_start[glycan_start.index(k) + len(k):]
-          if ((cut not in clean_list) and (len(glycan_mid)>0)):
+          if ((cut not in clean_list) and (len(glycan_mid) > 0)):
             glycan_part = glycan_part + glycan_mid
         except:
           pass

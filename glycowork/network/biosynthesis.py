@@ -256,10 +256,12 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   if ptm:
     if '-ol' in ''.join(glycans):
       suffix = '-ol'
+    elif '1Cer' in ''.join(glycans):
+      suffix = '1Cer'
     else:
       suffix = ''
     ptm_links = process_ptm(glycans, allowed_ptms = allowed_ptms, libr = libr, suffix = suffix)
-    if len(ptm_links)>1:
+    if len(ptm_links) > 1:
       network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
   #find any remaining orphan nodes and connect them to the root(s)
   if add_virtual_nodes == 'simple':
@@ -271,7 +273,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   #final clean-up / condensation step
   if virtuals:
     nodeDict = dict(network.nodes(data = True))
-    for node in list(network.nodes()):
+    for node in list(sorted(list(network.nodes()), key = len, reverse = True)):
       if (network.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
         network.remove_node(node)
     adj_matrix = create_adjacency_matrix(list(network.nodes()), libr = libr,
@@ -294,6 +296,12 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
             elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme)
           else:
             pass
+  #remove virtual nodes that are branch isomers of real nodes
+  if virtuals:
+    virtual_nodes = [x for x,y in network.nodes(data = True) if y['virtual'] == 1]
+    real_nodes = [glycan_to_nxGraph(x, libr = libr) for x,y in network.nodes(data = True) if y['virtual'] == 0]
+    to_cut = [v for v in virtual_nodes if any([fast_compare_glycans(glycan_to_nxGraph(v, libr = libr), r, libr = libr) for r in real_nodes])]
+    network.remove_nodes_from(to_cut)
   #directed or undirected network
   if directed:
     network = make_network_directed(network)
@@ -830,7 +838,10 @@ def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4A
   if ('Sug' in glycan_stem) or ('Neu(' in glycan_stem):
     print("Stemification fail. This is just information, no need to act.")
     return 0
-  g_stem = glycan_to_nxGraph(glycan_stem, libr = libr)
+  try:
+    g_stem = glycan_to_nxGraph(glycan_stem, libr = libr)
+  except:
+    raise IndexError("Okay, here's what's happened: you had a modified monosaccharide that was stemified into the unmodified monosaccharide that is absent from your input data, so it can't be indexed in libr; add the unmodified monosaccharide to your input libr.")
   if ggraphs is None:
     ggraphs = [glycan_to_nxGraph(k, libr = libr) for k in glycans]
   idx = np.where([safe_compare(k, g_stem, libr = libr) for k in ggraphs])[0].tolist()
@@ -984,7 +995,7 @@ def prune_directed_edges(network):
   nodes = list(network.nodes())
   for k in nodes:
     for j in nodes:
-      if network.has_edge(k,j) and (len(k)>len(j)):
+      if network.has_edge(k,j) and (len(k) > len(j)):
         network.remove_edge(k,j)
   return network
 
