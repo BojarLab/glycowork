@@ -507,14 +507,14 @@ def graph_to_string(graph, libr = None):
   if len(graph.nodes()) == 1:
     return nx.get_node_attributes(graph, 'string_labels')[0]
   diffs = [k[1]-k[0] for k in list(graph.edges())]
-  if np.max(diffs)>1:
+  if np.max(diffs) > 1:
     branch_branch_pool = []
-    branch_idx = np.where([j>1 for j in diffs])[0].tolist()
+    branch_idx = np.where([j > 1 for j in diffs])[0].tolist()
     branch_nodes = [list(graph.edges())[k][0] for k in branch_idx]
     branch = [list(graph.edges())[k][1] for k in branch_idx]
     branch_pool = [branch_crawl(branch[k], branch_nodes[k], graph) for k in range(len(branch))]
     branch_branch_nodes = [k for k in branch_nodes if k in unwrap(branch_pool)]
-    if len(branch_branch_nodes)>0:
+    if len(branch_branch_nodes) > 0:
       branch_branch_start = []
       for j in branch_branch_nodes:
         branch_branch = [list(graph.edges())[k][1] for k in range(len(list(graph.edges()))) if j in list(graph.edges())[k]]
@@ -533,18 +533,18 @@ def graph_to_string(graph, libr = None):
     branch_branch_pool = []
   glycan_motif = [list(nx.get_node_attributes(graph, 'string_labels').values())[k] for k in range(len(graph.nodes)) if k not in unwrap(branch_pool)]
   main_len = len(glycan_motif)
-  if len(branch_pool)>0:
+  if len(branch_pool) > 0:
     counter = 0
     for k in range(len(branch)):
       temp = min_process_glycans([branch[k]])[0]
-      temp = [m for m in temp if len(m)>0]
+      temp = [m for m in temp if len(m) > 0]
       if branch[k].count('(')>1:
         temp = ['[' + temp[0]] + temp[1:-1] + [temp[-1]+']']
       else:
         temp = ['[' + temp[0], temp[-1]+']']
       glycan_motif = glycan_motif[:branch_nodes[k]+counter] + temp + glycan_motif[branch_nodes[k]+counter:]
       counter += len(temp)
-  if len(branch_branch_pool)>0:
+  if len(branch_branch_pool) > 0:
     start_idxs = []
     for k in range(len(branch_branch_nodes)):
       running_idx = main_len
@@ -561,7 +561,7 @@ def graph_to_string(graph, libr = None):
       start_idxs.append(start_idx+branch_branch_nodes[k]-(main_len+branch_progress))
     for k in range(len(start_idxs)):
       glycan_motif.insert(np.max([start_idxs[k]+k, 0]), '['+branch_branch[k]+']')
-  glycan_motif = "".join([glycan_motif[k] if not ((glycan_motif[k].startswith('a')) or (glycan_motif[k].startswith('b')) or (re.match('^[0-9]+(-[0-9]+)+$', glycan_motif[k]))) \
+  glycan_motif = "".join([glycan_motif[k] if not ((glycan_motif[k].startswith('a')) or (glycan_motif[k].startswith('b')) or (glycan_motif[k].startswith('z')) or (re.match('^[0-9]+(-[0-9]+)+$', glycan_motif[k]))) \
                           else '('+glycan_motif[k]+')' for k in range(len(glycan_motif))])
   if '])' in glycan_motif:
     glycan_motif = glycan_motif.replace('])', ')]')
@@ -609,7 +609,7 @@ def largest_subgraph(glycan_a, glycan_b, libr = None):
     min_num = min(list(lgs.nodes()))
     node_dic = {k:k-min_num for k in list(lgs.nodes())}
     lgs = nx.relabel_nodes(lgs, node_dic)
-    if len(list(lgs.nodes()))>0:
+    if len(list(lgs.nodes())) > 0:
       return graph_to_string(lgs)
     else:
       return ""
