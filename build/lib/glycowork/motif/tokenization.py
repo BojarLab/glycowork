@@ -417,7 +417,8 @@ def match_composition(composition, group, level, df = None,
     return output_list
 
 def match_composition_relaxed(composition, group, level, df = None,
-                      mode = "exact", libr = None, reducing_end = None):
+                      mode = "exact", libr = None, reducing_end = None,
+                      Hex_list = None, HexNAc_list = None, dHex_list = None):
     """Given a coarse-grained monosaccharide composition (Hex, HexNAc, etc.), it returns all corresponding glycans\n
     | Arguments:
     | :-
@@ -427,7 +428,10 @@ def match_composition_relaxed(composition, group, level, df = None,
     | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
     | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements; default:"exact"
     | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
-    | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None\n
+    | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None
+    | Hex_list (list): list of hexoses used for matching Hex; default: internal Hex list
+    | HexNAc_list (list): list of N-acetylhexosamines used for matching HexNAc; default: internal HexNAc list
+    | dHex_list (list): list of deoxyhexoses used for matching dHex; default: internal dHex list\n
     | Returns:
     | :-
     | Returns list of glycans matching composition in IUPAC-condensed
@@ -438,6 +442,12 @@ def match_composition_relaxed(composition, group, level, df = None,
       df = df[df.target.str.endswith(reducing_end)].reset_index(drop = True)
     if libr is None:
       libr = lib
+    if Hex_list is None:
+      Hex_list = Hex
+    if HexNAc_list is None:
+      HexNAc_list = HexNAc
+    if dHex_list is None:
+      dHex_list = dHex
     input_composition = copy.deepcopy(composition)
     input_composition2 = copy.deepcopy(composition)
     original_composition = copy.deepcopy(composition)
@@ -446,16 +456,16 @@ def match_composition_relaxed(composition, group, level, df = None,
     input_composition2.pop('Hex', None)
     input_composition2.pop('dHex', None)
     input_composition2.pop('HexNAc', None)
-    if len(input_composition2)>0:
+    if len(input_composition2) > 0:
       output_list = match_composition(input_composition2, group, level, df = df,
                                      mode = 'minimal', libr = libr,
                                        glycans = output_list, relaxed = True)
     if 'Hex' in input_composition:
-      if any([j in input_composition for j in Hex]):
+      if any([j in input_composition for j in Hex_list]):
         relaxed = True
       else:
         relaxed = False
-      hex_pool = list(combinations_with_replacement(Hex, input_composition['Hex']))
+      hex_pool = list(combinations_with_replacement(Hex_list, input_composition['Hex']))
       hex_pool = [Counter(k) for k in hex_pool]
       input_composition.pop('Hex')
       output_list = [match_composition(k, group, level, df = df,
@@ -463,11 +473,11 @@ def match_composition_relaxed(composition, group, level, df = None,
                                        glycans = output_list, relaxed = relaxed) for k in hex_pool]
       output_list = list(set(unwrap(output_list)))
     if 'dHex' in input_composition:
-      if any([j in input_composition for j in dHex]):
+      if any([j in input_composition for j in dHex_list]):
         relaxed = True
       else:
         relaxed = False
-      dhex_pool = list(combinations_with_replacement(dHex, input_composition['dHex']))
+      dhex_pool = list(combinations_with_replacement(dHex_list, input_composition['dHex']))
       dhex_pool = [Counter(k) for k in dhex_pool]
       input_composition.pop('dHex')
       temp = [match_composition(k, group, level, df = df,
@@ -475,11 +485,11 @@ def match_composition_relaxed(composition, group, level, df = None,
                                        glycans = output_list, relaxed = relaxed) for k in dhex_pool]
       output_list = list(set(unwrap(temp)))
     if 'HexNAc' in input_composition:
-      if any([j in input_composition for j in HexNAc]):
+      if any([j in input_composition for j in HexNAc_list]):
         relaxed = True
       else:
         relaxed = False
-      hexnac_pool = list(combinations_with_replacement(HexNAc, input_composition['HexNAc']))
+      hexnac_pool = list(combinations_with_replacement(HexNAc_list, input_composition['HexNAc']))
       hexnac_pool = [Counter(k) for k in hexnac_pool]
       input_composition.pop('HexNAc')
       temp = [match_composition(k, group, level, df = df,
@@ -491,22 +501,22 @@ def match_composition_relaxed(composition, group, level, df = None,
       monosaccharide_count = sum(original_composition.values())
       monosaccharide_types = list(original_composition.keys())
       if 'Hex' in original_composition:
-        monosaccharide_types = monosaccharide_types + Hex
+        monosaccharide_types = monosaccharide_types + Hex_list
       if 'HexNAc' in original_composition:
-        monosaccharide_types = monosaccharide_types + HexNAc
+        monosaccharide_types = monosaccharide_types + HexNAc_list
       if 'dHex' in original_composition:
-        monosaccharide_types = monosaccharide_types + dHex
+        monosaccharide_types = monosaccharide_types + dHex_list
       output_list = [k for k in output_list if k.count('(') == monosaccharide_count-1]
       output_list = [k for k in output_list if not any([j not in monosaccharide_types for j in list(set(min_process_glycans([k])[0])) if j[0].isupper()])]
-      if 'Hex' in original_composition and len(input_composition2)>0:
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc[:-1] if j in original_composition])]
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex[:-1] if j in original_composition])]
-      elif 'dHex' in original_composition and len(input_composition2)>0:
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex[:-1] if j in original_composition])]
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc[:-1] if j in original_composition])]
-      elif 'HexNAc' in original_composition and len(input_composition2)>0:
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex[:-1] if j in original_composition])]
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex[:-1] if j in original_composition])]
+      if 'Hex' in original_composition and len(input_composition2) > 0:
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc_list[:-1] if j in original_composition])]
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex_list[:-1] if j in original_composition])]
+      elif 'dHex' in original_composition and len(input_composition2) > 0:
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex_list[:-1] if j in original_composition])]
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc_list[:-1] if j in original_composition])]
+      elif 'HexNAc' in original_composition and len(input_composition2) > 0:
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex_list[:-1] if j in original_composition])]
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex_list[:-1] if j in original_composition])]
     return output_list
 
 def condense_composition_matching(matched_composition, libr = None):
@@ -546,7 +556,8 @@ def condense_composition_matching(matched_composition, libr = None):
 
 def compositions_to_structures(composition_list, group = 'Homo_sapiens', level = 'Species', abundances = None,
                                df = None, libr = None, reducing_end = None,
-                               verbose = False):
+                               verbose = False,
+                      Hex_list = None, HexNAc_list = None, dHex_list = None):
   """wrapper function to map compositions to structures, condense them, and match them with relative intensities\n
   | Arguments:
   | :-
@@ -557,7 +568,10 @@ def compositions_to_structures(composition_list, group = 'Homo_sapiens', level =
   | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
   | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None
-  | verbose (bool): whether to print any non-matching compositions; default:False\n
+  | verbose (bool): whether to print any non-matching compositions; default:False
+  | Hex_list (list): list of hexoses used for matching Hex; default: internal Hex list
+  | HexNAc_list (list): list of N-acetylhexosamines used for matching HexNAc; default: internal HexNAc list
+  | dHex_list (list): list of deoxyhexoses used for matching dHex; default: internal dHex list\n
   | Returns:
   | :-
   | Returns dataframe of (matched structures) x (relative intensities)
@@ -568,19 +582,26 @@ def compositions_to_structures(composition_list, group = 'Homo_sapiens', level =
     df = df_species
   if abundances is None:
     abundances = pd.DataFrame([range(len(composition_list))]*2).T
+  if Hex_list is None:
+      Hex_list = Hex
+  if HexNAc_list is None:
+      HexNAc_list = HexNAc
+  if dHex_list is None:
+      dHex_list = dHex
   df_out = []
   not_matched = []
   for k in range(len(composition_list)):
     matched = match_composition_relaxed(composition_list[k], group, level,
-                                reducing_end = reducing_end, df = df, libr = libr)
-    if len(matched)>0:
+                                reducing_end = reducing_end, df = df, libr = libr,
+                                Hex_list = Hex_list, HexNAc_list = HexNAc_list, dHex_list = dHex_list)
+    if len(matched) > 0:
         condensed = condense_composition_matching(matched, libr = libr)
         matched_data = [abundances.iloc[k,1:].values.tolist()]*len(condensed)
         for ele in range(len(condensed)):
             df_out.append([condensed[ele]] + matched_data[ele])
     else:
         not_matched.append(composition_list[k])
-  if len(df_out)>0:
+  if len(df_out) > 0:
     df_out = pd.DataFrame(df_out)
     df_out.columns = ['glycan'] + ['abundance']*(abundances.shape[1]-1)
   print(str(len(not_matched)) + " compositions could not be matched. Run with verbose = True to see which compositions.")
