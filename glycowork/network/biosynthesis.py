@@ -88,7 +88,7 @@ def get_neighbors(glycan, glycans, libr = None, graphs = None,
   else:
     temp = graphs
   idx = [np.where([safe_compare(k, j, libr = libr) for k in temp])[0].tolist() for j in ggraph_nb]
-  nb = [glycans[k[0]] for k in idx if len(k)>0]
+  nb = [glycans[k[0]] for k in idx if len(k) > 0]
   return nb, idx
 
 def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
@@ -117,7 +117,7 @@ def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
   neighbors = [k[0] for k in neighbors_full]
   idx = [k[1] for k in neighbors_full]
   for j in range(len(glycans)):
-    if len(idx[j])>0:
+    if len(idx[j]) > 0:
       for i in range(len(idx[j])):
         if len(idx[j][i]) >= 1:
           inp = [idx[j][i], glycans.index(glycans[j])]
@@ -128,8 +128,8 @@ def create_adjacency_matrix(glycans, libr = None, virtual_nodes = False,
                                        min_size = min_size)
     new_nodes = list(set([k[1] for k in virtual_edges]))
     new_nodes = [k for k in new_nodes if k not in df_out.columns.values.tolist()]
-    idx = np.where([any([compare_glycans(k,j, libr = libr) for j in df_out.columns.values.tolist()]) for k in new_nodes])[0].tolist()
-    if len(idx)>0:
+    idx = np.where([any([compare_glycans(k, j, libr = libr) for j in df_out.columns.values.tolist()]) for k in new_nodes])[0].tolist()
+    if len(idx) > 0:
       virtual_edges = [j for j in virtual_edges if j[1] not in [new_nodes[k] for k in idx]]
       new_nodes = [new_nodes[k] for k in range(len(new_nodes)) if k not in idx]
     for k in new_nodes:
@@ -182,7 +182,11 @@ def find_diff(glycan_a, glycan_b, libr = None):
     except:
       larger_graph = ['dis', 'regard']
   if subgraph_isomorphism(ggraphs[np.argmax(lens)], ggraphs[np.argmin(lens)], libr = libr):
-    return (larger_graph[0] + "(" + larger_graph[1] + ")")
+    diff = (larger_graph[0] + "(" + larger_graph[1] + ")")
+    if 'S(' in diff or 'P(' in diff:
+      return 'disregard'
+    else:
+      return diff
   else:
     larger_graph = ['dis', 'regard']
     return "".join(larger_graph)
@@ -1118,6 +1122,9 @@ def choose_path(source, target, species_list, filepath, libr = None):
         alt_b.append(temp_network.nodes[alternatives[1]]['virtual'])
   alt_a = alt_a.count(0)/max([len(alt_a), 1])
   alt_b = alt_b.count(0)/max([len(alt_b), 1])
+  if alt_a == alt_b == 0:
+    alt_a = 0.01
+    alt_b = 0.01
   inferences = {alternatives[0]:alt_a, alternatives[1]:alt_b}
   return inferences
 
