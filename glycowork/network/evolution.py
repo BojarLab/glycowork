@@ -69,7 +69,7 @@ def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = 
   else:
     print("Not a defined metric. At the moment, only 'Jaccard' is available as a metric.")
   specs = list(sorted(list(set(df[rank].values.tolist()))))
-  idx_min = [k for k in range(len(specs)) if len(df[df[rank] == specs[k]])>=cut_off]
+  idx_min = [k for k in range(len(specs)) if len(df[df[rank] == specs[k]]) >= cut_off]
   specs_min = [specs[k] for k in idx_min]
   networks_min = [networks[k] for k in idx_min]
   dm = np.zeros((len(networks_min), len(networks_min)))
@@ -108,7 +108,7 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
                   bbox_inches = 'tight')
 
 def check_conservation(glycan, df, libr = None, rank = 'Order', filepath = None, threshold = 5,
-                       motif = False):
+                       motif = False, file_suffix = '_graph_exhaustive.pkl'):
   """estimates evolutionary conservation of glycans and glycan motifs via biosynthetic networks\n
   | Arguments:
   | :-
@@ -116,9 +116,10 @@ def check_conservation(glycan, df, libr = None, rank = 'Order', filepath = None,
   | df (dataframe): dataframe in the style of df_species, each row one glycan and columns are the taxonomic levels
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | rank (string): at which taxonomic level to assess conservation; default:Order
-  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + '_graph_exhaustive.pkl'
+  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + file_suffix
   | threshold (int): threshold of how many glycans a species needs to have to consider the species;default:5
-  | motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False\n
+  | motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False
+  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'\n
   | Returns:
   | :-
   | Returns a dictionary of taxonomic group : degree of conservation
@@ -131,7 +132,7 @@ def check_conservation(glycan, df, libr = None, rank = 'Order', filepath = None,
   all_specs = list(sorted(list(set(df_freq.Species.values.tolist()))))
   pool = list(set(df_freq[rank].values.tolist()))
   pool = [k for k in pool if len(list(set(df_freq[df_freq[rank] == k].Species.tolist()))) > 1]
-  networks = {k:nx.read_gpickle(filepath + k + '_graph_exhaustive.pkl') for k in all_specs}
+  networks = {k:nx.read_gpickle(filepath + k + file_suffix) for k in all_specs}
   conserved = {}
   for k in pool:
     specs = list(set(df_freq[df_freq[rank] == k].Species.values.tolist()))

@@ -1,6 +1,7 @@
 import re
 import itertools
 import mpld3
+import copy
 import pkg_resources
 import networkx as nx
 import numpy as np
@@ -309,6 +310,11 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   #directed or undirected network
   if directed:
     network = make_network_directed(network)
+    if virtuals:
+      nodeDict = dict(network.nodes(data = True))
+      for node in list(sorted(list(network.nodes()), key = len, reverse = True)):
+        if (network.out_degree[node] < 1) and (nodeDict[node]['virtual'] == 1):
+          network.remove_node(node)
   return network
 
 def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
@@ -1095,15 +1101,17 @@ def infuse_network(network, node_df, node_abundance = True, glycan_col = 'target
         network.nodes[node]['abundance'] = 50
   return network
 
-def choose_path(source, target, species_list, filepath, libr = None):
+def choose_path(source, target, species_list, filepath, libr = None,
+                file_suffix = '_graph_exhaustive.pkl'):
   """given a diamond-shape in biosynthetic networks (A->B,A->C,B->D,C->D), which path is taken from A to D?\n
   | Arguments:
   | :-
   | source (string): glycan node that is the biosynthetic precursor
   | target (string): glycan node that is the biosynthetic product; has to two biosynthetic steps away from source
   | species_list (list): list of species to compare network to
-  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + '_graph_exhaustive.pkl'
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + file_suffix
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'\n
   | Returns:
   | :-
   | Returns dictionary of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
@@ -1118,7 +1126,7 @@ def choose_path(source, target, species_list, filepath, libr = None):
   alt_a = []
   alt_b = []
   for k in species_list:
-    temp_network = nx.read_gpickle(filepath + k + '_graph_exhaustive.pkl')
+    temp_network = nx.read_gpickle(filepath + k + file_suffix)
     if source in list(temp_network.nodes()) and target in list(temp_network.nodes()):
       if alternatives[0] in list(temp_network.nodes()):
         alt_a.append(temp_network.nodes[alternatives[0]]['virtual'])
@@ -1158,14 +1166,16 @@ def find_diamonds(network):
       matchings_list2.append(d)
   return matchings_list2
 
-def trace_diamonds(network, species_list, filepath, libr = None):
+def trace_diamonds(network, species_list, filepath, libr = None,
+                   file_suffix = '_graph_exhaustive.pkl'):
   """extracts diamond-shape motifs from biosynthetic networks (A->B,A->C,B->D,C->D) and uses evolutionary information to determine which path is taken from A to D\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
   | species_list (list): list of species to compare network to
-  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + '_graph_exhaustive.pkl'
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + file_suffix
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'\n
   | Returns:
   | :-
   | Returns dataframe of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
@@ -1173,7 +1183,8 @@ def trace_diamonds(network, species_list, filepath, libr = None):
   if libr is None:
     libr = lib
   matchings_list = find_diamonds(network)
-  paths = [choose_path(d[1], d[3], species_list, filepath, libr = libr) for d in matchings_list]
+  paths = [choose_path(d[1], d[3], species_list, filepath, libr = libr,
+                       file_suffix = file_suffix) for d in matchings_list]
   df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
   df_out.columns = ['target', 'probability']
   return df_out
@@ -1189,10 +1200,14 @@ def prune_network(network, node_attr = 'abundance', threshold = 0.):
   | :-
   | Returns pruned network
   """
-  to_cut = [k for k in list(network.nodes()) if nx.get_node_attributes(network, node_attr)[k] <= threshold]
-  network.remove_nodes_from(to_cut)
-  nodeDict = dict(network.nodes(data = True))
-  for node in list(network.nodes()):
-    if (network.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
-      network.remove_node(node)
-  return network
+  network_out = copy.deepcopy(network)
+  #prune nodes lower in attribute than threshold
+  to_cut = [k for k in list(network_out.nodes()) if nx.get_node_attributes(network_out, node_attr)[k] <= threshold]
+  #leave virtual nodes that are needed to retain a connected component
+  to_cut = [k for k in to_cut if not any([network_out.in_degree[j] == 1 and len(j) > len(k) for j in network_out.neighbors(k)])]
+  network_out.remove_nodes_from(to_cut)
+  nodeDict = dict(network_out.nodes(data = True))
+  for node in list(network_out.nodes()):
+    if (network_out.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
+      network_out.remove_node(node)
+  return network_out
