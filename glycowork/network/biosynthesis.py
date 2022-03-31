@@ -1211,3 +1211,26 @@ def prune_network(network, node_attr = 'abundance', threshold = 0.):
     if (network_out.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
       network_out.remove_node(node)
   return network_out
+
+def evoprune_network(network, species_list, filepath, libr = None,
+                file_suffix = '_graph_exhaustive.pkl', node_attr = 'abundance', threshold = 0.):
+  """given a biosynthetic network, this function uses evolutionary relationships to prune impossible paths\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | species_list (list): list of species to compare network to
+  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + file_suffix
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'
+  | node_attr (string): which (numerical) node attribute to use for pruning; default:'abundance'
+  | threshold (float): everything below or equal to that threshold will be cut; default:0.\n
+  | Returns:
+  | :-
+  | Returns pruned network (with virtual node probability as a new node attribute)
+  """
+  if libr is None:
+    libr = lib
+  df_out = trace_diamonds(network, species_list, filepath, libr = libr, file_suffix = file_suffix)
+  network_out = infuse_network(network, df_out, intensity_col = 'probability')
+  network_out = prune_network(network_out, node_attr = node_attr, threshold = threshold)
+  return network_out
