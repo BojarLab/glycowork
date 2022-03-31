@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import lib, unwrap, linkages
 from glycowork.motif.graph import fast_compare_glycans, compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
-from glycowork.motif.processing import min_process_glycans
+from glycowork.motif.processing import min_process_glycans, choose_correct_isoform
 from glycowork.motif.tokenization import stemify_glycan
 
 io = pkg_resources.resource_stream(__name__, "monolink_to_enzyme.csv")
@@ -307,6 +307,14 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
     real_nodes = [glycan_to_nxGraph(x, libr = libr) for x,y in network.nodes(data = True) if y['virtual'] == 0]
     to_cut = [v for v in virtual_nodes if any([fast_compare_glycans(glycan_to_nxGraph(v, libr = libr), r, libr = libr) for r in real_nodes])]
     network.remove_nodes_from(to_cut)
+    virtual_nodes = [x for x,y in network.nodes(data = True) if y['virtual'] == 1]
+    virtual_graphs = [glycan_to_nxGraph(x, libr = libr) for x in virtual_nodes]
+    isomeric_graphs = [k for k in list(itertools.combinations(virtual_graphs, 2)) if fast_compare_glycans(k[0], k[1], libr = libr)]
+    if len(isomeric_graphs) > 0:
+      isomeric_nodes = [[virtual_nodes[virtual_graphs.index(k[0])],
+                         virtual_nodes[virtual_graphs.index(k[1])]] for k in isomeric_graphs]
+      to_cut = [choose_correct_isoform(k, reverse=True)[0] for k in isomeric_nodes]
+      network.remove_nodes_from(to_cut)
   #directed or undirected network
   if directed:
     network = make_network_directed(network)
@@ -315,7 +323,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
       for node in list(sorted(list(network.nodes()), key = len, reverse = True)):
         if (network.out_degree[node] < 1) and (nodeDict[node]['virtual'] == 1):
           network.remove_node(node)
-  return network
+  return filter_disregard(network)
 
 def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
                  node_size = False, lfc_dict = None):

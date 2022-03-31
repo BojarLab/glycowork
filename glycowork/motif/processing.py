@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import random
 
 linkages = ['a1-1','a1-2','a1-3','a1-4','a1-5','a1-6','a1-7','a1-8','a1-9','a1-11','a1-z','a2-1','a2-2','a2-3','a2-4','a2-5','a2-6','a2-7','a2-8','a2-9','a2-11','b1-1','b1-2','b1-3','b1-4','b1-5','b1-6','b1-7','b1-8','b1-9','b1-z','b2-1','b2-2','b2-3','b2-4','b2-5','b2-6','b2-7','b2-8','z1-z','z2-z','z1-2','z1-3','z1-4','z1-6','z2-3','z2-6','z2-8']
@@ -128,3 +129,24 @@ def check_nomenclature(glycan):
     
   return True
 
+def choose_correct_isoform(glycans, reverse = False):
+  """given a list of glycan branch isomers, this function returns the correct isomer\n
+  | Arguments:
+  | :-
+  | glycans (list): glycans in IUPAC-condensed nomenclature
+  | reverse (bool): whether to return the correct isomer (False) or everything except the correct isomer (True); default:False\n
+  | Returns:
+  | :-
+  | Returns the correct isomer as a string (if reverse=False, otherwise it returns a list of strings)
+  """
+  prefix = min_process_glycans([glyc[:glyc.index('[')] for glyc in glycans])
+  prefix_len = [len(k) for k in prefix]
+  if len(set(prefix_len)) == 1:
+    branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'z' and k[-2][-1] != 'd' else 10 for k in prefix]
+    correct_isoform = glycans[np.argmin(branch_endings)]
+  else:
+    correct_isoform = glycans[np.argmax(prefix_len)]
+  if reverse:
+    glycans.remove(correct_isoform)
+    correct_isoform = glycans
+  return correct_isoform
