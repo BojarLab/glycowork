@@ -867,8 +867,11 @@ def find_ptm(glycan, glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4A
     nb = [glycans[k] for k in idx][0]
     return ((glycan), (nb)), mod
   else:
-    print("No neighbors found. This is just information, no need to act.")
-    return 0
+    if ''.join(sorted(glycan)) == ''.join(sorted(glycan_stem+mod)):
+      return ((glycan), (glycan_stem)), mod
+    else:
+      print("No neighbors found. This is just information, no need to act.")
+      return 0
 
 def process_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
                libr = None, suffix = '-ol', verbose = False):
@@ -918,6 +921,11 @@ def update_network(network_in, edge_list, edge_labels = None, node_labels = None
     network.add_edges_from(edge_list)
     nx.set_edge_attributes(network, {edge_list[k]:edge_labels[k] for k in range(len(edge_list))}, 'diffs')
   if node_labels is None:
+    for node in network.nodes:
+      try:
+        temp = network.nodes[node]['virtual']
+      except:
+        network.nodes[node]['virtual'] = 1
     return network
   else:
     nx.set_node_attributes(network, node_labels, 'virtual')
