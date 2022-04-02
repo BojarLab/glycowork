@@ -188,13 +188,13 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   """
   if libr is None:
     libr = lib
-  g1 = glycan_to_nxGraph(glycan_a, libr)
-  g2 = glycan_to_nxGraph(glycan_b, libr)
-  
-  if wildcards:
-    return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+  if len(set([len(k) for k in min_process_glycans([glycan_a, glycan_b])])) == 1:
+    g1 = glycan_to_nxGraph(glycan_a, libr = libr)
+    g2 = glycan_to_nxGraph(glycan_b, libr = libr)
+    return fast_compare_glycans(g1, g2, libr = libr, wildcards = wildcards,
+                              wildcard_list = wildcard_list)
   else:
-    return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+    return False
 
 def fast_compare_glycans(g1, g2, libr = None,
                     wildcards = False, wildcard_list = []):
@@ -212,10 +212,16 @@ def fast_compare_glycans(g1, g2, libr = None,
   """
   if libr is None:
     libr = lib
-  if wildcards:
-    return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+  if len(g1.nodes) == len(g2.nodes):
+    if wildcards:
+      return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+    else:
+      if sorted(''.join(nx.get_node_attributes(g1, "string_labels").values())) == sorted(''.join(nx.get_node_attributes(g2, "string_labels").values())):
+        return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+      else:
+        return False
   else:
-    return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+    return False
 
 def subgraph_isomorphism(glycan, motif, libr = None,
                          extra = 'ignore', wildcard_list = [],
@@ -238,39 +244,66 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     libr = lib
   if len(wildcard_list) >= 1:
     wildcard_list = [libr.index(k) for k in wildcard_list]
+  motif_comp = min_process_glycans([motif])[0]
   if isinstance(glycan, str):
     if extra == 'termini':
-      g1 = glycan_to_nxGraph(glycan, libr, termini = 'calc')
-      g2 = glycan_to_nxGraph(motif, libr, termini = 'provided', termini_list = termini_list)
+      g1 = glycan_to_nxGraph(glycan, libr = libr, termini = 'calc')
+      g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided', termini_list = termini_list)
     else:
-      g1 = glycan_to_nxGraph(glycan, libr)
-      g2 = glycan_to_nxGraph(motif, libr)
+      g1 = glycan_to_nxGraph(glycan, libr = libr)
+      g2 = glycan_to_nxGraph(motif, libr = libr)
   else:
     g1 = glycan
     if extra == 'termini':
-      g2 = glycan_to_nxGraph(motif, libr, termini = 'provided', termini_list = termini_list)
+      g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided', termini_list = termini_list)
     else:
-      g2 = glycan_to_nxGraph(motif, libr)
-  if extra == 'ignore':
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
-  elif extra == 'wildcards':
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
-  elif extra == 'termini':
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
+      g2 = glycan_to_nxGraph(motif, libr = libr)
 
-  if count:
-    counts = 0
-    while graph_pair.subgraph_is_isomorphic():
-      counts += 1
-      g1.remove_nodes_from(graph_pair.mapping.keys())
-      if extra == 'ignore':
+  if len(g1.nodes) >= len(g2.nodes): 
+  
+    if extra == 'ignore':
+      if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
         graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
-      elif extra == 'wildcards':
-        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
-      elif extra == 'termini':
+      else:
+        if count:
+          return 0
+        else:
+          return False
+    elif extra == 'wildcards':
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+    elif extra == 'termini':
+      if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
         graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
-    return counts
-  else: return graph_pair.subgraph_is_isomorphic()
+      else:
+        if count:
+          return 0
+        else:
+          return False
+
+    if count:
+      counts = 0
+      while graph_pair.subgraph_is_isomorphic():
+        counts += 1
+        g1.remove_nodes_from(graph_pair.mapping.keys())
+        if extra == 'ignore':
+          if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
+            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+          else:
+            return counts
+        elif extra == 'wildcards':
+          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+        elif extra == 'termini':
+          if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
+            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
+          else:
+            return counts
+      return counts
+    else: return graph_pair.subgraph_is_isomorphic()
+  else:
+    if count:
+      return 0
+    else:
+      return False
 
 
 
