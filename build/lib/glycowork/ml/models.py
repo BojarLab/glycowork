@@ -9,6 +9,10 @@ except ImportError:
 import torch.nn.functional as F
 from glycowork.glycan_data.loader import lib
 
+device = "cpu"
+if torch.cuda.is_available():
+    device = "cuda:0"
+
 this_dir, this_filename = os.path.split(__file__)  # Get path
 data_path = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
 trained_SweetNet = torch.load(data_path)
@@ -330,25 +334,25 @@ def prep_model(model_type, num_classes, libr = None,
         model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
         if trained:
             model.load_state_dict(trained_SweetNet)
-        model = model.cuda()
+        model = model.to(device)
     elif model_type == 'LectinOracle':
         model = LectinOracle(len(libr), num_classes = num_classes)
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
             model.load_state_dict(trained_LectinOracle)
-        model = model.cuda()
+        model = model.to(device)
     elif model_type == 'LectinOracle_flex':
         model = LectinOracle_flex(len(libr), num_classes = num_classes)
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
             model.load_state_dict(trained_LectinOracle_flex)
-        model = model.cuda()
+        model = model.to(device)
     elif model_type == 'NSequonPred':
         model = NSequonPred()
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
             model.load_state_dict(trained_NSequonPred)
-        model = model.cuda()
+        model = model.to(device)
     else:
         print("Invalid Model Type")
     return model

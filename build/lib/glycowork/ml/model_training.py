@@ -11,6 +11,10 @@ from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_erro
 from glycowork.motif.annotate import annotate_dataset
 from glycowork.glycan_data.loader import lib
 
+device = "cpu"
+if torch.cuda.is_available():
+    device = "cuda:0"
+
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
     def __init__(self, patience = 7, verbose = False):
@@ -116,14 +120,14 @@ def train_model(model, dataloaders, criterion, optimizer,
       running_mcc = []
       for data in dataloaders[phase]:
         try:
-            x, y, edge_index, prot, batch = data.x, data.y, data.edge_index, data.train_idx, data.batch
-            prot = prot.view(max(batch)+1, -1).cuda()
+            x, y, edge_index, prot, batch = data.labels, data.y, data.edge_index, data.train_idx, data.batch
+            prot = prot.view(max(batch)+1, -1).to(device)
         except:
-            x, y, edge_index, batch = data.x, data.y, data.edge_index, data.batch
-        x = x.cuda()
-        y = y.cuda()
-        edge_index = edge_index.cuda()
-        batch = batch.cuda()
+            x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
+        x = x.to(device)
+        y = y.view(max(batch)+1, -1).to(device)
+        edge_index = edge_index.to(device)
+        batch = batch.to(device)
         optimizer.zero_grad()
 
         with torch.set_grad_enabled(phase == 'train'):
@@ -316,13 +320,13 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
                                                            factor = factor, verbose = True)
     if mode == 'multiclass':
-        criterion = torch.nn.CrossEntropyLoss().cuda()
+        criterion = torch.nn.CrossEntropyLoss().to(device)
     elif mode == 'multilabel':
-        criterion = torch.nn.BCEWithLogitsLoss().cuda()
+        criterion = torch.nn.BCEWithLogitsLoss().to(device)
     elif mode == 'binary':
-        criterion = torch.nn.BCEWithLogitsLoss().cuda()
+        criterion = torch.nn.BCEWithLogitsLoss().to(device)
     elif mode == 'regression':
-        criterion = torch.nn.MSELoss().cuda()
+        criterion = torch.nn.MSELoss().to(device)
     else:
         print("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
     return optimizer_ft, scheduler, criterion

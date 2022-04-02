@@ -117,7 +117,7 @@ def get_representative_substructures(enrichment_df, libr = None):
 
     clean_list = []
     for k in rep_motifs:
-        if sum([subgraph_isomorphism(j, k, libr = libr) for j in rep_motifs])>1:
+        if sum([subgraph_isomorphism(j, k, libr = libr) for j in rep_motifs]) > 1:
             rep_motifs.remove(k)
         else:
             clean_list.append(k)
