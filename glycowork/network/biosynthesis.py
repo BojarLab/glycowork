@@ -197,7 +197,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
                                                                                         'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'],
                  limit = 5, ptm = True, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
                  permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"],
-                      directed = False, edge_type = 'monolink'):
+                      directed = True, edge_type = 'monolink'):
   """visualize biosynthetic network\n
   | Arguments:
   | :-
@@ -209,7 +209,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   | ptm (bool): whether to consider post-translational modifications in the network construction; default:True
   | allowed_ptms (list): list of PTMs to consider
   | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
-  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False
+  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:True
   | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide'), monosaccharide(linkage) ('monolink'), or enzyme catalyzing the reaction ('enzyme'); default:'monolink'\n
   | Returns:
   | :-
@@ -223,6 +223,11 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
     virtuals = False
   #generating graph from adjacency of observed glycans
   min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
+  add_to_virtuals = []
+  for r in permitted_roots:
+      if r not in glycans and any([r in g for g in glycans]):
+        add_to_virtuals.append(r)
+        glycans.append(r)
   adjacency_matrix, virtual_nodes = create_adjacency_matrix(glycans, libr = libr, virtual_nodes = virtuals,
                             reducing_end = reducing_end, min_size = min_size)
   network = adjacencyMatrix_to_network(adjacency_matrix)
@@ -279,7 +284,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   if virtuals:
     nodeDict = dict(network.nodes(data = True))
     for node in list(sorted(list(network.nodes()), key = len, reverse = True)):
-      if (network.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
+      if (network.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1) and (node not in permitted_roots):
         network.remove_node(node)
     adj_matrix = create_adjacency_matrix(list(network.nodes()), libr = libr,
                                          reducing_end = reducing_end,
@@ -757,8 +762,9 @@ def infer_network(network, network_species, species_list, filepath = None, df = 
                   libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
                                                'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'], limit = 5,
-                  ptm = False, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
-                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"], directed = False):
+                  ptm = True, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
+                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"], directed = True,
+                  file_suffix = '_graph_exhaustive.pkl'):
   """replaces virtual nodes if they are observed in other species\n
   | Arguments:
   | :-
@@ -771,10 +777,11 @@ def infer_network(network, network_species, species_list, filepath = None, df = 
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used;only needed if filepath=None
   | reducing_end (list): monosaccharides at the reducing end that are allowed;only needed if filepath=None;default:milk glycan reducing ends
   | limit (int): maximum number of virtual nodes between observed nodes;only needed if filepath=None;default:5
-  | ptm (bool): whether to consider post-translational modifications in the network construction; default:False
+  | ptm (bool): whether to consider post-translational modifications in the network construction; default:True
   | allowed_ptms (list): list of PTMs to consider
   | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
-  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:False\n
+  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:True
+  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'\n
   | Returns:
   | :-
   | Returns network with filled in virtual nodes
@@ -789,7 +796,7 @@ def infer_network(network, network_species, species_list, filepath = None, df = 
                                          reducing_end = reducing_end, limit = limit, ptm = ptm, allowed_ptms = allowed_ptms,
                                          permitted_roots = permitted_roots, directed = directed)
       else:
-        temp_network = nx.read_gpickle(filepath + k + '_graph_exhaustive.pkl')
+        temp_network = nx.read_gpickle(filepath + k + file_suffix)
       temp_network = filter_disregard(temp_network)
       infer_network, infer_other = infer_virtual_nodes(network, temp_network)
       inferences.append(infer_network)

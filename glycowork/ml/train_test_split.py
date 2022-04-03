@@ -112,17 +112,17 @@ def general_split(glycans, labels, test_size = 0.2):
   return train_test_split(glycans, labels, shuffle = True,
                           test_size = test_size, random_state = 42)
 
-def taxonomic_multilabel(df, rank = 'Species', glycan_col = 'target'):
-  """converts a one row per glycan-species association file to a format of one glycan - all species associations\n
+def prepare_multilabel(df, rank = 'Species', glycan_col = 'target'):
+  """converts a one row per glycan-species/tissue/disease association file to a format of one glycan - all associations\n
   | Arguments:
   | :-
   | df (dataframe): dataframe where each row is one glycan - species association
-  | rank (string): which taxonomic level should be used; default:Species
+  | rank (string): which label column should be used; default:Species
   | glycan_col (string): column name of where the glycan sequences are stored; default:target\n
   | Returns:
   | :-
   | (1) list of unique glycans in df
-  | (2) list of lists, where each inner list are all the taxonomic labels of a glycan
+  | (2) list of lists, where each inner list are all the labels of a glycan
   """
   glycans = list(set(df[glycan_col].values.tolist()))
   class_list = list(set(df[rank].values.tolist()))
