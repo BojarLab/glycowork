@@ -248,7 +248,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
       except:
         pass
     network.add_edges_from(unwrap(new_edges), edge_labels = unwrap(new_edge_labels))
-    virtual_nodes = virtual_nodes + list(set(unwrap(new_nodes)))
+    virtual_nodes = virtual_nodes + add_to_virtuals + list(set(unwrap(new_nodes)))
     for ed in (network.edges()):
       if ed[0] in virtual_nodes and ed[1] in virtual_nodes:
         larger_ed = np.argmax([len(e) for e in [ed[0], ed[1]]])
