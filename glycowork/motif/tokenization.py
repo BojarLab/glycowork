@@ -380,9 +380,6 @@ def match_composition(composition, group, level, df = None,
             except :
                 a = 1
         output_list = list(set(output_list))
-        #print(str(len(output_list)) + " glycan structures match your composition.")
-        #for element in output_list:
-        #    print(element)
         
     if mode == "exact":
         for element in libr:
@@ -410,10 +407,6 @@ def match_composition(composition, group, level, df = None,
             except :
                 a = 1
         output_list = list(set(output_list))
-        #print(str(len(output_list)) + " glycan structures match your composition.")
-        #for element in output_list:
-        #    print(element)
-            
     return output_list
 
 def match_composition_relaxed(composition, group, level, df = None,
@@ -440,6 +433,13 @@ def match_composition_relaxed(composition, group, level, df = None,
       df = df_species
     if reducing_end is not None:
       df = df[df.target.str.endswith(reducing_end)].reset_index(drop = True)
+    comp_count = sum(composition.values())
+    len_distr = [len(k) - (len(k)-1)/2 for k in min_process_glycans(df.target.values.tolist())]
+    if mode == 'exact':
+      idx = [k for k in range(len(df)) if len_distr[k] == comp_count]
+    else:
+      idx = [k for k in range(len(df)) if len_distr[k] >= comp_count]
+    df = df.iloc[idx,:].reset_index(drop = True)
     if libr is None:
       libr = lib
     if Hex_list is None:
@@ -541,8 +541,6 @@ def condense_composition_matching(matched_composition, libr = None):
   sum_glycans = []
   for k in range(num_clusters):
     cluster_glycans = [matched_composition[j] for j in range(len(cluster_labels)) if cluster_labels[j] == k]
-    #print(cluster_glycans)
-    #idx = np.argmin([j.count('bond') for j in cluster_glycans])
     county = [j.count('bond') for j in cluster_glycans]
     idx = np.where(county == np.array(county).min())[0]
     if len(idx) == 1:
