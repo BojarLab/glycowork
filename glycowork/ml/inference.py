@@ -58,7 +58,7 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
                                           shuffle = False)
     res = []
     for data in glycan_loader:
-        x, y, edge_index, batch = data.x, data.y, data.edge_index, data.batch
+        x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
         x = x.to(device)
         y = y.to(device)
         edge_index = edge_index.to(device)
@@ -115,7 +115,7 @@ def get_multi_pred(prot, glycans, model, prot_dic,
   model = model.eval()
   res = []
   for k in train_loader:
-    x, y, edge_index, prot, batch = k.x, k.y, k.edge_index, k.train_idx, k.batch
+    x, y, edge_index, prot, batch = k.labels, k.y, k.edge_index, k.train_idx, k.batch
     x = x.to(device)
     y = y.to(device)
     prot = prot.view(max(batch)+1, -1).float().to(device)
@@ -158,7 +158,7 @@ def get_lectin_preds(prot, glycans, model, prot_dic = {}, background_correction 
       libr = lib
   if correction_df is None:
     correction_df = df_corr
-  if len(prot_dic)<1 and not flex:
+  if len(prot_dic) < 1 and not flex:
     print("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
   preds = get_multi_pred(prot, glycans, model, prot_dic,
                          batch_size = batch_size, libr = libr,
@@ -194,7 +194,7 @@ def get_esm1b_representations(prots, model, alphabet):
   prots = list(set(prots))
   data_list = []
   for k in range(0,len(prots)):
-    if len(prots[k])<1000:
+    if len(prots[k]) < 1000:
       data_list.append(('protein'+str(k), prots[k][:np.min([len(prots[k]),
                                                                1000])]))
     else:

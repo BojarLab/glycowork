@@ -19,39 +19,42 @@ def get_insight(glycan, libr = None, motifs = None):
     if motifs is None:
         motifs = motif_list
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
-    ggraph = glycan_to_nxGraph(glycan, libr = libr)
-    df_glycan['graph'] = [glycan_to_nxGraph(k, libr = libr) for k in df_glycan.glycan.values.tolist()]
-    idx = np.where([fast_compare_glycans(ggraph, k, libr = libr) for k in df_glycan.graph.values.tolist()])[0]
-    species = ast.literal_eval(df_glycan.Species.values.tolist()[idx[0]])
+    if glycan in df_glycan.glycan.values.tolist():
+        idx = df_glycan.glycan.values.tolist().index(glycan)
+    else:
+        ggraph = glycan_to_nxGraph(glycan, libr = libr)
+        df_glycan['graph'] = [glycan_to_nxGraph(k, libr = libr) for k in df_glycan.glycan.values.tolist()]
+        idx = np.where([fast_compare_glycans(ggraph, k, libr = libr) for k in df_glycan.graph.values.tolist()])[0][0]
+    species = ast.literal_eval(df_glycan.Species.values.tolist()[idx])
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(list(sorted(species))))
     else:
         try:
-            species = df_glycan.predicted_taxonomy.values.tolist()[idx[0]]
+            species = df_glycan.predicted_taxonomy.values.tolist()[idx]
             print("\nNo definitive information in our database but this glycan is predicted to occur here: " + str(species))
         except:
             pass
     if len(species) > 5:
-        phyla = list(sorted(list(set(eval(df_glycan.Phylum.values.tolist()[idx[0]])))))
+        phyla = list(sorted(list(set(eval(df_glycan.Phylum.values.tolist()[idx])))))
         print("\nPuh, that's quite a lot! Here are the phyla of those species: " + str(phyla))
     found_motifs = annotate_glycan(glycan, motifs = motifs, libr = libr)
     found_motifs = found_motifs.loc[:, (found_motifs != 0).any(axis = 0)].columns.values.tolist()
     if len(found_motifs) > 0:
         print("\nThis glycan contains the following motifs: " + str(found_motifs))
-    if isinstance(df_glycan.glytoucan_id.values.tolist()[idx[0]], str):
-        print("\nThis is the GlyTouCan ID for this glycan: " + str(df_glycan.glytoucan_id.values.tolist()[idx[0]]))
-    if isinstance(df_glycan.immunogenicity.values.tolist()[idx[0]], float):
-        if df_glycan.immunogenicity.values.tolist()[idx[0]] > 0:
+    if isinstance(df_glycan.glytoucan_id.values.tolist()[idx], str):
+        print("\nThis is the GlyTouCan ID for this glycan: " + str(df_glycan.glytoucan_id.values.tolist()[idx]))
+    if isinstance(df_glycan.immunogenicity.values.tolist()[idx], float):
+        if df_glycan.immunogenicity.values.tolist()[idx] > 0:
             print("\nThis glycan is likely to be immunogenic to humans.")
-        elif df_glycan.immunogenicity.values.tolist()[idx[0]] < 1:
+        elif df_glycan.immunogenicity.values.tolist()[idx] < 1:
             print("\nThis glycan is likely to be non-immunogenic to humans.")
-    if len(df_glycan.tissue_sample.values.tolist()[idx[0]])>2:
-        tissue = ast.literal_eval(df_glycan.tissue_sample.values.tolist()[idx[0]])
+    if len(df_glycan.tissue_sample.values.tolist()[idx]) > 2:
+        tissue = ast.literal_eval(df_glycan.tissue_sample.values.tolist()[idx])
         print("\nThis glycan has been reported to be expressed in: " + str(list(sorted(tissue))))
-    if len(df_glycan.disease_association.values.tolist()[idx[0]])>2:
-        disease = ast.literal_eval(df_glycan.disease_association.values.tolist()[idx[0]])
-        direction = ast.literal_eval(df_glycan.disease_direction.values.tolist()[idx[0]])
-        disease_sample = ast.literal_eval(df_glycan.disease_sample.values.tolist()[idx[0]])
+    if len(df_glycan.disease_association.values.tolist()[idx]) > 2:
+        disease = ast.literal_eval(df_glycan.disease_association.values.tolist()[idx])
+        direction = ast.literal_eval(df_glycan.disease_direction.values.tolist()[idx])
+        disease_sample = ast.literal_eval(df_glycan.disease_sample.values.tolist()[idx])
         print("\nThis glycan has been reported to be dysregulated in (disease, direction, sample): " \
               + str([(disease[k],
                      direction[k],
