@@ -1226,7 +1226,8 @@ def evoprune_network(network, species_list, filepath, libr = None,
   if libr is None:
     libr = lib
   df_out = trace_diamonds(network, species_list, filepath, libr = libr, file_suffix = file_suffix)
-  network_out = infuse_network(network, df_out, intensity_col = 'probability')
+  network_out = highlight_network(network, highlight = 'abundance', abundance_df = df_out,
+                                  intensity_col = 'probability')
   network_out = prune_network(network_out, node_attr = node_attr, threshold = threshold)
   return network_out
 
