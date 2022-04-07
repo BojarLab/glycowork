@@ -471,7 +471,7 @@ def create_neighbors(ggraph, libr = None, min_size = 1):
     ggraph_nb = [ggraph.subgraph(k) for k in itertools.combinations(ra, len(ggraph.nodes())-2) if safe_max(np.diff(k)) in [1,3]]
     ggraph_nb = [k for k in ggraph_nb if nx.is_connected(k)]
   for k in range(len(ggraph_nb)):
-    if ggraph_nb[k].nodes()[0] == 2:
+    if list(ggraph_nb[k].nodes())[0] == 2:
       ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {j:j-2 for j in ggraph_nb[k].nodes()})
     if any([j not in list(ggraph_nb[k].nodes()) for j in range(len(ggraph_nb[k].nodes()))]):
       which = np.min(np.where([j not in ggraph_nb[k].nodes() for j in range(len(ggraph_nb[k].nodes()))])[0].tolist())
