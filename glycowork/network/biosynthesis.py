@@ -746,7 +746,7 @@ def filter_disregard(network):
   | :-
   | Returns network without mistaken edges
   """
-  for k in network.edges():
+  for k in list(network.edges()):
     if nx.get_edge_attributes(network, 'diffs')[k] == 'disregard':
       network.remove_edge(k[0], k[1])
   return network
