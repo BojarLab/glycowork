@@ -476,7 +476,7 @@ def create_neighbors(ggraph, libr = None, min_size = 1):
     if any([j not in list(ggraph_nb[k].nodes()) for j in range(len(ggraph_nb[k].nodes()))]):
       which = np.min(np.where([j not in ggraph_nb[k].nodes() for j in range(len(ggraph_nb[k].nodes()))])[0].tolist())
       diff = len(ggraph_nb[k].nodes()) - which
-      current_nodes = ggraph_nb[k].nodes()
+      current_nodes = list(ggraph_nb[k].nodes())
       ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {current_nodes[m]:current_nodes[m]-diff for m in range(which, len(current_nodes))})
   #ggraph_nb = [j for j in ggraph_nb if sum([nx.is_isomorphic(j, i, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr))) for i in ggraph_nb]) <= 1]
   return ggraph_nb
