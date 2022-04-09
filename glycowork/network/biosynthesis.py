@@ -1203,7 +1203,7 @@ def prune_network(network, node_attr = 'abundance', threshold = 0.):
   network_out.remove_nodes_from(to_cut)
   nodeDict = dict(network_out.nodes(data = True))
   for node in list(network_out.nodes()):
-    if (network_out.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1):
+    if (network_out.degree[node] <= 1) and (nodeDict[node]['virtual'] == 1) and (network_out.in_degree[node] > 0):
       network_out.remove_node(node)
   return network_out
 

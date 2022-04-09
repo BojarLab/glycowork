@@ -1,10 +1,38 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from community import community_louvain
 from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
 from glycowork.glycan_data.loader import lib
 from glycowork.motif.graph import subgraph_isomorphism
+
+def calculate_distance_matrix(to_compare, dist_func, label_list = None):
+  """calculates pairwise distances based on objects and a metric\n
+  | Arguments:
+  | :-
+  | to_compare (dict or list): objects to calculate pairwise distances for, if dict then values have to be lists
+  | dist_func (function): function such as 'jaccard' or 'cosine' that calculates distance given two lists/elements
+  | label_list (list): column names for the resulting distance matrix; default:range(len(to_compare))\n
+  | Returns:
+  | :-
+  | Returns a len(to_compare) x len(to_compare) distance matrix
+  """
+  dm = np.zeros((len(to_compare), len(to_compare)))
+  if isinstance(to_compare, dict):
+    label_list = list(to_compare.keys())
+  elif idx is None:
+    label_list = list(range(len(to_compare)))
+  dm = pd.DataFrame(dm, columns = label_list)
+  if isinstance(to_compare, dict):
+    for i in range(len(to_compare)):
+      for j in range(len(to_compare)):
+        dm.iloc[i,j] = dist_func(to_compare[label_list[i]], to_compare[label_list[j]])
+  else:
+    for i in range(len(to_compare)):
+      for j in range(len(to_compare)):
+        dm.iloc[i,j] = dist_func(to_compare[i], to_compare[j])
+  return dm
 
 def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
                              averaging = 'median'):
@@ -30,11 +58,7 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
     avgs = [np.mean(embeddings.iloc[k,:], axis = 0) for k in df_idx]
   else:
     print("Only 'median' and 'mean' are permitted averaging choices.")
-  dm = np.zeros((len(avgs), len(avgs)))
-  dm = pd.DataFrame(dm, columns = df_min)
-  for i in range(len(avgs)):
-    for j in range(len(avgs)):
-      dm.iloc[i,j] = cosine(avgs[i], avgs[j])
+  dm = calculate_distance_matrix(avgs, cosine, label_list = df_min)
   return dm
 
 def jaccard(list1, list2):
@@ -72,11 +96,7 @@ def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = 
   idx_min = [k for k in range(len(specs)) if len(df[df[rank] == specs[k]]) >= cut_off]
   specs_min = [specs[k] for k in idx_min]
   networks_min = [networks[k] for k in idx_min]
-  dm = np.zeros((len(networks_min), len(networks_min)))
-  dm = pd.DataFrame(dm, columns = specs_min)
-  for i in range(len(networks_min)):
-    for j in range(len(networks_min)):
-      dm.iloc[i,j] = dist_func(networks_min[i], networks_min[j])
+  dm = calculate_distance_matrix(networks_min, dist_func, label_list = specs_min)
   return dm
 
 def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
@@ -146,3 +166,27 @@ def check_conservation(glycan, df, libr = None, rank = 'Order', filepath = None,
     else:
       conserved[k] = sum([glycan in j for j in nets]) / len(nets)
   return conserved
+
+def get_communities(graph_list, label_list = None):
+  """Find communities for each graph in a list of graphs\n
+  | Arguments:
+  | :-
+  | graph_list (list): list of undirected biosynthetic networks, in the form of networkx objects
+  | label_list (list): labels to create the community names, which are running_number + _ + label[k]  for graph_list[k]; default:range(len(graph_list))\n
+  | Returns:
+  | :-
+  | Returns a merged dictionary of community : glycans in that community
+  """
+  comm_list = [community_louvain.best_partition(g) for g in graph_list]
+  if label_list is None:
+    label_list = list(range(len(comm_list)))
+  comm_dicts = []
+  i = 0
+  for comm in comm_list:
+    comm_dict = {str(num)+'_'+str(label_list[i]):[] for num in list(set(comm.values()))}
+    for k,v in comm.items():
+      comm_dict[str(v)+'_'+str(label_list[i])].append(k)
+    comm_dicts.append(comm_dict)
+    i += 1
+  comm_dicts = {k: v for d in comm_dicts for k, v in d.items()}
+  return comm_dicts
