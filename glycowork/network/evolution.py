@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import networkx as nx
 from community import community_louvain
 from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
