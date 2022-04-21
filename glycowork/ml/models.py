@@ -25,16 +25,19 @@ trained_NSequonPred = torch.load(data_path)
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
-        super(SweetNet, self).__init__() 
+        super(SweetNet, self).__init__()
 
+        #convolution operations on the graph
         self.conv1 = GraphConv(128, 128)
         self.pool1 = TopKPooling(128, ratio = 1.0)
         self.conv2 = GraphConv(128, 128)
         self.pool2 = TopKPooling(128, ratio = 1.0)
         self.conv3 = GraphConv(128, 128)
         self.pool3 = TopKPooling(128, ratio = 1.0)
+        #node embedding
         self.item_embedding = torch.nn.Embedding(num_embeddings = lib_size+1,
                                                  embedding_dim = 128)
+        #fully connected part
         self.lin1 = torch.nn.Linear(256, 1024)
         self.lin2 = torch.nn.Linear(1024, 64)
         self.lin3 = torch.nn.Linear(64, num_classes)
@@ -44,9 +47,11 @@ class SweetNet(torch.nn.Module):
         self.act2 = torch.nn.LeakyReLU()      
   
     def forward(self, x, edge_index, batch, inference = False):
+        #getting node features
         x = self.item_embedding(x)
-        x = x.squeeze(1) 
+        x = x.squeeze(1)
 
+        #graph convolution operations
         x = F.leaky_relu(self.conv1(x, edge_index))
 
         x, edge_index, _, batch, _, _= self.pool1(x, edge_index, None, batch)
@@ -62,8 +67,10 @@ class SweetNet(torch.nn.Module):
         x, edge_index, _, batch, _, _ = self.pool3(x, edge_index, None, batch)
         x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
 
+        #combining results from three graph convolutions
         x = x1 + x2 + x3
         
+        #fully connected part
         x = self.lin1(x)
         x = self.bn1(self.act1(x))
         x = self.lin2(x)
@@ -119,38 +126,47 @@ class LectinOracle(torch.nn.Module):
     self.num_classes = num_classes
     self.data_min = data_min
     self.data_max = data_max
-    
+
+    #graph convolution operations for the glycan
     self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
     self.pool1 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
     self.pool2 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
     self.pool3 = TopKPooling(self.hidden_size, ratio = 1.0)
+    #node embedding for the glycan
     self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
                                              embedding_dim = self.hidden_size)
+    
+    #fully connected part for the protein
     self.prot_encoder1 = torch.nn.Linear(self.input_size_prot, 400)
     self.prot_encoder2 = torch.nn.Linear(400, 128)
-    self.dp1 = torch.nn.Dropout(0.5)
+    self.bn_prot1 = torch.nn.BatchNorm1d(400)
+    self.bn_prot2 = torch.nn.BatchNorm1d(128)
     self.dp_prot1 = torch.nn.Dropout(0.2)
     self.dp_prot2 = torch.nn.Dropout(0.1)
+    self.act_prot1 = torch.nn.LeakyReLU()
+    self.act_prot2 = torch.nn.LeakyReLU()
+    
+    #combined fully connected part
     self.fc1 = torch.nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
     self.fc2 = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
     self.bn1 = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
-    self.bn_prot1 = torch.nn.BatchNorm1d(400)
-    self.bn_prot2 = torch.nn.BatchNorm1d(128)
-    self.act1 = torch.nn.LeakyReLU()
-    self.act_prot1 = torch.nn.LeakyReLU()
-    self.act_prot2 = torch.nn.LeakyReLU()
+    self.dp1 = torch.nn.Dropout(0.5)    
+    self.act1 = torch.nn.LeakyReLU()    
     self.sigmoid = SigmoidRange(self.data_min, self.data_max)
     
     
   def forward(self, prot, nodes, edge_index, batch, inference = False):
+    #fully connected part for the protein
     embedded_prot = self.bn_prot1(self.act_prot1(self.dp_prot1(self.prot_encoder1(prot))))
     embedded_prot = self.bn_prot2(self.act_prot2(self.dp_prot2(self.prot_encoder2(embedded_prot))))
 
+    #getting glycan node features
     x = self.item_embedding(nodes)
     x = x.squeeze(1) 
 
+    #glycan graph convolution operations
     x = F.leaky_relu(self.conv1(x, edge_index))
 
     x, edge_index, _, batch, _, _= self.pool1(x, edge_index, None, batch)
@@ -166,10 +182,13 @@ class LectinOracle(torch.nn.Module):
     x, edge_index, _, batch, _, _ = self.pool3(x, edge_index, None, batch)
     x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
 
+    #combining results from three glycan graph convolutions
     x = x1 + x2 + x3
-
+    
+    #combining results from protein and glycan
     h_n = torch.cat((embedded_prot, x), 1)
     
+    #fully connected part
     h_n = self.bn1(self.act1(self.fc1(h_n)))
 
     #1
@@ -206,16 +225,19 @@ class LectinOracle_flex(torch.nn.Module):
     self.num_classes = num_classes
     self.data_min = data_min
     self.data_max = data_max
-    
+
+    #graph convolution operations for the glycan
     self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
     self.pool1 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
     self.pool2 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
     self.pool3 = TopKPooling(self.hidden_size, ratio = 1.0)
+    #node embedding for the glycan
     self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
                                              embedding_dim = self.hidden_size)
     
+    #ESM-1b mimicking
     self.fc1 = torch.nn.Linear(self.input_size_prot, 4000)
     self.fc2 = torch.nn.Linear(4000, 2000)
     self.fc3 = torch.nn.Linear(2000, 1280)
@@ -225,33 +247,40 @@ class LectinOracle_flex(torch.nn.Module):
     self.act2 = torch.nn.LeakyReLU()
     self.bn1 = torch.nn.BatchNorm1d(4000)
     self.bn2 = torch.nn.BatchNorm1d(2000)
-
+    
+    #fully connected part for the protein
     self.prot_encoder1 = torch.nn.Linear(1280, 400)
     self.prot_encoder2 = torch.nn.Linear(400, 128)
-    self.dp1_n = torch.nn.Dropout(0.5)
     self.dp_prot1 = torch.nn.Dropout(0.2)
     self.dp_prot2 = torch.nn.Dropout(0.1)
+    self.bn_prot1 = torch.nn.BatchNorm1d(400)
+    self.bn_prot2 = torch.nn.BatchNorm1d(128)
+    self.act_prot1 = torch.nn.LeakyReLU()
+    self.act_prot2 = torch.nn.LeakyReLU()
+
+    #combined fully connected part
+    self.dp1_n = torch.nn.Dropout(0.5) 
     self.fc1_n = torch.nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
     self.fc2_n = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
     self.bn1_n = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
-    self.bn_prot1 = torch.nn.BatchNorm1d(400)
-    self.bn_prot2 = torch.nn.BatchNorm1d(128)
     self.act1_n = torch.nn.LeakyReLU()
-    self.act_prot1 = torch.nn.LeakyReLU()
-    self.act_prot2 = torch.nn.LeakyReLU()
     self.sigmoid = SigmoidRange(self.data_min, self.data_max)
     
     
   def forward(self, prot, nodes, edge_index, batch, inference = False):
+    #ESM-1b mimicking
     prot = self.bn1(self.act1(self.dp1(self.fc1(prot))))
     prot = self.bn2(self.act2(self.dp2(self.fc2(prot))))
     prot = self.fc3(prot)
+    #fully connected part for the protein
     embedded_prot = self.bn_prot1(self.act_prot1(self.dp_prot1(self.prot_encoder1(prot))))
     embedded_prot = self.bn_prot2(self.act_prot2(self.dp_prot2(self.prot_encoder2(embedded_prot))))
 
+    #getting glycan node features
     x = self.item_embedding(nodes)
     x = x.squeeze(1) 
 
+    #glycan graph convolution operations
     x = F.leaky_relu(self.conv1(x, edge_index))
 
     x, edge_index, _, batch, _, _= self.pool1(x, edge_index, None, batch)
@@ -267,10 +296,13 @@ class LectinOracle_flex(torch.nn.Module):
     x, edge_index, _, batch, _, _ = self.pool3(x, edge_index, None, batch)
     x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
 
+    #combining results from three glycan graph convolutions
     x = x1 + x2 + x3
 
+    #combining results from protein and glycan
     h_n = torch.cat((embedded_prot, x), 1)
-    
+
+    #fully connected part    
     h_n = self.bn1_n(self.act1_n(self.fc1_n(h_n)))
 
     #1

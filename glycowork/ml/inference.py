@@ -16,8 +16,10 @@ except ImportError:
 
 io = pkg_resources.resource_stream(__name__,
                                    "glycowork_lectinoracle_background_correction.csv")
+#background correction values for LectinOracle predictions
 df_corr = pd.read_csv(io)
 
+#choosing the right computing architecture
 device = "cpu"
 if torch.cuda.is_available():
     device = "cuda:0"

@@ -11,6 +11,7 @@ from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_erro
 from glycowork.motif.annotate import annotate_dataset
 from glycowork.glycan_data.loader import lib
 
+#choose the correct computing architecture
 device = "cpu"
 if torch.cuda.is_available():
     device = "cuda:0"
@@ -119,6 +120,7 @@ def train_model(model, dataloaders, criterion, optimizer,
       running_acc = []
       running_mcc = []
       for data in dataloaders[phase]:
+        #get all relevant node attributes; top LectinOracle-style models, bottom SweetNet-style models
         try:
             x, y, edge_index, prot, batch = data.labels, data.y, data.edge_index, data.train_idx, data.batch
             prot = prot.view(max(batch)+1, -1).to(device)
@@ -131,6 +133,7 @@ def train_model(model, dataloaders, criterion, optimizer,
         optimizer.zero_grad()
 
         with torch.set_grad_enabled(phase == 'train'):
+          #first forward pass
           enable_running_stats(model)
           try:
               pred = model(prot, x, edge_index, batch)
@@ -142,13 +145,15 @@ def train_model(model, dataloaders, criterion, optimizer,
           if phase == 'train':
             loss.backward()
             optimizer.first_step(zero_grad = True)
+            #second forward pass
             disable_running_stats(model)
             try:
                 criterion(model(prot, x, edge_index, batch), y).backward()
             except:
                 criterion(model(x, edge_index, batch), y).backward()
             optimizer.second_step(zero_grad = True)
-            
+
+        #collecting relevant metrics            
         running_loss.append(loss.item())
         if mode == 'classification':
             if mode2 == 'multi':
@@ -166,7 +171,8 @@ def train_model(model, dataloaders, criterion, optimizer,
                                                                  pred.cpu().detach().numpy()))
         else:
             running_acc.append(mean_squared_error(y.cpu().detach().numpy(), pred.cpu().detach().numpy()))
-        
+
+      #averaging metrics at end of epoch  
       epoch_loss = np.mean(running_loss)
       epoch_acc = np.mean(running_acc)
       if mode != 'regression':
@@ -182,7 +188,8 @@ def train_model(model, dataloaders, criterion, optimizer,
       else:
           print('{} Loss: {:.4f} MSE: {:.4f}'.format(
               phase, epoch_loss, epoch_acc))
-      
+
+      #keep best model state_dict
       if phase == 'val' and epoch_loss <= best_loss:
         best_loss = epoch_loss
         best_model_wts = copy.deepcopy(model.state_dict())
@@ -195,6 +202,7 @@ def train_model(model, dataloaders, criterion, optimizer,
       if phase == 'val':
         val_losses.append(epoch_loss)
         val_acc.append(epoch_acc)
+        #check Early Stopping & adjust learning rate if needed
         early_stopping(epoch_loss, model)
         try:
             scheduler.step(epoch_loss)
@@ -315,10 +323,13 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
     | :-
     | Returns optimizer, learning rate scheduler, and loss criterion objects
     """
+    #choose optimizer
     optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, lr = lr,
                        weight_decay = weight_decay)
+    #choose learning rate scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
                                                            factor = factor, verbose = True)
+    #choose loss function
     if mode == 'multiclass':
         criterion = torch.nn.CrossEntropyLoss().to(device)
     elif mode == 'multilabel':
@@ -351,12 +362,14 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     | :-
     | Returns trained model                           
     """
+    #choose model type
     if mode == 'classification':
         model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,
                                   max_depth = 3)
     elif mode == 'regression':
         model = xgb.XGBRegressor(random_state = 42, n_estimators = 100,
                                  objective = 'reg:squarederror')
+    #get features
     if feature_calc:
         print("\nCalculating Glycan Features...")
         if libr is None:
@@ -378,10 +391,12 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
             X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")
     model.fit(X_train, y_train)
+    #keep track of column order & re-order test set accordingly
     cols_when_model_builds = model.get_booster().feature_names
     X_test = X_test[cols_when_model_builds]
     print("\nEvaluating model...")
     preds = model.predict(X_test)
+    #get metrics of trained model
     if mode == 'classification':
         out = accuracy_score(y_test, preds)
         print("Accuracy of trained model on separate validation set: " + str(out))
@@ -399,10 +414,12 @@ def analyze_ml_model(model):
     | :-
     | model (model object): trained machine learning model from train_ml_model
     """
+    #get important features
     feat_imp = model.get_booster().get_score(importance_type = 'gain')
     feat_imp = pd.DataFrame(feat_imp, index = [0]).T
     feat_imp = feat_imp.sort_values(by = feat_imp.columns.values.tolist()[0], ascending = False)
     feat_imp = feat_imp[:10]
+    #plot important features
     sns.barplot(x = feat_imp.index.values.tolist(),
                 y = feat_imp[feat_imp.columns.values.tolist()[0]],
                 color = 'cornflowerblue')
@@ -426,10 +443,13 @@ def get_mismatch(model, X_test, y_test, n = 10):
     | :-
     | Returns tuples of misclassifications and their predicted probability
     """
+    #get predictions
     preds = model.predict(X_test)
     preds_proba = model.predict_proba(X_test)
+    #get false predictions
     idx = [k for k in range(len(preds)) if preds[k] != y_test[k]]
     preds = X_test.iloc[idx, :].index.values.tolist()
     preds_proba = [preds_proba[k].tolist()[1] for k in idx]
+    #return the mismatches
     mismatch = [tuple([i,j]) for i,j in zip(preds, preds_proba)]
     return mismatch[:min(len(mismatch),n)]

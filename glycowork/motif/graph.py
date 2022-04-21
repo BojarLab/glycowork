@@ -305,8 +305,6 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     else:
       return False
 
-
-
 def glycan_to_nxGraph(glycan, libr = None,
                       termini = 'ignore', termini_list = None):
   """converts glycans into networkx graphs\n
@@ -323,7 +321,7 @@ def glycan_to_nxGraph(glycan, libr = None,
   if libr is None:
     libr = lib
   glycan_graph = glycan_to_graph(glycan, libr = libr)
-  if len(glycan_graph[1])>0:
+  if len(glycan_graph[1]) > 0:
     edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
     g1 = nx.from_edgelist(edgelist)
   else:

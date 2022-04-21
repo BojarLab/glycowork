@@ -655,7 +655,7 @@ def mz_to_structures(mz_list, reducing_end, group = 'Homo_sapiens', level = 'Spe
                                     check_all_adducts = check_all_adducts, check_specific_adduct = check_specific_adduct,
                                     ptm = ptm) for mz in mz_list]
   for m in range(len(compositions)):
-    structures = [compositions_to_structures([k], abundances.iloc[[m]], group, level, df = df,
+    structures = [compositions_to_structures([k], abundances = abundances.iloc[[m]], group = group, level = level, df = df,
                                              libr = libr, reducing_end = reducing_end, verbose = verbose) for k in compositions[m]]
     structures = [k for k in structures if not k.empty]
     if len(structures) == 1:
