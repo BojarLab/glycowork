@@ -55,10 +55,12 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
     """
     if libr is None:
       libr = lib
+    #preparing dataset for PyTorch
     glycan_loader = dataset_to_dataloader(glycans, range(len(glycans)),
                                           libr = libr, batch_size = batch_size,
                                           shuffle = False)
     res = []
+    #get predictions for each mini-batch
     for data in glycan_loader:
         x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
         x = x.to(device)
@@ -71,6 +73,7 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
             res.append(out)
         else:
             res.append(pred)
+    #unpacking and combining predictions
     res2 = [res[k].detach().cpu().numpy() for k in range(len(res))]
     res2 = pd.DataFrame(np.concatenate(res2))
     if rep:
@@ -101,6 +104,7 @@ def get_multi_pred(prot, glycans, model, prot_dic,
   """
   if libr is None:
       libr = lib
+  #preparing dataset for PyTorch
   if flex:
     prot = prot_to_coded([prot])
     train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
@@ -116,6 +120,7 @@ def get_multi_pred(prot, glycans, model, prot_dic,
                                        shuffle = False, extra_feature = [rep]*len(glycans))
   model = model.eval()
   res = []
+  #get predictions for each mini-batch
   for k in train_loader:
     x, y, edge_index, prot, batch = k.labels, k.y, k.edge_index, k.train_idx, k.batch
     x = x.to(device)
@@ -125,8 +130,10 @@ def get_multi_pred(prot, glycans, model, prot_dic,
     batch = batch.to(device)
     pred = model(prot, x, edge_index, batch)
     res.append(pred)
+  #unpacking and combining predictions
   res = unwrap([res[k].detach().cpu().numpy() for k in range(len(res))])
   res = [k.tolist()[0] for k in res]
+  #applying background correction of predictions
   if background_correction:
     correction_df = pd.Series(correction_df.pred.values,
                               index = correction_df.motif).to_dict()
@@ -224,16 +231,19 @@ def get_Nsequon_preds(prots, model, prot_dic):
   | Returns dataframe of protein sequences and predicted likelihood of being an N-sequon
   """
   reps = [prot_dic[k] for k in prots]
+  #preparing dataset for PyTorch
   dataset = SimpleDataset(reps, [0]*len(reps))
   loader = torch.utils.data.DataLoader(dataset, batch_size = 32, shuffle = False)
   model = model.eval()
   preds = []
+  #get predictions for each mini-batch
   for k in loader:
     x, y = k
     x = x.to(device)
     pred = model(x)
     pred = [sigmoid(x) for x in pred.cpu().detach().numpy()]
     preds.append(pred)
+  #unpacking and combining predictions
   preds = unwrap(preds)
   df_pred = pd.DataFrame([prots, preds]).T
   df_pred.columns = ['seq', 'glycosylated']

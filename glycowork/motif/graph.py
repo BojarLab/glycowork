@@ -4,7 +4,8 @@ from glycowork.glycan_data.loader import lib, unwrap, find_nth
 from glycowork.motif.processing import min_process_glycans
 import numpy as np
 import pandas as pd
-from scipy.sparse.linalg.eigen.arpack import eigsh
+from scipy.sparse.linalg import eigsh
+  
 
 def character_to_label(character, libr = None):
   """tokenizes character by indexing passed library\n

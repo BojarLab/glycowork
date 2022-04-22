@@ -19,6 +19,7 @@ def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
   """
   added_glycans = []
   added_labels = []
+  #each loop has the chance of exchanging glycan parts with each wildcard
   for k in range(len(glycans)):
     temp = glycans[k]
     for j in wildcard_list:
@@ -53,28 +54,34 @@ def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False,
   | class_converter (dictionary to map mapped integers back to text labels)
   """
   df = copy.deepcopy(df_in)
+  #get all non-selected ranks and drop from df
   rank_list = ['Species','Genus','Family','Order',
                'Class','Phylum','Kingdom','Domain']
   rank_list.remove(rank)
   df.drop(rank_list, axis = 1, inplace = True)
+  #get unique classes in rank
   class_list = list(set(df[rank].values.tolist()))
   class_list= [k for k in class_list if k != 'undetermined']
   temp = []
 
+  #for each class in rank, get unique set of glycans
   for i in range(len(class_list)):
     t = df[df[rank] == class_list[i]]
     t = t.drop_duplicates('target', keep = 'first')
     temp.append(t)
   df = pd.concat(temp).reset_index(drop = True)
 
+  #only keep classes in rank with minimum number of glycans
   counts = df[rank].value_counts()
   allowed_classes = [counts.index.tolist()[k] for k in range(len(counts.index.tolist())) if (counts >= min_seq).values.tolist()[k]]
   df = df[df[rank].isin(allowed_classes)]
 
+  #map string classes to integers
   class_list = list(sorted(list(set(df[rank].values.tolist()))))
   class_converter = {class_list[k]:k for k in range(len(class_list))}
   df[rank] = [class_converter[k] for k in df[rank].values.tolist()]
 
+  #split each class proportionally
   sss = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2)
   sss.get_n_splits(df[col].values.tolist(), df[rank].values.tolist())
   for i, j in sss.split(df[col].values.tolist(), df[rank].values.tolist()):
@@ -127,6 +134,7 @@ def prepare_multilabel(df, rank = 'Species', glycan_col = 'target'):
   glycans = list(set(df[glycan_col].values.tolist()))
   class_list = list(set(df[rank].values.tolist()))
   labels = [[0.]*len(class_list) for k in range(len(glycans))]
+  #get all class occurrences of glycan to construct multi-label
   for k in range(len(glycans)):
     sub_classes = df[df.target==glycans[k]][rank].values.tolist()
     for j in sub_classes:
