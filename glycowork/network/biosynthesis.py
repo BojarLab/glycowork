@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import lib, unwrap, linkages
-from glycowork.motif.graph import fast_compare_glycans, compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
+from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
 from glycowork.motif.processing import min_process_glycans, choose_correct_isoform
 from glycowork.motif.tokenization import stemify_glycan
 
@@ -16,7 +16,7 @@ io = pkg_resources.resource_stream(__name__, "monolink_to_enzyme.csv")
 df_enzyme = pd.read_csv(io, sep = '\t')
 
 def safe_compare(g1, g2, libr = None):
-  """fast_compare_glycans with try/except error catch\n
+  """compare_glycans with try/except error catch\n
   | Arguments:
   | :-
   | g1 (networkx object): glycan graph from glycan_to_nxGraph
@@ -29,7 +29,7 @@ def safe_compare(g1, g2, libr = None):
   if libr is None:
     libr = lib
   try:
-    return fast_compare_glycans(g1, g2, libr = libr)
+    return compare_glycans(g1, g2, libr = libr)
   except:
     return False
 
@@ -309,11 +309,11 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   if virtuals:
     virtual_nodes = [x for x,y in network.nodes(data = True) if y['virtual'] == 1]
     real_nodes = [glycan_to_nxGraph(x, libr = libr) for x,y in network.nodes(data = True) if y['virtual'] == 0]
-    to_cut = [v for v in virtual_nodes if any([fast_compare_glycans(glycan_to_nxGraph(v, libr = libr), r, libr = libr) for r in real_nodes])]
+    to_cut = [v for v in virtual_nodes if any([compare_glycans(glycan_to_nxGraph(v, libr = libr), r, libr = libr) for r in real_nodes])]
     network.remove_nodes_from(to_cut)
     virtual_nodes = [x for x,y in network.nodes(data = True) if y['virtual'] == 1]
     virtual_graphs = [glycan_to_nxGraph(x, libr = libr) for x in virtual_nodes]
-    isomeric_graphs = [k for k in list(itertools.combinations(virtual_graphs, 2)) if fast_compare_glycans(k[0], k[1], libr = libr)]
+    isomeric_graphs = [k for k in list(itertools.combinations(virtual_graphs, 2)) if compare_glycans(k[0], k[1], libr = libr)]
     if len(isomeric_graphs) > 0:
       isomeric_nodes = [[virtual_nodes[virtual_graphs.index(k[0])],
                          virtual_nodes[virtual_graphs.index(k[1])]] for k in isomeric_graphs]
@@ -420,7 +420,7 @@ def find_shared_virtuals(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-o
     for k in range(len(ggraph_nb_a)):
       for j in range(len(ggraph_nb_b)):
         if len(ggraph_nb_a[k]) >= min_size:
-          if fast_compare_glycans(ggraph_nb_a[k], ggraph_nb_b[j], libr = libr):
+          if compare_glycans(ggraph_nb_a[k], ggraph_nb_b[j], libr = libr):
             if [glycan_a, glycans_a[k]] not in [list(m) for m in out]:
               out.append((glycan_a, glycans_a[k]))
             if [glycan_b, glycans_b[j]] not in [list(m) for m in out]:
@@ -603,7 +603,7 @@ def find_path(glycan_a, glycan_b, libr = None, reducing_end = ['Glc-ol','GlcNAc-
   virtual_shells.append(virtuals)
   virtual_shells_t.append(virtuals_t)
   county = 0
-  while ((not any([fast_compare_glycans(glycan_to_nxGraph(smaller_glycan, libr = libr), k) for k in unwrap(virtuals)])) and (county < limit)):
+  while ((not any([compare_glycans(glycan_to_nxGraph(smaller_glycan, libr = libr), k) for k in unwrap(virtuals)])) and (county < limit)):
     virtuals, virtuals_t = propagate_virtuals(unwrap(virtuals_t), libr = libr, reducing_end = reducing_end,
                                               permitted_roots = permitted_roots)
     virtual_shells.append(virtuals)

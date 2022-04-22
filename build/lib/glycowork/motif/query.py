@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from glycowork.glycan_data.loader import lib, motif_list, df_glycan
-from glycowork.motif.graph import glycan_to_nxGraph, fast_compare_glycans
+from glycowork.motif.graph import compare_glycans
 from glycowork.motif.annotate import annotate_glycan
 
 def get_insight(glycan, libr = None, motifs = None):
@@ -21,10 +21,8 @@ def get_insight(glycan, libr = None, motifs = None):
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
     if glycan in df_glycan.glycan.values.tolist():
         idx = df_glycan.glycan.values.tolist().index(glycan)
-    else:
-        ggraph = glycan_to_nxGraph(glycan, libr = libr)
-        df_glycan['graph'] = [glycan_to_nxGraph(k, libr = libr) for k in df_glycan.glycan.values.tolist()]
-        idx = np.where([fast_compare_glycans(ggraph, k, libr = libr) for k in df_glycan.graph.values.tolist()])[0][0]
+    else:       
+        idx = np.where([compare_glycans(glycan, k, libr = libr) for k in df_glycan.glycan.values.tolist()])[0][0]
     species = ast.literal_eval(df_glycan.Species.values.tolist()[idx])
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(list(sorted(species))))

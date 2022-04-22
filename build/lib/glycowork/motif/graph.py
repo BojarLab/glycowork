@@ -178,8 +178,8 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   """returns True if glycans are the same and False if not\n
   | Arguments:
   | :-
-  | glycan_a (string): glycan in IUPAC-condensed format
-  | glycan_b (string): glycan in IUPAC-condensed format
+  | glycan_a (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
+  | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | wildcards (bool): set to True to allow wildcards (e.g., 'z1-z', 'monosaccharide'); default is False
   | wildcard_list (list): list of indices for wildcards in libr\n
@@ -189,30 +189,15 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   """
   if libr is None:
     libr = lib
-  if len(set([len(k) for k in min_process_glycans([glycan_a, glycan_b])])) == 1:
-    g1 = glycan_to_nxGraph(glycan_a, libr = libr)
-    g2 = glycan_to_nxGraph(glycan_b, libr = libr)
-    return fast_compare_glycans(g1, g2, libr = libr, wildcards = wildcards,
-                              wildcard_list = wildcard_list)
+  if isinstance(glycan_a, str):
+    if len(set([len(k) for k in min_process_glycans([glycan_a, glycan_b])])) == 1:
+      g1 = glycan_to_nxGraph(glycan_a, libr = libr)
+      g2 = glycan_to_nxGraph(glycan_b, libr = libr)
+    else:
+      return False
   else:
-    return False
-
-def fast_compare_glycans(g1, g2, libr = None,
-                    wildcards = False, wildcard_list = []):
-  """returns True if glycans are the same and False if not\n
-  | Arguments:
-  | :-
-  | g1 (networkx object): glycan graph from glycan_to_nxGraph
-  | g2 (networkx object): glycan graph from glycan_to_nxGraph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | wildcards (bool): set to True to allow wildcards (e.g., 'z1-z', 'monosaccharide'); default is False
-  | wildcard_list (list): list of indices for wildcards in libr\n
-  | Returns:
-  | :-  
-  | Returns True if two glycans are the same and False if not
-  """
-  if libr is None:
-    libr = lib
+    g1 = glycan_a
+    g2 = glycan_b
   if len(g1.nodes) == len(g2.nodes):
     if wildcards:
       return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
@@ -223,6 +208,7 @@ def fast_compare_glycans(g1, g2, libr = None,
         return False
   else:
     return False
+
 
 def subgraph_isomorphism(glycan, motif, libr = None,
                          extra = 'ignore', wildcard_list = [],
