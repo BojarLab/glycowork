@@ -467,9 +467,11 @@ def create_neighbors(ggraph, libr = None, min_size = 1):
   if len(ggraph.nodes()) == 3:
     ggraph_nb = [ggraph.subgraph([2])]
   else:
-    ra = range(len(ggraph.nodes()))
-    ggraph_nb = [ggraph.subgraph(k) for k in itertools.combinations(ra, len(ggraph.nodes())-2) if safe_max(np.diff(k)) in [1,3]]
-    ggraph_nb = [k for k in ggraph_nb if nx.is_connected(k)]
+    terminal_nodes = [k for k in ggraph.nodes() if ggraph.degree(k) == 1]
+    terminal_pairs = [[k,list(ggraph.neighbors(k))[0]] for k in terminal_nodes]
+    ggraph_nb = [copy.deepcopy(ggraph) for k in range(len(terminal_pairs))]
+  for k in range(len(terminal_pairs)):
+    ggraph_nb[k].remove_nodes_from(terminal_pairs[k])
   for k in range(len(ggraph_nb)):
     if list(ggraph_nb[k].nodes())[0] == 2:
       ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {j:j-2 for j in ggraph_nb[k].nodes()})
@@ -478,7 +480,7 @@ def create_neighbors(ggraph, libr = None, min_size = 1):
       diff = len(ggraph_nb[k].nodes()) - which
       current_nodes = list(ggraph_nb[k].nodes())
       ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {current_nodes[m]:current_nodes[m]-diff for m in range(which, len(current_nodes))})
-  #ggraph_nb = [j for j in ggraph_nb if sum([nx.is_isomorphic(j, i, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr))) for i in ggraph_nb]) <= 1]
+  ggraph_nb = [j for j in ggraph_nb if sum([nx.is_isomorphic(j, i, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr))) for i in ggraph_nb]) <= 1]
   return ggraph_nb
 
 def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
@@ -497,25 +499,10 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol',
   """
   if libr is None:
     libr = lib
-  try:
-    ggraph = glycan_to_nxGraph(glycan, libr = libr)
-  except:
-    return [], []
+  ggraph = glycan_to_nxGraph(glycan, libr = libr)
   if len(ggraph.nodes()) == 1:
     return ([], [])
   ggraph_nb = create_neighbors(ggraph, libr = libr)
-  ggraph_nb_t = []
-  for k in ggraph_nb:
-    try:
-      ggraph_nb_t.append(graph_to_string(k))
-    except:
-      pass
-  ggraph_nb = []
-  for k in list(set(ggraph_nb_t)):
-    try:
-      ggraph_nb.append(glycan_to_nxGraph(k, libr = libr))
-    except:
-      pass
   ggraph_nb_t = [graph_to_string(k) for k in ggraph_nb]
   ggraph_nb_t = [k if k[0] != '[' else k.replace('[','',1).replace(']','',1) for k in ggraph_nb_t]
   
