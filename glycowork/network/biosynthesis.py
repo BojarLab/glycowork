@@ -507,7 +507,7 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol',
   ggraph_nb_t = []
   for k in ggraph_nb:
     try:
-      ggraph_nb_t.append(graph_to_string(k, libr = libr))
+      ggraph_nb_t.append(graph_to_string(k))
     except:
       pass
   ggraph_nb = []
@@ -516,7 +516,7 @@ def get_virtual_nodes(glycan, libr = None, reducing_end = ['Glc-ol','GlcNAc-ol',
       ggraph_nb.append(glycan_to_nxGraph(k, libr = libr))
     except:
       pass
-  ggraph_nb_t = [graph_to_string(k, libr = libr) for k in ggraph_nb]
+  ggraph_nb_t = [graph_to_string(k) for k in ggraph_nb]
   ggraph_nb_t = [k if k[0] != '[' else k.replace('[','',1).replace(']','',1) for k in ggraph_nb_t]
   
   ggraph_nb_t = [k for k in ggraph_nb_t if any([k[-len(j):] == j for j in reducing_end])]

@@ -36,112 +36,75 @@ def string_to_labels(character_string, libr = None):
     libr = lib
   return list(map(lambda character: character_to_label(character, libr), character_string))
 
-def glycan_to_graph(glycan, libr = None):
+def evaluate_adjacency(glycan_part, adjustment):
+  """checks whether two glycoletters are adjacent in the graph-to-be-constructed\n
+  | Arguments:
+  | :-
+  | glycan_part (string): residual part of a glycan from within glycan_to_graph
+  | adjustment (int): number of characters to allow for extra length (consequence of tokenizing glycoletters)\n
+  | Returns:
+  | :-
+  | Returns True if adjacent and False if not
+  """
+  if any([glycan_part[-1] == '(', glycan_part[-1] == ')']) and len(glycan_part) < 2+adjustment:
+    return True
+  elif glycan_part[-1] == ']':
+    if any([glycan_part[:-1][-1] == '(', glycan_part[:-1][-1] == ')']) and len(glycan_part[:-1]) < 2+adjustment:
+      return True
+    else:
+      return False
+  return False
+
+def bracket_removal(glycan_part):
+  """iteratively removes (nested) branches between start and end of glycan_part\n
+  | Arguments:
+  | :-
+  | glycan_part (string): residual part of a glycan from within glycan_to_graph\n
+  | Returns:
+  | :-
+  | Returns glycan_part without interfering branches
+  """
+  while bool(re.search('\[[^\[\]]+\]', glycan_part)):
+    glycan_part = re.sub('\[[^\[\]]+\]', '', glycan_part)
+  return glycan_part
+
+def glycan_to_graph(glycan):
   """the monumental function for converting glycans into graphs\n
   | Arguments:
   | :-
-  | glycan (string): IUPAC-condensed glycan sequence (string)
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | glycan (string): IUPAC-condensed glycan sequence\n
   | Returns:
   | :-
-  | (1) a list of labeled glycoletters from the glycan / node list
-  | (2) two lists to indicate which glycoletters are connected in the glycan graph / edge list
+  | (1) a dictionary of node : monosaccharide/linkage
+  | (2) an adjacency matrix of size glycoletter X glycoletter
   """
-  if libr is None:
-    libr = lib
-  bracket_count = glycan.count('[')
-  parts = []
-  branchbranch = []
-  branchbranch2 = []
-  position_bb = []
-  b_counts = []
-  bb_count = 0
-  #checks for branches-within-branches and handles them
-  if bool(re.search('\[[^\]]+\[', glycan)):
-    double_pos = [(k.start(),k.end()) for k in re.finditer('\[[^\]]+\[', glycan)]
-    for spos, pos in double_pos:
-      bracket_count -= 1
-      glycan_part = glycan[spos+1:]
-      glycan_part = glycan_part[glycan_part.find('['):]
-      idx = [k.end() for k in re.finditer('\][^\(]+\(', glycan_part)][0]
-      idx2 = [k.start() for k in re.finditer('\][^\(]+\(', glycan_part)][0]
-      branchbranch.append(glycan_part[:idx-1].replace(']','').replace('[',''))
-      branchbranch2.append(glycan[pos-1:])
-      glycan_part = glycan[:pos-1]
-      b_counts.append(glycan_part.count('[')-bb_count)
-      glycan_part = glycan_part[glycan_part.rfind('[')+1:]
-      position_bb.append(glycan_part.count('(')*2)
-      bb_count += 1
-    for b in branchbranch2:
-      glycan =  glycan.replace(b, ']'.join(b.split(']')[1:]))
-  main = re.sub("[\[].*?[\]]", "", glycan)
-  position = []
-  branch_points = [x.start() for x in re.finditer('\]', glycan)]
-  for i in branch_points:
-    glycan_part = glycan[:i+1]
-    glycan_part = re.sub("[\[].*?[\]]", "", glycan_part)
-    position.append(glycan_part.count('(')*2)
-  parts.append(main)
+  glycan_proc = min_process_glycans([glycan])[0]
+  mask_dic = {k:glycan_proc[k] for k in range(len(glycan_proc))}
+  for k,j in mask_dic.items():
+    glycan = glycan.replace(j, str(k), 1)
+  adj_matrix = np.zeros((len(glycan_proc), len(glycan_proc)), dtype = int)
+  for k in range(len(mask_dic)):
+    for j in range(len(mask_dic)):
+      if k < j:
+        if k >= 100:
+          adjustment = 2
+        elif k >= 10:
+          adjustment = 1
+        else:
+          adjustment = 0
+        glycan_part = glycan[glycan.index(str(k))+1:glycan.index(str(j))]
 
-  for k in range(1,bracket_count+1):
-    start = find_nth(glycan, '[', k) + 1
-    #checks whether glycan continues after branch
-    if bool(re.search("[\]][^\[]+[\(]", glycan[start:])):
-      #checks for double branches and removes second branch
-      if bool(re.search('\]\[', glycan[start:])):
-        glycan_part = re.sub("[\[].*?[\]]", "", glycan[start:])
-        end = re.search("[\]].*?[\(]", glycan_part).span()[1] - 1
-        parts.append(glycan_part[:end].replace(']',''))
-      else:
-        end = re.search("[\]].*?[\(]", glycan[start:]).span()[1] + start -1
-        parts.append(glycan[start:end].replace(']',''))
-    else:
-      if bool(re.search('\]\[', glycan[start:])):
-        glycan_part = re.sub("[\[].*?[\]]", "", glycan[start:])
-        end = len(glycan_part)
-        parts.append(glycan_part[:end].replace(']',''))
-      else:
-        end = len(glycan)
-        parts.append(glycan[start:end].replace(']',''))
-  
-  try:
-    for bb in branchbranch:
-      parts.append(bb)
-  except:
-    pass
-
-  parts = min_process_glycans(parts)
-  parts_lengths = [len(j) for j in parts]
-  parts_tokenized = [string_to_labels(k, libr) for k in parts]
-  parts_tokenized = [parts_tokenized[0]] + [parts_tokenized[k][:-1] for k in range(1,len(parts_tokenized))]
-  parts_tokenized = [item for sublist in parts_tokenized for item in sublist]
-  
-  range_list = list(range(len([item for sublist in parts for item in sublist])))
-  init = 0
-  parts_positions = []
-  for k in parts_lengths:
-    parts_positions.append(range_list[init:init+k])
-    init += k
-
-  for j in range(1,len(parts_positions)-len(branchbranch)):
-    parts_positions[j][-1] = position[j-1]
-  for j in range(1, len(parts_positions)):
-    try:
-      for z in range(j+1,len(parts_positions)):
-        parts_positions[z][:-1] = [o-1 for o in parts_positions[z][:-1]]
-    except:
-      pass
-  try:
-    for i,j in enumerate(range(len(parts_positions)-len(branchbranch), len(parts_positions))):
-      parts_positions[j][-1] = parts_positions[b_counts[i]][position_bb[i]]
-  except:
-    pass
-
-  pairs = []
-  for i in parts_positions:
-    pairs.append([(i[m],i[m+1]) for m in range(0,len(i)-1)])
-  pairs = list(zip(*[item for sublist in pairs for item in sublist]))
-  return parts_tokenized, pairs
+        #immediately adjacent residues
+        if evaluate_adjacency(glycan_part, adjustment):
+          adj_matrix[k,j] = 1
+          continue
+        #adjacent residues separated by branches in the string
+        if len(bracket_removal(glycan_part)) <= 2+adjustment:
+          glycan_part = bracket_removal(glycan_part)
+          if evaluate_adjacency(glycan_part, adjustment):
+                adj_matrix[k,j] = 1
+                continue  
+  return mask_dic, adj_matrix
 
 def categorical_node_match_wildcard(attr, default, wildcard_list):
   if isinstance(attr, str):
@@ -307,21 +270,20 @@ def glycan_to_nxGraph(glycan, libr = None,
   """
   if libr is None:
     libr = lib
-  glycan_graph = glycan_to_graph(glycan, libr = libr)
-  if len(glycan_graph[1]) > 0:
-    edgelist = list(zip(glycan_graph[1][0], glycan_graph[1][1]))
-    g1 = nx.from_edgelist(edgelist)
+  node_dict, adj_matrix = glycan_to_graph(glycan)
+  if len(node_dict) > 1:
+    g1 = nx.from_numpy_matrix(adj_matrix)
   else:
     g1 = nx.Graph()  
     g1.add_node(0)
-  nx.set_node_attributes(g1, {k:glycan_graph[0][k] for k in range(len(glycan_graph[0]))},'labels')
-  nx.set_node_attributes(g1, {k:libr[glycan_graph[0][k]] for k in range(len(glycan_graph[0]))},'string_labels')
+  nx.set_node_attributes(g1, {k:libr.index(node_dict[k]) for k in range(len(node_dict))}, 'labels')
+  nx.set_node_attributes(g1, {k:node_dict[k] for k in range(len(node_dict))}, 'string_labels')
   if termini == 'ignore':
     pass
   elif termini == 'calc':
-    nx.set_node_attributes(g1, {k:'terminal' if g1.degree[k] == 1 else 'internal' for k in range(len(glycan_graph[0]))}, 'termini')
+    nx.set_node_attributes(g1, {k:'terminal' if g1.degree[k] == 1 else 'internal' for k in g1.nodes()}, 'termini')
   elif termini == 'provided':
-    nx.set_node_attributes(g1, {k:j for k,j in zip(range(len(glycan_graph[0])), termini_list)}, 'termini')
+    nx.set_node_attributes(g1, {k:j for k,j in zip(g1.nodes(), termini_list)}, 'termini')
   return g1
 
 def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'network'):
@@ -486,104 +448,49 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     feat_dic = {col_names[k]:features[k] for k in range(len(features))}
     return pd.DataFrame(feat_dic, index = [glycan])
 
-def branch_crawl(starting_node, main_chain_connect, graph):
-  """recursive function to ascertain branch length and collect all nodes\n
-  | Arguments:
-  | :-
-  | starting_node (int): first node of the branch
-  | main_chain_connect (int): main chain node to which branch is connected
-  | graph (networkx object): glycan graph\n
-  | Returns:
-  | :-
-  | Returns all nodes of the branch in the correct order
-  """
-  break_cond = True
-  node_pool = [starting_node]
-  node = starting_node
-  while break_cond:
-    try:
-      temp = [k for k in list(graph.edges()) if (node in k) and (k != tuple(sorted([node,main_chain_connect])))]
-      temp = [k for j in temp for k in j if k not in node_pool][0]
-      node_pool.append(temp)
-      node = temp
-    except:
-      break_cond = False
-  return list(sorted(node_pool))
-
-def graph_to_string(graph, libr = None):
+def graph_to_string(graph):
   """converts glycan graph back to IUPAC-condensed format\n
   | Arguments:
   | :-
-  | graph (networkx object): glycan graph, works with branched glycans
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | graph (networkx object): glycan graph, works with most glycans. Will often not properly format repeat glycans, e.g., xyloglucan etc\n
   | Returns:
   | :-
   | Returns glycan in IUPAC-condensed format (string)
   """
-  if libr is None:
-    libr = lib
-  if len(graph.nodes()) == 1:
-    return nx.get_node_attributes(graph, 'string_labels')[0]
-  diffs = [k[1]-k[0] for k in list(graph.edges())]
-  if np.max(diffs) > 1:
-    branch_branch_pool = []
-    branch_idx = np.where([j > 1 for j in diffs])[0].tolist()
-    branch_nodes = [list(graph.edges())[k][0] for k in branch_idx]
-    branch = [list(graph.edges())[k][1] for k in branch_idx]
-    branch_pool = [branch_crawl(branch[k], branch_nodes[k], graph) for k in range(len(branch))]
-    branch_branch_nodes = [k for k in branch_nodes if k in unwrap(branch_pool)]
-    if len(branch_branch_nodes) > 0:
-      branch_branch_start = []
-      for j in branch_branch_nodes:
-        branch_branch = [list(graph.edges())[k][1] for k in range(len(list(graph.edges()))) if j in list(graph.edges())[k]]
-        branch_branch_start.append(np.max([k for k in branch_branch if k!=j]))
-      branch_branch_pool = [branch_crawl(branch_branch_start[k], branch_branch_nodes[k], graph) for k in range(len(branch_branch_start))]
-      branch_branch = [[list(nx.get_node_attributes(graph, 'string_labels').values())[j] for j in k] for k in branch_branch_pool]
-      branch_branch = [[j for j in k] for k in branch_branch]
-      branch_branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch_branch]
-    else:
-      branch_branch_pool = []
-    branch = [[list(nx.get_node_attributes(graph, 'string_labels').values())[j] for j in k] for k in branch_pool if k not in branch_branch_pool]
-    branch = [[j for j in k] for k in branch]
-    branch = ["".join([k[j] if (j % 2) == 0 else '('+k[j]+')' for j in range(len(k))]) for k in branch]
-  else:
-    branch_pool = []
-    branch_branch_pool = []
-  glycan_motif = [list(nx.get_node_attributes(graph, 'string_labels').values())[k] for k in range(len(graph.nodes)) if k not in unwrap(branch_pool)]
-  main_len = len(glycan_motif)
-  if len(branch_pool) > 0:
-    counter = 0
-    for k in range(len(branch)):
-      temp = min_process_glycans([branch[k]])[0]
-      temp = [m for m in temp if len(m) > 0]
-      if branch[k].count('(')>1:
-        temp = ['[' + temp[0]] + temp[1:-1] + [temp[-1]+']']
-      else:
-        temp = ['[' + temp[0], temp[-1]+']']
-      glycan_motif = glycan_motif[:branch_nodes[k]+counter] + temp + glycan_motif[branch_nodes[k]+counter:]
-      counter += len(temp)
-  if len(branch_branch_pool) > 0:
-    start_idxs = []
-    for k in range(len(branch_branch_nodes)):
-      running_idx = main_len
-      for i in range(sum(['[' in j for j in glycan_motif])):
-        opened = np.where(['[' in j for j in glycan_motif])[0].tolist()[i]
-        closed = np.where([']' in j for j in glycan_motif])[0].tolist()[i]
-        prev_running_idx = running_idx
-        running_idx += len(glycan_motif[opened:closed+1])
-        if running_idx > branch_branch_nodes[k]:
-          start_idx = i
-          break
-      start_idx = np.where(['[' in j for j in glycan_motif])[0].tolist()[start_idx]
-      branch_progress = prev_running_idx-main_len
-      start_idxs.append(start_idx+branch_branch_nodes[k]-(main_len+branch_progress))
-    for k in range(len(start_idxs)):
-      glycan_motif.insert(np.max([start_idxs[k]+k, 0]), '['+branch_branch[k]+']')
-  glycan_motif = "".join([glycan_motif[k] if not ((glycan_motif[k].startswith('a')) or (glycan_motif[k].startswith('b')) or (glycan_motif[k].startswith('z')) or (re.match('^[0-9]+(-[0-9]+)+$', glycan_motif[k]))) \
-                          else '('+glycan_motif[k]+')' for k in range(len(glycan_motif))])
-  if '])' in glycan_motif:
-    glycan_motif = glycan_motif.replace('])', ')]')
-  return glycan_motif
+  node_labels = nx.get_node_attributes(graph, 'string_labels')
+  edges = graph.edges()
+  branch_points = [e[1] for e in edges if abs(e[0]-e[1]) > 1]
+  multi_branch_points = list(set([b for b in branch_points if branch_points.count(b) > 1]))
+
+  #note if a branch separates edge-neighbors
+  skeleton = [str(k)+'[' if (k,k+1) not in edges else str(k) for k in node_labels.keys()]
+  #note if a monosaccharide is a bona fide branch point
+  skeleton = [']'+k if int(k.replace('[','')) in branch_points else k for k in skeleton]
+  #add branch delimiter to multi-branch occasions, e.g., GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)*]*[Gal(b1-4)GlcNAc(b1-6)]Man
+  for k in range(len(skeleton)):
+    if '[' in skeleton[k] and any([x in multi_branch_points for x in graph.neighbors(k)]):
+      mb = [x for x in graph.neighbors(k) if x in multi_branch_points][0]
+      mb_e = [e for e in edges if mb in e]
+      if k != min([e[0] for e in mb_e]):
+        skeleton_part = ''.join(skeleton[:k])
+        if np.argmax([skeleton_part.rfind(']'), skeleton_part.rfind('[')]) == 1:
+          skeleton[k] = skeleton[k][:-1]+']'+skeleton[k][-1] 
+
+  #combine the skeleton, format, and map to the monosaccharides/linkages
+  glycan = '('.join(skeleton)[:-1]
+  glycan = re.sub('(\([^\()]*)\(', r'\1)', glycan)
+  glycan = glycan.replace('[)', ')[')
+  glycan = glycan.replace('])', ')]')
+  glycan = glycan.replace(']]', ']')
+  for k,j in dict(sorted(node_labels.items(), reverse = True)).items():
+    if k != 0 and k != len(node_labels)-1:
+      if j[0].isdigit():
+        j = '_' + j
+      glycan = re.sub('([^0-9a-zA-Z\-,])%s([^0-9a-zA-Z\-,])' % str(k), r'\1%s\2' % j, glycan)
+  glycan = node_labels[0]+glycan[1:]
+  glycan = max(glycan[:glycan.rfind(')')+1], glycan[:glycan.rfind(']')+1]) + node_labels[len(node_labels)-1]
+  glycan = glycan.replace('_', '')
+  return glycan
 
 def try_string_conversion(graph, libr = None):
   """check whether glycan graph describes a valid glycan\n
@@ -598,9 +505,9 @@ def try_string_conversion(graph, libr = None):
   if libr is None:
     libr = lib
   try:
-    temp = graph_to_string(graph, libr = libr)
+    temp = graph_to_string(graph)
     temp = glycan_to_nxGraph(temp, libr = libr)
-    return graph_to_string(temp, libr = libr)
+    return graph_to_string(temp)
   except:
     return None
 
