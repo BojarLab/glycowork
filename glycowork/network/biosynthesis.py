@@ -470,14 +470,14 @@ def create_neighbors(ggraph, libr = None, min_size = 1):
     terminal_nodes = [k for k in ggraph.nodes() if ggraph.degree(k) == 1]
     terminal_pairs = [[k,list(ggraph.neighbors(k))[0]] for k in terminal_nodes]
     ggraph_nb = [copy.deepcopy(ggraph) for k in range(len(terminal_pairs))]
-  for k in range(len(terminal_pairs)):
-    ggraph_nb[k].remove_nodes_from(terminal_pairs[k])
+    for k in range(len(terminal_pairs)):
+      ggraph_nb[k].remove_nodes_from(terminal_pairs[k])
   for k in range(len(ggraph_nb)):
     if list(ggraph_nb[k].nodes())[0] == 2:
       ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {j:j-2 for j in ggraph_nb[k].nodes()})
     if any([j not in list(ggraph_nb[k].nodes()) for j in range(len(ggraph_nb[k].nodes()))]):
       which = np.min(np.where([j not in ggraph_nb[k].nodes() for j in range(len(ggraph_nb[k].nodes()))])[0].tolist())
-      diff = len(ggraph_nb[k].nodes()) - which
+      diff = len(ggraph_nb[k].nodes()) - which - 1
       current_nodes = list(ggraph_nb[k].nodes())
       ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {current_nodes[m]:current_nodes[m]-diff for m in range(which, len(current_nodes))})
   ggraph_nb = [j for j in ggraph_nb if sum([nx.is_isomorphic(j, i, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr))) for i in ggraph_nb]) <= 1]
