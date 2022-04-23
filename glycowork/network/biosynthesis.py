@@ -182,9 +182,13 @@ def find_diff(glycan_a, glycan_b, libr = None):
       larger_graph.remove(k)
     except:
       larger_graph = ['dis', 'regard']
+  if len(larger_graph) > 2:
+    return 'disregard'
   if subgraph_isomorphism(ggraphs[np.argmax(lens)], ggraphs[np.argmin(lens)], libr = libr):
     diff = (larger_graph[0] + "(" + larger_graph[1] + ")")
     if 'S(' in diff or 'P(' in diff:
+      return 'disregard'
+    elif diff is None:
       return 'disregard'
     else:
       return diff
@@ -319,6 +323,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
                          virtual_nodes[virtual_graphs.index(k[1])]] for k in isomeric_graphs]
       to_cut = [choose_correct_isoform(k, reverse = True)[0] for k in isomeric_nodes]
       network.remove_nodes_from(to_cut)
+  network.remove_edges_from(nx.selfloop_edges(network))
   #directed or undirected network
   if directed:
     network = make_network_directed(network)
@@ -473,13 +478,8 @@ def create_neighbors(ggraph, libr = None, min_size = 1):
     for k in range(len(terminal_pairs)):
       ggraph_nb[k].remove_nodes_from(terminal_pairs[k])
   for k in range(len(ggraph_nb)):
-    if list(ggraph_nb[k].nodes())[0] == 2:
-      ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {j:j-2 for j in ggraph_nb[k].nodes()})
-    if any([j not in list(ggraph_nb[k].nodes()) for j in range(len(ggraph_nb[k].nodes()))]):
-      which = np.min(np.where([j not in ggraph_nb[k].nodes() for j in range(len(ggraph_nb[k].nodes()))])[0].tolist())
-      diff = len(ggraph_nb[k].nodes()) - which - 1
-      current_nodes = list(ggraph_nb[k].nodes())
-      ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {current_nodes[m]:current_nodes[m]-diff for m in range(which, len(current_nodes))})
+    node_list = list(ggraph_nb[k].nodes())
+    ggraph_nb[k] = nx.relabel_nodes(ggraph_nb[k], {node_list[m]:m for m in range(len(node_list))})
   ggraph_nb = [j for j in ggraph_nb if sum([nx.is_isomorphic(j, i, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr))) for i in ggraph_nb]) <= 1]
   return ggraph_nb
 
