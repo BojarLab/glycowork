@@ -252,23 +252,6 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   else:
     return pd.concat(shopping_cart, axis = 1)
 
-def pretend_connect(glycoletter_list):
-  """makes all permutations of the list of glycoletters\n
-  | Arguments:
-  | :-
-  | glycoletter_list (list): list of monosaccharides or linkages in IUPAC-condensed\n
-  | Returns:
-  | :-                               
-  | Returns a list of connected glycoletters
-  """
-  glycoletter_list = ['('+k+')' if k in linkages else k for k in glycoletter_list]
-  pool = []
-  for k in list(itertools.permutations(glycoletter_list)):
-    glycan = "".join(k)
-    if glycan[0]!='(' and glycan[-1]!=')':
-      pool.append(glycan)
-  return pool
-
 def get_k_saccharides(glycan, libr = None, k = 3):
   """function to retrieve k-saccharides (default:trisaccharides) occurring in a glycan\n
   | Arguments:
@@ -282,21 +265,22 @@ def get_k_saccharides(glycan, libr = None, k = 3):
   """
   if libr is None:
     libr = lib
-  actual_k = k + (k-1)
+  actual_k = k + (k-2)
   ggraph = glycan_to_nxGraph(glycan, libr = libr)
+  if len(ggraph.nodes()) < actual_k:
+    return []
+  nodeDict = dict(ggraph.nodes(data = True))
   out = []
-  for nodes in itertools.combinations(list(ggraph.nodes()), actual_k):
-    sub_g = ggraph.subgraph(nodes)
+  for edges in itertools.combinations(ggraph.edges(), actual_k):
+    sub_g = nx.from_edgelist(edges)
     if nx.is_connected(sub_g):
-      pool = pretend_connect(list(nx.get_node_attributes(sub_g, 'string_labels').values()))
-      for p in pool:
-        try:
-          if subgraph_isomorphism(ggraph, p, libr = libr):
-            if not any([compare_glycans(p, j, libr = libr) for j in out]):
-              out.append(p)
-        except:
-          pass
+      mapped_edges = [(nodeDict[k[0]]['string_labels'],nodeDict[k[1]]['string_labels']) for k in edges]
+      if mapped_edges[0][0][0] not in ['a', 'b', 'z']:
+        if all([mapped_edges[k][1] == mapped_edges[k+1][0] for k in range(len(mapped_edges)-1)]):
+          out_saccharide = list(mapped_edges[0]) + [m[1] for m in mapped_edges[1:]]
+          out_saccharide = '('.join(out_saccharide)
+          out_saccharide = re.sub('(\([^\()]*)\(', r'\1)', out_saccharide)
+          if subgraph_isomorphism(ggraph, out_saccharide, libr = libr):
+            out.append(out_saccharide)
   out = list(set(out))
-  out = [k.replace('GlcNAc(b1-4)GlcNAc(a1-6)Fuc', 'GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc') for k in out]
-  out = [k.replace('Man(a1-3)Man(a1-6)Man', 'Man(a1-3)[Man(a1-6)]Man') for k in out]
   return out

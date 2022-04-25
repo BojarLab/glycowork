@@ -273,6 +273,8 @@ def glycan_to_nxGraph(glycan, libr = None,
   node_dict, adj_matrix = glycan_to_graph(glycan)
   if len(node_dict) > 1:
     g1 = nx.from_numpy_matrix(adj_matrix)
+    for n1, n2, d in g1.edges(data=True):
+      del d['weight']
   else:
     g1 = nx.Graph()  
     g1.add_node(0)
