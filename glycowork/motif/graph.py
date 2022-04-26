@@ -478,28 +478,31 @@ def graph_to_string(graph):
   node_labels = nx.get_node_attributes(graph, 'string_labels')
   edges = graph.edges()
   branch_points = [e[1] for e in edges if abs(e[0]-e[1]) > 1]
-  multi_branch_points = list(set([b for b in branch_points if branch_points.count(b) > 1]))
 
-  #note if a branch separates edge-neighbors
-  skeleton = [str(k)+'[' if (k,k+1) not in edges else str(k) for k in node_labels.keys()]
   #note if a monosaccharide is a bona fide branch point
-  skeleton = [']'+k if int(k.replace('[','')) in branch_points else k for k in skeleton]
-  #add branch delimiter to multi-branch occasions, e.g., GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)*]*[Gal(b1-4)GlcNAc(b1-6)]Man
+  skeleton = [']'+str(k) if k in branch_points else str(k) for k in node_labels.keys()]
+  
   for k in range(len(skeleton)):
-    if '[' in skeleton[k] and any([x in multi_branch_points for x in graph.neighbors(k)]):
-      mb = [x for x in graph.neighbors(k) if x in multi_branch_points][0]
-      mb_e = [e for e in edges if mb in e]
-      if k != min([e[0] for e in mb_e]):
-        skeleton_part = ''.join(skeleton[:k])
-        if np.argmax([skeleton_part.rfind(']'), skeleton_part.rfind('[')]) == 1:
-          skeleton[k] = skeleton[k][:-1]+']'+skeleton[k][-1] 
+    #note whether a multibranch situation exists
+    if graph.degree()[k] == 4:
+      idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
+      skeleton[idx-1] = skeleton[idx-1] + ']'
+    #note whether a branch separates neighbors
+    elif graph.degree()[k] > 2:
+      skeleton[k] = ']' + skeleton[k]
+    #note whether a branch starts
+    elif graph.degree()[k] == 1 and k > 0:
+      skeleton[k] = '[' + skeleton[k]
 
   #combine the skeleton, format, and map to the monosaccharides/linkages
   glycan = '('.join(skeleton)[:-1]
   glycan = re.sub('(\([^\()]*)\(', r'\1)', glycan)
   glycan = glycan.replace('[)', ')[')
   glycan = glycan.replace('])', ')]')
-  glycan = glycan.replace(']]', ']')
+  while ']]' in glycan:
+    glycan = glycan.replace(']]', ']')
+  while '[[' in glycan:
+    glycan = glycan.replace('[[', '[')
   for k,j in dict(sorted(node_labels.items(), reverse = True)).items():
     if k != 0 and k != len(node_labels)-1:
       if j[0].isdigit():
