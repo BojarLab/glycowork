@@ -46,8 +46,10 @@ def evaluate_adjacency(glycan_part, adjustment):
   | :-
   | Returns True if adjacent and False if not
   """
+  #check whether glycoletters are adjacent in the main chain
   if any([glycan_part[-1] == '(', glycan_part[-1] == ')']) and len(glycan_part) < 2+adjustment:
     return True
+  #check whether glycoletters are connected but separated by a branch delimiter
   elif glycan_part[-1] == ']':
     if any([glycan_part[:-1][-1] == '(', glycan_part[:-1][-1] == ')']) and len(glycan_part[:-1]) < 2+adjustment:
       return True
@@ -78,20 +80,26 @@ def glycan_to_graph(glycan):
   | (1) a dictionary of node : monosaccharide/linkage
   | (2) an adjacency matrix of size glycoletter X glycoletter
   """
+  #get glycoletters
   glycan_proc = min_process_glycans([glycan])[0]
+  #map glycoletters to integers
   mask_dic = {k:glycan_proc[k] for k in range(len(glycan_proc))}
   for k,j in mask_dic.items():
     glycan = glycan.replace(j, str(k), 1)
+  #initialize adjacency matrix
   adj_matrix = np.zeros((len(glycan_proc), len(glycan_proc)), dtype = int)
+  #loop through each pair of glycoletters
   for k in range(len(mask_dic)):
     for j in range(len(mask_dic)):
       if k < j:
+        #integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
         if k >= 100:
           adjustment = 2
         elif k >= 10:
           adjustment = 1
         else:
           adjustment = 0
+        #subset the part of the glycan that is bookended by k and j
         glycan_part = glycan[glycan.index(str(k))+1:glycan.index(str(j))]
 
         #immediately adjacent residues
@@ -153,6 +161,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   if libr is None:
     libr = lib
   if isinstance(glycan_a, str):
+    #check whether glycan_a and glycan_b have the same length
     if len(set([len(k) for k in min_process_glycans([glycan_a, glycan_b])])) == 1:
       g1 = glycan_to_nxGraph(glycan_a, libr = libr)
       g2 = glycan_to_nxGraph(glycan_b, libr = libr)
@@ -165,6 +174,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
     if wildcards:
       return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
     else:
+      #first check whether components of both glycan graphs are identical, then check graph isomorphism (costly)
       if sorted(''.join(nx.get_node_attributes(g1, "string_labels").values())) == sorted(''.join(nx.get_node_attributes(g2, "string_labels").values())):
         return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
       else:
@@ -209,6 +219,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     else:
       g2 = glycan_to_nxGraph(motif, libr = libr)
 
+  #check whether length of glycan is larger or equal than the motif
   if len(g1.nodes) >= len(g2.nodes): 
   
     if extra == 'ignore':
@@ -229,7 +240,8 @@ def subgraph_isomorphism(glycan, motif, libr = None,
           return 0
         else:
           return False
-
+        
+    #count motif occurrence
     if count:
       counts = 0
       while graph_pair.subgraph_is_isomorphic():
@@ -270,14 +282,18 @@ def glycan_to_nxGraph(glycan, libr = None,
   """
   if libr is None:
     libr = lib
+  #map glycan string to node labels and adjacency matrix
   node_dict, adj_matrix = glycan_to_graph(glycan)
+  #convert adjacency matrix to networkx graph
   if len(node_dict) > 1:
     g1 = nx.from_numpy_matrix(adj_matrix)
+    #needed for compatibility with monosaccharide-only graphs (size = 1)
     for n1, n2, d in g1.edges(data=True):
       del d['weight']
   else:
     g1 = nx.Graph()  
     g1.add_node(0)
+  #add node labels
   nx.set_node_attributes(g1, {k:libr.index(node_dict[k]) for k in range(len(node_dict))}, 'labels')
   nx.set_node_attributes(g1, {k:node_dict[k] for k in range(len(node_dict))}, 'string_labels')
   if termini == 'ignore':

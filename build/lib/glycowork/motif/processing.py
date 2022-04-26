@@ -1,13 +1,7 @@
 import pandas as pd
 import numpy as np
 import random
-
-linkages = ['a1-1','a1-2','a1-3','a1-4','a1-5','a1-6','a1-7','a1-8','a1-9','a1-11','a1-z','a2-1','a2-2','a2-3','a2-4','a2-5','a2-6','a2-7','a2-8','a2-9','a2-11','b1-1','b1-2','b1-3','b1-4','b1-5','b1-6','b1-7','b1-8','b1-9','b1-z','b2-1','b2-2','b2-3','b2-4','b2-5','b2-6','b2-7','b2-8','z1-z','z2-z','z1-2','z1-3','z1-4','z1-6','z2-3','z2-6','z2-8']
-
-def unwrap(nested_list):
-  """converts a nested list into a flat list"""
-  out = [item for sublist in nested_list for item in sublist]
-  return out
+from glycowork.glycan_data.loader import unwrap, linkages
 
 def small_motif_find(glycan):
   """processes IUPACcondensed glycan sequence (string) without splitting it into glycowords\n
@@ -18,15 +12,8 @@ def small_motif_find(glycan):
   | :-
   | Returns string in which glycoletters are separated by asterisks
   """
-  b = glycan.split('(')
-  b = [k.split(')') for k in b]
-  b = [item for sublist in b for item in sublist]
-  b = [k.strip('[') for k in b]
-  b = [k.strip(']') for k in b]
-  b = [k.replace('[', '') for k in b]
-  b = [k.replace(']', '') for k in b]
-  b = '*'.join(b)
-  return b
+  b = glycan.replace('[', '').replace(']', '').replace(')', '(').split('(')
+  return '*'.join(b)
 
 def min_process_glycans(glycan_list):
   """converts list of glycans into a nested lists of glycoletters\n
@@ -50,8 +37,11 @@ def get_lib(glycan_list):
   | :-
   | Returns sorted list of unique glycoletters (strings) in glycan_list
   """
+  #convert to glycoletters
   proc = min_process_glycans(glycan_list)
+  #flatten nested lists
   lib = unwrap(proc)
+  #get unique vocab
   lib = list(sorted(list(set(lib))))
   return lib
 
@@ -81,7 +71,9 @@ def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
   | :-
   | Returns dataframe in which some glycoletters (from wildcard_list) have been replaced with wildcard_name
   """
+  ###this function probably will be deprecated at some point
   added_rows = []
+  #randomly choose glycans and replace glycoletters with wildcards
   for k in range(len(df)):
     temp = df[col].values.tolist()[k]
     for j in wildcard_list:
@@ -89,6 +81,7 @@ def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
         if random.uniform(0, 1) < r:
           added_rows.append([temp.replace(j, wildcard_name)] + df.iloc[k, 1:].values.tolist())
   added_rows = pd.DataFrame(added_rows, columns = df.columns.values.tolist())
+  #append wildcard-modified glycans and their labels to original dataframe
   df_out = pd.concat([df, added_rows], axis = 0, ignore_index = True)
   return df_out
 
@@ -105,29 +98,11 @@ def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species
   """
   glycans = list(sorted(list(set(df[glycan_col_name].values.tolist()))))
   species = list(sorted(list(set(df[label_col_name].values.tolist()))))
+  #get a count matrix for each rank - glycan combination
   mat_dic = {k:[df[df[label_col_name] == j][glycan_col_name].values.tolist().count(k) for j in species] for k in glycans}
   mat = pd.DataFrame(mat_dic)
   mat.index = species
   return mat
-
-def check_nomenclature(glycan):
-  """checks whether the proposed glycan has the correct nomenclature for glycowork\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format
-  """
-  if not isinstance(glycan, str):
-    print("You need to format your glycan sequences as strings.")
-    return
-  if '?' in glycan:
-    print("You're likely using ? somewhere, to indicate linkage uncertainty. Glycowork uses 'z' to indicate linkage uncertainty")
-    return
-  if '=' in glycan:
-    print("Could it be that you're using WURCS? Please convert to IUPACcondensed for using glycowork.")
-  if 'RES' in glycan:
-    print("Could it be that you're using GlycoCT? Please convert to IUPACcondensed for using glycowork.")
-    
-  return True
 
 def choose_correct_isoform(glycans, reverse = False):
   """given a list of glycan branch isomers, this function returns the correct isomer\n
@@ -139,8 +114,10 @@ def choose_correct_isoform(glycans, reverse = False):
   | :-
   | Returns the correct isomer as a string (if reverse=False, otherwise it returns a list of strings)
   """
+  #get what is before the first branch & its length for each glycan
   prefix = min_process_glycans([glyc[:glyc.index('[')] for glyc in glycans])
   prefix_len = [len(k) for k in prefix]
+  #choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(set(prefix_len)) == 1:
     branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'z' and k[-2][-1] != 'd' else 10 for k in prefix]
     correct_isoform = glycans[np.argmin(branch_endings)]

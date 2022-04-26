@@ -19,6 +19,7 @@ def get_insight(glycan, libr = None, motifs = None):
     if motifs is None:
         motifs = motif_list
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
+    #find glycan as string or as graph in df_glycan
     if glycan in df_glycan.glycan.values.tolist():
         idx = df_glycan.glycan.values.tolist().index(glycan)
     else:       

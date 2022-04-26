@@ -1,12 +1,14 @@
-from glycowork.glycan_data.loader import lib, df_glysum, df_glycan
+from glycowork.glycan_data.loader import lib, df_glycan
 from glycowork.motif.processing import small_motif_find
 try:
     import numpypy as np
 except ImportError:
     import numpy as np
 import operator
+import pandas as pd
 from abc import ABCMeta
 from abc import abstractmethod
+import pkg_resources
 
 GAP_ELEMENT = '-'
 GAP_CODE = 0
@@ -34,7 +36,9 @@ def pairwiseAlign(query, corpus = None, n = 5, vocab = None,
   if vocab is None:
       vocab = lib
   if submat is None:
-      submat = df_glysum
+      io = pkg_resources.resource_stream(__name__, "df_glysum_v5.csv")
+      submat = pd.read_csv(io)
+      submat = submat.iloc[:,1:]
   if n == 0:
     n = len(corpus)
   seqs = corpus[col].values.tolist()
