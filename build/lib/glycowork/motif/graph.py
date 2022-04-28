@@ -1,4 +1,5 @@
 import re
+import copy
 import networkx as nx
 from glycowork.glycan_data.loader import lib, unwrap, find_nth
 from glycowork.motif.processing import min_process_glycans
@@ -213,7 +214,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
       g1 = glycan_to_nxGraph(glycan, libr = libr)
       g2 = glycan_to_nxGraph(motif, libr = libr)
   else:
-    g1 = glycan
+    g1 = copy.deepcopy(glycan)
     if extra == 'termini':
       g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided', termini_list = termini_list)
     else:
