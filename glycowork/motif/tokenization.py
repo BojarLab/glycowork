@@ -9,7 +9,7 @@ from sklearn.cluster import DBSCAN
 
 from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, df_species, Hex, dHex, HexNAc, Sia, linkages
 from glycowork.motif.processing import small_motif_find, min_process_glycans, choose_correct_isoform
-from glycowork.motif.graph import compare_glycans
+from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 from glycowork.motif.annotate import annotate_dataset, find_isomorphs
 
 chars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T',
@@ -848,3 +848,79 @@ def check_nomenclature(glycan):
     print("Could it be that you're using GlycoCT? Please convert to IUPACcondensed for using glycowork.")
   print("Didn't spot an obvious error but this is not a guarantee that it will work.")
   return canonicalize_iupac(glycan)
+
+def map_to_basic(glycoletter):
+  """given a monosaccharide/linkage, try to map it to the corresponding base monosaccharide/linkage\n
+  | Arguments:
+  | :-
+  | glycoletter (string): monosaccharide or linkage\n
+  | Returns:
+  | :-
+  | Returns the base monosaccharide/linkage or the original glycoletter, if it cannot be mapped
+  """
+  if glycoletter in Hex:
+    return 'Hex'
+  elif glycoletter in dHex:
+    return 'dHex'
+  elif glycoletter in HexNAc:
+    return 'HexNAc'
+  elif glycoletter in linkages:
+    return 'z1-z'
+  else:
+    return glycoletter
+
+def structure_to_basic(glycan, libr = None):
+  """converts a monosaccharide- and linkage-defined glycan structure to the base topology\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed nomenclature
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns the glycan topology as a string
+  """
+  if libr is None:
+    libr = lib
+  ggraph = glycan_to_nxGraph(glycan, libr = libr)
+  nodeDict = dict(ggraph.nodes(data = True))
+  temp = {k:map_to_basic(nodeDict[k]['string_labels']) for k in ggraph.nodes}
+  nx.set_node_attributes(ggraph, temp, 'string_labels')
+  return graph_to_string(ggraph)
+
+def glycan_to_composition(glycan, libr = None):
+  """maps glycan to its composition\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns a dictionary of form "monosaccharide" : count
+  """
+  if libr is None:
+    libr = lib
+  glycan = structure_to_basic(glycan, libr = libr)
+  composition = Counter(min_process_glycans([glycan])[0])
+  del composition['z1-z']
+  return dict(composition)
+
+def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized',
+                               libr = None):
+  """given a glycan, calculates it's theoretical mass\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
+  | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns the theoretical mass of input glycan
+  """
+  if libr is None:
+    libr = lib
+  idx = sample_prep + '_' + mass_value
+  mass_dict = dict(zip(mapping_file.composition, mapping_file[idx]))
+  glycan = structure_to_basic(glycan, libr = libr)
+  theoretical_mass = sum([mass_dict[k] for k in min_process_glycans([glycan])[0] if k != 'z1-z'])+18.0105546
+  return theoretical_mass

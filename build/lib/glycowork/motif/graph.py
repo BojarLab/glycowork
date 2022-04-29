@@ -115,6 +115,52 @@ def glycan_to_graph(glycan):
                 continue  
   return mask_dic, adj_matrix
 
+def glycan_to_nxGraph(glycan, libr = None,
+                      termini = 'ignore', termini_list = None,
+                      override_reducing_end = False):
+  """converts glycans into networkx graphs\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
+  | override_reducing_end (bool): if True, it allows graph generation for glycans ending in a linkage; though the output doesn't work with all downstream functions; default:False\n
+  | Returns:
+  | :-
+  | Returns networkx graph object of glycan
+  """
+  if libr is None:
+    libr = lib
+  #this allows to make glycan graphs of motifs ending in a linkage
+  if override_reducing_end:
+    glycan = glycan + 'Hex'
+  #map glycan string to node labels and adjacency matrix
+  node_dict, adj_matrix = glycan_to_graph(glycan)
+  #convert adjacency matrix to networkx graph
+  if len(node_dict) > 1:
+    g1 = nx.from_numpy_matrix(adj_matrix)
+    #needed for compatibility with monosaccharide-only graphs (size = 1)
+    for n1, n2, d in g1.edges(data = True):
+      del d['weight']
+  else:
+    g1 = nx.Graph()  
+    g1.add_node(0)
+  #remove the helper monosaccharide if used
+  if override_reducing_end:
+    g1.remove_node(len(g1.nodes) - 1)
+    
+  #add node labels
+  nx.set_node_attributes(g1, {k:libr.index(node_dict[k]) for k in range(len(node_dict))}, 'labels')
+  nx.set_node_attributes(g1, {k:node_dict[k] for k in range(len(node_dict))}, 'string_labels')
+  if termini == 'ignore':
+    pass
+  elif termini == 'calc':
+    nx.set_node_attributes(g1, {k:'terminal' if g1.degree[k] == 1 else 'internal' for k in g1.nodes()}, 'termini')
+  elif termini == 'provided':
+    nx.set_node_attributes(g1, {k:j for k,j in zip(g1.nodes(), termini_list)}, 'termini')
+  return g1
+
 def categorical_node_match_wildcard(attr, default, wildcard_list):
   if isinstance(attr, str):
     def match(data1, data2):
@@ -209,16 +255,18 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   if isinstance(glycan, str):
     if extra == 'termini':
       g1 = glycan_to_nxGraph(glycan, libr = libr, termini = 'calc')
-      g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided', termini_list = termini_list)
+      g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided',
+                             termini_list = termini_list, override_reducing_end = True)
     else:
       g1 = glycan_to_nxGraph(glycan, libr = libr)
-      g2 = glycan_to_nxGraph(motif, libr = libr)
+      g2 = glycan_to_nxGraph(motif, libr = libr, override_reducing_end = True)
   else:
     g1 = copy.deepcopy(glycan)
     if extra == 'termini':
-      g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided', termini_list = termini_list)
+      g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided',
+                             termini_list = termini_list, override_reducing_end = True)
     else:
-      g2 = glycan_to_nxGraph(motif, libr = libr)
+      g2 = glycan_to_nxGraph(motif, libr = libr, override_reducing_end = True)
 
   #check whether length of glycan is larger or equal than the motif
   if len(g1.nodes) >= len(g2.nodes): 
@@ -267,43 +315,6 @@ def subgraph_isomorphism(glycan, motif, libr = None,
       return 0
     else:
       return False
-
-def glycan_to_nxGraph(glycan, libr = None,
-                      termini = 'ignore', termini_list = None):
-  """converts glycans into networkx graphs\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
-  | Returns:
-  | :-
-  | Returns networkx graph object of glycan
-  """
-  if libr is None:
-    libr = lib
-  #map glycan string to node labels and adjacency matrix
-  node_dict, adj_matrix = glycan_to_graph(glycan)
-  #convert adjacency matrix to networkx graph
-  if len(node_dict) > 1:
-    g1 = nx.from_numpy_matrix(adj_matrix)
-    #needed for compatibility with monosaccharide-only graphs (size = 1)
-    for n1, n2, d in g1.edges(data=True):
-      del d['weight']
-  else:
-    g1 = nx.Graph()  
-    g1.add_node(0)
-  #add node labels
-  nx.set_node_attributes(g1, {k:libr.index(node_dict[k]) for k in range(len(node_dict))}, 'labels')
-  nx.set_node_attributes(g1, {k:node_dict[k] for k in range(len(node_dict))}, 'string_labels')
-  if termini == 'ignore':
-    pass
-  elif termini == 'calc':
-    nx.set_node_attributes(g1, {k:'terminal' if g1.degree[k] == 1 else 'internal' for k in g1.nodes()}, 'termini')
-  elif termini == 'provided':
-    nx.set_node_attributes(g1, {k:j for k,j in zip(g1.nodes(), termini_list)}, 'termini')
-  return g1
 
 def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'network'):
     """compute graph features of glycan\n
