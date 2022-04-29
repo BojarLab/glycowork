@@ -882,6 +882,8 @@ def structure_to_basic(glycan, libr = None):
   """
   if libr is None:
     libr = lib
+  if glycan[-3:] == '-ol':
+    glycan = glycan[:-3]
   ggraph = glycan_to_nxGraph(glycan, libr = libr)
   nodeDict = dict(ggraph.nodes(data = True))
   temp = {k:map_to_basic(nodeDict[k]['string_labels']) for k in ggraph.nodes}

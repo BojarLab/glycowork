@@ -133,7 +133,7 @@ def glycan_to_nxGraph(glycan, libr = None,
   if libr is None:
     libr = lib
   #this allows to make glycan graphs of motifs ending in a linkage
-  if override_reducing_end:
+  if override_reducing_end and glycan[-1] == ')':
     glycan = glycan + 'Hex'
   #map glycan string to node labels and adjacency matrix
   node_dict, adj_matrix = glycan_to_graph(glycan)
@@ -147,7 +147,7 @@ def glycan_to_nxGraph(glycan, libr = None,
     g1 = nx.Graph()  
     g1.add_node(0)
   #remove the helper monosaccharide if used
-  if override_reducing_end:
+  if override_reducing_end and glycan[-1] == ')':
     g1.remove_node(len(g1.nodes) - 1)
     
   #add node labels
