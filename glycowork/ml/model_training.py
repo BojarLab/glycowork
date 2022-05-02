@@ -127,7 +127,10 @@ def train_model(model, dataloaders, criterion, optimizer,
         except:
             x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
         x = x.to(device)
-        y = y.view(max(batch)+1, -1).to(device)
+        if mode == 'multilabel':
+          y = y.view(max(batch)+1, -1).to(device)
+        else:
+          y = y.to(device)
         edge_index = edge_index.to(device)
         batch = batch.to(device)
         optimizer.zero_grad()

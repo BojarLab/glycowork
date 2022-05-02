@@ -71,12 +71,12 @@ def glytoucan_to_glycan(ids, revert = False):
     | Returns list of either GlyTouCan IDs or glycans in IUPAC-condensed
     """
     if revert:
-        ids = [df_glycan[df_glycan.glycan == k].glytoucan_id.values.tolist()[0] for k in ids]
+        ids = [df_glycan.glytoucan_id.values.tolist()[df_glycan.glycan.values.tolist().index(k)[0]] for k in ids]
         if any([k not in df_glycan.glycan.values.tolist() for k in ids]):
             print('These glycans are not in our database: ' + str([k for k in ids if k not in df_glycan.glycan.values.tolist()]))
         return ids
     else:
-        glycans = [df_glycan[df_glycan.glytoucan_id == k].glycan.values.tolist()[0] if k in df_glycan.glytoucan_id.values.tolist() else k for k in ids]
+        glycans = [df_glycan.glycan.values.tolist()[df_glycan.glytoucan_id.values.tolist().index(k)] if k in df_glycan.glytoucan_id.values.tolist() else k for k in ids]
         if any([k not in df_glycan.glytoucan_id.values.tolist() for k in ids]):
             print('These IDs are not in our database: ' + str([k for k in ids if k not in df_glycan.glytoucan_id.values.tolist()]))
         return glycans
