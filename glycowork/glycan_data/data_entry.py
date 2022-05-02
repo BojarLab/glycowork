@@ -1,7 +1,7 @@
 import networkx as nx
 from glycowork.glycan_data.loader import lib
 from glycowork.motif.processing import check_nomenclature
-from glycowork.motif.graph import glycan_to_graph, glycan_to_nxGraph, compare_glycans, fast_compare_glycans
+from glycowork.motif.graph import glycan_to_graph, glycan_to_nxGraph, compare_glycans
 
 def check_presence(glycan, df, colname = 'target', libr = None,
                    name = None, rank = 'Species', fast = False):
@@ -28,7 +28,7 @@ def check_presence(glycan, df, colname = 'target', libr = None,
         print("This is the best: %s is not in dataset" % name)
     if fast:
       ggraph = glycan_to_nxGraph(glycan, libr = libr)
-      check_all = [fast_compare_glycans(ggraph, k, libr = libr) for k in df.graph.values.tolist()]
+      check_all = [compare_glycans(ggraph, k, libr = libr) for k in df.graph.values.tolist()]
     else:
       check_all = [compare_glycans(glycan, k, libr = libr) for k in df[colname].values.tolist()]
     if any(check_all):

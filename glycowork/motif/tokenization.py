@@ -553,7 +553,7 @@ def condense_composition_matching(matched_composition, libr = None):
   if libr is None:
     libr = lib
   #define uncertainty wildcards
-  wildcards = ['bond']
+  wildcards = ['z1-z', 'z2-z', 'a2-z', 'a1-z', 'b1-z']
   #establish glycan equality given the wildcards
   match_matrix = [[compare_glycans(k, j, libr = libr, wildcards = True,
                                   wildcard_list = [libr.index(w) for w in wildcards]) for j in matched_composition] for k in matched_composition]
@@ -768,9 +768,9 @@ def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkag
   for k in glycans:
     for j in rares[0]:
       if (j in k) and ('-'+j not in k):
-        k = k.replace(j+'(', 'monosaccharide(')
+        k = k.replace(j+'(', 'Monosaccharide(')
         if k.endswith(j):
-          k = re.sub(j+'$', 'monosaccharide', k)
+          k = re.sub(j+'$', 'Monosaccharide', k)
     for m in rares[1]:
       if m in k:
         if m[1] == '1':

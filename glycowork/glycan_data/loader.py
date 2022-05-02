@@ -4,14 +4,14 @@ import ast
 import pickle
 import pkg_resources
 
-io = pkg_resources.resource_stream(__name__, "v5_sugarbase.csv")
+io = pkg_resources.resource_stream(__name__, "v6_sugarbase.csv")
 df_glycan = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
 motif_list = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_binding.csv")
 glycan_binding = pd.read_csv(io)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
-data_path = os.path.join(this_dir, 'lib_v5.pkl')
+data_path = os.path.join(this_dir, 'lib_v6.pkl')
 lib = pickle.load(open(data_path, 'rb'))
 
 #lib = get_lib(list(set(df_glycan.glycan.values.tolist() +
@@ -65,29 +65,37 @@ def reindex(df_new, df_old, out_col, ind_col, inp_col):
   out = [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
   return out
 
-def build_df_species(df):
-  """creates df_species from df_glycan\n
+def build_custom_df(df, kind = 'df_species'):
+  """creates custom df from df_glycan\n
   | Arguments:
   | :-
-  | df (dataframe): df_glycan / sugarbase\n
+  | df (dataframe): df_glycan / sugarbase
+  | kind (string): whether to create 'df_species', 'df_tissue', or 'df_disease' from df_glycan; default:df_species\n
   | Returns:
   | :-
-  | Returns df_species
+  | Returns custom df in the form of one glycan - species/tissue/disease association per row
   """
-  df = df[df.Species.str.len() > 2].reset_index(drop = True)
-  df = df.iloc[:,:10]
+  if kind == 'df_species':
+    cols = ['glycan', 'Species','Genus','Family','Order','Class',
+                   'Phylum','Kingdom','Domain', 'ref']
+  elif kind == 'df_tissue':
+    cols = ['glycan', 'tissue_sample', 'tissue_species', 'tissue_id', 'tissue_ref']
+  elif kind == 'df_disease':
+    cols = ['glycan', 'disease_association', 'disease_sample', 'disease_direction', 'disease_species', 'disease_id', 'disease_ref']
+  else:
+    print("Only df_species, df_tissue, and df_disease are currently possible as input.")
+  df = df[df[cols[1]].str.len() > 2].reset_index(drop = True)
+  df = df.loc[:,cols]
   df.columns = ['target'] + df.columns.values.tolist()[1:]
   df.index = df.target
   df.drop(['target'], axis = 1, inplace = True)
   df = df.applymap(lambda x: ast.literal_eval(x))
   try:
-    df = df.explode(['Species','Genus','Family','Order','Class',
-                   'Phylum','Kingdom','Domain'])
+    df = df.explode(cols[1:])
   except:
     raise ImportError("Seems like you're using pandas<1.3.0; please upgrade to allow for multi-column explode")
-  df = df.applymap(lambda x: x[0] if isinstance(x, list) else x)
   df.reset_index(inplace = True)
-  df = df.sort_values(['Species', 'target'], ascending = [True, True]).reset_index(drop = True)
+  df = df.sort_values([cols[1], 'target'], ascending = [True, True]).reset_index(drop = True)
   return df
 
-df_species = build_df_species(df_glycan)
+df_species = build_custom_df(df_glycan, kind = 'df_species')

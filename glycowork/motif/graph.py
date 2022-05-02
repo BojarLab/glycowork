@@ -164,9 +164,9 @@ def glycan_to_nxGraph(glycan, libr = None,
 def categorical_node_match_wildcard(attr, default, wildcard_list):
   if isinstance(attr, str):
     def match(data1, data2):
-      if data1['labels'] in wildcard_list:
+      if data1['string_labels'] in wildcard_list:
         return True
-      elif data2['labels'] in wildcard_list:
+      elif data2['string_labels'] in wildcard_list:
         return True
       else:
         return data1.get(attr, default) == data2.get(attr, default)
