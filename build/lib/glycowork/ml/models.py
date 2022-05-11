@@ -72,9 +72,9 @@ class SweetNet(torch.nn.Module):
         
         #fully connected part
         x = self.lin1(x)
-        x = self.bn1(self.act1(x))
+        x = self.act1(self.bn1(x))
         x = self.lin2(x)
-        x = self.bn2(self.act2(x))      
+        x = self.act2(self.bn2(x))      
         x = F.dropout(x, p = 0.5, training = self.training)
 
         x = self.lin3(x).squeeze(1)
@@ -99,9 +99,9 @@ class NSequonPred(torch.nn.Module):
         self.bn3 = torch.nn.BatchNorm1d(64)
 
     def forward(self, x):
-      x = self.bn1(F.dropout(F.rrelu(self.fc1(x)), p = 0.2, training = self.training))
-      x = self.bn2(F.dropout(F.rrelu(self.fc2(x)), p = 0.2, training = self.training))
-      x = self.bn3(F.dropout(F.rrelu(self.fc3(x)), p = 0.1, training = self.training))
+      x = F.dropout(F.rrelu(self.bn1(self.fc1(x))), p = 0.2, training = self.training)
+      x = F.dropout(F.rrelu(self.bn2(self.fc2(x))), p = 0.2, training = self.training)
+      x = F.dropout(F.rrelu(self.bn3(self.fc3(x))), p = 0.1, training = self.training)
       x = self.fc4(x)
       return x
 
@@ -189,7 +189,7 @@ class LectinOracle(torch.nn.Module):
     h_n = torch.cat((embedded_prot, x), 1)
     
     #fully connected part
-    h_n = self.bn1(self.act1(self.fc1(h_n)))
+    h_n = self.act1(self.bn1(self.fc1(h_n)))
 
     #1
     x1 = self.fc2(self.dp1(h_n))
@@ -269,12 +269,12 @@ class LectinOracle_flex(torch.nn.Module):
     
   def forward(self, prot, nodes, edge_index, batch, inference = False):
     #ESM-1b mimicking
-    prot = self.bn1(self.act1(self.dp1(self.fc1(prot))))
-    prot = self.bn2(self.act2(self.dp2(self.fc2(prot))))
+    prot = self.dp1(self.act1(self.bn1(self.fc1(prot))))
+    prot = self.dp2(self.act2(self.bn2(self.fc2(prot))))
     prot = self.fc3(prot)
     #fully connected part for the protein
-    embedded_prot = self.bn_prot1(self.act_prot1(self.dp_prot1(self.prot_encoder1(prot))))
-    embedded_prot = self.bn_prot2(self.act_prot2(self.dp_prot2(self.prot_encoder2(embedded_prot))))
+    embedded_prot = self.dp_prot1(self.act_prot1(self.bn_prot1(self.prot_encoder1(prot))))
+    embedded_prot = self.dp_prot2(self.act_prot2(self.bn_prot2(self.prot_encoder2(embedded_prot))))
 
     #getting glycan node features
     x = self.item_embedding(nodes)
@@ -303,7 +303,7 @@ class LectinOracle_flex(torch.nn.Module):
     h_n = torch.cat((embedded_prot, x), 1)
 
     #fully connected part    
-    h_n = self.bn1_n(self.act1_n(self.fc1_n(h_n)))
+    h_n = self.act1_n(self.bn1_n(self.fc1_n(h_n)))
 
     #1
     x1 = self.fc2_n(self.dp1_n(h_n))

@@ -151,7 +151,7 @@ def train_model(model, dataloaders, criterion, optimizer,
             #second forward pass
             disable_running_stats(model)
             try:
-                criterion(model(prot, x, edge_index, batch), y).backward()
+                criterion(model(prot, x, edge_index, batch), y.view(-1,1)).backward()
             except:
                 criterion(model(x, edge_index, batch), y).backward()
             optimizer.second_step(zero_grad = True)
