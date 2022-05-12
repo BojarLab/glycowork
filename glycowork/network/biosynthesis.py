@@ -1100,7 +1100,7 @@ def retrieve_inferred_nodes(network, species = None):
     return {species:inferred_nodes}
 
 def export_network(network, filepath):
-  """converts NetworkX network into files usable by Gephi\n
+  """converts NetworkX network into files usable, e.g., by Cytoscape or Gephi\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
@@ -1113,11 +1113,16 @@ def export_network(network, filepath):
   #generate edge_list
   edge_list = network.edges()
   edge_list = pd.DataFrame(edge_list)
-  edge_list.columns = ['Source', 'Target']
-  edge_labels = nx.get_edge_attributes(network, 'diffs')
-  edge_list['Label'] = [edge_labels[k] for k in network.edges()]
-  edge_list = edge_list.replace('z', '?', regex = True)
-  edge_list.to_csv(filepath + 'edge_list.csv', index = False)
+  if len(edge_list) > 0:
+    edge_list.columns = ['Source', 'Target']
+    edge_labels = nx.get_edge_attributes(network, 'diffs')
+    edge_list['Label'] = [edge_labels[k] for k in network.edges()]
+    edge_list = edge_list.replace('z', '?', regex = True)
+    edge_list.to_csv(filepath + 'edge_list.csv', index = False)
+  else:
+    edge_list = pd.DataFrame()
+    edge_list = edge_list.reindex(columns = ['Source', 'Target'])
+    edge_list.to_csv(filepath + 'edge_list.csv', index = False)
 
   #generate node_labels
   node_labels = nx.get_node_attributes(network, 'virtual')

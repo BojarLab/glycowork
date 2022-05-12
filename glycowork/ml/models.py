@@ -14,14 +14,14 @@ if torch.cuda.is_available():
     device = "cuda:0"
 
 this_dir, this_filename = os.path.split(__file__)  # Get path
-data_path = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
-trained_SweetNet = torch.load(data_path)
-data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565.pt')
-trained_LectinOracle = torch.load(data_path)
-data_path = os.path.join(this_dir, 'glycowork_lectinoracle_565_flex.pt')
-trained_LectinOracle_flex = torch.load(data_path)
-data_path = os.path.join(this_dir, 'NSequonPred_batch32.pt')
-trained_NSequonPred = torch.load(data_path)
+trained_SweetNet = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
+#trained_SweetNet = torch.load(data_path)
+trained_LectinOracle = os.path.join(this_dir, 'glycowork_lectinoracle_600.pt')
+#trained_LectinOracle = torch.load(data_path)
+trained_LectinOracle_flex = os.path.join(this_dir, 'glycowork_lectinoracle_565_flex.pt')
+#trained_LectinOracle_flex = torch.load(data_path)
+trained_NSequonPred = os.path.join(this_dir, 'NSequonPred_batch32.pt')
+#trained_NSequonPred = torch.load(data_path)
 
 class SweetNet(torch.nn.Module):
     def __init__(self, lib_size, num_classes = 1):
@@ -365,25 +365,25 @@ def prep_model(model_type, num_classes, libr = None,
         model = SweetNet(len(libr), num_classes = num_classes)
         model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
         if trained:
-            model.load_state_dict(trained_SweetNet)
+            model.load_state_dict(torch.load(trained_SweetNet))
         model = model.to(device)
     elif model_type == 'LectinOracle':
         model = LectinOracle(len(libr), num_classes = num_classes)
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
-            model.load_state_dict(trained_LectinOracle)
+            model.load_state_dict(torch.load(trained_LectinOracle))
         model = model.to(device)
     elif model_type == 'LectinOracle_flex':
         model = LectinOracle_flex(len(libr), num_classes = num_classes)
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
-            model.load_state_dict(trained_LectinOracle_flex)
+            model.load_state_dict(torch.load(trained_LectinOracle_flex))
         model = model.to(device)
     elif model_type == 'NSequonPred':
         model = NSequonPred()
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
-            model.load_state_dict(trained_NSequonPred)
+            model.load_state_dict(torch.load(trained_NSequonPred))
         model = model.to(device)
     else:
         print("Invalid Model Type")
