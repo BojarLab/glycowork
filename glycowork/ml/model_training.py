@@ -137,7 +137,8 @@ def train_model(model, dataloaders, criterion, optimizer,
 
         with torch.set_grad_enabled(phase == 'train'):
           #first forward pass
-          enable_running_stats(model)
+          if mode+mode2 == 'classificationmulti' or mode+mode2 == 'multilabelmulti':
+              enable_running_stats(model)
           try:
               pred = model(prot, x, edge_index, batch)
               loss = criterion(pred, y.view(-1,1))
@@ -147,14 +148,17 @@ def train_model(model, dataloaders, criterion, optimizer,
 
           if phase == 'train':
             loss.backward()
-            optimizer.first_step(zero_grad = True)
-            #second forward pass
-            disable_running_stats(model)
-            try:
-                criterion(model(prot, x, edge_index, batch), y.view(-1,1)).backward()
-            except:
-                criterion(model(x, edge_index, batch), y).backward()
-            optimizer.second_step(zero_grad = True)
+            if mode+mode2 == 'classificationmulti' or mode+mode2 == 'multilabelmulti':
+                optimizer.first_step(zero_grad = True)
+                #second forward pass
+                disable_running_stats(model)
+                try:
+                    criterion(model(prot, x, edge_index, batch), y.view(-1,1)).backward()
+                except:
+                    criterion(model(x, edge_index, batch), y).backward()
+                optimizer.second_step(zero_grad = True)
+            else:
+                optimizer.step()
 
         #collecting relevant metrics            
         running_loss.append(loss.item())
@@ -327,8 +331,12 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
     | Returns optimizer, learning rate scheduler, and loss criterion objects
     """
     #choose optimizer
-    optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, lr = lr,
+    if mode in ['multiclass', 'multilabel']:
+        optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, lr = lr,
                        weight_decay = weight_decay)
+    else:
+        optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
+                                         weight_decay = weight_decay)
     #choose learning rate scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
                                                            factor = factor, verbose = True)

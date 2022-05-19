@@ -136,7 +136,7 @@ def prepare_multilabel(df, rank = 'Species', glycan_col = 'target'):
   labels = [[0.]*len(class_list) for k in range(len(glycans))]
   #get all class occurrences of glycan to construct multi-label
   for k in range(len(glycans)):
-    sub_classes = df[df.target==glycans[k]][rank].values.tolist()
+    sub_classes = df[df[glycan_col]==glycans[k]][rank].values.tolist()
     for j in sub_classes:
       labels[k][class_list.index(j)] = 1.
   return glycans, labels
