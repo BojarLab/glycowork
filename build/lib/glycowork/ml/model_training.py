@@ -330,15 +330,16 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
     | :-
     | Returns optimizer, learning rate scheduler, and loss criterion objects
     """
-    #choose optimizer
+    #choose optimizer & learning rate scheduler
     if mode in ['multiclass', 'multilabel']:
         optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, lr = lr,
                        weight_decay = weight_decay)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
+                                                           factor = factor, verbose = True)
     else:
         optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
                                          weight_decay = weight_decay)
-    #choose learning rate scheduler
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
                                                            factor = factor, verbose = True)
     #choose loss function
     if mode == 'multiclass':
