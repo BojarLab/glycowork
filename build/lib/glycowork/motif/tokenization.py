@@ -909,7 +909,7 @@ def glycan_to_composition(glycan, libr = None):
 
 def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized',
                                libr = None):
-  """given a glycan, calculates it's theoretical mass\n
+  """given a glycan, calculates it's theoretical mass; doesn't work with modifications\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format

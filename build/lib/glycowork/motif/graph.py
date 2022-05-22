@@ -147,7 +147,7 @@ def glycan_to_nxGraph(glycan, libr = None,
     g1 = nx.Graph()  
     g1.add_node(0)
   #remove the helper monosaccharide if used
-  if override_reducing_end and glycan[-1] == ')':
+  if override_reducing_end and glycan[-4] == ')':
     g1.remove_node(len(g1.nodes) - 1)
     
   #add node labels

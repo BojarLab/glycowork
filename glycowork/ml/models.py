@@ -16,7 +16,7 @@ if torch.cuda.is_available():
 this_dir, this_filename = os.path.split(__file__)  # Get path
 trained_SweetNet = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
 trained_LectinOracle = os.path.join(this_dir, 'glycowork_lectinoracle_600.pt')
-trained_LectinOracle_flex = os.path.join(this_dir, 'glycowork_lectinoracle_565_flex.pt')
+trained_LectinOracle_flex = os.path.join(this_dir, 'glycowork_lectinoracle_600_flex.pt')
 trained_NSequonPred = os.path.join(this_dir, 'NSequonPred_batch32.pt')
 
 class SweetNet(torch.nn.Module):
