@@ -1,7 +1,9 @@
 import re
 import itertools
 import mpld3
+import pickle
 import copy
+import os
 import pkg_resources
 import networkx as nx
 import numpy as np
@@ -14,6 +16,10 @@ from glycowork.motif.tokenization import stemify_glycan
 
 io = pkg_resources.resource_stream(__name__, "monolink_to_enzyme.csv")
 df_enzyme = pd.read_csv(io, sep = '\t')
+
+this_dir, this_filename = os.path.split(__file__) 
+data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
+net_dic = pickle.load(open(data_path, 'rb'))
 
 def safe_compare(g1, g2, libr = None):
   """compare_glycans with try/except error catch\n
@@ -1029,21 +1035,20 @@ def infer_virtual_nodes(network_a, network_b, combined = None):
   inferred_b = [k for k in b_nodes if nx.get_node_attributes(network_b, 'virtual')[k] == 1 and nx.get_node_attributes(combined, 'virtual')[k] == 0]
   return (inferred_a, supported_a), (inferred_b, supported_b)
 
-def infer_network(network, network_species, species_list, filepath = None, df = None,
+def infer_network(network, network_species, species_list, network_dic, df = None,
                   add_virtual_nodes = 'exhaustive',
                   libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
                                                'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
                                                'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'], limit = 5,
                   ptm = True, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
-                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"], directed = True,
-                  file_suffix = '_graph_exhaustive.pkl'):
+                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"], directed = True):
   """replaces virtual nodes if they are observed in other species\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network that should be inferred
   | network_species (string): species from which the network stems
   | species_list (list): list of species to compare network to
-  | filepath (string): filepath to load biosynthetic networks from other species, if precalculated (def. recommended, as calculation will take ~1.5 hours); default:None
+  | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
   | df (dataframe): dataframe containing species-specific glycans, only needed if filepath=None;default:None
   | add_virtual_nodes (string): indicates whether no ('None'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added;only needed if filepath=None;default:'exhaustive'
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used;only needed if filepath=None
@@ -1052,8 +1057,7 @@ def infer_network(network, network_species, species_list, filepath = None, df = 
   | ptm (bool): whether to consider post-translational modifications in the network construction; default:True
   | allowed_ptms (list): list of PTMs to consider
   | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
-  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:True
-  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'\n
+  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:True\n
   | Returns:
   | :-
   | Returns network with filled in virtual nodes
@@ -1071,7 +1075,7 @@ def infer_network(network, network_species, species_list, filepath = None, df = 
                                          permitted_roots = permitted_roots, directed = directed)
       #or load network
       else:
-        temp_network = nx.read_gpickle(filepath + k + file_suffix)
+        temp_network = network_dic[k]
       temp_network = filter_disregard(temp_network)
       #get virtual nodes observed in species k
       infer_network, infer_other = infer_virtual_nodes(network, temp_network)
@@ -1153,17 +1157,15 @@ def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
   else :
     return(str(list(set(new_edge_label))).replace("'","").replace("[","").replace("]","").replace(", ","_"))
 
-def choose_path(source, target, species_list, filepath, libr = None,
-                file_suffix = '_graph_exhaustive.pkl'):
+def choose_path(source, target, species_list, network_dic, libr = None):
   """given a diamond-shape in biosynthetic networks (A->B,A->C,B->D,C->D), which path is taken from A to D?\n
   | Arguments:
   | :-
   | source (string): glycan node that is the biosynthetic precursor
   | target (string): glycan node that is the biosynthetic product; has to two biosynthetic steps away from source
   | species_list (list): list of species to compare network to
-  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + file_suffix
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'\n
+  | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
   | Returns:
   | :-
   | Returns dictionary of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
@@ -1181,7 +1183,7 @@ def choose_path(source, target, species_list, filepath, libr = None,
   alt_b = []
   #for each species, check whether an alternative has been observed
   for k in species_list:
-    temp_network = nx.read_gpickle(filepath + k + file_suffix)
+    temp_network = network_dic[k]
     if source in temp_network.nodes() and target in temp_network.nodes():
       if alternatives[0] in temp_network.nodes():
         alt_a.append(temp_network.nodes[alternatives[0]]['virtual'])
@@ -1228,16 +1230,14 @@ def find_diamonds(network):
       matchings_list2.append(d)
   return matchings_list2
 
-def trace_diamonds(network, species_list, filepath, libr = None,
-                   file_suffix = '_graph_exhaustive.pkl'):
+def trace_diamonds(network, species_list, network_dic, libr = None):
   """extracts diamond-shape motifs from biosynthetic networks (A->B,A->C,B->D,C->D) and uses evolutionary information to determine which path is taken from A to D\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
   | species_list (list): list of species to compare network to
-  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + file_suffix
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'\n
+  | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
   | Returns:
   | :-
   | Returns dataframe of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
@@ -1247,8 +1247,7 @@ def trace_diamonds(network, species_list, filepath, libr = None,
   #get the diamonds
   matchings_list = find_diamonds(network)
   #calculate the path probabilities
-  paths = [choose_path(d[1], d[3], species_list, filepath, libr = libr,
-                       file_suffix = file_suffix) for d in matchings_list]
+  paths = [choose_path(d[1], d[3], species_list, network_dic, libr = libr) for d in matchings_list]
   df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
   df_out.columns = ['target', 'probability']
   return df_out
@@ -1277,16 +1276,15 @@ def prune_network(network, node_attr = 'abundance', threshold = 0.):
       network_out.remove_node(node)
   return network_out
 
-def evoprune_network(network, species_list, filepath, libr = None,
-                file_suffix = '_graph_exhaustive.pkl', node_attr = 'abundance', threshold = 0.):
+def evoprune_network(network, network_dic = None, species_list = None, libr = None,
+                     node_attr = 'abundance', threshold = 0.):
   """given a biosynthetic network, this function uses evolutionary relationships to prune impossible paths\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
-  | species_list (list): list of species to compare network to
-  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + file_suffix
+  | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks
+  | species_list (list): list of species to compare network to; default:species from pre-computed milk networks
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'
   | node_attr (string): which (numerical) node attribute to use for pruning; default:'abundance'
   | threshold (float): everything below or equal to that threshold will be cut; default:0.\n
   | Returns:
@@ -1295,8 +1293,12 @@ def evoprune_network(network, species_list, filepath, libr = None,
   """
   if libr is None:
     libr = lib
+  if network_dic is None:
+    network_dic = net_dic
+  if species_list is None:
+    species_list = list(network_dic.keys())
   #calculate path probabilities of diamonds
-  df_out = trace_diamonds(network, species_list, filepath, libr = libr, file_suffix = file_suffix)
+  df_out = trace_diamonds(network, species_list, network_dic, libr = libr)
   #scale virtual node size by path probability
   network_out = highlight_network(network, highlight = 'abundance', abundance_df = df_out,
                                   intensity_col = 'probability')
@@ -1307,7 +1309,7 @@ def evoprune_network(network, species_list, filepath, libr = None,
 def highlight_network(network, highlight, motif = None,
                       abundance_df = None, glycan_col = 'target',
                       intensity_col = 'rel_intensity', conservation_df = None,
-                      filepath = None, file_suffix = '_graph_exhaustive_pruned.pkl', species = None, libr = None):
+                      network_dic = None, species = None, libr = None):
   """highlights a certain attribute in the network that will be visible when using plot_network\n
   | Arguments:
   | :-
@@ -1318,8 +1320,7 @@ def highlight_network(network, highlight, motif = None,
   | glycan_col (string): highlight=abundance; column name of the glycans in abundance_df
   | intensity_col (string): highlight=abundance; column name of the relative intensities in abundance_df
   | conservation_df (dataframe): highlight=conservation; dataframe containing glycans from different species
-  | filepath (string): highlight=conservation/species; filepath to load biosynthetic networks from other species; files need to be species name + file_suffix
-  | file_suffix (string): highlight=conservation/species; generic end part of filename in filepath; default:'_graph_exhaustive_pruned.pkl'
+  | network_dic (dict): highlight=conservation/species; dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks
   | species (string): highlight=species; which species to highlight in a multi-species network
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
   | Returns:
@@ -1328,6 +1329,8 @@ def highlight_network(network, highlight, motif = None,
   """
   if libr is None:
     libr = lib
+  if network_dic is None:
+    network_dic = net_dic
   #determine highlight validity
   if highlight == 'motif' and motif is None:
     print("You have to provide a glycan motif to highlight")
@@ -1347,7 +1350,7 @@ def highlight_network(network, highlight, motif = None,
     nx.set_node_attributes(network_out, motif_presence, name = 'origin')
   #color nodes whether they are from a species (green) or not (violet)
   elif highlight == 'species':
-    temp_net = nx.read_gpickle(filepath + species + file_suffix)
+    temp_net = network_dic[species]
     node_presence = {k:('limegreen' if k in temp_net.nodes() else 'darkviolet') for k in network_out.nodes()}
     nx.set_node_attributes(network_out, node_presence, name = 'origin')
   #add relative intensity values as 'abundance' node attribute used for node size scaling
@@ -1359,7 +1362,7 @@ def highlight_network(network, highlight, motif = None,
     spec_nodes = []
     specs = list(set(conservation_df.Species.values.tolist()))
     for k in specs:
-      temp_net = nx.read_gpickle(filepath + k + file_suffix)
+      temp_net = network_dic[k]
       spec_nodes.append(list(temp_net.nodes()))
     specs = [[specs[k]]*len(spec_nodes[k]) for k in range(len(specs))]
     df_temp = pd.DataFrame(unwrap(specs), unwrap(spec_nodes)).reset_index()

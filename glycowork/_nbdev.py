@@ -4,8 +4,7 @@ __all__ = ["index", "modules", "custom_doc_links", "git_url"]
 
 index = {}
 
-modules = ["alignment.py",
-           "glycan_data.py",
+modules = ["glycan_data.py",
            "ml.py",
            "motif.py",
            "network.py"]

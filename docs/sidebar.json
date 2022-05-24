@@ -2,11 +2,10 @@
   "glycowork": {
     "Overview": "/",
     "Glycowork": "core.html",
-    "alignment": "alignment.html",
     "glycan_data": "glycan_data.html",
     "ml": "ml.html",
     "motif": "motif.html",
-    "Examples": "examples.html",
-    "network": "network.html"
+    "network": "network.html",
+    "Examples": "examples.html"
   }
 }

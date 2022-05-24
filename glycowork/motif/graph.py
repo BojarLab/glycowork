@@ -1,7 +1,7 @@
 import re
 import copy
 import networkx as nx
-from glycowork.glycan_data.loader import lib, unwrap, find_nth
+from glycowork.glycan_data.loader import lib, unwrap, find_nth, df_glycan
 from glycowork.motif.processing import min_process_glycans
 import numpy as np
 import pandas as pd
@@ -478,15 +478,27 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     feat_dic = {col_names[k]:features[k] for k in range(len(features))}
     return pd.DataFrame(feat_dic, index = [glycan])
 
-def graph_to_string(graph):
+def graph_to_string(graph, fallback = False, libr = None):
   """converts glycan graph back to IUPAC-condensed format\n
   | Arguments:
   | :-
-  | graph (networkx object): glycan graph, works with most glycans. Will often not properly format repeat glycans, e.g., xyloglucan etc\n
+  | graph (networkx object): glycan graph, works with most glycans. Will often not properly format repeat glycans, e.g., xyloglucan etc
+  | fallback (bool): just searches for the corresponding string in df_glycan; default:False
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
   | Returns:
   | :-
   | Returns glycan in IUPAC-condensed format (string)
   """
+  if libr is None:
+    libr = lib
+  if fallback:
+    len_dist = min_process_glycans(df_glycan.glycan.values.tolist())
+    len_dist = [len(k) for k in len_dist]
+    df_glycan2 = [k for k in range(len(df_glycan)) if len_dist[k] == len(graph.nodes())]
+    df_glycan2 = df_glycan.iloc[df_glycan2, :].reset_index(drop = True)
+    idx = np.where([compare_glycans(graph, glycan_to_nxGraph(k, libr = libr), libr = libr) for k in df_glycan2.glycan.values.tolist()])[0][0]
+    glycan = df_glycan2.glycan.values.tolist()[idx]
+    return glycan
   node_labels = nx.get_node_attributes(graph, 'string_labels')
   edges = graph.edges()
   branch_points = [e[1] for e in edges if abs(e[0]-e[1]) > 1]
@@ -568,7 +580,10 @@ def largest_subgraph(glycan_a, glycan_b, libr = None):
     node_dic = {k:k-min_num for k in list(lgs.nodes())}
     lgs = nx.relabel_nodes(lgs, node_dic)
     if len(list(lgs.nodes())) > 0:
-      return graph_to_string(lgs)
+      try:
+        return graph_to_string(lgs)
+      except:
+        return graph_to_string(lgs, fallback = True, libr = libr)
     else:
       return ""
   else:

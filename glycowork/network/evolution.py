@@ -1,3 +1,5 @@
+import os
+import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -7,6 +9,10 @@ from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
 from glycowork.glycan_data.loader import lib
 from glycowork.motif.graph import subgraph_isomorphism
+
+this_dir, this_filename = os.path.split(__file__) 
+data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
+net_dic = pickle.load(open(data_path, 'rb'))
 
 def calculate_distance_matrix(to_compare, dist_func, label_list = None):
   """calculates pairwise distances based on objects and a metric\n
@@ -137,26 +143,27 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
 
-def check_conservation(glycan, df, libr = None, rank = 'Order', filepath = None, threshold = 5,
-                       motif = False, file_suffix = '_graph_exhaustive.pkl'):
+def check_conservation(glycan, df, network_dic = None, libr = None, rank = 'Order', threshold = 5,
+                       motif = False):
   """estimates evolutionary conservation of glycans and glycan motifs via biosynthetic networks\n
   | Arguments:
   | :-
   | glycan (string): full glycan or glycan motif in IUPAC-condensed nomenclature
   | df (dataframe): dataframe in the style of df_species, each row one glycan and columns are the taxonomic levels
+  | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | rank (string): at which taxonomic level to assess conservation; default:Order
-  | filepath (string): filepath to load biosynthetic networks from other species; files need to be species name + file_suffix
   | threshold (int): threshold of how many glycans a species needs to have to consider the species;default:5
-  | motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False
-  | file_suffix (string): generic end part of filename in filepath; default:'_graph_exhaustive.pkl'\n
+  | motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False\n
   | Returns:
   | :-
   | Returns a dictionary of taxonomic group : degree of conservation
   """
   if libr is None:
     libr = lib
-  #subset species with at least the threshold-number of glycans 
+  if network_dic is None:
+    network_dic = net_dic
+  #subset species with at least the threshold-number of glycans
   all_specs = list(sorted(list(set(df.Species.values.tolist()))))
   allowed = [k for k in all_specs if df.Species.values.tolist().count(k) >= threshold]
   df_freq = df[df.Species.isin(allowed)].reset_index(drop = True)
@@ -164,8 +171,8 @@ def check_conservation(glycan, df, libr = None, rank = 'Order', filepath = None,
   #subset members of rank with at least two species
   pool = list(set(df_freq[rank].values.tolist()))
   pool = [k for k in pool if len(list(set(df_freq[df_freq[rank] == k].Species.tolist()))) > 1]
-  #load networks
-  networks = {k:nx.read_gpickle(filepath + k + file_suffix) for k in all_specs}
+  #subset networks
+  network_dic = {k:j for k,j in network_dic.items() if k in all_specs}
   #for each member of rank, get all species networks and search for motif
   conserved = {}
   for k in pool:

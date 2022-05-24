@@ -556,7 +556,7 @@ def condense_composition_matching(matched_composition, libr = None):
   wildcards = ['z1-z', 'z2-z', 'a2-z', 'a1-z', 'b1-z']
   #establish glycan equality given the wildcards
   match_matrix = [[compare_glycans(k, j, libr = libr, wildcards = True,
-                                  wildcard_list = [libr.index(w) for w in wildcards]) for j in matched_composition] for k in matched_composition]
+                                  wildcard_list = wildcards) for j in matched_composition] for k in matched_composition]
   match_matrix = pd.DataFrame(match_matrix)
   match_matrix.columns = matched_composition
   #cluster glycans by pairwise equality (given the wildcards)

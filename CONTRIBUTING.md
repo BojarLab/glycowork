@@ -44,7 +44,3 @@ nbdev_install_git_hooks
 * characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context
 * allow users to specify their own deep learning architecture in ml.models
 * implement multiple sequence alignment and other substitution matrices
-
-
-#### Not sure whether a good idea
-* ideally, we’d have a better heuristic than estimate_lower_bound for speeding up annotation
