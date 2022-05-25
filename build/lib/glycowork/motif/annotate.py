@@ -186,7 +186,7 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
   | :-
-  | Returns dataframe with absence/presence of motifs in glycan
+  | Returns dataframe with counts of motifs in glycan
   """
   if motifs is None:
     motifs = motif_list
