@@ -1157,12 +1157,11 @@ def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
   else :
     return(str(list(set(new_edge_label))).replace("'","").replace("[","").replace("]","").replace(", ","_"))
 
-def choose_path(source, target, species_list, network_dic, libr = None):
+def choose_path(diamond, species_list, network_dic, libr = None):
   """given a diamond-shape in biosynthetic networks (A->B,A->C,B->D,C->D), which path is taken from A to D?\n
   | Arguments:
   | :-
-  | source (string): glycan node that is the biosynthetic precursor
-  | target (string): glycan node that is the biosynthetic product; has to two biosynthetic steps away from source
+  | diamond (dict): dictionary of form position in diamond : glycan string, describing the diamond
   | species_list (list): list of species to compare network to
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
@@ -1173,10 +1172,10 @@ def choose_path(source, target, species_list, network_dic, libr = None):
   if libr is None:
     libr = lib
   #construct the diamond between source and target node
-  network = construct_network([source, target], libr = libr, add_virtual_nodes = 'exhaustive',
-                              ptm = True, directed = True)
+  adj, _ = create_adjacency_matrix(list(diamond.values()), libr = libr)
+  network = adjacencyMatrix_to_network(adj)
   #get the intermediate nodes constituting the alternative paths
-  alternatives = [path[1] for path in nx.all_simple_paths(network, source = source, target = target)]
+  alternatives = [path[1] for path in nx.all_simple_paths(network, source = diamond[1], target = diamond[3])]
   if len(alternatives) < 2:
     return {}
   alt_a = []
@@ -1184,7 +1183,7 @@ def choose_path(source, target, species_list, network_dic, libr = None):
   #for each species, check whether an alternative has been observed
   for k in species_list:
     temp_network = network_dic[k]
-    if source in temp_network.nodes() and target in temp_network.nodes():
+    if diamond[1] in temp_network.nodes() and diamond[3] in temp_network.nodes():
       if alternatives[0] in temp_network.nodes():
         alt_a.append(temp_network.nodes[alternatives[0]]['virtual'])
       if alternatives[1] in temp_network.nodes():
@@ -1247,7 +1246,7 @@ def trace_diamonds(network, species_list, network_dic, libr = None):
   #get the diamonds
   matchings_list = find_diamonds(network)
   #calculate the path probabilities
-  paths = [choose_path(d[1], d[3], species_list, network_dic, libr = libr) for d in matchings_list]
+  paths = [choose_path(d, species_list, network_dic, libr = libr) for d in matchings_list]
   df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
   df_out.columns = ['target', 'probability']
   return df_out
