@@ -1279,7 +1279,7 @@ def evoprune_network(network, network_dic = None, species_list = None, libr = No
   network_out = highlight_network(network, highlight = 'abundance', abundance_df = df_out,
                                   intensity_col = 'probability')
   #remove diamond paths below threshold
-  network_out = prune_network(network_out, node_attr = node_attr, threshold = threshold)
+  network_out = prune_network(network_out, node_attr = node_attr, threshold = threshold*100)
   return network_out
 
 def highlight_network(network, highlight, motif = None,

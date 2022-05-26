@@ -8,7 +8,7 @@ from itertools import combinations_with_replacement, product
 from collections import Counter
 from sklearn.cluster import DBSCAN
 
-from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, df_species, Hex, dHex, HexNAc, Sia, linkages
+from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, df_species, Hex, dHex, HexA, HexN, HexNAc, Pen, Sia, linkages
 from glycowork.motif.processing import small_motif_find, min_process_glycans, choose_correct_isoform
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 from glycowork.motif.annotate import annotate_dataset, find_isomorphs
@@ -863,8 +863,14 @@ def map_to_basic(glycoletter):
     return 'Hex'
   elif glycoletter in dHex:
     return 'dHex'
+  elif glycoletter in HexA:
+    return 'HexA'
+  elif glycoletter in HexN:
+    return 'HexN'
   elif glycoletter in HexNAc:
     return 'HexNAc'
+  elif glycoletter in Pen:
+    return 'Pen'
   elif glycoletter in linkages:
     return 'z1-z'
   else:
