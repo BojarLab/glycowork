@@ -1035,48 +1035,23 @@ def infer_virtual_nodes(network_a, network_b, combined = None):
   inferred_b = [k for k in b_nodes if nx.get_node_attributes(network_b, 'virtual')[k] == 1 and nx.get_node_attributes(combined, 'virtual')[k] == 0]
   return (inferred_a, supported_a), (inferred_b, supported_b)
 
-def infer_network(network, network_species, species_list, network_dic, df = None,
-                  add_virtual_nodes = 'exhaustive',
-                  libr = None, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
-                                               'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol',
-                                               'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol'], limit = 5,
-                  ptm = True, allowed_ptms = ['OS','3S','6S','1P','6P','OAc','4Ac'],
-                 permitted_roots = ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"], directed = True):
+def infer_network(network, network_species, species_list, network_dic):
   """replaces virtual nodes if they are observed in other species\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network that should be inferred
   | network_species (string): species from which the network stems
   | species_list (list): list of species to compare network to
-  | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
-  | df (dataframe): dataframe containing species-specific glycans, only needed if filepath=None;default:None
-  | add_virtual_nodes (string): indicates whether no ('None'), proximal ('simple'), or all ('exhaustive') virtual nodes should be added;only needed if filepath=None;default:'exhaustive'
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used;only needed if filepath=None
-  | reducing_end (list): monosaccharides at the reducing end that are allowed;only needed if filepath=None;default:milk glycan reducing ends
-  | limit (int): maximum number of virtual nodes between observed nodes;only needed if filepath=None;default:5
-  | ptm (bool): whether to consider post-translational modifications in the network construction; default:True
-  | allowed_ptms (list): list of PTMs to consider
-  | permitted_roots (list): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
-  | directed (bool): whether to return a network with directed edges in the direction of biosynthesis; default:True\n
+  | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)\n
   | Returns:
   | :-
   | Returns network with filled in virtual nodes
   """
-  if libr is None:
-    libr = lib
   inferences = []
   #for each species, try to identify observed nodes matching virtual nodes in input network
   for k in species_list:
     if k != network_species:
-      #build network
-      if filepath is None:
-        temp_network = construct_network(df[df.Species == k].target.values.tolist(), add_virtual_nodes = add_virtual_nodes, libr = libr,
-                                         reducing_end = reducing_end, limit = limit, ptm = ptm, allowed_ptms = allowed_ptms,
-                                         permitted_roots = permitted_roots, directed = directed)
-      #or load network
-      else:
-        temp_network = network_dic[k]
-      temp_network = filter_disregard(temp_network)
+      temp_network = network_dic[k]
       #get virtual nodes observed in species k
       infer_network, infer_other = infer_virtual_nodes(network, temp_network)
       inferences.append(infer_network)
@@ -1157,14 +1132,15 @@ def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
   else :
     return(str(list(set(new_edge_label))).replace("'","").replace("[","").replace("]","").replace(", ","_"))
 
-def choose_path(diamond, species_list, network_dic, libr = None):
+def choose_path(diamond, species_list, network_dic, libr = None, threshold = 0.):
   """given a diamond-shape in biosynthetic networks (A->B,A->C,B->D,C->D), which path is taken from A to D?\n
   | Arguments:
   | :-
-  | diamond (dict): dictionary of form position in diamond : glycan string, describing the diamond
+  | diamond (dict): dictionary of form position-in-diamond : glycan-string, describing the diamond
   | species_list (list): list of species to compare network to
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | threshold (float): everything below or equal to that threshold will be cut; default:0.\n
   | Returns:
   | :-
   | Returns dictionary of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
@@ -1193,8 +1169,8 @@ def choose_path(diamond, species_list, network_dic, libr = None):
   alt_b = alt_b.count(0)/max([len(alt_b), 1])
   #if both alternatives aren't observed, add minimum value (because one of the paths *has* to be taken)
   if alt_a == alt_b == 0:
-    alt_a = 0.01
-    alt_b = 0.01
+    alt_a = 0.01 + threshold
+    alt_b = 0.01 + threshold
   inferences = {alternatives[0]:alt_a, alternatives[1]:alt_b}
   return inferences
 
@@ -1229,14 +1205,15 @@ def find_diamonds(network):
       matchings_list2.append(d)
   return matchings_list2
 
-def trace_diamonds(network, species_list, network_dic, libr = None):
+def trace_diamonds(network, species_list, network_dic, libr = None, threshold = 0.):
   """extracts diamond-shape motifs from biosynthetic networks (A->B,A->C,B->D,C->D) and uses evolutionary information to determine which path is taken from A to D\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
   | species_list (list): list of species to compare network to
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | threshold (float): everything below or equal to that threshold will be cut; default:0.\n
   | Returns:
   | :-
   | Returns dataframe of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
@@ -1246,7 +1223,7 @@ def trace_diamonds(network, species_list, network_dic, libr = None):
   #get the diamonds
   matchings_list = find_diamonds(network)
   #calculate the path probabilities
-  paths = [choose_path(d, species_list, network_dic, libr = libr) for d in matchings_list]
+  paths = [choose_path(d, species_list, network_dic, libr = libr, threshold = threshold) for d in matchings_list]
   df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
   df_out.columns = ['target', 'probability']
   return df_out
@@ -1297,7 +1274,7 @@ def evoprune_network(network, network_dic = None, species_list = None, libr = No
   if species_list is None:
     species_list = list(network_dic.keys())
   #calculate path probabilities of diamonds
-  df_out = trace_diamonds(network, species_list, network_dic, libr = libr)
+  df_out = trace_diamonds(network, species_list, network_dic, libr = libr, threshold = threshold)
   #scale virtual node size by path probability
   network_out = highlight_network(network, highlight = 'abundance', abundance_df = df_out,
                                   intensity_col = 'probability')

@@ -177,7 +177,7 @@ def check_conservation(glycan, df, network_dic = None, libr = None, rank = 'Orde
   conserved = {}
   for k in pool:
     specs = list(set(df_freq[df_freq[rank] == k].Species.values.tolist()))
-    nets = [networks[j] for j in specs]
+    nets = [network_dic[j] for j in specs]
     nets = [list(j.nodes()) for j in nets]
     if motif:
       if glycan[-1] == ')':
