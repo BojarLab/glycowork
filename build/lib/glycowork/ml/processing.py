@@ -1,57 +1,35 @@
-from glycowork.motif.graph import glycan_to_graph
+from glycowork.motif.graph import glycan_to_nxGraph
 from glycowork.glycan_data.loader import lib
 
 try:
   import torch
-  from torch_geometric.data import Data
   from torch_geometric.loader import DataLoader
+  from torch_geometric.utils.convert import from_networkx
 except ImportError:
     raise ImportError('<torch or torch_geometric missing; cannot do deep learning>')
 
-def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long, separate = False,
-                      context = False, error_catch = False, wo_labels = False):
+def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long):
   """wrapper function to convert a whole list of glycans into a graph dataset\n
   | Arguments:
   | :-
   | glycan_list (list): list of IUPAC-condensed glycan sequences as strings
   | labels (list): list of labels
-  | label_type (torch object): which tensor type for label, default is torch.long for binary labels, change to torch.float for continuous
-  | separate (bool): True returns node list / edge list / label list as separate files; False returns list of data tuples; default is False
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
-  | error_catch (bool): troubleshooting option, True will print glycans that cannot be converted into graphs; default is False
-  | wo_labels (bool): change to True if you do not want to pass and receive labels; default is False\n
+  | label_type (torch object): which tensor type for label, default is torch.long for binary labels, change to torch.float for continuous\n
   | Returns:
   | :-
   | Returns list of node list / edge list / label list data tuples
   """
   if libr is None:
     libr = lib
-  if error_catch:
-    glycan_graphs = []
-    for k in glycan_list:
-      try:
-        glycan_graphs.append(glycan_to_graph(k, libr))
-      except:
-        print(k)
-  else:
-    glycan_graphs = [glycan_to_graph(k, libr) for k in glycan_list]
-  if separate:
-    glycan_nodes, glycan_edges = zip(*glycan_graphs)
-    return list(glycan_nodes), list(glycan_edges), labels
-  else:
-    if wo_labels:
-      glycan_nodes, glycan_edges = zip(*glycan_graphs)
-      glycan_graphs = list(zip(glycan_nodes, glycan_edges))
-      data = [Data(x = torch.tensor(k[0], dtype = torch.long),
-                     edge_index = torch.tensor([k[1][0],k[1][1]], dtype = torch.long)) for k in glycan_graphs]
-      return data
-    else:
-      glycan_nodes, glycan_edges = zip(*glycan_graphs)
-      glycan_graphs = list(zip(glycan_nodes, glycan_edges, labels))
-      data = [Data(x = torch.tensor(k[0], dtype = torch.long),
-                 y = torch.tensor([k[2]], dtype = label_type),
-                 edge_index = torch.tensor([k[1][0],k[1][1]], dtype = torch.long)) for k in glycan_graphs]
-      return data
+  #generating glycan graphs
+  glycan_graphs = [glycan_to_nxGraph(k, libr = libr) for k in glycan_list]
+  #converting graphs to Pytorch Geometric Data objects
+  data = [from_networkx(k) for k in glycan_graphs]
+  #adding graph labels
+  for k in range(len(labels)):
+    data[k].y = torch.tensor(labels[k])
+  return data
 
 def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
                           shuffle = True, drop_last = False,
@@ -73,12 +51,15 @@ def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
   """
   if libr is None:
     libr = lib
+  #converting glycans and labels to PyTorch Geometric Data objects
   glycan_graphs = dataset_to_graphs(glycan_list, labels,
                                     libr = libr, label_type = label_type)
+  #adding (optional) extra feature to the Data objects
   if extra_feature is not None:
     for k in range(len(glycan_graphs)):
       glycan_graphs[k].train_idx = torch.tensor(extra_feature[k],
                                                 dtype = torch.float)
+  #generating the dataloader from the data objects
   glycan_loader = DataLoader(glycan_graphs, batch_size = batch_size,
                              shuffle = shuffle, drop_last = drop_last)
   return glycan_loader
@@ -107,6 +88,7 @@ def split_data_to_train(glycan_list_train, glycan_list_val,
   """
   if libr is None:
     libr = lib
+  #generating train and validation set loaders
   train_loader = dataset_to_dataloader(glycan_list_train, labels_train, libr = libr,
                                        batch_size = batch_size, shuffle = True,
                                        drop_last = drop_last, extra_feature = extra_feature_train,

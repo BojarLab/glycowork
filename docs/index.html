@@ -48,7 +48,7 @@ nb_path: "index.ipynb"
 <p>Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.</p>
 <p>The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. <code>Glycowork</code> is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, <code>glycowork</code> also contains glycan data that can be used for model training, motif comparisons, etc.</p>
 <p>If you use <code>glycowork</code> or any of our datasets in your project, please cite <a href="https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240">Thomes et al., 2021</a>.</p>
-<p>The inspiration for <code>glycowork</code> can be found in <a href="https://doi.org/10.1016/j.chom.2020.10.004">Bojar et al., 2020</a> and <a href="https://www.cell.com/cell-reports/fulltext/S2211-1247(21">Burkholz et al., 2021</a>00616-1). There, you can also find examples of possible use cases for the functions in <code>glycowork</code>.</p>
+<p>The inspiration for <code>glycowork</code> can be found in <a href="https://doi.org/10.1016/j.chom.2020.10.004">Bojar et al., 2020</a> and <a href="https://pubmed.ncbi.nlm.nih.gov/34133929/">Burkholz et al., 2021</a>. There, you can also find examples of possible use cases for the functions in <code>glycowork</code>.</p>
 <p>The full documentation for <code>glycowork</code> can be found here: <a href="https://bojarlab.github.io/glycowork/">https://bojarlab.github.io/glycowork/</a></p>
 <p>If you want to contribute to <code>glycowork</code>, the best place to start is to read our <a href="https://github.com/BojarLab/glycowork/blob/master/CONTRIBUTING.md">contribution guidelines</a>.</p>
 
@@ -83,12 +83,8 @@ nb_path: "index.ipynb"
 <div class="text_cell_render border-box-sizing rendered_html">
 <p><code>Glycowork</code> currently contains the following main datasets that are freely available to everyone:</p>
 <ul>
-<li><strong><code>df_species</code></strong><ul>
-<li>contains &gt;31,500 glycans with species association</li>
-</ul>
-</li>
 <li><strong><code>df_glycan</code></strong><ul>
-<li>contains &gt;50,500 unique glycan sequences, including labels such as &gt;2,500 tissue associations and &gt;500 disease associations</li>
+<li>contains &gt;51,000 unique glycan sequences, including labels such as &gt;32,000 species associations, &gt;8,000 tissue associations, and &gt;500 disease associations</li>
 </ul>
 </li>
 <li><strong><code>glycan_binding</code></strong><ul>
@@ -107,7 +103,7 @@ nb_path: "index.ipynb"
 </ul>
 </li>
 <li><strong><code>SweetNet</code></strong><ul>
-<li>a graph convolutional neural network trained to predict species from glycan, can be used to generate learned glycan representations; from <a href="https://www.cell.com/cell-reports/fulltext/S2211-1247(21">Burkholz et al., 2021</a>00616-1)</li>
+<li>a graph convolutional neural network trained to predict species from glycan, can be used to generate learned glycan representations; from <a href="https://pubmed.ncbi.nlm.nih.gov/34133929/">Burkholz et al., 2021</a></li>
 </ul>
 </li>
 <li><strong><code>NSequonPred</code></strong><ul>
@@ -127,12 +123,8 @@ nb_path: "index.ipynb"
 </div>
 <div class="cell border-box-sizing text_cell rendered"><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p><code>Glycowork</code> currently contains five main modules:</p>
+<p><code>Glycowork</code> currently contains four main modules:</p>
 <ul>
-<li><strong><a href="/glycowork/alignment.html"><code>alignment</code></a></strong><ul>
-<li>can be used to find similar glycan sequences by alignment according to a glycan-specific substitution matrix</li>
-</ul>
-</li>
 <li><strong><a href="/glycowork/glycan_data.html"><code>glycan_data</code></a></strong><ul>
 <li>stores several glycan datasets and contains helper functions</li>
 </ul>
@@ -150,7 +142,19 @@ nb_path: "index.ipynb"
 </ul>
 </li>
 </ul>
-<p>Below are some examples of what you can do with <code>glycowork</code>; be sure to check out the other <a href="/glycowork/examples.html"><code>examples</code></a> in the full documentation for everything that's there.</p>
+<p>Below are some examples of what you can do with <code>glycowork</code>; be sure to check out the other <a href="/glycowork/examples.html"><code>examples</code></a> in the full documentation for everything that's there.
+A non-exhaustive list includes:</p>
+<ul>
+<li>using trained AI models for prediction</li>
+<li>training your own AI models</li>
+<li>motif enrichment analyses</li>
+<li>annotating motifs in glycans</li>
+<li>finding out whether &amp; where glycans are describing the same sequence</li>
+<li>m/z to composition to structure to motif mappings</li>
+<li>mass calculation</li>
+<li>visualizing motif distribution / glycan similarities / sequence properties</li>
+<li>constructing and analyzing biosynthetic networks</li>
+</ul>
 
 </div>
 </div>
@@ -164,7 +168,7 @@ nb_path: "index.ipynb"
     <div class="input_area">
 <div class=" highlight hl-ipython3"><pre><span></span><span class="n">glycans</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc&#39;</span><span class="p">,</span>
            <span class="s1">&#39;Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-3)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">,</span>
-           <span class="s1">&#39;GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcN4P(b1-6)GlcN4P&#39;</span><span class="p">]</span>
+           <span class="s1">&#39;GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcN4P(b1-6)GlcN1P&#39;</span><span class="p">]</span>
 <span class="kn">from</span> <span class="nn">glycowork.motif.annotate</span> <span class="kn">import</span> <span class="n">annotate_dataset</span>
 <span class="n">out</span> <span class="o">=</span> <span class="n">annotate_dataset</span><span class="p">(</span><span class="n">glycans</span><span class="p">,</span> <span class="n">feature_set</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;known&#39;</span><span class="p">,</span> <span class="s1">&#39;graph&#39;</span><span class="p">,</span> <span class="s1">&#39;exhaustive&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </pre></div>
@@ -389,7 +393,6 @@ nb_path: "index.ipynb"
       <th>entropyStation</th>
       <th>N</th>
       <th>dens</th>
-      <th></th>
       <th>0dHex</th>
       <th>1,4-Anhydro-Gal-ol</th>
       <th>1,5-Anhydro-D-AltNAc-ol</th>
@@ -413,6 +416,7 @@ nb_path: "index.ipynb"
       <th>1-4</th>
       <th>1-5</th>
       <th>1-6</th>
+      <th>1-z</th>
       <th>1dAlt-ol</th>
       <th>1dEry-ol</th>
       <th>2,3-Anhydro-All</th>
@@ -455,7 +459,7 @@ nb_path: "index.ipynb"
       <th>3dGal</th>
       <th>3dLyxHep-ulosaric</th>
       <th>4,7-Anhydro-Kdo</th>
-      <th>4,7-Anhydro-KdoOPEtn</th>
+      <th>4,7-Anhydro-KdoOPEtN</th>
       <th>4,8-Anhydro-Kdo</th>
       <th>4-1</th>
       <th>4-5</th>
@@ -734,7 +738,7 @@ nb_path: "index.ipynb"
       <th>D-FucNAcOAc</th>
       <th>D-FucNAcOMe</th>
       <th>D-FucNAcOP</th>
-      <th>D-FucNAcOPEtn</th>
+      <th>D-FucNAcOPEtN</th>
       <th>D-FucNAlaAc</th>
       <th>D-FucNAsp</th>
       <th>D-FucNBut</th>
@@ -746,7 +750,7 @@ nb_path: "index.ipynb"
       <th>D-FucOAcOBut</th>
       <th>D-FucOAcOMe</th>
       <th>D-FucOBut</th>
-      <th>D-FucOEtn</th>
+      <th>D-FucOEtN</th>
       <th>D-FucOMe</th>
       <th>D-FucOMe1Coum</th>
       <th>D-FucOMe1Fer</th>
@@ -806,15 +810,15 @@ nb_path: "index.ipynb"
       <th>DDGalHepOMe</th>
       <th>DDGlcHep</th>
       <th>DDManHep</th>
-      <th>DDManHep2PEtn7PEtn</th>
+      <th>DDManHep2PEtN7PEtN</th>
       <th>DDManHep3P6P</th>
       <th>DDManHep7PCho</th>
       <th>DDManHepOAc</th>
       <th>DDManHepOBut</th>
-      <th>DDManHepOEtn</th>
+      <th>DDManHepOEtN</th>
       <th>DDManHepOMe</th>
       <th>DDManHepOP</th>
-      <th>DDManHepOPEtn</th>
+      <th>DDManHepOPEtN</th>
       <th>DDManHepOPGroA</th>
       <th>DDManHepPGroA</th>
       <th>DL-3,9dGalNon5NAc7NAc-ulosonic</th>
@@ -955,7 +959,7 @@ nb_path: "index.ipynb"
       <th>Gal-onic</th>
       <th>Gal1Cer</th>
       <th>Gal1Et</th>
-      <th>Gal1Etn</th>
+      <th>Gal1EtN</th>
       <th>Gal1Gro</th>
       <th>Gal1Me</th>
       <th>Gal1Me3P</th>
@@ -1008,9 +1012,10 @@ nb_path: "index.ipynb"
       <th>Gal3P</th>
       <th>Gal3P4P</th>
       <th>Gal3PCho</th>
-      <th>Gal3PCho6PEtn</th>
+      <th>Gal3PCho6PEtN</th>
       <th>Gal3PGro</th>
       <th>Gal3Pyr</th>
+      <th>Gal3Pyr4Pyr</th>
       <th>Gal3S</th>
       <th>Gal3S4S</th>
       <th>Gal3S6Et</th>
@@ -1028,6 +1033,7 @@ nb_path: "index.ipynb"
       <th>Gal4P6P</th>
       <th>Gal4PGro</th>
       <th>Gal4Pyr</th>
+      <th>Gal4Pyr6Pyr</th>
       <th>Gal4S</th>
       <th>Gal4S6S</th>
       <th>Gal5NAc-ol</th>
@@ -1041,7 +1047,7 @@ nb_path: "index.ipynb"
       <th>Gal6P</th>
       <th>Gal6PCho</th>
       <th>Gal6PChoOAc</th>
-      <th>Gal6PEtn</th>
+      <th>Gal6PEtN</th>
       <th>Gal6PGro</th>
       <th>Gal6Pyr</th>
       <th>Gal6S</th>
@@ -1079,7 +1085,7 @@ nb_path: "index.ipynb"
       <th>GalA4Ac</th>
       <th>GalA4Ac6Ser</th>
       <th>GalA4Me</th>
-      <th>GalA4PEtn6Lys</th>
+      <th>GalA4PEtN6Lys</th>
       <th>GalA6Ala</th>
       <th>GalA6CetLys</th>
       <th>GalA6Lys</th>
@@ -1105,7 +1111,7 @@ nb_path: "index.ipynb"
       <th>GalAOLac</th>
       <th>GalAOMe</th>
       <th>GalAOP</th>
-      <th>GalAOPEtn</th>
+      <th>GalAOPEtN</th>
       <th>GalAOPyr</th>
       <th>GalAP3</th>
       <th>GalASer</th>
@@ -1121,10 +1127,10 @@ nb_path: "index.ipynb"
       <th>GalN2Suc</th>
       <th>GalN2Suc-ol</th>
       <th>GalN6Me</th>
-      <th>GalN6PEtn</th>
+      <th>GalN6PEtN</th>
       <th>GalNAc</th>
       <th>GalNAc-ol</th>
-      <th>GalNAc1Etn</th>
+      <th>GalNAc1EtN</th>
       <th>GalNAc1Me</th>
       <th>GalNAc1N</th>
       <th>GalNAc1P</th>
@@ -1146,7 +1152,7 @@ nb_path: "index.ipynb"
       <th>GalNAc4Ac</th>
       <th>GalNAc4Ac6Ac</th>
       <th>GalNAc4Me</th>
-      <th>GalNAc4PEtn</th>
+      <th>GalNAc4PEtN</th>
       <th>GalNAc4PGro</th>
       <th>GalNAc4Pyr</th>
       <th>GalNAc4S</th>
@@ -1157,7 +1163,7 @@ nb_path: "index.ipynb"
       <th>GalNAc6Me</th>
       <th>GalNAc6P</th>
       <th>GalNAc6PCho</th>
-      <th>GalNAc6PEtn</th>
+      <th>GalNAc6PEtN</th>
       <th>GalNAc6PGro</th>
       <th>GalNAc6S</th>
       <th>GalNAc6S-ol</th>
@@ -1181,7 +1187,7 @@ nb_path: "index.ipynb"
       <th>GalNAcOMe</th>
       <th>GalNAcOP</th>
       <th>GalNAcOPCho</th>
-      <th>GalNAcOPEtn</th>
+      <th>GalNAcOPEtN</th>
       <th>GalNAcOPGro</th>
       <th>GalNAcOS</th>
       <th>GalNAcPGro</th>
@@ -1213,7 +1219,7 @@ nb_path: "index.ipynb"
       <th>GalOMeNAla</th>
       <th>GalOP</th>
       <th>GalOPCho</th>
-      <th>GalOPEtn</th>
+      <th>GalOPEtN</th>
       <th>GalOPGro</th>
       <th>GalOPyr</th>
       <th>GalOS</th>
@@ -1256,19 +1262,20 @@ nb_path: "index.ipynb"
       <th>Glc</th>
       <th>Glc-ol</th>
       <th>Glc-onic</th>
+      <th>Glc1</th>
       <th>Glc1Beh6Ac</th>
       <th>Glc1Cer</th>
       <th>Glc1Cer6Aep</th>
       <th>Glc1Coum</th>
       <th>Glc1Coum6Ac</th>
       <th>Glc1Et</th>
-      <th>Glc1Etn</th>
-      <th>Glc1Etn2Ac</th>
+      <th>Glc1EtN</th>
+      <th>Glc1EtN2Ac</th>
       <th>Glc1F</th>
       <th>Glc1Fer</th>
       <th>Glc1Fer6Ac</th>
       <th>Glc1Gro</th>
-      <th>Glc1Gro6PEtn</th>
+      <th>Glc1Gro6PEtN</th>
       <th>Glc1GroA</th>
       <th>Glc1Hxo</th>
       <th>Glc1Lin</th>
@@ -1295,7 +1302,7 @@ nb_path: "index.ipynb"
       <th>Glc1P2Lau3Lau</th>
       <th>Glc1P2Myr3Myr</th>
       <th>Glc1P6Ac</th>
-      <th>Glc1PEtn</th>
+      <th>Glc1PEtN</th>
       <th>Glc1PGro</th>
       <th>Glc1PP</th>
       <th>Glc1PP3N</th>
@@ -1385,7 +1392,7 @@ nb_path: "index.ipynb"
       <th>Glc3P-ol</th>
       <th>Glc3P4P</th>
       <th>Glc3P4P6Ac</th>
-      <th>Glc3PEtn6PEtn</th>
+      <th>Glc3PEtN6PEtN</th>
       <th>Glc3PGro</th>
       <th>Glc3S</th>
       <th>Glc3S-ol</th>
@@ -1401,7 +1408,7 @@ nb_path: "index.ipynb"
       <th>Glc4Me6Me</th>
       <th>Glc4N</th>
       <th>Glc4P</th>
-      <th>Glc4PEtn</th>
+      <th>Glc4PEtN</th>
       <th>Glc4PGro</th>
       <th>Glc4Pyr</th>
       <th>Glc4S</th>
@@ -1435,7 +1442,7 @@ nb_path: "index.ipynb"
       <th>Glc6P</th>
       <th>Glc6P-ol</th>
       <th>Glc6PCho</th>
-      <th>Glc6PEtn</th>
+      <th>Glc6PEtN</th>
       <th>Glc6PGro</th>
       <th>Glc6PGroA</th>
       <th>Glc6PGroAc</th>
@@ -1467,6 +1474,7 @@ nb_path: "index.ipynb"
       <th>GlcA2NAc3NAc6N</th>
       <th>GlcA2NAc4Me</th>
       <th>GlcA2Pyr</th>
+      <th>GlcA2Pyr3Pyr</th>
       <th>GlcA2S</th>
       <th>GlcA2S3Ac</th>
       <th>GlcA2S3Me</th>
@@ -1487,7 +1495,7 @@ nb_path: "index.ipynb"
       <th>GlcA6Ac</th>
       <th>GlcA6Ala</th>
       <th>GlcA6CetLys</th>
-      <th>GlcA6Etn</th>
+      <th>GlcA6EtN</th>
       <th>GlcA6Gly</th>
       <th>GlcA6GroN</th>
       <th>GlcA6Lys</th>
@@ -1506,7 +1514,7 @@ nb_path: "index.ipynb"
       <th>GlcAN2But3NBut</th>
       <th>GlcAOAc</th>
       <th>GlcAOBut</th>
-      <th>GlcAOEtn</th>
+      <th>GlcAOEtN</th>
       <th>GlcAOLac</th>
       <th>GlcAOMe</th>
       <th>GlcAOP</th>
@@ -1540,19 +1548,19 @@ nb_path: "index.ipynb"
       <th>GlcN1P2Ste3Pam</th>
       <th>GlcN1P2Ste3Ste</th>
       <th>GlcN1P3N</th>
-      <th>GlcN1PEtn</th>
-      <th>GlcN1PEtn2Myr3Myr</th>
-      <th>GlcN1PEtn2Ste3Pam</th>
+      <th>GlcN1PEtN</th>
+      <th>GlcN1PEtN2Myr3Myr</th>
+      <th>GlcN1PEtN2Ste3Pam</th>
       <th>GlcN1PLau3Dco</th>
       <th>GlcN1PP</th>
       <th>GlcN1PP2Lau</th>
       <th>GlcN1PP2Myr3Myr</th>
-      <th>GlcN1PPEtn2Dco3Dco</th>
-      <th>GlcN1PPEtn2Lau3Lau</th>
-      <th>GlcN1PPEtn2Myr3Lau</th>
-      <th>GlcN1PPEtn2Myr3Myr</th>
-      <th>GlcN1PPEtn2Myr3NMyr</th>
-      <th>GlcN1PPEtn2Ste3NPam</th>
+      <th>GlcN1PPEtN2Dco3Dco</th>
+      <th>GlcN1PPEtN2Lau3Lau</th>
+      <th>GlcN1PPEtN2Myr3Lau</th>
+      <th>GlcN1PPEtN2Myr3Myr</th>
+      <th>GlcN1PPEtN2Myr3NMyr</th>
+      <th>GlcN1PPEtN2Ste3NPam</th>
       <th>GlcN1Ste2Myr3N</th>
       <th>GlcN1Vac</th>
       <th>GlcN2Ac</th>
@@ -1564,7 +1572,7 @@ nb_path: "index.ipynb"
       <th>GlcN2But</th>
       <th>GlcN2But3NFoA6N</th>
       <th>GlcN2Dco3Dco4P</th>
-      <th>GlcN2Dco3Dco4PPEtn</th>
+      <th>GlcN2Dco3Dco4PPEtN</th>
       <th>GlcN2Dco3Myr3P</th>
       <th>GlcN2Dco4P</th>
       <th>GlcN2Fo</th>
@@ -1588,16 +1596,16 @@ nb_path: "index.ipynb"
       <th>GlcN2Myr3Dco4P</th>
       <th>GlcN2Myr3Lau</th>
       <th>GlcN2Myr3Lau4P</th>
-      <th>GlcN2Myr3Lau4PPEtn</th>
+      <th>GlcN2Myr3Lau4PPEtN</th>
       <th>GlcN2Myr3Myr</th>
       <th>GlcN2Myr3Myr4P</th>
-      <th>GlcN2Myr3Myr4PEtn</th>
+      <th>GlcN2Myr3Myr4PEtN</th>
       <th>GlcN2Myr3Myr4PP</th>
-      <th>GlcN2Myr3Myr4PPEtn</th>
+      <th>GlcN2Myr3Myr4PPEtN</th>
       <th>GlcN2Myr3NLau</th>
       <th>GlcN2Myr3NMyr</th>
       <th>GlcN2Myr3NMyr4P</th>
-      <th>GlcN2Myr3NMyr4PPEtn</th>
+      <th>GlcN2Myr3NMyr4PPEtN</th>
       <th>GlcN2Myr3NPam</th>
       <th>GlcN2Myr3Pam4P</th>
       <th>GlcN2Myr4P</th>
@@ -1634,30 +1642,30 @@ nb_path: "index.ipynb"
       <th>GlcN3N</th>
       <th>GlcN3N4P</th>
       <th>GlcN3N4PP</th>
-      <th>GlcN3N4PPEtn</th>
+      <th>GlcN3N4PPEtN</th>
       <th>GlcN3NMyr</th>
       <th>GlcN3S</th>
       <th>GlcN3S6S</th>
       <th>GlcN4Ac</th>
       <th>GlcN4P</th>
       <th>GlcN4P6Ac</th>
-      <th>GlcN4PEtn</th>
+      <th>GlcN4PEtN</th>
       <th>GlcN4PP</th>
-      <th>GlcN4PPEtn</th>
+      <th>GlcN4PPEtN</th>
       <th>GlcN6Ac</th>
       <th>GlcN6Aep</th>
       <th>GlcN6Me</th>
       <th>GlcN6N</th>
       <th>GlcN6P</th>
       <th>GlcN6PCho</th>
-      <th>GlcN6PEtn</th>
+      <th>GlcN6PEtN</th>
       <th>GlcN6S</th>
       <th>GlcNAC-ol</th>
       <th>GlcNAc</th>
       <th>GlcNAc-ol</th>
       <th>GlcNAc-onic</th>
       <th>GlcNAc1Cer</th>
-      <th>GlcNAc1Etn</th>
+      <th>GlcNAc1EtN</th>
       <th>GlcNAc1Gro</th>
       <th>GlcNAc1Me</th>
       <th>GlcNAc1Me6S</th>
@@ -1730,9 +1738,9 @@ nb_path: "index.ipynb"
       <th>GlcNAc6P</th>
       <th>GlcNAc6P-ol</th>
       <th>GlcNAc6PCho</th>
+      <th>GlcNAc6PEtN</th>
       <th>GlcNAc6PEtNAc</th>
       <th>GlcNAc6PEtg</th>
-      <th>GlcNAc6PEtn</th>
       <th>GlcNAc6PGro</th>
       <th>GlcNAc6Pyr</th>
       <th>GlcNAc6S</th>
@@ -1782,8 +1790,8 @@ nb_path: "index.ipynb"
       <th>GlcNAcOMe</th>
       <th>GlcNAcOP</th>
       <th>GlcNAcOPCho</th>
+      <th>GlcNAcOPEtN</th>
       <th>GlcNAcOPEtg</th>
-      <th>GlcNAcOPEtn</th>
       <th>GlcNAcOPGro</th>
       <th>GlcNAcOPGroA</th>
       <th>GlcNAcOPOAch</th>
@@ -1824,7 +1832,7 @@ nb_path: "index.ipynb"
       <th>GlcNOMar</th>
       <th>GlcNOMyr</th>
       <th>GlcNOP</th>
-      <th>GlcNOPEtn</th>
+      <th>GlcNOPEtN</th>
       <th>GlcNOPyr</th>
       <th>GlcNP3NFoA6N</th>
       <th>GlcNProp</th>
@@ -1835,7 +1843,7 @@ nb_path: "index.ipynb"
       <th>GlcOBz</th>
       <th>GlcOCm2Vac6AcNMe</th>
       <th>GlcOCm6AcNMe</th>
-      <th>GlcOEtnN</th>
+      <th>GlcOEtNN</th>
       <th>GlcOGly</th>
       <th>GlcOLac</th>
       <th>GlcOMal</th>
@@ -1849,13 +1857,13 @@ nb_path: "index.ipynb"
       <th>GlcOP1Ole</th>
       <th>GlcOPCho</th>
       <th>GlcOPChoGro</th>
-      <th>GlcOPEtn</th>
-      <th>GlcOPEtnN</th>
+      <th>GlcOPEtN</th>
+      <th>GlcOPEtNN</th>
       <th>GlcOPGro</th>
       <th>GlcOPN</th>
       <th>GlcOPN1Pam</th>
       <th>GlcOPNOMyr</th>
-      <th>GlcOPPEtn</th>
+      <th>GlcOPPEtN</th>
       <th>GlcOPyr</th>
       <th>GlcOS</th>
       <th>GlcOSN</th>
@@ -1892,7 +1900,7 @@ nb_path: "index.ipynb"
       <th>HexNAc</th>
       <th>HexNAc-ol</th>
       <th>HexNAcOPCho</th>
-      <th>HexNAcOPEtn</th>
+      <th>HexNAcOPEtN</th>
       <th>HexNAcOS</th>
       <th>HexOAc</th>
       <th>HexOMe</th>
@@ -1923,7 +1931,7 @@ nb_path: "index.ipynb"
       <th>IdoNAc1N</th>
       <th>IdoNAc6NAc</th>
       <th>Ins</th>
-      <th>Ins3PEtn</th>
+      <th>Ins3PEtN</th>
       <th>Kdn</th>
       <th>Kdn1N</th>
       <th>Kdn2P</th>
@@ -1947,8 +1955,8 @@ nb_path: "index.ipynb"
       <th>Kdo4Ac5S</th>
       <th>Kdo4P</th>
       <th>Kdo4P8P</th>
-      <th>Kdo4PPEtn</th>
-      <th>Kdo4PPEtn8N</th>
+      <th>Kdo4PPEtN</th>
+      <th>Kdo4PPEtN8N</th>
       <th>Kdo5Me</th>
       <th>Kdo5P</th>
       <th>Kdo5PGro</th>
@@ -1956,26 +1964,26 @@ nb_path: "index.ipynb"
       <th>Kdo7Ac</th>
       <th>Kdo7Me</th>
       <th>Kdo7P</th>
-      <th>Kdo7PEtn</th>
+      <th>Kdo7PEtN</th>
       <th>Kdo7Pyr</th>
       <th>Kdo8Ac</th>
       <th>Kdo8P</th>
-      <th>Kdo8PEtn</th>
+      <th>Kdo8PEtN</th>
       <th>Kdo8Pp</th>
       <th>KdoN</th>
       <th>KdoOAc</th>
       <th>KdoOMe</th>
       <th>KdoOP</th>
-      <th>KdoOPEtn</th>
+      <th>KdoOPEtN</th>
       <th>KdoOPN</th>
-      <th>KdoOPOEtn</th>
-      <th>KdoOPPEtn</th>
-      <th>KdoOPPEtnN</th>
+      <th>KdoOPOEtN</th>
+      <th>KdoOPPEtN</th>
+      <th>KdoOPPEtNN</th>
       <th>Kdof</th>
       <th>Ko</th>
       <th>Ko2Me</th>
       <th>KoOMe</th>
-      <th>KoOPEtn</th>
+      <th>KoOPEtN</th>
       <th>L-2dThrPen4N</th>
       <th>L-2dThrPen4NMe</th>
       <th>L-4dEry-ol</th>
@@ -2058,10 +2066,10 @@ nb_path: "index.ipynb"
       <th>L-GulNAcA6Gly</th>
       <th>L-GulNAcAN</th>
       <th>L-GulNAcANAm</th>
-      <th>L-GulNAcANEtn</th>
+      <th>L-GulNAcANEtN</th>
       <th>L-GulNAcAOAc</th>
       <th>L-GulNAcAOAcN</th>
-      <th>L-GulNAcAOEtn</th>
+      <th>L-GulNAcAOEtN</th>
       <th>L-Lyx</th>
       <th>L-Man</th>
       <th>L-Man-ol</th>
@@ -2103,39 +2111,38 @@ nb_path: "index.ipynb"
       <th>LDManHep2Ac</th>
       <th>LDManHep2Gly4P</th>
       <th>LDManHep2P4P</th>
-      <th>LDManHep2PPEtn</th>
-      <th>LDManHep2PPEtn4P</th>
+      <th>LDManHep2PPEtN</th>
+      <th>LDManHep2PPEtN4P</th>
       <th>LDManHep3P</th>
-      <th>LDManHep3PEtn</th>
+      <th>LDManHep3PEtN</th>
       <th>LDManHep4P</th>
       <th>LDManHep4P6Gly</th>
       <th>LDManHep4P6P</th>
-      <th>LDManHep4PEtn</th>
-      <th>LDManHep4PEtn7PEtn</th>
-      <th>LDManHep4PGly</th>
+      <th>LDManHep4PEtN</th>
+      <th>LDManHep4PEtN7PEtN</th>
       <th>LDManHep4POGly</th>
-      <th>LDManHep4PPEtn</th>
+      <th>LDManHep4PPEtN</th>
       <th>LDManHep6P</th>
       <th>LDManHep6P7Cm</th>
-      <th>LDManHep6PEtn</th>
-      <th>LDManHep6PPEtn</th>
+      <th>LDManHep6PEtN</th>
+      <th>LDManHep6PPEtN</th>
       <th>LDManHep7P</th>
-      <th>LDManHep7PEtn</th>
+      <th>LDManHep7PEtN</th>
       <th>LDManHepGly</th>
       <th>LDManHepGroN</th>
       <th>LDManHepOAc</th>
       <th>LDManHepOCm</th>
-      <th>LDManHepOEtn</th>
+      <th>LDManHepOEtN</th>
       <th>LDManHepOGly</th>
       <th>LDManHepOMe</th>
       <th>LDManHepOP</th>
-      <th>LDManHepOPEtn</th>
+      <th>LDManHepOPEtN</th>
       <th>LDManHepOPGroA</th>
       <th>LDManHepOPOCm</th>
       <th>LDManHepOPOMe</th>
-      <th>LDManHepOPOPEtn</th>
-      <th>LDManHepOPOPPEtn</th>
-      <th>LDManHepOPPEtn</th>
+      <th>LDManHepOPOPEtN</th>
+      <th>LDManHepOPOPPEtN</th>
+      <th>LDManHepOPPEtN</th>
       <th>LDManHepPGroA</th>
       <th>Leg</th>
       <th>Leg2P5Ac7Ac</th>
@@ -2164,7 +2171,7 @@ nb_path: "index.ipynb"
       <th>Man-onic</th>
       <th>Man1Cer</th>
       <th>Man1Et</th>
-      <th>Man1Etn</th>
+      <th>Man1EtN</th>
       <th>Man1Me</th>
       <th>Man1Me2Et</th>
       <th>Man1Me2S3S6S</th>
@@ -2173,7 +2180,7 @@ nb_path: "index.ipynb"
       <th>Man1N-ol</th>
       <th>Man1P</th>
       <th>Man1P-ol</th>
-      <th>Man1PEtn-ol</th>
+      <th>Man1PEtN-ol</th>
       <th>Man1PP</th>
       <th>Man1Prop</th>
       <th>Man1S</th>
@@ -2201,7 +2208,7 @@ nb_path: "index.ipynb"
       <th>Man2Oco3Oco4Oco6Oco</th>
       <th>Man2Oco6Ac</th>
       <th>Man2P</th>
-      <th>Man2PEtn</th>
+      <th>Man2PEtN</th>
       <th>Man2PMe</th>
       <th>Man2S</th>
       <th>Man2S3S4S6P</th>
@@ -2241,7 +2248,7 @@ nb_path: "index.ipynb"
       <th>Man6P</th>
       <th>Man6P-ol</th>
       <th>Man6PCho</th>
-      <th>Man6PEtn</th>
+      <th>Man6PEtN</th>
       <th>Man6S</th>
       <th>ManA</th>
       <th>ManA1PP</th>
@@ -2283,7 +2290,7 @@ nb_path: "index.ipynb"
       <th>ManNAc4PGroA</th>
       <th>ManNAc4Pyr</th>
       <th>ManNAc6Ac</th>
-      <th>ManNAc6PEtn</th>
+      <th>ManNAc6PEtN</th>
       <th>ManNAcA</th>
       <th>ManNAcA1Gro3NAc</th>
       <th>ManNAcA2NAc</th>
@@ -2299,7 +2306,7 @@ nb_path: "index.ipynb"
       <th>ManNAcAAla</th>
       <th>ManNAcAN</th>
       <th>ManNAcANAm</th>
-      <th>ManNAcANEtn</th>
+      <th>ManNAcANEtN</th>
       <th>ManNAcANOOrn</th>
       <th>ManNAcAOAc</th>
       <th>ManNAcASer</th>
@@ -2315,13 +2322,13 @@ nb_path: "index.ipynb"
       <th>ManOAcN</th>
       <th>ManOAcOMe</th>
       <th>ManOAcOPyr</th>
-      <th>ManOEtn</th>
+      <th>ManOEtN</th>
       <th>ManOLac</th>
       <th>ManOMe</th>
       <th>ManOP</th>
       <th>ManOP-ol</th>
       <th>ManOPCho</th>
-      <th>ManOPEtn</th>
+      <th>ManOPEtN</th>
       <th>ManOPOMe</th>
       <th>ManOPOPyr-ol</th>
       <th>ManOPyr</th>
@@ -2330,6 +2337,7 @@ nb_path: "index.ipynb"
       <th>Manf</th>
       <th>Manf1Me</th>
       <th>Manf1Me5P</th>
+      <th>Monosaccharide</th>
       <th>Mur</th>
       <th>MurN</th>
       <th>MurNAc</th>
@@ -2385,6 +2393,8 @@ nb_path: "index.ipynb"
       <th>Neu5Gc8S</th>
       <th>Neu5Gc9Ac</th>
       <th>Neu5Gc9Me</th>
+      <th>Neu5GcOAc</th>
+      <th>Neu5GcOLac</th>
       <th>Neu5GcOMe</th>
       <th>Neu5GcOS</th>
       <th>Neu5Pp</th>
@@ -2523,11 +2533,11 @@ nb_path: "index.ipynb"
       <th>Rha</th>
       <th>Rha-ol</th>
       <th>Rha1Dco</th>
-      <th>Rha1Etn</th>
+      <th>Rha1EtN</th>
       <th>Rha1Fer</th>
       <th>Rha1Gro</th>
       <th>Rha1Gro3Me</th>
-      <th>Rha1Gro3PEtn</th>
+      <th>Rha1Gro3PEtN</th>
       <th>Rha1Me</th>
       <th>Rha1N</th>
       <th>Rha1P</th>
@@ -2555,8 +2565,8 @@ nb_path: "index.ipynb"
       <th>Rha3Lac</th>
       <th>Rha3Me</th>
       <th>Rha3Me4Me</th>
-      <th>Rha3PEtn</th>
-      <th>Rha3PEtn4Ac</th>
+      <th>Rha3PEtN</th>
+      <th>Rha3PEtN4Ac</th>
       <th>Rha3PGro</th>
       <th>Rha3PMe</th>
       <th>Rha3Pyr</th>
@@ -2583,7 +2593,7 @@ nb_path: "index.ipynb"
       <th>RhaOMeCMeNLac</th>
       <th>RhaOMeCMeOFo</th>
       <th>RhaOP</th>
-      <th>RhaOPEtn</th>
+      <th>RhaOPEtN</th>
       <th>RhaOPGro</th>
       <th>RhaOPOMe</th>
       <th>RhaOPyr</th>
@@ -2608,7 +2618,7 @@ nb_path: "index.ipynb"
       <th>RibOAc</th>
       <th>RibOAcOP-ol</th>
       <th>RibOP-ol</th>
-      <th>RibOPEtn-ol</th>
+      <th>RibOPEtN-ol</th>
       <th>RibOPGro-ol</th>
       <th>RibOPPGro-ol</th>
       <th>RibPGro-ol</th>
@@ -2695,6 +2705,7 @@ nb_path: "index.ipynb"
       <th>a1-7</th>
       <th>a1-8</th>
       <th>a1-9</th>
+      <th>a1-z</th>
       <th>a2-1</th>
       <th>a2-11</th>
       <th>a2-2</th>
@@ -2705,6 +2716,7 @@ nb_path: "index.ipynb"
       <th>a2-7</th>
       <th>a2-8</th>
       <th>a2-9</th>
+      <th>a2-z</th>
       <th>a3-2</th>
       <th>a3-4</th>
       <th>a4-1</th>
@@ -2721,6 +2733,7 @@ nb_path: "index.ipynb"
       <th>b1-7</th>
       <th>b1-8</th>
       <th>b1-9</th>
+      <th>b1-z</th>
       <th>b2-1</th>
       <th>b2-2</th>
       <th>b2-3</th>
@@ -2738,11 +2751,12 @@ nb_path: "index.ipynb"
       <th>b6-3</th>
       <th>bond</th>
       <th>dHex</th>
-      <th>monosaccharide</th>
+      <th>z1-z</th>
+      <th>z2-z</th>
       <th>Fuc(a1-3)GlcNAc</th>
       <th>GalNAc(a1-4)GlcNAcA</th>
       <th>GlcN(b1-7)Kdo</th>
-      <th>GlcN4P(b1-6)GlcN4P</th>
+      <th>GlcN4P(b1-6)GlcN1P</th>
       <th>GlcNAc(b1-4)GlcNAc</th>
       <th>GlcNAcA(a1-4)Kdo</th>
       <th>Kdo(a2-4)Kdo</th>
@@ -2796,6 +2810,7 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>1</td>
       <td>1</td>
       <td>0</td>
       <td>0</td>
@@ -2869,6 +2884,7 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>1</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -2895,9 +2911,7 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
+      <td>1</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -2952,8 +2966,8 @@ nb_path: "index.ipynb"
       <td>4.0</td>
       <td>13.0</td>
       <td>13.0</td>
-      <td>0.034262</td>
-      <td>-2.390521</td>
+      <td>0.057103</td>
+      <td>-2.075921</td>
       <td>13.0</td>
       <td>12.0</td>
       <td>0</td>
@@ -4220,8 +4234,11 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
-      <td>2</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>2</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -5219,6 +5236,9 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
       <td>0</td>
       <td>0</td>
@@ -5280,9 +5300,13 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
       <td>0</td>
       <td>2</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -5362,7 +5386,7 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>1</td>
-      <td>0</td>
+      <td>1</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -5517,8 +5541,8 @@ nb_path: "index.ipynb"
       <td>3.0</td>
       <td>15.0</td>
       <td>15.0</td>
-      <td>0.043739</td>
-      <td>-2.621893</td>
+      <td>0.031066</td>
+      <td>-2.658737</td>
       <td>15.0</td>
       <td>14.0</td>
       <td>0</td>
@@ -6785,8 +6809,11 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
-      <td>2</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>2</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -7819,6 +7846,9 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>2</td>
       <td>2</td>
       <td>0</td>
@@ -7847,7 +7877,11 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>2</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -7887,7 +7921,7 @@ nb_path: "index.ipynb"
       <td>0</td>
     </tr>
     <tr>
-      <th>GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcN4P(b1-6)GlcN4P</th>
+      <th>GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcN4P(b1-6)GlcN1P</th>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -8082,8 +8116,8 @@ nb_path: "index.ipynb"
       <td>4.0</td>
       <td>15.0</td>
       <td>15.0</td>
-      <td>0.025865</td>
-      <td>-2.680266</td>
+      <td>0.013600</td>
+      <td>-2.688625</td>
       <td>15.0</td>
       <td>14.0</td>
       <td>0</td>
@@ -8819,6 +8853,8 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
       <td>0</td>
       <td>0</td>
@@ -9213,6 +9249,14 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
       <td>0</td>
       <td>0</td>
@@ -9330,13 +9374,7 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>2</td>
+      <td>1</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -10386,6 +10424,8 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>2</td>
       <td>0</td>
       <td>0</td>
@@ -10396,26 +10436,30 @@ nb_path: "index.ipynb"
       <td>0</td>
       <td>0</td>
       <td>0</td>
-      <td>1</td>
-      <td>1</td>
-      <td>1</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
       <td>0</td>
       <td>1</td>
       <td>1</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -10475,8 +10519,10 @@ nb_path: "index.ipynb"
                      <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">))</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">compare_glycans</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">,</span>
                      <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">))</span>
+
 <span class="c1">#or you could find the largest common subgraph of two glycans</span>
 <span class="kn">from</span> <span class="nn">glycowork.motif.graph</span> <span class="kn">import</span> <span class="n">largest_subgraph</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Largest Common Subgraph:&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">largest_subgraph</span><span class="p">(</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc&#39;</span><span class="p">,</span>
                      <span class="s1">&#39;Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">))</span>
 </pre></div>
@@ -10493,6 +10539,8 @@ nb_path: "index.ipynb"
 <div class="output_subarea output_stream output_stdout output_text">
 <pre>True
 False
+
+Largest Common Subgraph:
 Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc
 </pre>
 </div>
@@ -10511,109 +10559,34 @@ Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc
 
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython3"><pre><span></span><span class="kn">from</span> <span class="nn">glycowork.motif.analysis</span> <span class="kn">import</span> <span class="n">get_pvals_motifs</span>
-<span class="n">glycans</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc&#39;</span><span class="p">,</span>
-           <span class="s1">&#39;Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-3)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">,</span>
-           <span class="s1">&#39;GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcN4P(b1-6)GlcN4P&#39;</span><span class="p">,</span>
-           <span class="s1">&#39;Man(a1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc&#39;</span><span class="p">,</span>
-           <span class="s1">&#39;Glc(b1-3)Glc(b1-3)Glc&#39;</span><span class="p">]</span>
-<span class="n">label</span> <span class="o">=</span> <span class="p">[</span><span class="mf">3.234</span><span class="p">,</span> <span class="mf">2.423</span><span class="p">,</span> <span class="mf">0.733</span><span class="p">,</span> <span class="mf">3.102</span><span class="p">,</span> <span class="mf">0.108</span><span class="p">]</span>
-<span class="n">test_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s1">&#39;glycan&#39;</span><span class="p">:</span><span class="n">glycans</span><span class="p">,</span> <span class="s1">&#39;binding&#39;</span><span class="p">:</span><span class="n">label</span><span class="p">})</span>
-<span class="n">out</span> <span class="o">=</span> <span class="n">get_pvals_motifs</span><span class="p">(</span><span class="n">test_df</span><span class="p">,</span> <span class="n">glycan_col_name</span> <span class="o">=</span> <span class="s1">&#39;glycan&#39;</span><span class="p">,</span> <span class="n">label_col_name</span> <span class="o">=</span> <span class="s1">&#39;binding&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span><span class="mi">10</span><span class="p">,:]</span>
+<div class=" highlight hl-ipython3"><pre><span></span><span class="kn">from</span> <span class="nn">glycowork.motif.tokenization</span> <span class="kn">import</span> <span class="n">compositions_to_structures</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">compositions_to_structures</span><span class="p">([{</span><span class="s1">&#39;Hex&#39;</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;HexNAc&#39;</span><span class="p">:</span><span class="mi">4</span><span class="p">}],</span> <span class="n">reducing_end</span> <span class="o">=</span> <span class="s1">&#39;GlcNAc&#39;</span><span class="p">))</span>
 </pre></div>
 
     </div>
 </div>
 </div>
 
-</div>
-    {% endraw %}
-
-    {% raw %}
-    
-<div class="cell border-box-sizing code_cell rendered">
-
 <div class="output_wrapper">
 <div class="output">
 
 <div class="output_area">
 
-
-<div class="output_html rendered_html output_subarea output_execute_result">
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>motif</th>
-      <th>pval</th>
-      <th>corr_pval</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>5</th>
-      <td>GlcNAc</td>
-      <td>0.013469</td>
-      <td>0.394527</td>
-    </tr>
-    <tr>
-      <th>19</th>
-      <td>b1-4</td>
-      <td>0.013469</td>
-      <td>0.394527</td>
-    </tr>
-    <tr>
-      <th>8</th>
-      <td>Man</td>
-      <td>0.025198</td>
-      <td>0.590671</td>
-    </tr>
-    <tr>
-      <th>11</th>
-      <td>a1-3</td>
-      <td>0.025636</td>
-      <td>0.590671</td>
-    </tr>
-    <tr>
-      <th>13</th>
-      <td>a1-6</td>
-      <td>0.091752</td>
-      <td>0.958241</td>
-    </tr>
-    <tr>
-      <th>27</th>
-      <td>GlcNAc(b1-4)GlcNAc</td>
-      <td>0.091752</td>
-      <td>0.958241</td>
-    </tr>
-    <tr>
-      <th>33</th>
-      <td>Man(a1-3)Man</td>
-      <td>0.091752</td>
-      <td>0.958241</td>
-    </tr>
-    <tr>
-      <th>34</th>
-      <td>Man(a1-6)Man</td>
-      <td>0.091752</td>
-      <td>0.958241</td>
-    </tr>
-    <tr>
-      <th>35</th>
-      <td>Man(b1-4)GlcNAc</td>
-      <td>0.091752</td>
-      <td>0.958241</td>
-    </tr>
-    <tr>
-      <th>10</th>
-      <td>a1-2</td>
-      <td>0.130826</td>
-      <td>0.980276</td>
-    </tr>
-  </tbody>
-</table>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>0 compositions could not be matched. Run with verbose = True to see which compositions.
+                                              glycan  abundance
+0  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
+1  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
+2  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
+3  GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Ma...          0
+4  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][G...          0
+5  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
+6  GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-...          0
+7  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4...          0
+8  GlcNAc(z1-z)Man(a1-3)[GlcNAc(z1-z)Man(a1-6)]Ma...          0
+9  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]...          0
+</pre>
 </div>
-
 </div>
 
 </div>

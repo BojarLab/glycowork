@@ -5,10 +5,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="glycowork",
-    version="0.4.0",
+    version="0.5.0",
     author="Daniel Bojar",
     author_email="daniel.bojar@gu.se",
-    description="Package containing helper functions for processing and analysis of glycans",
+    description="Package for processing and analyzing glycans",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/BojarLab/glycowork",
@@ -24,5 +24,5 @@ setuptools.setup(
     install_requires=["sklearn", "regex", "networkx",
                       "statsmodels", "scipy", "torch",
                       "seaborn", "xgboost", "mpld3",
-                      "requests"],
+                      "requests", "pandas"],
 )

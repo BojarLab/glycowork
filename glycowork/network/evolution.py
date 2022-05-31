@@ -1,8 +1,47 @@
+import os
+import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import networkx as nx
+from community import community_louvain
 from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
+from glycowork.glycan_data.loader import lib
+from glycowork.motif.graph import subgraph_isomorphism
+
+this_dir, this_filename = os.path.split(__file__) 
+data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
+net_dic = pickle.load(open(data_path, 'rb'))
+
+def calculate_distance_matrix(to_compare, dist_func, label_list = None):
+  """calculates pairwise distances based on objects and a metric\n
+  | Arguments:
+  | :-
+  | to_compare (dict or list): objects to calculate pairwise distances for, if dict then values have to be lists
+  | dist_func (function): function such as 'jaccard' or 'cosine' that calculates distance given two lists/elements
+  | label_list (list): column names for the resulting distance matrix; default:range(len(to_compare))\n
+  | Returns:
+  | :-
+  | Returns a len(to_compare) x len(to_compare) distance matrix
+  """
+  dm = np.zeros((len(to_compare), len(to_compare)))
+  #check whether comparison objects are in a dict or list
+  if isinstance(to_compare, dict):
+    label_list = list(to_compare.keys())
+  elif idx is None:
+    label_list = list(range(len(to_compare)))
+  dm = pd.DataFrame(dm, columns = label_list)
+  #calculate pairwise distances
+  if isinstance(to_compare, dict):
+    for i in range(len(to_compare)):
+      for j in range(len(to_compare)):
+        dm.iloc[i,j] = dist_func(to_compare[label_list[i]], to_compare[label_list[j]])
+  else:
+    for i in range(len(to_compare)):
+      for j in range(len(to_compare)):
+        dm.iloc[i,j] = dist_func(to_compare[i], to_compare[j])
+  return dm
 
 def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
                              averaging = 'median'):
@@ -18,21 +57,20 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
   | :-
   | Returns a rank x rank distance matrix
   """
+  #subset df to only contain ranks with a minimum number of data points
   df_min = list(sorted([(df[rank].value_counts() >= cut_off).index.tolist()[k]
                            for k in range(len((df[rank].value_counts() >= cut_off).index.tolist()))
                            if (df[rank].value_counts() >= cut_off).values.tolist()[k]]))
   df_idx = [df.index[df[rank] == k].values.tolist() for k in df_min]
+  #retrieve and average embeddings for all glycans
   if averaging == 'median':
     avgs = [np.median(embeddings.iloc[k,:], axis = 0) for k in df_idx]
   elif averaging == 'mean':
     avgs = [np.mean(embeddings.iloc[k,:], axis = 0) for k in df_idx]
   else:
     print("Only 'median' and 'mean' are permitted averaging choices.")
-  dm = np.zeros((len(avgs), len(avgs)))
-  dm = pd.DataFrame(dm, columns = df_min)
-  for i in range(len(avgs)):
-    for j in range(len(avgs)):
-      dm.iloc[i,j] = cosine(avgs[i], avgs[j])
+  #get the distance matrix
+  dm = calculate_distance_matrix(avgs, cosine, label_list = df_min)
   return dm
 
 def jaccard(list1, list2):
@@ -62,19 +100,18 @@ def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = 
   | :-
   | Returns a rank x rank distance matrix
   """
+  #choose distance metric
   if metric == "Jaccard":
     dist_func = jaccard
   else:
     print("Not a defined metric. At the moment, only 'Jaccard' is available as a metric.")
+  #get all objects to calculate distance between
   specs = list(sorted(list(set(df[rank].values.tolist()))))
-  idx_min = [k for k in range(len(specs)) if len(df[df[rank] == specs[k]])>=cut_off]
+  idx_min = [k for k in range(len(specs)) if len(df[df[rank] == specs[k]]) >= cut_off]
   specs_min = [specs[k] for k in idx_min]
   networks_min = [networks[k] for k in idx_min]
-  dm = np.zeros((len(networks_min), len(networks_min)))
-  dm = pd.DataFrame(dm, columns = specs_min)
-  for i in range(len(networks_min)):
-    for j in range(len(networks_min)):
-      dm.iloc[i,j] = dist_func(networks_min[i], networks_min[j])
+  #get distance matrix
+  dm = calculate_distance_matrix(networks_min, dist_func, label_list = specs_min)
   return dm
 
 def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
@@ -85,6 +122,7 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
   | ylabel (string): how to label the y-axis of the dendrogram; default:'Mammalia'
   | filepath (string): absolute path including full filename allows for saving the plot\n
   """
+  #hierarchical clustering on the distance matrix
   Z = linkage(dm)
   plt.figure(figsize = (10,10))
   plt.title('Hierarchical Clustering Dendrogram')
@@ -104,3 +142,75 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
   if len(filepath) > 1:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
+
+def check_conservation(glycan, df, network_dic = None, libr = None, rank = 'Order', threshold = 5,
+                       motif = False):
+  """estimates evolutionary conservation of glycans and glycan motifs via biosynthetic networks\n
+  | Arguments:
+  | :-
+  | glycan (string): full glycan or glycan motif in IUPAC-condensed nomenclature
+  | df (dataframe): dataframe in the style of df_species, each row one glycan and columns are the taxonomic levels
+  | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | rank (string): at which taxonomic level to assess conservation; default:Order
+  | threshold (int): threshold of how many glycans a species needs to have to consider the species;default:5
+  | motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False\n
+  | Returns:
+  | :-
+  | Returns a dictionary of taxonomic group : degree of conservation
+  """
+  if libr is None:
+    libr = lib
+  if network_dic is None:
+    network_dic = net_dic
+  #subset species with at least the threshold-number of glycans
+  all_specs = list(sorted(list(set(df.Species.values.tolist()))))
+  allowed = [k for k in all_specs if df.Species.values.tolist().count(k) >= threshold]
+  df_freq = df[df.Species.isin(allowed)].reset_index(drop = True)
+  all_specs = list(sorted(list(set(df_freq.Species.values.tolist()))))
+  #subset members of rank with at least two species
+  pool = list(set(df_freq[rank].values.tolist()))
+  pool = [k for k in pool if len(list(set(df_freq[df_freq[rank] == k].Species.tolist()))) > 1]
+  #subset networks
+  network_dic = {k:j for k,j in network_dic.items() if k in all_specs}
+  #for each member of rank, get all species networks and search for motif
+  conserved = {}
+  for k in pool:
+    specs = list(set(df_freq[df_freq[rank] == k].Species.values.tolist()))
+    nets = [network_dic[j] for j in specs]
+    nets = [list(j.nodes()) for j in nets]
+    if motif:
+      if glycan[-1] == ')':
+        conserved[k] = sum([glycan in "".join(j) for j in nets]) / len(nets)
+      else:
+        conserved[k] = sum([any([subgraph_isomorphism(m, glycan, libr = libr) for m in j]) for j in nets]) / len(nets)
+    else:
+      conserved[k] = sum([glycan in j for j in nets]) / len(nets)
+  return conserved
+
+def get_communities(graph_list, label_list = None):
+  """Find communities for each graph in a list of graphs\n
+  | Arguments:
+  | :-
+  | graph_list (list): list of undirected biosynthetic networks, in the form of networkx objects
+  | label_list (list): labels to create the community names, which are running_number + _ + label[k]  for graph_list[k]; default:range(len(graph_list))\n
+  | Returns:
+  | :-
+  | Returns a merged dictionary of community : glycans in that community
+  """
+  #perform community detection on each network graph
+  comm_list = [community_louvain.best_partition(g) for g in graph_list]
+  if label_list is None:
+    label_list = list(range(len(comm_list)))
+  comm_dicts = []
+  #label the communities by species name and running number to distinguish them afterwards
+  i = 0
+  for comm in comm_list:
+    comm_dict = {str(num)+'_'+str(label_list[i]):[] for num in list(set(comm.values()))}
+    for k,v in comm.items():
+      comm_dict[str(v)+'_'+str(label_list[i])].append(k)
+    comm_dicts.append(comm_dict)
+    i += 1
+  #unwrap dictionaries
+  comm_dicts = {k: v for d in comm_dicts for k, v in d.items()}
+  return comm_dicts

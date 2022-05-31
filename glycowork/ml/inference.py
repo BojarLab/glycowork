@@ -16,14 +16,13 @@ except ImportError:
 
 io = pkg_resources.resource_stream(__name__,
                                    "glycowork_lectinoracle_background_correction.csv")
+#background correction values for LectinOracle predictions
 df_corr = pd.read_csv(io)
 
-#try:
-#  import esm
-#except ImportError:
-#  print('<esm missing; cannot use get_esm1b_representations>')
-
-
+#choosing the right computing architecture
+device = "cpu"
+if torch.cuda.is_available():
+    device = "cuda:0"
 
 class SimpleDataset(Dataset):
   def __init__(self, x, y):
@@ -56,22 +55,25 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
     """
     if libr is None:
       libr = lib
+    #preparing dataset for PyTorch
     glycan_loader = dataset_to_dataloader(glycans, range(len(glycans)),
                                           libr = libr, batch_size = batch_size,
                                           shuffle = False)
     res = []
+    #get predictions for each mini-batch
     for data in glycan_loader:
-        x, y, edge_index, batch = data.x, data.y, data.edge_index, data.batch
-        x = x.cuda()
-        y = y.cuda()
-        edge_index = edge_index.cuda()
-        batch = batch.cuda()
+        x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
+        x = x.to(device)
+        y = y.to(device)
+        edge_index = edge_index.to(device)
+        batch = batch.to(device)
         model = model.eval()
         pred, out = model(x, edge_index, batch, inference = True)
         if rep:
             res.append(out)
         else:
             res.append(pred)
+    #unpacking and combining predictions
     res2 = [res[k].detach().cpu().numpy() for k in range(len(res))]
     res2 = pd.DataFrame(np.concatenate(res2))
     if rep:
@@ -102,6 +104,7 @@ def get_multi_pred(prot, glycans, model, prot_dic,
   """
   if libr is None:
       libr = lib
+  #preparing dataset for PyTorch
   if flex:
     prot = prot_to_coded([prot])
     train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
@@ -117,17 +120,20 @@ def get_multi_pred(prot, glycans, model, prot_dic,
                                        shuffle = False, extra_feature = [rep]*len(glycans))
   model = model.eval()
   res = []
+  #get predictions for each mini-batch
   for k in train_loader:
-    x, y, edge_index, prot, batch = k.x, k.y, k.edge_index, k.train_idx, k.batch
-    x = x.cuda()
-    y = y.cuda()
-    prot = prot.view(max(batch)+1, -1).float().cuda()
-    edge_index = edge_index.cuda()
-    batch = batch.cuda()
+    x, y, edge_index, prot, batch = k.labels, k.y, k.edge_index, k.train_idx, k.batch
+    x = x.to(device)
+    y = y.to(device)
+    prot = prot.view(max(batch)+1, -1).float().to(device)
+    edge_index = edge_index.to(device)
+    batch = batch.to(device)
     pred = model(prot, x, edge_index, batch)
     res.append(pred)
+  #unpacking and combining predictions
   res = unwrap([res[k].detach().cpu().numpy() for k in range(len(res))])
   res = [k.tolist()[0] for k in res]
+  #applying background correction of predictions
   if background_correction:
     correction_df = pd.Series(correction_df.pred.values,
                               index = correction_df.motif).to_dict()
@@ -161,7 +167,7 @@ def get_lectin_preds(prot, glycans, model, prot_dic = {}, background_correction 
       libr = lib
   if correction_df is None:
     correction_df = df_corr
-  if len(prot_dic)<1 and not flex:
+  if len(prot_dic) < 1 and not flex:
     print("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
   preds = get_multi_pred(prot, glycans, model, prot_dic,
                          batch_size = batch_size, libr = libr,
@@ -197,7 +203,7 @@ def get_esm1b_representations(prots, model, alphabet):
   prots = list(set(prots))
   data_list = []
   for k in range(0,len(prots)):
-    if len(prots[k])<1000:
+    if len(prots[k]) < 1000:
       data_list.append(('protein'+str(k), prots[k][:np.min([len(prots[k]),
                                                                1000])]))
     else:
@@ -225,16 +231,19 @@ def get_Nsequon_preds(prots, model, prot_dic):
   | Returns dataframe of protein sequences and predicted likelihood of being an N-sequon
   """
   reps = [prot_dic[k] for k in prots]
+  #preparing dataset for PyTorch
   dataset = SimpleDataset(reps, [0]*len(reps))
   loader = torch.utils.data.DataLoader(dataset, batch_size = 32, shuffle = False)
   model = model.eval()
   preds = []
+  #get predictions for each mini-batch
   for k in loader:
     x, y = k
-    x = x.cuda()
+    x = x.to(device)
     pred = model(x)
     pred = [sigmoid(x) for x in pred.cpu().detach().numpy()]
     preds.append(pred)
+  #unpacking and combining predictions
   preds = unwrap(preds)
   df_pred = pd.DataFrame([prots, preds]).T
   df_pred.columns = ['seq', 'glycosylated']

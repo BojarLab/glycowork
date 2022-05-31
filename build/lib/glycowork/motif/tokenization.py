@@ -1,18 +1,23 @@
 import pandas as pd
 import numpy as np
+import networkx as nx
 import re
 import copy
-from itertools import combinations_with_replacement
+import pkg_resources
+from itertools import combinations_with_replacement, product
 from collections import Counter
 from sklearn.cluster import DBSCAN
 
-from glycowork.glycan_data.loader import lib, motif_list, find_nth, unwrap, df_species, Hex, dHex, HexNAc, Sia, linkages
-from glycowork.motif.processing import small_motif_find, min_process_glycans
-from glycowork.motif.graph import compare_glycans
-from glycowork.motif.annotate import annotate_dataset
+from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, df_species, Hex, dHex, HexA, HexN, HexNAc, Pen, Sia, linkages
+from glycowork.motif.processing import small_motif_find, min_process_glycans, choose_correct_isoform
+from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
+from glycowork.motif.annotate import annotate_dataset, find_isomorphs
 
 chars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T',
      'V','W','Y', 'X', 'Z'] + ['z']
+
+io = pkg_resources.resource_stream(__name__, "mz_to_composition.csv")
+mapping_file = pd.read_csv(io)
 
 def constrain_prot(proteins, libr = None):
   """Ensures that no characters outside of libr are present in proteins\n
@@ -26,28 +31,34 @@ def constrain_prot(proteins, libr = None):
   """
   if libr is None:
     libr = chars
+  #get list of unique characters
   mega_prot = list(set(list(''.join(proteins))))
+  #check whether any character is not in libr and replace it with a 'z' placeholder character
   forbidden = [k for k in mega_prot if k not in libr]
   for k in forbidden:
     proteins = [j.replace(k,'z') for j in proteins]
   return proteins
 
-def prot_to_coded(proteins, libr = None):
+def prot_to_coded(proteins, libr = None, pad_len = 1000):
   """Encodes protein sequences to be used in LectinOracle-flex\n
   | Arguments:
   | :-
   | proteins (list): list of proteins as strings
-  | libr (list): sorted list of amino acids occurring in proteins\n
+  | libr (list): sorted list of amino acids occurring in proteins
+  | pad_len (int): length up to which the proteins are padded\n
   | Returns:
   | :-
   | Returns list of encoded proteins with only permitted amino acids
   """
   if libr is None:
     libr = chars
-  prots = [k[:min(len(k), 1000)] for k in proteins]
+  #cut off protein sequence above pad_len
+  prots = [k[:min(len(k), pad_len)] for k in proteins]
+  #replace forbidden characters with 'z'
   prots = constrain_prot(prots, libr = libr)
+  #pad up to a length of pad_len
   prots = [pad_sequence(string_to_labels(str(k).upper(),libr = libr),
-                        max_length = 1000,
+                        max_length = pad_len,
                         pad_label = len(libr)-1) for k in prots]
   return prots
 
@@ -132,12 +143,12 @@ def get_core(sugar):
     return 'Neu5Gc'
   elif 'Neu' in sugar:
     return 'Neu'
-  elif ((sugar.startswith('a')) or sugar.startswith('b')):
+  elif sugar.startswith('a') or sugar.startswith('b') or sugar.startswith('z'):
     return sugar
   elif re.match('^[0-9]+(-[0-9]+)+$', sugar):
     return sugar
   else:
-    return 'Sug'
+    return 'Monosaccharide'
 
 def get_stem_lib(libr):
   """creates a mapping file to map modified monosaccharides to core monosaccharides\n
@@ -167,27 +178,33 @@ def stemify_glycan(glycan, stem_lib = None, libr = None):
     stem_lib = get_stem_lib(libr)
   clean_list = list(stem_lib.values())
   for k in list(stem_lib.keys())[::-1][:-1]:
-    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
+    #for each monosaccharide, check whether it's modified
+    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b','z'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
+      #go at it until all modifications are stemified
       while ((k in glycan) and (sum(1 for s in clean_list if k in s) <= 1)):
         glycan_start = glycan[:glycan.rindex('(')]
         glycan_part = glycan_start
+        #narrow it down to the offending monosaccharide
         if k in glycan_start:
           cut = glycan_start[glycan_start.index(k):]
           try:
             cut = cut[:cut.index('(')]
           except:
             pass
+          #replace offending monosaccharide with stemified monosaccharide
           if cut not in clean_list:
             glycan_part = glycan_start[:glycan_start.index(k)]
             glycan_part = glycan_part + stem_lib[k]
           else:
             glycan_part = glycan_start
+        #check to see whether there is anything after the modification that should be appended
         try:
           glycan_mid = glycan_start[glycan_start.index(k) + len(k):]
-          if ((cut not in clean_list) and (len(glycan_mid)>0)):
+          if ((cut not in clean_list) and (len(glycan_mid) > 0)):
             glycan_part = glycan_part + glycan_mid
         except:
           pass
+        #handling the reducing end
         glycan_end = glycan[glycan.rindex('('):]
         if k in glycan_end:
           if ']' in glycan_end:
@@ -220,15 +237,119 @@ def stemify_dataset(df, stem_lib = None, libr = None,
     libr = lib
   if stem_lib is None:
     stem_lib = get_stem_lib(libr)
+  #get pool of monosaccharides, decide which one to stemify based on rarity
   pool = unwrap(min_process_glycans(df[glycan_col_name].values.tolist()))
   pool_count = Counter(pool)
   for k in list(set(pool)):
     if pool_count[k] > rarity_filter:
       stem_lib[k] = k
+  #stemify all offending monosaccharides
   df_out = copy.deepcopy(df)
   df_out[glycan_col_name] = [stemify_glycan(k, stem_lib = stem_lib,
                                             libr = libr) for k in df_out[glycan_col_name].values.tolist()]
   return df_out
+
+def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
+                      sample_prep = 'underivatized', mass_tolerance = 0.2, human = True,
+                      glycan_class = 'N', check_all_adducts = False, check_specific_adduct = None,
+                      ptm = False):
+  """mapping a m/z value to one or more matching monosaccharide compositions\n
+  | Arguments:
+  | :-
+  | mz_value (float): the actual m/z value from mass spectrometry
+  | mode (string): whether mz_value comes from MS in 'positive' or 'negative' mode; default:'positive'
+  | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
+  | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
+  | mass_tolerance (float): how much deviation to tolerate for a match; default:0.2
+  | human (bool): whether to only consider human monosaccharide types; default:True
+  | glycan_class (string): which glycan class does the m/z value stem from, 'N' or 'O' linked glycans; default:'N'
+  | check_all_adducts (bool): whether to also check for matches with ion adducts (depending on mode); default:False
+  | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
+  | ptm (bool): whether to check for post-translational modification (sulfation, phosphorylation); default:False\n
+  | Returns:
+  | :-
+  | Returns a list of matching compositions in dict form
+  """
+  #get correct masses depending on sample characteristics
+  idx = sample_prep + '_' + mass_value
+  #needed because of implied water loss in the residue masses
+  free_reducing_end = 18.0105546
+
+  #Hex,HexNAc,dHex,Neu5Ac,Neu5Gc,Pen,Kdn,HexA,S,P
+  if glycan_class == 'N':
+    ranges = [21,21,7,6,4,5,3,3,4,3]
+  elif glycan_class == 'O':
+    ranges = [15,15,7,8,8,4,3,3,7,7]
+  else:
+    print("Invalid glycan class; only N and O are allowed.")
+
+  if human:
+    pools = [list(range(k)) for k in ranges[:4]]
+  else:
+    pools = [list(range(k)) for k in ranges[:-2]]
+  if ptm:
+    ptm_pools = [list(range(k)) for k in ranges[8:]]
+    pools = pools + ptm_pools
+  #get combinations
+  pools = list(product(*pools))
+
+  compositions = []
+  if mode == 'positive':
+    adducts = ['H+', 'Na+', 'K+']
+  elif mode == 'negative':
+    adducts = ['H', 'Acetate', 'Trifluoroacetic acid']
+  else:
+    print("Only positive or negative mode allowed.")
+  if not check_all_adducts:
+    if check_specific_adduct is None:
+      adducts = []
+    else:
+      adducts = [check_specific_adduct]
+  mass_dict = dict(zip(mapping_file.composition, mapping_file[idx]))
+  #for each combination calculate candidate precursor mass
+  if human:
+    precursors = [sum([mass_dict['Hex']*k[0], mass_dict['HexNAc']*k[1], mass_dict['dHex']*k[2],
+                       mass_dict['Neu5Ac']*k[3], free_reducing_end]) for k in pools]
+  else:
+    precursors = [sum([mass_dict['Hex']*k[0], mass_dict['HexNAc']*k[1], mass_dict['dHex']*k[2],
+                       mass_dict['Neu5Ac']*k[3], mass_dict['Neu5Gc']*k[4], mass_dict['Pen']*k[5],
+                       mass_dict['Kdn']*k[6], mass_dict['HexA']*k[7], free_reducing_end]) for k in pools]
+  if ptm:
+    precursors = [precursors[k] + mass_dict['Sulphate']*pools[k][-2] + mass_dict['Phosphate']*pools[k][-1] for k in range(len(precursors))]
+
+  #for each precursor candidate, check which lie within masss tolerance and format them
+  for k in range(len(precursors)):
+    precursor = precursors[k]
+    pool = pools[k]
+    if precursor < 1.2*mz_value:
+      candidates = [precursor] + [precursor + mass_dict[j] for j in adducts]
+      if any([abs(j - mz_value) < mass_tolerance for j in candidates]):
+        if human:
+          composition = {'Hex':pool[0], 'HexNAc':pool[1], 'dHex':pool[2],
+                         'Neu5Ac':pool[3]}
+        else:
+          composition = {'Hex':pool[0], 'HexNAc':pool[1], 'dHex':pool[2],
+                         'Neu5Ac':pool[3], 'Neu5Gc':pool[4],
+                         'Pen':pool[5], 'Kdn':pool[6], 'HexA':pool[7]}
+        if ptm:
+          composition['S'] = pool[-2]
+          composition['P'] = pool[-1]
+        compositions.append(composition)
+
+  #heuristics to rule out unphysiological glycan compositions        
+  compositions = [dict(t) for t in {tuple(d.items()) for d in compositions}]
+  compositions = [k for k in compositions if (k['Hex'] + k['HexNAc']) > 0]
+  compositions = [k for k in compositions if (k['dHex'] + 1) <= (k['Hex'] + k['HexNAc'])]
+  if glycan_class == 'N':
+    compositions = [k for k in compositions if k['HexNAc'] >= 2]
+    compositions = [k for k in compositions if any([(k['HexNAc'] > 2),
+                                                    (k['HexNAc'] == 2 and k['Neu5Ac'] == 0)])]
+  if glycan_class == 'O':
+    compositions = [k for k in compositions if k['HexNAc'] >= 1]
+  if ptm:
+    compositions = [k for k in compositions if not all([(k['S'] > 0), (k['P'] > 0)])]
+    compositions = [k for k in compositions if (k['S'] + k['P']) <= (k['Hex'] + k['HexNAc'])]
+  return compositions
 
 def match_composition(composition, group, level, df = None,
                       mode = "minimal", libr = None, glycans = None,
@@ -252,72 +373,56 @@ def match_composition(composition, group, level, df = None,
       df = df_species
     if libr is None:
       libr = lib
+    #subset the dataframe for the group of interest
     filtered_df = df[df[level] == group]
-        
+    #check which monosaccharides have to be considered
     exact_composition = {}
-    if mode == "minimal":
-        for element in libr:
-            if element in composition:
-                exact_composition[element] = composition.get(element)
-        if glycans is None:
-          glycan_list = filtered_df.target.values.tolist()
-        else:
-          glycan_list = copy.deepcopy(glycans)
-        to_remove = []
-        output_list = glycan_list
-        for glycan in glycan_list:
-            for key in exact_composition:
-                glycan_count = sum(1 for _ in re.finditer(r'\b%s\b' % re.escape(key), glycan))
-                if relaxed:
-                  if exact_composition[key] > glycan_count:
-                    to_remove.append(glycan)
-                else:
-                  if exact_composition[key] != glycan_count :
-                    to_remove.append(glycan)
-        for element in to_remove:
-            try :
-                output_list.remove(element)
-            except :
-                a = 1
-        output_list = list(set(output_list))
-        #print(str(len(output_list)) + " glycan structures match your composition.")
-        #for element in output_list:
-        #    print(element)
+    for element in libr:
+      if element in composition:
+        exact_composition[element] = composition.get(element)
+    if glycans is None:
+        glycan_list = filtered_df.target.values.tolist()
+    else:
+        glycan_list = copy.deepcopy(glycans)
+    to_remove = []
+    output_list = glycan_list
+        
+    if mode == "minimal":   
+      #for each glycan, check whether monosaccharide count corresponds to composition 
+      for glycan in glycan_list:
+          for key in exact_composition:
+              glycan_count = sum(1 for _ in re.finditer(r'\b%s\b' % re.escape(key), glycan))
+              if relaxed:
+                if exact_composition[key] > glycan_count:
+                  to_remove.append(glycan)
+              else:
+                if exact_composition[key] != glycan_count:
+                  to_remove.append(glycan)
         
     if mode == "exact":
-        for element in libr:
-            if element in composition:
-                exact_composition[element] = composition.get(element)
-        if glycans is None:
-          glycan_list = filtered_df.target.values.tolist()
-        else:
-          glycan_list = glycans
-        to_remove = []
-        output_list = glycan_list
-        for glycan in glycan_list:
-            count_sum = 0
-            for key in exact_composition :
-                glycan_count = sum(1 for _ in re.finditer(r'\b%s\b' % re.escape(key), glycan))
-                count_sum = count_sum + exact_composition[key]
-                if exact_composition[key] != glycan_count:
-                    to_remove.append(glycan)
-            monosaccharide_number_in_glycan = glycan.count("(") + 1
-            if monosaccharide_number_in_glycan != count_sum:
-                to_remove.append(glycan)
-        for element in to_remove:
-            try :
-                output_list.remove(element)
-            except :
-                a = 1
-        output_list = list(set(output_list))
-        #print(str(len(output_list)) + " glycan structures match your composition.")
-        #for element in output_list:
-        #    print(element)
-            
+      #for each glycan, check whether glycan *only* contains the monosaccharides from the composition
+      for glycan in glycan_list:
+          count_sum = 0
+          for key in exact_composition:
+              glycan_count = sum(1 for _ in re.finditer(r'\b%s\b' % re.escape(key), glycan))
+              count_sum = count_sum + exact_composition[key]
+              if exact_composition[key] != glycan_count:
+                  to_remove.append(glycan)
+          monosaccharide_number_in_glycan = glycan.count("(") + 1
+          if monosaccharide_number_in_glycan != count_sum:
+              to_remove.append(glycan)
+              
+    for element in to_remove:
+        try:
+            output_list.remove(element)
+        except:
+            pass
+    output_list = list(set(output_list))
     return output_list
 
 def match_composition_relaxed(composition, group, level, df = None,
-                      mode = "exact", libr = None, reducing_end = None):
+                      mode = "exact", libr = None, reducing_end = None,
+                      Hex_list = None, HexNAc_list = None, dHex_list = None):
     """Given a coarse-grained monosaccharide composition (Hex, HexNAc, etc.), it returns all corresponding glycans\n
     | Arguments:
     | :-
@@ -327,17 +432,35 @@ def match_composition_relaxed(composition, group, level, df = None,
     | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
     | mode (string): can be "minimal" or "exact" to match glycans that contain at least the specified composition or glycans matching exactly the requirements; default:"exact"
     | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
-    | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None\n
+    | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None
+    | Hex_list (list): list of hexoses used for matching Hex; default: internal Hex list
+    | HexNAc_list (list): list of N-acetylhexosamines used for matching HexNAc; default: internal HexNAc list
+    | dHex_list (list): list of deoxyhexoses used for matching dHex; default: internal dHex list\n
     | Returns:
     | :-
     | Returns list of glycans matching composition in IUPAC-condensed
     """
     if df is None:
       df = df_species
+    #subset for glycans with the right reducing end
     if reducing_end is not None:
       df = df[df.target.str.endswith(reducing_end)].reset_index(drop = True)
+    #subset for glycans with the right number of monosaccharides
+    comp_count = sum(composition.values())
+    len_distr = [len(k) - (len(k)-1)/2 for k in min_process_glycans(df.target.values.tolist())]
+    if mode == 'exact':
+      idx = [k for k in range(len(df)) if len_distr[k] == comp_count]
+    else:
+      idx = [k for k in range(len(df)) if len_distr[k] >= comp_count]
+    df = df.iloc[idx,:].reset_index(drop = True)
     if libr is None:
       libr = lib
+    if Hex_list is None:
+      Hex_list = Hex
+    if HexNAc_list is None:
+      HexNAc_list = HexNAc
+    if dHex_list is None:
+      dHex_list = dHex
     input_composition = copy.deepcopy(composition)
     input_composition2 = copy.deepcopy(composition)
     original_composition = copy.deepcopy(composition)
@@ -346,16 +469,19 @@ def match_composition_relaxed(composition, group, level, df = None,
     input_composition2.pop('Hex', None)
     input_composition2.pop('dHex', None)
     input_composition2.pop('HexNAc', None)
-    if len(input_composition2)>0:
+    if len(input_composition2) > 0:
+      #first, match anything that is not Hex/dHex/HexNAc
       output_list = match_composition(input_composition2, group, level, df = df,
                                      mode = 'minimal', libr = libr,
                                        glycans = output_list, relaxed = True)
     if 'Hex' in input_composition:
-      if any([j in input_composition for j in Hex]):
+      #match the count of Hex from the composition in the current output_list
+      if any([j in input_composition for j in Hex_list]):
         relaxed = True
       else:
         relaxed = False
-      hex_pool = list(combinations_with_replacement(Hex, input_composition['Hex']))
+      #get mixtures of all kinds of different Hex's
+      hex_pool = list(combinations_with_replacement(Hex_list, input_composition['Hex']))
       hex_pool = [Counter(k) for k in hex_pool]
       input_composition.pop('Hex')
       output_list = [match_composition(k, group, level, df = df,
@@ -363,11 +489,13 @@ def match_composition_relaxed(composition, group, level, df = None,
                                        glycans = output_list, relaxed = relaxed) for k in hex_pool]
       output_list = list(set(unwrap(output_list)))
     if 'dHex' in input_composition:
-      if any([j in input_composition for j in dHex]):
+      #match the count of dHex from the composition in the current output_list
+      if any([j in input_composition for j in dHex_list]):
         relaxed = True
       else:
         relaxed = False
-      dhex_pool = list(combinations_with_replacement(dHex, input_composition['dHex']))
+      #get mixtures of all kinds of different dHex's
+      dhex_pool = list(combinations_with_replacement(dHex_list, input_composition['dHex']))
       dhex_pool = [Counter(k) for k in dhex_pool]
       input_composition.pop('dHex')
       temp = [match_composition(k, group, level, df = df,
@@ -375,11 +503,13 @@ def match_composition_relaxed(composition, group, level, df = None,
                                        glycans = output_list, relaxed = relaxed) for k in dhex_pool]
       output_list = list(set(unwrap(temp)))
     if 'HexNAc' in input_composition:
-      if any([j in input_composition for j in HexNAc]):
+      #match the count of HexNAc from the composition in the current output_list
+      if any([j in input_composition for j in HexNAc_list]):
         relaxed = True
       else:
         relaxed = False
-      hexnac_pool = list(combinations_with_replacement(HexNAc, input_composition['HexNAc']))
+      #get mixtures of all kinds of different HexNAc's
+      hexnac_pool = list(combinations_with_replacement(HexNAc_list, input_composition['HexNAc']))
       hexnac_pool = [Counter(k) for k in hexnac_pool]
       input_composition.pop('HexNAc')
       temp = [match_composition(k, group, level, df = df,
@@ -388,25 +518,26 @@ def match_composition_relaxed(composition, group, level, df = None,
       output_list = list(set(unwrap(temp)))
       
     if mode == 'exact':
+      #make sure that the respective number of monosaccharides in the matched structures align with the composition
       monosaccharide_count = sum(original_composition.values())
       monosaccharide_types = list(original_composition.keys())
       if 'Hex' in original_composition:
-        monosaccharide_types = monosaccharide_types + Hex
+        monosaccharide_types = monosaccharide_types + Hex_list
       if 'HexNAc' in original_composition:
-        monosaccharide_types = monosaccharide_types + HexNAc
+        monosaccharide_types = monosaccharide_types + HexNAc_list
       if 'dHex' in original_composition:
-        monosaccharide_types = monosaccharide_types + dHex
+        monosaccharide_types = monosaccharide_types + dHex_list
       output_list = [k for k in output_list if k.count('(') == monosaccharide_count-1]
       output_list = [k for k in output_list if not any([j not in monosaccharide_types for j in list(set(min_process_glycans([k])[0])) if j[0].isupper()])]
-      if 'Hex' in original_composition and len(input_composition2)>0:
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc[:-1] if j in original_composition])]
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex[:-1] if j in original_composition])]
-      elif 'dHex' in original_composition and len(input_composition2)>0:
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex[:-1] if j in original_composition])]
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc[:-1] if j in original_composition])]
-      elif 'HexNAc' in original_composition and len(input_composition2)>0:
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex[:-1] if j in original_composition])]
-        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex[:-1] if j in original_composition])]
+      if 'Hex' in original_composition and len(input_composition2) > 0:
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc_list[:-1] if j in original_composition])]
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex_list[:-1] if j in original_composition])]
+      elif 'dHex' in original_composition and len(input_composition2) > 0:
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex_list[:-1] if j in original_composition])]
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in HexNAc_list[:-1] if j in original_composition])]
+      elif 'HexNAc' in original_composition and len(input_composition2) > 0:
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in Hex_list[:-1] if j in original_composition])]
+        output_list = [k for k in output_list if all([k.count(j) == original_composition[j] for j in dHex_list[:-1] if j in original_composition])]
     return output_list
 
 def condense_composition_matching(matched_composition, libr = None):
@@ -421,42 +552,108 @@ def condense_composition_matching(matched_composition, libr = None):
   """
   if libr is None:
     libr = lib
-  match_matrix = [[compare_glycans(k, j,libr = libr, wildcards = True,
-                                  wildcard_list = [libr.index('bond')]) for j in matched_composition] for k in matched_composition]
+  #define uncertainty wildcards
+  wildcards = ['z1-z', 'z2-z', 'a2-z', 'a1-z', 'b1-z']
+  #establish glycan equality given the wildcards
+  match_matrix = [[compare_glycans(k, j, libr = libr, wildcards = True,
+                                  wildcard_list = wildcards) for j in matched_composition] for k in matched_composition]
   match_matrix = pd.DataFrame(match_matrix)
   match_matrix.columns = matched_composition
+  #cluster glycans by pairwise equality (given the wildcards)
   clustering = DBSCAN(eps = 1, min_samples = 1).fit(match_matrix)
   cluster_labels = clustering.labels_
   num_clusters = len(list(set(cluster_labels)))
   sum_glycans = []
+  #for each cluster, get the most well-defined glycan and return it
   for k in range(num_clusters):
     cluster_glycans = [matched_composition[j] for j in range(len(cluster_labels)) if cluster_labels[j] == k]
-    #print(cluster_glycans)
-    #idx = np.argmin([j.count('bond') for j in cluster_glycans])
-    county = [j.count('bond') for j in cluster_glycans]
+    county = [sum([j.count(w) for w in wildcards]) for j in cluster_glycans]
     idx = np.where(county == np.array(county).min())[0]
     if len(idx) == 1:
       sum_glycans.append(cluster_glycans[idx[0]])
     else:
       for j in idx:
         sum_glycans.append(cluster_glycans[j])
-    #sum_glycans.append(cluster_glycans[idx])
-  #print("This matching can be summarized by " + str(num_clusters) + " glycans.")
   return sum_glycans
 
-def compositions_to_structures(composition_list, abundances, group, level,
+def compositions_to_structures(composition_list, group = 'Homo_sapiens', level = 'Species', abundances = None,
                                df = None, libr = None, reducing_end = None,
-                               verbose = False):
+                               verbose = False,
+                      Hex_list = None, HexNAc_list = None, dHex_list = None):
   """wrapper function to map compositions to structures, condense them, and match them with relative intensities\n
   | Arguments:
   | :-
   | composition_list (list): list of composition dictionaries of the form {'Hex': 1, 'HexNAc': 1}
-  | abundances (dataframe): every row one glycan (matching composition_list in order), every column one sample; pd.DataFrame([range(len(composition_list))]*2).T if not applicable
-  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter
-  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain
+  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter; default:Homo_sapiens
+  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain; default:Species
+  | abundances (dataframe): every row one composition (matching composition_list in order), every column one sample;default:pd.DataFrame([range(len(composition_list))]*2).T
   | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
   | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None
+  | verbose (bool): whether to print any non-matching compositions; default:False
+  | Hex_list (list): list of hexoses used for matching Hex; default: internal Hex list
+  | HexNAc_list (list): list of N-acetylhexosamines used for matching HexNAc; default: internal HexNAc list
+  | dHex_list (list): list of deoxyhexoses used for matching dHex; default: internal dHex list\n
+  | Returns:
+  | :-
+  | Returns dataframe of (matched structures) x (relative intensities)
+  """
+  if libr is None:
+    libr = lib
+  if df is None:
+    df = df_species
+  if abundances is None:
+    abundances = pd.DataFrame([range(len(composition_list))]*2).T
+  if Hex_list is None:
+      Hex_list = Hex
+  if HexNAc_list is None:
+      HexNAc_list = HexNAc
+  if dHex_list is None:
+      dHex_list = dHex
+  df_out = []
+  not_matched = []
+  for k in range(len(composition_list)):
+    #for each composition, map it to potential structures
+    matched = match_composition_relaxed(composition_list[k], group, level,
+                                reducing_end = reducing_end, df = df, libr = libr,
+                                Hex_list = Hex_list, HexNAc_list = HexNAc_list, dHex_list = dHex_list)
+    #if multiple structure matches, try to condense them by wildcard clustering
+    if len(matched) > 0:
+        condensed = condense_composition_matching(matched, libr = libr)
+        matched_data = [abundances.iloc[k,1:].values.tolist()]*len(condensed)
+        for ele in range(len(condensed)):
+            df_out.append([condensed[ele]] + matched_data[ele])
+    else:
+        not_matched.append(composition_list[k])
+  if len(df_out) > 0:
+    df_out = pd.DataFrame(df_out)
+    df_out.columns = ['glycan'] + ['abundance']*(abundances.shape[1]-1)
+  print(str(len(not_matched)) + " compositions could not be matched. Run with verbose = True to see which compositions.")
+  if verbose:
+    print(not_matched)
+  return df_out
+
+def mz_to_structures(mz_list, reducing_end, group = 'Homo_sapiens', level = 'Species', abundances = None, mode = 'positive',
+                     mass_value = 'monoisotopic', sample_prep = 'underivatized', mass_tolerance = 0.2,
+                     check_all_adducts = False, check_specific_adduct = None,
+                      ptm = False, df = None, libr = None, verbose = False):
+  """wrapper function to map precursor masses to structures, condense them, and match them with relative intensities\n
+  | Arguments:
+  | :-
+  | mz_list (list): list of precursor masses
+  | reducing_end (string): filters possible glycans by reducing end monosaccharide
+  | group (string): name of the Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain used to filter; default:Homo_sapiens
+  | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain; default:Species
+  | abundances (dataframe): every row one composition (matching mz_list in order), every column one sample; default:pd.DataFrame([range(len(mz_list))]*2).T
+  | mode (string): whether mz_value comes from MS in 'positive' or 'negative' mode; default:'positive'
+  | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
+  | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
+  | mass_tolerance (float): how much deviation to tolerate for a match; default:0.2
+  | check_all_adducts (bool): whether to also check for matches with ion adducts (depending on mode); default:False
+  | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
+  | ptm (bool): whether to check for post-translational modification (sulfation, phosphorylation); default:False
+  | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
   | verbose (bool): whether to print any non-matching compositions; default:False\n
   | Returns:
   | :-
@@ -466,23 +663,38 @@ def compositions_to_structures(composition_list, abundances, group, level,
     libr = lib
   if df is None:
     df = df_species
-  out_df = []
-  not_matched = []
-  for k in range(len(composition_list)):
-    matched = match_composition_relaxed(composition_list[k], group, level,
-                                reducing_end = reducing_end, df = df, libr = libr)
-    if len(matched)>0:
-        condensed = condense_composition_matching(matched, libr = libr)
-        matched_data = [abundances.iloc[k,1:].values.tolist()]*len(condensed)
-        for ele in range(len(condensed)):
-            out_df.append([condensed[ele]] + matched_data[ele])
+  if abundances is None:
+    abundances = pd.DataFrame([range(len(mz_list))]*2).T
+  if group == 'Homo_sapiens':
+    human = True
+  else:
+    human = False
+  #infer glycan class
+  if 'GlcNAc' in reducing_end:
+    glycan_class = 'N'
+  elif 'GalNAc' in reducing_end:
+    glycan_class = 'O'
+  else:
+    print("Not a valid class for mz_to_composition; currently N/O matching is supported. For everything else run composition_to_structures separately.")
+  out_structures = []
+  #map each m/z value to potential compositions
+  compositions = [mz_to_composition(mz, mode = mode, mass_value = mass_value, sample_prep = sample_prep,
+                                    mass_tolerance = mass_tolerance, human = human, glycan_class = glycan_class,
+                                    check_all_adducts = check_all_adducts, check_specific_adduct = check_specific_adduct,
+                                    ptm = ptm) for mz in mz_list]
+  #map each of these potential compositions to potential structures
+  for m in range(len(compositions)):
+    structures = [compositions_to_structures([k], abundances = abundances.iloc[[m]], group = group, level = level, df = df,
+                                             libr = libr, reducing_end = reducing_end, verbose = verbose) for k in compositions[m]]
+    structures = [k for k in structures if not k.empty]
+    #do not return matches if one m/z value matches multiple compositions that *each* match multiple structures, because of error propagation
+    if len(structures) == 1:
+      out_structures.append(structures[0])
     else:
-        not_matched.append(composition_list[k])
-  df_out = pd.DataFrame(out_df)
-  print(str(len(not_matched)) + " compositions could not be matched. Run with verbose = True to see which compositions.")
-  if verbose:
-    print(not_matched)
-  return df_out
+      if verbose:
+        print("m/z value " + str(mz_list[m]) + " with multiple matched compositions that each would have matching structures is filtered out.")
+  out_structures = pd.concat(out_structures, axis = 0)
+  return out_structures
 
 def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
                          form = 'wide'):
@@ -499,14 +711,17 @@ def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
   """
   if libr is None:
     libr = lib
+  #find the motifs in the glycans
   annot = annotate_dataset(df.iloc[:,0].values.tolist(), libr = libr,
                            feature_set = feature_set, condense = True)
   annot2 = pd.concat([annot.reset_index(drop = True), df.iloc[:,1:]], axis = 1)
   out_tuples = []
+  #reformat to record all present motifs in the provided structures
   for k in range(len(annot2)):
     for j in range(annot.shape[1]):
       if annot2.iloc[k,j]>0:
           out_tuples.append([annot2.columns.values.tolist()[j]] + df.iloc[k, 1:].values.tolist())
+  #group abundances on a motif level
   motif_df = pd.DataFrame(out_tuples)
   motif_df = motif_df.groupby(motif_df.columns.values.tolist()[0]).mean().reset_index()
   if form == 'wide':
@@ -530,33 +745,198 @@ def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkag
   | :-
   | Returns list of glycans in IUPAC-condensed with masked rare monosaccharides and linkages
   """
+  #get rarity thresholds
   if thresh_monosaccharides is None:
     thresh_monosaccharides = int(np.ceil(0.001*len(glycans)))
   if thresh_linkages is None:
     thresh_linkages = int(np.ceil(0.03*len(glycans)))
   rares = unwrap(min_process_glycans(glycans))
   rare_linkages, rare_monosaccharides = [], []
+  #sort monosaccharides and linkages into different bins
   for x in rares:
     (rare_monosaccharides, rare_linkages)[x in linkages].append(x)
   rares = [rare_monosaccharides, rare_linkages]
   thresh = [thresh_monosaccharides, thresh_linkages]
+  #establish which ones are considered to be rare
   rares = [list({x: count for x, count in Counter(rares[k]).items() if count <= thresh[k]}.keys()) for k in range(len(rares))]
   try:
     rares[0].remove('')
   except:
     pass
   out = []
+  #for each glycan, check whether they have rare monosaccharides/linkages and mask them
   for k in glycans:
     for j in rares[0]:
       if (j in k) and ('-'+j not in k):
-        k = k.replace(j+'(', 'monosaccharide(')
+        k = k.replace(j+'(', 'Monosaccharide(')
         if k.endswith(j):
-          k = re.sub(j+'$', 'monosaccharide', k)
+          k = re.sub(j+'$', 'Monosaccharide', k)
     for m in rares[1]:
       if m in k:
         if m[1] == '1':
-          k = k.replace(m, '?1-?')
+          k = k.replace(m, 'z1-z')
         else:
-          k = k.replace(m, '?2-?')
+          k = k.replace(m, 'z2-z')
     out.append(k)
   return out
+
+def canonicalize_iupac(glycan):
+  """converts a glycan from any IUPAC flavor into the exact IUPAC-condensed version that is optimized for glycowork\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan sequence in IUPAC; post-biosynthetic modifications can still be an issue\n
+  | Returns:
+  | :-
+  | Returns glycan as a string in canonicalized IUPAC-condensed
+  """
+  #canonicalize usage of monosaccharides and linkages
+  if 'NeuAc' in glycan:
+    glycan = glycan.replace('NeuAc', 'Neu5Ac')
+  if 'NeuGc' in glycan:
+    glycan = glycan.replace('NeuGc', 'Neu5Gc')
+  if "\u03B1" in glycan:
+    glycan = glycan.replace("\u03B1", 'a')
+  if "\u03B2" in glycan:
+    glycan = glycan.replace("\u03B2", 'b')
+  #canonicalize linkage uncertainty
+  if '?' in glycan:
+    glycan = glycan.replace('?', 'z')
+  while '/' in glycan:
+    glycan = glycan[:glycan.index('/')-1] + 'z' + glycan[glycan.index('/')+1:]
+  #canonicalize usage of brackets and parentheses
+  if bool(re.search(r'\([A-Z0-9]', glycan)):
+    glycan = glycan.replace('(', '[')
+    glycan = glycan.replace(')', ']')
+  if '(' not in glycan and len(glycan) > 6:
+    for k in range(1,glycan.count('-')+1):
+      idx = find_nth(glycan, '-', k)
+      if (glycan[idx-1].isnumeric()) and (glycan[idx+1].isnumeric() or glycan[idx+1]=='z'):
+        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+2] + ')' + glycan[idx+2:]
+      elif (glycan[idx-1].isnumeric()) and bool(re.search(r'[A-Z]', glycan[idx+1])):
+        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+1] + 'z)' + glycan[idx+1:]
+  #canonicalize reducing end
+  if bool(re.search(r'[a-z]ol', glycan)):
+    if 'Glcol' not in glycan:
+      glycan = glycan[:-2]
+    else:
+      glycan = glycan[:-2] + '-ol'
+  #canonicalize branch ordering
+  if '[' in glycan:
+    isos = find_isomorphs(glycan)
+    glycan = choose_correct_isoform(isos)
+  if '+' in glycan:
+    print("Warning: There seems to be a floating substituent in the IUPAC string (curly brackets); we can't handle that in downstream functions.")
+  return glycan
+
+def check_nomenclature(glycan):
+  """checks whether the proposed glycan has the correct nomenclature for glycowork\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | Returns:
+  | :-
+  | If salvageable, returns the re-formatted glycan; if not, prints the reason why it's not convertable
+  """
+  if not isinstance(glycan, str):
+    print("You need to format your glycan sequences as strings.")
+    return
+  if '?' in glycan:
+    print("You're likely using ? somewhere, to indicate linkage uncertainty. Glycowork uses 'z' to indicate linkage uncertainty")
+    return canonicalize_iupac(glycan)
+  if '=' in glycan:
+    print("Could it be that you're using WURCS? Please convert to IUPACcondensed for using glycowork.")
+  if 'RES' in glycan:
+    print("Could it be that you're using GlycoCT? Please convert to IUPACcondensed for using glycowork.")
+  print("Didn't spot an obvious error but this is not a guarantee that it will work.")
+  return canonicalize_iupac(glycan)
+
+def map_to_basic(glycoletter):
+  """given a monosaccharide/linkage, try to map it to the corresponding base monosaccharide/linkage\n
+  | Arguments:
+  | :-
+  | glycoletter (string): monosaccharide or linkage\n
+  | Returns:
+  | :-
+  | Returns the base monosaccharide/linkage or the original glycoletter, if it cannot be mapped
+  """
+  if glycoletter in Hex:
+    return 'Hex'
+  elif glycoletter in dHex:
+    return 'dHex'
+  elif glycoletter in HexA:
+    return 'HexA'
+  elif glycoletter in HexN:
+    return 'HexN'
+  elif glycoletter in HexNAc:
+    return 'HexNAc'
+  elif glycoletter in Pen:
+    return 'Pen'
+  elif glycoletter in linkages:
+    return 'z1-z'
+  else:
+    return glycoletter
+
+def structure_to_basic(glycan, libr = None):
+  """converts a monosaccharide- and linkage-defined glycan structure to the base topology\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed nomenclature
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns the glycan topology as a string
+  """
+  if libr is None:
+    libr = lib
+  if glycan[-3:] == '-ol':
+    glycan = glycan[:-3]
+  ggraph = glycan_to_nxGraph(glycan, libr = libr)
+  nodeDict = dict(ggraph.nodes(data = True))
+  temp = {k:map_to_basic(nodeDict[k]['string_labels']) for k in ggraph.nodes}
+  nx.set_node_attributes(ggraph, temp, 'string_labels')
+  return graph_to_string(ggraph)
+
+def glycan_to_composition(glycan, libr = None):
+  """maps glycan to its composition\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns a dictionary of form "monosaccharide" : count
+  """
+  if libr is None:
+    libr = lib
+  glycan = structure_to_basic(glycan, libr = libr)
+  composition = Counter(min_process_glycans([glycan])[0])
+  del composition['z1-z']
+  return dict(composition)
+
+def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized',
+                               libr = None):
+  """given a glycan, calculates it's theoretical mass; only allowed extra-modifications are sulfation & phosphorylation\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
+  | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns the theoretical mass of input glycan
+  """
+  if libr is None:
+    libr = lib
+  idx = sample_prep + '_' + mass_value
+  mass_dict = dict(zip(mapping_file.composition, mapping_file[idx]))
+  sulfate_count = glycan.count('S')
+  phosphate_count = glycan.count('P')
+  glycan = stemify_glycan(glycan, libr = libr)
+  glycan = structure_to_basic(glycan, libr = libr)
+  theoretical_mass = sum([mass_dict[k] for k in min_process_glycans([glycan])[0] if k != 'z1-z'])+18.0105546
+  if sulfate_count > 0:
+    theoretical_mass += mass_dict['Sulphate'] * sulfate_count
+  if phosphate_count > 0:
+    theoretical_mass += mass_dict['Phosphate'] * phosphate_count
+  return theoretical_mass

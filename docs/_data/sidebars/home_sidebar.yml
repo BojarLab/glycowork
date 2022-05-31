@@ -13,9 +13,6 @@ entries:
       title: Glycowork
       url: core.html
     - output: web,pdf
-      title: alignment
-      url: alignment.html
-    - output: web,pdf
       title: glycan_data
       url: glycan_data.html
     - output: web,pdf
@@ -25,11 +22,11 @@ entries:
       title: motif
       url: motif.html
     - output: web,pdf
-      title: Examples
-      url: examples.html
-    - output: web,pdf
       title: network
       url: network.html
+    - output: web,pdf
+      title: Examples
+      url: examples.html
     output: web
     title: glycowork
   output: web
