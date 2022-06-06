@@ -1,6 +1,7 @@
 import unittest
 
 import bioregistry
+import pandas as pd
 
 from glycowork.glycan_data.loader import build_custom_df, df_glycan
 
@@ -11,8 +12,9 @@ class TestSemantics(unittest.TestCase):
 
     def test_tissue_ids(self):
         """Test that entries in the tissue_id column are valid CURIEs."""
-        for tissue_id in sorted(self.df["tissue_id"].unique()):
-            with self.subTest(tissue_id=tissue_id):
+        for index, tissue_id in self.df["tissue_id"].iteritems():
+            with self.subTest(index=index, tissue_id=tissue_id):
+                self.assertTrue(pd.notnull(tissue_id))
                 self.assertIn(
                     ":",
                     tissue_id,
