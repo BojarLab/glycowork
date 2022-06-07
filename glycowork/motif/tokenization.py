@@ -801,6 +801,12 @@ def canonicalize_iupac(glycan):
   #canonicalize linkage uncertainty
   if '?' in glycan:
     glycan = glycan.replace('?', 'z')
+  if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
+    glycan = re.sub(r'([a-z])\-([A-Z])', r'\1z1-z\2', glycan)
+  if bool(re.search(r'[a-z][\(\)]', glycan)):
+    glycan = re.sub(r'([a-z])([\(\)])', r'\1z1-z\2', glycan)
+  if bool(re.search(r'[0-9]\-[\(\)]', glycan)):
+    glycan = re.sub(r'([0-9])\-([\(\)])', r'\1-z\2', glycan)
   while '/' in glycan:
     glycan = glycan[:glycan.index('/')-1] + 'z' + glycan[glycan.index('/')+1:]
   #canonicalize usage of brackets and parentheses
@@ -820,6 +826,11 @@ def canonicalize_iupac(glycan):
       glycan = glycan[:-2]
     else:
       glycan = glycan[:-2] + '-ol'
+  #handle modifications
+  if bool(re.search(r'\[[0-9]?[SP]\][^\(]+', glycan)):
+    glycan = re.sub(r'\[([0-9]?[SP])\]([^\(]+)', r'\2\1', glycan)
+  if bool(re.search(r'\-ol[0-9]?[SP]', glycan)):
+    glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
   #canonicalize branch ordering
   if '[' in glycan:
     isos = find_isomorphs(glycan)
