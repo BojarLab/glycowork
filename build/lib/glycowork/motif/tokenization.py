@@ -3,6 +3,7 @@ import numpy as np
 import networkx as nx
 import re
 import copy
+import math
 import pkg_resources
 from itertools import combinations_with_replacement, product
 from collections import Counter
@@ -280,9 +281,11 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
 
   #Hex,HexNAc,dHex,Neu5Ac,Neu5Gc,Pen,Kdn,HexA,S,P
   if glycan_class == 'N':
-    ranges = [21,21,7,6,4,5,3,3,4,3]
+    ranges = [math.floor(mz_value/160),math.floor(mz_value/203),math.floor(mz_value/146),
+              math.floor(mz_value/291)-1,math.floor(mz_value/307)-1,5,3,3,4,3]
   elif glycan_class == 'O':
-    ranges = [15,15,7,8,8,4,3,3,7,7]
+    ranges = [math.floor(mz_value/160),math.floor(mz_value/203),math.floor(mz_value/146),
+              math.floor(mz_value/291),math.floor(mz_value/307),4,3,3,7,7]
   else:
     print("Invalid glycan class; only N and O are allowed.")
 
@@ -320,7 +323,7 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   if ptm:
     precursors = [precursors[k] + mass_dict['Sulphate']*pools[k][-2] + mass_dict['Phosphate']*pools[k][-1] for k in range(len(precursors))]
 
-  #for each precursor candidate, check which lie within masss tolerance and format them
+  #for each precursor candidate, check which lie within mass tolerance and format them
   for k in range(len(precursors)):
     precursor = precursors[k]
     pool = pools[k]

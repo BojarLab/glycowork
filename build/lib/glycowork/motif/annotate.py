@@ -182,7 +182,7 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-  | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+  | wildcard_list (list): list of wildcard names (such as 'z1-z', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
   | :-
@@ -231,7 +231,7 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-  | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+  | wildcard_list (list): list of wildcard names (such as 'z1-z', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
   | condense (bool): if True, throws away columns with only zeroes; default:False
   | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
