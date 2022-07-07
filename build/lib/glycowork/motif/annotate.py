@@ -146,7 +146,7 @@ def motif_matrix(df, glycan_col_name, label_col_name, libr = None):
   out_matrix = pd.concat([wga_letter, wga_di_out], axis = 1)
   out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()]
   temp = out_matrix.pop(label_col_name)
-  out_matrix[label_col_name] = temp
+  out_matrix = pd.concat([out_matrix, temp], axis = 1)
   out_matrix.reset_index(drop = True, inplace = True)
   return out_matrix
 

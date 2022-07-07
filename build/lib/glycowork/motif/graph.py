@@ -201,7 +201,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | wildcards (bool): set to True to allow wildcards (e.g., 'z1-z', 'monosaccharide'); default is False
-  | wildcard_list (list): list of indices for wildcards in libr\n
+  | wildcard_list (list): list of wildcards to consider, in the form of 'z1-z' etc.\n
   | Returns:
   | :-  
   | Returns True if two glycans are the same and False if not
