@@ -772,7 +772,7 @@ def glycan_to_composition(glycan, libr = None):
 
 def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized',
                                libr = None):
-  """given a glycan, calculates it's theoretical mass; only allowed extra-modifications are sulfation, phosphorylation, and PCho\n
+  """given a glycan, calculates it's theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation, PEtN, and PCho\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
@@ -788,15 +788,17 @@ def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep 
   theoretical_mass = 0
   idx = sample_prep + '_' + mass_value
   mass_dict = dict(zip(mapping_file.composition, mapping_file[idx]))
-  sulfate_count = glycan.count('S')
-  phosphate_count = glycan.count('P')
+  if 'Me' in glycan:
+    theoretical_mass += mass_dict['Methyl'] * glycan.count('Me')
+  if 'P' in glycan:
+    theoretical_mass += mass_dict['Phosphate'] * glycan.count('P')
+  if 'S' in glycan:
+    theoretical_mass += mass_dict['Sulphate'] * glycan.count('S')
   if 'PCho' in glycan:
     theoretical_mass += mass_dict['PCho'] * glycan.count('PCho') - mass_dict['Phosphate'] * glycan.count('PCho')
+  if 'PEtN' in glycan:
+    theoretical_mass += mass_dict['PEtN'] * glycan.count('PEtN') - mass_dict['Phosphate'] * glycan.count('PEtN')
   glycan = stemify_glycan(glycan, libr = libr)
   glycan = structure_to_basic(glycan, libr = libr)
-  theoretical_mass += sum([mass_dict[k] for k in min_process_glycans([glycan])[0] if k != 'z1-z'])+18.0105546
-  if sulfate_count > 0:
-    theoretical_mass += mass_dict['Sulphate'] * sulfate_count
-  if phosphate_count > 0:
-    theoretical_mass += mass_dict['Phosphate'] * phosphate_count
+  theoretical_mass += sum([mass_dict[k] for k in min_process_glycans([glycan])[0] if k != 'z1-z']) + mass_dict['red_end']
   return theoretical_mass
