@@ -25,58 +25,41 @@ class SweetNet(torch.nn.Module):
 
         #convolution operations on the graph
         self.conv1 = GraphConv(128, 128)
-        self.pool1 = TopKPooling(128, ratio = 1.0)
         self.conv2 = GraphConv(128, 128)
-        self.pool2 = TopKPooling(128, ratio = 1.0)
         self.conv3 = GraphConv(128, 128)
-        self.pool3 = TopKPooling(128, ratio = 1.0)
+        
         #node embedding
         self.item_embedding = torch.nn.Embedding(num_embeddings = lib_size+1,
                                                  embedding_dim = 128)
         #fully connected part
-        self.lin1 = torch.nn.Linear(256, 1024)
-        self.lin2 = torch.nn.Linear(1024, 64)
-        self.lin3 = torch.nn.Linear(64, num_classes)
+        self.lin1 = torch.nn.Linear(128, 1024)
+        self.lin2 = torch.nn.Linear(1024, 128)
+        self.lin3 = torch.nn.Linear(128, num_classes)
         self.bn1 = torch.nn.BatchNorm1d(1024)
-        self.bn2 = torch.nn.BatchNorm1d(64)
+        self.bn2 = torch.nn.BatchNorm1d(128)
         self.act1 = torch.nn.LeakyReLU()
         self.act2 = torch.nn.LeakyReLU()      
   
     def forward(self, x, edge_index, batch, inference = False):
+        
         #getting node features
         x = self.item_embedding(x)
         x = x.squeeze(1)
 
         #graph convolution operations
         x = F.leaky_relu(self.conv1(x, edge_index))
-
-        x, edge_index, _, batch, _, _= self.pool1(x, edge_index, None, batch)
-        x1 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
         x = F.leaky_relu(self.conv2(x, edge_index))
-     
-        x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, None, batch)
-        x2 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
         x = F.leaky_relu(self.conv3(x, edge_index))
+        x = gap(x, batch)
 
-        x, edge_index, _, batch, _, _ = self.pool3(x, edge_index, None, batch)
-        x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
-        #combining results from three graph convolutions
-        x = x1 + x2 + x3
-        
         #fully connected part
-        x = self.lin1(x)
-        x = self.act1(self.bn1(x))
-        x = self.lin2(x)
-        x = self.act2(self.bn2(x))      
-        x = F.dropout(x, p = 0.5, training = self.training)
+        x = self.act1(self.bn1(self.lin1(x)))
+        x_out = self.bn2(self.lin2(x))   
+        x = F.dropout(self.act2(x_out), p = 0.5, training = self.training)
 
         x = self.lin3(x).squeeze(1)
 
         if inference:
-          x_out = x1 + x2 + x3
           return x, x_out
         else:
           return x

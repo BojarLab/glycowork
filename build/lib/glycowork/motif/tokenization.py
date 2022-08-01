@@ -748,21 +748,30 @@ def structure_to_basic(glycan, libr = None):
   nx.set_node_attributes(ggraph, temp, 'string_labels')
   return graph_to_string(ggraph)
 
-def glycan_to_composition(glycan, libr = None):
+def glycan_to_composition(glycan, libr = None, go_fast = False):
   """maps glycan to its composition\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | go_fast (bool): if True, it will only do stemification if necessary (2-10x speed-up), *will fail if non-allowed modifications occur*; default:False\n
   | Returns:
   | :-
   | Returns a dictionary of form "monosaccharide" : count
   """
   if libr is None:
     libr = lib
-  glycan2 = stemify_glycan(glycan, libr = libr)
+  if go_fast:
+    if any([k in glycan for k in ['Me', 'P', 'S']]):
+      glycan2 = stemify_glycan(glycan, libr = libr)
+    else:
+      glycan2 = glycan
+  else:
+    glycan2 = stemify_glycan(glycan, libr = libr)
   glycan2 = structure_to_basic(glycan2, libr = libr)
   composition = Counter(min_process_glycans([glycan2])[0])
+  if 'Me' in glycan:
+    composition['Me'] = glycan.count('Me')
   if 'S' in glycan:
     composition['S'] = glycan.count('S')
   if 'P' in glycan:
@@ -771,14 +780,15 @@ def glycan_to_composition(glycan, libr = None):
   return dict(composition)
 
 def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized',
-                               libr = None):
+                               libr = None, go_fast = False):
   """given a glycan, calculates it's theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation, PEtN, and PCho\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | go_fast (bool): if True, it will only do stemification if necessary (2-10x speed-up), *will fail if non-allowed modifications occur*; default:False\n
   | Returns:
   | :-
   | Returns the theoretical mass of input glycan
@@ -798,7 +808,11 @@ def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep 
     theoretical_mass += mass_dict['PCho'] * glycan.count('PCho') - mass_dict['Phosphate'] * glycan.count('PCho')
   if 'PEtN' in glycan:
     theoretical_mass += mass_dict['PEtN'] * glycan.count('PEtN') - mass_dict['Phosphate'] * glycan.count('PEtN')
-  glycan = stemify_glycan(glycan, libr = libr)
+  if go_fast:
+    if any([k in glycan for k in ['Me', 'P', 'S']]):
+      glycan = stemify_glycan(glycan, libr = libr)
+  else:
+    glycan = stemify_glycan(glycan, libr = libr, go_fast = go_fast)
   glycan = structure_to_basic(glycan, libr = libr)
   theoretical_mass += sum([mass_dict[k] for k in min_process_glycans([glycan])[0] if k != 'z1-z']) + mass_dict['red_end']
   return theoretical_mass
