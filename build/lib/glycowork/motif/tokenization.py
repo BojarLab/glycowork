@@ -266,7 +266,7 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
   | mass_tolerance (float): how much deviation to tolerate for a match; default:0.2
   | human (bool): whether to only consider human monosaccharide types; default:True
-  | glycan_class (string): which glycan class does the m/z value stem from, 'N' or 'O' linked glycans; default:'N'
+  | glycan_class (string): which glycan class does the m/z value stem from, 'N', 'O', or 'lipid' linked glycans or 'free' glycans; default:'N'
   | check_all_adducts (bool): whether to also check for matches with ion adducts (depending on mode); default:False
   | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
   | ptm (bool): whether to check for post-translational modification (sulfation, phosphorylation); default:False\n
@@ -286,8 +286,11 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   elif glycan_class == 'O':
     ranges = [math.floor(mz_value/160),math.floor(mz_value/203),math.floor(mz_value/146),
               math.floor(mz_value/291),math.floor(mz_value/307),4,3,3,7,7]
+  elif glycan_class == 'free' or glycan_class == 'lipid':
+    ranges = [math.floor(mz_value/160),math.floor(mz_value/203),math.floor(mz_value/146),
+              math.floor(mz_value/291)-1,math.floor(mz_value/307)-1,1,1,4,6,3]
   else:
-    print("Invalid glycan class; only N and O are allowed.")
+    print("Invalid glycan class; only N, O, lipid, and free are allowed.")
 
   if human:
     pools = [list(range(k)) for k in ranges[:4]]
