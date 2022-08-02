@@ -812,7 +812,7 @@ def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep 
     if any([k in glycan for k in ['Me', 'P', 'S']]):
       glycan = stemify_glycan(glycan, libr = libr)
   else:
-    glycan = stemify_glycan(glycan, libr = libr, go_fast = go_fast)
+    glycan = stemify_glycan(glycan, libr = libr)
   glycan = structure_to_basic(glycan, libr = libr)
   theoretical_mass += sum([mass_dict[k] for k in min_process_glycans([glycan])[0] if k != 'z1-z']) + mass_dict['red_end']
   return theoretical_mass
