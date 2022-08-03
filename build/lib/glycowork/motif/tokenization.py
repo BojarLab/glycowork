@@ -256,7 +256,7 @@ def stemify_dataset(df, stem_lib = None, libr = None,
 def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
                       sample_prep = 'underivatized', mass_tolerance = 0.2, human = True,
                       glycan_class = 'N', check_all_adducts = False, check_specific_adduct = None,
-                      ptm = False):
+                      ptm = False, libr = None, there_can_only_be_one = False):
   """mapping a m/z value to one or more matching monosaccharide compositions\n
   | Arguments:
   | :-
@@ -269,11 +269,15 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   | glycan_class (string): which glycan class does the m/z value stem from, 'N', 'O', or 'lipid' linked glycans or 'free' glycans; default:'N'
   | check_all_adducts (bool): whether to also check for matches with ion adducts (depending on mode); default:False
   | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
-  | ptm (bool): whether to check for post-translational modification (sulfation, phosphorylation); default:False\n
+  | ptm (bool): whether to check for post-translational modification (sulfation, phosphorylation); default:False
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | there_can_only_be_one (bool): if True, only returns the composition with the closest match with mz_value; default:False\n
   | Returns:
   | :-
-  | Returns a list of matching compositions in dict form
+  | Returns a list of matching compositions in dict form (or a single composition dict if there_can_only_be_one == True)
   """
+  if libr is None:
+    libr = lib
   #get correct masses depending on sample characteristics
   idx = sample_prep + '_' + mass_value
   #needed because of implied water loss in the residue masses
@@ -358,6 +362,10 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   if ptm:
     compositions = [k for k in compositions if not all([(k['S'] > 0), (k['P'] > 0)])]
     compositions = [k for k in compositions if (k['S'] + k['P']) <= (k['Hex'] + k['HexNAc'])]
+  compositions = [{k: v for k, v in comp.items() if v} for comp in compositions]
+  if there_can_only_be_one:
+    compositions = compositions[np.argmin([abs(mz_value-composition_to_mass(comp, libr = libr,
+                                                                            mass_value = mass_value, sample_prep = sample_prep)) for comp in compositions])]
   return compositions
 
 def match_composition_relaxed(composition, group, level, df = None,
@@ -782,9 +790,35 @@ def glycan_to_composition(glycan, libr = None, go_fast = False):
   del composition['z1-z']
   return dict(composition)
 
+def composition_to_mass(dict_comp, libr = None, mass_value = 'monoisotopic',
+                      sample_prep = 'underivatized'):
+  """given a composition, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
+  | Arguments:
+  | :-
+  | dict_comp (dict): composition in form monosaccharide:count
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
+  | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'\n
+  | Returns:
+  | :-
+  | Returns the theoretical mass of input composition
+  """
+  if libr is None:
+    libr = lib
+  theoretical_mass = 0
+  idx = sample_prep + '_' + mass_value
+  mass_dict = dict(zip(mapping_file.composition, mapping_file[idx]))
+  if 'S' in dict_comp.keys():
+    dict_comp['Sulphate'] = dict_comp.pop('S')
+  if 'P' in dict_comp.keys():
+    dict_comp['Phosphate'] = dict_comp.pop('P')
+  for k,v in dict_comp.items():
+    theoretical_mass += mass_dict[k] * v
+  return theoretical_mass + mass_dict['red_end']
+
 def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized',
                                libr = None, go_fast = False):
-  """given a glycan, calculates it's theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation, PEtN, and PCho\n
+  """given a glycan, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
@@ -798,24 +832,5 @@ def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep 
   """
   if libr is None:
     libr = lib
-  theoretical_mass = 0
-  idx = sample_prep + '_' + mass_value
-  mass_dict = dict(zip(mapping_file.composition, mapping_file[idx]))
-  if 'Me' in glycan:
-    theoretical_mass += mass_dict['Methyl'] * glycan.count('Me')
-  if 'P' in glycan:
-    theoretical_mass += mass_dict['Phosphate'] * glycan.count('P')
-  if 'S' in glycan:
-    theoretical_mass += mass_dict['Sulphate'] * glycan.count('S')
-  if 'PCho' in glycan:
-    theoretical_mass += mass_dict['PCho'] * glycan.count('PCho') - mass_dict['Phosphate'] * glycan.count('PCho')
-  if 'PEtN' in glycan:
-    theoretical_mass += mass_dict['PEtN'] * glycan.count('PEtN') - mass_dict['Phosphate'] * glycan.count('PEtN')
-  if go_fast:
-    if any([k in glycan for k in ['Me', 'P', 'S']]):
-      glycan = stemify_glycan(glycan, libr = libr)
-  else:
-    glycan = stemify_glycan(glycan, libr = libr)
-  glycan = structure_to_basic(glycan, libr = libr)
-  theoretical_mass += sum([mass_dict[k] for k in min_process_glycans([glycan])[0] if k != 'z1-z']) + mass_dict['red_end']
-  return theoretical_mass
+  comp = glycan_to_composition(glycan, libr = libr, go_fast = go_fast)
+  return composition_to_mass(comp, libr = libr, mass_value = mass_value, sample_prep = sample_prep)
