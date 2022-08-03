@@ -286,13 +286,13 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   #Hex,HexNAc,dHex,Neu5Ac,Neu5Gc,Pen,Kdn,HexA,S,P
   if glycan_class == 'N':
     ranges = [math.floor(mz_value/160),math.floor(mz_value/203),math.floor(mz_value/146),
-              math.floor(mz_value/291)-1,math.floor(mz_value/307)-1,5,3,3,4,3]
+              math.floor(mz_value/291)-1,math.floor(mz_value/307)-1,3,3,3,4,2]
   elif glycan_class == 'O':
     ranges = [math.floor(mz_value/160),math.floor(mz_value/203),math.floor(mz_value/146),
-              math.floor(mz_value/291),math.floor(mz_value/307),4,3,3,7,7]
+              math.floor(mz_value/291),math.floor(mz_value/307),1,3,3,5,2]
   elif glycan_class == 'free' or glycan_class == 'lipid':
     ranges = [math.floor(mz_value/160),math.floor(mz_value/203),math.floor(mz_value/146),
-              math.floor(mz_value/291)-1,math.floor(mz_value/307)-1,1,1,4,6,3]
+              math.floor(mz_value/291)-1,math.floor(mz_value/307)-1,1,1,3,5,2]
   else:
     print("Invalid glycan class; only N, O, lipid, and free are allowed.")
 
@@ -359,6 +359,8 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
                                                     (k['HexNAc'] == 2 and k['Neu5Ac'] == 0)])]
   if glycan_class == 'O':
     compositions = [k for k in compositions if k['HexNAc'] >= 1]
+  if glycan_class == 'free':
+    compositions = [k for k in compositions if k['Hex'] >= 1]
   if ptm:
     compositions = [k for k in compositions if not all([(k['S'] > 0), (k['P'] > 0)])]
     compositions = [k for k in compositions if (k['S'] + k['P']) <= (k['Hex'] + k['HexNAc'])]
@@ -790,12 +792,12 @@ def glycan_to_composition(glycan, libr = None, go_fast = False):
   del composition['z1-z']
   return dict(composition)
 
-def composition_to_mass(dict_comp, libr = None, mass_value = 'monoisotopic',
+def composition_to_mass(dict_comp_in, libr = None, mass_value = 'monoisotopic',
                       sample_prep = 'underivatized'):
   """given a composition, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
   | Arguments:
   | :-
-  | dict_comp (dict): composition in form monosaccharide:count
+  | dict_comp_in (dict): composition in form monosaccharide:count
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'\n
@@ -805,6 +807,7 @@ def composition_to_mass(dict_comp, libr = None, mass_value = 'monoisotopic',
   """
   if libr is None:
     libr = lib
+  dict_comp = copy.deepcopy(dict_comp_in)
   theoretical_mass = 0
   idx = sample_prep + '_' + mass_value
   mass_dict = dict(zip(mapping_file.composition, mapping_file[idx]))
