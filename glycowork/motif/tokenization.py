@@ -363,7 +363,7 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
     compositions = [k for k in compositions if not all([(k['S'] > 0), (k['P'] > 0)])]
     compositions = [k for k in compositions if (k['S'] + k['P']) <= (k['Hex'] + k['HexNAc'])]
   compositions = [{k: v for k, v in comp.items() if v} for comp in compositions]
-  if there_can_only_be_one:
+  if there_can_only_be_one and len(compositions) > 0:
     compositions = compositions[np.argmin([abs(mz_value-composition_to_mass(comp, libr = libr,
                                                                             mass_value = mass_value, sample_prep = sample_prep)) for comp in compositions])]
   return compositions
