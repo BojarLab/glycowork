@@ -912,7 +912,7 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
     network = make_network_directed(network)
     if virtuals:
       nodeDict = dict(network.nodes(data = True))
-      for node in list(sorted(network.nodes(), key = len, reverse = True)):
+      for node in list(sorted(network.nodes(), key = len, reverse = False)):
         if (network.in_degree[node] < 1) and (nodeDict[node]['virtual'] == 1) and (node not in permitted_roots):
           network.remove_node(node)
       for node in list(sorted(network.nodes(), key = len, reverse = True)):
