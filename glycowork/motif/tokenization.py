@@ -289,10 +289,10 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
               math.floor(mz_value/291)-1,math.floor(mz_value/307)-1,3,3,3,4,2]
   elif glycan_class == 'O':
     ranges = [math.floor(mz_value/160),math.floor(mz_value/203),math.floor(mz_value/146),
-              math.floor(mz_value/291),math.floor(mz_value/307),1,3,3,5,2]
+              math.floor(mz_value/291),math.floor(mz_value/307),1,3,3,4,2]
   elif glycan_class == 'free' or glycan_class == 'lipid':
     ranges = [math.floor(mz_value/160),math.floor(mz_value/203),math.floor(mz_value/146),
-              math.floor(mz_value/291)-1,math.floor(mz_value/307)-1,1,1,3,5,2]
+              math.floor(mz_value/291)-1,math.floor(mz_value/307)-1,1,1,3,4,2]
   else:
     print("Invalid glycan class; only N, O, lipid, and free are allowed.")
 
