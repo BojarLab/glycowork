@@ -1100,18 +1100,18 @@ def export_network(network, filepath):
     edge_labels = nx.get_edge_attributes(network, 'diffs')
     edge_list['Label'] = [edge_labels[k] for k in network.edges()]
     edge_list = edge_list.replace('z', '?', regex = True)
-    edge_list.to_csv(filepath + 'edge_list.csv', index = False)
+    edge_list.to_csv(filepath + '_edge_list.csv', index = False)
   else:
     edge_list = pd.DataFrame()
     edge_list = edge_list.reindex(columns = ['Source', 'Target'])
-    edge_list.to_csv(filepath + 'edge_list.csv', index = False)
+    edge_list.to_csv(filepath + '_edge_list.csv', index = False)
 
   #generate node_labels
   node_labels = nx.get_node_attributes(network, 'virtual')
   node_labels = pd.DataFrame(node_labels, index = [0]).T.reset_index()
   node_labels.columns = ['Id', 'Virtual']
   node_labels = node_labels.replace('z', '?', regex = True)
-  node_labels.to_csv(filepath + 'node_labels.csv', index = False)
+  node_labels.to_csv(filepath + '_node_labels.csv', index = False)
 
 def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
                             monolink_column = 'monolink', mode = 'condensed') :
@@ -1256,7 +1256,7 @@ def prune_network(network, node_attr = 'abundance', threshold = 0.):
   return network_out
 
 def evoprune_network(network, network_dic = None, species_list = None, libr = None,
-                     node_attr = 'abundance', threshold = 0.):
+                     node_attr = 'abundance', threshold = 0.01):
   """given a biosynthetic network, this function uses evolutionary relationships to prune impossible paths\n
   | Arguments:
   | :-
@@ -1265,7 +1265,7 @@ def evoprune_network(network, network_dic = None, species_list = None, libr = No
   | species_list (list): list of species to compare network to; default:species from pre-computed milk networks
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | node_attr (string): which (numerical) node attribute to use for pruning; default:'abundance'
-  | threshold (float): everything below or equal to that threshold will be cut; default:0.\n
+  | threshold (float): everything below or equal to that threshold will be cut; default:0.01\n
   | Returns:
   | :-
   | Returns pruned network (with virtual node probability as a new node attribute)

@@ -108,11 +108,8 @@ class LectinOracle(torch.nn.Module):
 
     #graph convolution operations for the glycan
     self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool1 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool2 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool3 = TopKPooling(self.hidden_size, ratio = 1.0)
     #node embedding for the glycan
     self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
                                              embedding_dim = self.hidden_size)
@@ -128,7 +125,7 @@ class LectinOracle(torch.nn.Module):
     self.act_prot2 = torch.nn.LeakyReLU()
     
     #combined fully connected part
-    self.fc1 = torch.nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
+    self.fc1 = torch.nn.Linear(128+self.hidden_size, int(np.round(self.hidden_size/2)))
     self.fc2 = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
     self.bn1 = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
     self.dp1 = torch.nn.Dropout(0.5)    
@@ -147,22 +144,9 @@ class LectinOracle(torch.nn.Module):
 
     #glycan graph convolution operations
     x = F.leaky_relu(self.conv1(x, edge_index))
-
-    x, edge_index, _, batch, _, _= self.pool1(x, edge_index, None, batch)
-    x1 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
     x = F.leaky_relu(self.conv2(x, edge_index))
-     
-    x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, None, batch)
-    x2 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
     x = F.leaky_relu(self.conv3(x, edge_index))
-        
-    x, edge_index, _, batch, _, _ = self.pool3(x, edge_index, None, batch)
-    x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
-    #combining results from three glycan graph convolutions
-    x = x1 + x2 + x3
+    x = gap(x, batch)
     
     #combining results from protein and glycan
     h_n = torch.cat((embedded_prot, x), 1)

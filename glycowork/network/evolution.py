@@ -29,7 +29,7 @@ def calculate_distance_matrix(to_compare, dist_func, label_list = None):
   #check whether comparison objects are in a dict or list
   if isinstance(to_compare, dict):
     label_list = list(to_compare.keys())
-  elif idx is None:
+  elif label_list is None:
     label_list = list(range(len(to_compare)))
   dm = pd.DataFrame(dm, columns = label_list)
   #calculate pairwise distances
