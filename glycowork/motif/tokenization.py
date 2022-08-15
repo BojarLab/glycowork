@@ -256,7 +256,8 @@ def stemify_dataset(df, stem_lib = None, libr = None,
 def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
                       sample_prep = 'underivatized', mass_tolerance = 0.2, human = True,
                       glycan_class = 'N', check_all_adducts = False, check_specific_adduct = None,
-                      ptm = False, libr = None, there_can_only_be_one = False):
+                      ptm = False, libr = None, there_can_only_be_one = False,
+                      filter_out = None):
   """mapping a m/z value to one or more matching monosaccharide compositions\n
   | Arguments:
   | :-
@@ -271,7 +272,8 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
   | ptm (bool): whether to check for post-translational modification (sulfation, phosphorylation); default:False
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
-  | there_can_only_be_one (bool): if True, only returns the composition with the closest match with mz_value; default:False\n
+  | there_can_only_be_one (bool): if True, only returns the composition with the closest match with mz_value; default:False
+  | filter_out (list): list of monosaccharide types to ignore during composition finding; default:None\n
   | Returns:
   | :-
   | Returns a list of matching compositions in dict form (or a single composition dict if there_can_only_be_one == True)
@@ -349,7 +351,7 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
           composition['P'] = pool[-1]
         compositions.append(composition)
 
-  #heuristics to rule out unphysiological glycan compositions        
+  #heuristics to rule out unphysiological glycan compositions
   compositions = [dict(t) for t in {tuple(d.items()) for d in compositions}]
   compositions = [k for k in compositions if (k['Hex'] + k['HexNAc']) > 0]
   compositions = [k for k in compositions if (k['dHex'] + 1) <= (k['Hex'] + k['HexNAc'])]
@@ -365,6 +367,8 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
     compositions = [k for k in compositions if not all([(k['S'] > 0), (k['P'] > 0)])]
     compositions = [k for k in compositions if (k['S'] + k['P']) <= (k['Hex'] + k['HexNAc'])]
   compositions = [{k: v for k, v in comp.items() if v} for comp in compositions]
+  if filter_out:
+    compositions = [k for k in compositions if not any([j in k.keys() for j in filter_out])]
   if there_can_only_be_one and len(compositions) > 0:
     compositions = compositions[np.argmin([abs(mz_value-composition_to_mass(comp, libr = libr,
                                                                             mass_value = mass_value, sample_prep = sample_prep)) for comp in compositions])]
@@ -815,6 +819,8 @@ def composition_to_mass(dict_comp_in, libr = None, mass_value = 'monoisotopic',
     dict_comp['Sulphate'] = dict_comp.pop('S')
   if 'P' in dict_comp.keys():
     dict_comp['Phosphate'] = dict_comp.pop('P')
+  if 'Me' in dict_comp.keys():
+    dict_comp['Methyl'] = dict_comp.pop('Me')
   for k,v in dict_comp.items():
     theoretical_mass += mass_dict[k] * v
   return theoretical_mass + mass_dict['red_end']
