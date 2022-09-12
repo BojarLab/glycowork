@@ -68,6 +68,19 @@ def reindex(df_new, df_old, out_col, ind_col, inp_col):
   out = [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
   return out
 
+def stringify_dict(dicty):
+  """Converts dictionary into a string\n
+  | Arguments:
+  | :-
+  | dicty (dictionary): dictionary\n
+  | Returns:
+  | :-
+  | Returns string of type key:value for sorted items
+  """
+  dicty = dict(sorted(dicty.items()))
+  dicty = ''.join(str(key) + str(value) for key, value in dicty.items())
+  return dicty
+
 def build_custom_df(df, kind = 'df_species'):
   """creates custom df from df_glycan\n
   | Arguments:

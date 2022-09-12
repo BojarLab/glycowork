@@ -9,7 +9,7 @@ from itertools import combinations_with_replacement, product
 from collections import Counter
 from sklearn.cluster import DBSCAN
 
-from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, df_species, Hex, dHex, HexA, HexN, HexNAc, Pen, Sia, linkages
+from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, df_species, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, Sia, linkages
 from glycowork.motif.processing import small_motif_find, min_process_glycans, choose_correct_isoform
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 from glycowork.motif.annotate import annotate_dataset, find_isomorphs
@@ -363,16 +363,65 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
     compositions = [k for k in compositions if k['HexNAc'] >= 1]
   if glycan_class == 'free':
     compositions = [k for k in compositions if k['Hex'] >= 1]
+    compositions = [k for k in compositions if k['Hex'] >= k['HexNAc']]
+  if glycan_class == 'lipid':
+    compositions = [k for k in compositions if k['Hex'] >= 1]
   if ptm:
     compositions = [k for k in compositions if not all([(k['S'] > 0), (k['P'] > 0)])]
     compositions = [k for k in compositions if (k['S'] + k['P']) <= (k['Hex'] + k['HexNAc'])]
   compositions = [{k: v for k, v in comp.items() if v} for comp in compositions]
   if filter_out:
     compositions = [k for k in compositions if not any([j in k.keys() for j in filter_out])]
-  if there_can_only_be_one and len(compositions) > 0:
+  if there_can_only_be_one and len(compositions) > 1:
     compositions = compositions[np.argmin([abs(mz_value-composition_to_mass(comp, libr = libr,
                                                                             mass_value = mass_value, sample_prep = sample_prep)) for comp in compositions])]
   return compositions
+
+def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
+                      sample_prep = 'underivatized', mass_tolerance = 0.2,
+                      glycan_class = 'N', check_all_adducts = False, check_specific_adduct = None,
+                      libr = None, df_use = None, filter_out = None):
+  """experimental! only use if you know what you're doing; mapping a m/z value to a matching monosaccharide composition\n
+  | Arguments:
+  | :-
+  | mz_value (float): the actual m/z value from mass spectrometry
+  | mode (string): whether mz_value comes from MS in 'positive' or 'negative' mode; default:'negative'
+  | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
+  | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
+  | mass_tolerance (float): how much deviation to tolerate for a match; default:0.2
+  | glycan_class (string): which glycan class does the m/z value stem from, 'N', 'O', or 'lipid' linked glycans or 'free' glycans; default:'N'
+  | check_all_adducts (bool): whether to also check for matches with ion adducts (depending on mode); default:False
+  | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | df_use (dataframe): species-specific glycan dataframe to use for mapping; default: df_glycan
+  | filter_out (list): list of monosaccharide types to ignore during composition finding; default:None\n
+  | Returns:
+  | :-
+  | Returns a list of matching compositions in dict form
+  """
+  if libr is None:
+    libr = lib
+  if df_use is None:
+    df_use = df_glycan
+  max_mono = round(mz_value/150)
+  min_mono = round(mz_value/300)
+  mask = df_use['glycan_type'].values == glycan_class
+  df_sub = df_use[mask]
+  comp_pool = df_sub.dropna(subset=['composition']).composition.tolist()
+  out = []
+  for c in comp_pool:
+        if min_mono<sum(c.values())<=max_mono:
+          try:
+            mass = composition_to_mass(c, libr = libr, mass_value=mass_value, sample_prep=sample_prep)
+            if abs(mass - mz_value) < mass_tolerance:
+              out = [c]
+              break
+          except:
+            pass
+  if filter_out:
+    return [k for k in out if not any([j in k.keys() for j in filter_out])]
+  else:
+    return out
 
 def match_composition_relaxed(composition, group, level, df = None,
                       libr = None, reducing_end = None):
