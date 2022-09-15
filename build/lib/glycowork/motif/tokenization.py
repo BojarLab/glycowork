@@ -19,6 +19,7 @@ chars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S'
 
 io = pkg_resources.resource_stream(__name__, "mz_to_composition.csv")
 mapping_file = pd.read_csv(io)
+mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
 
 def constrain_prot(proteins, libr = None):
   """Ensures that no characters outside of libr are present in proteins\n
@@ -378,9 +379,8 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   return compositions
 
 def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
-                      sample_prep = 'underivatized', mass_tolerance = 0.2,
-                      glycan_class = 'N', check_all_adducts = False, check_specific_adduct = None,
-                      libr = None, df_use = None, filter_out = None):
+                      sample_prep = 'underivatized', mass_tolerance = 0.5,
+                      glycan_class = 'N', libr = None, df_use = None, filter_out = None):
   """experimental! only use if you know what you're doing; mapping a m/z value to a matching monosaccharide composition\n
   | Arguments:
   | :-
@@ -388,10 +388,8 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   | mode (string): whether mz_value comes from MS in 'positive' or 'negative' mode; default:'negative'
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
-  | mass_tolerance (float): how much deviation to tolerate for a match; default:0.2
+  | mass_tolerance (float): how much deviation to tolerate for a match; default:0.5
   | glycan_class (string): which glycan class does the m/z value stem from, 'N', 'O', or 'lipid' linked glycans or 'free' glycans; default:'N'
-  | check_all_adducts (bool): whether to also check for matches with ion adducts (depending on mode); default:False
-  | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
   | df_use (dataframe): species-specific glycan dataframe to use for mapping; default: df_glycan
   | filter_out (list): list of monosaccharide types to ignore during composition finding; default:None\n
@@ -403,6 +401,10 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
     libr = lib
   if df_use is None:
     df_use = df_glycan
+  if mode == 'negative':
+    adduct = mass_dict['Acetate']
+  else:
+    adduct = mass_dict['Na+']
   max_mono = round(mz_value/150)
   min_mono = round(mz_value/300)
   mask = df_use['glycan_type'].values == glycan_class
@@ -413,15 +415,17 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
         if min_mono<sum(c.values())<=max_mono:
           try:
             mass = composition_to_mass(c, libr = libr, mass_value=mass_value, sample_prep=sample_prep)
-            if abs(mass - mz_value) < mass_tolerance:
-              out = [c]
-              break
+            if any([abs(m - mz_value) < mass_tolerance for m in [mass, mass+adduct]]):
+              if filter_out:
+                if not any([j in c.keys() for j in filter_out]):
+                  out = [c]
+                  break
+              else:
+                out = [c]
+                break
           except:
             pass
-  if filter_out:
-    return [k for k in out if not any([j in k.keys() for j in filter_out])]
-  else:
-    return out
+  return out
 
 def match_composition_relaxed(composition, group, level, df = None,
                       libr = None, reducing_end = None):
