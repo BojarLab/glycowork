@@ -152,6 +152,19 @@ def get_core(sugar):
   else:
     return 'Monosaccharide'
 
+def get_modification(sugar):
+  """retrieves modification from modified monosaccharide\n
+  | Arguments:
+  | :-
+  | sugar (string): monosaccharide or linkage\n
+  | Returns:
+  | :-
+  | Returns modification as string
+  """
+  core = get_core(sugar)
+  modification = sugar.replace(core, '')
+  return modification
+
 def get_stem_lib(libr):
   """creates a mapping file to map modified monosaccharides to core monosaccharides\n
   | Arguments:
