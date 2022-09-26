@@ -102,7 +102,6 @@ def glycan_to_graph(glycan):
           adjustment = 0
         #subset the part of the glycan that is bookended by k and j
         glycan_part = glycan[glycan.index(str(k))+1:glycan.index(str(j))]
-
         #immediately adjacent residues
         if evaluate_adjacency(glycan_part, adjustment):
           adj_matrix[k,j] = 1
@@ -150,7 +149,6 @@ def glycan_to_nxGraph(glycan, libr = None,
   if override_reducing_end:
     if glycan[-1] == 'x':
       g1.remove_node(len(g1.nodes) - 1)
-    
   #add node labels
   nx.set_node_attributes(g1, {k:libr.index(node_dict[k]) for k in range(len(node_dict))}, 'labels')
   nx.set_node_attributes(g1, {k:node_dict[k] for k in range(len(node_dict))}, 'string_labels')
@@ -200,8 +198,8 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   | glycan_a (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | wildcards (bool): set to True to allow wildcards (e.g., 'z1-z', 'monosaccharide'); default is False
-  | wildcard_list (list): list of wildcards to consider, in the form of 'z1-z' etc.\n
+  | wildcards (bool): set to True to allow wildcards (e.g., '?1-?', 'monosaccharide'); default is False
+  | wildcard_list (list): list of wildcards to consider, in the form of '?1-?' etc.\n
   | Returns:
   | :-  
   | Returns True if two glycans are the same and False if not
@@ -241,7 +239,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   | motif (string): glycan motif in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
-  | wildcard_list (list): list of wildcard names (such as 'z1-z', 'Hex', 'HexNAc', 'Sia')
+  | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
   | count (bool): whether to return the number or absence/presence of motifs; default:False\n
   | Returns:
@@ -271,7 +269,6 @@ def subgraph_isomorphism(glycan, motif, libr = None,
 
   #check whether length of glycan is larger or equal than the motif
   if len(g1.nodes) >= len(g2.nodes): 
-  
     if extra == 'ignore':
       if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
         graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))

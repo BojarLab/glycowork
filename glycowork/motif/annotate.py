@@ -302,7 +302,7 @@ def get_k_saccharides(glycan, libr = None, k = 3):
     if nx.is_connected(sub_g):
       mapped_edges = [(nodeDict[k[0]]['string_labels'],nodeDict[k[1]]['string_labels']) for k in edges]
       #check whether first entry is a monosaccharide
-      if mapped_edges[0][0][0] not in ['a', 'b', 'z']:
+      if mapped_edges[0][0][0] not in ['a', 'b', '?', 'z']:
         #check whether all entries describe "overlapping" edges amenable to stitching together
         if all([mapped_edges[k][1] == mapped_edges[k+1][0] for k in range(len(mapped_edges)-1)]):
           out_saccharide = list(mapped_edges[0]) + [m[1] for m in mapped_edges[1:]]

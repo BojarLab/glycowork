@@ -145,7 +145,7 @@ def get_core(sugar):
     return 'Neu5Gc'
   elif 'Neu' in sugar:
     return 'Neu'
-  elif sugar.startswith('a') or sugar.startswith('b') or sugar.startswith('z'):
+  elif sugar.startswith('a') or sugar.startswith('b') or sugar.startswith('?') or sugar.startswith('z'):
     return sugar
   elif re.match('^[0-9]+(-[0-9]+)+$', sugar):
     return sugar
@@ -184,7 +184,7 @@ def stemify_glycan(glycan, stem_lib = None, libr = None):
   clean_list = list(stem_lib.values())
   for k in list(stem_lib.keys())[::-1][:-1]:
     #for each monosaccharide, check whether it's modified
-    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b','z'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
+    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b','?','z'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
       #go at it until all modifications are stemified
       while ((k in glycan) and (sum(1 for s in clean_list if k in s) <= 1)):
         glycan_start = glycan[:glycan.rindex('(')]
@@ -473,7 +473,8 @@ def condense_composition_matching(matched_composition, libr = None):
   if libr is None:
     libr = lib
   #define uncertainty wildcards
-  wildcards = ['z1-z', 'z2-z', 'a2-z', 'a1-z', 'b1-z']
+  wildcards = ['?1-?', '?2-?', 'a2-?', 'a1-?', 'b1-?',
+               'z1-z', 'z2-z', 'a2-z', 'a1-z', 'b1-z']
   #establish glycan equality given the wildcards
   match_matrix = [[compare_glycans(k, j, libr = libr, wildcards = True,
                                   wildcard_list = wildcards) for j in matched_composition] for k in matched_composition]
@@ -683,9 +684,9 @@ def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkag
     for m in rares[1]:
       if m in k:
         if m[1] == '1':
-          k = k.replace(m, 'z1-z')
+          k = k.replace(m, '?1-?')
         else:
-          k = k.replace(m, 'z2-z')
+          k = k.replace(m, '?2-?')
     out.append(k)
   return out
 
@@ -708,16 +709,14 @@ def canonicalize_iupac(glycan):
   if "\u03B2" in glycan:
     glycan = glycan.replace("\u03B2", 'b')
   #canonicalize linkage uncertainty
-  if '?' in glycan:
-    glycan = glycan.replace('?', 'z')
   if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
-    glycan = re.sub(r'([a-z])\-([A-Z])', r'\1z1-z\2', glycan)
+    glycan = re.sub(r'([a-z])\-([A-Z])', r'\1\?1-\?\2', glycan)
   if bool(re.search(r'[a-z][\(\)]', glycan)):
-    glycan = re.sub(r'([a-z])([\(\)])', r'\1z1-z\2', glycan)
+    glycan = re.sub(r'([a-z])([\(\)])', r'\1\?1-\?\2', glycan)
   if bool(re.search(r'[0-9]\-[\(\)]', glycan)):
-    glycan = re.sub(r'([0-9])\-([\(\)])', r'\1-z\2', glycan)
+    glycan = re.sub(r'([0-9])\-([\(\)])', r'\1-\?\2', glycan)
   while '/' in glycan:
-    glycan = glycan[:glycan.index('/')-1] + 'z' + glycan[glycan.index('/')+1:]
+    glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
   #canonicalize usage of brackets and parentheses
   if bool(re.search(r'\([A-Z0-9]', glycan)):
     glycan = glycan.replace('(', '[')
@@ -725,10 +724,10 @@ def canonicalize_iupac(glycan):
   if '(' not in glycan and len(glycan) > 6:
     for k in range(1,glycan.count('-')+1):
       idx = find_nth(glycan, '-', k)
-      if (glycan[idx-1].isnumeric()) and (glycan[idx+1].isnumeric() or glycan[idx+1]=='z'):
+      if (glycan[idx-1].isnumeric()) and (glycan[idx+1].isnumeric() or glycan[idx+1]=='?'):
         glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+2] + ')' + glycan[idx+2:]
       elif (glycan[idx-1].isnumeric()) and bool(re.search(r'[A-Z]', glycan[idx+1])):
-        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+1] + 'z)' + glycan[idx+1:]
+        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+1] + '?)' + glycan[idx+1:]
   #canonicalize reducing end
   if bool(re.search(r'[a-z]ol', glycan)):
     if 'Glcol' not in glycan:
@@ -760,9 +759,6 @@ def check_nomenclature(glycan):
   if not isinstance(glycan, str):
     print("You need to format your glycan sequences as strings.")
     return
-  if '?' in glycan:
-    print("You're likely using ? somewhere, to indicate linkage uncertainty. Glycowork uses 'z' to indicate linkage uncertainty")
-    return canonicalize_iupac(glycan)
   if '=' in glycan:
     print("Could it be that you're using WURCS? Please convert to IUPACcondensed for using glycowork.")
   if 'RES' in glycan:
@@ -792,7 +788,7 @@ def map_to_basic(glycoletter):
   elif glycoletter in Pen:
     return 'Pen'
   elif glycoletter in linkages:
-    return 'z1-z'
+    return '?1-?'
   else:
     return glycoletter
 
@@ -846,7 +842,7 @@ def glycan_to_composition(glycan, libr = None, go_fast = False):
     composition['S'] = glycan.count('S')
   if 'P' in glycan:
     composition['P'] = glycan.count('P')
-  del composition['z1-z']
+  del composition['?1-?']
   return dict(composition)
 
 def composition_to_mass(dict_comp_in, libr = None, mass_value = 'monoisotopic',

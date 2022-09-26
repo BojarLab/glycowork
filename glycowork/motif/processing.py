@@ -119,7 +119,7 @@ def choose_correct_isoform(glycans, reverse = False):
   prefix_len = [len(k) for k in prefix]
   #choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(set(prefix_len)) == 1:
-    branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'z' and k[-2][-1] != 'd' else 10 for k in prefix]
+    branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'z' and k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in prefix]
     correct_isoform = glycans[np.argmin(branch_endings)]
   else:
     correct_isoform = glycans[np.argmax(prefix_len)]
