@@ -185,8 +185,10 @@ def stemify_glycan(glycan, stem_lib = None, libr = None):
   for k in list(stem_lib.keys())[::-1][:-1]:
     #for each monosaccharide, check whether it's modified
     if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b','?','z'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
+      county = 0
       #go at it until all modifications are stemified
-      while ((k in glycan) and (sum(1 for s in clean_list if k in s) <= 1)):
+      while ((k in glycan) and (sum(1 for s in clean_list if k in s) <= 1)) and county < 5:
+        county += 1
         glycan_start = glycan[:glycan.rindex('(')]
         glycan_part = glycan_start
         #narrow it down to the offending monosaccharide
@@ -823,7 +825,7 @@ def glycan_to_composition(glycan, libr = None, go_fast = False):
   | go_fast (bool): if True, it will only do stemification if necessary (2-10x speed-up), *will fail if non-allowed modifications occur*; default:False\n
   | Returns:
   | :-
-  | Returns a dictionary of form "monosaccharide" : count
+  | Returns a dictionary of form "Monosaccharide" : count
   """
   if libr is None:
     libr = lib
@@ -843,7 +845,12 @@ def glycan_to_composition(glycan, libr = None, go_fast = False):
   if 'P' in glycan:
     composition['P'] = glycan.count('P')
   del composition['?1-?']
-  return dict(composition)
+  composition = dict(composition)
+  if any([k not in ['Hex','dHex','HexNAc','HexN','HexA','Neu5Ac','Neu5Gc','Kdn',
+                    'Pen','Me','S','P'] for k in composition.keys()]):
+    return {}
+  else:
+    return composition
 
 def composition_to_mass(dict_comp_in, libr = None, mass_value = 'monoisotopic',
                       sample_prep = 'underivatized'):
