@@ -127,3 +127,25 @@ def choose_correct_isoform(glycans, reverse = False):
     glycans.remove(correct_isoform)
     correct_isoform = glycans
   return correct_isoform
+
+def enforce_class(glycan, glycan_class):
+  """given a glycan and glycan class, determines whether glycan is from this class\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed nomenclature
+  | glycan_class (string): glycan class in form of "O", "N", "free", or "lipid"\n
+  | Returns:
+  | :-
+  | Returns True if glycan is in glycan class and False if not
+  """
+  if glycan_class == 'O':
+    pool = ['GalNAc', 'GalNAcOS', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
+  elif glycan_class == 'N':
+    pool = ['GlcNAc']
+  elif glycan_class == 'free' or glycan_class == 'lipid':
+    pool = ['Glc', 'GlcOS', 'GlcNAc', 'Gal', 'Ins']
+  truth = any([glycan.endswith(k) for k in pool])
+  if glycan_class == 'free' or glycan_class == 'lipid' or glycan_class == 'O':
+    if any([glycan.endswith(k) for k in ['GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc']]):
+      truth = False
+  return truth

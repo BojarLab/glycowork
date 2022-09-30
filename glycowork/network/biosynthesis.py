@@ -1081,12 +1081,13 @@ def retrieve_inferred_nodes(network, species = None):
   else:
     return {species:inferred_nodes}
 
-def export_network(network, filepath):
+def export_network(network, filepath, other_node_attributes = []):
   """converts NetworkX network into files usable, e.g., by Cytoscape or Gephi\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
-  | filepath (string): should describe a valid path + file name prefix, will be appended by file description and type\n
+  | filepath (string): should describe a valid path + file name prefix, will be appended by file description and type
+  | other_node_attributes (list): string names of node attributes that should also be extracted; default:[]\n
   | Returns:
   | :-
   | (1) saves a .csv dataframe containing the edge list and edge labels
@@ -1109,7 +1110,13 @@ def export_network(network, filepath):
   #generate node_labels
   node_labels = nx.get_node_attributes(network, 'virtual')
   node_labels = pd.DataFrame(node_labels, index = [0]).T.reset_index()
-  node_labels.columns = ['Id', 'Virtual']
+  if len(other_node_attributes)>0:
+    other_node_labels = []
+    for att in other_node_attributes:
+      lab = nx.get_node_attributes(network, att)
+      other_node_labels.append(pd.DataFrame(lab, index = [0]).T.reset_index().iloc[:,1])
+    node_labels = pd.concat([node_labels] + other_node_labels, axis = 1)
+  node_labels.columns = ['Id', 'Virtual'] + other_node_attributes
   node_labels = node_labels.replace('z', '?', regex = True)
   node_labels.to_csv(filepath + '_node_labels.csv', index = False)
 
