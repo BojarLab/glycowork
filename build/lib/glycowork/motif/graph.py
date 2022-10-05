@@ -114,7 +114,7 @@ def glycan_to_graph(glycan):
                 continue  
   return mask_dic, adj_matrix
 
-def glycan_to_nxGraph(glycan, libr = None,
+def glycan_to_nxGraph_int(glycan, libr = None,
                       termini = 'ignore', termini_list = None,
                       override_reducing_end = False):
   """converts glycans into networkx graphs\n
@@ -158,6 +158,38 @@ def glycan_to_nxGraph(glycan, libr = None,
     nx.set_node_attributes(g1, {k:'terminal' if g1.degree[k] == 1 else 'internal' for k in g1.nodes()}, 'termini')
   elif termini == 'provided':
     nx.set_node_attributes(g1, {k:j for k,j in zip(g1.nodes(), termini_list)}, 'termini')
+  return g1
+
+def glycan_to_nxGraph(glycan, libr = None,
+                      termini = 'ignore', termini_list = None,
+                      override_reducing_end = False):
+  """wrapper for converting glycans into networkx graphs; also works with floating substituents\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
+  | override_reducing_end (bool): if True, it allows graph generation for glycans ending in a linkage; though the output doesn't work with all downstream functions; default:False\n
+  | Returns:
+  | :-
+  | Returns networkx graph object of glycan
+  """
+  if libr is None:
+    libr = lib
+  if '{' in glycan:
+    parts = glycan.replace('}','{').split('{')
+    parts = [k for k in parts if len(k) > 0]
+    parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
+                                   termini_list = termini_list, override_reducing_end = True) for k in parts]
+    len_org = len(parts[-1].nodes())
+    for p in range(len(parts)-1):
+      parts[p] = nx.relabel_nodes(parts[p], {pn:pn+len_org for pn in parts[p].nodes()})
+      len_org += len(parts[p].nodes())
+    g1 = nx.algorithms.operators.all.compose_all(parts)
+  else:
+    g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
+                                   termini_list = termini_list, override_reducing_end = override_reducing_end)
   return g1
 
 def categorical_node_match_wildcard(attr, default, wildcard_list):
