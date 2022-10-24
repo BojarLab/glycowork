@@ -415,7 +415,7 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   if libr is None:
     libr = lib
   if df_use is None:
-    df_use = df_glycan
+    df_use = df_glycan[df_glycan.glycan_type == glycan_class]
   if mode == 'negative':
     adduct = mass_dict['Acetate']
   else:

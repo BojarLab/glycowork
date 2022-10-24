@@ -14,6 +14,20 @@ from glycowork.glycan_data.loader import lib, df_species, unwrap
 from glycowork.motif.annotate import annotate_dataset, link_find
 from glycowork.motif.graph import subgraph_isomorphism
 
+def cohen_d(x,y):
+  """calculates effect size between two groups\n
+    | Arguments:
+    | :-
+    | x (list or 1D-array): comparison group containing numerical data
+    | y (list or 1D-array): comparison group containing numerical data\n
+    | Returns:
+    | :-
+    | Returns Cohen's d as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)
+  """
+  nx = len(x)
+  ny = len(y)
+  dof = nx + ny - 2
+  return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof=1) ** 2 + (ny-1)*np.std(y, ddof=1) ** 2) / dof)
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      libr = None, thresh = 1.645, sorting = True,
