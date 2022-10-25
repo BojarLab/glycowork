@@ -208,7 +208,9 @@ def find_diff(glycan_a, glycan_b, libr = None):
     return 'disregard'
   #final check of whether the smaller glycan is a subgraph of the larger glycan
   if subgraph_isomorphism(ggraphs[np.argmax(lens)], ggraphs[np.argmin(lens)], libr = libr):
-    diff = (larger_graph[0] + "(" + larger_graph[1] + ")")
+    linkage = [k for k in larger_graph if k in linkages][0]
+    sugar = [k for k in larger_graph if k not in linkages][0]
+    diff = (sugar + "(" + linkage + ")")
     if 'S(' in diff or 'P(' in diff:
       return 'disregard'
     elif diff is None:
@@ -930,7 +932,12 @@ def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
   | edge_label_draw (bool): draws edge labels if True; default:True
   | lfc_dict (dict): dictionary of enzyme:log2-fold-change to scale edge width; default:None\n
   """
-  mpld3.enable_notebook()
+  try:
+    mpld3.enable_notebook()
+  except:
+    print("Not in a notebook environment --> mpld3 doesn't work, so we can't do fancy plotting. Reverting to just plotting the network. Recommended to run this in a notebook.")
+    nx.draw(network)
+    plt.show()
   fig, ax = plt.subplots(figsize = (16,16))
   #check whether are values to scale node size by
   if len(list(nx.get_node_attributes(network, 'abundance').values())) > 0:
