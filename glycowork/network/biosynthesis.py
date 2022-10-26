@@ -1194,16 +1194,19 @@ def choose_path(diamond, species_list, network_dic, libr = None, threshold = 0.,
     inferences = {k[0]:v for k,v in inferences.items()}
   return inferences
 
-def find_diamonds(network, nb_intermediates = 2):
+def find_diamonds(network, libr = None, nb_intermediates = 2):
   """automatically extracts shapes such as diamonds (A->B,A->C,B->D,C->D) from biosynthetic networks\n
   | Arguments:
   | :-
-  | network (networkx object): biosynthetic network, returned from construct_network\n
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
   | Returns:
   | :-
   | Returns list of dictionaries, with each dictionary a network motif in the form of position in the motif : glycan
   """
+  if libr is None:
+    libr = lib
   if nb_intermediates % 2 > 0:
     print("nb_intermediates has to be a multiple of 2; please re-try.")
   #generate matching motif
@@ -1272,7 +1275,7 @@ def trace_diamonds(network, species_list, network_dic, libr = None, threshold = 
   if libr is None:
     libr = lib
   #get the diamonds
-  matchings_list = find_diamonds(network, nb_intermediates = nb_intermediates)
+  matchings_list = find_diamonds(network, libr = libr, nb_intermediates = nb_intermediates)
   #calculate the path probabilities
   paths = [choose_path(d, species_list, network_dic, libr = libr,
                        threshold = threshold, nb_intermediates = nb_intermediates) for d in matchings_list]
