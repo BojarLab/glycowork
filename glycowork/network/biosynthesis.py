@@ -1248,7 +1248,7 @@ def find_diamonds(network, nb_intermediates = 2):
       d = dict((v, k) for k, v in d.items())
       #filter out non-diamond shapes with any cross-connections
       if nb_intermediates > 2:
-        if max((n for d,n in adjacencyMatrix_to_network(create_adjacency_matrix(list(diamond.values()), libr = libr)[0]).degree())) == 2:
+        if max((n for d,n in adjacencyMatrix_to_network(create_adjacency_matrix(list(d.values()), libr = libr)[0]).degree())) == 2:
           matchings_list2.append(d)
       else:
         matchings_list2.append(d)

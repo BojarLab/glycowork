@@ -45,7 +45,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-    | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+    | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
     | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
     | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None
     | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
