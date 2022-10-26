@@ -1149,18 +1149,20 @@ def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
   else :
     return(str(list(set(new_edge_label))).replace("'","").replace("[","").replace("]","").replace(", ","_"))
 
-def choose_path(diamond, species_list, network_dic, libr = None, threshold = 0.):
-  """given a diamond-shape in biosynthetic networks (A->B,A->C,B->D,C->D), which path is taken from A to D?\n
+def choose_path(diamond, species_list, network_dic, libr = None, threshold = 0.,
+                nb_intermediates = 2):
+  """given a shape such as diamonds in biosynthetic networks (A->B,A->C,B->D,C->D), which path is taken from A to D?\n
   | Arguments:
   | :-
   | diamond (dict): dictionary of form position-in-diamond : glycan-string, describing the diamond
   | species_list (list): list of species to compare network to
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | threshold (float): everything below or equal to that threshold will be cut; default:0.\n
+  | threshold (float): everything below or equal to that threshold will be cut; default:0.
+  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
   | Returns:
   | :-
-  | Returns dictionary of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
+  | Returns dictionary of each intermediary path and its experimental support (0-1) across species
   """
   if libr is None:
     libr = lib
@@ -1168,42 +1170,54 @@ def choose_path(diamond, species_list, network_dic, libr = None, threshold = 0.)
   adj, _ = create_adjacency_matrix(list(diamond.values()), libr = libr)
   network = adjacencyMatrix_to_network(adj)
   #get the intermediate nodes constituting the alternative paths
-  alternatives = [path[1] for path in nx.all_simple_paths(network, source = diamond[1], target = diamond[3])]
+  alternatives = [path[1:int(((nb_intermediates/2)+1))] for path in nx.all_simple_paths(network, source = diamond[1], target = diamond[1+int(((nb_intermediates/2)+1))])]
+  print(alternatives)
   if len(alternatives) < 2:
     return {}
-  alt_a = []
-  alt_b = []
+  alts = [[] for _ in range(len(alternatives))]
   #for each species, check whether an alternative has been observed
   for k in species_list:
     temp_network = network_dic[k]
-    if diamond[1] in temp_network.nodes() and diamond[3] in temp_network.nodes():
-      if alternatives[0] in temp_network.nodes():
-        alt_a.append(temp_network.nodes[alternatives[0]]['virtual'])
-      if alternatives[1] in temp_network.nodes():
-        alt_b.append(temp_network.nodes[alternatives[1]]['virtual'])
-  #calculate the ratio of observed / (observed + virtual)
-  alt_a = alt_a.count(0)/max([len(alt_a), 1])
-  alt_b = alt_b.count(0)/max([len(alt_b), 1])
+    if diamond[1] in temp_network.nodes() and diamond[1+int((nb_intermediates/2)+1)] in temp_network.nodes():
+      for a in range(len(alternatives)):
+        if all([aa in temp_network.nodes() for aa in alternatives[a]]):
+          alts[a].append(np.mean([temp_network.nodes[aa]['virtual'] for aa in alternatives[a]]))
+        else:
+          alts[a].append(1)
+  alts = [1-np.mean(a) for a in alts]
   #if both alternatives aren't observed, add minimum value (because one of the paths *has* to be taken)
-  if alt_a == alt_b == 0:
-    alt_a = 0.01 + threshold
-    alt_b = 0.01 + threshold
-  inferences = {alternatives[0]:alt_a, alternatives[1]:alt_b}
+  inferences = {tuple(alternatives[a]):alts[a] for a in range(len(alternatives))}
+  if sum(inferences.values()) == 0:
+    inferences = {k:v+0.01+threshold for k,v in inferences.items()}
+  #will be removed in the future
+  if nb_intermediates == 2:
+    inferences = {k[0]:v for k,v in inferences.items()}
   return inferences
 
-def find_diamonds(network):
-  """automatically extracts diamond-shaped motifs (A->B,A->C,B->D,C->D) from biosynthetic networks\n
+def find_diamonds(network, nb_intermediates = 2):
+  """automatically extracts shapes such as diamonds (A->B,A->C,B->D,C->D) from biosynthetic networks\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network\n
+  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
   | Returns:
   | :-
-  | Returns list of dictionaries, with each dictionary a diamond motif in the form of position in the diamond : glycan
+  | Returns list of dictionaries, with each dictionary a network motif in the form of position in the motif : glycan
   """
+  if nb_intermediates % 2 > 0:
+    print("nb_intermediates has to be a multiple of 2; please re-try.")
   #generate matching motif
   g1 = nx.DiGraph()
-  nx.add_path(g1, [1,2,3])
-  nx.add_path(g1, [1,4,3])
+  nb_nodes = nb_intermediates + 2 #number of intermediates + 1 source node + 1 target node
+  path_length = int(nb_intermediates/2 + 2) #the length of one of the two paths is half of the number of intermediates + 1 source node + 1 target node
+  first_path = []
+  second_path = []
+
+  [first_path.append(x) for x in range(1, path_length+1)]
+  [second_path.append(first_path[x]) if x in [0, len(first_path)-1] else second_path.append(first_path[x]+ len(first_path)-1) for x in range(0,len(first_path))]                                                                                                                     
+  nx.add_path(g1, first_path)
+  nx.add_path(g1, second_path)
+    
   #find networks containing the matching motif
   graph_pair = nx.algorithms.isomorphism.GraphMatcher(network, g1)
   #find diamonds within those networks
@@ -1215,14 +1229,33 @@ def find_diamonds(network):
   #for each diamond, only keep the diamond if at least one of the intermediate structures is virtual
   for d in matchings_list:
     d_rev = dict((v, k) for k, v in d.items())
-    middle_nodes = [d_rev[2], d_rev[4]]
+    substrate_node = d_rev[1]
+    product_node = d_rev[path_length]
+    middle_nodes = []
+    [middle_nodes.append(d_rev[key]) for key in range(2, len(d_rev.items())+1) if key != path_length] 
+    
+    #pattern matching sometimes identify discontinuous patterns containing nodes "out of the path" -> they are filtered here
+    #For each middle node, test whether they are part of the same path as substrate node and product node (remove false positives)
+    for middle_node in middle_nodes:
+      try:
+        are_connected = nx.bidirectional_dijkstra(network, substrate_node, middle_node)
+        are_connected = nx.bidirectional_dijkstra(network, middle_node, product_node)
+      except:
+        break
+
     virtual_state = [nx.get_node_attributes(network, 'virtual')[j] for j in middle_nodes]
     if any([j == 1 for j in virtual_state]):
       d = dict((v, k) for k, v in d.items())
-      matchings_list2.append(d)
+      #filter out non-diamond shapes with any cross-connections
+      if nb_intermediates > 2:
+        if max((n for d,n in adjacencyMatrix_to_network(create_adjacency_matrix(list(diamond.values()), libr = libr)[0]).degree())) == 2:
+          matchings_list2.append(d)
+      else:
+        matchings_list2.append(d)
   return matchings_list2
 
-def trace_diamonds(network, species_list, network_dic, libr = None, threshold = 0.):
+def trace_diamonds(network, species_list, network_dic, libr = None, threshold = 0.,
+                   nb_intermediates = 2):
   """extracts diamond-shape motifs from biosynthetic networks (A->B,A->C,B->D,C->D) and uses evolutionary information to determine which path is taken from A to D\n
   | Arguments:
   | :-
@@ -1230,7 +1263,8 @@ def trace_diamonds(network, species_list, network_dic, libr = None, threshold = 
   | species_list (list): list of species to compare network to
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | threshold (float): everything below or equal to that threshold will be cut; default:0.\n
+  | threshold (float): everything below or equal to that threshold will be cut; default:0.
+  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
   | Returns:
   | :-
   | Returns dataframe of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
@@ -1238,9 +1272,10 @@ def trace_diamonds(network, species_list, network_dic, libr = None, threshold = 
   if libr is None:
     libr = lib
   #get the diamonds
-  matchings_list = find_diamonds(network)
+  matchings_list = find_diamonds(network, nb_intermediates = nb_intermediates)
   #calculate the path probabilities
-  paths = [choose_path(d, species_list, network_dic, libr = libr, threshold = threshold) for d in matchings_list]
+  paths = [choose_path(d, species_list, network_dic, libr = libr,
+                       threshold = threshold, nb_intermediates = nb_intermediates) for d in matchings_list]
   df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
   df_out.columns = ['target', 'probability']
   return df_out
@@ -1270,7 +1305,7 @@ def prune_network(network, node_attr = 'abundance', threshold = 0.):
   return network_out
 
 def evoprune_network(network, network_dic = None, species_list = None, libr = None,
-                     node_attr = 'abundance', threshold = 0.01):
+                     node_attr = 'abundance', threshold = 0.01, nb_intermediates = 2):
   """given a biosynthetic network, this function uses evolutionary relationships to prune impossible paths\n
   | Arguments:
   | :-
@@ -1279,7 +1314,8 @@ def evoprune_network(network, network_dic = None, species_list = None, libr = No
   | species_list (list): list of species to compare network to; default:species from pre-computed milk networks
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | node_attr (string): which (numerical) node attribute to use for pruning; default:'abundance'
-  | threshold (float): everything below or equal to that threshold will be cut; default:0.01\n
+  | threshold (float): everything below or equal to that threshold will be cut; default:0.01
+  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
   | Returns:
   | :-
   | Returns pruned network (with virtual node probability as a new node attribute)
@@ -1291,7 +1327,8 @@ def evoprune_network(network, network_dic = None, species_list = None, libr = No
   if species_list is None:
     species_list = list(network_dic.keys())
   #calculate path probabilities of diamonds
-  df_out = trace_diamonds(network, species_list, network_dic, libr = libr, threshold = threshold)
+  df_out = trace_diamonds(network, species_list, network_dic,
+                          libr = libr, threshold = threshold, nb_intermediates = nb_intermediates)
   #scale virtual node size by path probability
   network_out = highlight_network(network, highlight = 'abundance', abundance_df = df_out,
                                   intensity_col = 'probability')
