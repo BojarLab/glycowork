@@ -618,3 +618,50 @@ def largest_subgraph(glycan_a, glycan_b, libr = None):
       return ""
   else:
     return ""
+
+def get_possible_topologies(glycan, libr = None):
+  """creates possible glycans given a floating substituent; only works with max one floating substituent\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns list of NetworkX-like glycan graphs of possible topologies
+  """
+  if libr is None:
+    libr = lib
+  if '{' not in glycan:
+    print("This glycan already has a defined topology; please don't use this function.")
+  ggraph = glycan_to_nxGraph(glycan, libr = libr)
+  parts = [ggraph.subgraph(c) for c in nx.connected_components(ggraph)]
+  topologies = []
+  for k in list(parts[-1].nodes()):
+    #only add to non-reducing ends
+    if parts[-1].degree[k] == 1 and k != max(list(parts[-1].nodes())):
+      ggraph2 = copy.deepcopy(ggraph)
+      ggraph2.add_edge(max(list(parts[0].nodes())), k)
+      ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
+      topologies.append(ggraph2)
+  return topologies
+
+def possible_topology_check(glycan, glycans, libr = None):
+  """checks whether glycan with floating substituent could match glycans from a list; only works with max one floating substituent\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format that has to contain a floating substituent
+  | glycans (list): list of glycans in IUPAC-condensed format (should not contain floating substituents)
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns list of glycans that could match input glycan
+  """
+  if libr is None:
+    libr = lib
+  topologies = get_possible_topologies(glycan, libr = libr)
+  out_glycs = []
+  for g in glycans:
+    ggraph = glycan_to_nxGraph(g, libr = libr)
+    if any([compare_glycans(t, ggraph, libr = libr) for t in topologies]):
+      out_glycs.append(g)
+  return out_glycs

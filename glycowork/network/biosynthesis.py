@@ -1171,7 +1171,6 @@ def choose_path(diamond, species_list, network_dic, libr = None, threshold = 0.,
   network = adjacencyMatrix_to_network(adj)
   #get the intermediate nodes constituting the alternative paths
   alternatives = [path[1:int(((nb_intermediates/2)+1))] for path in nx.all_simple_paths(network, source = diamond[1], target = diamond[1+int(((nb_intermediates/2)+1))])]
-  print(alternatives)
   if len(alternatives) < 2:
     return {}
   alts = [[] for _ in range(len(alternatives))]
