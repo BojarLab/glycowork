@@ -86,6 +86,8 @@ def link_find(glycan):
   | :-
   | Returns list of unique disaccharides (strings) for a glycan in IUPAC-condensed
   """
+  if '}' in glycan:
+    glycan = glycan[glycan.rindex('}')+1:]
   #get different string representations of the same glycan
   ss = find_isomorphs(glycan)
   coll = []

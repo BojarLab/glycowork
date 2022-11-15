@@ -842,6 +842,8 @@ def glycan_to_composition(glycan, libr = None, go_fast = False):
   """
   if libr is None:
     libr = lib
+  if '{' in glycan:
+    glycan = glycan.replace('{','').replace('}','')
   if go_fast:
     if any([k in glycan for k in ['Me', 'P', 'S']]):
       glycan2 = stemify_glycan(glycan, libr = libr)
