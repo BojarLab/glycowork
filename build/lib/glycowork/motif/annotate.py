@@ -4,7 +4,7 @@ import itertools
 import re
 
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, ensure_graph
 from glycowork.motif.processing import small_motif_find
 
 
@@ -281,7 +281,7 @@ def get_k_saccharides(glycan, libr = None, k = 3):
   """function to retrieve k-saccharides (default:trisaccharides) occurring in a glycan\n
   | Arguments:
   | :-
-  | glycan (string): glycan in IUPAC-condensed nomenclature
+  | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
   | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
   | k (int): number of monosaccharides per -saccharide, default:3 (for trisaccharides)\n
   | Returns:
@@ -292,7 +292,7 @@ def get_k_saccharides(glycan, libr = None, k = 3):
     libr = lib
   #adjust for the fact that linkages are nodes in our graphs
   actual_k = k + (k-2)
-  ggraph = glycan_to_nxGraph(glycan, libr = libr)
+  ggraph = ensure_graph(glycan, libr = libr)
   if len(ggraph.nodes()) < actual_k:
     return []
   nodeDict = dict(ggraph.nodes(data = True))
@@ -321,7 +321,7 @@ def get_terminal_structures(glycan, libr = None):
   """returns terminal structures from all non-reducing ends (monosaccharide+linkage)\n
   | Arguments:
   | :-
-  | glycan (string): glycan in IUPAC-condensed nomenclature
+  | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
   | Returns:
   | :-
@@ -329,7 +329,7 @@ def get_terminal_structures(glycan, libr = None):
   """
   if libr is None:
     libr = lib
-  ggraph = glycan_to_nxGraph(glycan, libr = libr)
+  ggraph = ensure_graph(glycan, libr = libr)
   nodeDict = dict(ggraph.nodes(data = True))
   termini = [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]
   return termini
