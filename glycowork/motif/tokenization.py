@@ -389,8 +389,8 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   if filter_out:
     compositions = [k for k in compositions if not any([j in k.keys() for j in filter_out])]
   if there_can_only_be_one and len(compositions) > 1:
-    compositions = compositions[np.argmin([abs(mz_value-composition_to_mass(comp, libr = libr,
-                                                                            mass_value = mass_value, sample_prep = sample_prep)) for comp in compositions])]
+    compositions = compositions[np.argmin([abs(mz_value-composition_to_mass(comp, mass_value = mass_value,
+                                                                            sample_prep = sample_prep)) for comp in compositions])]
   return compositions
 
 def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
@@ -429,7 +429,7 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   for c in comp_pool:
         if min_mono<sum(c.values())<=max_mono:
           try:
-            mass = composition_to_mass(c, libr = libr, mass_value=mass_value, sample_prep=sample_prep)
+            mass = composition_to_mass(c, mass_value=mass_value, sample_prep=sample_prep)
             if any([abs(m - mz_value) < mass_tolerance for m in [mass, mass+adduct]]):
               if filter_out:
                 if not any([j in c.keys() for j in filter_out]):
@@ -867,21 +867,18 @@ def glycan_to_composition(glycan, libr = None, go_fast = False):
   else:
     return composition
 
-def composition_to_mass(dict_comp_in, libr = None, mass_value = 'monoisotopic',
+def composition_to_mass(dict_comp_in, mass_value = 'monoisotopic',
                       sample_prep = 'underivatized'):
   """given a composition, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
   | Arguments:
   | :-
   | dict_comp_in (dict): composition in form monosaccharide:count
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'\n
   | Returns:
   | :-
   | Returns the theoretical mass of input composition
   """
-  if libr is None:
-    libr = lib
   dict_comp = copy.deepcopy(dict_comp_in)
   theoretical_mass = 0
   idx = sample_prep + '_' + mass_value
@@ -913,4 +910,4 @@ def calculate_theoretical_mass(glycan, mass_value = 'monoisotopic', sample_prep 
   if libr is None:
     libr = lib
   comp = glycan_to_composition(glycan, libr = libr, go_fast = go_fast)
-  return composition_to_mass(comp, libr = libr, mass_value = mass_value, sample_prep = sample_prep)
+  return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep)

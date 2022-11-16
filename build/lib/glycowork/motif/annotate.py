@@ -316,3 +316,20 @@ def get_k_saccharides(glycan, libr = None, k = 3):
             out.append(out_saccharide)
   out = list(set(out))
   return out
+
+def get_terminal_structures(glycan, libr = None):
+  """returns terminal structures from all non-reducing ends (monosaccharide+linkage)\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed nomenclature
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns a list of terminal structures (strings)
+  """
+  if libr is None:
+    libr = lib
+  ggraph = glycan_to_nxGraph(glycan, libr = libr)
+  nodeDict = dict(ggraph.nodes(data = True))
+  termini = [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]
+  return termini
