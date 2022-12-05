@@ -66,7 +66,7 @@ nb_path: "04_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="construct_network" class="doc_header"><code>construct_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L782" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>construct_network</code>(<strong><code>glycans</code></strong>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'exhaustive'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>, <strong><code>ptm</code></strong>=<em><code>True</code></em>, <strong><code>allowed_ptms</code></strong>=<em><code>['OS', '3S', '6S', '1P', '6P', 'OAc', '4Ac']</code></em>, <strong><code>permitted_roots</code></strong>=<em><code>['Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol']</code></em>, <strong><code>directed</code></strong>=<em><code>True</code></em>, <strong><code>edge_type</code></strong>=<em><code>'monolink'</code></em>)</p>
+<h4 id="construct_network" class="doc_header"><code>construct_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L785" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>construct_network</code>(<strong><code>glycans</code></strong>, <strong><code>add_virtual_nodes</code></strong>=<em><code>'exhaustive'</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>, <strong><code>ptm</code></strong>=<em><code>True</code></em>, <strong><code>allowed_ptms</code></strong>=<em><code>['OS', '3S', '6S', '1P', '6P', 'OAc', '4Ac']</code></em>, <strong><code>permitted_roots</code></strong>=<em><code>['Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol']</code></em>, <strong><code>directed</code></strong>=<em><code>True</code></em>, <strong><code>edge_type</code></strong>=<em><code>'monolink'</code></em>)</p>
 </blockquote>
 <p>visualize biosynthetic network</p>
 <table>
@@ -140,7 +140,7 @@ nb_path: "04_network.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="plot_network" class="doc_header"><code>plot_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L920" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>plot_network</code>(<strong><code>network</code></strong>, <strong><code>plot_format</code></strong>=<em><code>'pydot2'</code></em>, <strong><code>edge_label_draw</code></strong>=<em><code>True</code></em>, <strong><code>lfc_dict</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="plot_network" class="doc_header"><code>plot_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L928" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>plot_network</code>(<strong><code>network</code></strong>, <strong><code>plot_format</code></strong>=<em><code>'pydot2'</code></em>, <strong><code>edge_label_draw</code></strong>=<em><code>True</code></em>, <strong><code>lfc_dict</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>visualizes biosynthetic network</p>
 <table>
@@ -445,7 +445,7 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_shared_virtuals" class="doc_header"><code>find_shared_virtuals</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L222" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shared_virtuals</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>min_size</code></strong>=<em><code>1</code></em>)</p>
+<h4 id="find_shared_virtuals" class="doc_header"><code>find_shared_virtuals</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L224" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shared_virtuals</code>(<strong><code>glycan_a</code></strong>, <strong><code>glycan_b</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>min_size</code></strong>=<em><code>1</code></em>)</p>
 </blockquote>
 <p>finds virtual nodes that are shared between two glycans (i.e., that connect these two glycans)</p>
 <table>
@@ -541,7 +541,7 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="find_shortest_path" class="doc_header"><code>find_shortest_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L458" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shortest_path</code>(<strong><code>goal_glycan</code></strong>, <strong><code>glycan_list</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>, <strong><code>permitted_roots</code></strong>=<em><code>['Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol']</code></em>)</p>
+<h4 id="find_shortest_path" class="doc_header"><code>find_shortest_path</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L460" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>find_shortest_path</code>(<strong><code>goal_glycan</code></strong>, <strong><code>glycan_list</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>reducing_end</code></strong>=<em><code>['Glc-ol', 'GlcNAc-ol', 'Glc3S-ol', 'GlcNAc6S-ol', 'GlcNAc6P-ol', 'GlcNAc1P-ol', 'Glc3P-ol', 'Glc6S-ol', 'GlcOS-ol']</code></em>, <strong><code>limit</code></strong>=<em><code>5</code></em>, <strong><code>permitted_roots</code></strong>=<em><code>['Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol']</code></em>)</p>
 </blockquote>
 <p>finds the glycan with the shortest path via virtual nodes to the goal glycan</p>
 <table>
@@ -644,7 +644,7 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="infer_network" class="doc_header"><code>infer_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1038" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infer_network</code>(<strong><code>network</code></strong>, <strong><code>network_species</code></strong>, <strong><code>species_list</code></strong>, <strong><code>network_dic</code></strong>)</p>
+<h4 id="infer_network" class="doc_header"><code>infer_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1051" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>infer_network</code>(<strong><code>network</code></strong>, <strong><code>network_species</code></strong>, <strong><code>species_list</code></strong>, <strong><code>network_dic</code></strong>)</p>
 </blockquote>
 <p>replaces virtual nodes if they are observed in other species</p>
 <table>
@@ -700,7 +700,7 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="retrieve_inferred_nodes" class="doc_header"><code>retrieve_inferred_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1064" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>retrieve_inferred_nodes</code>(<strong><code>network</code></strong>, <strong><code>species</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="retrieve_inferred_nodes" class="doc_header"><code>retrieve_inferred_nodes</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1077" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>retrieve_inferred_nodes</code>(<strong><code>network</code></strong>, <strong><code>species</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>returns the inferred virtual nodes of a network that has been used with infer_network</p>
 <table>
@@ -750,7 +750,7 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="update_network" class="doc_header"><code>update_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L630" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>update_network</code>(<strong><code>network_in</code></strong>, <strong><code>edge_list</code></strong>, <strong><code>edge_labels</code></strong>=<em><code>None</code></em>, <strong><code>node_labels</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="update_network" class="doc_header"><code>update_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L632" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>update_network</code>(<strong><code>network_in</code></strong>, <strong><code>edge_list</code></strong>, <strong><code>edge_labels</code></strong>=<em><code>None</code></em>, <strong><code>node_labels</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>updates a network with new edges and their labels</p>
 <table>
@@ -806,7 +806,7 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="trace_diamonds" class="doc_header"><code>trace_diamonds</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1208" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>trace_diamonds</code>(<strong><code>network</code></strong>, <strong><code>species_list</code></strong>, <strong><code>network_dic</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>threshold</code></strong>=<em><code>0.0</code></em>)</p>
+<h4 id="trace_diamonds" class="doc_header"><code>trace_diamonds</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1262" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>trace_diamonds</code>(<strong><code>network</code></strong>, <strong><code>species_list</code></strong>, <strong><code>network_dic</code></strong>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>threshold</code></strong>=<em><code>0.0</code></em>, <strong><code>nb_intermediates</code></strong>=<em><code>2</code></em>)</p>
 </blockquote>
 <p>extracts diamond-shape motifs from biosynthetic networks (A-&gt;B,A-&gt;C,B-&gt;D,C-&gt;D) and uses evolutionary information to determine which path is taken from A to D</p>
 <table>
@@ -829,6 +829,9 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 </tr>
 <tr>
 <td style="text-align:left">threshold (float): everything below or equal to that threshold will be cut; default:0.</td>
+</tr>
+<tr>
+<td style="text-align:left">nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)</td>
 </tr>
 </tbody>
 </table>
@@ -865,7 +868,7 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="evoprune_network" class="doc_header"><code>evoprune_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1255" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>evoprune_network</code>(<strong><code>network</code></strong>, <strong><code>network_dic</code></strong>=<em><code>None</code></em>, <strong><code>species_list</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>node_attr</code></strong>=<em><code>'abundance'</code></em>, <strong><code>threshold</code></strong>=<em><code>0.0</code></em>)</p>
+<h4 id="evoprune_network" class="doc_header"><code>evoprune_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1312" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>evoprune_network</code>(<strong><code>network</code></strong>, <strong><code>network_dic</code></strong>=<em><code>None</code></em>, <strong><code>species_list</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>node_attr</code></strong>=<em><code>'abundance'</code></em>, <strong><code>threshold</code></strong>=<em><code>0.01</code></em>, <strong><code>nb_intermediates</code></strong>=<em><code>2</code></em>)</p>
 </blockquote>
 <p>given a biosynthetic network, this function uses evolutionary relationships to prune impossible paths</p>
 <table>
@@ -890,7 +893,10 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 <td style="text-align:left">node_attr (string): which (numerical) node attribute to use for pruning; default:'abundance'</td>
 </tr>
 <tr>
-<td style="text-align:left">threshold (float): everything below or equal to that threshold will be cut; default:0.</td>
+<td style="text-align:left">threshold (float): everything below or equal to that threshold will be cut; default:0.01</td>
+</tr>
+<tr>
+<td style="text-align:left">nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)</td>
 </tr>
 </tbody>
 </table>
@@ -927,7 +933,7 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="highlight_network" class="doc_header"><code>highlight_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1285" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>highlight_network</code>(<strong><code>network</code></strong>, <strong><code>highlight</code></strong>, <strong><code>motif</code></strong>=<em><code>None</code></em>, <strong><code>abundance_df</code></strong>=<em><code>None</code></em>, <strong><code>glycan_col</code></strong>=<em><code>'target'</code></em>, <strong><code>intensity_col</code></strong>=<em><code>'rel_intensity'</code></em>, <strong><code>conservation_df</code></strong>=<em><code>None</code></em>, <strong><code>network_dic</code></strong>=<em><code>None</code></em>, <strong><code>species</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="highlight_network" class="doc_header"><code>highlight_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1344" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>highlight_network</code>(<strong><code>network</code></strong>, <strong><code>highlight</code></strong>, <strong><code>motif</code></strong>=<em><code>None</code></em>, <strong><code>abundance_df</code></strong>=<em><code>None</code></em>, <strong><code>glycan_col</code></strong>=<em><code>'target'</code></em>, <strong><code>intensity_col</code></strong>=<em><code>'rel_intensity'</code></em>, <strong><code>conservation_df</code></strong>=<em><code>None</code></em>, <strong><code>network_dic</code></strong>=<em><code>None</code></em>, <strong><code>species</code></strong>=<em><code>None</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>highlights a certain attribute in the network that will be visible when using plot_network</p>
 <table>
@@ -1001,7 +1007,7 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="export_network" class="doc_header"><code>export_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1081" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>export_network</code>(<strong><code>network</code></strong>, <strong><code>filepath</code></strong>)</p>
+<h4 id="export_network" class="doc_header"><code>export_network</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/network/biosynthesis.py#L1094" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>export_network</code>(<strong><code>network</code></strong>, <strong><code>filepath</code></strong>, <strong><code>other_node_attributes</code></strong>=<em><code>[]</code></em>)</p>
 </blockquote>
 <p>converts NetworkX network into files usable, e.g., by Cytoscape or Gephi</p>
 <table>
@@ -1015,6 +1021,9 @@ if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
 </tr>
 <tr>
 <td style="text-align:left">filepath (string): should describe a valid path + file name prefix, will be appended by file description and type</td>
+</tr>
+<tr>
+<td style="text-align:left">other_node_attributes (list): string names of node attributes that should also be extracted; default:[]</td>
 </tr>
 </tbody>
 </table>

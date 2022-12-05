@@ -180,7 +180,7 @@ nb_path: "02_ml.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="training_setup" class="doc_header"><code>training_setup</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L318" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>training_setup</code>(<strong><code>model</code></strong>, <strong><code>lr</code></strong>, <strong><code>lr_patience</code></strong>=<em><code>4</code></em>, <strong><code>factor</code></strong>=<em><code>0.2</code></em>, <strong><code>weight_decay</code></strong>=<em><code>0.0001</code></em>, <strong><code>mode</code></strong>=<em><code>'multiclass'</code></em>)</p>
+<h4 id="training_setup" class="doc_header"><code>training_setup</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L344" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>training_setup</code>(<strong><code>model</code></strong>, <strong><code>lr</code></strong>, <strong><code>lr_patience</code></strong>=<em><code>4</code></em>, <strong><code>factor</code></strong>=<em><code>0.2</code></em>, <strong><code>weight_decay</code></strong>=<em><code>0.0001</code></em>, <strong><code>mode</code></strong>=<em><code>'multiclass'</code></em>, <strong><code>gsam_alpha</code></strong>=<em><code>0.0</code></em>)</p>
 </blockquote>
 <p>prepares optimizer, learning rate scheduler, and loss criterion for model training</p>
 <table>
@@ -206,6 +206,9 @@ nb_path: "02_ml.ipynb"
 </tr>
 <tr>
 <td style="text-align:left">mode (string): 'multiclass': classification with multiple classes, 'multilabel': predicting several labels at the same time, 'binary':binary classification, 'regression': regression; default:'multiclass'</td>
+</tr>
+<tr>
+<td style="text-align:left">gsam_alpha (float): if higher than zero, uses GSAM instead of SAM for the optimizer</td>
 </tr>
 </tbody>
 </table>
@@ -242,7 +245,7 @@ nb_path: "02_ml.ipynb"
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="train_ml_model" class="doc_header"><code>train_ml_model</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L357" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>train_ml_model</code>(<strong><code>X_train</code></strong>, <strong><code>X_test</code></strong>, <strong><code>y_train</code></strong>, <strong><code>y_test</code></strong>, <strong><code>mode</code></strong>=<em><code>'classification'</code></em>, <strong><code>feature_calc</code></strong>=<em><code>False</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>return_features</code></strong>=<em><code>False</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known', 'exhaustive']</code></em>, <strong><code>additional_features_train</code></strong>=<em><code>None</code></em>, <strong><code>additional_features_test</code></strong>=<em><code>None</code></em>)</p>
+<h4 id="train_ml_model" class="doc_header"><code>train_ml_model</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L384" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>train_ml_model</code>(<strong><code>X_train</code></strong>, <strong><code>X_test</code></strong>, <strong><code>y_train</code></strong>, <strong><code>y_test</code></strong>, <strong><code>mode</code></strong>=<em><code>'classification'</code></em>, <strong><code>feature_calc</code></strong>=<em><code>False</code></em>, <strong><code>libr</code></strong>=<em><code>None</code></em>, <strong><code>return_features</code></strong>=<em><code>False</code></em>, <strong><code>feature_set</code></strong>=<em><code>['known', 'exhaustive']</code></em>, <strong><code>additional_features_train</code></strong>=<em><code>None</code></em>, <strong><code>additional_features_test</code></strong>=<em><code>None</code></em>)</p>
 </blockquote>
 <p>wrapper function to train standard machine learning models on glycans</p>
 <table>
@@ -354,7 +357,7 @@ Accuracy of trained model on separate validation set: 0.9302481556002683
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="analyze_ml_model" class="doc_header"><code>analyze_ml_model</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L423" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>analyze_ml_model</code>(<strong><code>model</code></strong>)</p>
+<h4 id="analyze_ml_model" class="doc_header"><code>analyze_ml_model</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L450" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>analyze_ml_model</code>(<strong><code>model</code></strong>)</p>
 </blockquote>
 <p>plots relevant features for model prediction</p>
 <table>
@@ -425,7 +428,7 @@ Accuracy of trained model on separate validation set: 0.9302481556002683
 
 
 <div class="output_markdown rendered_html output_subarea ">
-<h4 id="get_mismatch" class="doc_header"><code>get_mismatch</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L446" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_mismatch</code>(<strong><code>model</code></strong>, <strong><code>X_test</code></strong>, <strong><code>y_test</code></strong>, <strong><code>n</code></strong>=<em><code>10</code></em>)</p>
+<h4 id="get_mismatch" class="doc_header"><code>get_mismatch</code><a href="https://github.com/BojarLab/glycowork/tree/master/glycowork/ml/model_training.py#L473" class="source_link" style="float:right">[source]</a></h4><blockquote><p><code>get_mismatch</code>(<strong><code>model</code></strong>, <strong><code>X_test</code></strong>, <strong><code>y_test</code></strong>, <strong><code>n</code></strong>=<em><code>10</code></em>)</p>
 </blockquote>
 <p>analyzes misclassifications of trained machine learning model</p>
 <table>

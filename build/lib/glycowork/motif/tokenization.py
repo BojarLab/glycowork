@@ -145,7 +145,7 @@ def get_core(sugar):
     return 'Neu5Gc'
   elif 'Neu' in sugar:
     return 'Neu'
-  elif sugar.startswith('a') or sugar.startswith('b') or sugar.startswith('?') or sugar.startswith('z'):
+  elif sugar.startswith('a') or sugar.startswith('b') or sugar.startswith('?'):
     return sugar
   elif re.match('^[0-9]+(-[0-9]+)+$', sugar):
     return sugar
@@ -197,7 +197,7 @@ def stemify_glycan(glycan, stem_lib = None, libr = None):
   clean_list = list(stem_lib.values())
   for k in list(stem_lib.keys())[::-1][:-1]:
     #for each monosaccharide, check whether it's modified
-    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b','?','z'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
+    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a','b','?'))) and not (re.match('^[0-9]+(-[0-9]+)+$', k))):
       county = 0
       #go at it until all modifications are stemified
       while ((k in glycan) and (sum(1 for s in clean_list if k in s) <= 1)) and county < 5:
