@@ -696,7 +696,8 @@ def deorphanize_nodes(network, reducing_end = ['Glc-ol','GlcNAc-ol','Glc3S-ol',
   """
   if libr is None:
     libr = lib
-  min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
+  min_size = min_process_glycans(permitted_roots)
+  min_size = min([len(k) for k in min_size])
   permitted_roots = [k for k in permitted_roots if k in network.nodes()]
   if len(permitted_roots) > 0:
     #get unconnected observed nodes
@@ -811,7 +812,9 @@ def construct_network(glycans, add_virtual_nodes = 'exhaustive', libr = None, re
   else:
     virtuals = False
   #generating graph from adjacency of observed glycans
-  min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
+  min_size = min_process_glycans(permitted_roots)
+  min_size = min([len(k) for k in min_size])
+  #min_size = min([len(glycan_to_nxGraph(k, libr = libr).nodes()) for k in permitted_roots])
   add_to_virtuals = []
   for r in permitted_roots:
       if r not in glycans and any([r in g for g in glycans]):

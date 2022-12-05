@@ -778,7 +778,7 @@ def check_nomenclature(glycan):
     print("Could it be that you're using WURCS? Please convert to IUPACcondensed for using glycowork.")
   if 'RES' in glycan:
     print("Could it be that you're using GlycoCT? Please convert to IUPACcondensed for using glycowork.")
-  print("Didn't spot an obvious error but this is not a guarantee that it will work.")
+  #print("Didn't spot an obvious error but this is not a guarantee that it will work.")
   return canonicalize_iupac(glycan)
 
 def map_to_basic(glycoletter):

@@ -277,45 +277,57 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   else:
     return pd.concat(shopping_cart, axis = 1)
 
-def get_k_saccharides(glycan, libr = None, k = 3):
+def get_k_saccharides(glycan, size = 3, libr = None):
   """function to retrieve k-saccharides (default:trisaccharides) occurring in a glycan\n
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
-  | k (int): number of monosaccharides per -saccharide, default:3 (for trisaccharides)\n
+  | size (int): number of monosaccharides per -saccharide, default:3 (for trisaccharides)
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib\n
   | Returns:
   | :-                               
   | Returns list of trisaccharides in glycan in IUPAC-condensed nomenclature
   """
   if libr is None:
     libr = lib
-  #adjust for the fact that linkages are nodes in our graphs
-  actual_k = k + (k-2)
-  ggraph = ensure_graph(glycan, libr = libr)
-  if len(ggraph.nodes()) < actual_k:
+  size = size + (size-1)
+  glycan = ensure_graph(glycan, libr = libr)
+  if len(glycan.nodes()) < size:
     return []
-  nodeDict = dict(ggraph.nodes(data = True))
-  out = []
-  #get edges describing subgraphs corresponding to k-saccharides
-  for edges in itertools.combinations(ggraph.edges(), actual_k):
-    sub_g = nx.from_edgelist(edges)
-    #check whether subgraph is connected
-    if nx.is_connected(sub_g):
-      mapped_edges = [(nodeDict[k[0]]['string_labels'],nodeDict[k[1]]['string_labels']) for k in edges]
-      #check whether first entry is a monosaccharide
-      if mapped_edges[0][0][0] not in ['a', 'b', '?', 'z']:
-        #check whether all entries describe "overlapping" edges amenable to stitching together
-        if all([mapped_edges[k][1] == mapped_edges[k+1][0] for k in range(len(mapped_edges)-1)]):
-          out_saccharide = list(mapped_edges[0]) + [m[1] for m in mapped_edges[1:]]
-          #set parentheses correctly
-          out_saccharide = '('.join(out_saccharide)
-          out_saccharide = re.sub('(\([^\()]*)\(', r'\1)', out_saccharide)
-          #final check whether subgraph occurs in glycan
-          if subgraph_isomorphism(ggraph, out_saccharide, libr = libr):
-            out.append(out_saccharide)
-  out = list(set(out))
-  return out
+  # initialize a list to store the subgraphs
+  subgraphs = set()
+
+  # define a recursive function to traverse the graph
+  def traverse(node, path):
+    # add the current node to the path
+    path.append(node)
+
+    # check if the path has the desired size
+    if len(path) == size:
+      # add the path as a subgraph to the list of subgraphs
+      subgraph = glycan.subgraph(path).copy()
+      subgraphs.add(subgraph)
+
+    # iterate over the neighbors of the current node
+    for neighbor in glycan[node]:
+      # check if the neighbor is already in the path
+      if neighbor not in path:
+        # traverse the neighbor
+        traverse(neighbor, path)
+
+    # remove the current node from the path
+    path.pop()
+
+  # iterate over the nodes in the graph
+  for node in glycan.nodes():
+    # traverse the graph starting from the current node
+    traverse(node, [])
+
+  # return the list of subgraphs
+  subgraphs = [nx.relabel_nodes(k, {list(k.nodes())[n]:n for n in range(len(k.nodes()))}) for k in subgraphs]
+  subgraphs = [graph_to_string(k, libr = libr) for k in subgraphs]
+  subgraphs = [k for k in subgraphs if k[0] not in ['a', 'b', '?']]
+  return list(set(subgraphs))
 
 def get_terminal_structures(glycan, libr = None):
   """returns terminal structures from all non-reducing ends (monosaccharide+linkage)\n
