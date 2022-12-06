@@ -1,3 +1,4 @@
+import pubchempy as pcp
 import networkx as nx
 import pandas as pd
 import itertools
@@ -5,7 +6,7 @@ import re
 
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
-from glycowork.motif.processing import small_motif_find
+from glycowork.motif.processing import small_motif_find, IUPAC_to_SMILES
 
 
 def convert_to_counts_glycoletter(glycan, libr = None):
@@ -221,6 +222,48 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   out.index = [glycan]
   return out
 
+def get_molecular_properties(glycan_list, verbose = False, placeholder = False) :
+    """given a list of SMILES glycans, uses pubchempy to return various molecular parameters retrieved from PubChem\n
+  | Arguments:
+  | :-
+  | glycan_list (list): list of glycans in IUPAC-condensed
+  | verbose (bool): set True to print SMILES not found on PubChem; default:False
+  | placeholder (bool): whether failed requests should return dummy values or be dropped; default:False\n
+  | Returns:
+  | :-
+  | Returns a dataframe with all the molecular parameters retrieved from PubChem
+  """
+  smiles_list = IUPAC_to_SMILES(glycan_list)
+  if placeholder:
+    dummy = IUPAC_to_SMILES(['Glc'])[0]
+  compounds_list = []
+  failed_requests = []
+  for s in smiles_list:
+    try:
+      c = pcp.get_compounds(s, 'smiles')[0]
+      if c.cid == None:
+        if placeholder:
+          compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0])
+        else:
+          failed_requests.append(s)
+      else:
+        compounds_list.append(c)
+    except:
+      failed_requests.append(s)
+  if verbose == True and len(failed_requests) >= 1:
+    print('The following SMILES were not found on PubChem:')
+    for failed in failed_requests:
+      print(failed)
+  df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight','xlogp','elements','atoms','bonds',
+                                                            'charge','exact_mass','monoisotopic_mass','tpsa','complexity',
+                                                            'h_bond_donor_count','h_bond_acceptor_count',
+                                                            'rotatable_bond_count','fingerprint','cactvs_fingerprint',
+                                                            'heavy_atom_count','isotope_atom_count','atom_stereo_count',
+                                                            'defined_atom_stereo_count','undefined_atom_stereo_count', 
+                                                            'bond_stereo_count','defined_bond_stereo_count',
+                                                            'undefined_bond_stereo_count', 'covalent_unit_count'])
+  return df
+
 def annotate_dataset(glycans, motifs = None, libr = None,
                      feature_set = ['known'], extra = 'termini',
                      wildcard_list = [], termini_list = [],
@@ -231,9 +274,9 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   | glycans (list): list of IUPAC-condensed glycan sequences as strings
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-  | wildcard_list (list): list of wildcard names (such as 'z1-z', 'Hex', 'HexNAc', 'Sia')
+  | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
   | condense (bool): if True, throws away columns with only zeroes; default:False
   | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
@@ -270,6 +313,8 @@ def annotate_dataset(glycans, motifs = None, libr = None,
     temp.index = glycans
     temp.drop(['labels'], axis = 1, inplace = True)
     shopping_cart.append(temp)
+  if 'chemical' in feature_set:
+    shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
   if condense:
     #remove motifs that never occur
     temp = pd.concat(shopping_cart, axis = 1)

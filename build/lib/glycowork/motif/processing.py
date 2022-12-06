@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import random
+from glyles import convert
 from glycowork.glycan_data.loader import unwrap, linkages
 
 def small_motif_find(glycan):
@@ -149,3 +150,15 @@ def enforce_class(glycan, glycan_class):
     if any([glycan.endswith(k) for k in ['GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc']]):
       truth = False
   return truth
+
+def IUPAC_to_SMILES(glycan_list) :
+    """given a list of IUPAC-condensed glycans, uses GlyLES to return a list of corresponding isomeric SMILES\n
+  | Arguments:
+  | :-
+  | glycan_list (list): list of IUPAC-condensed glycans\n
+  | Returns:
+  | :-
+  | Returns a list of corresponding isomeric SMILES
+  """
+  smiles_list = [convert(g)[0][1] for g in glycan_list]
+  return(smiles_list)

@@ -220,7 +220,7 @@ class LectinOracle_flex(torch.nn.Module):
 
     #combined fully connected part
     self.dp1_n = torch.nn.Dropout(0.5) 
-    self.fc1_n = torch.nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
+    self.fc1_n = torch.nn.Linear(128+self.hidden_size, int(np.round(self.hidden_size/2)))
     self.fc2_n = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
     self.bn1_n = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
     self.act1_n = torch.nn.LeakyReLU()

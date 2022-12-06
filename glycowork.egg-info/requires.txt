@@ -9,3 +9,5 @@ xgboost
 mpld3
 requests
 pandas
+glyles
+pubchempy

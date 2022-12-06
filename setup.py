@@ -20,9 +20,10 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     install_requires=["sklearn", "regex", "networkx",
                       "statsmodels", "scipy", "torch",
                       "seaborn", "xgboost", "mpld3",
-                      "requests", "pandas"],
+                      "requests", "pandas", "glyles",
+                      "pubchempy"],
 )
