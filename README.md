@@ -10,6 +10,7 @@
 Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.
 
 The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. `Glycowork` is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused data science and machine learning. Next to various functions to work with glycans, `glycowork` also contains glycan data that can be used for model training, motif comparisons, etc.
+Glycowork uses human-readable IUPAC-condensed (e.g., `Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc`) as a user-facing string representation and monosaccharide-level graphs as a powerful behind-the-scenes architecture.
 
 If you use `glycowork` or any of our datasets in your project, please cite [Thomes et al., 2021](https://academic.oup.com/glycob/advance-article/doi/10.1093/glycob/cwab067/6311240).
 
@@ -33,7 +34,7 @@ alternative: <br>
 
 `Glycowork` currently contains the following main datasets that are freely available to everyone:
 - **`df_glycan`**
-    - contains >51,000 unique glycan sequences, including labels such as >32,000 species associations, >8,000 tissue associations, and >500 disease associations
+    - contains >51,500 unique glycan sequences, including labels such as >33,000 species associations, >9,500 tissue associations, and >500 disease associations
 - **`glycan_binding`**
     - contains >550,000 protein-glycan binding interactions, from 1,392 unique glycan-binding proteins
     
@@ -309,7 +310,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>1-4</th>
       <th>1-5</th>
       <th>1-6</th>
-      <th>1-z</th>
+      <th>1-?</th>
       <th>1dAlt-ol</th>
       <th>1dEry-ol</th>
       <th>2,3-Anhydro-All</th>
@@ -428,6 +429,10 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>8eLeg5But7Ac</th>
       <th>8eLegNAcNBut</th>
       <th>9dNeu5Ac</th>
+      <th>?1-3</th>
+      <th>?1-4</th>
+      <th>?1-?</th>
+      <th>?2-?</th>
       <th>Abe</th>
       <th>Abe1PP</th>
       <th>Abe2Ac</th>
@@ -851,6 +856,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>Gal-ol</th>
       <th>Gal-onic</th>
       <th>Gal1Cer</th>
+      <th>Gal1Cer3S</th>
       <th>Gal1Et</th>
       <th>Gal1EtN</th>
       <th>Gal1Gro</th>
@@ -2131,6 +2137,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>Man4N</th>
       <th>Man4Pyr</th>
       <th>Man4S</th>
+      <th>Man4Suc</th>
       <th>Man5P-ol</th>
       <th>Man6AEP</th>
       <th>Man6Ac</th>
@@ -2598,7 +2605,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>a1-7</th>
       <th>a1-8</th>
       <th>a1-9</th>
-      <th>a1-z</th>
+      <th>a1-?</th>
       <th>a2-1</th>
       <th>a2-11</th>
       <th>a2-2</th>
@@ -2609,7 +2616,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>a2-7</th>
       <th>a2-8</th>
       <th>a2-9</th>
-      <th>a2-z</th>
+      <th>a2-?</th>
       <th>a3-2</th>
       <th>a3-4</th>
       <th>a4-1</th>
@@ -2626,7 +2633,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>b1-7</th>
       <th>b1-8</th>
       <th>b1-9</th>
-      <th>b1-z</th>
+      <th>b1-?</th>
       <th>b2-1</th>
       <th>b2-2</th>
       <th>b2-3</th>
@@ -2644,8 +2651,25 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>b6-3</th>
       <th>bond</th>
       <th>dHex</th>
-      <th>z1-z</th>
-      <th>z2-z</th>
+      <th>{Fuc</th>
+      <th>{Gal</th>
+      <th>{GlcNAc</th>
+      <th>{HexNAc</th>
+      <th>{Man</th>
+      <th>{Neu5Ac</th>
+      <th>{Neu5Gc</th>
+      <th>}Fuc</th>
+      <th>}Gal</th>
+      <th>}GlcNAc</th>
+      <th>}Man</th>
+      <th>}Neu5Ac</th>
+      <th>}Neu5Gc</th>
+      <th>}{Fuc</th>
+      <th>}{Gal</th>
+      <th>}{GlcNAc</th>
+      <th>}{Man</th>
+      <th>}{Neu5Ac</th>
+      <th>}{Neu5Gc</th>
       <th>Fuc(a1-3)GlcNAc</th>
       <th>GalNAc(a1-4)GlcNAcA</th>
       <th>GlcN(b1-7)Kdo</th>
@@ -2860,8 +2884,8 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>4.0</td>
       <td>13.0</td>
       <td>13.0</td>
-      <td>0.057103</td>
-      <td>-2.075921</td>
+      <td>0.025788</td>
+      <td>-2.521756</td>
       <td>13.0</td>
       <td>12.0</td>
       <td>0</td>
@@ -3354,7 +3378,12 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -5133,6 +5162,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
       <td>1</td>
       <td>0</td>
       <td>0</td>
@@ -5199,6 +5229,23 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>1</td>
       <td>0</td>
       <td>2</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -5436,10 +5483,15 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>3.0</td>
       <td>15.0</td>
       <td>15.0</td>
-      <td>0.031066</td>
-      <td>-2.658737</td>
+      <td>0.031998</td>
+      <td>-2.705025</td>
       <td>15.0</td>
       <td>14.0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -7744,6 +7796,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
       <td>2</td>
       <td>2</td>
       <td>0</td>
@@ -7775,6 +7828,23 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>2</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -8012,10 +8082,15 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>4.0</td>
       <td>15.0</td>
       <td>15.0</td>
-      <td>0.013600</td>
-      <td>-2.688625</td>
+      <td>0.019614</td>
+      <td>-2.669849</td>
       <td>15.0</td>
       <td>14.0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -10322,6 +10397,7 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
       <td>2</td>
       <td>0</td>
       <td>0</td>
@@ -10377,6 +10453,23 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
       <td>1</td>
       <td>1</td>
@@ -10404,36 +10497,43 @@ print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNA
 print(compare_glycans('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
                      'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'))
 
-#or you could find the largest common subgraph of two glycans
-from glycowork.motif.graph import largest_subgraph
-print("\nLargest Common Subgraph:")
-print(largest_subgraph('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-                     'Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'))
+#or you could find the terminal structures of a glycan
+from glycowork.motif.annotate import get_terminal_structures
+print("\nTerminal structures:")
+print(get_terminal_structures('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'))
 ```
 
     True
     False
     
-    Largest Common Subgraph:
-    Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc
+    Terminal structures:
+    ['Man(a1-3)', 'Man(a1-6)', 'Fuc(a1-6)']
     
 
 ```
 #given a composition, find matching glycan structures in sugarbase; can be set to species-specific structures
 from glycowork.motif.tokenization import compositions_to_structures
 print(compositions_to_structures([{'Hex':3, 'HexNAc':4}], reducing_end = 'GlcNAc'))
+
+#or we could calculate the mass of this composition
+from glycowork.motif.tokenization import composition_to_mass
+print("\nMass of the composition Hex3HexNAc4")
+print(composition_to_mass({'Hex':3, 'HexNAc':4}))
 ```
 
     0 compositions could not be matched. Run with verbose = True to see which compositions.
                                                   glycan  abundance
     0  GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Ma...          0
-    1  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
-    2  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][G...          0
-    3  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4...          0
-    4  GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-...          0
-    5  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]...          0
-    6  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
-    7  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
-    8  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
-    9  GlcNAc(z1-z)Man(a1-3)[GlcNAc(z1-z)Man(a1-6)]Ma...          0
+    1  GlcNAc(?1-?)Man(a1-3)[GlcNAc(?1-?)Man(a1-6)]Ma...          0
+    2  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
+    3  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
+    4  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
+    5  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][G...          0
+    6  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4...          0
+    7  GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-...          0
+    8  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]...          0
+    9  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
+    
+    Mass of the composition Hex3HexNAc4
+    1316.4865545999999
     

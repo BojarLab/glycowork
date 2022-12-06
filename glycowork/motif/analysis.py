@@ -226,6 +226,9 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     | palette (string): color palette to color different classes; default:'colorblind'
     | **kwargs: keyword arguments that are directly passed on to matplotlib\n
     """
+    idx = [k for k in range(len(glycans)) if '{' not in glycans[k]]
+    glycans = [glycans[k] for k in idx]
+    label_list = [label_list[k] for k in idx]
     #get all glycan embeddings
     if emb is None:
         this_dir, this_filename = os.path.split(__file__) 
