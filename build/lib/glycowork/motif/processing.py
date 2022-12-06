@@ -151,8 +151,8 @@ def enforce_class(glycan, glycan_class):
       truth = False
   return truth
 
-def IUPAC_to_SMILES(glycan_list) :
-    """given a list of IUPAC-condensed glycans, uses GlyLES to return a list of corresponding isomeric SMILES\n
+def IUPAC_to_SMILES(glycan_list):
+  """given a list of IUPAC-condensed glycans, uses GlyLES to return a list of corresponding isomeric SMILES\n
   | Arguments:
   | :-
   | glycan_list (list): list of IUPAC-condensed glycans\n
@@ -160,5 +160,4 @@ def IUPAC_to_SMILES(glycan_list) :
   | :-
   | Returns a list of corresponding isomeric SMILES
   """
-  smiles_list = [convert(g)[0][1] for g in glycan_list]
-  return(smiles_list)
+  return [convert(g)[0][1] for g in glycan_list]
