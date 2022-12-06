@@ -254,14 +254,15 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False) 
     print('The following SMILES were not found on PubChem:')
     for failed in failed_requests:
       print(failed)
-  df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight','xlogp','elements','atoms','bonds',
+  df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight','xlogp',
                                                             'charge','exact_mass','monoisotopic_mass','tpsa','complexity',
                                                             'h_bond_donor_count','h_bond_acceptor_count',
-                                                            'rotatable_bond_count','fingerprint','cactvs_fingerprint',
-                                                            'heavy_atom_count','isotope_atom_count','atom_stereo_count',
+                                                            'rotatable_bond_count','heavy_atom_count','isotope_atom_count','atom_stereo_count',
                                                             'defined_atom_stereo_count','undefined_atom_stereo_count', 
                                                             'bond_stereo_count','defined_bond_stereo_count',
                                                             'undefined_bond_stereo_count', 'covalent_unit_count'])
+  df = df.reset_index(drop = True)
+  df.index = glycan_list
   return df
 
 def annotate_dataset(glycans, motifs = None, libr = None,
