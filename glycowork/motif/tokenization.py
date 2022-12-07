@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import networkx as nx
 import re
+import ast
 import copy
 import math
 import pkg_resources
@@ -424,7 +425,9 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   min_mono = round(mz_value/300)
   mask = df_use['glycan_type'].values == glycan_class
   df_sub = df_use[mask]
-  comp_pool = df_sub.dropna(subset=['composition']).composition.tolist()
+  comp_pool = df_sub.dropna(subset=['Composition']).Composition.tolist()
+  if isinstance(comp_pool[0], str):
+    comp_pool = [ast.literal_eval(k) for k in comp_pool]
   out = []
   for c in comp_pool:
         if min_mono<sum(c.values())<=max_mono:
@@ -488,8 +491,7 @@ def condense_composition_matching(matched_composition, libr = None):
   if libr is None:
     libr = lib
   #define uncertainty wildcards
-  wildcards = ['?1-?', '?2-?', 'a2-?', 'a1-?', 'b1-?',
-               'z1-z', 'z2-z', 'a2-z', 'a1-z', 'b1-z']
+  wildcards = ['?1-?', '?2-?', 'a2-?', 'a1-?', 'b1-?']
   #establish glycan equality given the wildcards
   match_matrix = [[compare_glycans(k, j, libr = libr, wildcards = True,
                                   wildcard_list = wildcards) for j in matched_composition] for k in matched_composition]

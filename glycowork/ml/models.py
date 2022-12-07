@@ -2,8 +2,8 @@ import os
 import torch
 import numpy as np
 try:
-    from torch_geometric.nn import TopKPooling, GraphConv
-    from torch_geometric.nn import global_mean_pool as gap, global_max_pool as gmp
+    from torch_geometric.nn import GraphConv
+    from torch_geometric.nn import global_mean_pool as gap
 except ImportError:
     raise ImportError('<torch_geometric missing; cannot do deep learning>')
 import torch.nn.functional as F
