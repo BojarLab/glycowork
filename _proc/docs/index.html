@@ -319,7 +319,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <li>visualizing motif distribution / glycan similarities / sequence properties</li>
 <li>constructing and analyzing biosynthetic networks</li>
 </ul>
-<div class="cell" data-execution_count="2">
+<div class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#get motifs, graph features, and sequence features of a set of glycan sequences to train models or analyze glycan properties</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>glycans <span class="op">=</span> [<span class="st">'Man(a1-3)[Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc'</span>,</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>           <span class="st">'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-3)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'</span>,</span>
@@ -327,8 +327,8 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> glycowork.motif.annotate <span class="im">import</span> annotate_dataset</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>out <span class="op">=</span> annotate_dataset(glycans, feature_set <span class="op">=</span> [<span class="st">'known'</span>, <span class="st">'graph'</span>, <span class="st">'exhaustive'</span>]).head()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-<div class="cell" data-execution_count="3">
-<div class="cell-output cell-output-display" data-execution_count="3">
+<div class="cell">
+<div class="cell-output cell-output-display">
 
 <table class="dataframe table table-sm table-striped">
   <thead>
@@ -10734,7 +10734,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 </table>
 </div>
 </div>
-<div class="cell" data-execution_count="4">
+<div class="cell">
 <div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">#using graphs, you can easily check whether two glycans are the same - even if they use different bracket notations!</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> glycowork.motif.graph <span class="im">import</span> compare_glycans</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(compare_glycans(<span class="st">'Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'</span>,</span>
@@ -10754,7 +10754,7 @@ Terminal structures:
 ['Man(a1-3)', 'Man(a1-6)', 'Fuc(a1-6)']</code></pre>
 </div>
 </div>
-<div class="cell" data-execution_count="5">
+<div class="cell">
 <div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">#given a composition, find matching glycan structures in sugarbase; can be set to species-specific structures</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> glycowork.motif.tokenization <span class="im">import</span> compositions_to_structures</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(compositions_to_structures([{<span class="st">'Hex'</span>:<span class="dv">3</span>, <span class="st">'HexNAc'</span>:<span class="dv">4</span>}], reducing_end <span class="op">=</span> <span class="st">'GlcNAc'</span>))</span>
