@@ -11,3 +11,4 @@ requests
 pandas
 glyles
 pubchempy
+matplotlib-inline

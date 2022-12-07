@@ -1,0 +1,10 @@
+website:
+  sidebar:
+    contents:
+      - index.ipynb
+      - 00_core.ipynb
+      - 01_glycan_data.ipynb
+      - 02_ml.ipynb
+      - 03_motif.ipynb
+      - 04_network.ipynb
+      - 05_examples.ipynb

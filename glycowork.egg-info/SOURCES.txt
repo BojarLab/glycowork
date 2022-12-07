@@ -5,6 +5,7 @@ README.md
 settings.ini
 setup.py
 glycowork/__init__.py
+glycowork/_modidx.py
 glycowork/_nbdev.py
 glycowork/core.py
 glycowork/examples.py

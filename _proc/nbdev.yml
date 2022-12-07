@@ -1,0 +1,9 @@
+project:
+  output-dir: docs
+
+website:
+  title: "glycowork"
+  site-url: "https://BojarLab.github.io/glycowork/"
+  description: "Package for processing and analyzing glycans"
+  repo-branch: master
+  repo-url: "https://github.com/BojarLab/glycowork/tree/master/"
