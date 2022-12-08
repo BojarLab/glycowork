@@ -25,5 +25,6 @@ setuptools.setup(
                       "statsmodels", "scipy", "torch",
                       "seaborn", "xgboost", "mpld3",
                       "requests", "pandas", "glyles",
-                      "pubchempy", "matplotlib-inline"],
+                      "pubchempy", "matplotlib-inline",
+                      "python-louvain"],
 )
