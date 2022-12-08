@@ -554,6 +554,10 @@ def graph_to_string(graph, fallback = False, libr = None):
   skeleton = [']'+str(k) if k in branch_points else str(k) for k in node_labels.keys()]
   
   for k in range(len(skeleton)):
+    #multibranch situation on reducing end
+    if skeleton[k] == skeleton[-1] and graph.degree()[k] == 3:
+      idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
+      skeleton[idx-1] = skeleton[idx-1] + ']'
     #note whether a multibranch situation exists
     if graph.degree()[k] == 4:
       idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
