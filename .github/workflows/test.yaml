@@ -19,8 +19,6 @@ jobs:
             pip install -U nbdev
             echo "Doing editable install..."
             test -f setup.py && pip install -e ".[dev]"
-            echo "Check we are starting with clean git checkout"
-            fi
             echo "Trying to strip out notebooks"
             nbdev_clean
             echo "Check that strip out was unnecessary"
