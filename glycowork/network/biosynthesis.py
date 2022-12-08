@@ -1161,7 +1161,6 @@ def export_network(network, filepath, other_node_attributes = []):
     edge_list.columns = ['Source', 'Target']
     edge_labels = nx.get_edge_attributes(network, 'diffs')
     edge_list['Label'] = [edge_labels[k] for k in network.edges()]
-    edge_list = edge_list.replace('z', '?', regex = True)
     edge_list.to_csv(filepath + '_edge_list.csv', index = False)
   else:
     edge_list = pd.DataFrame()
@@ -1171,14 +1170,13 @@ def export_network(network, filepath, other_node_attributes = []):
   #generate node_labels
   node_labels = nx.get_node_attributes(network, 'virtual')
   node_labels = pd.DataFrame(node_labels, index = [0]).T.reset_index()
-  if len(other_node_attributes)>0:
+  if len(other_node_attributes) > 0:
     other_node_labels = []
     for att in other_node_attributes:
       lab = nx.get_node_attributes(network, att)
       other_node_labels.append(pd.DataFrame(lab, index = [0]).T.reset_index().iloc[:,1])
     node_labels = pd.concat([node_labels] + other_node_labels, axis = 1)
   node_labels.columns = ['Id', 'Virtual'] + other_node_attributes
-  node_labels = node_labels.replace('z', '?', regex = True)
   node_labels.to_csv(filepath + '_node_labels.csv', index = False)
 
 def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',

@@ -16,14 +16,7 @@ jobs:
           run: |
             set -ux
             python -m pip install --upgrade pip
-            if [ $USE_PRE ]; then
-              pip install -U git+https://github.com/fastai/fastcore.git
-              pip install -U git+https://github.com/fastai/ghapi.git
-              pip install -U git+https://github.com/fastai/execnb.git
-              pip install -U git+https://github.com/fastai/nbdev.git
-            else
-              pip install -U nbdev
-            fi
+            pip install -U nbdev
             echo "Doing editable install..."
             test -f setup.py && pip install -e ".[dev]"
             echo "Check we are starting with clean git checkout"
