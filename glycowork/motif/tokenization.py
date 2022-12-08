@@ -144,6 +144,8 @@ def get_core(sugar):
     return 'Neu5Ac'
   elif (('Neu' in sugar) and ('5Gc' in sugar)):
     return 'Neu5Gc'
+  elif (('Neu' in sugar) and ('4Ac' in sugar)):
+    return 'Neu4Ac'
   elif 'Neu' in sugar:
     return 'Neu'
   elif sugar.startswith('a') or sugar.startswith('b') or sugar.startswith('?'):
