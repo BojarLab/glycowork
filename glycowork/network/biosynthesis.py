@@ -580,11 +580,11 @@ def detect_ptm(glycans, allowed_ptms = ['OS','3S','6S','1P','3P','6P','OAc','4Ac
             break
   return out
 
-def stemify_glycan_fast(ggraph, stem_lib = None, libr = None):
+def stemify_glycan_fast(ggraph_in, stem_lib = None, libr = None):
   """stemifies a glycan graph\n
   | Arguments:
   | :-
-  | ggraph (networkx): glycan graph as a networkx object
+  | ggraph_in (networkx): glycan graph as a networkx object
   | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
   | Returns:
@@ -596,6 +596,7 @@ def stemify_glycan_fast(ggraph, stem_lib = None, libr = None):
     libr = lib
   if stem_lib is None:
     stem_lib = get_stem_lib(libr)
+  ggraph = copy.deepcopy(ggraph_in)
   nx.set_node_attributes(ggraph, {k:{"string_labels":stem_lib[v],
                                      "labels": libr.index(stem_lib[v])} for k,v in nx.get_node_attributes(ggraph, "string_labels").items()})
   return graph_to_string(ggraph, libr = libr), ggraph
