@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import ast
 import pickle
+import itertools
 import pkg_resources
 
 io = pkg_resources.resource_stream(__name__, "v7_sugarbase.csv")
@@ -30,7 +31,7 @@ Sia = ['Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia']
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""
-  out = [item for sublist in nested_list for item in sublist]
+  out = list(itertools.chain(*nested_list))
   return out
 
 def find_nth(haystack, needle, n):

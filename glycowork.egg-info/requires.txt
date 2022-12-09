@@ -1,4 +1,4 @@
-sklearn
+scikit-learn
 regex
 networkx
 statsmodels
@@ -12,3 +12,4 @@ pandas
 glyles
 pubchempy
 matplotlib-inline
+python-louvain
