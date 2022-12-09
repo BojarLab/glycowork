@@ -1,11 +1,12 @@
+import pubchempy as pcp
 import networkx as nx
 import pandas as pd
 import itertools
 import re
 
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph
-from glycowork.motif.processing import small_motif_find
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
+from glycowork.motif.processing import small_motif_find, IUPAC_to_SMILES
 
 
 def convert_to_counts_glycoletter(glycan, libr = None):
@@ -86,6 +87,8 @@ def link_find(glycan):
   | :-
   | Returns list of unique disaccharides (strings) for a glycan in IUPAC-condensed
   """
+  if '}' in glycan:
+    glycan = glycan[glycan.rindex('}')+1:]
   #get different string representations of the same glycan
   ss = find_isomorphs(glycan)
   coll = []
@@ -146,7 +149,7 @@ def motif_matrix(df, glycan_col_name, label_col_name, libr = None):
   out_matrix = pd.concat([wga_letter, wga_di_out], axis = 1)
   out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()]
   temp = out_matrix.pop(label_col_name)
-  out_matrix[label_col_name] = temp
+  out_matrix = pd.concat([out_matrix, temp], axis = 1)
   out_matrix.reset_index(drop = True, inplace = True)
   return out_matrix
 
@@ -182,7 +185,7 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-  | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+  | wildcard_list (list): list of wildcard names (such as 'z1-z', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
   | :-
@@ -219,6 +222,49 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   out.index = [glycan]
   return out
 
+def get_molecular_properties(glycan_list, verbose = False, placeholder = False) :
+  """given a list of SMILES glycans, uses pubchempy to return various molecular parameters retrieved from PubChem\n
+  | Arguments:
+  | :-
+  | glycan_list (list): list of glycans in IUPAC-condensed
+  | verbose (bool): set True to print SMILES not found on PubChem; default:False
+  | placeholder (bool): whether failed requests should return dummy values or be dropped; default:False\n
+  | Returns:
+  | :-
+  | Returns a dataframe with all the molecular parameters retrieved from PubChem
+  """
+  smiles_list = IUPAC_to_SMILES(glycan_list)
+  if placeholder:
+    dummy = IUPAC_to_SMILES(['Glc'])[0]
+  compounds_list = []
+  failed_requests = []
+  for s in smiles_list:
+    try:
+      c = pcp.get_compounds(s, 'smiles')[0]
+      if c.cid == None:
+        if placeholder:
+          compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0])
+        else:
+          failed_requests.append(s)
+      else:
+        compounds_list.append(c)
+    except:
+      failed_requests.append(s)
+  if verbose == True and len(failed_requests) >= 1:
+    print('The following SMILES were not found on PubChem:')
+    for failed in failed_requests:
+      print(failed)
+  df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight','xlogp',
+                                                            'charge','exact_mass','monoisotopic_mass','tpsa','complexity',
+                                                            'h_bond_donor_count','h_bond_acceptor_count',
+                                                            'rotatable_bond_count','heavy_atom_count','isotope_atom_count','atom_stereo_count',
+                                                            'defined_atom_stereo_count','undefined_atom_stereo_count', 
+                                                            'bond_stereo_count','defined_bond_stereo_count',
+                                                            'undefined_bond_stereo_count', 'covalent_unit_count'])
+  df = df.reset_index(drop = True)
+  df.index = glycan_list
+  return df
+
 def annotate_dataset(glycans, motifs = None, libr = None,
                      feature_set = ['known'], extra = 'termini',
                      wildcard_list = [], termini_list = [],
@@ -229,9 +275,9 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   | glycans (list): list of IUPAC-condensed glycan sequences as strings
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-  | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+  | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
   | condense (bool): if True, throws away columns with only zeroes; default:False
   | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
@@ -268,6 +314,8 @@ def annotate_dataset(glycans, motifs = None, libr = None,
     temp.index = glycans
     temp.drop(['labels'], axis = 1, inplace = True)
     shopping_cart.append(temp)
+  if 'chemical' in feature_set:
+    shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
   if condense:
     #remove motifs that never occur
     temp = pd.concat(shopping_cart, axis = 1)
@@ -275,42 +323,71 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   else:
     return pd.concat(shopping_cart, axis = 1)
 
-def get_k_saccharides(glycan, libr = None, k = 3):
+def get_k_saccharides(glycan, size = 3, libr = None):
   """function to retrieve k-saccharides (default:trisaccharides) occurring in a glycan\n
   | Arguments:
   | :-
-  | glycan (string): glycan in IUPAC-condensed nomenclature
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
-  | k (int): number of monosaccharides per -saccharide, default:3 (for trisaccharides)\n
+  | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
+  | size (int): number of monosaccharides per -saccharide, default:3 (for trisaccharides)
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib\n
   | Returns:
   | :-                               
   | Returns list of trisaccharides in glycan in IUPAC-condensed nomenclature
   """
   if libr is None:
     libr = lib
-  #adjust for the fact that linkages are nodes in our graphs
-  actual_k = k + (k-2)
-  ggraph = glycan_to_nxGraph(glycan, libr = libr)
-  if len(ggraph.nodes()) < actual_k:
+  size = size + (size-1)
+  glycan = ensure_graph(glycan, libr = libr)
+  if len(glycan.nodes()) < size:
     return []
+  # initialize a list to store the subgraphs
+  subgraphs = set()
+
+  # define a recursive function to traverse the graph
+  def traverse(node, path):
+    # add the current node to the path
+    path.append(node)
+
+    # check if the path has the desired size
+    if len(path) == size:
+      # add the path as a subgraph to the list of subgraphs
+      subgraph = glycan.subgraph(path).copy()
+      subgraphs.add(subgraph)
+
+    # iterate over the neighbors of the current node
+    for neighbor in glycan[node]:
+      # check if the neighbor is already in the path
+      if neighbor not in path:
+        # traverse the neighbor
+        traverse(neighbor, path)
+
+    # remove the current node from the path
+    path.pop()
+
+  # iterate over the nodes in the graph
+  for node in glycan.nodes():
+    # traverse the graph starting from the current node
+    traverse(node, [])
+
+  # return the list of subgraphs
+  subgraphs = [nx.relabel_nodes(k, {list(k.nodes())[n]:n for n in range(len(k.nodes()))}) for k in subgraphs]
+  subgraphs = [graph_to_string(k, libr = libr) for k in subgraphs]
+  subgraphs = [k for k in subgraphs if k[0] not in ['a', 'b', '?']]
+  return list(set(subgraphs))
+
+def get_terminal_structures(glycan, libr = None):
+  """returns terminal structures from all non-reducing ends (monosaccharide+linkage)\n
+  | Arguments:
+  | :-
+  | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | Returns:
+  | :-
+  | Returns a list of terminal structures (strings)
+  """
+  if libr is None:
+    libr = lib
+  ggraph = ensure_graph(glycan, libr = libr)
   nodeDict = dict(ggraph.nodes(data = True))
-  out = []
-  #get edges describing subgraphs corresponding to k-saccharides
-  for edges in itertools.combinations(ggraph.edges(), actual_k):
-    sub_g = nx.from_edgelist(edges)
-    #check whether subgraph is connected
-    if nx.is_connected(sub_g):
-      mapped_edges = [(nodeDict[k[0]]['string_labels'],nodeDict[k[1]]['string_labels']) for k in edges]
-      #check whether first entry is a monosaccharide
-      if mapped_edges[0][0][0] not in ['a', 'b', 'z']:
-        #check whether all entries describe "overlapping" edges amenable to stitching together
-        if all([mapped_edges[k][1] == mapped_edges[k+1][0] for k in range(len(mapped_edges)-1)]):
-          out_saccharide = list(mapped_edges[0]) + [m[1] for m in mapped_edges[1:]]
-          #set parentheses correctly
-          out_saccharide = '('.join(out_saccharide)
-          out_saccharide = re.sub('(\([^\()]*)\(', r'\1)', out_saccharide)
-          #final check whether subgraph occurs in glycan
-          if subgraph_isomorphism(ggraph, out_saccharide, libr = libr):
-            out.append(out_saccharide)
-  out = list(set(out))
-  return out
+  termini = [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]
+  return termini

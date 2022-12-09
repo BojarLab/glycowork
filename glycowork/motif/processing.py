@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import random
+from glyles import convert
 from glycowork.glycan_data.loader import unwrap, linkages
 
 def small_motif_find(glycan):
@@ -119,7 +120,7 @@ def choose_correct_isoform(glycans, reverse = False):
   prefix_len = [len(k) for k in prefix]
   #choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(set(prefix_len)) == 1:
-    branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'z' and k[-2][-1] != 'd' else 10 for k in prefix]
+    branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'z' and k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in prefix]
     correct_isoform = glycans[np.argmin(branch_endings)]
   else:
     correct_isoform = glycans[np.argmax(prefix_len)]
@@ -127,3 +128,36 @@ def choose_correct_isoform(glycans, reverse = False):
     glycans.remove(correct_isoform)
     correct_isoform = glycans
   return correct_isoform
+
+def enforce_class(glycan, glycan_class):
+  """given a glycan and glycan class, determines whether glycan is from this class\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed nomenclature
+  | glycan_class (string): glycan class in form of "O", "N", "free", or "lipid"\n
+  | Returns:
+  | :-
+  | Returns True if glycan is in glycan class and False if not
+  """
+  if glycan_class == 'O':
+    pool = ['GalNAc', 'GalNAcOS', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
+  elif glycan_class == 'N':
+    pool = ['GlcNAc']
+  elif glycan_class == 'free' or glycan_class == 'lipid':
+    pool = ['Glc', 'GlcOS', 'GlcNAc', 'Gal', 'Ins']
+  truth = any([glycan.endswith(k) for k in pool])
+  if glycan_class == 'free' or glycan_class == 'lipid' or glycan_class == 'O':
+    if any([glycan.endswith(k) for k in ['GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc']]):
+      truth = False
+  return truth
+
+def IUPAC_to_SMILES(glycan_list):
+  """given a list of IUPAC-condensed glycans, uses GlyLES to return a list of corresponding isomeric SMILES\n
+  | Arguments:
+  | :-
+  | glycan_list (list): list of IUPAC-condensed glycans\n
+  | Returns:
+  | :-
+  | Returns a list of corresponding isomeric SMILES
+  """
+  return [convert(g)[0][1] for g in glycan_list]

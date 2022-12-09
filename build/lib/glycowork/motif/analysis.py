@@ -14,6 +14,20 @@ from glycowork.glycan_data.loader import lib, df_species, unwrap
 from glycowork.motif.annotate import annotate_dataset, link_find
 from glycowork.motif.graph import subgraph_isomorphism
 
+def cohen_d(x,y):
+  """calculates effect size between two groups\n
+    | Arguments:
+    | :-
+    | x (list or 1D-array): comparison group containing numerical data
+    | y (list or 1D-array): comparison group containing numerical data\n
+    | Returns:
+    | :-
+    | Returns Cohen's d as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)
+  """
+  nx = len(x)
+  ny = len(y)
+  dof = nx + ny - 2
+  return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof=1) ** 2 + (ny-1)*np.std(y, ddof=1) ** 2) / dof)
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      libr = None, thresh = 1.645, sorting = True,
@@ -29,9 +43,9 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
     | thresh (float): threshold value to separate positive/negative; default is 1.645 for Z-scores
     | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-    | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+    | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
     | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
     | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None
     | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
@@ -142,7 +156,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans
     | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
     | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
     | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
     | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
@@ -212,6 +226,9 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     | palette (string): color palette to color different classes; default:'colorblind'
     | **kwargs: keyword arguments that are directly passed on to matplotlib\n
     """
+    idx = [k for k in range(len(glycans)) if '{' not in glycans[k]]
+    glycans = [glycans[k] for k in idx]
+    label_list = [label_list[k] for k in idx]
     #get all glycan embeddings
     if emb is None:
         this_dir, this_filename = os.path.split(__file__) 

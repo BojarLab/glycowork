@@ -1,4 +1,4 @@
-sklearn
+scikit-learn
 regex
 networkx
 statsmodels
@@ -9,3 +9,7 @@ xgboost
 mpld3
 requests
 pandas
+glyles
+pubchempy
+matplotlib-inline
+python-louvain

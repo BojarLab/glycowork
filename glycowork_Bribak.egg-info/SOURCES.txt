@@ -1,6 +1,0 @@
-README.md
-setup.py
-glycowork_Bribak.egg-info/PKG-INFO
-glycowork_Bribak.egg-info/SOURCES.txt
-glycowork_Bribak.egg-info/dependency_links.txt
-glycowork_Bribak.egg-info/top_level.txt

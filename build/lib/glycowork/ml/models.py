@@ -2,8 +2,8 @@ import os
 import torch
 import numpy as np
 try:
-    from torch_geometric.nn import TopKPooling, GraphConv
-    from torch_geometric.nn import global_mean_pool as gap, global_max_pool as gmp
+    from torch_geometric.nn import GraphConv
+    from torch_geometric.nn import global_mean_pool as gap
 except ImportError:
     raise ImportError('<torch_geometric missing; cannot do deep learning>')
 import torch.nn.functional as F
@@ -25,58 +25,41 @@ class SweetNet(torch.nn.Module):
 
         #convolution operations on the graph
         self.conv1 = GraphConv(128, 128)
-        self.pool1 = TopKPooling(128, ratio = 1.0)
         self.conv2 = GraphConv(128, 128)
-        self.pool2 = TopKPooling(128, ratio = 1.0)
         self.conv3 = GraphConv(128, 128)
-        self.pool3 = TopKPooling(128, ratio = 1.0)
+        
         #node embedding
         self.item_embedding = torch.nn.Embedding(num_embeddings = lib_size+1,
                                                  embedding_dim = 128)
         #fully connected part
-        self.lin1 = torch.nn.Linear(256, 1024)
-        self.lin2 = torch.nn.Linear(1024, 64)
-        self.lin3 = torch.nn.Linear(64, num_classes)
+        self.lin1 = torch.nn.Linear(128, 1024)
+        self.lin2 = torch.nn.Linear(1024, 128)
+        self.lin3 = torch.nn.Linear(128, num_classes)
         self.bn1 = torch.nn.BatchNorm1d(1024)
-        self.bn2 = torch.nn.BatchNorm1d(64)
+        self.bn2 = torch.nn.BatchNorm1d(128)
         self.act1 = torch.nn.LeakyReLU()
         self.act2 = torch.nn.LeakyReLU()      
   
     def forward(self, x, edge_index, batch, inference = False):
+        
         #getting node features
         x = self.item_embedding(x)
         x = x.squeeze(1)
 
         #graph convolution operations
         x = F.leaky_relu(self.conv1(x, edge_index))
-
-        x, edge_index, _, batch, _, _= self.pool1(x, edge_index, None, batch)
-        x1 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
         x = F.leaky_relu(self.conv2(x, edge_index))
-     
-        x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, None, batch)
-        x2 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
         x = F.leaky_relu(self.conv3(x, edge_index))
+        x = gap(x, batch)
 
-        x, edge_index, _, batch, _, _ = self.pool3(x, edge_index, None, batch)
-        x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
-        #combining results from three graph convolutions
-        x = x1 + x2 + x3
-        
         #fully connected part
-        x = self.lin1(x)
-        x = self.act1(self.bn1(x))
-        x = self.lin2(x)
-        x = self.act2(self.bn2(x))      
-        x = F.dropout(x, p = 0.5, training = self.training)
+        x = self.act1(self.bn1(self.lin1(x)))
+        x_out = self.bn2(self.lin2(x))   
+        x = F.dropout(self.act2(x_out), p = 0.5, training = self.training)
 
         x = self.lin3(x).squeeze(1)
 
         if inference:
-          x_out = x1 + x2 + x3
           return x, x_out
         else:
           return x
@@ -125,11 +108,8 @@ class LectinOracle(torch.nn.Module):
 
     #graph convolution operations for the glycan
     self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool1 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool2 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool3 = TopKPooling(self.hidden_size, ratio = 1.0)
     #node embedding for the glycan
     self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
                                              embedding_dim = self.hidden_size)
@@ -145,7 +125,7 @@ class LectinOracle(torch.nn.Module):
     self.act_prot2 = torch.nn.LeakyReLU()
     
     #combined fully connected part
-    self.fc1 = torch.nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
+    self.fc1 = torch.nn.Linear(128+self.hidden_size, int(np.round(self.hidden_size/2)))
     self.fc2 = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
     self.bn1 = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
     self.dp1 = torch.nn.Dropout(0.5)    
@@ -164,22 +144,9 @@ class LectinOracle(torch.nn.Module):
 
     #glycan graph convolution operations
     x = F.leaky_relu(self.conv1(x, edge_index))
-
-    x, edge_index, _, batch, _, _= self.pool1(x, edge_index, None, batch)
-    x1 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
     x = F.leaky_relu(self.conv2(x, edge_index))
-     
-    x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, None, batch)
-    x2 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
     x = F.leaky_relu(self.conv3(x, edge_index))
-        
-    x, edge_index, _, batch, _, _ = self.pool3(x, edge_index, None, batch)
-    x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
-    #combining results from three glycan graph convolutions
-    x = x1 + x2 + x3
+    x = gap(x, batch)
     
     #combining results from protein and glycan
     h_n = torch.cat((embedded_prot, x), 1)
@@ -224,11 +191,8 @@ class LectinOracle_flex(torch.nn.Module):
 
     #graph convolution operations for the glycan
     self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool1 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool2 = TopKPooling(self.hidden_size, ratio = 1.0)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
-    self.pool3 = TopKPooling(self.hidden_size, ratio = 1.0)
     #node embedding for the glycan
     self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
                                              embedding_dim = self.hidden_size)
@@ -256,7 +220,7 @@ class LectinOracle_flex(torch.nn.Module):
 
     #combined fully connected part
     self.dp1_n = torch.nn.Dropout(0.5) 
-    self.fc1_n = torch.nn.Linear(128+2*self.hidden_size, int(np.round(self.hidden_size/2)))
+    self.fc1_n = torch.nn.Linear(128+self.hidden_size, int(np.round(self.hidden_size/2)))
     self.fc2_n = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
     self.bn1_n = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
     self.act1_n = torch.nn.LeakyReLU()
@@ -278,22 +242,9 @@ class LectinOracle_flex(torch.nn.Module):
 
     #glycan graph convolution operations
     x = F.leaky_relu(self.conv1(x, edge_index))
-
-    x, edge_index, _, batch, _, _= self.pool1(x, edge_index, None, batch)
-    x1 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
     x = F.leaky_relu(self.conv2(x, edge_index))
-     
-    x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, None, batch)
-    x2 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
     x = F.leaky_relu(self.conv3(x, edge_index))
-        
-    x, edge_index, _, batch, _, _ = self.pool3(x, edge_index, None, batch)
-    x3 = torch.cat([gmp(x, batch), gap(x, batch)], dim = 1)
-
-    #combining results from three glycan graph convolutions
-    x = x1 + x2 + x3
+    x = gap(x, batch)
 
     #combining results from protein and glycan
     h_n = torch.cat((embedded_prot, x), 1)

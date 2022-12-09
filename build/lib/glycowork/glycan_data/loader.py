@@ -2,25 +2,26 @@ import pandas as pd
 import os
 import ast
 import pickle
+import itertools
 import pkg_resources
 
-io = pkg_resources.resource_stream(__name__, "v6_sugarbase.csv")
+io = pkg_resources.resource_stream(__name__, "v7_sugarbase.csv")
 df_glycan = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
 motif_list = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_binding.csv")
 glycan_binding = pd.read_csv(io)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
-data_path = os.path.join(this_dir, 'lib_v6.pkl')
+data_path = os.path.join(this_dir, 'lib_v7.pkl')
 lib = pickle.load(open(data_path, 'rb'))
 
 #lib = get_lib(list(set(df_glycan.glycan.values.tolist() +
 #                       motif_list.motif.values.tolist() +
-#                       glycan_binding.columns.values.tolist()[:-1] +
+#                       glycan_binding.columns.values.tolist()[:-2] +
 #                       ['Monosaccharide','Sia'])))
 
-linkages = ['a1-1','a1-2','a1-3','a1-4','a1-5','a1-6','a1-7','a1-8','a1-9','a1-11','a1-z','a2-1','a2-2','a2-3','a2-4','a2-5','a2-6','a2-7','a2-8','a2-9','a2-11','a2-z','b1-1','b1-2','b1-3','b1-4','b1-5','b1-6','b1-7','b1-8','b1-9','b1-z','b2-1','b2-2','b2-3','b2-4','b2-5','b2-6','b2-7','b2-8','z1-z','z2-z','z1-2','z1-3','z1-4','z1-6','z2-3','z2-6','z2-8']
-Hex = ['Glc', 'Gal', 'Man', 'Hex']
+linkages = ['a1-1','a1-2','a1-3','a1-4','a1-5','a1-6','a1-7','a1-8','a1-9','a1-11','a1-?','a2-1','a2-2','a2-3','a2-4','a2-5','a2-6','a2-7','a2-8','a2-9','a2-11','a2-?','b1-1','b1-2','b1-3','b1-4','b1-5','b1-6','b1-7','b1-8','b1-9','b1-?','b2-1','b2-2','b2-3','b2-4','b2-5','b2-6','b2-7','b2-8','?1-?','?2-?','?1-2','?1-3','?1-4','?1-6','?2-3','?2-6','?2-8']
+Hex = ['Glc', 'Gal', 'Man', 'Ins', 'Galf', 'Hex']
 dHex = ['Fuc', 'Qui', 'Rha', 'dHex']
 HexA = ['GlcA', 'ManA', 'GalA', 'IdoA', 'HexA']
 HexN = ['GlcN', 'ManN', 'GalN', 'HexN']
@@ -30,7 +31,7 @@ Sia = ['Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia']
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""
-  out = [item for sublist in nested_list for item in sublist]
+  out = list(itertools.chain(*nested_list))
   return out
 
 def find_nth(haystack, needle, n):
@@ -67,6 +68,19 @@ def reindex(df_new, df_old, out_col, ind_col, inp_col):
     print("Mismatching column names for ind_col and inp_col. Doesn't mean it's wrong but pay attention.")
   out = [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
   return out
+
+def stringify_dict(dicty):
+  """Converts dictionary into a string\n
+  | Arguments:
+  | :-
+  | dicty (dictionary): dictionary\n
+  | Returns:
+  | :-
+  | Returns string of type key:value for sorted items
+  """
+  dicty = dict(sorted(dicty.items()))
+  dicty = ''.join(str(key) + str(value) for key, value in dicty.items())
+  return dicty
 
 def build_custom_df(df, kind = 'df_species'):
   """creates custom df from df_glycan\n
