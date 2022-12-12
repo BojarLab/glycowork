@@ -429,7 +429,11 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   df_sub = df_use[mask]
   comp_pool = df_sub.dropna(subset=['Composition']).Composition.tolist()
   if isinstance(comp_pool[0], str):
+    comp_pool = list(set(comp_pool))
     comp_pool = [ast.literal_eval(k) for k in comp_pool]
+  else:
+    comp_pool = list({v['id']:v for v in comp_pool}.values())
+    del comp_pool['id']
   out = []
   for c in comp_pool:
         if min_mono<sum(c.values())<=max_mono:
