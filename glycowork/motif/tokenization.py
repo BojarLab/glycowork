@@ -397,7 +397,7 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
   return compositions
 
 def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
-                      sample_prep = 'underivatized', mass_tolerance = 0.5,
+                      sample_prep = 'underivatized', mass_tolerance = 0.5, kingdom = 'Animalia',
                       glycan_class = 'N', libr = None, df_use = None, filter_out = None):
   """experimental! only use if you know what you're doing; mapping a m/z value to a matching monosaccharide composition\n
   | Arguments:
@@ -407,6 +407,7 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
   | mass_tolerance (float): how much deviation to tolerate for a match; default:0.5
+  | kingdom (string): taxonomic kingdom for choosing a subset of glycans to consider; default:'Animalia'
   | glycan_class (string): which glycan class does the m/z value stem from, 'N', 'O', or 'lipid' linked glycans or 'free' glycans; default:'N'
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
   | df_use (dataframe): species-specific glycan dataframe to use for mapping; default: df_glycan
@@ -419,6 +420,7 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
     libr = lib
   if df_use is None:
     df_use = df_glycan[df_glycan.glycan_type == glycan_class]
+    df_use = df_use[df_use.Kingdom.str.contains(kingdom)]
   if mode == 'negative':
     adduct = mass_dict['Acetate']
   else:
@@ -436,9 +438,9 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
     del comp_pool['id']
   out = []
   for c in comp_pool:
-        if min_mono<sum(c.values())<=max_mono:
+        if min_mono < sum(c.values()) <= max_mono:
           try:
-            mass = composition_to_mass(c, mass_value=mass_value, sample_prep=sample_prep)
+            mass = composition_to_mass(c, mass_value = mass_value, sample_prep = sample_prep)
             if any([abs(m - mz_value) < mass_tolerance for m in [mass, mass+adduct]]):
               if filter_out:
                 if not any([j in c.keys() for j in filter_out]):

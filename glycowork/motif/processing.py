@@ -13,7 +13,7 @@ def small_motif_find(glycan):
   | :-
   | Returns string in which glycoletters are separated by asterisks
   """
-  b = glycan.replace('[', '').replace(']', '').replace(')', '(').split('(')
+  b = b = glycan.replace('[', '').replace(']', '').replace('{', '').replace('}', '').replace(')', '(').split('(')
   return '*'.join(b)
 
 def min_process_glycans(glycan_list):
