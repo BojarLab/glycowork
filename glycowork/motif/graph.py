@@ -258,8 +258,15 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   if isinstance(glycan_a, str):
     #check whether glycan_a and glycan_b have the same length
     if len(set([len(k) for k in min_process_glycans([glycan_a, glycan_b])])) == 1:
-      g1 = glycan_to_nxGraph(glycan_a, libr = libr)
-      g2 = glycan_to_nxGraph(glycan_b, libr = libr)
+      if wildcards is False:
+        if sorted(glycan_a.replace('[','').replace(']','')) == sorted(glycan_b.replace('[','').replace(']','')):
+          g1 = glycan_to_nxGraph(glycan_a, libr = libr)
+          g2 = glycan_to_nxGraph(glycan_b, libr = libr)
+        else:
+          return False
+      else:
+        g1 = glycan_to_nxGraph(glycan_a, libr = libr)
+        g2 = glycan_to_nxGraph(glycan_b, libr = libr)
     else:
       return False
   else:
