@@ -150,8 +150,8 @@ def glycan_to_nxGraph_int(glycan, libr = None,
     if glycan[-1] == 'x':
       g1.remove_node(len(g1.nodes) - 1)
   #add node labels
-  nx.set_node_attributes(g1, {k:libr.index(node_dict[k]) for k in range(len(node_dict))}, 'labels')
-  nx.set_node_attributes(g1, {k:node_dict[k] for k in range(len(node_dict))}, 'string_labels')
+  nx.set_node_attributes(g1, {i:libr.index(k) for i,k in enumerate(node_dict.values())}, 'labels')
+  nx.set_node_attributes(g1, {i:k for i,k in enumerate(node_dict.values())}, 'string_labels')
   if termini == 'ignore':
     pass
   elif termini == 'calc':
