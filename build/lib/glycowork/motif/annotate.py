@@ -185,7 +185,7 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-  | wildcard_list (list): list of wildcard names (such as 'z1-z', 'Hex', 'HexNAc', 'Sia')
+  | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
   | :-

@@ -436,22 +436,38 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   else:
     comp_pool = list({v['id']:v for v in comp_pool}.values())
     del comp_pool['id']
+  comp_pool = [c for c in comp_pool if min_mono < sum(c.values()) <= max_mono]
   out = []
   for c in comp_pool:
-        if min_mono < sum(c.values()) <= max_mono:
-          try:
-            mass = composition_to_mass(c, mass_value = mass_value, sample_prep = sample_prep)
-            if any([abs(m - mz_value) < mass_tolerance for m in [mass, mass+adduct]]):
-              if filter_out:
-                if not any([j in c.keys() for j in filter_out]):
-                  out = [c]
-                  break
-              else:
+        try:
+          mass = composition_to_mass(c, mass_value = mass_value, sample_prep = sample_prep)
+          if abs(mass - mz_value) < mass_tolerance:
+            if filter_out:
+              if not any([j in c.keys() for j in filter_out]):
                 out = [c]
                 break
-          except:
-            pass
-  return out
+            else:
+              out = [c]
+              break
+        except:
+          pass
+  if len(out) > 0:
+    return out
+  else:
+    for c in comp_pool:
+        try:
+          mass = composition_to_mass(c, mass_value = mass_value, sample_prep = sample_prep)
+          if abs(mass+adduct - mz_value) < mass_tolerance:
+            if filter_out:
+              if not any([j in c.keys() for j in filter_out]):
+                out = [c]
+                break
+            else:
+              out = [c]
+              break
+        except:
+          pass
+    return out
 
 def match_composition_relaxed(composition, group, level, df = None,
                       libr = None, reducing_end = None):
