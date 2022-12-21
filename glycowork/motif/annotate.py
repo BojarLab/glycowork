@@ -6,49 +6,7 @@ import re
 
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
-from glycowork.motif.processing import small_motif_find, IUPAC_to_SMILES
-
-
-def convert_to_counts_glycoletter(glycan, libr = None):
-  """counts the occurrence of glycoletters in glycan\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dictionary with counts per glycoletter in a glycan
-  """
-  if libr is None:
-    libr = lib
-  #initialize occurrence dictionary from list of glycoletters
-  letter_dict = dict.fromkeys(libr, 0)
-  #split glycan into glycoletters
-  glycan = small_motif_find(glycan).split('*')
-  #counts each glycoletter in glycan
-  for i in libr:
-    letter_dict[i] = glycan.count(i)
-  return letter_dict
-
-def glycoletter_count_matrix(glycans, target_col, target_col_name, libr = None):
-  """creates dataframe of counted glycoletters in glycan list\n
-  | Arguments:
-  | :-
-  | glycans (list): list of glycans in IUPAC-condensed format as strings
-  | target_col (list or pd.Series): label columns used for prediction
-  | target_col_name (string): name for target_col
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dataframe with glycoletter counts (columns) for every glycan (rows)
-  """
-  if libr is None:
-    libr = lib
-  #counts glycoletters in each glycan
-  counted_glycans = [convert_to_counts_glycoletter(i, libr) for i in glycans]
-  out = pd.DataFrame(counted_glycans)
-  out[target_col_name] = target_col
-  return out
+from glycowork.motif.processing import small_motif_find, IUPAC_to_SMILES, get_lib
 
 def find_isomorphs(glycan):
   """returns a set of isomorphic glycans by swapping branches etc.\n
@@ -115,41 +73,26 @@ def link_find(glycan):
       coll += b
   return list(set(coll))
 
-def motif_matrix(df, glycan_col_name, label_col_name, libr = None):
+def motif_matrix(glycans):
   """generates dataframe with counted glycoletters and disaccharides in glycans\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences and labels
-  | glycan_col_name (string): column name for glycan sequences
-  | label_col_name (string): column name for labels; string
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | glycans (list): list of IUPAC-condensed glycan sequences as strings\n
   | Returns:
   | :-
   | Returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)
   """
-  if libr is None:
-    libr = lib
-  matrix_list = []
-  di_dics = []
+  libr = get_lib(glycans)
   #get all disaccharides
-  wga_di = [link_find(i) for i in df[glycan_col_name].values.tolist()]
+  wga_di = [link_find(i) for i in glycans]
   #collect disaccharide repertoire
-  lib_di = list(sorted(list(set([item for sublist in wga_di for item in sublist]))))
+  lib_di = set(unwrap(wga_di))
   #count each disaccharide in each glycan
-  for j in wga_di:
-    di_dict = dict.fromkeys(lib_di, 0)
-    for i in list(di_dict.keys()):
-      di_dict[i] = j.count(i)
-    di_dics.append(di_dict)
-  wga_di_out = pd.DataFrame(di_dics)
-  #count all glycoletters in each glycan
-  wga_letter = glycoletter_count_matrix(df[glycan_col_name].values.tolist(),
-                                          df[label_col_name].values.tolist(),
-                                   label_col_name, libr)
+  wga_di_out = pd.DataFrame([{i:j.count(i) for i in lib_di} for j in wga_di])
+  #counts glycoletters in each glycan
+  wga_letter = pd.DataFrame([{i:g.count(i) for i in libr} for g in glycans])
   out_matrix = pd.concat([wga_letter, wga_di_out], axis = 1)
   out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()]
-  temp = out_matrix.pop(label_col_name)
-  out_matrix = pd.concat([out_matrix, temp], axis = 1)
   out_matrix.reset_index(drop = True, inplace = True)
   return out_matrix
 
@@ -181,10 +124,10 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   """searches for known motifs in glycan sequence\n
   | Arguments:
   | :-
-  | glycan (string): IUPAC-condensed glycan sequence
+  | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
-  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
+  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; will only be handled with string input; default:'termini'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
@@ -202,14 +145,14 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
     libr = lib
   #count the number of times each motif occurs in a glycan
   if extra == 'termini':
-    ggraph = glycan_to_nxGraph(glycan, libr = libr, termini = 'calc')
+    ggraph = ensure_graph(glycan, libr = libr, termini = 'calc')
     res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
                               termini_list = termini_list[k],
                                 count = True) for k in range(len(motifs))]*1
   else:
-    ggraph = glycan_to_nxGraph(glycan, libr = libr, termini = 'ignore')
+    ggraph = ensure_graph(glycan, libr = libr, termini = 'ignore')
     res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
@@ -219,7 +162,10 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   out = pd.DataFrame(columns = motifs.motif_name.values.tolist())
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
-  out.index = [glycan]
+  if isinstance(glycan, str):
+    out.index = [glycan]
+  else:
+    out.index = [graph_to_string(glycan)]
   return out
 
 def get_molecular_properties(glycan_list, verbose = False, placeholder = False) :
@@ -309,10 +255,8 @@ def annotate_dataset(glycans, motifs = None, libr = None,
     shopping_cart.append(pd.concat([generate_graph_features(k, libr = libr) for k in glycans], axis = 0))
   if 'exhaustive' in feature_set:
     #counts disaccharides and glycoletters in each glycan
-    temp = motif_matrix(pd.DataFrame({'glycans':glycans, 'labels':range(len(glycans))}),
-                                                   'glycans', 'labels', libr = libr)
+    temp = motif_matrix(glycans)
     temp.index = glycans
-    temp.drop(['labels'], axis = 1, inplace = True)
     shopping_cart.append(temp)
   if 'chemical' in feature_set:
     shopping_cart.append(get_molecular_properties(glycans, placeholder = True))

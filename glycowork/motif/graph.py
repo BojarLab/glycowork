@@ -192,12 +192,13 @@ def glycan_to_nxGraph(glycan, libr = None,
                                    termini_list = termini_list, override_reducing_end = override_reducing_end)
   return g1
 
-def ensure_graph(glycan, libr = None):
+def ensure_graph(glycan, libr = None, **kwargs):
   """ensures function compatibility with string glycans and graph glycans\n
   | Arguments:
   | :-
   | glycan (string or networkx graph): glycan in IUPAC-condensed format or as a networkx graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | **kwargs: keyword arguments that are directly passed on to glycan_to_nxGraph\n
   | Returns:
   | :-
   | Returns networkx graph object of glycan
@@ -205,7 +206,7 @@ def ensure_graph(glycan, libr = None):
   if libr is None:
     libr = lib
   if isinstance(glycan, str):
-    return glycan_to_nxGraph(glycan, libr = libr)
+    return glycan_to_nxGraph(glycan, libr = libr, **kwargs)
   else:
     return glycan
 

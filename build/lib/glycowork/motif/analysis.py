@@ -148,8 +148,7 @@ def get_representative_substructures(enrichment_df, libr = None):
 def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
-                 estimate_speedup = False,
-                 **kwargs):
+                 estimate_speedup = False, **kwargs):
     """clusters samples based on glycan data (for instance glycan binding etc.)\n
     | Arguments:
     | :-
