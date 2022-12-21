@@ -241,15 +241,17 @@ def categorical_termini_match(attr1, attr2, default1, default2):
   return match
 
 def compare_glycans(glycan_a, glycan_b, libr = None,
-                    wildcards = False, wildcard_list = []):
+                    wildcards = False, wildcard_list = [],
+                    wildcards_ptm = False):
   """returns True if glycans are the same and False if not\n
   | Arguments:
   | :-
   | glycan_a (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | wildcards (bool): set to True to allow wildcards (e.g., '?1-?', 'monosaccharide'); default is False
-  | wildcard_list (list): list of wildcards to consider, in the form of '?1-?' etc.\n
+  | wildcards (bool): set to True to allow wildcards (e.g., '?1-?', 'monosaccharide'); default:False
+  | wildcard_list (list): list of wildcards to consider, in the form of '?1-?' etc.
+  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'); default:False\n
   | Returns:
   | :-  
   | Returns True if two glycans are the same and False if not
@@ -259,6 +261,9 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   if isinstance(glycan_a, str):
     #check whether glycan_a and glycan_b have the same length
     if len(set([len(k) for k in min_process_glycans([glycan_a, glycan_b])])) == 1:
+      if wildcards_ptm:
+        glycan_a = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', glycan_a).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+        glycan_b = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', glycan_b).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
       if wildcards is False:
         if sorted(glycan_a.replace('[','').replace(']','')) == sorted(glycan_b.replace('[','').replace(']','')):
           g1 = glycan_to_nxGraph(glycan_a, libr = libr)
