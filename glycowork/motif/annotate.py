@@ -6,7 +6,7 @@ import re
 
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
-from glycowork.motif.processing import small_motif_find, IUPAC_to_SMILES, get_lib
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib
 
 def find_isomorphs(glycan):
   """returns a set of isomorphic glycans by swapping branches etc.\n

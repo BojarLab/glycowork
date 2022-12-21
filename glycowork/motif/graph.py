@@ -648,12 +648,13 @@ def largest_subgraph(glycan_a, glycan_b, libr = None):
   else:
     return ""
 
-def get_possible_topologies(glycan, libr = None):
+def get_possible_topologies(glycan, libr = None, exhaustive = False):
   """creates possible glycans given a floating substituent; only works with max one floating substituent\n
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format or as networkx graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | exhaustive (bool): whether to also allow additions at internal positions; default:False\n
   | Returns:
   | :-
   | Returns list of NetworkX-like glycan graphs of possible topologies
@@ -666,32 +667,40 @@ def get_possible_topologies(glycan, libr = None):
   ggraph = ensure_graph(glycan, libr = libr)
   parts = [ggraph.subgraph(c) for c in nx.connected_components(ggraph)]
   topologies = []
-  for k in list(parts[-1].nodes()):
+  for k in list(parts[-1].nodes())[::2]:
     #only add to non-reducing ends
-    if parts[-1].degree[k] == 1 and k != max(list(parts[-1].nodes())):
+    if not exhaustive:
+      if parts[-1].degree[k] == 1 and k != max(list(parts[-1].nodes())):
+        ggraph2 = copy.deepcopy(ggraph)
+        ggraph2.add_edge(max(list(parts[0].nodes())), k)
+        ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
+        topologies.append(ggraph2)
+    else:
       ggraph2 = copy.deepcopy(ggraph)
       ggraph2.add_edge(max(list(parts[0].nodes())), k)
       ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
       topologies.append(ggraph2)
   return topologies
 
-def possible_topology_check(glycan, glycans, libr = None):
+def possible_topology_check(glycan, glycans, libr = None, exhaustive = False, **kwargs):
   """checks whether glycan with floating substituent could match glycans from a list; only works with max one floating substituent\n
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
   | glycans (list): list of glycans in IUPAC-condensed format (or networkx graphs; should not contain floating substituents)
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | exhaustive (bool): whether to also allow additions at internal positions; default:False
+  | **kwargs: keyword arguments that are directly passed on to compare_glycans\n
   | Returns:
   | :-
   | Returns list of glycans that could match input glycan
   """
   if libr is None:
     libr = lib
-  topologies = get_possible_topologies(glycan, libr = libr)
+  topologies = get_possible_topologies(glycan, libr = libr, exhaustive = exhaustive)
   out_glycs = []
   for g in glycans:
     ggraph = ensure_graph(g, libr = libr)
-    if any([compare_glycans(t, ggraph, libr = libr) for t in topologies]):
+    if any([compare_glycans(t, ggraph, libr = libr, **kwargs) for t in topologies]):
       out_glycs.append(g)
   return out_glycs
