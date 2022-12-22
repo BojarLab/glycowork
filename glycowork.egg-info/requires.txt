@@ -14,5 +14,3 @@ pubchempy
 matplotlib-inline
 python-louvain
 drawSvg
-pycairo
-cairocffi
