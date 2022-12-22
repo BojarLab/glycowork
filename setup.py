@@ -26,5 +26,6 @@ setuptools.setup(
                       "seaborn", "xgboost", "mpld3",
                       "requests", "pandas", "glyles",
                       "pubchempy", "matplotlib-inline",
-                      "python-louvain"],
+                      "python-louvain", "drawSvg",
+                      "libcairo2-dev", "pycairo", "cairocffi"],
 )
