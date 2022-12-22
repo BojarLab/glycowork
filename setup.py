@@ -27,5 +27,5 @@ setuptools.setup(
                       "requests", "pandas", "glyles",
                       "pubchempy", "matplotlib-inline",
                       "python-louvain", "drawSvg",
-                      "libcairo2-dev", "pycairo", "cairocffi"],
+                      "pycairo", "cairocffi"],
 )
