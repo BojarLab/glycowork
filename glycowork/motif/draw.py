@@ -886,20 +886,20 @@ def split_monosaccharide_linkage(label_list):
   if any(isinstance(el, list) for el in label_list):
     sugar = [k[::2][::-1] for k in label_list]
     sugar_modification = [[get_modification(k) for k in y] for y in sugar]
-    sugar_modification = [[multireplace(['O', '-ol'], '', k) for k in y] for y in sugar_modification]
+    sugar_modification = [[multireplace({'O', '-ol'}, '', k) for k in y] for y in sugar_modification]
     sugar = [[get_core(k) for k in y] for y in sugar]
     bond = [k[1::2][::-1] for k in label_list]
   else:
     sugar = label_list[::2][::-1]
     sugar_modification = [get_modification(k) if k != 'Re' else '' for k in sugar]
-    sugar_modification = [multireplace(['O', '-ol'], '', k) for k in sugar_modification]
+    sugar_modification = [multireplace({'O', '-ol'}, '', k) for k in sugar_modification]
     sugar = [get_core(k) if k != 'Re' else 'Re' for k in sugar]
     bond = label_list[1::2][::-1]
 
   return sugar, sugar_modification, bond
 
-def multireplace(list, replacement, string):
-  for k in list:
+def multireplace(remove_set, replacement, string):
+  for k in remove_set:
     string = string.replace(k, replacement)
   return string
 
