@@ -211,7 +211,7 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False) 
   df.index = glycan_list
   return df
 
-def annotate_dataset(glycans, motifs = None, libr = None,
+def annotate_dataset(glycans, motifs = None,
                      feature_set = ['known'], extra = 'termini',
                      wildcard_list = [], termini_list = [],
                      condense = False, estimate_speedup = False):
@@ -220,7 +220,6 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   | :-
   | glycans (list): list of IUPAC-condensed glycan sequences as strings
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
@@ -233,8 +232,7 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   """
   if motifs is None:
     motifs = motif_list
-  if libr is None:
-    libr = lib
+  libr = get_lib(glycans + motifs.motif.values.tolist())
   #non-exhaustive speed-up that should only be used if necessary
   if estimate_speedup:
     motifs = estimate_lower_bound(glycans, motifs)

@@ -30,7 +30,7 @@ def cohen_d(x,y):
   return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof=1) ** 2 + (ny-1)*np.std(y, ddof=1) ** 2) / dof)
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
-                     libr = None, thresh = 1.645, sorting = True,
+                     thresh = 1.645, sorting = True,
                      feature_set = ['exhaustive'], extra = 'termini',
                      wildcard_list = [], multiple_samples = False,
                      motifs = None, estimate_speedup = False):
@@ -40,7 +40,6 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | df (dataframe): dataframe containing glycan sequences and labels
     | glycan_col_name (string): column name for glycan sequences; arbitrary if multiple_samples = True; default:'glycan'
     | label_col_name (string): column name for labels; arbitrary if multiple_samples = True; default:'target'
-    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
     | thresh (float): threshold value to separate positive/negative; default is 1.645 for Z-scores
     | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
@@ -53,8 +52,6 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | :-
     | Returns dataframe with p-values and corrected p-values for every glycan motif
     """
-    if libr is None:
-        libr = lib
     #reformat to allow for proper annotation in all samples
     if multiple_samples:
         if 'target' in df.columns.values.tolist():
@@ -65,8 +62,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
         df.columns = [glycan_col_name] + df.columns.values.tolist()[1:]
     #annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
-                                motifs = motifs,
-                                libr = libr, feature_set = feature_set,
+                                motifs = motifs, feature_set = feature_set,
                                extra = extra, wildcard_list = wildcard_list,
                                 estimate_speedup = estimate_speedup)
     #broadcast the dataframe to the correct size given the number of samples
@@ -145,7 +141,7 @@ def get_representative_substructures(enrichment_df, libr = None):
             clean_list.append(k)
     return clean_list
 
-def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
+def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
                  estimate_speedup = False, **kwargs):
@@ -154,7 +150,6 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     | :-
     | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans
     | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
-    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
     | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
@@ -168,8 +163,6 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     | :-
     | Prints clustermap                         
     """
-    if libr is None:
-        libr = lib
     if index_col in df.columns.values.tolist():
         df.index = df[index_col]
         df.drop([index_col], axis = 1, inplace = True)
@@ -177,7 +170,7 @@ def make_heatmap(df, mode = 'sequence', libr = None, feature_set = ['known'],
     if mode == 'motif':
         #count glycan motifs and remove rare motifs from the result
         df_motif = annotate_dataset(df.columns.values.tolist(),
-                                libr = libr, feature_set = feature_set,
+                                feature_set = feature_set,
                                     extra = extra, wildcard_list = wildcard_list,
                                     estimate_speedup = estimate_speedup)
         df_motif = df_motif.replace(0,np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
