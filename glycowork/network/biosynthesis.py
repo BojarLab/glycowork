@@ -11,7 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import lib, unwrap, linkages
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
-from glycowork.motif.processing import min_process_glycans, choose_correct_isoform
+from glycowork.motif.processing import choose_correct_isoform
 from glycowork.motif.tokenization import get_stem_lib
 
 io = pkg_resources.resource_stream(__name__, "monolink_to_enzyme.csv")
@@ -22,7 +22,7 @@ data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
 net_dic = pickle.load(open(data_path, 'rb'))
 
 permitted_roots = {"Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"}
-allowed_ptms = {'OS','3S','6S','1P','3P','6P','OAc','4Ac'}
+allowed_ptms = {'OS','3S','6S','OP','1P','3P','6P','OAc','4Ac'}
 
 def safe_compare(g1, g2, libr = None):
   """compare_glycans with try/except error catch\n
@@ -121,7 +121,7 @@ def create_neighbors(ggraph, libr = None, min_size = 1):
   if len(ggraph.nodes()) == 3:
     ggraph_nb = ggraph.subgraph([2])
     node_list = list(ggraph_nb.nodes())
-    ggraph_nb = [nx.relabel_nodes(ggraph_nb, {node_list[m]:m for m in range(len(node_list))})]
+    ggraph_nb = [nx.relabel_nodes(ggraph_nb, {m:i for i,m in enumerate(node_list)})]
   #generate all precursors by iteratively cleaving off the non-reducing-end monosaccharides
   else:
     terminal_pairs = [k for k in ggraph.nodes() if ggraph.degree(k) == 1 and k != max(list(ggraph.nodes()))]
@@ -131,7 +131,7 @@ def create_neighbors(ggraph, libr = None, min_size = 1):
       #cleaving off messes with the node labeling, so they have to be re-labeled
       ggraph_temp = ggraph.subgraph([n for n in ggraph.nodes() if n not in k])
       node_list = list(ggraph_temp.nodes())
-      ggraph_nb.append(nx.relabel_nodes(ggraph_temp, {node_list[m]:m for m in range(len(node_list))}))
+      ggraph_nb.append(nx.relabel_nodes(ggraph_temp, {m:i for i,m in enumerate(node_list)}))
   return ggraph_nb
 
 def get_virtual_nodes(glycan, graph_dic, libr = None, min_size = 1):
@@ -149,10 +149,10 @@ def get_virtual_nodes(glycan, graph_dic, libr = None, min_size = 1):
   """
   if libr is None:
     libr = lib
+  if glycan.count('(')+1 <= min_size:
+    return ([], [])
   #get glycan graph
   ggraph = safe_index(glycan, graph_dic, libr = libr)
-  if len(ggraph.nodes()) <= min_size:
-    return ([], [])
   #get biosynthetic precursors
   ggraph_nb = create_neighbors(ggraph, libr = libr, min_size = min_size)
   ggraph_nb_t = [graph_to_string(k) for k in ggraph_nb]
@@ -290,8 +290,7 @@ def create_adjacency_matrix(glycans, graph_dic, libr = None, min_size = 1):
     if len(idx[j]) > 0:
       for i in range(len(idx[j])):
         if len(idx[j][i]) >= 1:
-          inp = [idx[j][i], glycans.index(glycans[j])]
-          df_out.iloc[inp[0], inp[1]] = 1
+          df_out.iat[idx[j][i][0], j] = 1
   #find connections between virtual nodes that connect observed nodes
   new_nodes = []
   virtual_edges = fill_with_virtuals(glycans, graph_dic, libr = libr, min_size = min_size)
@@ -301,15 +300,15 @@ def create_adjacency_matrix(glycans, graph_dic, libr = None, min_size = 1):
   idx = np.where([any([compare_glycans(k, safe_index(j, graph_dic, libr = libr), libr = libr) for j in df_out.columns]) for k in new_nodes_g])[0].tolist()
   if len(idx) > 0:
     virtual_edges = [j for j in virtual_edges if j[1] not in [new_nodes[k] for k in idx]]
-    new_nodes = [new_nodes[k] for k in range(len(new_nodes)) if k not in idx]
+    new_nodes = [n for k,n in enumerate(new_nodes) if k not in idx]
   #add virtual nodes
   for k in new_nodes:
     df_out[k] = 0
     df_out.loc[len(df_out)] = 0
-    df_out.index = df_out.index.values.tolist()[:-1] + [k]
+    df_out.index = df_out.index.tolist()[:-1] + [k]
   #add virtual edges
   for k in virtual_edges:
-    df_out.loc[k[0], k[1]] = 1
+    df_out.at[k[0], k[1]] = 1
   return df_out.add(df_out.T, fill_value = 0), new_nodes
 
 def estimate_distance(larger_glycan, smaller_glycan):
@@ -322,9 +321,7 @@ def estimate_distance(larger_glycan, smaller_glycan):
   | :-
   | Returns an integer of monosaccharide distance
   """
-  dist =  min_process_glycans([larger_glycan, smaller_glycan])
-  dist = len(dist[0])-len(dist[1])
-  return int(dist/2)
+  return int(larger_glycan.count('(')-smaller_glycan.count('('))
 
 def adjacencyMatrix_to_network(adjacency_matrix):
   """converts an adjacency matrix to a network\n
@@ -336,7 +333,7 @@ def adjacencyMatrix_to_network(adjacency_matrix):
   | Returns biosynthetic network as a networkx graph
   """
   network = nx.convert_matrix.from_numpy_array(adjacency_matrix.values)
-  network = nx.relabel_nodes(network, {k:adjacency_matrix.columns.values.tolist()[k] for k in range(len(adjacency_matrix))})
+  network = nx.relabel_nodes(network, {k:c for k,c in enumerate(adjacency_matrix.columns)})
   return network
 
 def propagate_virtuals(glycans, graph_dic, libr = None, permitted_roots = permitted_roots, min_size = 1):
@@ -355,9 +352,7 @@ def propagate_virtuals(glycans, graph_dic, libr = None, permitted_roots = permit
   if libr is None:
     libr = lib
   #while assuring that glycans don't become smaller than the root, find biosynthetic precursors of each glycan in glycans
-  linkage_count = min([k.count('(') for k in permitted_roots])
-  virtuals = [get_virtual_nodes(k, graph_dic, libr = libr, min_size = min_size) for k in glycans if k.count('(') > linkage_count]
-  return [k[1] for k in virtuals]
+  return [get_virtual_nodes(k, graph_dic, libr = libr, min_size = min_size)[1] for k in glycans if k.count('(') > (min_size-1)]
 
 def shells_to_edges(prev_shell, next_shell):
   """map virtual node generations to edges\n
@@ -396,7 +391,6 @@ def find_path(glycan_a, glycan_b, graph_dic, libr = None,
     libr = lib
   true_nodes = [glycan_a, glycan_b]
   smaller_glycan = true_nodes[np.argmin([len(j) for j in true_nodes])]
-  #smaller_glycan_g = safe_index(smaller_glycan, graph_dic, libr = libr)
   larger_glycan = true_nodes[np.argmax([len(j) for j in true_nodes])]
   #bridge the distance between a and b by generating biosynthetic precursors
   dist = estimate_distance(larger_glycan, smaller_glycan)
@@ -641,7 +635,7 @@ def return_unconnected_to_root(network, permitted_roots = permitted_roots):
   #for each observed node, check whether it has a path to a root; if not, collect and return the node
   for node in network.nodes():
     if nodeDict[node]['virtual'] == 0 and (node not in permitted_roots):
-      path_tracing = [nx.algorithms.shortest_paths.generic.has_path(network, node, k) for k in permitted_roots if k in network.nodes()]
+      path_tracing = [nx.algorithms.shortest_paths.generic.has_path(network, node, k) for k in permitted_roots]
       if not any(path_tracing):
         unconnected.add(node)
   return unconnected
@@ -662,7 +656,6 @@ def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, lib
   """
   if libr is None:
     libr = lib
-  min_size = min([len(k) for k in min_process_glycans(permitted_roots)])
   permitted_roots = [k for k in permitted_roots if k in network.nodes()]
   if len(permitted_roots) > 0:
     #get unconnected observed nodes
@@ -676,7 +669,7 @@ def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, lib
     unconnected_nodes = {k for k in unconnected_nodes if len(safe_index(k, graph_dic, libr = libr)) > min_size}
     nodeDict = dict(network.nodes(data = True))
     #subset the observed nodes that are connected to the root
-    real_nodes = sorted([node for node in list(network.nodes()) if nodeDict[node]['virtual'] == 0 and node not in unconnected_nodes], key = len, reverse = True)
+    real_nodes = sorted([node for node in network.nodes() if nodeDict[node]['virtual'] == 0 and node not in unconnected_nodes], key = len, reverse = True)
     edges = []
     edge_labels = []
     #for each unconnected node, find the shortest path to its root node
@@ -766,7 +759,7 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   if libr is None:
     libr = lib
   #generating graph from adjacency of observed glycans
-  min_size = min([len(k) for k in min_process_glycans(permitted_roots)])
+  min_size = min([k.count('(') for k in permitted_roots]) + 1
   add_to_virtuals = []
   for r in permitted_roots:
       if r not in glycans and any([r in g for g in glycans]):
