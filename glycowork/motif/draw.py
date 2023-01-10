@@ -9,7 +9,7 @@ import networkx as nx
 import numpy as np
 import sys
 import re
-from math import sin, cos, radians
+from math import sin, cos, radians, sqrt
 
 def matches(line, opendelim='(', closedelim=')'):
   """
