@@ -291,8 +291,6 @@ def hex(x_pos, y_pos, color = 'white'):
                         fill= color,
                         stroke='black', stroke_width = 0.04*dim))
 
-inside_hex_dim = ((sqrt(3))/2)*dim
-
 def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose = False, conf = ''): 
   """draw individual monosaccharides in shapes & colors according to the SNFG nomenclature\n
   | Arguments:
@@ -307,6 +305,8 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
   | :-  
   | 
   """
+
+  inside_hex_dim = ((sqrt(3))/2)*dim
 
   if shape == 'Hex':
     # xexose - circle
