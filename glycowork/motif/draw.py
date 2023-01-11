@@ -9,7 +9,7 @@ import networkx as nx
 import numpy as np
 import sys
 import re
-from math import sin, cos, radians, sqrt
+from math import sin, cos, radians, sqrt, atan, degrees
 
 def matches(line, opendelim='(', closedelim=')'):
   """
@@ -292,7 +292,7 @@ def hex(x_pos, y_pos, dim, color = 'white'):
                         fill= color,
                         stroke='black', stroke_width = 0.04*dim))
 
-def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose = False, conf = ''): 
+def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose = False, conf = '', deg = 0): 
   """draw individual monosaccharides in shapes & colors according to the SNFG nomenclature\n
   | Arguments:
   | :-
@@ -1043,26 +1043,39 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     d.append(p)
 
   if shape == 'Z':
+    
+    # deg = 0
+    rot = 'rotate(' + str(deg) + ' ' + str(0-x_pos*dim) + ' ' + str(0-y_pos*dim) + ')'
+    g = draw.Group(transform=rot)
+
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
     p.M((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)
     p.L((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)  
-    d.append(p)
+    g.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
     p.M((0-x_pos*dim)-0.02*dim,            (0+y_pos*dim)+0.5*dim)
     p.L((0-x_pos*dim)+0.4*dim,            (0+y_pos*dim)+0.5*dim)  
-    d.append(p)
+    g.append(p)
+    d.append(g)
 
   if shape == 'Y':
+    
+    # deg = 0
+    rot = 'rotate(' + str(deg) + ' ' + str(0-x_pos*dim) + ' ' + str(0-y_pos*dim) + ')'
+    g = draw.Group(transform=rot)
+    
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
     p.M((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)
     p.L((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)  
-    d.append(p)
+    g.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
     p.M((0-x_pos*dim)-0.02*dim,            (0+y_pos*dim)+0.5*dim)
     p.L((0-x_pos*dim)+0.4*dim,            (0+y_pos*dim)+0.5*dim)  
-    d.append(p)
+    g.append(p)
 
-    d.append(draw.Circle((0-x_pos*dim)+0.4*dim, 0+y_pos*dim, 0.15*dim, fill='none', stroke_width=0.04*dim, stroke='black'))
+    g.append(draw.Circle((0-x_pos*dim)+0.4*dim, 0+y_pos*dim, 0.15*dim, fill='none', stroke_width=0.04*dim, stroke='black'))
+
+    d.append(g)
 
   if shape == 'B':
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
@@ -1115,7 +1128,7 @@ def add_bond(x_start, x_stop, y_start, y_stop, label = '', dim = 50, compact = F
   d.append(p)
   d.append(draw.Text(label, dim*0.4, path=p, text_anchor='middle', valign='middle', lineOffset=-1))
 
-def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50, compact = False, conf = ''):
+def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50, compact = False, conf = '', deg = 0):
   """wrapper function for drawing monosaccharide at specified position\n
   | Arguments:
   | :-
@@ -1136,7 +1149,7 @@ def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50,
     x_pos = x_pos * 1.2
     y_pos = (y_pos * 0.5) *1.2
   if monosaccharide in list(sugar_dict.keys()):
-    draw_shape(shape = sugar_dict[monosaccharide][0], color = sugar_dict[monosaccharide][1], x_pos = x_pos, y_pos = y_pos, modification = modification, conf = conf, furanose = sugar_dict[monosaccharide][2], dim = dim)
+    draw_shape(shape = sugar_dict[monosaccharide][0], color = sugar_dict[monosaccharide][1], x_pos = x_pos, y_pos = y_pos, modification = modification, conf = conf, furanose = sugar_dict[monosaccharide][2], dim = dim, deg = deg)
   else:
     p = draw.Path(stroke_width=0.04*dim, stroke = 'black')
     p.M(0-x_pos*dim-1/2*dim, 0+y_pos*dim+1/2*dim)
@@ -1378,20 +1391,31 @@ def split_monosaccharide_linkage(label_list):
   if any(isinstance(el, list) for el in label_list):
     sugar = [k[::2][::-1] for k in label_list]
     sugar_modification = [[get_modification(k) if k in lib else '' for k in y] for y in sugar]
-    sugar_modification = [[multireplace(['O', '-ol'], '', k) for k in y] for y in sugar_modification]
+    sugar_modification = [[multireplace({'O', '-ol'}, '', k) for k in y] for y in sugar_modification]
     sugar = [[get_core(k) if k not in additions else k for k in y] for y in sugar]
     bond = [k[1::2][::-1] for k in label_list]
   else:
     sugar = label_list[::2][::-1]
     sugar_modification = [get_modification(k) if k not in additions else '' for k in sugar]
-    sugar_modification = [multireplace(['O', '-ol'], '', k) for k in sugar_modification]
+    sugar_modification = [multireplace({'O', '-ol'}, '', k) for k in sugar_modification]
     sugar = [get_core(k) if k not in additions else k for k in sugar]
     bond = label_list[1::2][::-1]
 
   return sugar, sugar_modification, bond
 
-def multireplace(list, replacement, string):
-  for k in list:
+def multireplace(remove_set, replacement, string):
+  """
+  Replaces all occurences of items in a set with a given string.\n
+  | Arguments:
+  | :-
+  | remove_set (set): set of substrings to replace
+  | replacement (str): string to replace substrings with
+  | string (str): string to perform replacements on\n
+  | Returns:
+  | :-
+  | (str) modified string
+  """
+  for k in remove_set:
     string = string.replace(k, replacement)
   return string
 
@@ -2015,6 +2039,47 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
   branch_branch_sugar, branch_branch_x_pos, branch_branch_y_pos, branch_branch_sugar_modification, branch_branch_bond, branch_branch_connection, bb_conf  = data[2]
   bbb_sugar, bbb_x_pos, bbb_y_pos, bbb_sugar_modification, bbb_bond, bbb_connection, bbb_conf  = data[3]
 
+  # calculate angles for main chain Y, Z fragments 
+  main_deg = []
+  for k in range(len(main_sugar)):
+    if main_sugar[k] in ['Z', 'Y']:
+      slope = (main_sugar_y_pos[k]-main_sugar_y_pos[k-1])/((main_sugar_x_pos[k]*2)-(main_sugar_x_pos[k-1]*2))
+      main_deg.append(degrees(atan(slope)))
+    else:
+      main_deg.append(0)
+
+  # calculate angles for branch Y, Z fragments 
+  branch_deg = []
+  for k in range(len(branch_sugar)):
+    tmp = []
+    for j in range(len(branch_sugar[k])):
+      if branch_sugar[k][j] in ['Z', 'Y']:
+        if len(branch_sugar[k]) == 1:
+          slope = (branch_y_pos[k][j]-main_sugar_y_pos[branch_connection[k]])/((branch_x_pos[k][j]*2)-(main_sugar_x_pos[branch_connection[k]]*2))
+          tmp.append(degrees(atan(slope)))
+        else:
+          slope = (branch_y_pos[k][j]-branch_y_pos[k][j-1])/((branch_x_pos[k][j]*2)-(branch_x_pos[k][j-1]*2))
+          tmp.append(degrees(atan(slope)))
+      else:
+        tmp.append(0)
+    branch_deg.append(tmp)
+
+  # calculate angles for branch_branch Y, Z fragments 
+  branch_branch_deg = []
+  for k in range(len(branch_branch_sugar)):
+    tmp = []
+    for j in range(len(branch_branch_sugar[k])):
+      if branch_branch_sugar[k][j] in ['Z', 'Y']:
+        if len(branch_branch_sugar[k]) == 1:
+          slope = (branch_branch_y_pos[k][j]-branch_y_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]])/((branch_branch_x_pos[k][j]*2)-(branch_x_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]]*2))
+          tmp.append(degrees(atan(slope)))
+        else:
+          slope = (branch_branch_y_pos[k][j]-branch_branch_y_pos[k][j-1])/((branch_branch_x_pos[k][j]*2)-(branch_branch_x_pos[k][j-1]*2))
+          tmp.append(degrees(atan(slope)))
+      else:
+        tmp.append(0)
+    branch_branch_deg.append(tmp)
+
     ## adjust drawing dimentions
   max_y = max(unwrap(bbb_y_pos)+unwrap(branch_branch_y_pos)+unwrap(branch_y_pos)+main_sugar_y_pos)
   min_y = min(unwrap(bbb_y_pos)+unwrap(branch_branch_y_pos)+unwrap(branch_y_pos)+main_sugar_y_pos)
@@ -2052,11 +2117,11 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
   # bond branch_branch_branch to branch_branch
   [add_bond(bbb_x_pos[k][0], branch_branch_x_pos[bbb_connection[k][0]][bbb_connection[k][1]], bbb_y_pos[k][0], branch_branch_y_pos[bbb_connection[k][0]][bbb_connection[k][1]], bbb_bond[k][0], dim = dim, compact = compact) for k in range(len(bbb_sugar))]
   # sugar main chain
-  [add_sugar(main_sugar[k], main_sugar_x_pos[k], main_sugar_y_pos[k], modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim) for k in range(len(main_sugar))]
+  [add_sugar(main_sugar[k], main_sugar_x_pos[k], main_sugar_y_pos[k], modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim, deg = main_deg[k]) for k in range(len(main_sugar))]
   # sugar branch
-  [add_sugar(branch_sugar[b_idx][s_idx], branch_x_pos[b_idx][s_idx], branch_y_pos[b_idx][s_idx], modification = branch_sugar_modification[b_idx][s_idx], conf = b_conf[b_idx][s_idx], compact = compact, dim = dim) for b_idx in range(len(branch_sugar)) for s_idx in range(len(branch_sugar[b_idx]))]
+  [add_sugar(branch_sugar[b_idx][s_idx], branch_x_pos[b_idx][s_idx], branch_y_pos[b_idx][s_idx], modification = branch_sugar_modification[b_idx][s_idx], conf = b_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_deg[b_idx][s_idx]) for b_idx in range(len(branch_sugar)) for s_idx in range(len(branch_sugar[b_idx]))]
   # sugar branch_branch 
-  [add_sugar(branch_branch_sugar[b_idx][s_idx], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx], modification = branch_branch_sugar_modification[b_idx][s_idx], conf = bb_conf[b_idx][s_idx], compact = compact, dim = dim) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx]))]
+  [add_sugar(branch_branch_sugar[b_idx][s_idx], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx], modification = branch_branch_sugar_modification[b_idx][s_idx], conf = bb_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_branch_deg[b_idx][s_idx]) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx]))]
   # sugar branch branch branch
   [add_sugar(bbb_sugar[b_idx][s_idx], bbb_x_pos[b_idx][s_idx], bbb_y_pos[b_idx][s_idx], modification = bbb_sugar_modification[b_idx][s_idx], conf = bbb_conf[b_idx][s_idx], compact = compact, dim = dim) for b_idx in range(len(bbb_sugar)) for s_idx in range(len(bbb_sugar[b_idx]))]
 
