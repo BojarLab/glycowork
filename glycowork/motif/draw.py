@@ -109,7 +109,7 @@ additions = ['-', 'blank', 'redEnd', 'free',
              '02X', '13A', '24A', '35A',
              '25A', '03A', '14X', '25X',
              '03X', '14A', 'Z', 'Y',
-             'B', 'C']
+             'B', 'C', 'text']
 draw_lib = expand_lib(lib, additions)
 
 sugar_dict = {
@@ -229,6 +229,7 @@ sugar_dict = {
   "Psi": ['Assigned', snfg_pink, False],
 
   "blank": ['empty', snfg_white, False],
+  "text": ['text', None, None],
   "redEnd" : ['redEnd', None, None],
   "free" : ['free', None, None],
   "04X" : ['04X', None, None],
@@ -292,7 +293,7 @@ def hex(x_pos, y_pos, dim, color = 'white'):
                         fill= color,
                         stroke='black', stroke_width = 0.04*dim))
 
-def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose = False, conf = '', deg = 0): 
+def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose = False, conf = '', deg = 0, text_anchor = 'middle'): 
   """draw individual monosaccharides in shapes & colors according to the SNFG nomenclature\n
   | Arguments:
   | :-
@@ -681,7 +682,10 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor=text_anchor, valign='middle', lineOffset=-0.75))
+
+  if shape == 'text':
+    d.append(draw.Text(modification, dim*0.35, 0-x_pos*dim, 0+y_pos*dim, text_anchor=text_anchor))
   
   if shape == 'redEnd':
     p = draw.Path(stroke_width=0.04*dim, stroke='black', fill = 'none')
@@ -1128,7 +1132,7 @@ def add_bond(x_start, x_stop, y_start, y_stop, label = '', dim = 50, compact = F
   d.append(p)
   d.append(draw.Text(label, dim*0.4, path=p, text_anchor='middle', valign='middle', lineOffset=-1))
 
-def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50, compact = False, conf = '', deg = 0):
+def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50, compact = False, conf = '', deg = 0, text_anchor = 'middle'):
   """wrapper function for drawing monosaccharide at specified position\n
   | Arguments:
   | :-
@@ -1149,7 +1153,7 @@ def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50,
     x_pos = x_pos * 1.2
     y_pos = (y_pos * 0.5) *1.2
   if monosaccharide in list(sugar_dict.keys()):
-    draw_shape(shape = sugar_dict[monosaccharide][0], color = sugar_dict[monosaccharide][1], x_pos = x_pos, y_pos = y_pos, modification = modification, conf = conf, furanose = sugar_dict[monosaccharide][2], dim = dim, deg = deg)
+    draw_shape(shape = sugar_dict[monosaccharide][0], color = sugar_dict[monosaccharide][1], x_pos = x_pos, y_pos = y_pos, modification = modification, conf = conf, furanose = sugar_dict[monosaccharide][2], dim = dim, deg = deg, text_anchor = text_anchor)
   else:
     p = draw.Path(stroke_width=0.04*dim, stroke = 'black')
     p.M(0-x_pos*dim-1/2*dim, 0+y_pos*dim+1/2*dim)
@@ -1420,6 +1424,7 @@ def multireplace(remove_set, replacement, string):
   return string
 
 def get_coordinates_and_labels(draw_this, show_linkage = True):
+  
   if bool(re.search('^\[', draw_this)) == False:
     draw_this = multiple_branch_branches(draw_this)
     draw_this = multiple_branches(draw_this)
@@ -2020,7 +2025,7 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
   # handle floaty bits if present
   floaty_bits = []
   for openpos, closepos, level in matches(draw_this, opendelim='{', closedelim='}'):
-      floaty_bits.append(draw_this[openpos:closepos]+'Re')
+      floaty_bits.append(draw_this[openpos:closepos]+'blank')
       draw_this = draw_this[:openpos-1]+ len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')
 
@@ -2128,7 +2133,13 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
   if floaty_bits != []:
     fb_count = {i:floaty_bits.count(i) for i in floaty_bits}
     floaty_bits = list(set(floaty_bits))
-    floaty_data = [get_coordinates_and_labels(floaty_bits[k], show_linkage = show_linkage) for k in range(len(floaty_bits))]
+    # floaty_data = [get_coordinates_and_labels(floaty_bits[k], show_linkage = show_linkage) for k in range(len(floaty_bits))]
+    floaty_data = []
+    for k in range(len(floaty_bits)):
+      try:
+        floaty_data.append(get_coordinates_and_labels(floaty_bits[k], show_linkage = show_linkage))
+      except:
+        floaty_data.append(get_coordinates_and_labels('blank(-)blank', show_linkage = show_linkage))
     y_span = max_y-min_y
     n_floats = len(floaty_bits)
     floaty_span = n_floats * 2 - 2
@@ -2138,14 +2149,17 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
       floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf = floaty_data[j][0]
       floaty_sugar_x_pos = [floaty_sugar_x_pos[k] + max_x + 1 for k in floaty_sugar_x_pos]
       floaty_sugar_y_pos = [floaty_sugar_y_pos[k] + 2 * j - y_diff for k in floaty_sugar_y_pos]
-      [add_bond(floaty_sugar_x_pos[k+1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k+1], floaty_sugar_y_pos[k], floaty_bond[k], dim = dim, compact = compact) for k in range(len(floaty_sugar)-1)]
-      [add_sugar(floaty_sugar[k], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf=floaty_conf, compact = compact, dim = dim) for k in range(len(floaty_sugar))]
+      if floaty_sugar != ['blank', 'blank']:
+        [add_bond(floaty_sugar_x_pos[k+1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k+1], floaty_sugar_y_pos[k], floaty_bond[k], dim = dim, compact = compact) for k in range(len(floaty_sugar)-1)]
+        [add_sugar(floaty_sugar[k], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf=floaty_conf, compact = compact, dim = dim) for k in range(len(floaty_sugar))]
+      else:
+        add_sugar('text', min(floaty_sugar_x_pos), floaty_sugar_y_pos[-1], modification = floaty_bits[j].replace('blank',''), compact=compact, dim=dim, text_anchor='end')
 
       if fb_count[floaty_bits[j]] > 1:
         if compact == False:
-          add_sugar('Re', max(floaty_sugar_x_pos)+0.5, floaty_sugar_y_pos[-1]-0.75, modification = str(fb_count[floaty_bits[j]]) + 'x', compact=compact, dim=dim )
+          add_sugar('blank', max(floaty_sugar_x_pos)+0.5, floaty_sugar_y_pos[-1]-0.75, modification = str(fb_count[floaty_bits[j]]) + 'x', compact=compact, dim=dim )
         else:
-          add_sugar('Re', max(floaty_sugar_x_pos)+0.75, floaty_sugar_y_pos[-1]-1.2, modification = str(fb_count[floaty_bits[j]]) + 'x', compact=compact, dim=dim )
+          add_sugar('blank', max(floaty_sugar_x_pos)+0.75, floaty_sugar_y_pos[-1]-1.2, modification = str(fb_count[floaty_bits[j]]) + 'x', compact=compact, dim=dim )
 
     if compact == False:
       draw_bracket(max_x*2+1, (min_y, max_y), direction = 'right')
