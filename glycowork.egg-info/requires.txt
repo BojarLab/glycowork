@@ -1,6 +1,6 @@
 scikit-learn
 regex
-networkx
+networkx>=3.0.0
 statsmodels
 scipy
 torch

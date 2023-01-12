@@ -21,7 +21,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.7',
-    install_requires=["scikit-learn", "regex", "networkx",
+    install_requires=["scikit-learn", "regex", "networkx>=3.0.0",
                       "statsmodels", "scipy", "torch",
                       "seaborn", "xgboost", "mpld3",
                       "requests", "pandas", "glyles",

@@ -138,7 +138,7 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   node_dict, adj_matrix = glycan_to_graph(glycan)
   #convert adjacency matrix to networkx graph
   if len(node_dict) > 1:
-    g1 = nx.from_numpy_matrix(adj_matrix)
+    g1 = nx.from_numpy_array(adj_matrix)
     #needed for compatibility with monosaccharide-only graphs (size = 1)
     for n1, n2, d in g1.edges(data = True):
       del d['weight']
@@ -399,7 +399,7 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
       glycan = label
       nbr_node_types = len(set(list(g.nodes())))
     #adjacency matrix:
-    A = nx.to_numpy_matrix(g)
+    A = nx.to_numpy_array(g)
     N = A.shape[0]
     if nx.is_directed(g):
       directed = True
