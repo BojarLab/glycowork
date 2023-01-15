@@ -25,9 +25,7 @@ def min_process_glycans(glycan_list):
   | :-
   | Returns list of glycoletter lists
   """
-  glycan_motifs = [small_motif_find(k) for k in glycan_list]
-  glycan_motifs = [i.split('*') for i in glycan_motifs]
-  return glycan_motifs
+  return [small_motif_find(k).split('*') for k in glycan_list]
 
 def get_lib(glycan_list):
   """returns sorted list of unique glycoletters in list of glycans\n
@@ -38,13 +36,10 @@ def get_lib(glycan_list):
   | :-
   | Returns sorted list of unique glycoletters (strings) in glycan_list
   """
-  #convert to glycoletters
-  proc = min_process_glycans(glycan_list)
-  #flatten nested lists
-  lib = unwrap(proc)
+  #convert to glycoletters & flatten
+  lib = unwrap(min_process_glycans(glycan_list))
   #get unique vocab
-  lib = list(sorted(list(set(lib))))
-  return lib
+  return sorted(set(lib))
 
 def expand_lib(libr, glycan_list):
   """updates libr with newly introduced glycoletters\n
@@ -57,7 +52,7 @@ def expand_lib(libr, glycan_list):
   | Returns new lib
   """
   new_lib = get_lib(glycan_list)
-  return list(sorted(list(set(libr + new_lib))))
+  return sorted(set(libr + new_lib))
 
 def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
   """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards\n
@@ -97,8 +92,8 @@ def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species
   | :-
   | Returns pandas dataframe with labels as rows and glycan occurrences as columns
   """
-  glycans = list(sorted(list(set(df[glycan_col_name].values.tolist()))))
-  species = list(sorted(list(set(df[label_col_name].values.tolist()))))
+  glycans = sorted(set(df[glycan_col_name].values.tolist()))
+  species = sorted(set(df[label_col_name].values.tolist()))
   #get a count matrix for each rank - glycan combination
   mat_dic = {k:[df[df[label_col_name] == j][glycan_col_name].values.tolist().count(k) for j in species] for k in glycans}
   mat = pd.DataFrame(mat_dic)
@@ -120,7 +115,7 @@ def choose_correct_isoform(glycans, reverse = False):
   prefix_len = [len(k) for k in prefix]
   #choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(set(prefix_len)) == 1:
-    branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'z' and k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in prefix]
+    branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in prefix]
     correct_isoform = glycans[np.argmin(branch_endings)]
   else:
     correct_isoform = glycans[np.argmax(prefix_len)]
@@ -140,7 +135,7 @@ def enforce_class(glycan, glycan_class):
   | Returns True if glycan is in glycan class and False if not
   """
   if glycan_class == 'O':
-    pool = ['GalNAc', 'GalNAcOS', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
+    pool =  ['GalNAc', 'GalNAcOS', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
   elif glycan_class == 'N':
     pool = ['GlcNAc']
   elif glycan_class == 'free' or glycan_class == 'lipid':
