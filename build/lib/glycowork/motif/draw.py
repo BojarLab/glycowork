@@ -2019,6 +2019,9 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50):
 
 def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output = None):
 
+  if draw_this[-1] == ')':
+    draw_this = draw_this + 'blank'
+
   if compact == True:
     show_linkage = False
 
