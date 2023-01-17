@@ -731,22 +731,48 @@ def deorphanize_edge_labels(network, graph_dic, libr = None):
       network.edges[k]['diffs'] = diff
   return network
 
+def infer_roots(glycans):
+  """infers the correct permitted roots, given the glycan class\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed format\n
+  | Returns:
+  | :-
+  | Returns a set of permitted roots
+  """
+  #free
+  if any(k.endswith('-ol') for k in glycans):
+    return {'Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol'}
+  #O-linked
+  elif any(k.endswith('GalNAc') for k in glycans):
+    return {'GalNAc', 'Fuc', 'Man'}
+  #N-linked
+  elif any(k.endswith('GlcNAc') for k in glycans):
+    return {'Man(b1-4)GlcNAc(b1-4)GlcNAc'}
+  #glycolipid
+  elif any(k.endswith('1Cer') for k in glycans):
+    return {'Glc1Cer', 'Gal1Cer'}
+  else:
+    print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or Glc")
+
 def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
-                 permitted_roots = permitted_roots, edge_type = 'monolink'):
+                      edge_type = 'monolink', permitted_roots = None):
   """construct a glycan biosynthetic network\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | allowed_ptms (set): list of PTMs to consider
-  | permitted_roots (set): which nodes should be considered as roots; default:{"Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"}
-  | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide'), monosaccharide(linkage) ('monolink'), or enzyme catalyzing the reaction ('enzyme'); default:'monolink'\n
+  | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide'), monosaccharide(linkage) ('monolink'), or enzyme catalyzing the reaction ('enzyme'); default:'monolink'
+  | permitted_roots (set): which nodes should be considered as roots; default:will be inferred\n
   | Returns:
   | :-
   | Returns a networkx object of the network
   """
   if libr is None:
     libr = lib
+  if permitted_roots is None:
+    permitted_roots = infer_roots(glycans)
   #generating graph from adjacency of observed glycans
   min_size = min([k.count('(') for k in permitted_roots]) + 1
   add_to_virtuals = []
@@ -773,7 +799,7 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
     except:
       pass
   network.add_edges_from(unwrap(new_edges), edge_labels = unwrap(new_edge_labels))
-  virtual_nodes = virtual_nodes + add_to_virtuals + list(set(unwrap(new_nodes)))
+  virtual_nodes += add_to_virtuals + list(set(unwrap(new_nodes)))
   for node in virtual_nodes:
     graph_dic[node] = glycan_to_nxGraph(node, libr = libr)
   for ed in network.edges():

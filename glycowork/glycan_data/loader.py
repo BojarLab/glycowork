@@ -101,18 +101,15 @@ def build_custom_df(df, kind = 'df_species'):
     cols = ['glycan', 'disease_association', 'disease_sample', 'disease_direction', 'disease_species', 'disease_id', 'disease_ref']
   else:
     print("Only df_species, df_tissue, and df_disease are currently possible as input.")
-  df = df[df[cols[1]].str.len() > 2].reset_index(drop = True)
-  df = df.loc[:,cols]
+  df = df[df[cols[1]].str.len() > 2].reset_index(drop = True).loc[:,cols]
   df.columns = ['target'] + df.columns.values.tolist()[1:]
   df.index = df.target
   df.drop(['target'], axis = 1, inplace = True)
   df = df.applymap(lambda x: ast.literal_eval(x))
   try:
-    df = df.explode(cols[1:])
+    df = df.explode(cols[1:]).reset_index()
   except:
     raise ImportError("Seems like you're using pandas<1.3.0; please upgrade to allow for multi-column explode")
-  df.reset_index(inplace = True)
-  df = df.sort_values([cols[1], 'target'], ascending = [True, True]).reset_index(drop = True)
-  return df
+  return df.sort_values([cols[1], 'target'], ascending = [True, True]).reset_index(drop = True)
 
 df_species = build_custom_df(df_glycan, kind = 'df_species')

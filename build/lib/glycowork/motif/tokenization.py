@@ -787,7 +787,7 @@ def canonicalize_iupac(glycan):
     isos = find_isomorphs(glycan)
     glycan = choose_correct_isoform(isos)
   if '+' in glycan:
-    print("Warning: There seems to be a floating substituent in the IUPAC string (curly brackets); we can't handle that in downstream functions.")
+    glycan = '{'+glycan.replace('+', '}')
   return glycan
 
 def check_nomenclature(glycan):
