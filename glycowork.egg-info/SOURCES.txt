@@ -51,15 +51,3 @@ glycowork/network/biosynthesis.py
 glycowork/network/evolution.py
 glycowork/network/milk_networks_exhaustive.pkl
 glycowork/network/monolink_to_enzyme.csv
-glycowork/tests/__init__.py
-glycowork/tests/test_alignment.py
-glycowork/tests/test_analysis.py
-glycowork/tests/test_annotate.py
-glycowork/tests/test_biosynthesis.py
-glycowork/tests/test_dataentry.py
-glycowork/tests/test_graph.py
-glycowork/tests/test_hierarchyfilter.py
-glycowork/tests/test_loader.py
-glycowork/tests/test_processing.py
-glycowork/tests/test_query.py
-glycowork/tests/test_tokenization.py
