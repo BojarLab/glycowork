@@ -34,10 +34,8 @@ def constrain_prot(proteins, libr = None):
   """
   if libr is None:
     libr = chars
-  #get list of unique characters
-  mega_prot = list(set(list(''.join(proteins))))
   #check whether any character is not in libr and replace it with a 'z' placeholder character
-  forbidden = [k for k in mega_prot if k not in libr]
+  forbidden = [k for k in set(list(''.join(proteins))) if k not in libr]
   for k in forbidden:
     proteins = [j.replace(k,'z') for j in proteins]
   return proteins
@@ -77,8 +75,7 @@ def character_to_label(character, libr = None):
   """
   if libr is None:
     libr = lib
-  character_label = libr.index(character)
-  return character_label
+  return libr.index(character)
 
 def string_to_labels(character_string, libr = None):
   """tokenizes word by indexing characters in passed library\n
@@ -265,7 +262,7 @@ def stemify_dataset(df, stem_lib = None, libr = None,
   #get pool of monosaccharides, decide which one to stemify based on rarity
   pool = unwrap(min_process_glycans(df[glycan_col_name].values.tolist()))
   pool_count = Counter(pool)
-  for k in list(set(pool)):
+  for k in set(pool):
     if pool_count[k] > rarity_filter:
       stem_lib[k] = k
   #stemify all offending monosaccharides
@@ -431,7 +428,7 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   min_mono = round(mz_value/300)
   mask = df_use['glycan_type'].values == glycan_class
   df_sub = df_use[mask]
-  comp_pool = df_sub.dropna(subset=['Composition']).Composition.tolist()
+  comp_pool = df_sub.dropna(subset = ['Composition']).Composition.tolist()
   if isinstance(comp_pool[0], str):
     comp_pool = list(set(comp_pool))
     comp_pool = [ast.literal_eval(k) for k in comp_pool]
@@ -500,8 +497,7 @@ def match_composition_relaxed(composition, group, level, df = None,
     idx = [k for k in range(len(df)) if len_distr[k] == comp_count]
     output_list = df.iloc[idx,:].target.values.tolist()
     output_compositions = [glycan_to_composition(k, libr = libr) for k in output_list]
-    out = [output_list[k] for k in range(len(output_compositions)) if composition == output_compositions[k]]
-    return out
+    return [output_list[k] for k in range(len(output_compositions)) if composition == output_compositions[k]]
 
 
 def condense_composition_matching(matched_composition, libr = None):
@@ -526,7 +522,7 @@ def condense_composition_matching(matched_composition, libr = None):
   #cluster glycans by pairwise equality (given the wildcards)
   clustering = DBSCAN(eps = 1, min_samples = 1).fit(match_matrix)
   cluster_labels = clustering.labels_
-  num_clusters = len(list(set(cluster_labels)))
+  num_clusters = len(set(cluster_labels))
   sum_glycans = []
   #for each cluster, get the most well-defined glycan and return it
   for k in range(num_clusters):
@@ -646,8 +642,7 @@ def mz_to_structures(mz_list, reducing_end, group = 'Homo_sapiens', level = 'Spe
     else:
       if verbose:
         print("m/z value " + str(mz_list[m]) + " with multiple matched compositions that each would have matching structures is filtered out.")
-  out_structures = pd.concat(out_structures, axis = 0)
-  return out_structures
+  return pd.concat(out_structures, axis = 0)
 
 def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
                          form = 'wide'):
@@ -678,7 +673,7 @@ def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
   motif_df = pd.DataFrame(out_tuples)
   motif_df = motif_df.groupby(motif_df.columns.values.tolist()[0]).mean().reset_index()
   if form == 'wide':
-    motif_df.columns = ['glycan'] + ['sample'+str(k) for k in range(1, motif_df.shape[1])]
+    motif_df.columns = ['glycan'] + ['sample' + str(k) for k in range(1, motif_df.shape[1])]
     return motif_df
   elif form == 'long':
     motif_df.columns = ['glycan'] + ['rel_intensity' for k in range(1, motif_df.shape[1])]
@@ -883,8 +878,8 @@ def glycan_to_composition(glycan, libr = None, stem_libr = None):
     composition['P'] = glycan.count('P')
   del composition['?1-?']
   composition = dict(composition)
-  if any([k not in ['Hex','dHex','HexNAc','HexN','HexA','Neu5Ac','Neu5Gc','Kdn',
-                    'Pen','Me','S','P'] for k in composition.keys()]):
+  if any([k not in {'Hex','dHex','HexNAc','HexN','HexA','Neu5Ac','Neu5Gc','Kdn',
+                    'Pen','Me','S','P'} for k in composition.keys()]):
     return {}
   else:
     return composition

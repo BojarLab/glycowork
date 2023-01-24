@@ -27,7 +27,7 @@ def cohen_d(x,y):
   nx = len(x)
   ny = len(y)
   dof = nx + ny - 2
-  return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof=1) ** 2 + (ny-1)*np.std(y, ddof=1) ** 2) / dof)
+  return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      thresh = 1.645, sorting = True,

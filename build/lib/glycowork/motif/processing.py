@@ -51,8 +51,7 @@ def expand_lib(libr, glycan_list):
   | :-
   | Returns new lib
   """
-  new_lib = get_lib(glycan_list)
-  return sorted(set(libr + new_lib))
+  return sorted(set(libr + get_lib(glycan_list)))
 
 def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
   """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards\n
@@ -78,8 +77,7 @@ def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
           added_rows.append([temp.replace(j, wildcard_name)] + df.iloc[k, 1:].values.tolist())
   added_rows = pd.DataFrame(added_rows, columns = df.columns.values.tolist())
   #append wildcard-modified glycans and their labels to original dataframe
-  df_out = pd.concat([df, added_rows], axis = 0, ignore_index = True)
-  return df_out
+  return pd.concat([df, added_rows], axis = 0, ignore_index = True)
 
 def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species'):
   """converts a dataframe such as df_species to absence/presence matrix\n

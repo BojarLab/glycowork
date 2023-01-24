@@ -139,8 +139,7 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   #check whether termini are specified
   if extra == 'termini':
     if len(termini_list) < 1:
-      termini_list = motifs.termini_spec.values.tolist()
-      termini_list = [eval(k) for k in termini_list]
+      termini_list = [eval(k) for k in motifs.termini_spec.values.tolist()]
   if libr is None:
     libr = lib
   #count the number of times each motif occurs in a glycan
@@ -239,8 +238,7 @@ def annotate_dataset(glycans, motifs = None,
   #checks whether termini information is provided
   if extra == 'termini':
     if len(termini_list) < 1:
-      termini_list = motifs.termini_spec.values.tolist()
-      termini_list = [eval(k) for k in termini_list]
+      termini_list = [eval(k) for k in motifs.termini_spec.values.tolist()]
   shopping_cart = []
   if 'known' in feature_set:
     #counts literature-annotated motifs in each glycan

@@ -20,8 +20,7 @@ def character_to_label(character, libr = None):
   """
   if libr is None:
     libr = lib
-  character_label = libr.index(character)
-  return character_label
+  return libr.index(character)
 
 def string_to_labels(character_string, libr = None):
   """tokenizes word by indexing characters in passed library\n
@@ -333,17 +332,17 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   if len(g1.nodes) >= len(g2.nodes): 
     if extra == 'ignore':
       if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
       else:
         if count:
           return 0
         else:
           return False
     elif extra == 'wildcards':
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
     elif extra == 'termini':
       if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
       else:
         if count:
           return 0
@@ -358,14 +357,14 @@ def subgraph_isomorphism(glycan, motif, libr = None,
         g1.remove_nodes_from(graph_pair.mapping.keys())
         if extra == 'ignore':
           if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
           else:
             return counts
         elif extra == 'wildcards':
-          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
         elif extra == 'termini':
           if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
+            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
           else:
             return counts
       return counts
@@ -552,16 +551,13 @@ def graph_to_string(graph, fallback = False, libr = None):
   if libr is None:
     libr = lib
   if fallback:
-    len_dist = min_process_glycans(df_glycan.glycan.values.tolist())
-    len_dist = [len(k) for k in len_dist]
+    len_dist = [len(k) for k in min_process_glycans(df_glycan.glycan.values.tolist())]
     df_glycan2 = [k for k in range(len(df_glycan)) if len_dist[k] == len(graph.nodes())]
     df_glycan2 = df_glycan.iloc[df_glycan2, :].reset_index(drop = True)
     idx = np.where([compare_glycans(graph, glycan_to_nxGraph(k, libr = libr), libr = libr) for k in df_glycan2.glycan.values.tolist()])[0][0]
-    glycan = df_glycan2.glycan.values.tolist()[idx]
-    return glycan
+    return df_glycan2.glycan.values.tolist()[idx]
   node_labels = nx.get_node_attributes(graph, 'string_labels')
-  edges = graph.edges()
-  branch_points = [e[1] for e in edges if abs(e[0]-e[1]) > 1]
+  branch_points = [e[1] for e in graph.edges() if abs(e[0]-e[1]) > 1]
 
   #note if a monosaccharide is a bona fide branch point
   skeleton = [']'+str(k) if k in branch_points else str(k) for k in node_labels.keys()]
@@ -598,8 +594,7 @@ def graph_to_string(graph, fallback = False, libr = None):
       glycan = re.sub('([^0-9a-zA-Z\-,])%s([^0-9a-zA-Z\-,])' % str(k), r'\1%s\2' % j, glycan)
   glycan = node_labels[0]+glycan[1:]
   glycan = max(glycan[:glycan.rfind(')')+1], glycan[:glycan.rfind(']')+1]) + node_labels[len(node_labels)-1]
-  glycan = glycan.replace('_', '')
-  return glycan
+  return glycan.replace('_', '')
 
 def try_string_conversion(graph, libr = None):
   """check whether glycan graph describes a valid glycan\n
@@ -678,12 +673,14 @@ def get_possible_topologies(glycan, libr = None, exhaustive = False):
       if parts[-1].degree[k] == 1 and k != max(list(parts[-1].nodes())):
         ggraph2 = copy.deepcopy(ggraph)
         ggraph2.add_edge(max(list(parts[0].nodes())), k)
-        ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
+        ggraph2 = nx.relabel_nodes(ggraph2, {k:i for i,k in enumerate(ggraph2.nodes())})
+        #ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
         topologies.append(ggraph2)
     else:
       ggraph2 = copy.deepcopy(ggraph)
       ggraph2.add_edge(max(list(parts[0].nodes())), k)
-      ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
+      ggraph2 = nx.relabel_nodes(ggraph2, {k:i for i,k in enumerate(ggraph2.nodes())})
+      #ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
       topologies.append(ggraph2)
   return topologies
 
