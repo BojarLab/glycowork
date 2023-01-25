@@ -750,7 +750,7 @@ class CFGtoIUPACParser:
     glycan = left_side + monosaccharide + right_side
     return glycan
 
-  def _find_and_fix_modifications(self, glycan: str):
+  def _find_and_fix_modifications(self, glycan: str) -> str:
     """
     Finds modifications like [6S] or [6S,4P] etc., converts them to the format expected by IUPAC
     """
@@ -837,7 +837,7 @@ class CFGtoIUPACParser:
     glycan = self._find_and_fix_modifications(glycan)
     return glycan
 
-def cfg_to_iupac(glycan: str):
+def cfg_to_iupac(glycan: str) -> str:
   """
   Wrapper function to convert glycan from cfg format to IUPAC format
   Arguments:
