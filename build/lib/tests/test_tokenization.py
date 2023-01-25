@@ -1,5 +1,3 @@
-from glycowork.motif.annotate import motif_matrix
-
 from glycowork.motif.tokenization import *
 from glycowork.motif.graph import glycan_to_nxGraph
 from glycowork.motif.tokenization import cfg_to_iupac
