@@ -1,4 +1,3 @@
-import pytest
 from glycowork.motif.annotate import motif_matrix
 
 from glycowork.motif.tokenization import *
