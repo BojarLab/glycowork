@@ -11,7 +11,9 @@ test_df = pd.DataFrame({'glycan':glycans, 'eukaryotic':label})
 print("Glyco-Motif Test")
 print(motif_matrix(test_df, 'glycan', 'eukaryotic'))
 
-glycans_test = [
+# This list contains a tuples of glycans - the first glycan in the tuple is the glycan in CFG format, the second glycan
+# in the tuple is the glycan in IUPAC condensed format
+CFG_IUPAC_GLYCANS = [
     (
         "Xyla1-6Glcb1-4(Xyla1-6)Glcb1-4[Xyla1-6]Glcb1-4Glc-ol",
         "Xyl(a1-6)Glc(b1-4)[Xyl(a1-6)]Glc(b1-4)[Xyl(a1-6)]Glc(b1-4)Glc-ol",
@@ -45,7 +47,7 @@ glycans_test = [
 
 
 def test_cfg_to_iupac():
-    for input_glycan, expected_glycan in glycans_test:
+    for input_glycan, expected_glycan in CFG_IUPAC_GLYCANS:
         ouput_glycan = cfg_to_iupac(glycan=input_glycan)
         # Test to make sure it can be parsed by glycowork
         glycan_to_nxGraph(glycan=ouput_glycan)
