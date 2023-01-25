@@ -728,6 +728,125 @@ def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkag
     out.append(k)
   return out
 
+class CFGtoIUPACParser:
+  """Class to convert glycans in format typically present on Consortium for Functional Glycomics (CFG) glycan arrays to
+  IUPAC format which is parseable by glycowork. Can fix glycans from older versions of CFG arrays as well as the newer
+  versions."""
+
+  @staticmethod
+  def _fix_modification(glycan: str, match: re.Match) -> str:
+    """
+    Fix modifications like [6S]GlcNAc to the format expected for IUPAC e.g. GlcNAc6S
+    """
+    # Now find the next bond
+    right_side = glycan[match.end():]
+    left_side = glycan[: match.start()]
+    monosaccharide = re.split(r"\([ab][1-9]-[1-9]\)", right_side)[0]
+    right_side = right_side.lstrip(monosaccharide)
+    new_mod = match.group().strip("[").strip("]")
+    new_mod = new_mod.split(",")
+    new_mod = "".join(new_mod)
+    monosaccharide = monosaccharide + new_mod
+    glycan = left_side + monosaccharide + right_side
+    return glycan
+
+  def _find_and_fix_modifications(self, glycan: str):
+    """
+    Finds modifications like [6S] or [6S,4P] etc., converts them to the format expected by IUPAC
+    """
+    for _ in range(100):
+      # Pattern to match anything in the format like [6S] or [6S,4P] etc.
+      match = re.search(r"\[(\d?[SP],?)+]", glycan)
+      if match:
+        glycan = self._fix_modification(glycan=glycan, match=match)
+      else:
+        return glycan
+
+  @staticmethod
+  def _fix_cfg_errors(glycan: str) -> str:
+    """
+    Fixes errors that are sometimes found in cfg glycan strings (mostly from old array versions).
+    :param glycan: input glycan string
+    :return: cleaned glycan string
+    """
+    glycan = glycan.replace("b-GlcN(Gc)", 'GlcN(Gc)b')
+    glycan = glycan.replace("KDN", "Kdn")
+    glycan = glycan.replace("GlcNAcb-Gly", "GlcNAcGly")
+    glycan = glycan.replace("NeuAc", "Neu5Ac")
+    glycan = glycan.replace("GlcNac", "GlcNAc")
+    glycan = glycan.replace("(6-O-Su)", "(6S)")
+    # Replace the old way of denoting sulfation and phosphorylation with the new way
+    glycan = glycan.replace("OSO3", "S")
+    glycan = glycan.replace("6-H2PO3", "(6P)")
+    glycan = glycan.replace("[", "(")
+    glycan = glycan.replace("]", ")")
+    # Remove any leading bonds
+    glycan = re.sub(f"^[ab]-[DL]?-?", "", glycan)
+    return glycan
+
+  @staticmethod
+  def _add_parentheses_to_bond(match: re.Match) -> str:
+    """
+    Adds parentheses around a bound (e.g converts b1-2 to (b1-2))
+    """
+    return f"({match.group()})"
+
+  @staticmethod
+  def _clean_string(glycan: str) -> str:
+    """
+    Cleans the glycan string by replacing special characters and empty strings.
+    :param glycan: glycan name
+    :return: cleaned glycan string
+    """
+    # remove all white space
+    glycan = "".join(glycan.split())
+    # replace alpha with a beta with b, etc.
+    return glycan.replace("–", "-").replace("α", "a").replace("β", "b").replace(" ", "")
+
+  def _convert_cfg_to_iupac(self, glycan: str) -> str:
+    # Convert some IUPAC specific differences in naming monosaccharides
+    glycan = glycan.replace("GlcN(Gc)", "GlcNGc")
+    glycan = glycan.replace("9NAcNeu5Ac", "Neu5Ac9NAc")
+    glycan = glycan.replace("Neu5Ac(9Ac)", "Neu5Ac9Ac")
+    # To make sure we don't accidentally strip the 'a' off the end of a Rha, mistakenly thinking it is part of a
+    # bond
+    glycan = glycan.replace("Rha", "!+~")
+    # Then convert () to []
+    glycan = glycan.replace("(", "[").replace(")", "]")
+    # Add parentheses around the bonds
+    glycan = re.sub(r"[ab][1-9]-[1-9]", self._add_parentheses_to_bond, glycan)
+    # Remove any connections like a-Sp8
+    glycan = re.sub(r"[ab]?\d?-?(Sp\d*)?$", "", glycan)
+    # Remove any b-Asn connections
+    glycan = re.sub(r"[ab]?-Asn$", "", glycan)
+    # Now replace what we removed - wait to do this till the very end so we don't accidentally replace Rha-Sp with
+    # Rh
+    glycan = glycan.replace("!+~", "Rha")
+    return glycan
+
+  def parse(self, glycan: str) -> str:
+    """This is the main function that should be called to do the conversion after instantiating the object. The function
+    will strip and leading bonds (e.g. a-L-...) and linkers (...b-Sp6)
+    Arguments:
+      glycan (string): glycan in CFG format (e.g. (4P)GlcNAcb1-4Manb-Sp)
+      Returns: glycan in IUPAC condensed format
+    """
+    glycan = self._clean_string(glycan)
+    glycan = self._fix_cfg_errors(glycan)
+    glycan = self._convert_cfg_to_iupac(glycan)
+    glycan = self._find_and_fix_modifications(glycan)
+    return glycan
+
+def cfg_to_iupac(glycan: str):
+  """
+  Wrapper function to convert glycan from cfg format to IUPAC format
+  Arguments:
+    glycan (string): glycan sequence in CFG format.
+    Returns: glycan converted to IUPAC condensed format
+  """
+  parser = CFGtoIUPACParser()
+  return parser.parse(glycan)
+
 def canonicalize_iupac(glycan):
   """converts a glycan from any IUPAC flavor into the exact IUPAC-condensed version that is optimized for glycowork\n
   | Arguments:
