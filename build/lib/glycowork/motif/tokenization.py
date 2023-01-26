@@ -865,7 +865,7 @@ def canonicalize_iupac(glycan):
   #canonicalize linkage uncertainty
   if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
     glycan = re.sub(r'([a-z])\-([A-Z])', r'\1\?1-\?\2', glycan)
-  if bool(re.search(r'[a-z][\(\)]', glycan)):
+  if bool(re.search(r'[a-b][\(\)]', glycan)):
     glycan = re.sub(r'([a-z])([\(\)])', r'\1\?1-\?\2', glycan)
   if bool(re.search(r'[0-9]\-[\(\)]', glycan)):
     glycan = re.sub(r'([0-9])\-([\(\)])', r'\1-\?\2', glycan)
