@@ -82,6 +82,21 @@ def stringify_dict(dicty):
   dicty = ''.join(str(key) + str(value) for key, value in dicty.items())
   return dicty
 
+def multireplace(string, remove_dic):
+  """
+  Replaces all occurences of items in a set with a given string\n
+  | Arguments:
+  | :-
+  | string (str): string to perform replacements on
+  | remove_dic (set): dict of form to_replace:replace_with\n
+  | Returns:
+  | :-
+  | (str) modified string
+  """
+  for k,v in remove_dic.items():
+    string = string.replace(k, v)
+  return string
+
 def build_custom_df(df, kind = 'df_species'):
   """creates custom df from df_glycan\n
   | Arguments:

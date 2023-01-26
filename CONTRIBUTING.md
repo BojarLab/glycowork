@@ -21,6 +21,10 @@ nbdev_install_hooks
 
 ## PR submission guidelines
 
+* Before submitting a PR, run this command locally, that will run all tests and return any errors that may have occurred:
+```
+nbdev_prepare
+```
 * Keep each PR focused. While it's more convenient, do not combine several unrelated fixes together. Create as many branches as needing to keep each PR focused.
 * Do not mix style changes/fixes with "functional" changes. It's very difficult to review such PRs and it most likely gets rejected.
 * Do not add/remove vertical whitespace. Preserve the original style of the file you edit as much as you can.

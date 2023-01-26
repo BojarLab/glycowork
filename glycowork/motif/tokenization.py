@@ -10,7 +10,7 @@ from itertools import combinations_with_replacement, product
 from collections import Counter
 from sklearn.cluster import DBSCAN
 
-from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, df_species, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, Sia, linkages
+from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, multireplace, df_species, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, Sia, linkages
 from glycowork.motif.processing import small_motif_find, min_process_glycans, choose_correct_isoform
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 from glycowork.motif.annotate import annotate_dataset, find_isomorphs
@@ -771,7 +771,7 @@ class CFGtoIUPACParser:
     """
     glycan = glycan.replace("b-GlcN(Gc)", 'GlcN(Gc)b')
     glycan = glycan.replace("KDN", "Kdn")
-    glycan = glycan.replace("GlcNAcb-Gly", "GlcNAcGly")
+    glycan = glycan.replace("GlcNAcb-Gly", "GlcNAc")
     glycan = glycan.replace("NeuAc", "Neu5Ac")
     glycan = glycan.replace("GlcNac", "GlcNAc")
     glycan = glycan.replace("(6-O-Su)", "(6S)")
@@ -806,7 +806,7 @@ class CFGtoIUPACParser:
   def _convert_cfg_to_iupac(self, glycan: str) -> str:
     # Convert some IUPAC specific differences in naming monosaccharides
     glycan = glycan.replace("GlcN(Gc)", "GlcNGc")
-    glycan = glycan.replace("9NAcNeu5Ac", "Neu5Ac9NAc")
+    glycan = glycan.replace("9NAcNeu5Ac", "Neu5Ac9Ac")
     glycan = glycan.replace("Neu5Ac(9Ac)", "Neu5Ac9Ac")
     # To make sure we don't accidentally strip the 'a' off the end of a Rha, mistakenly thinking it is part of a
     # bond
@@ -838,11 +838,13 @@ class CFGtoIUPACParser:
     return glycan
 
 def cfg_to_iupac(glycan: str) -> str:
-  """
-  Wrapper function to convert glycan from cfg format to IUPAC format
-  Arguments:
-    glycan (string): glycan sequence in CFG format.
-    Returns: glycan converted to IUPAC condensed format
+  """Wrapper function to convert glycan from cfg format to IUPAC format\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan sequence in CFG format\n
+  | Returns:
+  | :-
+  | Returns glycan converted to IUPAC condensed format
   """
   parser = CFGtoIUPACParser()
   return parser.parse(glycan)
@@ -857,14 +859,9 @@ def canonicalize_iupac(glycan):
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
   #canonicalize usage of monosaccharides and linkages
-  if 'NeuAc' in glycan:
-    glycan = glycan.replace('NeuAc', 'Neu5Ac')
-  if 'NeuGc' in glycan:
-    glycan = glycan.replace('NeuGc', 'Neu5Gc')
-  if "\u03B1" in glycan:
-    glycan = glycan.replace("\u03B1", 'a')
-  if "\u03B2" in glycan:
-    glycan = glycan.replace("\u03B2", 'b')
+  replace_dic = {'NeuAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'GlcN(Gc)':'GlcNGc', 'Neu5Ac(9Ac)':'Neu5Ac9Ac',
+                 'KDN':'Kdn', 'Nac':'NAc', 'OSO3':'S', '–':'-', ' ':''}
+  glycan = multireplace(glycan, replace_dic)
   #canonicalize linkage uncertainty
   if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
     glycan = re.sub(r'([a-z])\-([A-Z])', r'\1\?1-\?\2', glycan)
