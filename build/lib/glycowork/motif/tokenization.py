@@ -644,23 +644,19 @@ def mz_to_structures(mz_list, reducing_end, group = 'Homo_sapiens', level = 'Spe
         print("m/z value " + str(mz_list[m]) + " with multiple matched compositions that each would have matching structures is filtered out.")
   return pd.concat(out_structures, axis = 0)
 
-def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
-                         form = 'wide'):
+def structures_to_motifs(df, feature_set = ['exhaustive'], form = 'wide'):
   """function to convert relative intensities of glycan structures to those of glycan motifs\n
   | Arguments:
   | :-
   | df (dataframe): function expects glycans in the first column and rel. intensities of each sample in a new column
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
   | form (string): whether to return 'wide' or 'long' dataframe; default:'wide'\n
   | Returns:
   | :-
   | Returns dataframe of motifs, relative intensities, and sample IDs
   """
-  if libr is None:
-    libr = lib
   #find the motifs in the glycans
-  annot = annotate_dataset(df.iloc[:,0].values.tolist(), libr = libr,
+  annot = annotate_dataset(df.iloc[:,0].values.tolist(),
                            feature_set = feature_set, condense = True)
   annot2 = pd.concat([annot.reset_index(drop = True), df.iloc[:,1:]], axis = 1)
   out_tuples = []
@@ -673,7 +669,7 @@ def structures_to_motifs(df, libr = None, feature_set = ['exhaustive'],
   motif_df = pd.DataFrame(out_tuples)
   motif_df = motif_df.groupby(motif_df.columns.values.tolist()[0]).mean().reset_index()
   if form == 'wide':
-    motif_df.columns = ['glycan'] + ['sample' + str(k) for k in range(1, motif_df.shape[1])]
+    motif_df.columns = ['glycan'] + df.columns.tolist()[1:]#['sample' + str(k) for k in range(1, motif_df.shape[1])]
     return motif_df
   elif form == 'long':
     motif_df.columns = ['glycan'] + ['rel_intensity' for k in range(1, motif_df.shape[1])]
@@ -908,7 +904,7 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'([0-9]?[SP])([^\(^\[]+)', r'\2\1', glycan)
   if bool(re.search(r'\-ol[0-9]?[SP]', glycan)):
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
-  post_process = {'5Ac(?1':'5Ac(a2', 'GalS':'GalOS', 'GlcNAcS':'GlcNAcOS',
+  post_process = {'5Ac(?1':'5Ac(a2', 'Fuc(?':'Fuc(a', 'GalS':'GalOS', 'GlcNAcS':'GlcNAcOS',
                   'GalNAcS':'GalNAcOS'}
   glycan = multireplace(glycan, post_process)
   #canonicalize branch ordering

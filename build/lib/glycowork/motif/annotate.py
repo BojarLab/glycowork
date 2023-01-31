@@ -68,15 +68,11 @@ def link_find(glycan):
     #from this linear glycan part, chunk away disaccharides and re-format them
     for i in [iso, b_re]:
       b = i.split('(')
-      b = [k.split(')') for k in b]
-      #b = [item for sublist in b for item in sublist]
-      b = unwrap(b)
+      b = unwrap([k.split(')') for k in b])
       b = ['*'.join(b[i:i+3]) for i in range(0, len(b) - 2, 2)]
       b = [k for k in b if (re.search('\*\[', k) is None and re.search('\*\]\[', k) is None)]
-      b = [k.strip('[') for k in b]
-      b = [k.strip(']') for k in b]
-      b = [k.replace('[', '') for k in b]
-      b = [k.replace(']', '') for k in b]
+      b = [k.strip('[').strip(']') for k in b]
+      b = [k.replace('[', '').replace(']', '') for k in b]
       b = [k[:find_nth(k, '*', 1)] + '(' + k[find_nth(k, '*', 1)+1:] for k in b]
       b = [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
       coll += b
