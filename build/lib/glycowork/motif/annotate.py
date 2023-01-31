@@ -96,9 +96,7 @@ def motif_matrix(glycans):
   #counts glycoletters in each glycan
   wga_letter = pd.DataFrame([{i:g.count(i) for i in libr} for g in glycans])
   out_matrix = pd.concat([wga_letter, wga_di_out], axis = 1)
-  out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()]
-  out_matrix.reset_index(drop = True, inplace = True)
-  return out_matrix
+  return out_matrix.loc[:,~out_matrix.columns.duplicated()].reset_index(drop = True)
 
 def estimate_lower_bound(glycans, motifs):
   """searches for motifs which are present in at least glycan; not 100% exact but useful for speedup\n
@@ -120,8 +118,7 @@ def estimate_lower_bound(glycans, motifs):
   motif_ish = [k.replace('[','').replace(']','') for k in motifs.motif.values.tolist()]
   #check if a motif occurs in giant string
   idx = [k for k, j in enumerate(motif_ish) if j in glycans]
-  motifs = motifs.iloc[idx, :].reset_index(drop = True)
-  return motifs
+  return motifs.iloc[idx, :].reset_index(drop = True)
 
 def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
                     wildcard_list = [], termini_list = []):
@@ -333,5 +330,4 @@ def get_terminal_structures(glycan, libr = None):
     libr = lib
   ggraph = ensure_graph(glycan, libr = libr)
   nodeDict = dict(ggraph.nodes(data = True))
-  termini = [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]
-  return termini
+  return [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]

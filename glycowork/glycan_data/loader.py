@@ -31,8 +31,7 @@ Sia = ['Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia']
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""
-  out = list(itertools.chain(*nested_list))
-  return out
+  return list(itertools.chain(*nested_list))
 
 def find_nth(haystack, needle, n):
   """finds n-th instance of motif\n
@@ -66,8 +65,7 @@ def reindex(df_new, df_old, out_col, ind_col, inp_col):
   """
   if ind_col != inp_col:
     print("Mismatching column names for ind_col and inp_col. Doesn't mean it's wrong but pay attention.")
-  out = [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
-  return out
+  return [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
 
 def stringify_dict(dicty):
   """Converts dictionary into a string\n
@@ -79,8 +77,7 @@ def stringify_dict(dicty):
   | Returns string of type key:value for sorted items
   """
   dicty = dict(sorted(dicty.items()))
-  dicty = ''.join(str(key) + str(value) for key, value in dicty.items())
-  return dicty
+  return ''.join(str(key) + str(value) for key, value in dicty.items())
 
 def multireplace(string, remove_dic):
   """

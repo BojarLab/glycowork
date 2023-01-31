@@ -58,7 +58,7 @@ def prot_to_coded(proteins, libr = None, pad_len = 1000):
   #replace forbidden characters with 'z'
   prots = constrain_prot(prots, libr = libr)
   #pad up to a length of pad_len
-  prots = [pad_sequence(string_to_labels(str(k).upper(),libr = libr),
+  prots = [pad_sequence(string_to_labels(str(k).upper(), libr = libr),
                         max_length = pad_len,
                         pad_label = len(libr)-1) for k in prots]
   return prots
@@ -669,7 +669,7 @@ def structures_to_motifs(df, feature_set = ['exhaustive'], form = 'wide'):
   motif_df = pd.DataFrame(out_tuples)
   motif_df = motif_df.groupby(motif_df.columns.values.tolist()[0]).mean().reset_index()
   if form == 'wide':
-    motif_df.columns = ['glycan'] + df.columns.tolist()[1:]#['sample' + str(k) for k in range(1, motif_df.shape[1])]
+    motif_df.columns = ['glycan'] + df.columns.tolist()[1:]
     return motif_df
   elif form == 'long':
     motif_df.columns = ['glycan'] + ['rel_intensity' for k in range(1, motif_df.shape[1])]
@@ -856,12 +856,13 @@ def canonicalize_iupac(glycan):
   """
   #canonicalize usage of monosaccharides and linkages
   replace_dic = {'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'GlcN(Gc)':'GlcNGc', 'Neu5Ac(9Ac)':'Neu5Ac9Ac',
-                 'KDN':'Kdn', 'Nac':'NAc', 'OSO3':'S', 'H2PO3':'P', '–':'-', ' ':'', 'α':'a',
+                 'KDN':'Kdn', 'Nac':'NAc', 'OSO3':'S', '-O-Su':'S', 'H2PO3':'P', '–':'-', ' ':'', 'α':'a',
                  'β':'b'}
   glycan = multireplace(glycan, replace_dic)
   #trim linkers
-  if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan)) and '-ol' not in glycan:
-    glycan = glycan[:glycan.rindex('-')]
+  if '-' in glycan:
+    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and '-ol' not in glycan:
+      glycan = glycan[:glycan.rindex('-')]
   #canonicalize usage of brackets and parentheses
   if bool(re.search(r'\([A-Z0-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
@@ -937,7 +938,6 @@ def check_nomenclature(glycan):
     print("Could it be that you're using WURCS? Please convert to IUPACcondensed for using glycowork.")
   if 'RES' in glycan:
     print("Could it be that you're using GlycoCT? Please convert to IUPACcondensed for using glycowork.")
-  #print("Didn't spot an obvious error but this is not a guarantee that it will work.")
   return canonicalize_iupac(glycan)
 
 def map_to_basic(glycoletter):
