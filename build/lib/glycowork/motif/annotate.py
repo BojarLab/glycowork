@@ -17,24 +17,29 @@ def find_isomorphs(glycan):
   | :-
   | Returns list of unique glycan notations (strings) for a glycan in IUPAC-condensed
   """
-  out_list = [glycan]
+  out_list = {glycan}
   #starting branch swapped with next side branch
-  if '[' in glycan and glycan.index('[') > 0 and not bool(re.search('\[[^\]]+\[', glycan)):
-    glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
-    out_list.append(glycan2)
+  if '[' in glycan and glycan.index('[') > 0:
+    if not bool(re.search('\[[^\]]+\[', glycan)):
+      glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
+    else:
+      glycan2 = re.sub('^(.*?)\[(.*?)(\]{1,1})(.*?)\]', r'\2\3\4[\1]', glycan, 1)
+    out_list.add(glycan2)
   #double branch swap
-  temp = []
+  temp = set()
   for k in out_list:
     if '][' in k:
-      glycan3 = re.sub('(\[.*?\])(\[.*?\])', r'\2\1', k)
-      temp.append(glycan3)
+      glycan2 = re.sub('(\[.*?\])(\[.*?\])', r'\2\1', k)
+      temp.add(glycan2)
+  out_list.update(temp)
+  temp = set()
   #starting branch swapped with next side branch again to also include double branch swapped isomorphs
-  temp2 = []
-  for k in temp:
-    if '[' in k and k.index('[') > 0 and not bool(re.search('\[[^\]]+\[', k)):
-      glycan4 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', k, 1)
-      temp2.append(glycan4)
-  return list(set(out_list + temp + temp2))
+  for k in out_list:
+    if '[' in k and k.index('[') > 0 and not bool(re.search('\[[^\]]+\[', k[:k.index(']')+1])):
+      glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', k, 1)
+      temp.add(glycan2)
+  out_list.update(temp)
+  return list(out_list)
 
 def link_find(glycan):
   """finds all disaccharide motifs in a glycan sequence using its isomorphs\n
