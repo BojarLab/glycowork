@@ -74,8 +74,7 @@ def link_find(glycan):
       b = [k.strip('[').strip(']') for k in b]
       b = [k.replace('[', '').replace(']', '') for k in b]
       b = [k[:find_nth(k, '*', 1)] + '(' + k[find_nth(k, '*', 1)+1:] for k in b]
-      b = [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
-      coll += b
+      coll += [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
   return list(set(coll))
 
 def motif_matrix(glycans):
