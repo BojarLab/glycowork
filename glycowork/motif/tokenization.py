@@ -860,21 +860,34 @@ def canonicalize_iupac(glycan):
   """
   #canonicalize usage of monosaccharides and linkages
   replace_dic = {'NeuAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'GlcN(Gc)':'GlcNGc', 'Neu5Ac(9Ac)':'Neu5Ac9Ac',
-                 'KDN':'Kdn', 'Nac':'NAc', 'OSO3':'S', '–':'-', ' ':''}
+                 'KDN':'Kdn', 'Nac':'NAc', 'OSO3':'S', '–':'-', ' ':'', 'α':'a',
+                 'β':'b'}
   glycan = multireplace(glycan, replace_dic)
-  #canonicalize linkage uncertainty
-  if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
-    glycan = re.sub(r'([a-z])\-([A-Z])', r'\1\?1-\?\2', glycan)
-  if bool(re.search(r'[a-b][\(\)]', glycan)):
-    glycan = re.sub(r'([a-z])([\(\)])', r'\1\?1-\?\2', glycan)
-  if bool(re.search(r'[0-9]\-[\(\)]', glycan)):
-    glycan = re.sub(r'([0-9])\-([\(\)])', r'\1-\?\2', glycan)
-  while '/' in glycan:
-    glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
   #canonicalize usage of brackets and parentheses
   if bool(re.search(r'\([A-Z0-9]', glycan)):
     glycan = glycan.replace('(', '[')
     glycan = glycan.replace(')', ']')
+  #canonicalize linkage uncertainty
+  #open linkages
+  if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
+    glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
+  #missing linkages
+  if bool(re.search(r'[a-b][\(\)]', glycan)):
+    glycan = re.sub(r'([a-b])([\(\)])', r'\1?1-?\2', glycan)
+  #open linkages in front of branches
+  if bool(re.search(r'[0-9]\-[\[\]]', glycan)):
+    glycan = re.sub(r'([0-9])\-([\[\]])', r'\1-?\2', glycan)
+  #open linkages in front of branches (missing information)
+  if bool(re.search(r'[a-z]\-[\[\]]', glycan)):
+    glycan = re.sub(r'([a-z])\-([\[\]])', r'\1?1-?\2', glycan)
+  #branches without linkages
+  if bool(re.search(r'\[([a-zA-Z])+\]', glycan)):
+    glycan = re.sub(r'(\[[a-zA-Z]+)(\])', r'\1?1-?\2', glycan)
+  #missing linkages in front of branches
+  if bool(re.search(r'[a-z]\[[A-Z]', glycan)):
+    glycan = re.sub(r'([a-z])(\[[A-Z])', r'\1?1-?\2', glycan)
+  while '/' in glycan:
+    glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
   if '(' not in glycan and len(glycan) > 6:
     for k in range(1,glycan.count('-')+1):
       idx = find_nth(glycan, '-', k)
@@ -889,10 +902,15 @@ def canonicalize_iupac(glycan):
     else:
       glycan = glycan[:-2] + '-ol'
   #handle modifications
-  if bool(re.search(r'\[[0-9]?[SP]\][^\(]+', glycan)):
-    glycan = re.sub(r'\[([0-9]?[SP])\]([^\(]+)', r'\2\1', glycan)
+  if bool(re.search(r'\[[0-9]?[SP]\][^\(^\[]+', glycan)):
+    glycan = re.sub(r'\[([0-9]?[SP])\]([^\(^\[]+)', r'\2\1', glycan)
+  if bool(re.search(r'[0-9]?[SP][^\(^\[]+', glycan)):
+    glycan = re.sub(r'([0-9]?[SP])([^\(^\[]+)', r'\2\1', glycan)
   if bool(re.search(r'\-ol[0-9]?[SP]', glycan)):
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
+  post_process = {'5Ac(?1':'5Ac(a2', 'GalS':'GalOS', 'GlcNAcS':'GlcNAcOS',
+                  'GalNAcS':'GalNAcOS'}
+  glycan = multireplace(glycan, post_process)
   #canonicalize branch ordering
   if '[' in glycan:
     isos = find_isomorphs(glycan)

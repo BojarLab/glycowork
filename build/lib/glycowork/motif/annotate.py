@@ -22,9 +22,12 @@ def find_isomorphs(glycan):
   if '[' in glycan and glycan.index('[') > 0:
     if not bool(re.search('\[[^\]]+\[', glycan)):
       glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
-    else:
+    elif not bool(re.search('\[[^\]]+\[', glycan[find_nth(glycan, ']', 2):])) and bool(re.search('\[[^\]]+\[', glycan[:find_nth(glycan, '[', 3)])):
       glycan2 = re.sub('^(.*?)\[(.*?)(\]{1,1})(.*?)\]', r'\2\3\4[\1]', glycan, 1)
-    out_list.add(glycan2)
+    try:
+      out_list.add(glycan2)
+    except:
+      pass
   #double branch swap
   temp = set()
   for k in out_list:
@@ -66,7 +69,8 @@ def link_find(glycan):
     for i in [iso, b_re]:
       b = i.split('(')
       b = [k.split(')') for k in b]
-      b = [item for sublist in b for item in sublist]
+      #b = [item for sublist in b for item in sublist]
+      b = unwrap(b)
       b = ['*'.join(b[i:i+3]) for i in range(0, len(b) - 2, 2)]
       b = [k for k in b if (re.search('\*\[', k) is None and re.search('\*\]\[', k) is None)]
       b = [k.strip('[') for k in b]
