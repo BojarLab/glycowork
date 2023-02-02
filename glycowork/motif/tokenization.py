@@ -855,21 +855,23 @@ def canonicalize_iupac(glycan):
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
   #canonicalize usage of monosaccharides and linkages
-  replace_dic = {'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'GlcN(Gc)':'GlcNGc', 'Neu5Ac(9Ac)':'Neu5Ac9Ac',
-                 'KDN':'Kdn', 'Nac':'NAc', 'OSO3':'S', '-O-Su':'S', 'H2PO3':'P', '–':'-', ' ':'', 'α':'a',
-                 'β':'b'}
+  replace_dic = {'Nac':'NAc', 'NAC':'NAc', 'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'GlcN(Gc)':'GlcNGc', 'Neu5Ac(9Ac)':'Neu5Ac9Ac',
+                 'KDN':'Kdn', 'OSO3':'S', '-O-Su-':'S', 'H2PO3':'P', '–':'-', ' ':'', 'α':'a', 'β':'b', '.':''}
   glycan = multireplace(glycan, replace_dic)
   #trim linkers
   if '-' in glycan:
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and '-ol' not in glycan:
       glycan = glycan[:glycan.rindex('-')]
   #canonicalize usage of brackets and parentheses
-  if bool(re.search(r'\([A-Z0-9]', glycan)):
+  if bool(re.search(r'\([A-Z3-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
   #canonicalize linkage uncertainty
   #open linkages
   if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
-    glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
+    glycan = re.sub(r'([a-z])\-(A-Z])', r'\1?1-?\2', glycan)
+  #open linkages2
+  if bool(re.search(r'[1-2]\-\)', glycan)):
+    glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
   #missing linkages
   if bool(re.search(r'[a-b][\(\)]', glycan)):
     glycan = re.sub(r'([a-b])([\(\)])', r'\1?1-?\2', glycan)
@@ -885,6 +887,9 @@ def canonicalize_iupac(glycan):
   #missing linkages in front of branches
   if bool(re.search(r'[a-z]\[[A-Z]', glycan)):
     glycan = re.sub(r'([a-z])(\[[A-Z])', r'\1?1-?\2', glycan)
+  #missing anomer info
+  if bool(re.search(r'\([1-2]', glycan)):
+    glycan = re.sub(r'(\()([1-2])', r'\1?\2', glycan)
   #smudge uncertainty
   while '/' in glycan:
     glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
