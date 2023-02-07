@@ -1984,7 +1984,7 @@ def get_coordinates_and_labels(draw_this, show_linkage = True):
       [branch_branch_sugar, branch_branch_x_pos, branch_branch_y_pos, branch_branch_sugar_modification, branch_branch_bond, branch_branch_connection, bb_conf],
       [bbb_sugar, bbb_x_pos, bbb_y_pos, bbb_sugar_modification, bbb_bond, bbb_connection, bbb_conf]
   ]
-
+  
   return data_combined
 
 def draw_bracket(x, y_min_max, direction = 'right', dim = 50):
@@ -2117,9 +2117,9 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
   # bond branch to main chain
   [add_bond(branch_x_pos[k][0], main_sugar_x_pos[branch_connection[k]], branch_y_pos[k][0], main_sugar_y_pos[branch_connection[k]], branch_bond[k][0], dim = dim, compact = compact) for k in range(len(branch_sugar))]
   # bond branch branch
-  [add_bond(branch_branch_x_pos[b_idx][s_idx+1], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx+1], branch_branch_y_pos[b_idx][s_idx], branch_branch_bond[b_idx][::-1][s_idx], dim = dim, compact = compact) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx])-1) if len(branch_branch_sugar[b_idx]) > 1]
+  [add_bond(branch_branch_x_pos[b_idx][s_idx+1], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx+1], branch_branch_y_pos[b_idx][s_idx], branch_branch_bond[b_idx][s_idx+1], dim = dim, compact = compact) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx])-1) if len(branch_branch_sugar[b_idx]) > 1]
   # bond branch branch branch
-  [add_bond(branch_branch_x_pos[b_idx][s_idx+1], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx+1], branch_branch_y_pos[b_idx][s_idx], branch_branch_bond[b_idx][::-1][s_idx], dim = dim, compact = compact) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx])-1) if len(branch_branch_sugar[b_idx]) > 1]
+  [add_bond(bbb_x_pos[b_idx][s_idx+1], bbb_x_pos[b_idx][s_idx], bbb_y_pos[b_idx][s_idx+1], bbb_y_pos[b_idx][s_idx], bbb_bond[b_idx][s_idx+1], dim = dim, compact = compact) for b_idx in range(len(bbb_sugar)) for s_idx in range(len(bbb_sugar[b_idx])-1) if len(bbb_sugar[b_idx]) > 1]
   # bond branch_branch to branch
   [add_bond(branch_branch_x_pos[k][0], branch_x_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]], branch_branch_y_pos[k][0], branch_y_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]], branch_branch_bond[k][0], dim = dim, compact = compact) for k in range(len(branch_branch_sugar))]
   # bond branch_branch_branch to branch_branch
