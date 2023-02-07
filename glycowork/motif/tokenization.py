@@ -855,7 +855,7 @@ def canonicalize_iupac(glycan):
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
   #canonicalize usage of monosaccharides and linkages
-  replace_dic = {'Nac':'NAc', 'NAC':'NAc', 'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'GlcN(Gc)':'GlcNGc', 'Neu5Ac(9Ac)':'Neu5Ac9Ac',
+  replace_dic = {'Nac':'NAc', 'AC':'Ac', 'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'GlcN(Gc)':'GlcNGc', 'Neu5Ac(9Ac)':'Neu5Ac9Ac',
                  'KDN':'Kdn', 'OSO3':'S', '-O-Su-':'S', 'H2PO3':'P', '–':'-', ' ':'', 'α':'a', 'β':'b', '.':''}
   glycan = multireplace(glycan, replace_dic)
   #trim linkers

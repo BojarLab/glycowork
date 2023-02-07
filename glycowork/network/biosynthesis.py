@@ -663,6 +663,7 @@ def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, lib
     edge_labels = []
     #for each unconnected node, find the shortest path to its root node
     for node in unconnected_nodes:
+      r_target = ''
       g_node = safe_index(node, graph_dic, libr = libr)
       for r in real_nodes:
         if subgraph_isomorphism(g_node, r, libr = libr):

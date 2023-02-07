@@ -139,7 +139,7 @@ def enforce_class(glycan, glycan_class):
   elif glycan_class == 'N':
     pool = ['GlcNAc']
   elif glycan_class == 'free' or glycan_class == 'lipid':
-    pool = ['Glc', 'GlcOS', 'GlcNAc', 'Gal', 'Ins']
+    pool = ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins']
   truth = any([glycan.endswith(k) for k in pool])
   if glycan_class == 'free' or glycan_class == 'lipid' or glycan_class == 'O':
     if any([glycan.endswith(k) for k in ['GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc']]):
