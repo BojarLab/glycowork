@@ -1,4 +1,4 @@
-from glycowork.glycan_data.loader import lib, unwrap, motif_list
+from glycowork.glycan_data.loader import lib, unwrap, motif_list, multireplace
 from glycowork.motif.graph import glycan_to_nxGraph
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import expand_lib, min_process_glycans
@@ -1395,33 +1395,17 @@ def split_monosaccharide_linkage(label_list):
   if any(isinstance(el, list) for el in label_list):
     sugar = [k[::2][::-1] for k in label_list]
     sugar_modification = [[get_modification(k) if k in lib else '' for k in y] for y in sugar]
-    sugar_modification = [[multireplace({'O', '-ol'}, '', k) for k in y] for y in sugar_modification]
+    sugar_modification = [[multireplace(k, {'O':'', '-ol':''}) for k in y] for y in sugar_modification]
     sugar = [[get_core(k) if k not in additions else k for k in y] for y in sugar]
     bond = [k[1::2][::-1] for k in label_list]
   else:
     sugar = label_list[::2][::-1]
     sugar_modification = [get_modification(k) if k not in additions else '' for k in sugar]
-    sugar_modification = [multireplace({'O', '-ol'}, '', k) for k in sugar_modification]
+    sugar_modification = [multireplace(k, {'O':'', '-ol':''}) for k in sugar_modification]
     sugar = [get_core(k) if k not in additions else k for k in sugar]
     bond = label_list[1::2][::-1]
 
   return sugar, sugar_modification, bond
-
-def multireplace(remove_set, replacement, string):
-  """
-  Replaces all occurences of items in a set with a given string.\n
-  | Arguments:
-  | :-
-  | remove_set (set): set of substrings to replace
-  | replacement (str): string to replace substrings with
-  | string (str): string to perform replacements on\n
-  | Returns:
-  | :-
-  | (str) modified string
-  """
-  for k in remove_set:
-    string = string.replace(k, replacement)
-  return string
 
 def get_coordinates_and_labels(draw_this, show_linkage = True):
   
