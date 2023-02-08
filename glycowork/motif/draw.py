@@ -1407,6 +1407,32 @@ def split_monosaccharide_linkage(label_list):
 
   return sugar, sugar_modification, bond
 
+def glycan_to_skeleton(glycan_string): 
+  """convert glycan to skeleton of node labels according to the respective glycan graph object\n
+  | Arguments:
+  | :-
+  | glycan_string (string):
+  | Returns:
+  | :-
+  | node label skeleton of glycan (string)\n
+  """
+  tmp = multireplace(glycan_string, {'(': ',', ')': ',', '[': ',[,', ']': ',],'})
+  tmp = tmp.split(',')
+  tmp = [k for k in tmp if k != '']
+
+  tmp2 = []
+  idx = 0
+  for k in tmp:
+    if k in ['[', ']']:
+      tmp2.append(k)
+    else:
+      tmp2.append(str(idx))
+      idx = idx + 1
+
+  tmp2 = '-'.join(tmp2)
+  tmp2 = multireplace(tmp2, {'[-': '[', '-]': ']'})
+  return(tmp2)
+
 def get_coordinates_and_labels(draw_this, show_linkage = True):
   
   if bool(re.search('^\[', draw_this)) == False:
@@ -1420,39 +1446,8 @@ def get_coordinates_and_labels(draw_this, show_linkage = True):
   node_labels = nx.get_node_attributes(graph, 'string_labels')
   edges = graph.edges()
   branch_points = [e[1] for e in edges if abs(e[0]-e[1]) > 1]
-  skeleton = [']'+str(k) if k in branch_points else str(k) for k in node_labels.keys()]
   
-  for k in range(len(skeleton)):
-    #multibranch situation on reducing end
-    if skeleton[k] == skeleton[-1] and graph.degree()[k] == 3:
-      idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
-      skeleton[idx-1] = skeleton[idx-1] + ']'
-    #note whether a multibranch situation exists
-    if graph.degree()[k] == 4:
-      idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
-      if any(']]' in s for s in skeleton[idx:]):
-        idx = np.where(['[' in m for m in skeleton[:k]])[0][-2]
-      else:
-        idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
-      skeleton[idx-1] = skeleton[idx-1] + ']'
-      #note whether a branch separates neighbors
-    elif graph.degree()[k] > 2:
-      skeleton[k] = ']' + skeleton[k]
-      #note whether a branch starts
-    elif graph.degree()[k] == 1 and k > 0:
-      skeleton[k] = '[' + skeleton[k]
-  # fix cases of extra brackets at reducing end monosaccharide
-  if skeleton[-1] == '['+str(len(node_labels)-1):
-      skeleton[-1] = str(len(node_labels)-1)
-
-  glycan = '-'.join(skeleton)#[:-1]#+str(len(node_labels)-1)
-  glycan = re.sub('(\([^\()]*)\(', r'\1)', glycan)
-  glycan = glycan.replace('[)', ')[')
-  glycan = glycan.replace('])', ')]')
-  while ']]' in glycan:
-    glycan = glycan.replace(']]', ']')
-  while '[[' in glycan:
-    glycan = glycan.replace('[[', '[')
+  glycan = glycan_to_skeleton(draw_this)
 
   ## split main & branches, get labels
   branch_branch_branch_node = []
@@ -1474,7 +1469,7 @@ def get_coordinates_and_labels(draw_this, show_linkage = True):
           glycan = glycan[:openpos-1]+ len(glycan[openpos-1:closepos+1])*'*' + glycan[closepos+1:]
       glycan = glycan.replace('*', '')
       parts[k] = [ [i for i in k if i != ''] for k in [k.split('-') for k in parts[k]] ]
-
+  
   main_node = glycan.split('-')
   main_node = [k for k in main_node if k != '' ]
   branch_branch_branch_node, branch_branch_node, branch_node = parts
