@@ -11,9 +11,9 @@ from collections import Counter
 from sklearn.cluster import DBSCAN
 
 from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, multireplace, df_species, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, Sia, linkages
-from glycowork.motif.processing import small_motif_find, min_process_glycans, choose_correct_isoform
+from glycowork.motif.processing import small_motif_find, min_process_glycans, choose_correct_isoform, canonicalize_iupac
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
-from glycowork.motif.annotate import annotate_dataset, find_isomorphs
+from glycowork.motif.annotate import annotate_dataset
 
 chars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T',
      'V','W','Y', 'X', 'Z'] + ['z']
@@ -844,88 +844,6 @@ def cfg_to_iupac(glycan: str) -> str:
   """
   parser = CFGtoIUPACParser()
   return parser.parse(glycan)
-
-def canonicalize_iupac(glycan):
-  """converts a glycan from any IUPAC flavor into the exact IUPAC-condensed version that is optimized for glycowork\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan sequence in IUPAC; some post-biosynthetic modifications could still be an issue\n
-  | Returns:
-  | :-
-  | Returns glycan as a string in canonicalized IUPAC-condensed
-  """
-  #canonicalize usage of monosaccharides and linkages
-  replace_dic = {'Nac':'NAc', 'AC':'Ac', 'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'GlcN(Gc)':'GlcNGc', 'Neu5Ac(9Ac)':'Neu5Ac9Ac',
-                 'KDN':'Kdn', 'OSO3':'S', '-O-Su-':'S', 'H2PO3':'P', '–':'-', ' ':'', 'α':'a', 'β':'b', '.':''}
-  glycan = multireplace(glycan, replace_dic)
-  #trim linkers
-  if '-' in glycan:
-    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and '-ol' not in glycan:
-      glycan = glycan[:glycan.rindex('-')]
-  #canonicalize usage of brackets and parentheses
-  if bool(re.search(r'\([A-Z3-9]', glycan)):
-    glycan = glycan.replace('(', '[').replace(')', ']')
-  #canonicalize linkage uncertainty
-  #open linkages
-  if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
-    glycan = re.sub(r'([a-z])\-(A-Z])', r'\1?1-?\2', glycan)
-  #open linkages2
-  if bool(re.search(r'[1-2]\-\)', glycan)):
-    glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
-  #missing linkages
-  if bool(re.search(r'[a-b][\(\)]', glycan)):
-    glycan = re.sub(r'([a-b])([\(\)])', r'\1?1-?\2', glycan)
-  #open linkages in front of branches
-  if bool(re.search(r'[0-9]\-[\[\]]', glycan)):
-    glycan = re.sub(r'([0-9])\-([\[\]])', r'\1-?\2', glycan)
-  #open linkages in front of branches (with missing information)
-  if bool(re.search(r'[a-z]\-[\[\]]', glycan)):
-    glycan = re.sub(r'([a-z])\-([\[\]])', r'\1?1-?\2', glycan)
-  #branches without linkages
-  if bool(re.search(r'\[([a-zA-Z])+\]', glycan)):
-    glycan = re.sub(r'(\[[a-zA-Z]+)(\])', r'\1?1-?\2', glycan)
-  #missing linkages in front of branches
-  if bool(re.search(r'[a-z]\[[A-Z]', glycan)):
-    glycan = re.sub(r'([a-z])(\[[A-Z])', r'\1?1-?\2', glycan)
-  #missing anomer info
-  if bool(re.search(r'\([1-2]', glycan)):
-    glycan = re.sub(r'(\()([1-2])', r'\1?\2', glycan)
-  #smudge uncertainty
-  while '/' in glycan:
-    glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
-  #introduce parentheses for linkages
-  if '(' not in glycan and len(glycan) > 6:
-    for k in range(1,glycan.count('-')+1):
-      idx = find_nth(glycan, '-', k)
-      if (glycan[idx-1].isnumeric()) and (glycan[idx+1].isnumeric() or glycan[idx+1]=='?'):
-        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+2] + ')' + glycan[idx+2:]
-      elif (glycan[idx-1].isnumeric()) and bool(re.search(r'[A-Z]', glycan[idx+1])):
-        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+1] + '?)' + glycan[idx+1:]
-  #canonicalize reducing end
-  if bool(re.search(r'[a-z]ol', glycan)):
-    if 'Glcol' not in glycan:
-      glycan = glycan[:-2]
-    else:
-      glycan = glycan[:-2] + '-ol'
-  if (glycan.endswith('a') or glycan.endswith('b')) and not glycan.endswith('Rha'):
-    glycan = glycan[:-1]
-  #handle modifications
-  if bool(re.search(r'\[[0-9]?[SP]\][^\(^\[]+', glycan)):
-    glycan = re.sub(r'\[([0-9]?[SP])\]([^\(^\[]+)', r'\2\1', glycan)
-  if bool(re.search(r'[0-9]?[SP][^\(^\[]+', glycan)):
-    glycan = re.sub(r'([0-9]?[SP])([^\(^\[]+)', r'\2\1', glycan)
-  if bool(re.search(r'\-ol[0-9]?[SP]', glycan)):
-    glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
-  post_process = {'5Ac(?1':'5Ac(a2', 'Fuc(?':'Fuc(a', 'GalS':'GalOS', 'GlcNAcS':'GlcNAcOS',
-                  'GalNAcS':'GalNAcOS'}
-  glycan = multireplace(glycan, post_process)
-  #canonicalize branch ordering
-  if '[' in glycan:
-    isos = find_isomorphs(glycan)
-    glycan = choose_correct_isoform(isos)
-  if '+' in glycan:
-    glycan = '{'+glycan.replace('+', '}')
-  return glycan
 
 def check_nomenclature(glycan):
   """checks whether the proposed glycan has the correct nomenclature for glycowork\n

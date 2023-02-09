@@ -501,7 +501,7 @@ def stemify_glycan_fast(ggraph_in, stem_lib = None, libr = None):
     stem_lib = get_stem_lib(libr)
   ggraph = copy.deepcopy(ggraph_in)
   nx.set_node_attributes(ggraph, {k:{"string_labels":stem_lib[v], "labels":libr.index(stem_lib[v])} for k,v in nx.get_node_attributes(ggraph, "string_labels").items()})
-  return graph_to_string(ggraph, libr = libr), ggraph
+  return graph_to_string(ggraph), ggraph
 
 def find_ptm(glycan, glycans, graph_dic, allowed_ptms = allowed_ptms,
                libr = None, ggraphs = None, suffix = '-ol', stem_lib = None):

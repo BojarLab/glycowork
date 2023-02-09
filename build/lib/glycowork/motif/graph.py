@@ -2,7 +2,7 @@ import re
 import copy
 import networkx as nx
 from glycowork.glycan_data.loader import lib, unwrap, find_nth, df_glycan
-from glycowork.motif.processing import min_process_glycans
+from glycowork.motif.processing import min_process_glycans, canonicalize_iupac
 import numpy as np
 import pandas as pd
 from scipy.sparse.linalg import eigsh
@@ -537,64 +537,43 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     feat_dic = {col_names[k]:features[k] for k in range(len(features))}
     return pd.DataFrame(feat_dic, index = [glycan])
 
-def graph_to_string(graph, fallback = False, libr = None):
+def neighbor_is_branchpoint(graph, node):
+  """checks whether node is connected to downstream node with more than two branches\n
+  | Arguments:
+  | :-
+  | graph (networkx object): glycan graph
+  | node (int): node index\n
+  | Returns:
+  | :-
+  | Returns True if node is connected to downstream multi-branch node and False if not
+  """
+  edges = list(graph.edges(node))
+  edges = unwrap([e for e in edges if sum(e)>2*node])
+  edges = [graph.degree[e] for e in set(edges) if e!=node]
+  if len(edges)>0 and max(edges)>3:
+    return True
+  else:
+    return False
+
+def graph_to_string(graph):
   """converts glycan graph back to IUPAC-condensed format\n
   | Arguments:
   | :-
-  | graph (networkx object): glycan graph, works with most glycans. Will often not properly format repeat glycans, e.g., xyloglucan etc
-  | fallback (bool): just searches for the corresponding string in df_glycan; default:False
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | graph (networkx object): glycan graph\n
   | Returns:
   | :-
   | Returns glycan in IUPAC-condensed format (string)
   """
-  if libr is None:
-    libr = lib
-  if fallback:
-    len_dist = [len(k) for k in min_process_glycans(df_glycan.glycan.values.tolist())]
-    df_glycan2 = [k for k in range(len(df_glycan)) if len_dist[k] == len(graph.nodes())]
-    df_glycan2 = df_glycan.iloc[df_glycan2, :].reset_index(drop = True)
-    idx = np.where([compare_glycans(graph, glycan_to_nxGraph(k, libr = libr), libr = libr) for k in df_glycan2.glycan.values.tolist()])[0][0]
-    return df_glycan2.glycan.values.tolist()[idx]
-  node_labels = nx.get_node_attributes(graph, 'string_labels')
-  branch_points = [e[1] for e in graph.edges() if abs(e[0]-e[1]) > 1]
-
-  #note if a monosaccharide is a bona fide branch point
-  skeleton = [']'+str(k) if k in branch_points else str(k) for k in node_labels.keys()]
-  
-  for k in range(len(skeleton)):
-    #multibranch situation on reducing end
-    if skeleton[k] == skeleton[-1] and graph.degree()[k] == 3:
-      idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
-      skeleton[idx-1] = skeleton[idx-1] + ']'
-    #note whether a multibranch situation exists
-    if graph.degree()[k] == 4:
-      idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
-      skeleton[idx-1] = skeleton[idx-1] + ']'
-    #note whether a branch separates neighbors
-    elif graph.degree()[k] > 2:
-      skeleton[k] = ']' + skeleton[k]
-    #note whether a branch starts
-    elif graph.degree()[k] == 1 and k > 0:
-      skeleton[k] = '[' + skeleton[k]
-
-  #combine the skeleton, format, and map to the monosaccharides/linkages
-  glycan = '('.join(skeleton)[:-1]
-  glycan = re.sub('(\([^\()]*)\(', r'\1)', glycan)
-  glycan = glycan.replace('[)', ')[')
-  glycan = glycan.replace('])', ')]')
-  while ']]' in glycan:
-    glycan = glycan.replace(']]', ']')
-  while '[[' in glycan:
-    glycan = glycan.replace('[[', '[')
-  for k,j in dict(sorted(node_labels.items(), reverse = True)).items():
-    if k != 0 and k != len(node_labels)-1:
-      if j[0].isdigit():
-        j = '_' + j
-      glycan = re.sub('([^0-9a-zA-Z\-,])%s([^0-9a-zA-Z\-,])' % str(k), r'\1%s\2' % j, glycan)
-  glycan = node_labels[0]+glycan[1:]
-  glycan = max(glycan[:glycan.rfind(')')+1], glycan[:glycan.rfind(']')+1]) + node_labels[len(node_labels)-1]
-  return glycan.replace('_', '')
+  nodes = list(nx.get_node_attributes(graph, "string_labels").values())
+  nodes = [k+')' if graph.degree[min(i+1,len(nodes)-1)]>2 or neighbor_is_branchpoint(graph,i) else k if graph.degree[i]==2 else '('+k if graph.degree[i]==1 else k for i,k in enumerate(nodes)]
+  if graph.degree[len(graph)-1]<2:
+    nodes = ''.join(nodes)[1:][::-1].replace('(', '', 1)[::-1]
+  else:
+    nodes[-1] = ')'+nodes[-1]
+    nodes = ''.join(nodes)[1:]
+  if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')')==nodes[:nodes.index(')(')].count('('))):
+    nodes = nodes.replace(')(', '(', 1)
+  return canonicalize_iupac(nodes)
 
 def try_string_conversion(graph, libr = None):
   """check whether glycan graph describes a valid glycan\n

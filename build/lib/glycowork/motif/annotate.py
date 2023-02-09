@@ -6,43 +6,7 @@ import re
 
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
-from glycowork.motif.processing import IUPAC_to_SMILES, get_lib
-
-def find_isomorphs(glycan):
-  """returns a set of isomorphic glycans by swapping branches etc.\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns list of unique glycan notations (strings) for a glycan in IUPAC-condensed
-  """
-  out_list = {glycan}
-  #starting branch swapped with next side branch
-  if '[' in glycan and glycan.index('[') > 0:
-    if not bool(re.search('\[[^\]]+\[', glycan)):
-      glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
-    elif not bool(re.search('\[[^\]]+\[', glycan[find_nth(glycan, ']', 2):])) and bool(re.search('\[[^\]]+\[', glycan[:find_nth(glycan, '[', 3)])):
-      glycan2 = re.sub('^(.*?)\[(.*?)(\]{1,1})(.*?)\]', r'\2\3\4[\1]', glycan, 1)
-    try:
-      out_list.add(glycan2)
-    except:
-      pass
-  #double branch swap
-  temp = set()
-  for k in out_list:
-    if '][' in k:
-      glycan2 = re.sub('(\[.*?\])(\[.*?\])', r'\2\1', k)
-      temp.add(glycan2)
-  out_list.update(temp)
-  temp = set()
-  #starting branch swapped with next side branch again to also include double branch swapped isomorphs
-  for k in out_list:
-    if '[' in k and k.index('[') > 0 and not bool(re.search('\[[^\]]+\[', k[:k.index(']')+1])):
-      glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', k, 1)
-      temp.add(glycan2)
-  out_list.update(temp)
-  return list(out_list)
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs
 
 def link_find(glycan):
   """finds all disaccharide motifs in a glycan sequence using its isomorphs\n
@@ -312,7 +276,7 @@ def get_k_saccharides(glycan, size = 3, libr = None):
 
   # return the list of subgraphs
   subgraphs = [nx.relabel_nodes(k, {list(k.nodes())[n]:n for n in range(len(k.nodes()))}) for k in subgraphs]
-  subgraphs = [graph_to_string(k, libr = libr) for k in subgraphs]
+  subgraphs = [graph_to_string(k) for k in subgraphs]
   subgraphs = [k for k in subgraphs if k[0] not in ['a', 'b', '?']]
   return list(set(subgraphs))
 
