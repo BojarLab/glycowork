@@ -250,7 +250,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | wildcards (bool): set to True to allow wildcards (e.g., '?1-?', 'monosaccharide'); default:False
   | wildcard_list (list): list of wildcards to consider, in the form of '?1-?' etc.
-  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'); default:False\n
+  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
   | Returns:
   | :-  
   | Returns True if two glycans are the same and False if not
@@ -292,7 +292,8 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
 
 def subgraph_isomorphism(glycan, motif, libr = None,
                          extra = 'ignore', wildcard_list = [],
-                         termini_list = [], count = False):
+                         termini_list = [], count = False,
+                         wildcards_ptm = False):
   """returns True if motif is in glycan and False if not\n
   | Arguments:
   | :-
@@ -302,7 +303,8 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
-  | count (bool): whether to return the number or absence/presence of motifs; default:False\n
+  | count (bool): whether to return the number or absence/presence of motifs; default:False
+  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
   | Returns:
   | :-
   | Returns True if motif is in glycan and False if not
@@ -313,6 +315,9 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     wildcard_list = [libr.index(k) for k in wildcard_list]
   motif_comp = min_process_glycans([motif])[0]
   if isinstance(glycan, str):
+    if wildcards_ptm:
+      glycan = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', glycan).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+      motif = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', motif).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
     if extra == 'termini':
       g1 = glycan_to_nxGraph(glycan, libr = libr, termini = 'calc')
       g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided',
