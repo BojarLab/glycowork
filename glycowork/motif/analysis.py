@@ -11,6 +11,7 @@ from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap
+from glycowork.motif.tokenization import structures_to_motifs
 from glycowork.motif.annotate import annotate_dataset, link_find
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -373,3 +374,38 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
   plt.show()
+
+def get_differential_expression(df, group1, group2, normalized = True,
+                                motifs = False):
+  """Calculates differentially expressed glycans or motifs from glycomics data\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
+  | group1 (list): list of column indices for the first group of samples
+  | group2 (list): list of column indices for the second group of samples
+  | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
+  | motif (bool): whether to analyze full sequences (False) or motifs (True); default:False\n
+  | Returns:
+  | :-
+  | Returns a dataframe with:
+  | (i) Differentially expressed glycans/motifs
+  | (ii) Corrected p-values (Welch's t-test with Holm-Sidak correction)
+  | (iii) Effect size as Cohen's d
+  """
+  if not normalized:
+    for col in df.columns.tolist()[1:]:
+      df.at[:,col] = [k/sum(df.loc[:,col])*100 for k in df.loc[:,col].values.tolist()]
+  if libr is None:
+    libr = lib
+  if motifs:
+    df = structures_to_motifs(df, feature_set = ['exhaustive', 'known'])
+  glycans = df.iloc[:,0].values.tolist()
+  df_a = df.iloc[:,group1]
+  df_b = df.iloc[:,group2]
+  pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1] for k in range(len(df_a))]
+  pvals = multipletests(pvals)[1]
+  effect_sizes = [cohen_d(df_a.iloc[k,:], df_b.iloc[k,:]) for k in range(len(df_a))]
+  out = [(glycans[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
+  out = pd.DataFrame(out)
+  out.columns = ['Glycan', 'corr p-val', 'Cohens d']
+  return out
