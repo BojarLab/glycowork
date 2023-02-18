@@ -54,6 +54,19 @@ def expand_lib(libr, glycan_list):
   """
   return sorted(set(libr + get_lib(glycan_list)))
 
+def bracket_removal(glycan_part):
+  """iteratively removes (nested) branches between start and end of glycan_part\n
+  | Arguments:
+  | :-
+  | glycan_part (string): residual part of a glycan from within glycan_to_graph\n
+  | Returns:
+  | :-
+  | Returns glycan_part without interfering branches
+  """
+  while bool(re.search('\[[^\[\]]+\]', glycan_part)):
+    glycan_part = re.sub('\[[^\[\]]+\]', '', glycan_part)
+  return glycan_part
+
 def find_isomorphs(glycan):
   """returns a set of isomorphic glycans by swapping branches etc.\n
   | Arguments:
@@ -66,10 +79,10 @@ def find_isomorphs(glycan):
   out_list = {glycan}
   #starting branch swapped with next side branch
   if '[' in glycan and glycan.index('[') > 0:
-    if not bool(re.search('\[[^\]]+\[', glycan)):
-      glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
-    elif not bool(re.search('\[[^\]]+\[', glycan[find_nth(glycan, ']', 2):])) and bool(re.search('\[[^\]]+\[', glycan[:find_nth(glycan, '[', 3)])):
-      glycan2 = re.sub('^(.*?)\[(.*?)(\]{1,1})(.*?)\]', r'\2\3\4[\1]', glycan, 1)
+    if not bool(re.search(r'\[[^\]]+\[', glycan)):
+      glycan2 = re.sub(r'^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
+    elif not bool(re.search(r'\[[^\]]+\[', glycan[find_nth(glycan, ']', 2):])) and bool(re.search(r'\[[^\]]+\[', glycan[:find_nth(glycan, '[', 3)])):
+      glycan2 = re.sub(r'^(.*?)\[(.*?)(\]{1,1})(.*?)\]', r'\2\3\4[\1]', glycan, 1)
     try:
       out_list.add(glycan2)
     except:
@@ -78,43 +91,17 @@ def find_isomorphs(glycan):
   temp = set()
   for k in out_list:
     if '][' in k:
-      glycan2 = re.sub('(\[.*?\])(\[.*?\])', r'\2\1', k)
+      glycan2 = re.sub(r'\[([^[\]]+)\]\[([^[\]]+)\]', r'[\2][\1]', k)
       temp.add(glycan2)
   out_list.update(temp)
   temp = set()
   #starting branch swapped with next side branch again to also include double branch swapped isomorphs
   for k in out_list:
-    if '[' in k and k.index('[') > 0 and not bool(re.search('\[[^\]]+\[', k[:k.index(']')+1])):
-      glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', k, 1)
+    if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
+      glycan2 = re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1)
       temp.add(glycan2)
   out_list.update(temp)
   return list(out_list)
-
-def seed_wildcard(df, wildcard_list, wildcard_name, r = 0.1, col = 'target'):
-  """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe in which the glycan column is called "target" and is the first column
-  | wildcard_list (list): list which glycoletters a wildcard encompasses
-  | wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature
-  | r (float): rate of replacement, default is 0.1 or 10%
-  | col (string): column name for glycan sequences; default: target\n
-  | Returns:
-  | :-
-  | Returns dataframe in which some glycoletters (from wildcard_list) have been replaced with wildcard_name
-  """
-  ###this function probably will be deprecated at some point
-  added_rows = []
-  #randomly choose glycans and replace glycoletters with wildcards
-  for k in range(len(df)):
-    temp = df[col].values.tolist()[k]
-    for j in wildcard_list:
-      if j in temp:
-        if random.uniform(0, 1) < r:
-          added_rows.append([temp.replace(j, wildcard_name)] + df.iloc[k, 1:].values.tolist())
-  added_rows = pd.DataFrame(added_rows, columns = df.columns.values.tolist())
-  #append wildcard-modified glycans and their labels to original dataframe
-  return pd.concat([df, added_rows], axis = 0, ignore_index = True)
 
 def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species'):
   """converts a dataframe such as df_species to absence/presence matrix\n
@@ -143,19 +130,37 @@ def choose_correct_isoform(glycans, reverse = False):
   | reverse (bool): whether to return the correct isomer (False) or everything except the correct isomer (True); default:False\n
   | Returns:
   | :-
-  | Returns the correct isomer as a string (if reverse=False, otherwise it returns a list of strings)
+  | Returns the correct isomer as a string (if reverse=False; otherwise it returns a list of strings)
   """
+  if len(glycans) == 1:
+      return glycans[0]
   #get what is before the first branch & its length for each glycan
-  prefix = min_process_glycans([glyc[:glyc.index('[')] for glyc in glycans])
+  mains = [bracket_removal(k[:k.rindex(']')+1]) for k in glycans]
+  prefix = min_process_glycans(mains)
+  if len(set([int(k[-2][-1]) for k in prefix])) == 1:
+    mains = [bracket_removal(k[:find_nth(k,']',k.count(']')-1)+1]) for k in glycans]
+    prefix = min_process_glycans(mains)
   prefix_len = [len(k) for k in prefix]
+  glycans2 = [g for k,g in enumerate(glycans) if prefix_len[k] == max(prefix_len)]
+  prefix = [p for k,p in enumerate(prefix) if prefix_len[k] == max(prefix_len)]
   #choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
-  if len(set(prefix_len)) == 1:
+  if len(glycans2) > 1:
     branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in prefix]
     if len(set(branch_endings)) == 1:
       branch_endings = [ord(k[0][0]) for k in prefix]
-    correct_isoform = glycans[np.argmin(branch_endings)]
+    glycans2 = [g for k,g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
+    if len(glycans2) > 1:
+        preprefix = min_process_glycans([glyc[:glyc.index('[')] for glyc in glycans2])
+        branch_endings = [int(k[-2][-1]) if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in preprefix]
+        glycans2 = [g for k,g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
+        if len(glycans2) > 1:
+          correct_isoform = sorted(glycans2)[0]
+        else:
+          correct_isoform = glycans2[0]
+    else:
+        correct_isoform = glycans2[0]
   else:
-    correct_isoform = glycans[np.argmax(prefix_len)]
+    correct_isoform = glycans2[0]
   if reverse:
     glycans.remove(correct_isoform)
     correct_isoform = glycans
@@ -197,6 +202,8 @@ def IUPAC_to_SMILES(glycan_list):
   | :-
   | Returns a list of corresponding isomeric SMILES
   """
+  if not isinstance(glycan_list, list):
+    raise TypeError("Input must be a list")
   return [convert(g)[0][1] for g in glycan_list]
 
 def canonicalize_iupac(glycan):
@@ -209,8 +216,8 @@ def canonicalize_iupac(glycan):
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
   #canonicalize usage of monosaccharides and linkages
-  replace_dic = {'Nac':'NAc', 'AC':'Ac', 'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'GlcN(Gc)':'GlcNGc', 'Neu5Ac(9Ac)':'Neu5Ac9Ac',
-                 'KDN':'Kdn', 'OSO3':'S', '-O-Su-':'S', 'H2PO3':'P', '–':'-', ' ':'', 'α':'a', 'β':'b', '.':''}
+  replace_dic = {'Nac':'NAc', 'AC':'Ac', 'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'N(Gc)':'NGc', 'GL':'Gl', '(9Ac)':'9Ac',
+                 'KDN':'Kdn', 'OSO3':'S', '-O-Su-':'S', 'H2PO3':'P', '–':'-', ' ':'', 'α':'a', 'β':'b', '.':'', '((':'(', '))':')'}
   glycan = multireplace(glycan, replace_dic)
   #trim linkers
   if '-' in glycan:
@@ -270,7 +277,7 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'([1-9]?[SP])([A-Z][^\(^\[]+)', r'\2\1', glycan)
   if bool(re.search(r'\-ol[0-9]?[SP]', glycan)):
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
-  post_process = {'5Ac(?1':'5Ac(a2', 'Fuc(?':'Fuc(a', 'GalS':'GalOS', 'GlcNAcS':'GlcNAcOS',
+  post_process = {'5Ac(?1':'5Ac(a2', '5Gc(?1':'5Gc(a2', 'Fuc(?':'Fuc(a', 'GalS':'GalOS', 'GlcNAcS':'GlcNAcOS',
                   'GalNAcS':'GalNAcOS'}
   glycan = multireplace(glycan, post_process)
   #canonicalize branch ordering

@@ -2,7 +2,7 @@ import re
 import copy
 import networkx as nx
 from glycowork.glycan_data.loader import lib, unwrap, find_nth, df_glycan
-from glycowork.motif.processing import min_process_glycans, canonicalize_iupac
+from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal
 import numpy as np
 import pandas as pd
 from scipy.sparse.linalg import eigsh
@@ -56,19 +56,6 @@ def evaluate_adjacency(glycan_part, adjustment):
     else:
       return False
   return False
-
-def bracket_removal(glycan_part):
-  """iteratively removes (nested) branches between start and end of glycan_part\n
-  | Arguments:
-  | :-
-  | glycan_part (string): residual part of a glycan from within glycan_to_graph\n
-  | Returns:
-  | :-
-  | Returns glycan_part without interfering branches
-  """
-  while bool(re.search('\[[^\[\]]+\]', glycan_part)):
-    glycan_part = re.sub('\[[^\[\]]+\]', '', glycan_part)
-  return glycan_part
 
 def glycan_to_graph(glycan):
   """the monumental function for converting glycans into graphs\n
@@ -623,10 +610,7 @@ def largest_subgraph(glycan_a, glycan_b, libr = None):
     node_dic = {k:k-min_num for k in list(lgs.nodes())}
     lgs = nx.relabel_nodes(lgs, node_dic)
     if len(list(lgs.nodes())) > 0:
-      try:
-        return graph_to_string(lgs)
-      except:
-        return graph_to_string(lgs, fallback = True, libr = libr)
+      return graph_to_string(lgs)
     else:
       return ""
   else:
@@ -658,13 +642,11 @@ def get_possible_topologies(glycan, libr = None, exhaustive = False):
         ggraph2 = copy.deepcopy(ggraph)
         ggraph2.add_edge(max(list(parts[0].nodes())), k)
         ggraph2 = nx.relabel_nodes(ggraph2, {k:i for i,k in enumerate(ggraph2.nodes())})
-        #ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
         topologies.append(ggraph2)
     else:
       ggraph2 = copy.deepcopy(ggraph)
       ggraph2.add_edge(max(list(parts[0].nodes())), k)
       ggraph2 = nx.relabel_nodes(ggraph2, {k:i for i,k in enumerate(ggraph2.nodes())})
-      #ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
       topologies.append(ggraph2)
   return topologies
 

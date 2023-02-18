@@ -22,7 +22,7 @@ data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
 net_dic = pickle.load(open(data_path, 'rb'))
 
 permitted_roots = {"Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"}
-allowed_ptms = {'OS','3S','6S','OP','1P','3P','6P','OAc','4Ac'}
+allowed_ptms = {'OS','3S','6S','OP','1P','3P','6P','OAc','4Ac','9Ac'}
 
 def safe_compare(g1, g2, libr = None):
   """compare_glycans with try/except error catch\n
@@ -751,8 +751,8 @@ def infer_roots(glycans):
   elif any(k.endswith('GlcNAc') for k in glycans):
     return {'Man(b1-4)GlcNAc(b1-4)GlcNAc'}
   #glycolipid
-  elif any(k.endswith('1Cer') for k in glycans):
-    return {'Glc1Cer', 'Gal1Cer'}
+  elif any(k.endswith('1Cer') or k.endswith('Ins') for k in glycans):
+    return {'Glc1Cer', 'Gal1Cer', 'Ins'}
   else:
     print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or Glc")
 
