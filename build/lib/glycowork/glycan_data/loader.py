@@ -104,24 +104,26 @@ def build_custom_df(df, kind = 'df_species'):
   | :-
   | Returns custom df in the form of one glycan - species/tissue/disease association per row
   """
-  if kind == 'df_species':
-    cols = ['glycan', 'Species','Genus','Family','Order','Class',
-                   'Phylum','Kingdom','Domain', 'ref']
-  elif kind == 'df_tissue':
-    cols = ['glycan', 'tissue_sample', 'tissue_species', 'tissue_id', 'tissue_ref']
-  elif kind == 'df_disease':
-    cols = ['glycan', 'disease_association', 'disease_sample', 'disease_direction', 'disease_species', 'disease_id', 'disease_ref']
-  else:
-    print("Only df_species, df_tissue, and df_disease are currently possible as input.")
-  df = df[df[cols[1]].str.len() > 2].reset_index(drop = True).loc[:,cols]
-  df.columns = ['target'] + df.columns.values.tolist()[1:]
-  df.index = df.target
-  df.drop(['target'], axis = 1, inplace = True)
-  df = df.applymap(lambda x: ast.literal_eval(x))
+  kind_to_cols = {
+        'df_species': ['glycan', 'Species','Genus','Family','Order','Class',
+                       'Phylum','Kingdom','Domain', 'ref'],
+        'df_tissue': ['glycan', 'tissue_sample', 'tissue_species', 'tissue_id', 'tissue_ref'],
+        'df_disease': ['glycan', 'disease_association', 'disease_sample', 'disease_direction',
+                       'disease_species', 'disease_id', 'disease_ref']
+    }
+  cols = kind_to_cols.get(kind, None)
+  if cols is None:
+    raise ValueError("Invalid value for 'kind' argument, only df_species, df_tissue, and df_disease are supported.")
+  df = df.loc[df[cols[1]].str.len() > 2, cols]
+  df.set_index('glycan', inplace = True)
+  df.index.name = 'target'
+  df = df.applymap(ast.literal_eval)
   try:
     df = df.explode(cols[1:]).reset_index()
   except:
     raise ImportError("Seems like you're using pandas<1.3.0; please upgrade to allow for multi-column explode")
-  return df.sort_values([cols[1], 'target'], ascending = [True, True]).reset_index(drop = True)
+  df.sort_values([cols[1], 'target'], ascending = [True, True], inplace = True)
+  df.reset_index(drop = True, inplace = True)
+  return df
 
 df_species = build_custom_df(df_glycan, kind = 'df_species')

@@ -55,7 +55,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     """
     #reformat to allow for proper annotation in all samples
     if multiple_samples:
-        if 'target' in df.columns.values.tolist():
+        if 'target' in df.columns:
           df.drop(['target'], axis = 1, inplace = True)
         df = df.T
         samples = df.shape[1]
@@ -68,11 +68,10 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                                 estimate_speedup = estimate_speedup)
     #broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
-        df.index = df[glycan_col_name].values.tolist()
-        df = df.drop([glycan_col_name], axis = 1)
-        df.columns = [label_col_name]*len(df.columns.values.tolist())
+        df.set_index(glycan_col_name, inplace = True)
+        df.columns = [label_col_name]*len(df.columns)
         df_motif = pd.concat([pd.concat([df.iloc[:,k],
-                                   df_motif],axis=1).dropna() for k in range(len(df.columns.values.tolist()))], axis = 0)
+                                   df_motif],axis = 1).dropna() for k in range(len(df.columns))], axis = 0)
         cols = df_motif.columns.values.tolist()[1:] + [df_motif.columns.values.tolist()[0]]
         df_motif = df_motif[cols]
     else:
@@ -88,7 +87,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                         equal_var = False)[1]/2 if np.mean(df_pos.iloc[:,k])>np.mean(df_neg.iloc[:,k]) else 1.0 for k in range(0,
                                                                                                                                df_motif.shape[1]-1)]
     ttests_corr = multipletests(ttests, method = 'hs')[1].tolist()
-    out = pd.DataFrame(list(zip(df_motif.columns.values.tolist()[:-1], ttests, ttests_corr)))
+    out = pd.DataFrame(list(zip(df_motif.columns.tolist()[:-1], ttests, ttests_corr)))
     out.columns = ['motif', 'pval', 'corr_pval']
     if sorting:
         return out.sort_values(by = ['corr_pval', 'pval'])
@@ -107,7 +106,7 @@ def get_representative_substructures(enrichment_df, libr = None):
     """
     if libr is None:
         libr = lib
-    glycans = list(set(df_species.target.values.tolist()))
+    glycans = list(set(df_species.target))
     #only consider motifs that are significantly enriched
     filtered_df = enrichment_df[enrichment_df.corr_pval < 0.05].reset_index(drop = True)
     pvals = filtered_df.pval.values.tolist()
@@ -164,13 +163,12 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
     | :-
     | Prints clustermap                         
     """
-    if index_col in df.columns.values.tolist():
-        df.index = df[index_col]
-        df.drop([index_col], axis = 1, inplace = True)
-    df = df.fillna(0)
+    if index_col in df.columns:
+        df.set_index(index_col, inplace = True)
+    df.fillna(0, inplace = True)
     if mode == 'motif':
         #count glycan motifs and remove rare motifs from the result
-        df_motif = annotate_dataset(df.columns.values.tolist(),
+        df_motif = annotate_dataset(df.columns.tolist(),
                                 feature_set = feature_set,
                                     extra = extra, wildcard_list = wildcard_list,
                                     estimate_speedup = estimate_speedup)
@@ -178,16 +176,16 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
         collect_dic = {}
         #distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
         if datatype == 'response':
-          for col in df_motif.columns.values.tolist():
-            indices = [i for i, x in enumerate(df_motif[col].values.tolist()) if x >= 1]
+          for col in df_motif.columns.tolist():
+            indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
             temp = np.mean(df.iloc[:, indices], axis = 1)
             collect_dic[col] = temp
           df = pd.DataFrame(collect_dic)
         elif datatype == 'presence':
-          idx = df.index.values.tolist()
-          collecty = [[np.sum(df.iloc[row, [i for i, x in enumerate(df_motif[col].values.tolist()) if x >= 1]])/df.iloc[row, :].values.sum() for col in df_motif.columns.values.tolist()] for row in range(df.shape[0])]
+          idx = df.index.tolist()
+          collecty = [[np.sum(df.iloc[row, [i for i, x in enumerate(df_motif[col]) if x >= 1]])/df.iloc[row, :].values.sum() for col in df_motif.columns] for row in range(df.shape[0])]
           df = pd.DataFrame(collecty)
-          df.columns = df_motif.columns.values.tolist()
+          df.columns = df_motif.columns
           df.index = idx
     df.dropna(axis = 1, inplace = True)
     #cluster the motif abundances
