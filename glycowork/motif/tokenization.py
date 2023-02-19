@@ -929,16 +929,18 @@ def glycan_to_composition(glycan, libr = None, stem_libr = None):
   if '{' in glycan:
     glycan = glycan.replace('{','').replace('}','')
   composition = Counter([map_to_basic(stem_libr[k]) for k in min_process_glycans([glycan])[0]])
-  if 'Me' in glycan:
-    composition['Me'] = glycan.count('Me')
-  if 'S' in glycan:
-    composition['S'] = glycan.count('S')
-  if 'P' in glycan:
-    composition['P'] = glycan.count('P')
+  allowed_mods = ['Me', 'S', 'P', 'PCho', 'PEtN']
+  for m in allowed_mods:
+    if m in glycan:
+      composition[m] = glycan.count(m)
+  if 'PCho' in glycan or 'PEtN' in glycan:
+    del composition['P']
+  if any([k in glycan for k in ['OAc','2Ac','3Ac','4Ac','6Ac','7Ac','9Ac']]):
+    composition['Ac'] = sum([glycan.count(k) for k in ['OAc','2Ac','3Ac','4Ac','6Ac','7Ac','9Ac']])
   del composition['?1-?']
   composition = dict(composition)
   if any([k not in {'Hex','dHex','HexNAc','HexN','HexA','Neu5Ac','Neu5Gc','Kdn',
-                    'Pen','Me','S','P'} for k in composition.keys()]):
+                    'Pen','Me','S','P','PCho','PEtN','Ac'} for k in composition.keys()]):
     return {}
   else:
     return composition
@@ -965,6 +967,8 @@ def composition_to_mass(dict_comp_in, mass_value = 'monoisotopic',
     dict_comp['Phosphate'] = dict_comp.pop('P')
   if 'Me' in dict_comp.keys():
     dict_comp['Methyl'] = dict_comp.pop('Me')
+  if 'Ac' in dict_comp.keys():
+    dict_comp['Acetate'] = dict_comp.pop('Ac')
   for k,v in dict_comp.items():
     theoretical_mass += mass_dict[k] * v
   return theoretical_mass + mass_dict['red_end']
