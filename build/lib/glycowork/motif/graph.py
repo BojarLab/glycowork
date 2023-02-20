@@ -169,10 +169,10 @@ def glycan_to_nxGraph(glycan, libr = None,
     parts = [k for k in parts if len(k) > 0]
     parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
                                    termini_list = termini_list, override_reducing_end = True) for k in parts]
-    len_org = len(parts[-1].nodes())
+    len_org = len(parts[-1])
     for p in range(len(parts)-1):
       parts[p] = nx.relabel_nodes(parts[p], {pn:pn+len_org for pn in parts[p].nodes()})
-      len_org += len(parts[p].nodes())
+      len_org += len(parts[p])
     g1 = nx.algorithms.operators.all.compose_all(parts)
   else:
     g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
@@ -548,7 +548,7 @@ def neighbor_is_branchpoint(graph, node):
   else:
     return False
 
-def graph_to_string(graph):
+def graph_to_string_int(graph):
   """converts glycan graph back to IUPAC-condensed format\n
   | Arguments:
   | :-
@@ -567,6 +567,29 @@ def graph_to_string(graph):
   if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')') == nodes[:nodes.index(')(')].count('('))):
     nodes = nodes.replace(')(', '(', 1)
   return canonicalize_iupac(nodes)
+
+def graph_to_string(graph):
+  """converts glycan graph back to IUPAC-condensed format\n
+  | Arguments:
+  | :-
+  | graph (networkx object): glycan graph\n
+  | Returns:
+  | :-
+  | Returns glycan in IUPAC-condensed format (string)
+  """
+  if nx.number_connected_components(graph) > 1:
+    parts = [graph.subgraph(sorted(c)) for c in nx.connected_components(graph)]
+    len_org = len(parts[-1])
+    for p in range(len(parts)-1):
+      H = nx.Graph()
+      H.add_nodes_from(sorted(parts[p].nodes(data = True)))
+      H.add_edges_from(parts[p].edges(data = True))
+      parts[p] = nx.relabel_nodes(H, {pn:pn-len_org for pn in H.nodes()})
+      len_org += len(H)
+    parts = '}'.join(['{'+graph_to_string_int(p) for p in parts])  
+    return parts[:parts.rfind('{')] + parts[parts.rfind('{')+1:]
+  else:
+    return graph_to_string_int(graph)
 
 def try_string_conversion(graph, libr = None):
   """check whether glycan graph describes a valid glycan\n
