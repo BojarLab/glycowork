@@ -236,7 +236,7 @@ def canonicalize_iupac(glycan):
   if bool(re.search(r'[1-2]\-\)', glycan)):
     glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
   #missing linkages
-  if bool(re.search(r'[^h][a-b][\(\)]', glycan)):
+  if bool(re.search(r'[^hr][a-b][\(\)]', glycan)):
     glycan = re.sub(r'([a-b])([\(\)])', r'\1?1-?\2', glycan)
   #open linkages in front of branches
   if bool(re.search(r'[0-9]\-[\[\]]', glycan)):
@@ -270,7 +270,7 @@ def canonicalize_iupac(glycan):
       glycan = glycan[:-2]
     else:
       glycan = glycan[:-2] + '-ol'
-  if (glycan.endswith('a') or glycan.endswith('b')) and not glycan.endswith('Rha'):
+  if (glycan.endswith('a') or glycan.endswith('b')) and not glycan.endswith('Rha') and not glycan.endswith('Ara'):
     glycan = glycan[:-1]
   #handle modifications
   if bool(re.search(r'\[[1-9]?[SP]\][A-Z][^\(^\[]+', glycan)):
