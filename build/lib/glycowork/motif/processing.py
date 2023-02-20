@@ -148,10 +148,12 @@ def choose_correct_isoform(glycans, reverse = False):
     branch_endings = [k[-2][-1] if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in prefix]
     if len(set(branch_endings)) == 1:
       branch_endings = [ord(k[0][0]) for k in prefix]
+    branch_endings = [int(k) for k in branch_endings]
     glycans2 = [g for k,g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
     if len(glycans2) > 1:
         preprefix = min_process_glycans([glyc[:glyc.index('[')] for glyc in glycans2])
         branch_endings = [k[-2][-1] if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in preprefix]
+        branch_endings = [int(k) for k in branch_endings]
         glycans2 = [g for k,g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
         if len(glycans2) > 1:
           correct_isoform = sorted(glycans2)[0]
