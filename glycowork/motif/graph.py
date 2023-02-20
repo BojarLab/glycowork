@@ -134,6 +134,7 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   #remove the helper monosaccharide if used
   if override_reducing_end:
     if glycan[-1] == 'x':
+      del node_dict[len(g1.nodes) - 1]
       g1.remove_node(len(g1.nodes) - 1)
   #add node labels
   nx.set_node_attributes(g1, {i:libr.index(k) for i,k in enumerate(node_dict.values())}, 'labels')
@@ -388,7 +389,7 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     else:
       g = glycan
       glycan = label
-      nbr_node_types = len(set(list(g.nodes())))
+      nbr_node_types = len(set(g.nodes()))
     #adjacency matrix:
     A = nx.to_numpy_array(g)
     N = A.shape[0]
@@ -540,9 +541,9 @@ def neighbor_is_branchpoint(graph, node):
   | Returns True if node is connected to downstream multi-branch node and False if not
   """
   edges = list(graph.edges(node))
-  edges = unwrap([e for e in edges if sum(e)>2*node])
-  edges = [graph.degree[e] for e in set(edges) if e!=node]
-  if len(edges)>0 and max(edges)>3:
+  edges = unwrap([e for e in edges if sum(e) > 2*node])
+  edges = [graph.degree[e] for e in set(edges) if e != node]
+  if len(edges) > 0 and max(edges) > 3:
     return True
   else:
     return False
@@ -557,13 +558,13 @@ def graph_to_string(graph):
   | Returns glycan in IUPAC-condensed format (string)
   """
   nodes = list(nx.get_node_attributes(graph, "string_labels").values())
-  nodes = [k+')' if graph.degree[min(i+1,len(nodes)-1)]>2 or neighbor_is_branchpoint(graph,i) else k if graph.degree[i]==2 else '('+k if graph.degree[i]==1 else k for i,k in enumerate(nodes)]
-  if graph.degree[len(graph)-1]<2:
+  nodes = [k+')' if graph.degree[min(i+1,len(nodes)-1)] > 2 or neighbor_is_branchpoint(graph,i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i,k in enumerate(nodes)]
+  if graph.degree[len(graph)-1] < 2:
     nodes = ''.join(nodes)[1:][::-1].replace('(', '', 1)[::-1]
   else:
     nodes[-1] = ')'+nodes[-1]
     nodes = ''.join(nodes)[1:]
-  if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')')==nodes[:nodes.index(')(')].count('('))):
+  if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')') == nodes[:nodes.index(')(')].count('('))):
     nodes = nodes.replace(')(', '(', 1)
   return canonicalize_iupac(nodes)
 
@@ -606,10 +607,10 @@ def largest_subgraph(glycan_a, glycan_b, libr = None):
   largest_common_subgraph = list(ismags.largest_common_subgraph())
   lgs = graph_a.subgraph(list(largest_common_subgraph[0].keys()))
   if nx.is_connected(lgs):
-    min_num = min(list(lgs.nodes()))
-    node_dic = {k:k-min_num for k in list(lgs.nodes())}
+    min_num = min(lgs.nodes())
+    node_dic = {k:k-min_num for k in lgs.nodes()}
     lgs = nx.relabel_nodes(lgs, node_dic)
-    if len(list(lgs.nodes())) > 0:
+    if len(lgs) > 0:
       return graph_to_string(lgs)
     else:
       return ""
@@ -638,14 +639,14 @@ def get_possible_topologies(glycan, libr = None, exhaustive = False):
   for k in list(parts[-1].nodes())[::2]:
     #only add to non-reducing ends
     if not exhaustive:
-      if parts[-1].degree[k] == 1 and k != max(list(parts[-1].nodes())):
+      if parts[-1].degree[k] == 1 and k != max(parts[-1].nodes()):
         ggraph2 = copy.deepcopy(ggraph)
-        ggraph2.add_edge(max(list(parts[0].nodes())), k)
+        ggraph2.add_edge(max(parts[0].nodes()), k)
         ggraph2 = nx.relabel_nodes(ggraph2, {k:i for i,k in enumerate(ggraph2.nodes())})
         topologies.append(ggraph2)
     else:
       ggraph2 = copy.deepcopy(ggraph)
-      ggraph2.add_edge(max(list(parts[0].nodes())), k)
+      ggraph2.add_edge(max(parts[0].nodes()), k)
       ggraph2 = nx.relabel_nodes(ggraph2, {k:i for i,k in enumerate(ggraph2.nodes())})
       topologies.append(ggraph2)
   return topologies

@@ -267,8 +267,7 @@ def stemify_dataset(df, stem_lib = None, libr = None,
       stem_lib[k] = k
   #stemify all offending monosaccharides
   df_out = copy.deepcopy(df)
-  df_out[glycan_col_name] = [stemify_glycan(k, stem_lib = stem_lib,
-                                            libr = libr) for k in df_out[glycan_col_name].values.tolist()]
+  df_out[glycan_col_name] = [stemify_glycan(k, stem_lib = stem_lib, libr = libr) for k in df_out[glycan_col_name]]
   return df_out
 
 def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
@@ -430,8 +429,7 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   df_sub = df_use[mask]
   comp_pool = df_sub.dropna(subset = ['Composition']).Composition.tolist()
   if isinstance(comp_pool[0], str):
-    comp_pool = list(set(comp_pool))
-    comp_pool = [ast.literal_eval(k) for k in comp_pool]
+    comp_pool = [ast.literal_eval(k) for k in set(comp_pool)]
   else:
     comp_pool = list({v['id']:v for v in comp_pool}.values())
     del comp_pool['id']
@@ -521,12 +519,11 @@ def condense_composition_matching(matched_composition, libr = None):
   match_matrix.columns = matched_composition
   #cluster glycans by pairwise equality (given the wildcards)
   clustering = DBSCAN(eps = 1, min_samples = 1).fit(match_matrix)
-  cluster_labels = clustering.labels_
-  num_clusters = len(set(cluster_labels))
+  num_clusters = len(set(clustering.labels_))
   sum_glycans = []
   #for each cluster, get the most well-defined glycan and return it
   for k in range(num_clusters):
-    cluster_glycans = [matched_composition[j] for j in range(len(cluster_labels)) if cluster_labels[j] == k]
+    cluster_glycans = [matched_composition[j] for j in range(len(clustering.labels_)) if clustering.labels_[j] == k]
     county = [sum([j.count(w) for w in wildcards]) for j in cluster_glycans]
     idx = np.where(county == np.array(county).min())[0]
     if len(idx) == 1:
@@ -663,7 +660,7 @@ def structures_to_motifs(df, feature_set = ['exhaustive'], form = 'wide'):
   #reformat to record all present motifs in the provided structures
   for k in range(len(annot2)):
     for j in range(annot.shape[1]):
-      if annot2.iloc[k,j]>0:
+      if annot2.iloc[k,j] > 0:
           out_tuples.append([annot2.columns.values.tolist()[j]] + df.iloc[k, 1:].values.tolist())
   #group abundances on a motif level
   motif_df = pd.DataFrame(out_tuples)

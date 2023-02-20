@@ -60,7 +60,7 @@ def motif_matrix(glycans):
   #counts glycoletters in each glycan
   wga_letter = pd.DataFrame([{i:g.count(i) for i in libr} for g in glycans])
   out_matrix = pd.concat([wga_letter, wga_di_out], axis = 1)
-  return out_matrix.loc[:,~out_matrix.columns.duplicated()].reset_index(drop = True)
+  return out_matrix.reset_index(drop = True).loc[:,~out_matrix.columns.duplicated()]
 
 def estimate_lower_bound(glycans, motifs):
   """searches for motifs which are present in at least glycan; not 100% exact but useful for speedup\n
@@ -79,7 +79,7 @@ def estimate_lower_bound(glycans, motifs):
   #convert everything to one giant string
   glycans = '_'.join(glycans)
   #pseudo-linearize motifs
-  motif_ish = [k.replace('[','').replace(']','') for k in motifs.motif.values.tolist()]
+  motif_ish = [k.replace('[','').replace(']','') for k in motifs.motif]
   #check if a motif occurs in giant string
   idx = [k for k, j in enumerate(motif_ish) if j in glycans]
   return motifs.iloc[idx, :].reset_index(drop = True)
@@ -104,26 +104,26 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   #check whether termini are specified
   if extra == 'termini':
     if len(termini_list) < 1:
-      termini_list = [eval(k) for k in motifs.termini_spec.values.tolist()]
+      termini_list = [eval(k) for k in motifs.termini_spec]
   if libr is None:
     libr = lib
   #count the number of times each motif occurs in a glycan
   if extra == 'termini':
     ggraph = ensure_graph(glycan, libr = libr, termini = 'calc')
-    res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
+    res = [subgraph_isomorphism(ggraph, motifs.motif[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
                               termini_list = termini_list[k],
                                 count = True) for k in range(len(motifs))]*1
   else:
     ggraph = ensure_graph(glycan, libr = libr, termini = 'ignore')
-    res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
+    res = [subgraph_isomorphism(ggraph, motifs.motif[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
                               termini_list = termini_list,
                                 count = True) for k in range(len(motifs))]*1
       
-  out = pd.DataFrame(columns = motifs.motif_name.values.tolist())
+  out = pd.DataFrame(columns = motifs.motif_name)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
   if isinstance(glycan, str):
@@ -203,7 +203,7 @@ def annotate_dataset(glycans, motifs = None,
   #checks whether termini information is provided
   if extra == 'termini':
     if len(termini_list) < 1:
-      termini_list = [eval(k) for k in motifs.termini_spec.values.tolist()]
+      termini_list = [eval(k) for k in motifs.termini_spec]
   shopping_cart = []
   if 'known' in feature_set:
     #counts literature-annotated motifs in each glycan
