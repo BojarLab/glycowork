@@ -105,6 +105,7 @@ def find_isomorphs(glycan):
       glycan2 = re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1)
       temp.add(glycan2)
   out_list.update(temp)
+  out_list = {k for k in out_list if not any([j in k for j in ['[[', ']]']])}
   if floaty:
     out_list = {floaty+k for k in out_list}
   return list(out_list)
