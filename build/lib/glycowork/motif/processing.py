@@ -76,6 +76,10 @@ def find_isomorphs(glycan):
   | :-
   | Returns list of unique glycan notations (strings) for a glycan in IUPAC-condensed
   """
+  floaty = False
+  if '{' in glycan:
+    floaty = glycan[:glycan.rindex('}')+1]
+    glycan = glycan[glycan.rindex('}')+1:]
   out_list = {glycan}
   #starting branch swapped with next side branch
   if '[' in glycan and glycan.index('[') > 0:
@@ -101,6 +105,8 @@ def find_isomorphs(glycan):
       glycan2 = re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1)
       temp.add(glycan2)
   out_list.update(temp)
+  if floaty:
+    out_list = {floaty+k for k in out_list}
   return list(out_list)
 
 def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species'):
@@ -133,7 +139,11 @@ def choose_correct_isoform(glycans, reverse = False):
   | Returns the correct isomer as a string (if reverse=False; otherwise it returns a list of strings)
   """
   if len(glycans) == 1:
-      return glycans[0]
+    return glycans[0]
+  floaty = False
+  if '{' in glycans[0]:
+    floaty = glycans[0][:glycans[0].rindex('}')+1]
+    glycans = [k[k.rindex('}')+1:] for k in glycans]
   #get what is before the first branch & its length for each glycan
   mains = [bracket_removal(k[:k.rindex(']')+1]) for k in glycans]
   prefix = min_process_glycans(mains)
@@ -163,6 +173,8 @@ def choose_correct_isoform(glycans, reverse = False):
         correct_isoform = glycans2[0]
   else:
     correct_isoform = glycans2[0]
+  if floaty:
+    correct_isoform = floaty + correct_isoform
   if reverse:
     glycans.remove(correct_isoform)
     correct_isoform = glycans
