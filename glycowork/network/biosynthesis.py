@@ -154,6 +154,7 @@ def get_virtual_nodes(glycan, graph_dic, libr = None, min_size = 1):
   #get biosynthetic precursors
   ggraph_nb_t = create_neighbors(ggraph, libr = libr, min_size = min_size)
   ggraph_nb_t = [graph_to_string(k) for k in ggraph_nb_t]
+  #this might not be necessary anymore with the better graph_to_string
   ggraph_nb_t = [k if k[0] != '[' else k.replace('[','',1).replace(']','',1) for k in ggraph_nb_t]
 
   ggraph_nb_t2 = []
@@ -358,11 +359,8 @@ def shells_to_edges(prev_shell, next_shell):
   | :-
   | Returns mapped edges between two virtual node generations
   """
-  edges_out = []
   #find connections/edges between virtual nodes from propagate_virtuals run N and propagate_virtuals run N+1
-  for m in range(len(prev_shell)):
-    edges_out.append(unwrap([[(prev_shell[m][k], next_shell[k][j]) for j in range(len(next_shell[k]))] for k in range(len(prev_shell[m]))]))
-  return edges_out
+  return [unwrap([[(prev_shell[m][k], next_shell[k][j]) for j in range(len(next_shell[k]))] for k in range(len(prev_shell[m]))]) for m in range(len(prev_shell))]
 
 
 def find_path(glycan_a, glycan_b, graph_dic, libr = None,
@@ -443,11 +441,7 @@ def get_unconnected_nodes(network, glycan_list):
   | :-
   | Returns list of unconnected nodes
   """
-  connected_nodes = network.edges()
-  connected_nodes = set(sum(connected_nodes, ()))
-  #find nodes that have no edges
-  unconnected = [k for k in glycan_list if k not in connected_nodes]
-  return unconnected
+  return [k for k in glycan_list if k not in set(sum(network.edges(), ()))]
 
 def filter_disregard(network, attr = 'diffs', value = 'disregard'):
   """filters out mistaken edges\n
@@ -574,8 +568,8 @@ def process_ptm(glycans, graph_dic, allowed_ptms = allowed_ptms,
   edges = [find_ptm(k, glycans, graph_dic, allowed_ptms = allowed_ptms,
                     libr = libr, ggraphs = ggraphs, suffix = suffix,
                     stem_lib = stem_lib) for k in ptm_glycans]
-  if len([k for k in edges if k != 0]) > 0:
-    edges, edge_labels = zip(*[k for k in edges if k != 0])
+  if m := [k for k in edges if k != 0]:
+    edges, edge_labels = zip(*m)
     return list(edges), list(edge_labels)
   else:
     return []
@@ -676,7 +670,7 @@ def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, lib
       e, el = find_path(node, r_target, graph_dic, libr = libr, permitted_roots = permitted_roots, min_size = min_size)
       edges.append(e)
       edge_labels.append(el)
-    edge_labels = unwrap([[edge_labels[k][edges[k][j]] for j in range(len(edges[k]))] for k in range(len(edge_labels))])
+    edge_labels = unwrap([[k[j] for j in edges[i]] for i,k in enumerate(edge_labels)])
     edges = unwrap(edges)
     node_labels = {node:(nodeDict[node]['virtual'] if node in network.nodes() else 1) for node in unwrap(edges)}
     network_out = update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
@@ -793,8 +787,7 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
     try:
       virtual_edges, edge_labels = find_shortest_path(k, [j for j in network.nodes() if j != k], graph_dic, libr = libr,
                                                     permitted_roots = permitted_roots, min_size = min_size)
-      total_nodes = set(list(sum(virtual_edges, ())))
-      new_nodes.append([j for j in total_nodes if j not in network.nodes()])
+      new_nodes.append([j for j in set(sum(virtual_edges, ())) if j not in network.nodes()])
       new_edges.append(virtual_edges)
       new_edge_labels.append(edge_labels)
     except:
@@ -865,8 +858,7 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   if len(isomeric_graphs) > 0:
     isomeric_nodes = [[virtual_nodes[virtual_graphs.index(k[0])],
                         virtual_nodes[virtual_graphs.index(k[1])]] for k in isomeric_graphs]
-    to_cut = [choose_correct_isoform(k, reverse = True)[0] for k in isomeric_nodes]
-    network.remove_nodes_from(to_cut)
+    network.remove_nodes_from([choose_correct_isoform(k, reverse = True)[0] for k in isomeric_nodes])
   network.remove_edges_from(nx.selfloop_edges(network))
   #make network directed
   network = make_network_directed(network)
