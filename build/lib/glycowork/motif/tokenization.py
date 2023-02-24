@@ -119,12 +119,12 @@ def get_core(sugar):
   | :-
   | Returns core monosaccharide as string
   """
-  easy_cores = ['GlcNAc', 'GalNAc', 'ManNAc', 'FucNAc', 'QuiNAc', 'RhaNAc', 'GulNAc',
-                'IdoNAc', 'Ins', 'MurNAc', 'HexNAc', '6dAltNAc', 'AcoNAc', 'GlcA', 'AltA',
+  easy_cores = ['HexNAc', 'GlcNAc', 'GalNAc', 'ManNAc', 'FucNAc', 'QuiNAc', 'RhaNAc', 'GulNAc',
+                'IdoNAc', 'Ins', 'MurNAc', 'HexNAc', '6dAltNAc', 'AcoNAc', 'HexA', 'GlcA', 'AltA',
                 'GalA', 'ManA', 'Tyv', 'Yer', 'Abe', 'GlcfNAc', 'GalfNAc', 'ManfNAc',
                 'FucfNAc', 'IdoA', 'GulA', 'LDManHep', 'DDManHep', 'DDGlcHep', 'LyxHep', 'ManHep',
-                'DDAltHep', 'IdoHep', 'DLGlcHep', 'GalHep']
-  next_cores = ['GlcN', 'GalN', 'ManN', 'FucN', 'QuiN', 'RhaN', 'AraN', 'IdoN' 'Glcf', 'Galf', 'Manf',
+                'DDAltHep', 'IdoHep', 'DLGlcHep', 'GalHep', 'dHex']
+  next_cores = ['HexN', 'GlcN', 'GalN', 'ManN', 'FucN', 'QuiN', 'RhaN', 'AraN', 'IdoN' 'Glcf', 'Galf', 'Manf',
                 'Fucf', 'Araf', 'Lyxf', 'Xylf', '6dAltf', 'Ribf', 'Fruf', 'Apif', 'Kdof', 'Sedf',
                 '6dTal', 'AltNAc', '6dAlt']
   hard_cores = ['Glc', 'Gal', 'Man', 'Fuc', 'Qui', 'Rha', 'Ara', 'Oli', 'Kdn', 'Gul', 'Lyx',
