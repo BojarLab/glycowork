@@ -2,7 +2,7 @@ import re
 import copy
 import networkx as nx
 from glycowork.glycan_data.loader import lib, unwrap, find_nth, df_glycan
-from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal
+from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, expand_lib
 import numpy as np
 import pandas as pd
 from scipy.sparse.linalg import eigsh
@@ -251,6 +251,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
       if wildcards_ptm:
         glycan_a = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', glycan_a).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
         glycan_b = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', glycan_b).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+        libr = expand_lib(libr, [glycan_a, glycan_b])
       if wildcards is False:
         if sorted(glycan_a.replace('[','').replace(']','')) == sorted(glycan_b.replace('[','').replace(']','')):
           g1 = glycan_to_nxGraph(glycan_a, libr = libr)
@@ -306,6 +307,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     if wildcards_ptm:
       glycan = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', glycan).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
       motif = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', motif).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+      libr = expand_lib(libr, [glycan, motif])
     if extra == 'termini':
       g1 = glycan_to_nxGraph(glycan, libr = libr, termini = 'calc')
       g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided',
