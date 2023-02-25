@@ -137,8 +137,7 @@ def glycan_to_nxGraph_int(glycan, libr = None,
       del node_dict[len(g1.nodes) - 1]
       g1.remove_node(len(g1.nodes) - 1)
   #add node labels
-  nx.set_node_attributes(g1, {i:libr.index(k) for i,k in enumerate(node_dict.values())}, 'labels')
-  nx.set_node_attributes(g1, {i:k for i,k in enumerate(node_dict.values())}, 'string_labels')
+  nx.set_node_attributes(g1, {i:{'labels':libr.index(k), 'string_labels':k} for i,k in enumerate(node_dict.values())})
   if termini == 'ignore':
     pass
   elif termini == 'calc':
@@ -166,9 +165,8 @@ def glycan_to_nxGraph(glycan, libr = None,
     libr = lib
   if '{' in glycan:
     parts = glycan.replace('}','{').split('{')
-    parts = [k for k in parts if len(k) > 0]
     parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
-                                   termini_list = termini_list, override_reducing_end = True) for k in parts]
+                                   termini_list = termini_list, override_reducing_end = True) for k in parts if len(k) > 0]
     len_org = len(parts[-1])
     for p in range(len(parts)-1):
       parts[p] = nx.relabel_nodes(parts[p], {pn:pn+len_org for pn in parts[p].nodes()})
