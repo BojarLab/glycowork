@@ -13,4 +13,4 @@ glyles
 pubchempy
 matplotlib-inline
 python-louvain
-drawSvg
+drawSvg~=1.9

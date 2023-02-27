@@ -26,5 +26,5 @@ setuptools.setup(
                       "seaborn", "xgboost", "mpld3",
                       "requests", "pandas", "glyles",
                       "pubchempy", "matplotlib-inline",
-                      "python-louvain", "drawSvg"],
+                      "python-louvain", "drawSvg~=1.9"],
 )
