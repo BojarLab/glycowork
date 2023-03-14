@@ -145,14 +145,18 @@ def choose_correct_isoform(glycans, reverse = False):
   if '{' in glycans[0]:
     floaty = glycans[0][:glycans[0].rindex('}')+1]
     glycans = [k[k.rindex('}')+1:] for k in glycans]
+  #heuristic: main chain should contain the most monosaccharides of all chains
+  mains = [bracket_removal(g) for g in glycans]
+  mains = [len(k) for k in min_process_glycans(mains)]
+  glycans2 = [g for k,g in enumerate(glycans) if mains[k] == max(mains)]
   #get what is before the first branch & its length for each glycan
-  mains = [bracket_removal(k[:k.rindex(']')+1]) for k in glycans]
+  mains = [bracket_removal(k[:k.rindex(']')+1]) for k in glycans2]
   prefix = min_process_glycans(mains)
   if len(set([k[-2][-1] for k in prefix])) == 1:
-    mains = [bracket_removal(k[:find_nth(k,']',k.count(']')-1)+1]) for k in glycans]
+    mains = [bracket_removal(k[:find_nth(k,']',k.count(']')-1)+1]) for k in glycans2]
     prefix = min_process_glycans(mains)
   prefix_len = [len(k) for k in prefix]
-  glycans2 = [g for k,g in enumerate(glycans) if prefix_len[k] == max(prefix_len)]
+  glycans2 = [g for k,g in enumerate(glycans2) if prefix_len[k] == max(prefix_len)]
   prefix = [p for k,p in enumerate(prefix) if prefix_len[k] == max(prefix_len)]
   #choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(glycans2) > 1:
