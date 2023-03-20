@@ -333,6 +333,8 @@ def find_path(glycan_a, glycan_b, graph_dic, libr = None,
   dist = int(larger_glycan.count('(')-smaller_glycan.count('('))
   if dist < 1:
     return [], {}
+  if dist > 5:
+    return [], {}
   virtuals_t = [[larger_glycan]]
   #while ensuring that glycans don't become smaller than the root, find biosynthetic precursors of each glycan in glycans
   virtual_shells_t = [[[larger_glycan]]] + [virtuals_t := [get_virtual_nodes(k, graph_dic, libr = libr, min_size = min_size)[1] for k in unwrap(virtuals_t) if k.count('(') > (min_size-1)] for s in range(dist)]
