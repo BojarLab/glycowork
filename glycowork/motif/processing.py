@@ -63,8 +63,8 @@ def bracket_removal(glycan_part):
   | :-
   | Returns glycan_part without interfering branches
   """
-  while bool(re.search('\[[^\[\]]+\]', glycan_part)):
-    glycan_part = re.sub('\[[^\[\]]+\]', '', glycan_part)
+  while bool(re.search(r'\[[^\[\]]+\]', glycan_part)):
+    glycan_part = re.sub(r'\[[^\[\]]+\]', '', glycan_part)
   return glycan_part
 
 def find_isomorphs(glycan):
@@ -129,6 +129,28 @@ def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species
   mat.index = species
   return mat
 
+def find_matching_brackets_indices(s):
+  stack = []
+  opening_indices = {}
+  matching_indices = []
+    
+  for i, c in enumerate(s):
+    if c == '[':
+      stack.append(i)
+      opening_indices[i] = len(stack) - 1
+    elif c == ']':
+      if len(stack) > 0:
+        opening_index = stack.pop()
+        matching_indices.append((opening_index, i))
+        del opening_indices[opening_index]
+
+  if len(stack) > 0:
+    print("Unmatched opening brackets:", [s[i] for i in stack])
+    return None
+  else:
+    matching_indices.sort()
+    return matching_indices
+
 def choose_correct_isoform(glycans, reverse = False):
   """given a list of glycan branch isomers, this function returns the correct isomer\n
   | Arguments:
@@ -149,17 +171,26 @@ def choose_correct_isoform(glycans, reverse = False):
   mains = [bracket_removal(g) for g in glycans]
   mains = [len(k) for k in min_process_glycans(mains)]
   glycans2 = [g for k,g in enumerate(glycans) if mains[k] == max(mains)]
-  #get what is before the first branch & its length for each glycan
-  mains = [bracket_removal(k[:k.rindex(']')+1]) for k in glycans2]
-  prefix = min_process_glycans(mains)
-  if len(set([k[-2][-1] for k in prefix])) == 1:
-    mains = [bracket_removal(k[:find_nth(k,']',k.count(']')-1)+1]) for k in glycans2]
-    prefix = min_process_glycans(mains)
-  prefix_len = [len(k) for k in prefix]
-  glycans2 = [g for k,g in enumerate(glycans2) if prefix_len[k] == max(prefix_len)]
-  prefix = [p for k,p in enumerate(prefix) if prefix_len[k] == max(prefix_len)]
+  #handle neighboring branches
+  kill_list = []
+  for g in glycans2:
+    if '][' in g:
+      try:
+        match = re.search(r'\[([^[\]]+)\]\[([^[\]]+)\]', g)
+        if match.group(1).count('(') < match.group(2).count('('):
+          kill_list.append(g)
+        elif match.group(1).count('(') == match.group(2).count('('):
+          if int(match.group(1)[-2]) > int(match.group(2)[-2]):
+            kill_list.append(g)
+      except:
+        pass
+  glycans2 = [k for k in glycans2 if k not in kill_list]
   #choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(glycans2) > 1:
+    candidates = {k:find_matching_brackets_indices(k) for k in glycans2}
+    prefix = [min_process_glycans([k[j[0]+1:j[1]] for j in candidates[k]]) for k in candidates.keys()]
+    prefix = [np.argmax([len(j) for j in k]) for k in prefix]
+    prefix = min_process_glycans([k[:candidates[k][prefix[i]][0]] for i,k in enumerate(candidates.keys())])
     branch_endings = [k[-2][-1] if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in prefix]
     if len(set(branch_endings)) == 1:
       branch_endings = [ord(k[0][0]) for k in prefix]
