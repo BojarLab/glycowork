@@ -4,6 +4,9 @@
 __all__ = []
 
 # %% ../02_ml.ipynb 2
+from .ml.models import *
+from .ml.inference import *
+from .ml.processing import *
 from .ml.model_training import *
 from .ml.train_test_split import *
 from .glycan_data.loader import df_species, df_glycan

@@ -38,7 +38,7 @@ def get_lib(glycan_list):
   | Returns sorted list of unique glycoletters (strings) in glycan_list
   """
   #convert to glycoletters & flatten
-  lib = unwrap(min_process_glycans(glycan_list))
+  lib = unwrap(min_process_glycans(set(glycan_list)))
   #get unique vocab
   return sorted(set(lib))
 
