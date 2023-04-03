@@ -14,3 +14,7 @@ pubchempy
 matplotlib-inline
 python-louvain
 drawSvg~=1.9
+
+[test]
+torch_geometric
+pycairo
