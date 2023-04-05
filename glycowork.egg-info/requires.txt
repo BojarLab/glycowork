@@ -13,7 +13,7 @@ glyles
 pubchempy
 matplotlib-inline
 python-louvain
-drawSvg~=1.9
+drawSvg~=2.0
 
 [test]
 torch_geometric

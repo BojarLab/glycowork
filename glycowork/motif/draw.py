@@ -4,7 +4,7 @@ from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import expand_lib, min_process_glycans
 
 import cairo, cairosvg, cairocffi
-import drawSvg as draw
+import drawsvg as draw
 import networkx as nx
 import numpy as np
 import sys
@@ -66,7 +66,7 @@ def get_bounding_box(d, pad=0, resolution=1/256, max_size=10000):
   # https://github.com/cduck/drawSvg/issues/25
     rbox = (-max_size, -max_size, 2*max_size, 2*max_size)
     # Hack, add an argument to asSvg instead
-    svg_lines = d.asSvg().split('\n')
+    svg_lines = d.as_svg().split('\n')
     svg_lines[2] = f'viewBox="{rbox[0]}, {rbox[1]}, {rbox[2]}, {rbox[3]}">'
     svg_code = '\n'.join(svg_lines)
     
@@ -84,7 +84,7 @@ def get_bounding_box(d, pad=0, resolution=1/256, max_size=10000):
 def fit_to_contents(d, pad=0, resolution=1/256, max_size=10000):
   # https://github.com/cduck/drawSvg/issues/25
     bb = get_bounding_box(d, pad=pad, resolution=resolution, max_size=max_size)
-    d.viewBox = (bb[0], -bb[1]-bb[3], bb[2], bb[3])
+    d.view_box = (bb[0], -bb[1]-bb[3], bb[2], bb[3])
     d.width, d.height = bb[2], bb[3]
     
     # Debug: Draw bounding rectangle
@@ -103,14 +103,13 @@ snfg_brown = '#9f6d55'
 snfg_orange = '#ef6130'
 snfg_red = '#C23537'
 
-additions = ['-', 'blank', 'redEnd', 'free', 
+additions = ['-', 'blank', 'red_end', 'free', 
              '04X', '15A', '02A', '13X',
              '24X', '35X', '04A', '15X',
              '02X', '13A', '24A', '35A',
              '25A', '03A', '14X', '25X',
              '03X', '14A', 'Z', 'Y',
-             'B', 'C', 'text']
-draw_lib = expand_lib(lib, additions)
+             'B', 'C', 'text', 'non_glycan']
 
 sugar_dict = {
   "Hex": ['Hex', snfg_white, False],
@@ -227,10 +226,11 @@ sugar_dict = {
   "Tag": ['Assigned', snfg_yellow, False],
   "Sor": ['Assigned', snfg_orange, False],
   "Psi": ['Assigned', snfg_pink, False],
+  "non_glycan": ['Assigned', 'black', False],
 
   "blank": ['empty', snfg_white, False],
   "text": ['text', None, None],
-  "redEnd" : ['redEnd', None, None],
+  "red_end" : ['red_end', None, None],
   "free" : ['free', None, None],
   "04X" : ['04X', None, None],
   "15A" : ['15A', None, None],
@@ -255,6 +255,8 @@ sugar_dict = {
   "B" : ['B', None, None],
   "C" : ['C', None, None]
 }   
+
+draw_lib = expand_lib(lib, ['-'] + list(sugar_dict.keys()))
 
 def hex_circumference(x_pos, y_pos, dim):
   p = draw.Path(stroke_width=0.04*dim, stroke='black')
@@ -318,19 +320,19 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     if furanose == True:
       p = draw.Path(stroke_width=0)
       p.M(0-x_pos*dim-dim, 0+y_pos*dim)
       p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
       d.append(p)
-      d.append(draw.Text('f', dim*0.30, path=p, text_anchor='middle', valign='middle'))
+      d.append(draw.Text('f', dim*0.30, path=p, text_anchor='middle', center=True))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))
 
   if shape == 'HexNAc':
     # hexnac - square
@@ -340,57 +342,58 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     if furanose == True:
       p = draw.Path(stroke_width=0)
       p.M(0-x_pos*dim-dim, 0+y_pos*dim)
       p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
       d.append(p)
-      d.append(draw.Text('f', dim*0.30, path=p, text_anchor='middle', valign='middle'))
+      d.append(draw.Text('f', dim*0.30, path=p, text_anchor='middle', center=True))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
   if shape == 'HexN':
     # hexosamine - crossed square
     d.append(draw.Rectangle((0-x_pos*dim)-(dim/2),(0+y_pos*dim)-(dim/2),dim,dim, fill='white', stroke_width=0.04*dim, stroke = 'black'))
-    d.append(draw.Lines((0-x_pos*dim)-(dim/2), (0+y_pos*dim)+(dim/2),
-                        (0-x_pos*dim)+(dim/2), (0+y_pos*dim)+(dim/2),
+    d.append(draw.Lines((0-x_pos*dim)-(dim/2), (0+y_pos*dim)-(dim/2),
                         (0-x_pos*dim)+(dim/2), (0+y_pos*dim)-(dim/2),
-                        (0-x_pos*dim)-(dim/2), (0+y_pos*dim)+(dim/2),
+                        (0-x_pos*dim)+(dim/2), (0+y_pos*dim)+(dim/2),
+                        (0-x_pos*dim)-(dim/2), (0+y_pos*dim)-(dim/2),
             close=True,
             fill=color,
             stroke='black', stroke_width = 0))
     p = draw.Path(stroke_width=0.04*dim, stroke='black',)
-    p.M((0-x_pos*dim)-(dim/2), (0+y_pos*dim)+(dim/2))
-    p.L((0-x_pos*dim)+(dim/2), (0+y_pos*dim)+(dim/2))  
-    d.append(p)
-    p = draw.Path(stroke_width=0.04*dim, stroke='black',)
-    p.M((0-x_pos*dim)+(dim/2), (0+y_pos*dim)+(dim/2))
+    p.M((0-x_pos*dim)-(dim/2), (0+y_pos*dim)-(dim/2))
     p.L((0-x_pos*dim)+(dim/2), (0+y_pos*dim)-(dim/2))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black',)
     p.M((0-x_pos*dim)+(dim/2), (0+y_pos*dim)-(dim/2))
-    p.L((0-x_pos*dim)-(dim/2), (0+y_pos*dim)+(dim/2))  
+    p.L((0-x_pos*dim)+(dim/2), (0+y_pos*dim)+(dim/2))  
+    d.append(p)
+    p = draw.Path(stroke_width=0.04*dim, stroke='black',)
+    p.M((0-x_pos*dim)+(dim/2), (0+y_pos*dim)+(dim/2))
+    p.L((0-x_pos*dim)-(dim/2), (0+y_pos*dim)-(dim/2))  
     d.append(p)
     # text annotation
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
-  if shape == 'HexA':
+  if shape == 'HexA_2':
     # hexuronate - divided diamond
+    # AltA / IdoA
     d.append(draw.Lines((0-x_pos*dim),         (0+y_pos*dim)+(dim/2),
                         (0-x_pos*dim)+(dim/2), (0+y_pos*dim),
                         (0-x_pos*dim),         (0+y_pos*dim)-(dim/2),
@@ -423,17 +426,16 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
-  if shape == 'HexA_2':
+  if shape == 'HexA':
     # hexuronate - divided diamond (colors flipped)
-    # AltA / IdoA
     d.append(draw.Lines((0-x_pos*dim),         (0+y_pos*dim)+(dim/2),
                         (0-x_pos*dim)+(dim/2), (0+y_pos*dim),
                         (0-x_pos*dim),         (0+y_pos*dim)-(dim/2),
@@ -466,19 +468,19 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
   if shape == 'dHex':
     # deoxyhexose - triangle
-    d.append(draw.Lines((0-x_pos*dim)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5), #-(dim*1/3)
-                    (0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim)-(((3**0.5)/2)*dim*0.5),
-                    (0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5),
+    d.append(draw.Lines((0-x_pos*dim)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5), #-(dim*1/3)
+                    (0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim)+(((3**0.5)/2)*dim*0.5),
+                    (0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5),
             close=True,
             fill=color,
             stroke='black', stroke_width = 0.04*dim))
@@ -487,52 +489,58 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
+    if furanose == True:
+      p = draw.Path(stroke_width=0)
+      p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.05*dim)
+      p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.05*dim)  
+      d.append(p)
+      d.append(draw.Text('f', dim*0.30, path=p, text_anchor='middle', center=True))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
   if shape == 'dHexNAc':
     # deoxyhexnac - divided triangle
-    d.append(draw.Lines((0-x_pos*dim)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5), #-(dim*1/3) for center of triangle
-                    (0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim)-(((3**0.5)/2)*dim*0.5), # -(dim*1/3) for bottom alignment
-                    (0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5), # -(((3**0.5)/2)*dim*0.5) for half of triangle height
+    d.append(draw.Lines((0-x_pos*dim)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5), #-(dim*1/3) for center of triangle
+                    (0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim)+(((3**0.5)/2)*dim*0.5), # -(dim*1/3) for bottom alignment
+                    (0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5), # -(((3**0.5)/2)*dim*0.5) for half of triangle height
             close=True,
             fill='white',
             stroke='black', stroke_width = 0.04*dim))
-    d.append(draw.Lines((0-x_pos*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5), #-(dim*1/3)
-                    (0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim)-(((3**0.5)/2)*dim*0.5),
-                    (0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5),
+    d.append(draw.Lines((0-x_pos*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5), #-(dim*1/3)
+                    (0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim)+(((3**0.5)/2)*dim*0.5),
+                    (0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5),
             close=True,
             fill=color,
             stroke='black', stroke_width = 0))
     p = draw.Path(stroke_width=0.04*dim, stroke='black',)
-    p.M((0-x_pos*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5))
-    p.L((0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim)-(((3**0.5)/2)*dim*0.5))  
+    p.M((0-x_pos*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5))
+    p.L((0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim)+(((3**0.5)/2)*dim*0.5))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black',)
-    p.M((0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim)-(((3**0.5)/2)*dim*0.5))
-    p.L((0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5))  
+    p.M((0-x_pos*dim)+(dim/2)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim)+(((3**0.5)/2)*dim*0.5))
+    p.L((0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black',)
-    p.M((0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5))
-    p.L((0-x_pos*dim), (0+y_pos*dim)-(((3**0.5)/2)*dim*0.5))  
+    p.M((0-x_pos*dim)+(dim)-(0.5*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5))
+    p.L((0-x_pos*dim), (0+y_pos*dim)+(((3**0.5)/2)*dim*0.5))  
     d.append(p)
     # text annotation
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
   if shape == 'ddHex':
     # dideoxyhex - flat rectangle
@@ -548,26 +556,26 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
   if shape == 'Pen':
     # pentose - star
-    d.append(draw.Lines((0-x_pos*dim)+0 ,         (0+y_pos*dim)+(0.5*dim)/cos(radians(18)),
-                    (0-x_pos*dim)+((0.25*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)+((0.25*dim)/cos(radians(18)))*sin(radians(54)),
-                    (0-x_pos*dim)+((0.5*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)+((0.5*dim)/cos(radians(18)))*sin(radians(18)),
-                    (0-x_pos*dim)+((0.25*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)-((0.25*dim)/cos(radians(18)))*sin(radians(18)),
-                    (0-x_pos*dim)+((0.5*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)-((0.5*dim)/cos(radians(18)))*sin(radians(54)),
-                    (0-x_pos*dim)+0 ,         (0+y_pos*dim)-(0.25*dim)/cos(radians(18)),
-                    (0-x_pos*dim)-((0.5*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)-((0.5*dim)/cos(radians(18)))*sin(radians(54)),
-                    (0-x_pos*dim)-((0.25*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)-((0.25*dim)/cos(radians(18)))*sin(radians(18)),
-                    (0-x_pos*dim)+-((0.5*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)+((0.5*dim)/cos(radians(18)))*sin(radians(18)),
-                    (0-x_pos*dim)-((0.25*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)+((0.25*dim)/cos(radians(18)))*sin(radians(54)),
+    d.append(draw.Lines((0-x_pos*dim)+0 ,         (0+y_pos*dim)-(0.5*dim)/cos(radians(18)),
+                    (0-x_pos*dim)+((0.25*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)-((0.25*dim)/cos(radians(18)))*sin(radians(54)),
+                    (0-x_pos*dim)+((0.5*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)-((0.5*dim)/cos(radians(18)))*sin(radians(18)),
+                    (0-x_pos*dim)+((0.25*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)+((0.25*dim)/cos(radians(18)))*sin(radians(18)),
+                    (0-x_pos*dim)+((0.5*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)+((0.5*dim)/cos(radians(18)))*sin(radians(54)),
+                    (0-x_pos*dim)+0 ,         (0+y_pos*dim)+(0.25*dim)/cos(radians(18)),
+                    (0-x_pos*dim)-((0.5*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)+((0.5*dim)/cos(radians(18)))*sin(radians(54)),
+                    (0-x_pos*dim)-((0.25*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)+((0.25*dim)/cos(radians(18)))*sin(radians(18)),
+                    (0-x_pos*dim)+-((0.5*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)-((0.5*dim)/cos(radians(18)))*sin(radians(18)),
+                    (0-x_pos*dim)-((0.25*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)-((0.25*dim)/cos(radians(18)))*sin(radians(54)),
                         close=True,
                         fill= color,
                         stroke='black', stroke_width = 0.04*dim))
@@ -576,13 +584,19 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
+    if furanose == True:
+      p = draw.Path(stroke_width=0)
+      p.M(0-x_pos*dim-dim, 0+y_pos*dim)
+      p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
+      d.append(p)
+      d.append(draw.Text('f', dim*0.30, path=p, text_anchor='middle', center=True))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
   if shape == 'dNon':
     # deoxynonulosonate - diamond
@@ -598,13 +612,13 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
   if shape == 'ddNon':
     # dideoxynonulosonate - flat diamond
@@ -620,13 +634,13 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
    
   if shape == 'Unknown':
     # unknown - flat hexagon
@@ -644,21 +658,21 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
   if shape == 'Assigned':
     # assigned - pentagon
-    d.append(draw.Lines((0-x_pos*dim)+0 ,         (0+y_pos*dim)+(0.5*dim)/cos(radians(18)),
-                        (0-x_pos*dim)+((0.5*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)+((0.5*dim)/cos(radians(18)))*sin(radians(18)),
-                        (0-x_pos*dim)+((0.5*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)-((0.5*dim)/cos(radians(18)))*sin(radians(54)),
-                        (0-x_pos*dim)-((0.5*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)-((0.5*dim)/cos(radians(18)))*sin(radians(54)),
-                        (0-x_pos*dim)+-((0.5*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)+((0.5*dim)/cos(radians(18)))*sin(radians(18)),
+    d.append(draw.Lines((0-x_pos*dim)+0 ,         (0+y_pos*dim)-(0.5*dim)/cos(radians(18)),
+                        (0-x_pos*dim)+((0.5*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)-((0.5*dim)/cos(radians(18)))*sin(radians(18)),
+                        (0-x_pos*dim)+((0.5*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)+((0.5*dim)/cos(radians(18)))*sin(radians(54)),
+                        (0-x_pos*dim)-((0.5*dim)/cos(radians(18)))*cos(radians(54)) ,         (0+y_pos*dim)+((0.5*dim)/cos(radians(18)))*sin(radians(54)),
+                        (0-x_pos*dim)+-((0.5*dim)/cos(radians(18)))*cos(radians(18)) ,         (0+y_pos*dim)-((0.5*dim)/cos(radians(18)))*sin(radians(18)),
                         close=True,
                         fill= color,
                         stroke='black', stroke_width = 0.04*dim))
@@ -667,13 +681,13 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor='middle', line_offset=-3.15))
     # ring configuration
     p = draw.Path(stroke_width=0)
     p.M(0-x_pos*dim-dim, 0+y_pos*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim)  
     d.append(p)
-    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', valign='middle'))    
+    d.append(draw.Text(conf, dim*0.30, path=p, text_anchor='middle', center=True))    
   
   if shape == 'empty':
     d.append(draw.Circle(0-x_pos*dim, 0+y_pos*dim, dim/2, fill='none', stroke_width=0.04*dim, stroke='none'))
@@ -682,368 +696,368 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     p.M(0-x_pos*dim-dim, 0+y_pos*dim+0.5*dim)
     p.L(0-x_pos*dim+dim, 0+y_pos*dim+0.5*dim)  
     d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor=text_anchor, valign='middle', lineOffset=-0.75))
+    d.append(draw.Text(modification, dim*0.35, path=p, text_anchor=text_anchor, line_offset=-3.15))
 
   if shape == 'text':
     d.append(draw.Text(modification, dim*0.35, 0-x_pos*dim, 0+y_pos*dim, text_anchor=text_anchor))
   
-  if shape == 'redEnd':
+  if shape == 'red_end':
     p = draw.Path(stroke_width=0.04*dim, stroke='black', fill = 'none')
-    p.M(((0-x_pos*dim)+0.1*dim), ((0+y_pos*dim)+0.4*dim))  # Start path at point (-10, 20)
-    p.C(((0-x_pos*dim)-0.3*dim), ((0+y_pos*dim)+0.1*dim),
-        ((0-x_pos*dim)+0.3*dim), ((0+y_pos*dim)-0.1*dim),
-        ((0-x_pos*dim)-0.1*dim), ((0+y_pos*dim)-0.4*dim))
+    p.M(((0-x_pos*dim)+0.1*dim), ((0+y_pos*dim)-0.4*dim))  # Start path at point (-10, 20)
+    p.C(((0-x_pos*dim)-0.3*dim), ((0+y_pos*dim)-0.1*dim),
+        ((0-x_pos*dim)+0.3*dim), ((0+y_pos*dim)+0.1*dim),
+        ((0-x_pos*dim)-0.1*dim), ((0+y_pos*dim)+0.4*dim))
     d.append(p)
     d.append(draw.Circle((0-x_pos*dim), 0+y_pos*dim, 0.15*dim, fill='white', stroke_width=0.04*dim, stroke='black'))
 
   if shape == 'free':
     p = draw.Path(stroke_width=0.04*dim, stroke='black', fill = 'none')
-    p.M(((0-x_pos*dim)+0.1*dim), ((0+y_pos*dim)+0.4*dim))  # Start path at point (-10, 20)
-    p.C(((0-x_pos*dim)-0.3*dim), ((0+y_pos*dim)+0.1*dim),
-        ((0-x_pos*dim)+0.3*dim), ((0+y_pos*dim)-0.1*dim),
-        ((0-x_pos*dim)-0.1*dim), ((0+y_pos*dim)-0.4*dim))
+    p.M(((0-x_pos*dim)+0.1*dim), ((0+y_pos*dim)-0.4*dim))  # Start path at point (-10, 20)
+    p.C(((0-x_pos*dim)-0.3*dim), ((0+y_pos*dim)-0.1*dim),
+        ((0-x_pos*dim)+0.3*dim), ((0+y_pos*dim)+0.1*dim),
+        ((0-x_pos*dim)-0.1*dim), ((0+y_pos*dim)+0.4*dim))
     d.append(p)
 
   if shape == '04X':
     hex(x_pos, y_pos, dim) 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(60)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(120)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(120)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(60)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(120)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(120)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)),
                             close=True,
                             fill= 'grey',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)))  
     d.append(p)
 
   if shape == '15A':
     hex(x_pos, y_pos, dim)  
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(60)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(0)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(60)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(0)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)),
                             close=True,
                             fill= 'grey',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)))  
     d.append(p)
 
   if shape == '02A':
     hex(x_pos, y_pos, dim) 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(0)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(0)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)),
                             close=True,
                             fill= 'grey',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)))  
     d.append(p)
 
   if shape == '13X':
     hex(x_pos, y_pos, dim) 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(240)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(240)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)),
                             close=True,
                             fill= 'grey',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)))  
     d.append(p) 
 
   if shape == '24X':
     hex(x_pos, y_pos, dim) 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(240)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(180)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(240)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(180)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)),
                             close=True,
                             fill= 'grey',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)))  
     d.append(p)
 
   if shape == '35X':
     hex(x_pos, y_pos, dim) 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(180)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(120)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(120)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(180)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(120)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(120)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)),
                             close=True,
                             fill= 'grey',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)))  
     d.append(p)
 
   if shape == '04A':
     hex(x_pos, y_pos, dim, color = 'grey') 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(60)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(120)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(120)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(60)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(120)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(120)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)),
                             close=True,
                             fill= 'white',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)))  
     d.append(p)
 
   if shape == '15X':
     hex(x_pos, y_pos, dim, color = 'grey')  
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(60)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(0)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(60)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(0)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)),
                             close=True,
                             fill= 'white',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)))  
     d.append(p)
 
   if shape == '02X':
     hex(x_pos, y_pos, dim, color = 'grey') 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(0)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(0)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)),
                             close=True,
                             fill= 'white',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)))  
     d.append(p)
 
   if shape == '13A':
     hex(x_pos, y_pos, dim, color = 'grey') 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(240)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(240)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)),
                             close=True,
                             fill= 'white',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)))  
     d.append(p)
 
   if shape == '24A':
     hex(x_pos, y_pos, dim, color = 'grey') 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(240)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(180)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(240)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(180)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)),
                             close=True,
                             fill= 'white',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)))  
     d.append(p)
 
   if shape == '35A':
     hex(x_pos, y_pos, dim, color = 'grey') 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(180)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(120)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(120)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),           (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(180)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(120)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(120)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),           (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)),
                             close=True,
                             fill= 'white',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)))  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)+0)
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)))  
+    p.M((0-x_pos*dim)+0,                                                (0+y_pos*dim)-0)
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)))  
     d.append(p) 
   
   if shape == '25A':
     hex(x_pos, y_pos, dim) 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(60)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(0)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(60)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(0)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)),
                             close=True,
                             fill= 'grey',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)))
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)))  
+    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)))
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)))  
     d.append(p)
 
   if shape == '03A':
     hex(x_pos, y_pos, dim) 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(0)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(240)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(0)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(240)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)),
                             close=True,
                             fill= 'grey',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)))
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)))  
+    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)))
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)))  
     d.append(p)
 
   if shape == '14X':
     hex(x_pos, y_pos, dim) 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(240)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(180)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(240)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(180)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)),
                             close=True,
                             fill= 'grey',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)))
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)))  
+    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)))
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)))  
     d.append(p)
 
   if shape == '25X':
     hex(x_pos, y_pos, dim, color = 'grey') 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(60)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(0)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(60)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(60)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(0)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)),
                             close=True,
                             fill= 'white',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(90)))
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(270)))  
+    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(90)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(90)))
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(270)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(270)))  
     d.append(p)
 
   if shape == '03X':
     hex(x_pos, y_pos, dim, color = 'grey') 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(0)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(240)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(0)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(0)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(240)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)),
                             close=True,
                             fill= 'white',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(30)))
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(210)))  
+    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(30)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(30)))
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(210)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(210)))  
     d.append(p)
 
   if shape == '14A':
     hex(x_pos, y_pos, dim, color = 'grey') 
-    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)+0,
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                       (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                        (0+y_pos*dim)+(0.5*dim)*sin(radians(240)),
-                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(180)),
-                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)),
+    d.append(draw.Lines(    (0-x_pos*dim)+0,                                                (0+y_pos*dim)-0,
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                       (0+y_pos*dim)-(0.5*dim)*sin(radians(300)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                        (0+y_pos*dim)-(0.5*dim)*sin(radians(240)),
+                            (0-x_pos*dim)+(0.5*dim)*cos(radians(180)),                      (0+y_pos*dim)-(0.5*dim)*sin(radians(180)),
+                            (0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)),
                             close=True,
                             fill= 'white',
                             stroke='black', stroke_width = 0))
     hex_circumference(x_pos, y_pos, dim)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(330)))
-    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),            (0+y_pos*dim)+(0.5*inside_hex_dim)*sin(radians(150)))  
+    p.M((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(330)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(330)))
+    p.L((0-x_pos*dim)+(0.5*inside_hex_dim)*cos(radians(150)),            (0+y_pos*dim)-(0.5*inside_hex_dim)*sin(radians(150)))  
     d.append(p)
 
   if shape == 'Z':
@@ -1053,12 +1067,12 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     g = draw.Group(transform=rot)
 
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)
-    p.L((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)  
+    p.M((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)
+    p.L((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)  
     g.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)-0.02*dim,            (0+y_pos*dim)+0.5*dim)
-    p.L((0-x_pos*dim)+0.4*dim,            (0+y_pos*dim)+0.5*dim)  
+    p.M((0-x_pos*dim)-0.02*dim,            (0+y_pos*dim)-0.5*dim)
+    p.L((0-x_pos*dim)+0.4*dim,            (0+y_pos*dim)-0.5*dim)  
     g.append(p)
     d.append(g)
 
@@ -1069,12 +1083,12 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
     g = draw.Group(transform=rot)
     
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)
-    p.L((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)  
+    p.M((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)
+    p.L((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)  
     g.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)-0.02*dim,            (0+y_pos*dim)+0.5*dim)
-    p.L((0-x_pos*dim)+0.4*dim,            (0+y_pos*dim)+0.5*dim)  
+    p.M((0-x_pos*dim)-0.02*dim,            (0+y_pos*dim)-0.5*dim)
+    p.L((0-x_pos*dim)+0.4*dim,            (0+y_pos*dim)-0.5*dim)  
     g.append(p)
 
     g.append(draw.Circle((0-x_pos*dim)+0.4*dim, 0+y_pos*dim, 0.15*dim, fill='none', stroke_width=0.04*dim, stroke='black'))
@@ -1083,22 +1097,22 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
 
   if shape == 'B':
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)
-    p.L((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)  
+    p.M((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)
+    p.L((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0.02*dim,            (0+y_pos*dim)-0.5*dim)
-    p.L((0-x_pos*dim)-0.4*dim,            (0+y_pos*dim)-0.5*dim)  
+    p.M((0-x_pos*dim)+0.02*dim,            (0+y_pos*dim)+0.5*dim)
+    p.L((0-x_pos*dim)-0.4*dim,            (0+y_pos*dim)+0.5*dim)  
     d.append(p)
 
   if shape == 'C':
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)
-    p.L((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)  
+    p.M((0-x_pos*dim),            (0+y_pos*dim)-0.5*dim)
+    p.L((0-x_pos*dim),            (0+y_pos*dim)+0.5*dim)  
     d.append(p)
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
-    p.M((0-x_pos*dim)+0.02*dim,            (0+y_pos*dim)-0.5*dim)
-    p.L((0-x_pos*dim)-0.4*dim,            (0+y_pos*dim)-0.5*dim)  
+    p.M((0-x_pos*dim)+0.02*dim,            (0+y_pos*dim)+0.5*dim)
+    p.L((0-x_pos*dim)-0.4*dim,            (0+y_pos*dim)+0.5*dim)  
     d.append(p)
 
     d.append(draw.Circle((0-x_pos*dim)-0.4*dim, 0+y_pos*dim, 0.15*dim, fill='none', stroke_width=0.04*dim, stroke='black'))
@@ -1118,6 +1132,8 @@ def add_bond(x_start, x_stop, y_start, y_stop, label = '', dim = 50, compact = F
   | :-  
   | 
   """
+  if label == '-':
+    label = ''
   if compact == False:
     x_start = x_start * 2
     x_stop = x_stop * 2
@@ -1130,7 +1146,7 @@ def add_bond(x_start, x_stop, y_start, y_stop, label = '', dim = 50, compact = F
   p.M(0-x_start*dim, 0+y_start*dim)
   p.L(0-x_stop*dim, 0+y_stop*dim)  
   d.append(p)
-  d.append(draw.Text(label, dim*0.4, path=p, text_anchor='middle', valign='middle', lineOffset=-1))
+  d.append(draw.Text(label, dim*0.4, path=p, text_anchor='middle', valign='middle', line_offset=-0.5))
 
 def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50, compact = False, conf = '', deg = 0, text_anchor = 'middle'):
   """wrapper function for drawing monosaccharide at specified position\n
@@ -1365,7 +1381,7 @@ def process_bonds(linkage_list):
         elif bool(re.compile("^\d-\d").match(k)):
           tmp.append(k[0]+' - '+k[-1])
         else:
-          tmp.append('')
+          tmp.append('-')
       bonds.append(tmp)
       tmp = []
     return bonds
@@ -1387,7 +1403,7 @@ def process_bonds(linkage_list):
       elif bool(re.compile("^\d-\d").match(k)):
         bonds.append(k[0]+' - '+k[-1])
       else:
-        bonds.append('')
+        bonds.append('-')
     return bonds
 
 def split_monosaccharide_linkage(label_list):
@@ -1433,7 +1449,10 @@ def glycan_to_skeleton(glycan_string):
   tmp2 = multireplace(tmp2, {'[-': '[', '-]': ']'})
   return(tmp2)
 
-def get_coordinates_and_labels(draw_this, show_linkage = True):
+def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_lib, extend_lib = False):
+
+  if extend_lib == True:
+    draw_lib = expand_lib(draw_lib, [draw_this])
   
   if bool(re.search('^\[', draw_this)) == False:
     draw_this = multiple_branch_branches(draw_this)
@@ -1493,18 +1512,12 @@ def get_coordinates_and_labels(draw_this, show_linkage = True):
   branch_sugar, branch_sugar_modification, branch_bond = split_monosaccharide_linkage(branch_label)
   branch_branch_sugar, branch_branch_sugar_modification, branch_branch_bond = split_monosaccharide_linkage(branch_branch_label)
   bbb_sugar, bbb_sugar_modification, bbb_bond = split_monosaccharide_linkage(bbb_label)
-
+  
   ## process linkages
   main_bond = process_bonds(main_bond)
   branch_bond = process_bonds(branch_bond)
   branch_branch_bond = process_bonds(branch_branch_bond)
   bbb_bond = process_bonds(bbb_bond)
-
-  if show_linkage == False:
-    main_bond = ['' for x in main_bond]
-    branch_bond = [['' for x in y] for y in branch_bond]
-    branch_branch_bond = [['' for x in y] for y in branch_branch_bond]
-    bbb_bond = [['' for x in y] for y in bbb_bond]
 
   ## get connectivity
   branch_connection = []
@@ -1996,7 +2009,7 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50):
     p.L(0-(x*dim)-0.25*dim, 0+(y_min_max[0]*dim)-0.75*dim) 
     d.append(p)
 
-def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output = None):
+def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, output = None):
 
   if draw_this[-1] == ')':
     draw_this = draw_this + 'blank'
@@ -2018,19 +2031,34 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
       draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values.tolist()[0]
       data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage)
     except:
-      return print('Error: did you enter a real glycan or motif?')
-      sys.exit(1)
+        try:
+          data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, extend_lib = True)
+        except:
+          return print('Error: did you enter a real glycan or motif?')
+          sys.exit(1)
 
   main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf = data[0]
   branch_sugar, branch_x_pos, branch_y_pos, branch_sugar_modification, branch_bond, branch_connection, b_conf = data[1]
   branch_branch_sugar, branch_branch_x_pos, branch_branch_y_pos, branch_branch_sugar_modification, branch_branch_bond, branch_branch_connection, bb_conf  = data[2]
   bbb_sugar, bbb_x_pos, bbb_y_pos, bbb_sugar_modification, bbb_bond, bbb_connection, bbb_conf  = data[3]
 
+  if show_linkage == False:
+    main_bond = ['-' for x in main_bond]
+    branch_bond = [['-' for x in y] for y in branch_bond]
+    branch_branch_bond = [['-' for x in y] for y in branch_branch_bond]
+    bbb_bond = [['-' for x in y] for y in bbb_bond]
+
+  # drawsvg 2.0 y fix
+  main_sugar_y_pos = [(k*-1) for k in main_sugar_y_pos]
+  branch_y_pos = [[(x*-1) for x in y] for y in branch_y_pos]
+  branch_branch_y_pos = [[(x*-1) for x in y] for y in branch_branch_y_pos]
+  bbb_y_pos = [[(x*-1) for x in y] for y in bbb_y_pos]
+
   # calculate angles for main chain Y, Z fragments 
   main_deg = []
   for k in range(len(main_sugar)):
     if main_sugar[k] in ['Z', 'Y']:
-      slope = (main_sugar_y_pos[k]-main_sugar_y_pos[k-1])/((main_sugar_x_pos[k]*2)-(main_sugar_x_pos[k-1]*2))
+      slope = -1*(main_sugar_y_pos[k]-main_sugar_y_pos[k-1])/((main_sugar_x_pos[k]*2)-(main_sugar_x_pos[k-1]*2))
       main_deg.append(degrees(atan(slope)))
     else:
       main_deg.append(0)
@@ -2042,10 +2070,10 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
     for j in range(len(branch_sugar[k])):
       if branch_sugar[k][j] in ['Z', 'Y']:
         if len(branch_sugar[k]) == 1:
-          slope = (branch_y_pos[k][j]-main_sugar_y_pos[branch_connection[k]])/((branch_x_pos[k][j]*2)-(main_sugar_x_pos[branch_connection[k]]*2))
+          slope = -1*(branch_y_pos[k][j]-main_sugar_y_pos[branch_connection[k]])/((branch_x_pos[k][j]*2)-(main_sugar_x_pos[branch_connection[k]]*2))
           tmp.append(degrees(atan(slope)))
         else:
-          slope = (branch_y_pos[k][j]-branch_y_pos[k][j-1])/((branch_x_pos[k][j]*2)-(branch_x_pos[k][j-1]*2))
+          slope = -1*(branch_y_pos[k][j]-branch_y_pos[k][j-1])/((branch_x_pos[k][j]*2)-(branch_x_pos[k][j-1]*2))
           tmp.append(degrees(atan(slope)))
       else:
         tmp.append(0)
@@ -2058,10 +2086,10 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
     for j in range(len(branch_branch_sugar[k])):
       if branch_branch_sugar[k][j] in ['Z', 'Y']:
         if len(branch_branch_sugar[k]) == 1:
-          slope = (branch_branch_y_pos[k][j]-branch_y_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]])/((branch_branch_x_pos[k][j]*2)-(branch_x_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]]*2))
+          slope = -1*(branch_branch_y_pos[k][j]-branch_y_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]])/((branch_branch_x_pos[k][j]*2)-(branch_x_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]]*2))
           tmp.append(degrees(atan(slope)))
         else:
-          slope = (branch_branch_y_pos[k][j]-branch_branch_y_pos[k][j-1])/((branch_branch_x_pos[k][j]*2)-(branch_branch_x_pos[k][j-1]*2))
+          slope = -1*(branch_branch_y_pos[k][j]-branch_branch_y_pos[k][j-1])/((branch_branch_x_pos[k][j]*2)-(branch_branch_x_pos[k][j-1]*2))
           tmp.append(degrees(atan(slope)))
       else:
         tmp.append(0)
@@ -2084,10 +2112,19 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
   x_ori = -width+(dim/2)+0.5*dim
   y_ori = (-height/2)+(((max_y-abs(min_y))/2)*dim)
 
+  # global d2
   global d
 
   ## draw
-  d = draw.Drawing(width, height, origin=(x_ori,y_ori), displayInline=True)
+  d2 = draw.Drawing(width, height, origin=(x_ori,y_ori)) #context=draw.Context(invert_y=True)
+
+  if vertical == True:
+    deg = 90
+  else:
+    deg = 0
+
+  rot = 'rotate(' + str(deg) + ' ' + str(width/2) + ' ' + str(height/2) + ')'
+  d = draw.Group(transform=rot)
 
   # bond main chain
   [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], main_bond[k], dim = dim, compact = compact) for k in range(len(main_sugar)-1)]
@@ -2131,6 +2168,8 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
       floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf = floaty_data[j][0]
       floaty_sugar_x_pos = [floaty_sugar_x_pos[k] + max_x + 1 for k in floaty_sugar_x_pos]
       floaty_sugar_y_pos = [floaty_sugar_y_pos[k] + 2 * j - y_diff for k in floaty_sugar_y_pos]
+      # drawsvg 2.0 fix
+      floaty_sugar_y_pos = [(k*-1) for k in floaty_sugar_y_pos]
       if floaty_sugar != ['blank', 'blank']:
         [add_bond(floaty_sugar_x_pos[k+1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k+1], floaty_sugar_y_pos[k], floaty_bond[k], dim = dim, compact = compact) for k in range(len(floaty_sugar)-1)]
         [add_sugar(floaty_sugar[k], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf=floaty_conf, compact = compact, dim = dim) for k in range(len(floaty_sugar))]
@@ -2144,14 +2183,17 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
           add_sugar('blank', max(floaty_sugar_x_pos)+0.75, floaty_sugar_y_pos[-1]-1.2, modification = str(fb_count[floaty_bits[j]]) + 'x', compact=compact, dim=dim )
 
     if compact == False:
-      draw_bracket(max_x*2+1, (min_y, max_y), direction = 'right')
+      draw_bracket(max_x*2+1, (min_y, max_y), direction = 'right', dim = dim)
     elif compact == True:
-      draw_bracket(max_x*1.2+1, ((min_y *0.5)* 1.2, (max_y *0.5)* 1.2), direction = 'right')
+      draw_bracket(max_x*1.2+1, ((min_y *0.5)* 1.2, (max_y *0.5)* 1.2), direction = 'right', dim = dim)
 
-  fit_to_contents(d, pad=10)
+  
+  d2.append(d)
+
+  fit_to_contents(d2, pad=10)
 
   if output is not None:
-      data = d.asSvg()
+      data = d2.as_svg()
       data = re.sub(r'<text font-size="17.5" ', r'<text font-size="17.5" font-family="century gothic" font-weight="bold" ', data)
       data = re.sub(r'<text font-size="20.0" ', r'<text font-size="20" font-family="century gothic" ', data)
       data = re.sub(r'<text font-size="15.0" ', r'<text font-size="17.5" font-family="century gothic" font-style="italic" ', data)
@@ -2163,4 +2205,5 @@ def GlycoDraw(draw_this, compact = False, show_linkage = True, dim = 50, output 
       elif 'pdf' in output:
         cairosvg.svg2pdf(bytestring=data, write_to=output)
 
-  return d
+
+  return d2
