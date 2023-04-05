@@ -26,5 +26,6 @@ setuptools.setup(
                       "seaborn", "xgboost", "mpld3",
                       "requests", "pandas", "glyles",
                       "pubchempy", "matplotlib-inline",
-                      "python-louvain", "drawSvg~=1.9"],
+                      "python-louvain", "drawSvg~=2.0"],
+    extras_require={'test':["torch_geometric", "pycairo", "CairoSVG"]},
 )

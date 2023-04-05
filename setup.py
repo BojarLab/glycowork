@@ -27,5 +27,5 @@ setuptools.setup(
                       "requests", "pandas", "glyles",
                       "pubchempy", "matplotlib-inline",
                       "python-louvain", "drawSvg~=2.0"],
-    extras_require={'test':["torch_geometric", "pycairo"]},
+    extras_require={'test':["torch_geometric", "pycairo", "CairoSVG"]},
 )

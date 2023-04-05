@@ -18,3 +18,4 @@ drawSvg~=2.0
 [test]
 torch_geometric
 pycairo
+CairoSVG
