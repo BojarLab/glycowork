@@ -43,7 +43,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | label_col_name (string): column name for labels; arbitrary if multiple_samples = True; default:'target'
     | thresh (float): threshold value to separate positive/negative; default is 1.645 for Z-scores
     | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
     | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
     | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
@@ -150,7 +150,7 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
     | :-
     | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans
     | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
     | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
     | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
@@ -374,7 +374,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   plt.show()
 
 def get_differential_expression(df, group1, group2, normalized = True,
-                                motifs = False):
+                                motifs = False, feature_set = ['exhaustive', 'known'], libr = None):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -382,7 +382,9 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | group1 (list): list of column indices for the first group of samples
   | group2 (list): list of column indices for the second group of samples
   | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
-  | motif (bool): whether to analyze full sequences (False) or motifs (True); default:False\n
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:uses glycowork-internal list\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -396,7 +398,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   if libr is None:
     libr = lib
   if motifs:
-    df = structures_to_motifs(df, feature_set = ['exhaustive', 'known'])
+    df = structures_to_motifs(df, feature_set = feature_set)
   glycans = df.iloc[:,0].values.tolist()
   df_a = df.iloc[:,group1]
   df_b = df.iloc[:,group2]
@@ -406,4 +408,4 @@ def get_differential_expression(df, group1, group2, normalized = True,
   out = [(glycans[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
   out.columns = ['Glycan', 'corr p-val', 'Cohens d']
-  return out
+  return out.sort_values(by = 'corr p-val')

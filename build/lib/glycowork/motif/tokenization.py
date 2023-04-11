@@ -639,7 +639,7 @@ def structures_to_motifs(df, feature_set = ['exhaustive'], form = 'wide'):
   | Arguments:
   | :-
   | df (dataframe): function expects glycans in the first column and rel. intensities of each sample in a new column
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans) and 'exhaustive' (all mono- and disaccharide features)
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (chemical features of glycans)
   | form (string): whether to return 'wide' or 'long' dataframe; default:'wide'\n
   | Returns:
   | :-
