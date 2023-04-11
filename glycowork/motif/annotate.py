@@ -222,7 +222,11 @@ def annotate_dataset(glycans, motifs = None,
   if 'chemical' in feature_set:
     shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
   if 'terminal' in feature_set:
-    shopping_cart.append(get_terminal_structures(glycans, libr = libr))
+    bag = [get_terminal_structures(glycan, libr = libr) for glycan in glycans]
+    repertoire = set(unwrap(bag))
+    bag = pd.DataFrame([{i:j.count(i) for i in repertoire} for j in bag])
+    bag.index = glycans
+    shopping_cart.append(bag)
   if condense:
     #remove motifs that never occur
     temp = pd.concat(shopping_cart, axis = 1)
