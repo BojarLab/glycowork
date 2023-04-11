@@ -389,8 +389,9 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | :-
   | Returns a dataframe with:
   | (i) Differentially expressed glycans/motifs
-  | (ii) Corrected p-values (Welch's t-test with Holm-Sidak correction)
-  | (iii) Effect size as Cohen's d
+  | (ii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
+  | (iii) Corrected p-values (Welch's t-test with Holm-Sidak correction)
+  | (iv) Effect size as Cohen's d
   """
   if not normalized:
     for col in df.columns.tolist()[1:]:
@@ -404,8 +405,9 @@ def get_differential_expression(df, group1, group2, normalized = True,
   df_b = df.iloc[:,group2]
   pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1] for k in range(len(df_a))]
   pvals = multipletests(pvals)[1]
+  fc = df_b.mean(axis = 1) / df_a.mean(axis = 1)
   effect_sizes = [cohen_d(df_a.iloc[k,:], df_b.iloc[k,:]) for k in range(len(df_a))]
-  out = [(glycans[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
+  out = [(glycans[k], np.log2(fc[k]), pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
-  out.columns = ['Glycan', 'corr p-val', 'Cohens d']
+  out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'Cohens d']
   return out.sort_values(by = 'corr p-val')
