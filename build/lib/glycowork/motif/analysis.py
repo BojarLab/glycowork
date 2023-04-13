@@ -405,9 +405,9 @@ def get_differential_expression(df, group1, group2, normalized = True,
   df_b = df.iloc[:,group2]
   pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1] for k in range(len(df_a))]
   pvals = multipletests(pvals)[1]
-  fc = df_b.mean(axis = 1) / df_a.mean(axis = 1)
+  fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
   effect_sizes = [cohen_d(df_a.iloc[k,:], df_b.iloc[k,:]) for k in range(len(df_a))]
-  out = [(glycans[k], np.log2(fc[k]), pvals[k], effect_sizes[k]) for k in range(len(glycans))]
+  out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
   out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'Cohens d']
   return out.sort_values(by = 'corr p-val')

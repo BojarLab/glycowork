@@ -588,8 +588,8 @@ def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, lib
     #only consider unconnected nodes if they are larger than the root (otherwise they should be pruned anyway)
     unconnected_nodes = {k for k in unconnected_nodes if len(safe_index(k, graph_dic, libr = libr)) > min_size}
     nodeDict = dict(network.nodes(data = True))
-    #subset the observed nodes that are connected to the root
-    real_nodes = sorted([node for node in network.nodes() if nodeDict[node]['virtual'] == 0 and node not in unconnected_nodes], key = len, reverse = True)
+    #subset the observed nodes that are connected to the root and are at least the size of the smallest root
+    real_nodes = sorted([node for node in network.nodes() if nodeDict[node]['virtual'] == 0 and node not in unconnected_nodes and len(safe_index(node, graph_dic, libr = libr)) >= min_size], key = len, reverse = True)
     edges = []
     edge_labels = []
     #for each unconnected node, find the shortest path to its root node
@@ -726,7 +726,6 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   nx.set_edge_attributes(network, {el:find_diff(el[0], el[1], graph_dic, libr = libr) for el in network.edges()}, 'diffs')
   virtual_labels = {k:(1 if k in virtual_nodes else 0) for k in network.nodes()}
   nx.set_node_attributes(network, virtual_labels, 'virtual')
-  #network = filter_disregard(network)
   #connect post-translational modifications
   if '-ol' in ''.join(glycans):
     suffix = '-ol'
