@@ -372,18 +372,26 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
                   bbox_inches = 'tight')
   plt.show()
 
+def replace_zero_with_random_gaussian(x, mean = 0.01, std_dev = 0.01):
+  if x == 0:
+    return np.random.normal(loc = mean, scale = std_dev)
+  else:
+    return x
+
 def get_differential_expression(df, group1, group2, normalized = True,
-                                motifs = False, feature_set = ['exhaustive', 'known'], libr = None):
+                                motifs = False, feature_set = ['exhaustive', 'known'], libr = None,
+                                impute = False):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
   | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
-  | group1 (list): list of column indices for the first group of samples
+  | group1 (list): list of column indices for the first group of samples, usually the control
   | group2 (list): list of column indices for the second group of samples
   | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:uses glycowork-internal list\n
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:uses glycowork-internal list
+  | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution; default:False\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -392,11 +400,15 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | (iii) Corrected p-values (Welch's t-test with Holm-Sidak correction)
   | (iv) Effect size as Cohen's d
   """
-  if not normalized:
-    for col in df.columns.tolist()[1:]:
-      df.at[:,col] = [k/sum(df.loc[:,col])*100 for k in df.loc[:,col].values.tolist()]
   if libr is None:
     libr = lib
+  if impute:
+    thresh = int(round(len(group1+group2)/2))
+    df = df[df.iloc[:,group1+group2].apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]
+    df = df.applymap(replace_zero_with_random_gaussian)
+  if not normalized:
+    for col in df.columns.tolist()[1:]:
+      df[col] = [k/sum(df.loc[:,col])*100 for k in df.loc[:,col].values.tolist()]
   if motifs:
     df = structures_to_motifs(df, feature_set = feature_set)
   glycans = df.iloc[:,0].values.tolist()
@@ -405,7 +417,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1] for k in range(len(df_a))]
   pvals = multipletests(pvals)[1]
   fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
-  effect_sizes = [cohen_d(df_a.iloc[k,:], df_b.iloc[k,:]) for k in range(len(df_a))]
+  effect_sizes = [cohen_d(df_b.iloc[k,:], df_a.iloc[k,:]) for k in range(len(df_a))]
   out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
   out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'Cohens d']
