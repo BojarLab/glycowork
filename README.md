@@ -60,9 +60,9 @@ alternative: <br>
 freely available to everyone:
 
 - **`df_glycan`**
-  - contains \>51,500 unique glycan sequences, including labels such as
-    \>33,000 species associations, \>9,500 tissue associations, and
-    \>500 disease associations
+  - contains \~50,000 unique glycan sequences, including labels such as
+    \~35,000 species associations, \~14,000 tissue associations, and
+    \~1,000 disease associations
 - **`glycan_binding`**
   - contains \>550,000 protein-glycan binding interactions, from 1,392
     unique glycan-binding proteins
@@ -350,20 +350,20 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>b1-4</th>
       <th>b1-6</th>
       <th>b1-7</th>
-      <th>GlcNAc(b1-4)GlcNAc</th>
-      <th>Man(b1-4)GlcNAc</th>
-      <th>GlcNAcA(a1-4)Kdo</th>
-      <th>Fuc(a1-3)GlcNAc</th>
-      <th>Man(a1-2)Man</th>
-      <th>GalNAc(a1-4)GlcNAcA</th>
-      <th>Man(a1-3)Man</th>
-      <th>Kdo(a2-6)GlcN4P</th>
-      <th>GlcN(b1-7)Kdo</th>
-      <th>Xyl(b1-2)Man</th>
-      <th>Kdo(a2-5)Kdo</th>
-      <th>GlcN4P(b1-6)GlcN1P</th>
-      <th>Man(a1-6)Man</th>
       <th>Kdo(a2-4)Kdo</th>
+      <th>GlcN4P(b1-6)GlcN1P</th>
+      <th>Kdo(a2-5)Kdo</th>
+      <th>GalNAc(a1-4)GlcNAcA</th>
+      <th>GlcN(b1-7)Kdo</th>
+      <th>Fuc(a1-3)GlcNAc</th>
+      <th>Man(a1-3)Man</th>
+      <th>GlcNAcA(a1-4)Kdo</th>
+      <th>Xyl(b1-2)Man</th>
+      <th>GlcNAc(b1-4)GlcNAc</th>
+      <th>Man(a1-2)Man</th>
+      <th>Man(b1-4)GlcNAc</th>
+      <th>Man(a1-6)Man</th>
+      <th>Kdo(a2-6)GlcN4P</th>
     </tr>
   </thead>
   <tbody>
@@ -589,18 +589,18 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>2</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0</td>
       <td>1</td>
       <td>1</td>
       <td>0</td>
       <td>1</td>
-      <td>0</td>
-      <td>0</td>
-      <td>1</td>
-      <td>0</td>
-      <td>0</td>
-      <td>1</td>
-      <td>0</td>
-      <td>0</td>
       <td>1</td>
       <td>0</td>
     </tr>
@@ -826,18 +826,18 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>2</td>
       <td>0</td>
       <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
       <td>1</td>
       <td>1</td>
-      <td>0</td>
-      <td>0</td>
       <td>1</td>
-      <td>0</td>
-      <td>1</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
       <td>1</td>
       <td>0</td>
     </tr>
@@ -1063,18 +1063,18 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>1</td>
       <td>1</td>
-      <td>0</td>
-      <td>0</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
       <td>1</td>
       <td>0</td>
       <td>0</td>
       <td>1</td>
       <td>0</td>
-      <td>1</td>
-      <td>1</td>
       <td>0</td>
-      <td>1</td>
-      <td>1</td>
+      <td>0</td>
+      <td>0</td>
       <td>0</td>
       <td>1</td>
     </tr>
@@ -1121,8 +1121,8 @@ print(composition_to_mass({'Hex':3, 'HexNAc':4}))
     4  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
     5  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][G...          0
     6  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4...          0
-    7  GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-...          0
-    8  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]...          0
+    7  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]...          0
+    8  GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-...          0
     9  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
 
     Mass of the composition Hex3HexNAc4

@@ -5,14 +5,14 @@ import pickle
 import itertools
 import pkg_resources
 
-io = pkg_resources.resource_stream(__name__, "v7_sugarbase.csv")
+io = pkg_resources.resource_stream(__name__, "v8_sugarbase.csv")
 df_glycan = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
 motif_list = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_binding.csv")
 glycan_binding = pd.read_csv(io)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
-data_path = os.path.join(this_dir, 'lib_v7.pkl')
+data_path = os.path.join(this_dir, 'lib_v8.pkl')
 lib = pickle.load(open(data_path, 'rb'))
 
 #lib = get_lib(list(set(df_glycan.glycan.values.tolist() +

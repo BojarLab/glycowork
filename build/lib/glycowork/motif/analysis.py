@@ -223,7 +223,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     #get all glycan embeddings
     if emb is None:
         this_dir, this_filename = os.path.split(__file__) 
-        data_path = os.path.join(this_dir, 'glycan_representations_species.pkl')
+        data_path = os.path.join(this_dir, 'glycan_representations.pkl')
         emb = pickle.load(open(data_path, 'rb'))
     #get the subset of embeddings corresponding to 'glycans'
     if isinstance(emb, pd.DataFrame):
@@ -231,8 +231,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     embs = np.array([emb[k] for k in glycans])
     #calculate t-SNE of embeddings
     embs = TSNE(random_state = 42,
-                init = 'pca').fit_transform(embs)
-                #init = 'pca', learning_rate = 'auto').fit_transform(embs)
+                init = 'pca', learning_rate = 'auto').fit_transform(embs)
     #plot the t-SNE
     markers = None
     if shape_feature is not None:
