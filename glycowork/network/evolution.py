@@ -133,7 +133,7 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
       p = 300,  # show only the last p merged clusters
       show_leaf_counts = False,  # otherwise numbers in brackets are counts
       leaf_rotation = 0.,
-      labels = dm.columns.values.tolist(),
+      labels = dm.columns.tolist(),
       leaf_font_size = 11.,
       show_contracted = True,  # to get a distribution impression in truncated branches
       )

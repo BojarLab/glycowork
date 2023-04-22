@@ -36,9 +36,8 @@ nbdev_prepare
 * Docs are automatically created from the notebooks in the nbs folder.
 
 
-## Wishlist for future glycowork updates (last update: 2022-03-16)
+## Wishlist for future glycowork updates (last update: 2023-04-21)
 #### Urgent
-* add the possibility of drawing glycans on plots (e.g., have SNFG glycans on x-axis for a bar plot etc.)
 * add functions to convert other nomenclatures (WURCS, GlycoCT, etc.) into IUPAC-condensed
 * more, and more informative, error messages
 

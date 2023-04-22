@@ -110,6 +110,7 @@ that’s there. A non-exhaustive list includes:
 - training your own AI models
 - motif enrichment analyses
 - annotating motifs in glycans
+- drawing publication-quality glycan figures
 - finding out whether & where glycans are describing the same sequence
 - m/z to composition to structure to motif mappings
 - mass calculation
@@ -350,20 +351,20 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>b1-4</th>
       <th>b1-6</th>
       <th>b1-7</th>
-      <th>Kdo(a2-4)Kdo</th>
-      <th>GlcN4P(b1-6)GlcN1P</th>
-      <th>Kdo(a2-5)Kdo</th>
-      <th>GalNAc(a1-4)GlcNAcA</th>
-      <th>GlcN(b1-7)Kdo</th>
       <th>Fuc(a1-3)GlcNAc</th>
-      <th>Man(a1-3)Man</th>
+      <th>GalNAc(a1-4)GlcNAcA</th>
+      <th>Man(b1-4)GlcNAc</th>
+      <th>Kdo(a2-4)Kdo</th>
+      <th>Man(a1-6)Man</th>
+      <th>GlcN(b1-7)Kdo</th>
       <th>GlcNAcA(a1-4)Kdo</th>
+      <th>GlcN4P(b1-6)GlcN1P</th>
+      <th>Kdo(a2-6)GlcN4P</th>
       <th>Xyl(b1-2)Man</th>
       <th>GlcNAc(b1-4)GlcNAc</th>
+      <th>Man(a1-3)Man</th>
+      <th>Kdo(a2-5)Kdo</th>
       <th>Man(a1-2)Man</th>
-      <th>Man(b1-4)GlcNAc</th>
-      <th>Man(a1-6)Man</th>
-      <th>Kdo(a2-6)GlcN4P</th>
     </tr>
   </thead>
   <tbody>
@@ -589,19 +590,19 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>2</td>
       <td>0</td>
       <td>0</td>
+      <td>1</td>
       <td>0</td>
+      <td>1</td>
+      <td>0</td>
+      <td>1</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>1</td>
       <td>1</td>
-      <td>0</td>
-      <td>1</td>
       <td>1</td>
       <td>0</td>
-      <td>1</td>
-      <td>1</td>
       <td>0</td>
     </tr>
     <tr>
@@ -828,18 +829,18 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>1</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>1</td>
-      <td>0</td>
-      <td>0</td>
-      <td>1</td>
-      <td>1</td>
-      <td>1</td>
       <td>1</td>
       <td>0</td>
+      <td>1</td>
     </tr>
     <tr>
       <th>GalNAc(a1-4)GlcNAcA(a1-4)[GlcN(b1-7)]Kdo(a2-5)[Kdo(a2-4)]Kdo(a2-6)GlcN4P(b1-6)GlcN1P</th>
@@ -1063,20 +1064,20 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>1</td>
       <td>1</td>
+      <td>0</td>
       <td>1</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0</td>
       <td>1</td>
       <td>1</td>
       <td>1</td>
       <td>1</td>
       <td>0</td>
       <td>0</td>
-      <td>1</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
       <td>0</td>
       <td>1</td>
+      <td>0</td>
     </tr>
   </tbody>
 </table>
