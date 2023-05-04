@@ -50,17 +50,27 @@ def motif_matrix(glycans):
   | :-
   | Returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)
   """
-  libr = get_lib(glycans)
-  #get all disaccharides
-  wga_di = [link_find(i) for i in glycans]
-  #collect disaccharide repertoire
-  lib_di = set(unwrap(wga_di))
-  #count each disaccharide in each glycan
-  wga_di_out = pd.DataFrame([{i:j.count(i) for i in lib_di} for j in wga_di])
-  #counts glycoletters in each glycan
-  wga_letter = pd.DataFrame([{i:g.count(i) for i in libr} for g in glycans])
-  out_matrix = pd.concat([wga_letter, wga_di_out], axis = 1)
-  return out_matrix.reset_index(drop = True).loc[:,~out_matrix.columns.duplicated()]
+  shadow_glycans = [re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in glycans]
+  out_matrix = []
+  for c,gs in enumerate([glycans, shadow_glycans]):
+    #get all disaccharides
+    wga_di = [link_find(i) for i in gs]
+    #collect disaccharide repertoire
+    if c == 0:
+      libr = {k for k in get_lib(gs) if '?' not in k}
+      lib_di = {k for k in set(unwrap(wga_di)) if '?' not in k}
+    else:
+      libr = {k for k in get_lib(gs) if '?' in k}
+      lib_di = set(unwrap(wga_di))
+    #count each disaccharide in each glycan
+    wga_di_out = pd.DataFrame([{i:j.count(i) if i in j else 0 for i in lib_di} for j in wga_di])
+    #counts glycoletters in each glycan
+    wga_letter = pd.DataFrame([{i:g.count(i) if i in g else 0 for i in libr} for g in gs])
+    out_matrix.append(pd.concat([wga_letter, wga_di_out], axis = 1))
+  org_len = out_matrix[0].shape[1]
+  out_matrix = pd.concat(out_matrix, axis = 1).reset_index(drop = True)
+  out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()].copy()
+  return out_matrix.drop([col2 for col1,col2 in itertools.product(out_matrix.columns.tolist()[:org_len], out_matrix.columns.tolist()[org_len:]) if out_matrix[col1].sum()==out_matrix[col2].sum() and re.sub(r"([ab])(\d)-(\d)", r"\1\2-?", col1) == col2], axis = 1)
 
 def estimate_lower_bound(glycans, motifs):
   """searches for motifs which are present in at least glycan; not 100% exact but useful for speedup\n
