@@ -152,7 +152,7 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
     | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-    | wildcard_list (list): list of wildcard names (such as 'bond', 'Hex', 'HexNAc', 'Sia')
+    | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
     | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
     | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
     | filepath (string): absolute path including full filename allows for saving the plot

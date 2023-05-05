@@ -73,7 +73,7 @@ def motif_matrix(glycans):
   return out_matrix.drop([col2 for col1,col2 in itertools.product(out_matrix.columns.tolist()[:org_len], out_matrix.columns.tolist()[org_len:]) if out_matrix[col1].sum()==out_matrix[col2].sum() and re.sub(r"([ab])(\d)-(\d)", r"\1\2-?", col1) == col2], axis = 1)
 
 def estimate_lower_bound(glycans, motifs):
-  """searches for motifs which are present in at least glycan; not 100% exact but useful for speedup\n
+  """searches for motifs which are present in at least one glycan; not 100% exact but useful for speedup\n
   | Arguments:
   | :-
   | glycans (string): list of IUPAC-condensed glycan sequences
@@ -104,7 +104,7 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; will only be handled with string input; default:'termini'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
   | Returns dataframe with counts of motifs in glycan
@@ -197,7 +197,7 @@ def annotate_dataset(glycans, motifs = None,
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
   | condense (bool): if True, throws away columns with only zeroes; default:False
   | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
   | Returns:
@@ -234,9 +234,13 @@ def annotate_dataset(glycans, motifs = None,
   if 'terminal' in feature_set:
     bag = [get_terminal_structures(glycan, libr = libr) for glycan in glycans]
     repertoire = set(unwrap(bag))
-    bag = pd.DataFrame([{i:j.count(i) for i in repertoire} for j in bag])
-    bag.index = glycans
-    shopping_cart.append(bag)
+    bag_out = pd.DataFrame([{i:j.count(i) for i in repertoire} for j in bag])
+    if '?' in ''.join(repertoire):
+      shadow_glycans = [[re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in b] for b in bag]
+      shadow_bag = pd.DataFrame([{i:j.count(i) for i in repertoire if '?' in i} for j in shadow_glycans])
+      bag_out = pd.concat([bag_out, shadow_bag], axis = 1).reset_index(drop = True)
+    bag_out.index = glycans
+    shopping_cart.append(bag_out)
   if condense:
     #remove motifs that never occur
     temp = pd.concat(shopping_cart, axis = 1)
