@@ -57,10 +57,10 @@ def motif_matrix(glycans):
     wga_di = [link_find(i) for i in gs]
     #collect disaccharide repertoire
     if c == 0:
-      libr = {k for k in get_lib(gs) if '?' not in k}
+      libr = {k for k in get_lib(gs) if '?' not in k and k not in linkages}
       lib_di = {k for k in set(unwrap(wga_di)) if '?' not in k}
     else:
-      libr = {k for k in get_lib(gs) if '?' in k}
+      libr = {k for k in get_lib(gs) if '?' in k and k not in linkages}
       lib_di = set(unwrap(wga_di))
     #count each disaccharide in each glycan
     wga_di_out = pd.DataFrame([{i:j.count(i) if i in j else 0 for i in lib_di} for j in wga_di])
@@ -236,6 +236,7 @@ def annotate_dataset(glycans, motifs = None,
     repertoire = set(unwrap(bag))
     bag_out = pd.DataFrame([{i:j.count(i) for i in repertoire} for j in bag])
     if '?' in ''.join(repertoire):
+      bag_out = bag_out.loc[:,~bag_out.columns.str.contains(r'\?')]
       shadow_glycans = [[re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in b] for b in bag]
       shadow_bag = pd.DataFrame([{i:j.count(i) for i in repertoire if '?' in i} for j in shadow_glycans])
       bag_out = pd.concat([bag_out, shadow_bag], axis = 1).reset_index(drop = True)

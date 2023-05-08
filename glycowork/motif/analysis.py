@@ -10,7 +10,7 @@ from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
 
-from glycowork.glycan_data.loader import lib, df_species, unwrap
+from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
 from glycowork.motif.tokenization import structures_to_motifs
 from glycowork.motif.annotate import annotate_dataset, link_find
 from glycowork.motif.graph import subgraph_isomorphism
@@ -141,6 +141,21 @@ def get_representative_substructures(enrichment_df, libr = None):
             clean_list.append(k)
     return clean_list
 
+def clean_up_heatmap(df):
+  df.index = [k+' '*20 if k in motif_list.motif_name else k for k in df.index]
+  # Group the DataFrame by identical rows
+  grouped = df.groupby(list(df.columns))
+  # Find the row with the longest string index within each group and return a new DataFrame
+  result = pd.concat(
+        [
+            group.loc[group.index.to_series().str.len().idxmax()]
+            for _, group in grouped
+        ],
+        axis = 1,
+    ).T
+  result.index = [k.strip() for k in result.index]
+  return result
+
 def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
@@ -176,9 +191,9 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
         collect_dic = {}
         #distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
         if datatype == 'response':
-          for col in df_motif.columns.tolist():
+          for col in df_motif.columns:
             indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
-            temp = np.mean(df.iloc[:, indices], axis = 1)
+            temp = df.iloc[:, indices].sum(axis = 1)
             collect_dic[col] = temp
           df = pd.DataFrame(collect_dic)
         elif datatype == 'presence':
@@ -188,8 +203,9 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
           df.columns = df_motif.columns
           df.index = idx
     df.dropna(axis = 1, inplace = True)
+    df = clean_up_heatmap(df.T)
     #cluster the motif abundances
-    sns.clustermap(df.T, **kwargs)
+    sns.clustermap(df, **kwargs)
     plt.xlabel('Samples')
     if mode == 'sequence':
         plt.ylabel('Glycans')
