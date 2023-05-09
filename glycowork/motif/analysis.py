@@ -425,11 +425,24 @@ def get_differential_expression(df, group1, group2, normalized = True,
   if not normalized:
     for col in df.columns.tolist()[1:]:
       df[col] = [k/sum(df.loc[:,col])*100 for k in df.loc[:,col].values.tolist()]
-  if motifs:
-    df = structures_to_motifs(df, feature_set = feature_set)
   glycans = df.iloc[:,0].values.tolist()
-  df_a = df.iloc[:,group1]
-  df_b = df.iloc[:,group2]
+  group1 = [df.columns.tolist()[k] for k in group1]
+  group2 = [df.columns.tolist()[k] for k in group2]
+  df = df.loc[:,[df.columns.tolist()[0]]+group1+group2]
+  if motifs:
+    df_motif = annotate_dataset(df.iloc[:,0].values.tolist(),
+                                feature_set = feature_set)
+    collect_dic = {}
+    df = df.iloc[:,1:].T
+    for col in df_motif.columns:
+      indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
+      temp = df.iloc[:, indices].sum(axis = 1)
+      collect_dic[col] = temp
+    df = pd.DataFrame(collect_dic)
+    df = clean_up_heatmap(df.T)
+    glycans = df.index.tolist()
+  df_a = df.loc[:,group1]
+  df_b = df.loc[:,group2]
   pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1] for k in range(len(df_a))]
   pvals = multipletests(pvals)[1]
   fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
