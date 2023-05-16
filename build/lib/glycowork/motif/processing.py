@@ -67,6 +67,23 @@ def bracket_removal(glycan_part):
     glycan_part = re.sub(r'\[[^\[\]]+\]', '', glycan_part)
   return glycan_part
 
+def scale_in_range(listy, a, b):
+  """Normalize list of numbers in range a to b\n
+  | Arguments:
+  | :-
+  | listy (list): list of numbers as integers/floats
+  | a (integer/float): min value in normalized range
+  | b (integer/float): max value in normalized range\n
+  | Returns:
+  | :-
+  | Normalized list of numbers
+  """  
+  tmp = []
+  for k in range(len(listy)):
+    norm = (b-a) * ((listy[k]-min(listy))/(max(listy)-min(listy))) + a
+    tmp.append(norm)
+  return tmp
+
 def find_isomorphs(glycan):
   """returns a set of isomorphic glycans by swapping branches etc.\n
   | Arguments:
