@@ -2207,3 +2207,20 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
 
 
   return d2
+
+def save_svg_to_file(svg_bytestring, filepath):
+  """write svg string to file\n
+  | Arguments:
+  | :-
+  | svg_bytestring (string): svg code as string
+  | filepath (string): absolute path including full filename allows for saving the plot\n                          
+  | Returns:
+  | :-
+  | Saves file to disk
+  """
+  if filepath.split('.')[-1] == 'pdf':
+    cairosvg.svg2pdf(bytestring = svg_bytestring, write_to = filepath, dpi = 300)
+  elif filepath.split('.')[-1] == 'svg':
+    cairosvg.svg2svg(bytestring = svg_bytestring, write_to = filepath, dpi = 300)
+  elif filepath.split('.')[-1] == 'png':
+    cairosvg.svg2png(bytestring = svg_bytestring, write_to = filepath, dpi = 300)

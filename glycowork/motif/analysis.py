@@ -9,10 +9,12 @@ from collections import Counter
 from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
+from io import StringIO
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
-from glycowork.motif.annotate import annotate_dataset, link_find
+from glycowork.motif.annotate import annotate_dataset, link_find, text_to_glycan
 from glycowork.motif.graph import subgraph_isomorphism
+from glycowork.motif.draw import save_svg_to_file
 
 def cohen_d(x,y):
   """calculates effect size between two groups\n
@@ -158,63 +160,72 @@ def clean_up_heatmap(df):
 def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
-                 estimate_speedup = False, **kwargs):
-    """clusters samples based on glycan data (for instance glycan binding etc.)\n
-    | Arguments:
-    | :-
-    | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans
-    | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-    | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-    | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
-    | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
-    | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
-    | filepath (string): absolute path including full filename allows for saving the plot
-    | index_col (string): default column to convert to dataframe index; default:'target'
-    | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False
-    | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                          
-    | Returns:
-    | :-
-    | Prints clustermap                         
-    """
-    if index_col in df.columns:
-        df.set_index(index_col, inplace = True)
-    df.fillna(0, inplace = True)
-    if mode == 'motif':
-        #count glycan motifs and remove rare motifs from the result
-        df_motif = annotate_dataset(df.columns.tolist(),
-                                feature_set = feature_set,
-                                    extra = extra, wildcard_list = wildcard_list,
-                                    estimate_speedup = estimate_speedup)
-        df_motif = df_motif.replace(0,np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
-        collect_dic = {}
-        #distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
-        if datatype == 'response':
-          for col in df_motif.columns:
-            indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
-            temp = df.iloc[:, indices].sum(axis = 1)
-            collect_dic[col] = temp
-          df = pd.DataFrame(collect_dic)
-        elif datatype == 'presence':
-          idx = df.index.tolist()
-          collecty = [[np.sum(df.iloc[row, [i for i, x in enumerate(df_motif[col]) if x >= 1]])/df.iloc[row, :].values.sum() for col in df_motif.columns] for row in range(df.shape[0])]
-          df = pd.DataFrame(collecty)
-          df.columns = df_motif.columns
-          df.index = idx
-    df.dropna(axis = 1, inplace = True)
-    df = clean_up_heatmap(df.T)
-    #cluster the motif abundances
-    sns.clustermap(df, **kwargs)
-    plt.xlabel('Samples')
-    if mode == 'sequence':
-        plt.ylabel('Glycans')
+                 estimate_speedup = False, annotate = False, compact_glycans = False, glycan_size = 'medium', **kwargs):
+  """clusters samples based on glycan data (for instance glycan binding etc.)\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans
+  | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
+  | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
+  | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
+  | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
+  | filepath (string): absolute path including full filename allows for saving the plot
+  | index_col (string): default column to convert to dataframe index; default:'target'
+  | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False
+  | annotate (bool): if True, annotate row labels with GlycoDraw; default:False
+  | compact_glycans (bool): if True, draw compact glycan structures; default:False
+  | glycan_size (string): modify glycan size; default:'medium'; options are 'small', 'medium', 'large'
+  | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                          
+  | Returns:
+  | :-
+  | Prints clustermap                         
+  """
+  if index_col in df.columns:
+      df.set_index(index_col, inplace = True)
+  df.fillna(0, inplace = True)
+  if mode == 'motif':
+      #count glycan motifs and remove rare motifs from the result
+      df_motif = annotate_dataset(df.columns.tolist(),
+                              feature_set = feature_set,
+                                  extra = extra, wildcard_list = wildcard_list,
+                                  estimate_speedup = estimate_speedup)
+      df_motif = df_motif.replace(0,np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
+      collect_dic = {}
+      #distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
+      if datatype == 'response':
+        for col in df_motif.columns:
+          indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
+          temp = df.iloc[:, indices].sum(axis = 1)
+          collect_dic[col] = temp
+        df = pd.DataFrame(collect_dic)
+      elif datatype == 'presence':
+        idx = df.index.tolist()
+        collecty = [[np.sum(df.iloc[row, [i for i, x in enumerate(df_motif[col]) if x >= 1]])/df.iloc[row, :].values.sum() for col in df_motif.columns] for row in range(df.shape[0])]
+        df = pd.DataFrame(collecty)
+        df.columns = df_motif.columns
+        df.index = idx
+  df.dropna(axis = 1, inplace = True)
+  df = clean_up_heatmap(df.T)
+  #cluster the motif abundances
+  sns.clustermap(df, **kwargs)
+  plt.xlabel('Samples')
+  if mode == 'sequence':
+      plt.ylabel('Glycans')
+  else:
+      plt.ylabel('Motifs')
+  plt.tight_layout()
+  if len(filepath) > 1:
+    if annotate == True:
+      i = StringIO()
+      plt.savefig(i, format="svg", bbox_inches = 'tight')
+      svg_bytestring = text_to_glycan(i, compact = compact_glycans, glycan_size = glycan_size)
+      save_svg_to_file(svg_bytestring, filepath)
     else:
-        plt.ylabel('Motifs')
-    plt.tight_layout()
-    if len(filepath) > 1:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
-    plt.show()
+  plt.show()
 
 def plot_embeddings(glycans, emb = None, label_list = None,
                     shape_feature = None, filepath = '', alpha = 0.8,
@@ -450,3 +461,74 @@ def get_differential_expression(df, group1, group2, normalized = True,
   out = pd.DataFrame(out)
   out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'Cohens d']
   return out.sort_values(by = 'corr p-val')
+
+def make_volcano(df, group1, group2, normalized = True,
+                                motifs = False, feature_set = ['exhaustive', 'known'], libr = None,
+                                impute = False, filepath = '', y_thresh = 0.05, x_thresh = 1.0, 
+                                label_changed = True, annotate = False, scale_by_logp = True, compact = False, x_metric = 'Log2FC'):
+  """Plots glycan differential expression results in a volcano plot\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
+  | group1 (list): list of column indices for the first group of samples, usually the control
+  | group2 (list): list of column indices for the second group of samples
+  | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:uses glycowork-internal list
+  | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution; default:False
+  | filepath (string): absolute path including full filename allows for saving the plot
+  | y_thresh (float): corr p threshhold for labeling datapoints; default:0.05
+  | x_thresh (float): absolute x metric threshold for labeling datapoints; defualt:1.0
+  | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
+  | annotate (bool): if True, replace text labels with glycan figures; default:False
+  | scale_by_logp (bool): if True, scale glycan figures by -log10(corr p-val); default:True
+  | compact (bool): if True, draw compact glycan figures; default:False
+  | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2Fc', 'Cohens d'\n
+  | Returns:
+  | :-
+  | Prints volcano plot
+  """
+  
+  if annotate == True:
+    label_changed = True
+
+  # get DE  
+  de_res = get_differential_expression(df = df, group1 = group1, group2 = group2, normalized = normalized, motifs = motifs,
+                                        feature_set = feature_set, libr = libr, impute = impute)
+  de_res['log_p'] = -np.log10(de_res['corr p-val'].values.tolist())
+
+  x = de_res[x_metric].values.tolist()
+  y = de_res['log_p'].values.tolist()
+  l = de_res['Glycan'].values.tolist()
+
+  # size range (dim argument in GlycoDraw) for glycan scaling
+  glycan_scale, scale_range = ['', '']
+  if scale_by_logp == True:
+    glycan_scale = [y, l]
+    scale_range = [15, 90]
+  
+  # make plot
+  ax = sns.scatterplot(x = x_metric, y = 'log_p', data = de_res, color = '#3E3E3E', alpha = 0.8)
+  ax.set(xlabel=x_metric, ylabel = '-log10(corr p-val)', title = '')
+  plt.axhline(y = -np.log10(y_thresh), c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
+  plt.axvline(x = x_thresh, c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
+  plt.axvline(x = -x_thresh, c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
+  sns.despine(bottom=True, left = True)
+
+  # text labels
+  if label_changed == True:
+    texts = [plt.text(x[i], y[i], l[i]) for i in range(len(x)) if y[i]>-np.log10(y_thresh) and abs(x[i])>x_thresh]
+
+  # save to file
+  if len(filepath) > 1:
+      if annotate == True:
+        i = StringIO()
+        plt.savefig(i, format="svg", bbox_inches = 'tight')
+        svg_bytestring = text_to_glycan(i, glycan_scale, scale_range, compact)
+        save_svg_to_file(svg_bytestring, filepath)
+      else:
+        plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+                    bbox_inches = 'tight')
+  
+  plt.show()
