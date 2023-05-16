@@ -11,7 +11,6 @@ from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
-from glycowork.motif.tokenization import structures_to_motifs
 from glycowork.motif.annotate import annotate_dataset, link_find
 from glycowork.motif.graph import subgraph_isomorphism
 

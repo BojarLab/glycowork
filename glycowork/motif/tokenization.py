@@ -13,7 +13,6 @@ from sklearn.cluster import DBSCAN
 from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, multireplace, df_species, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, Sia, linkages
 from glycowork.motif.processing import small_motif_find, min_process_glycans, choose_correct_isoform, canonicalize_iupac
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
-from glycowork.motif.annotate import annotate_dataset
 
 chars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T',
      'V','W','Y', 'X', 'Z'] + ['z']
@@ -633,40 +632,6 @@ def mz_to_structures(mz_list, reducing_end, group = 'Homo_sapiens', level = 'Spe
     return pd.concat(out_structures, axis = 0)
   else:
     return []
-
-def structures_to_motifs(df, feature_set = ['exhaustive'], form = 'wide'):
-  """function to convert relative intensities of glycan structures to those of glycan motifs\n
-  | Arguments:
-  | :-
-  | df (dataframe): function expects glycans in the first column and rel. intensities of each sample in a new column
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (chemical features of glycans)
-  | form (string): whether to return 'wide' or 'long' dataframe; default:'wide'\n
-  | Returns:
-  | :-
-  | Returns dataframe of motifs, relative intensities, and sample IDs
-  """
-  #find the motifs in the glycans
-  annot = annotate_dataset(df.iloc[:,0].values.tolist(),
-                           feature_set = feature_set, condense = True)
-  annot2 = pd.concat([annot.reset_index(drop = True), df.iloc[:,1:]], axis = 1)
-  out_tuples = []
-  #reformat to record all present motifs in the provided structures
-  for k in range(len(annot2)):
-    for j in range(annot.shape[1]):
-      if annot2.iloc[k,j] > 0:
-          out_tuples.append([annot2.columns.values.tolist()[j]] + df.iloc[k, 1:].values.tolist())
-  #group abundances on a motif level
-  motif_df = pd.DataFrame(out_tuples)
-  motif_df = motif_df.groupby(motif_df.columns.values.tolist()[0]).mean().reset_index()
-  if form == 'wide':
-    motif_df.columns = ['glycan'] + df.columns.tolist()[1:]
-    return motif_df
-  elif form == 'long':
-    motif_df.columns = ['glycan'] + ['rel_intensity' for k in range(1, motif_df.shape[1])]
-    sample_dfs = [pd.concat([motif_df.iloc[:,0], motif_df.iloc[:,k]], axis = 1) for k in range(1, motif_df.shape[1])]
-    out = pd.concat(sample_dfs, axis = 0, ignore_index = True)
-    out['sample_id'] = unwrap([[k]*len(sample_dfs[k]) for k in range(len(sample_dfs))])
-    return out
 
 def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkages = None):
   """masks rare monosaccharides and linkages in a list of glycans\n 
