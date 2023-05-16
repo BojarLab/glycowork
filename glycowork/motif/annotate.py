@@ -3,10 +3,12 @@ import networkx as nx
 import pandas as pd
 import itertools
 import re
+from io import StringIO
 
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
-from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, scale_in_range
+from glycowork.motif.draw import GlycoDraw
 
 def link_find(glycan):
   """finds all disaccharide motifs in a glycan sequence using its isomorphs\n
@@ -316,3 +318,70 @@ def get_terminal_structures(glycan, libr = None):
   ggraph = ensure_graph(glycan, libr = libr)
   nodeDict = dict(ggraph.nodes(data = True))
   return [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]
+
+  def text_to_glycan(svg_StringIO, glycan_scale = '', scale_range = '', compact = False, glycan_size = 'medium'):
+  """Modify matplotlib svg figure to replace text labels with glycan figures\n
+  | Arguments:
+  | :-
+  | svg_StringIO (StringIO): figure svg code as text stream
+  | glycan_scale (list): list [y, l], where y (float) = -log10(corr p-val) and l (string) = glycans; ignored if empty; defualt:''
+  | scale_range (list): list of two integers defining min/max glycan dim; ignored if empty; default:''
+  | compact (bool): if True, draw compact glycan figures; default:False
+  | glycan_size (string): modify glycan size; default:'medium'; options are 'small', 'medium', 'large'\n
+  | Returns:
+  | :-
+  | Modified figure svg code
+  """
+  glycan_size_dict = {
+      'small': 'scale(0.1 0.1)  translate(0, -74)',
+      'medium': 'scale(0.2 0.2)  translate(0, -55)',
+      'large': 'scale(0.3 0.3)  translate(0, -49)'
+      }
+  
+  # get svg code
+  svg_tmp = svg_StringIO.getvalue()
+
+  # get all text labels
+  matches = re.findall(r"<!--.*-->[\s\S]*?<\/g>", svg_tmp)
+
+  # prepare for appending
+  svg_tmp = svg_tmp.replace('</svg>', '')
+  element_id = 0
+
+  edit_svg = False
+
+  for match in matches:
+    # keep track of current label and position in figure
+    current_label = re.findall(r'<!--\s*(.*?)\s*-->', match)[0]
+    current_pos = '<g transform' + re.findall(r'<g transform\s*(.*?)\s*">', match)[0] + '">'
+    current_pos = current_pos.replace('scale(0.1 -0.1)', glycan_size_dict[glycan_size])
+    # check if label is glycan
+    try:  
+      glycan_to_nxGraph(current_label)
+      edit_svg = True
+    except:
+      pass
+    try:  
+      glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0])
+      edit_svg = True
+    except:
+      pass
+    # delete text label, append glycan figure
+    if edit_svg == True:
+      svg_tmp = svg_tmp.replace(match, '')
+      if glycan_scale == '':
+        d = GlycoDraw(current_label, compact = compact)
+      else:
+        d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)])
+      data = d.as_svg()
+      data = data.replace('<?xml version="1.0" encoding="UTF-8"?>\n', '')
+      id_matches = re.findall(r'd\d+', data)
+      # reassign element ids to avoid duplicates
+      for id in id_matches:
+        data = data.replace(id, 'd' + str(element_id))
+        element_id += 1
+      svg_tmp = svg_tmp + '\n' + current_pos + '\n' + data + '\n</g>'    
+      edit_svg = False
+  
+  svg_tmp = svg_tmp + '</svg>'
+  return svg_tmp
