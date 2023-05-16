@@ -319,7 +319,7 @@ def get_terminal_structures(glycan, libr = None):
   nodeDict = dict(ggraph.nodes(data = True))
   return [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]
 
-  def text_to_glycan(svg_StringIO, glycan_scale = '', scale_range = '', compact = False, glycan_size = 'medium'):
+def text_to_glycan(svg_StringIO, glycan_scale = '', scale_range = '', compact = False, glycan_size = 'medium'):
   """Modify matplotlib svg figure to replace text labels with glycan figures\n
   | Arguments:
   | :-
