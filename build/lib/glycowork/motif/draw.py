@@ -54,44 +54,8 @@ def matches(line, opendelim='(', closedelim=')'):
           print("expecting closing quote to match open quote starting at: '{}'"
                 .format(line[pos-1:]))
             
-class RecordingSurface(cairosvg.surface.Surface):
-  # https://github.com/cduck/drawSvg/issues/25
-    """A surface that records draw commands."""
-    def _create_surface(self, width, height):
-        cairo_surface = cairocffi.RecordingSurface(
-                cairocffi.CONTENT_COLOR_ALPHA, None)
-        return cairo_surface, width, height
 
-def get_bounding_box(d, pad=0, resolution=1/256, max_size=10000):
-  # https://github.com/cduck/drawSvg/issues/25
-    rbox = (-max_size, -max_size, 2*max_size, 2*max_size)
-    # Hack, add an argument to asSvg instead
-    svg_lines = d.as_svg().split('\n')
-    svg_lines[2] = f'viewBox="{rbox[0]}, {rbox[1]}, {rbox[2]}, {rbox[3]}">'
-    svg_code = '\n'.join(svg_lines)
-    
-    t = cairosvg.parser.Tree(bytestring=svg_code)
-    s = RecordingSurface(t, None, 72, scale=1/resolution)
-    b = s.cairo.ink_extents()
-    
-    return (
-        rbox[0] + b[0]*resolution - pad,
-        -(rbox[1]+b[1]*resolution)-b[3]*resolution - pad,
-        b[2]*resolution + pad*2,
-        b[3]*resolution + pad*2,
-    )
-
-def fit_to_contents(d, pad=0, resolution=1/256, max_size=10000):
-  # https://github.com/cduck/drawSvg/issues/25
-    bb = get_bounding_box(d, pad=pad, resolution=resolution, max_size=max_size)
-    d.view_box = (bb[0], -bb[1]-bb[3], bb[2], bb[3])
-    d.width, d.height = bb[2], bb[3]
-    
-    # Debug: Draw bounding rectangle
-    # d.append(draw.Rectangle(*bb, fill='none', stroke_width=2,
-                            # stroke='red', stroke_dasharray='5 2'))
-
-# Adjusted SNFG color palette
+# adjusted SNFG color palette
 snfg_white = '#ffffff'
 snfg_alt_blue = '#0385ae'
 snfg_green = '#058f60'
@@ -103,6 +67,7 @@ snfg_brown = '#9f6d55'
 snfg_orange = '#ef6130'
 snfg_red = '#C23537'
 
+# extensions for draw_lib
 additions = ['-', 'blank', 'red_end', 'free', 
              '04X', '15A', '02A', '13X',
              '24X', '35X', '04A', '15X',
@@ -111,6 +76,7 @@ additions = ['-', 'blank', 'red_end', 'free',
              '03X', '14A', 'Z', 'Y',
              'B', 'C', 'text', 'non_glycan']
 
+# shape-color mapping
 sugar_dict = {
   "Hex": ['Hex', snfg_white, False],
   "Glc": ['Hex', snfg_alt_blue, False],
@@ -256,9 +222,20 @@ sugar_dict = {
   "C" : ['C', None, None]
 }   
 
+# build draw_lib with glycoword additions
 draw_lib = expand_lib(lib, ['-'] + list(sugar_dict.keys()))
 
 def hex_circumference(x_pos, y_pos, dim):
+  """Draw a hexagoncircumference at the specified position and dimensions.\n
+  | Arguments:
+  | :-
+  | x_pos (int): X coordinate of the hexagon's center on the drawing canvas.
+  | y_pos (int): Y coordinate of the hexagon's center on the drawing canvas.
+  | dim (int): Arbitrary dimension unit used for scaling the hexagon's size.\n
+  | Returns:
+  | :-
+  | None
+  """  
   p = draw.Path(stroke_width=0.04*dim, stroke='black')
   p.M((0-x_pos*dim)+0.5*dim, (0+y_pos*dim)+0)
   p.L((0-x_pos*dim)+(0.5*dim)*cos(radians(60)),(0+y_pos*dim)+(0.5*dim)*sin(radians(60)))  
@@ -285,6 +262,17 @@ def hex_circumference(x_pos, y_pos, dim):
   d.append(p)
 
 def hex(x_pos, y_pos, dim, color = 'white'):
+  """Draw a hexagon shape at the specified position and dimensions.\n
+  | Arguments:
+  | :-
+  | x_pos (int): X coordinate of the hexagon's center on the drawing canvas.
+  | y_pos (int): Y coordinate of the hexagon's center on the drawing canvas.
+  | dim (int): Arbitrary dimension unit used for scaling the hexagon's size.
+  | color (str): Color of the hexagon. Default is 'white'.\n
+  | Returns:
+  | :-
+  | None
+  """  
   d.append(draw.Lines(  (0-x_pos*dim)+0.5*dim,                                          (0+y_pos*dim)+0,
                         (0-x_pos*dim)+(0.5*dim)*cos(radians(300)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(300)),
                         (0-x_pos*dim)+(0.5*dim)*cos(radians(240)),                      (0+y_pos*dim)+(0.5*dim)*sin(radians(240)),
@@ -309,7 +297,6 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
   | :-  
   | 
   """
-
   inside_hex_dim = ((sqrt(3))/2)*dim
 
   if shape == 'Hex':
@@ -1181,6 +1168,14 @@ def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50,
     d.append(p)
 
 def multiple_branches(glycan):
+  """Reorder multiple branches by linkage on a given glycan\n
+  | Arguments:
+  | :-
+  | glycan (str): Input glycan string.\n
+  | Returns:
+  | -------
+  | str: Modified glycan string.
+  """
   if ']' in glycan:
     tmp = glycan.replace('(', '*')
     tmp = tmp.replace(')', '*')
@@ -1193,16 +1188,30 @@ def multiple_branches(glycan):
         open_close.append((openpos, closepos))
 
     for k in range(len(open_close)-1):
-      # print(open_close[k][1], open_close[k+1][0])
       if open_close[k+1][0] - open_close[k][1] == 2:
         branch1 = glycan[open_close[k][0]:open_close[k][1]]
+        tmp1 = branch1[-2]
         branch2 = glycan[open_close[k+1][0]:open_close[k+1][1]]
-        # print(branch1[-2], branch2[-2])
-        if branch1[-2] > branch2[-2]:
+        tmp2 = branch2[-2]
+        if tmp1 == '?' and tmp2 == '?':
+          if '?' in [tmp1, tmp2]:
+            if len(branch1) > len(branch2):
+              tmp1, tmp2 = [1, 2]
+            else:
+              tmp1, tmp2 = [2, 1]
+        if tmp1 > tmp2:
           glycan = glycan[:open_close[k][0]] + branch2 + '][' + branch1 + glycan[open_close[k+1][1]:]
   return glycan
 
 def multiple_branch_branches(glycan):
+  """Reorder nested multiple branches by linkage on a given glycan\n
+  | Arguments:
+  | :-
+  | glycan (str): Input glycan string.\n
+  | Returns:
+  | -------
+  | str: Modified glycan string.
+  """
   if ']' in glycan:
     tmp = glycan.replace('(', '*')
     tmp = tmp.replace(')', '*')
@@ -1239,8 +1248,27 @@ def reorder_for_drawing(glycan, by = 'linkage'):
         group1 = glycan[:openpos-1]
         group2 = glycan[openpos:closepos]
         branch_end = [j[-2] for j in [group1, group2]]
-        branch_end = [k.replace('z', '9') for k in branch_end]
+        # branch_end = [j[-2] for j in [re.sub(r'\[[^]]+\]', '', group1), re.sub(r'\[[^]]+\]', '', group2)]]
+        # branch_end = [k.replace('z', '9') for k in branch_end]
         branch_len = [len(k) for k in min_process_glycans([group1, group2])]
+
+        # print(branch_end[0])
+        # print('g1 ' + group1)
+        # print(branch_end[1])
+        # print('g2 ' + group2)
+
+        # if branch_end[0] in ['?', ')'] and branch_end[1] in ['?', ')']:
+        #   branch_end[0] = 1
+        #   branch_end[1] = 2
+        # if branch_end[0] in ['?', ')']:
+        #   branch_end[0] = branch_end[1] + 1
+        # if branch_end[1] in ['?', ')']:
+        #   branch_end[1] = branch_end[0] + 1
+
+        # print(branch_end[0])
+        # print('g1 ' + group1)
+        # print(branch_end[1])
+        # print('g2 ' + group2)
 
         if by == 'length':
           
@@ -1257,11 +1285,20 @@ def reorder_for_drawing(glycan, by = 'linkage'):
           if branch_end[0] == branch_end[1]:
             glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
           else:
+            
+            
             glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
   return glycan
 
 def branch_order(glycan, by = 'linkage'):
-
+  """order nested branches by linkage, ascending\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | Returns:
+  | :-
+  | Returns re-ordered glycan
+  """
   tmp = glycan.replace('(', '*')
   tmp = tmp.replace(')', '*')
   tmp = tmp.replace('[', '(')
@@ -1303,7 +1340,7 @@ def split_node(G, node):
   | :-
   | glycan graph (networkx object), consisting of two disjointed graphs\n
   ref: https://stackoverflow.com/questions/65853641/networkx-how-to-split-nodes-into-two-effectively-disconnecting-edges
-"""
+  """
   edges = G.edges(node, data=True)
   
   new_edges = []
@@ -1407,7 +1444,17 @@ def process_bonds(linkage_list):
     return bonds
 
 def split_monosaccharide_linkage(label_list):
-
+  """Split the monosaccharide linkage and extract relevant information from the given label list.\n
+  | Arguments:
+  | :-
+  | label_list (list): List of labels \n
+  | Returns:
+  | -------
+  | Three lists - sugar, sugar_modification, and bond.
+  |   - sugar (list): List of sugars 
+  |   - sugar_modification (list): List of sugar modifications 
+  |   - bond (list): List of bond information 
+  """
   if any(isinstance(el, list) for el in label_list):
     sugar = [k[::2][::-1] for k in label_list]
     sugar_modification = [[get_modification(k) if k in lib else '' for k in y] for y in sugar]
@@ -1450,7 +1497,18 @@ def glycan_to_skeleton(glycan_string):
   return(tmp2)
 
 def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_lib, extend_lib = False):
-
+  """ Extract monosaccharide labels and calculate coordinates for drawing\n
+  | Arguments:
+  | :-
+  | draw_this (str): Glycan structure to be drawn.
+  | show_linkage (bool, optional): Flag indicating whether to show linkages. Default is True.
+  | draw_lib (dict): lib extended with non-standard glycowords
+  | extend_lib (bool): If True, further extend the library with given input. Default is False.\n
+  | Returns:
+  | :-
+  | data_combined (list of lists)
+  | contains lists with monosaccharide label, x position, y position, modification, bond, conformation
+  """
   if extend_lib == True:
     draw_lib = expand_lib(draw_lib, [draw_this])
   
@@ -1460,6 +1518,7 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
     draw_this = reorder_for_drawing(draw_this)
     draw_this = multiple_branches(draw_this)
     draw_this = multiple_branch_branches(draw_this)
+  # print(draw_this)
 
   graph = glycan_to_nxGraph(draw_this, libr = draw_lib)
   node_labels = nx.get_node_attributes(graph, 'string_labels')
@@ -1845,8 +1904,10 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
               branch_branch_y_pos[k][n] = branch_branch_y_pos[k][n] + y_adj
 
     # y adjust branch connections
+  # print(branch_connection)
   for k in range(len(unique(branch_connection))):
     tmp = [branch_y_pos[j][0] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))]
+    # print(tmp)
     if ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(unique(branch_connection)[k]) < 2 or ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(0) > 1:# and list(set(unwrap([branch_sugar[k] for k in unwrap(get_indices(unwrap(branch_sugar), ['Fuc']))]))) == ['Fuc']:
       y_adj = 0
     elif ['Xyl'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(unique(branch_connection)[k]) < 2:
@@ -1938,12 +1999,19 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
             if branch_x_pos[k][j] == 0:
                 branch_y_pos[k][j] = branch_y_pos[k][j] + (to_add/2)
 
+      tmp_listy = []
       if main_sugar[-1] == 'Fuc':# and len(main_sugar) == 2:
         pass
       else:
         for k in range(len(main_sugar)):
           if main_sugar_x_pos[k] < min([x for x in unwrap(branch_x_pos) if x > 0]):
-            main_sugar_y_pos[k] = main_sugar_y_pos[k] + (to_add/2)
+            tmp_listy.append(main_sugar_x_pos[k])
+      for k in range(len(tmp_listy)):
+        if max(branch_connection) > max(tmp_listy):
+          main_sugar_y_pos[k] = main_sugar_y_pos[k] + (to_add/2)
+        else:
+          main_sugar_y_pos[k] = main_sugar_y_pos[k] + (to_add/2)
+            
       
       for k in range(len(branch_branch_y_pos)):
         #if branch_branch_sugar[k] != ['Fuc']:
@@ -1957,6 +2025,7 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
         for j in range(len(bbb_y_pos[k])):
           if [k[::2][::-1] for k in branch_branch_branch_node][k][j] in [str(k) for k in upper]:
             bbb_y_pos[k][j] = bbb_y_pos[k][j] + to_add
+
 
   main_conf = [k.group()[0] if k != None else '' for k in [re.search('^L-|^D-', k) for k in main_sugar_modification]]
   main_sugar_modification = [re.sub('^L-|^D-', '', k) for k in main_sugar_modification]
@@ -1980,6 +2049,17 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
   return data_combined
 
 def draw_bracket(x, y_min_max, direction = 'right', dim = 50):
+  """Draw a bracket shape at the specified position and dimensions.\n
+  | Arguments:
+  | :-
+  | x (int): X coordinate of the bracket on the drawing canvas.
+  | y_min_max (list): List containing the minimum and maximum Y coordinates for the bracket.
+  | direction (str, optional): Direction of the bracket. Possible values are 'right' and 'left'. Default is 'right'.
+  | dim (int, optional): Arbitrary dimension unit used for scaling the bracket's size. Default is 50.\n
+  | Returns:
+  | :-
+  | None
+  """
   # vertial
   p = draw.Path(stroke_width=0.04*dim, stroke = 'black')
   p.M(0-(x*dim), 0+(y_min_max[1]*dim)+0.75*dim)
@@ -2010,7 +2090,23 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50):
     d.append(p)
 
 def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, output = None):
+  """Draws a glycan structure based on the provided input.\n
+  | Arguments:
+  | :-
+  | draw_this (str): The glycan structure or motif to be drawn.
+  | vertical (bool, optional): Set to True to draw the structure vertically. Defaults to False.
+  | compact (bool, optional): Set to True to draw the structure in a compact form. Defaults to False.
+  | show_linkage (bool, optional): Set to False to hide the linkage information. Defaults to True.
+  | dim (int, optional): The dimension (size) of the individual sugar units in the structure. Defaults to 50.
+  | output (str, optional): The path to the output file to save as SVG or PDF. Defaults to None.
+  """
 
+  bond_hack = False
+  if 'Man(a1-?)' in draw_this: 
+    if 'Man(a1-3)' not in draw_this and 'Man(a1-6)' not in draw_this:
+      draw_this = 'Man(a1-6)'.join(draw_this.rsplit('Man(a1-?)', 1))
+      bond_hack = True
+  
   if draw_this[-1] == ')':
     draw_this = draw_this + 'blank'
 
@@ -2034,13 +2130,27 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
         try:
           data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, extend_lib = True)
         except:
-          return print('Error: did you enter a real glycan or motif?')
+          # return print('Error: did you enter a real glycan or motif?')
+          # print(e)
           sys.exit(1)
 
   main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf = data[0]
   branch_sugar, branch_x_pos, branch_y_pos, branch_sugar_modification, branch_bond, branch_connection, b_conf = data[1]
   branch_branch_sugar, branch_branch_x_pos, branch_branch_y_pos, branch_branch_sugar_modification, branch_branch_bond, branch_branch_connection, bb_conf  = data[2]
   bbb_sugar, bbb_x_pos, bbb_y_pos, bbb_sugar_modification, bbb_bond, bbb_connection, bbb_conf  = data[3]
+
+  while bond_hack == True:
+    for k in range(len(main_bond)):
+      if main_sugar[k] + '--' + main_bond[k] == 'Man--α 6':
+        main_bond[k] = 'α'
+        bond_hack = False
+
+    for branch in range(len(branch_bond)):
+      for bond in range(len(branch_bond[branch])):
+        if branch_sugar[branch][bond] + '--' + branch_bond[branch][bond] == 'Man--α 6':
+          branch_bond[branch][bond] = 'α'
+          bond_hack = False
+    bond_hack = False
 
   if show_linkage == False:
     main_bond = ['-' for x in main_bond]
@@ -2186,11 +2296,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
       draw_bracket(max_x*2+1, (min_y, max_y), direction = 'right', dim = dim)
     elif compact == True:
       draw_bracket(max_x*1.2+1, ((min_y *0.5)* 1.2, (max_y *0.5)* 1.2), direction = 'right', dim = dim)
-
   
   d2.append(d)
-
-  fit_to_contents(d2, pad=10)
 
   if output is not None:
       data = d2.as_svg()
@@ -2204,23 +2311,109 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
       
       elif 'pdf' in output:
         cairosvg.svg2pdf(bytestring=data, write_to=output)
-
-
   return d2
 
-def save_svg_to_file(svg_bytestring, filepath):
-  """write svg string to file\n
+def scale_in_range(listy, a, b):
+  """Normalize list of numbers in range a to b\n
   | Arguments:
   | :-
-  | svg_bytestring (string): svg code as string
-  | filepath (string): absolute path including full filename allows for saving the plot\n                          
+  | listy (list): list of numbers as integers/floats
+  | a (integer/float): min value in normalized range
+  | b (integer/float): max value in normalized range\n
   | Returns:
   | :-
-  | Saves file to disk
+  | Normalized list of numbers
+  """  
+  tmp = []
+  for k in range(len(listy)):
+    norm = (b-a) * ((listy[k]-min(listy))/(max(listy)-min(listy))) + a
+    tmp.append(norm)
+  return tmp
+
+def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_size = 'medium', filepath = '',
+                    scale_by_DE_res = None, x_thresh = 1, y_thresh = 0.05, x_metric = 'Log2FC'):
+  """Modify matplotlib svg figure to replace text labels with glycan figures\n
+  | Arguments:
+  | :-
+  | svg_input (string): absolute path including full filename for input svg figure
+  | scale_range (tuple): tuple of two integers defining min/max glycan dim; default:(25,80)
+  | compact (bool): if True, draw compact glycan figures; default:False
+  | glycan_size (string): modify glycan size; default:'medium'; options are 'small', 'medium', 'large'
+  | scale_by_DE_res (df): result table from motif_analysis.get_differential_expression. Include to scale glycan figure size by -10logp
+  | y_thresh (float): corr p threshhold for datapoints included for scaling, set to match get_differential_expression; default:0.05
+  | x_thresh (float): absolute x metric threshold for datapoints included for scaling, set to match get_differential_expression; defualt:1.0
+  | filepath (string): absolute path including full filename allows for saving the plot\n
+  | Returns:
+  | :-
+  | Modified figure svg code
   """
-  if filepath.split('.')[-1] == 'pdf':
-    cairosvg.svg2pdf(bytestring = svg_bytestring, write_to = filepath, dpi = 300)
-  elif filepath.split('.')[-1] == 'svg':
-    cairosvg.svg2svg(bytestring = svg_bytestring, write_to = filepath, dpi = 300)
-  elif filepath.split('.')[-1] == 'png':
-    cairosvg.svg2png(bytestring = svg_bytestring, write_to = filepath, dpi = 300)
+  glycan_size_dict = {
+      'small': 'scale(0.1 0.1)  translate(0, -74)',
+      'medium': 'scale(0.2 0.2)  translate(0, -55)',
+      'large': 'scale(0.3 0.3)  translate(0, -49)'
+      }
+  
+  glycan_scale = ''
+    
+  if scale_by_DE_res is not None:
+    res_df = scale_by_DE_res.loc[(abs(scale_by_DE_res[x_metric]) > x_thresh) & (scale_by_DE_res['corr p-val'] < y_thresh)]
+    y = -np.log10(res_df['corr p-val'].values.tolist())
+    l = res_df['Glycan'].values.tolist()
+    glycan_scale = [y, l]
+    
+  # get svg code
+  svg_tmp = open(svg_input,"r").read()
+
+  # get all text labels
+  matches = re.findall(r"<!--.*-->[\s\S]*?<\/g>", svg_tmp)
+
+  # prepare for appending
+  svg_tmp = svg_tmp.replace('</svg>', '')
+  element_id = 0
+
+  edit_svg = False
+
+  for match in matches:
+    # keep track of current label and position in figure
+    current_label = re.findall(r'<!--\s*(.*?)\s*-->', match)[0]
+    current_pos = '<g transform' + re.findall(r'<g transform\s*(.*?)\s*">', match)[0] + '">'
+    current_pos = current_pos.replace('scale(0.1 -0.1)', glycan_size_dict[glycan_size])
+    # check if label is glycan
+    try:  
+      glycan_to_nxGraph(current_label)
+      edit_svg = True
+    except:
+      pass
+    try:  
+      glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0])
+      edit_svg = True
+    except:
+      pass
+    # delete text label, append glycan figure
+    if edit_svg == True:
+      svg_tmp = svg_tmp.replace(match, '')
+      if glycan_scale == '':
+        d = GlycoDraw(current_label, compact = compact)
+      else:
+        d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)])
+      data = d.as_svg()
+      data = data.replace('<?xml version="1.0" encoding="UTF-8"?>\n', '')
+      id_matches = re.findall(r'd\d+', data)
+      # reassign element ids to avoid duplicates
+      for id in id_matches:
+        data = data.replace(id, 'd' + str(element_id))
+        element_id += 1
+      svg_tmp = svg_tmp + '\n' + current_pos + '\n' + data + '\n</g>'    
+      edit_svg = False
+  
+  svg_tmp = svg_tmp + '</svg>'
+  
+  if len(filepath) > 1:
+      if filepath.split('.')[-1] == 'pdf':
+        cairosvg.svg2pdf(bytestring = svg_tmp, write_to = filepath, dpi = 300)
+      elif filepath.split('.')[-1] == 'svg':
+        cairosvg.svg2svg(bytestring = svg_tmp, write_to = filepath, dpi = 300)
+      elif filepath.split('.')[-1] == 'png':
+        cairosvg.svg2png(bytestring = svg_tmp, write_to = filepath, dpi = 300)    
+  else:
+      return svg_tmp

@@ -9,13 +9,11 @@ from collections import Counter
 from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
-from io import StringIO
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
 from glycowork.motif.processing import cohen_d
-from glycowork.motif.annotate import annotate_dataset, link_find, text_to_glycan
+from glycowork.motif.annotate import annotate_dataset, link_find
 from glycowork.motif.graph import subgraph_isomorphism
-from glycowork.motif.draw import save_svg_to_file
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      thresh = 1.645, sorting = True,
@@ -146,7 +144,7 @@ def clean_up_heatmap(df):
 def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
-                 estimate_speedup = False, annotate = False, compact_glycans = False, glycan_size = 'medium', **kwargs):
+                 estimate_speedup = False, **kwargs):
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
   | Arguments:
   | :-
@@ -160,9 +158,6 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
   | filepath (string): absolute path including full filename allows for saving the plot
   | index_col (string): default column to convert to dataframe index; default:'target'
   | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False
-  | annotate (bool): if True, annotate row labels with GlycoDraw; default:False
-  | compact_glycans (bool): if True, draw compact glycan structures; default:False
-  | glycan_size (string): modify glycan size; default:'medium'; options are 'small', 'medium', 'large'
   | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                          
   | Returns:
   | :-
@@ -203,12 +198,6 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
       plt.ylabel('Motifs')
   plt.tight_layout()
   if len(filepath) > 1:
-    if annotate == True:
-      i = StringIO()
-      plt.savefig(i, format="svg", bbox_inches = 'tight')
-      svg_bytestring = text_to_glycan(i, compact = compact_glycans, glycan_size = glycan_size)
-      save_svg_to_file(svg_bytestring, filepath)
-    else:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
   plt.show()
@@ -451,7 +440,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
 def make_volcano(df, group1, group2, normalized = True,
                                 motifs = False, feature_set = ['exhaustive', 'known'], libr = None,
                                 impute = False, filepath = '', y_thresh = 0.05, x_thresh = 1.0, 
-                                label_changed = True, annotate = False, scale_by_logp = True, compact = False, x_metric = 'Log2FC'):
+                                label_changed = True, x_metric = 'Log2FC'):
   """Plots glycan differential expression results in a volcano plot\n
   | Arguments:
   | :-
@@ -467,32 +456,19 @@ def make_volcano(df, group1, group2, normalized = True,
   | y_thresh (float): corr p threshhold for labeling datapoints; default:0.05
   | x_thresh (float): absolute x metric threshold for labeling datapoints; defualt:1.0
   | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
-  | annotate (bool): if True, replace text labels with glycan figures; default:False
-  | scale_by_logp (bool): if True, scale glycan figures by -log10(corr p-val); default:True
-  | compact (bool): if True, draw compact glycan figures; default:False
   | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2Fc', 'Cohens d'\n
   | Returns:
   | :-
   | Prints volcano plot
   """
-  
-  if annotate == True:
-    label_changed = True
 
   # get DE  
   de_res = get_differential_expression(df = df, group1 = group1, group2 = group2, normalized = normalized, motifs = motifs,
                                         feature_set = feature_set, libr = libr, impute = impute)
   de_res['log_p'] = -np.log10(de_res['corr p-val'].values.tolist())
-
   x = de_res[x_metric].values.tolist()
   y = de_res['log_p'].values.tolist()
   l = de_res['Glycan'].values.tolist()
-
-  # size range (dim argument in GlycoDraw) for glycan scaling
-  glycan_scale, scale_range = ['', '']
-  if scale_by_logp == True:
-    glycan_scale = [y, l]
-    scale_range = [15, 90]
   
   # make plot
   ax = sns.scatterplot(x = x_metric, y = 'log_p', data = de_res, color = '#3E3E3E', alpha = 0.8)
@@ -508,13 +484,7 @@ def make_volcano(df, group1, group2, normalized = True,
 
   # save to file
   if len(filepath) > 1:
-      if annotate == True:
-        i = StringIO()
-        plt.savefig(i, format="svg", bbox_inches = 'tight')
-        svg_bytestring = text_to_glycan(i, glycan_scale, scale_range, compact)
-        save_svg_to_file(svg_bytestring, filepath)
-      else:
-        plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                     bbox_inches = 'tight')
   
   plt.show()
