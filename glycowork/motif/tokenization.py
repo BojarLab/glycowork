@@ -420,12 +420,12 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   if reduced:
     mz_value = mz_value - 1.0078
   multiplier = 1 if mode == 'negative' else -1
-  comp_pool = sorted(df_use.Composition.unique(), reverse = True)
-  try:
+  if isinstance(df_use.Composition.tolist()[0], str):
+    comp_pool = sorted(df_use.Composition.unique(), reverse = True)
     comp_pool = [ast.literal_eval(k) for k in comp_pool if isinstance(k, str)]
-  except:
-    comp_pool = list({v['id']:v for v in comp_pool if not isinstance(v, float)}.values())
-    del comp_pool['id']
+  else:
+    tuple_set = {tuple(d.items()) for d in df_use.Composition}
+    comp_pool = [dict(t) for t in tuple_set]
   out = []
   cache = {}
   for c in comp_pool:

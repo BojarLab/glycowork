@@ -416,7 +416,8 @@ def get_differential_expression(df, group1, group2, normalized = True,
   df = df.loc[:,[df.columns.tolist()[0]]+group1+group2]
   if motifs:
     df_motif = annotate_dataset(df.iloc[:,0].values.tolist(),
-                                feature_set = feature_set)
+                                feature_set = feature_set,
+                                condense = True)
     collect_dic = {}
     df = df.iloc[:,1:].T
     for col in df_motif.columns:
@@ -428,7 +429,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
     glycans = df.index.tolist()
   df_a = df.loc[:,group1]
   df_b = df.loc[:,group2]
-  pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1] for k in range(len(df_a))]
+  pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1]-0.00001 for k in range(len(df_a))]
   pvals = multipletests(pvals)[1]
   fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
   effect_sizes = [cohen_d(df_b.iloc[k,:], df_a.iloc[k,:]) for k in range(len(df_a))]
@@ -481,7 +482,7 @@ def make_volcano(df, group1, group2, normalized = True,
 
   # text labels
   if label_changed == True:
-    texts = [plt.text(x[i], y[i], l[i]) for i in range(len(x)) if y[i] > -np.log10(y_thresh) and abs(x[i])>x_thresh]
+    texts = [plt.text(x[i], y[i], l[i]) for i in range(len(x)) if y[i] > -np.log10(y_thresh) and abs(x[i]) > x_thresh]
 
   # save to file
   if len(filepath) > 1:
