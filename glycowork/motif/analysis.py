@@ -435,6 +435,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
   out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'Cohens d']
+  out = out.dropna()
   return out.sort_values(by = 'corr p-val')
 
 def make_volcano(df, group1, group2, normalized = True,
