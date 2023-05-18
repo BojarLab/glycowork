@@ -411,21 +411,18 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   | Returns a list of matching compositions in dict form
   """
   if df_use is None:
-    df_use = df_glycan[df_glycan.glycan_type == glycan_class]
-    df_use = df_use[df_use.Kingdom.str.contains(kingdom)]
+    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.str.contains(kingdom))]
   if mode == 'negative':
     adduct = mass_dict['Acetate']
   else:
     adduct = mass_dict['Na+']
   max_mono = round(mz_value/150)
   min_mono = round(mz_value/300)
-  mask = df_use['glycan_type'].values == glycan_class
-  df_sub = df_use[mask]
-  comp_pool = df_sub.dropna(subset = ['Composition']).Composition.tolist()
+  comp_pool = df_use.Composition.tolist()
   if isinstance(comp_pool[0], str):
-    comp_pool = [ast.literal_eval(k) for k in set(comp_pool)]
+    comp_pool = [ast.literal_eval(k) for k in set(comp_pool) if isinstance(k, str)]
   else:
-    comp_pool = list({v['id']:v for v in comp_pool}.values())
+    comp_pool = list({v['id']:v for v in comp_pool if not isinstance(v, float)}.values())
     del comp_pool['id']
   comp_pool = [c for c in comp_pool if min_mono < sum(c.values()) <= max_mono]
   out = []
