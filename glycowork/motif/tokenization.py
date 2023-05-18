@@ -391,15 +391,16 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
                                                                             sample_prep = sample_prep)) for comp in compositions])]
   return compositions
 
-def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
+def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic', reduced = False,
                       sample_prep = 'underivatized', mass_tolerance = 0.5, kingdom = 'Animalia',
-                      glycan_class = 'N', df_use = None, filter_out = None):
+                      glycan_class = 'N', df_use = None, filter_out = set()):
   """experimental! only use if you know what you're doing; mapping a m/z value to a matching monosaccharide composition\n
   | Arguments:
   | :-
   | mz_value (float): the actual m/z value from mass spectrometry
   | mode (string): whether mz_value comes from MS in 'positive' or 'negative' mode; default:'negative'
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
+  | reduced (bool): whether glycans are reduced at reducing end; default:False
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
   | mass_tolerance (float): how much deviation to tolerate for a match; default:0.5
   | kingdom (string): taxonomic kingdom for choosing a subset of glycans to consider; default:'Animalia'
@@ -416,46 +417,42 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
     adduct = mass_dict['Acetate']
   else:
     adduct = mass_dict['Na+']
-  max_mono = round(mz_value/150)
-  min_mono = round(mz_value/300)
-  comp_pool = df_use.Composition.tolist()
-  if isinstance(comp_pool[0], str):
-    comp_pool = [ast.literal_eval(k) for k in set(comp_pool) if isinstance(k, str)]
-  else:
+  if reduced:
+    mz_value = mz_value - 1.0078
+  multiplier = 1 if mode == 'negative' else -1
+  comp_pool = sorted(df_use.Composition.unique(), reverse = True)
+  try:
+    comp_pool = [ast.literal_eval(k) for k in comp_pool if isinstance(k, str)]
+  except:
     comp_pool = list({v['id']:v for v in comp_pool if not isinstance(v, float)}.values())
     del comp_pool['id']
-  comp_pool = [c for c in comp_pool if min_mono < sum(c.values()) <= max_mono]
   out = []
+  cache = {}
   for c in comp_pool:
-        try:
-          mass = composition_to_mass(c, mass_value = mass_value, sample_prep = sample_prep)
-          if abs(mass - mz_value) < mass_tolerance:
-            if filter_out:
-              if not any([j in c.keys() for j in filter_out]):
-                out = [c]
-                break
-            else:
-              out = [c]
-              break
-        except:
-          pass
+    m = composition_to_mass(c, mass_value = mass_value, sample_prep = sample_prep)
+    cache[m] = c
+    if abs(m - mz_value) < mass_tolerance:
+      if not filter_out.intersection(c.keys()):
+        out = [c]
+        break
   if len(out) > 0:
     return out
   else:
-    for c in comp_pool:
-        try:
-          mass = composition_to_mass(c, mass_value = mass_value, sample_prep = sample_prep)
-          if abs(mass+adduct - mz_value) < mass_tolerance:
-            if filter_out:
-              if not any([j in c.keys() for j in filter_out]):
-                out = [c]
-                break
-            else:
-              out = [c]
-              break
-        except:
-          pass
-    return out
+    for m,c in cache.items():
+      if abs(m+adduct - mz_value) < mass_tolerance:
+        if not filter_out.intersection(c.keys()):
+          out = [c]
+          break
+    if len(out) > 0:
+      return out
+    else:
+      mz_value = (mz_value+0.5*multiplier)*2+(reduced*1)
+      for m,c in cache.items():
+        if abs(m - mz_value) < mass_tolerance:
+          if not filter_out.intersection(c.keys()):
+            out = [c]
+            break
+      return out
 
 def match_composition_relaxed(composition, group, level, df = None, reducing_end = None):
     """Given a coarse-grained monosaccharide composition (Hex, HexNAc, etc.), it returns all corresponding glycans\n
@@ -777,33 +774,23 @@ def glycan_to_composition(glycan, stem_libr = None):
   else:
     return composition
 
-def composition_to_mass(dict_comp_in, mass_value = 'monoisotopic',
+def composition_to_mass(dict_comp, mass_value = 'monoisotopic',
                       sample_prep = 'underivatized'):
   """given a composition, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
   | Arguments:
   | :-
-  | dict_comp_in (dict): composition in form monosaccharide:count
+  | dict_comp (dict): composition in form monosaccharide:count
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'\n
   | Returns:
   | :-
   | Returns the theoretical mass of input composition
   """
-  dict_comp = copy.deepcopy(dict_comp_in)
-  theoretical_mass = 0
-  idx = sample_prep + '_' + mass_value
-  mass_dict = dict(zip(mapping_file.composition, mapping_file[idx]))
-  if 'S' in dict_comp.keys():
-    dict_comp['Sulphate'] = dict_comp.pop('S')
-  if 'P' in dict_comp.keys():
-    dict_comp['Phosphate'] = dict_comp.pop('P')
-  if 'Me' in dict_comp.keys():
-    dict_comp['Methyl'] = dict_comp.pop('Me')
-  if 'Ac' in dict_comp.keys():
-    dict_comp['Acetate'] = dict_comp.pop('Ac')
-  for k,v in dict_comp.items():
-    theoretical_mass += mass_dict[k] * v
-  return theoretical_mass + mass_dict['red_end']
+  mass_dict = dict(zip(mapping_file.composition, mapping_file[sample_prep + '_' + mass_value]))
+  for old_key, new_key in {'S': 'Sulphate', 'P': 'Phosphate', 'Me': 'Methyl', 'Ac': 'Acetate'}.items():
+    if old_key in dict_comp:
+      dict_comp[new_key] = dict_comp.pop(old_key)
+  return sum(mass_dict.get(k, 0) * v for k,v in dict_comp.items()) + mass_dict['red_end']
 
 def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized', stem_libr = None):
   """given a glycan, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
