@@ -1,6 +1,6 @@
 scikit-learn
 regex
-networkx>=3.0.0
+networkx>=3.0
 statsmodels
 scipy
 torch
@@ -15,7 +15,14 @@ matplotlib-inline
 python-louvain
 drawSvg~=2.0
 
-[test]
+[all]
 torch_geometric
 pycairo
 CairoSVG
+
+[draw]
+pycairo
+CairoSVG
+
+[ml]
+torch_geometric

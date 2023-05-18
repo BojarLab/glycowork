@@ -267,7 +267,7 @@ def canonicalize_iupac(glycan):
   """
   #canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac':'NAc', 'AC':'Ac', 'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'N(Gc)':'NGc', 'GL':'Gl', '(9Ac)':'9Ac',
-                 'KDN':'Kdn', 'OSO3':'S', '-O-Su-':'S', 'H2PO3':'P', '–':'-', ' ':'', 'α':'a', 'β':'b', '.':'', '((':'(', '))':')'}
+                 'KDN':'Kdn', 'OSO3':'S', '-O-Su-':'S', '(S)':'S', 'H2PO3':'P', '(P)':'P', '–':'-', ' ':'', ',':'-', 'α':'a', 'β':'b', '.':'', '((':'(', '))':')'}
   glycan = multireplace(glycan, replace_dic)
   #trim linkers
   if '-' in glycan:
@@ -279,7 +279,7 @@ def canonicalize_iupac(glycan):
   #canonicalize linkage uncertainty
   #open linkages
   if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
-    glycan = re.sub(r'([a-z])\-(A-Z])', r'\1?1-?\2', glycan)
+    glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
   #open linkages2
   if bool(re.search(r'[1-2]\-\)', glycan)):
     glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)

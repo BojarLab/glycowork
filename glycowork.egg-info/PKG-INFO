@@ -1143,4 +1143,6 @@ Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
-Provides-Extra: test
+Provides-Extra: all
+Provides-Extra: ml
+Provides-Extra: draw

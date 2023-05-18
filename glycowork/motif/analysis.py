@@ -473,15 +473,15 @@ def make_volcano(df, group1, group2, normalized = True,
   
   # make plot
   ax = sns.scatterplot(x = x_metric, y = 'log_p', data = de_res, color = '#3E3E3E', alpha = 0.8)
-  ax.set(xlabel=x_metric, ylabel = '-log10(corr p-val)', title = '')
+  ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)', title = '')
   plt.axhline(y = -np.log10(y_thresh), c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
   plt.axvline(x = x_thresh, c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
   plt.axvline(x = -x_thresh, c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
-  sns.despine(bottom=True, left = True)
+  sns.despine(bottom = True, left = True)
 
   # text labels
   if label_changed == True:
-    texts = [plt.text(x[i], y[i], l[i]) for i in range(len(x)) if y[i]>-np.log10(y_thresh) and abs(x[i])>x_thresh]
+    texts = [plt.text(x[i], y[i], l[i]) for i in range(len(x)) if y[i] > -np.log10(y_thresh) and abs(x[i])>x_thresh]
 
   # save to file
   if len(filepath) > 1:
