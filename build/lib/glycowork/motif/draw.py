@@ -61,10 +61,10 @@ snfg_alt_blue = '#0385AE'
 snfg_green = '#058F60'
 snfg_yellow = '#FCC326'
 snfg_light_blue = '#91D3E3'
-snfg_pink = '#f39EA0'
+snfg_pink = '#F39EA0'
 snfg_purple = '#A15989'
 snfg_brown = '#9F6D55'
-snfg_orange = '#Ef6130'
+snfg_orange = '#EF6130'
 snfg_red = '#C23537'
 
 # extensions for draw_lib
@@ -1050,7 +1050,7 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
   if shape == 'Z':
     
     # deg = 0
-    rot = 'rotate(' + str(deg) + ' ' + str(0-x_pos*dim) + ' ' + str(0-y_pos*dim) + ')'
+    rot = 'rotate(' + str(deg) + ' ' + str(0-abs(x_pos)*(dim)) + ' ' + str(0-abs(y_pos)*(dim)) + ')'
     g = draw.Group(transform=rot)
 
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
@@ -1066,7 +1066,7 @@ def draw_shape(shape, color, x_pos, y_pos, modification = '', dim = 50, furanose
   if shape == 'Y':
     
     # deg = 0
-    rot = 'rotate(' + str(deg) + ' ' + str(0-x_pos*dim) + ' ' + str(0-y_pos*dim) + ')'
+    rot = 'rotate(' + str(deg) + ' ' + str(0-abs(x_pos)*(dim)) + ' ' + str(0-abs(y_pos)*(dim)) + ')'
     g = draw.Group(transform=rot)
     
     p = draw.Path(stroke_width=0.04*dim, stroke='black')
@@ -1238,7 +1238,6 @@ def reorder_for_drawing(glycan, by = 'linkage'):
     tmp = tmp.replace(']', ')')
 
     for openpos, closepos, level in matches(tmp):
-      # if level == 0 and bool(re.search('^Fuc\S{6}$', tmp[openpos:closepos])) == False:
       if level == 0 and bool(re.search('^Fuc\S{6}$|^Xyl\S{6}$', tmp[openpos:closepos])) == False:
 
         # nested branches
@@ -1248,27 +1247,7 @@ def reorder_for_drawing(glycan, by = 'linkage'):
         group1 = glycan[:openpos-1]
         group2 = glycan[openpos:closepos]
         branch_end = [j[-2] for j in [group1, group2]]
-        # branch_end = [j[-2] for j in [re.sub(r'\[[^]]+\]', '', group1), re.sub(r'\[[^]]+\]', '', group2)]]
-        # branch_end = [k.replace('z', '9') for k in branch_end]
         branch_len = [len(k) for k in min_process_glycans([group1, group2])]
-
-        # print(branch_end[0])
-        # print('g1 ' + group1)
-        # print(branch_end[1])
-        # print('g2 ' + group2)
-
-        # if branch_end[0] in ['?', ')'] and branch_end[1] in ['?', ')']:
-        #   branch_end[0] = 1
-        #   branch_end[1] = 2
-        # if branch_end[0] in ['?', ')']:
-        #   branch_end[0] = branch_end[1] + 1
-        # if branch_end[1] in ['?', ')']:
-        #   branch_end[1] = branch_end[0] + 1
-
-        # print(branch_end[0])
-        # print('g1 ' + group1)
-        # print(branch_end[1])
-        # print('g2 ' + group2)
 
         if by == 'length':
           
@@ -1284,9 +1263,7 @@ def reorder_for_drawing(glycan, by = 'linkage'):
 
           if branch_end[0] == branch_end[1]:
             glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-          else:
-            
-            
+          else:            
             glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
   return glycan
 
@@ -1518,7 +1495,6 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
     draw_this = reorder_for_drawing(draw_this)
     draw_this = multiple_branches(draw_this)
     draw_this = multiple_branch_branches(draw_this)
-  # print(draw_this)
 
   graph = glycan_to_nxGraph(draw_this, libr = draw_lib)
   node_labels = nx.get_node_attributes(graph, 'string_labels')
@@ -1718,7 +1694,6 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
         counter = counter+2
       elif len(main_sugar) - (branch_connection[k]+1) == 1:
         branch_y_pos[k] = [main_sugar_y_pos[branch_connection[k]]+counter for x in branch_x_pos[k]]
-        # maybe?
         counter = counter+2
       else:
         branch_y_pos[k] = [main_sugar_y_pos[branch_connection[k]]+2+counter for x in branch_x_pos[k]]
@@ -1730,8 +1705,7 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
       else:
         branch_y_pos[k] = [main_sugar_y_pos[branch_connection[k]]+2 for x in branch_x_pos[k]]
     # one monosaccharide branches
-    elif len(branch_sugar[k]) == 1 and  branch_sugar[k][0] not in ['Fuc', 'Xyl']: # ['Fuc']
-      # branch_y_pos[k] = [main_sugar_y_pos[branch_connection[k]] for x in branch_x_pos[k]]
+    elif len(branch_sugar[k]) == 1 and  branch_sugar[k][0] not in ['Fuc', 'Xyl']: 
       if main_sugar[-1] not in ['Fuc', 'Xyl']:
         branch_y_pos[k] = [main_sugar_y_pos[branch_connection[k]]+2+counter for x in branch_x_pos[k]]
         counter = counter+2
@@ -1753,9 +1727,7 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
       tmp = [branch_y_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]]+2+counter for x in branch_branch_x_pos[k]]
       tmp[-1] = tmp[-1]-2
       branch_branch_y_pos[k] = tmp
-    # elif branch_sugar[branch_branch_connection[k][0]][-1] == 'Fuc':#& branch_node[branch_branch_connection[k][0]][::2][::-1][-2] == branch_node[branch_branch_connection[k][0]][branch_branch_connection[k][1]]:
     elif branch_node[branch_branch_connection[k][0]][::2][::-1][-2] == branch_node[branch_branch_connection[k][0]][::2][::-1][branch_branch_connection[k][1]] and branch_sugar[branch_branch_connection[k][0]][-1] == 'Fuc':
-      # print('True')
       branch_branch_y_pos[k] = [branch_y_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]] for x in branch_branch_x_pos[k]]
     #   counter = counter + 0
     elif len(branch_branch_sugar[k]) > 1 and branch_branch_sugar[k][-1] not in ['Fuc', 'Xyl']:
@@ -1800,7 +1772,6 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
 
   for k in range(len(branch_sugar)):
     if branch_sugar[k] in [['Fuc'], ['Xyl']]:
-    # if branch_sugar[k] == ['Xyl']:
       filter.append(main_node[::2][::-1][branch_connection[k]])
     if branch_sugar[k][-1] == 'Fuc' and len(branch_sugar[k]) > 1:
       filter.append(branch_node[k][::2][::-1][-2])    
@@ -1847,18 +1818,10 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
       if max([y_list[k[0]] for k in idx_A]) > max([y_list[k[0]] for k in idx_B]):
         upper_min = min([y_list[k[0]] for k in idx_A])
         lower_max = max([y_list[k[0]] for k in idx_B])
-        # upper_y = [y_list[k[0]] for k in idx_A]
-        # upper_x = [x_list[k[0]] for k in idx_A]
-        # lower_y = [y_list[k[0]] for k in idx_B]
-        # lower_x = [x_list[k[0]] for k in idx_B]
         upper = pair[0]
       else:
         upper_min = min([y_list[k[0]] for k in idx_B])
         lower_max = max([y_list[k[0]] for k in idx_A])
-        # upper_y = [y_list[k[0]] for k in idx_B]
-        # upper_x = [x_list[k[0]] for k in idx_B]
-        # lower_y = [y_list[k[0]] for k in idx_A]
-        # lower_x = [x_list[k[0]] for k in idx_A]
         upper = pair[1]
 
       to_add = 2 - (upper_min-lower_max)
@@ -1907,7 +1870,6 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
   # print(branch_connection)
   for k in range(len(unique(branch_connection))):
     tmp = [branch_y_pos[j][0] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))]
-    # print(tmp)
     if ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(unique(branch_connection)[k]) < 2 or ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(0) > 1:# and list(set(unwrap([branch_sugar[k] for k in unwrap(get_indices(unwrap(branch_sugar), ['Fuc']))]))) == ['Fuc']:
       y_adj = 0
     elif ['Xyl'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(unique(branch_connection)[k]) < 2:
@@ -1989,18 +1951,18 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
       if diff_to_fix != []:
         to_add = max(diff_to_fix)
 
-      if main_sugar[-1] == 'Fuc':# and len(main_sugar) == 2:
+      if main_sugar[-1] == 'Fuc':
         pass
       else:
         for k in range(len(branch_y_pos)):
           for j in range(len(branch_y_pos[k])):
-            if [k[::2][::-1] for k in branch_node][k][j] in [str(k) for k in upper]: #and branch_sugar[k] != ['Fuc']:
+            if [k[::2][::-1] for k in branch_node][k][j] in [str(k) for k in upper]: 
               branch_y_pos[k][j] = branch_y_pos[k][j] + to_add
             if branch_x_pos[k][j] == 0:
                 branch_y_pos[k][j] = branch_y_pos[k][j] + (to_add/2)
 
       tmp_listy = []
-      if main_sugar[-1] == 'Fuc':# and len(main_sugar) == 2:
+      if main_sugar[-1] == 'Fuc':
         pass
       else:
         for k in range(len(main_sugar)):
@@ -2014,14 +1976,12 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
             
       
       for k in range(len(branch_branch_y_pos)):
-        #if branch_branch_sugar[k] != ['Fuc']:
         for j in range(len(branch_branch_y_pos[k])):
           if [k[::2][::-1] for k in branch_branch_node][k][j] in [str(k) for k in upper]:
             branch_branch_y_pos[k][j] = branch_branch_y_pos[k][j] + to_add
             # print(to_add)
 
       for k in range(len(bbb_y_pos)):
-        #if branch_branch_sugar[k] != ['Fuc']:
         for j in range(len(bbb_y_pos[k])):
           if [k[::2][::-1] for k in branch_branch_branch_node][k][j] in [str(k) for k in upper]:
             bbb_y_pos[k][j] = bbb_y_pos[k][j] + to_add
@@ -2130,8 +2090,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
         try:
           data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, extend_lib = True)
         except:
-          # return print('Error: did you enter a real glycan or motif?')
-          # print(e)
+          return print('Error: did you enter a real glycan or motif?')
           sys.exit(1)
 
   main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf = data[0]
@@ -2222,7 +2181,6 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   x_ori = -width+(dim/2)+0.5*dim
   y_ori = (-height/2)+(((max_y-abs(min_y))/2)*dim)
 
-  # global d2
   global d
 
   ## draw
@@ -2235,7 +2193,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
 
   rot = 'rotate(' + str(deg) + ' ' + str(width/2) + ' ' + str(height/2) + ')'
   d = draw.Group(transform=rot)
-
+  
   # bond main chain
   [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], main_bond[k], dim = dim, compact = compact) for k in range(len(main_sugar)-1)]
   # bond branch
@@ -2262,7 +2220,6 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   if floaty_bits != []:
     fb_count = {i:floaty_bits.count(i) for i in floaty_bits}
     floaty_bits = list(set(floaty_bits))
-    # floaty_data = [get_coordinates_and_labels(floaty_bits[k], show_linkage = show_linkage) for k in range(len(floaty_bits))]
     floaty_data = []
     for k in range(len(floaty_bits)):
       try:
