@@ -406,7 +406,7 @@ def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic',
   | kingdom (string): taxonomic kingdom for choosing a subset of glycans to consider; default:'Animalia'
   | glycan_class (string): which glycan class does the m/z value stem from, 'N', 'O', or 'lipid' linked glycans or 'free' glycans; default:'N'
   | df_use (dataframe): species-specific glycan dataframe to use for mapping; default: df_glycan
-  | filter_out (list): list of monosaccharide types to ignore during composition finding; default:None\n
+  | filter_out (set): set of monosaccharide types to ignore during composition finding; default:None\n
   | Returns:
   | :-
   | Returns a list of matching compositions in dict form
