@@ -56,15 +56,15 @@ def matches(line, opendelim='(', closedelim=')'):
             
 
 # adjusted SNFG color palette
-snfg_white = '#ffffff'
-snfg_alt_blue = '#0385ae'
-snfg_green = '#058f60'
-snfg_yellow = '#fcc326'
-snfg_light_blue = '#91d3e3'
-snfg_pink = '#f39ea0'
-snfg_purple = '#a15989'
-snfg_brown = '#9f6d55'
-snfg_orange = '#ef6130'
+snfg_white = '#FFFFFF'
+snfg_alt_blue = '#0385AE'
+snfg_green = '#058F60'
+snfg_yellow = '#FCC326'
+snfg_light_blue = '#91D3E3'
+snfg_pink = '#f39EA0'
+snfg_purple = '#A15989'
+snfg_brown = '#9F6D55'
+snfg_orange = '#Ef6130'
 snfg_red = '#C23537'
 
 # extensions for draw_lib
