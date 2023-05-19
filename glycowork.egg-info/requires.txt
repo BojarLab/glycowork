@@ -13,16 +13,17 @@ glyles
 pubchempy
 matplotlib-inline
 python-louvain
-drawSvg~=2.0
 
 [all]
 torch_geometric
 pycairo
 CairoSVG
+drawSvg~=2.0
 
 [draw]
 pycairo
 CairoSVG
+drawSvg~=2.0
 
 [ml]
 torch_geometric
