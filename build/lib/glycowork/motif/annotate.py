@@ -6,77 +6,7 @@ import re
 
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
-from glycowork.motif.processing import small_motif_find, IUPAC_to_SMILES
-
-
-def convert_to_counts_glycoletter(glycan, libr = None):
-  """counts the occurrence of glycoletters in glycan\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dictionary with counts per glycoletter in a glycan
-  """
-  if libr is None:
-    libr = lib
-  #initialize occurrence dictionary from list of glycoletters
-  letter_dict = dict.fromkeys(libr, 0)
-  #split glycan into glycoletters
-  glycan = small_motif_find(glycan).split('*')
-  #counts each glycoletter in glycan
-  for i in libr:
-    letter_dict[i] = glycan.count(i)
-  return letter_dict
-
-def glycoletter_count_matrix(glycans, target_col, target_col_name, libr = None):
-  """creates dataframe of counted glycoletters in glycan list\n
-  | Arguments:
-  | :-
-  | glycans (list): list of glycans in IUPAC-condensed format as strings
-  | target_col (list or pd.Series): label columns used for prediction
-  | target_col_name (string): name for target_col
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
-  | Returns:
-  | :-
-  | Returns dataframe with glycoletter counts (columns) for every glycan (rows)
-  """
-  if libr is None:
-    libr = lib
-  #counts glycoletters in each glycan
-  counted_glycans = [convert_to_counts_glycoletter(i, libr) for i in glycans]
-  out = pd.DataFrame(counted_glycans)
-  out[target_col_name] = target_col
-  return out
-
-def find_isomorphs(glycan):
-  """returns a set of isomorphic glycans by swapping branches etc.\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns list of unique glycan notations (strings) for a glycan in IUPAC-condensed
-  """
-  out_list = [glycan]
-  #starting branch swapped with next side branch
-  if '[' in glycan and glycan.index('[') > 0 and not bool(re.search('\[[^\]]+\[', glycan)):
-    glycan2 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
-    out_list.append(glycan2)
-  #double branch swap
-  temp = []
-  for k in out_list:
-    if '][' in k:
-      glycan3 = re.sub('(\[.*?\])(\[.*?\])', r'\2\1', k)
-      temp.append(glycan3)
-  #starting branch swapped with next side branch again to also include double branch swapped isomorphs
-  temp2 = []
-  for k in temp:
-    if '[' in k and k.index('[') > 0 and not bool(re.search('\[[^\]]+\[', k)):
-      glycan4 = re.sub('^(.*?)\[(.*?)\]', r'\2[\1]', k, 1)
-      temp2.append(glycan4)
-  return list(set(out_list + temp + temp2))
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs
 
 def link_find(glycan):
   """finds all disaccharide motifs in a glycan sequence using its isomorphs\n
@@ -102,59 +32,48 @@ def link_find(glycan):
     #from this linear glycan part, chunk away disaccharides and re-format them
     for i in [iso, b_re]:
       b = i.split('(')
-      b = [k.split(')') for k in b]
-      b = [item for sublist in b for item in sublist]
+      b = unwrap([k.split(')') for k in b])
       b = ['*'.join(b[i:i+3]) for i in range(0, len(b) - 2, 2)]
       b = [k for k in b if (re.search('\*\[', k) is None and re.search('\*\]\[', k) is None)]
-      b = [k.strip('[') for k in b]
-      b = [k.strip(']') for k in b]
-      b = [k.replace('[', '') for k in b]
-      b = [k.replace(']', '') for k in b]
+      b = [k.strip('[').strip(']') for k in b]
+      b = [k.replace('[', '').replace(']', '') for k in b]
       b = [k[:find_nth(k, '*', 1)] + '(' + k[find_nth(k, '*', 1)+1:] for k in b]
-      b = [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
-      coll += b
+      coll += [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
   return list(set(coll))
 
-def motif_matrix(df, glycan_col_name, label_col_name, libr = None):
+def motif_matrix(glycans):
   """generates dataframe with counted glycoletters and disaccharides in glycans\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences and labels
-  | glycan_col_name (string): column name for glycan sequences
-  | label_col_name (string): column name for labels; string
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | glycans (list): list of IUPAC-condensed glycan sequences as strings\n
   | Returns:
   | :-
   | Returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)
   """
-  if libr is None:
-    libr = lib
-  matrix_list = []
-  di_dics = []
-  #get all disaccharides
-  wga_di = [link_find(i) for i in df[glycan_col_name].values.tolist()]
-  #collect disaccharide repertoire
-  lib_di = list(sorted(list(set([item for sublist in wga_di for item in sublist]))))
-  #count each disaccharide in each glycan
-  for j in wga_di:
-    di_dict = dict.fromkeys(lib_di, 0)
-    for i in list(di_dict.keys()):
-      di_dict[i] = j.count(i)
-    di_dics.append(di_dict)
-  wga_di_out = pd.DataFrame(di_dics)
-  #count all glycoletters in each glycan
-  wga_letter = glycoletter_count_matrix(df[glycan_col_name].values.tolist(),
-                                          df[label_col_name].values.tolist(),
-                                   label_col_name, libr)
-  out_matrix = pd.concat([wga_letter, wga_di_out], axis = 1)
-  out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()]
-  temp = out_matrix.pop(label_col_name)
-  out_matrix = pd.concat([out_matrix, temp], axis = 1)
-  out_matrix.reset_index(drop = True, inplace = True)
-  return out_matrix
+  shadow_glycans = [re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in glycans]
+  out_matrix = []
+  for c,gs in enumerate([glycans, shadow_glycans]):
+    #get all disaccharides
+    wga_di = [link_find(i) for i in gs]
+    #collect disaccharide repertoire
+    if c == 0:
+      libr = {k for k in get_lib(gs) if '?' not in k and k not in linkages}
+      lib_di = {k for k in set(unwrap(wga_di)) if '?' not in k}
+    else:
+      libr = {k for k in get_lib(gs) if '?' in k and k not in linkages}
+      lib_di = set(unwrap(wga_di))
+    #count each disaccharide in each glycan
+    wga_di_out = pd.DataFrame([{i:j.count(i) if i in j else 0 for i in lib_di} for j in wga_di])
+    #counts glycoletters in each glycan
+    wga_letter = pd.DataFrame([{i:g.count(i) if i in g else 0 for i in libr} for g in gs])
+    out_matrix.append(pd.concat([wga_letter, wga_di_out], axis = 1))
+  org_len = out_matrix[0].shape[1]
+  out_matrix = pd.concat(out_matrix, axis = 1).reset_index(drop = True)
+  out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()].copy()
+  return out_matrix.drop([col2 for col1,col2 in itertools.product(out_matrix.columns.tolist()[:org_len], out_matrix.columns.tolist()[org_len:]) if out_matrix[col1].sum()==out_matrix[col2].sum() and re.sub(r"([ab])(\d)-(\d)", r"\1\2-?", col1) == col2], axis = 1)
 
 def estimate_lower_bound(glycans, motifs):
-  """searches for motifs which are present in at least glycan; not 100% exact but useful for speedup\n
+  """searches for motifs which are present in at least one glycan; not 100% exact but useful for speedup\n
   | Arguments:
   | :-
   | glycans (string): list of IUPAC-condensed glycan sequences
@@ -170,23 +89,22 @@ def estimate_lower_bound(glycans, motifs):
   #convert everything to one giant string
   glycans = '_'.join(glycans)
   #pseudo-linearize motifs
-  motif_ish = [k.replace('[','').replace(']','') for k in motifs.motif.values.tolist()]
+  motif_ish = [k.replace('[','').replace(']','') for k in motifs.motif]
   #check if a motif occurs in giant string
   idx = [k for k, j in enumerate(motif_ish) if j in glycans]
-  motifs = motifs.iloc[idx, :].reset_index(drop = True)
-  return motifs
+  return motifs.iloc[idx, :].reset_index(drop = True)
 
 def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
                     wildcard_list = [], termini_list = []):
   """searches for known motifs in glycan sequence\n
   | Arguments:
   | :-
-  | glycan (string): IUPAC-condensed glycan sequence
+  | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
-  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
-  | wildcard_list (list): list of wildcard names (such as 'z1-z', 'Hex', 'HexNAc', 'Sia')
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
+  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; will only be handled with string input; default:'termini'
+  | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
   | Returns dataframe with counts of motifs in glycan
@@ -196,30 +114,32 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   #check whether termini are specified
   if extra == 'termini':
     if len(termini_list) < 1:
-      termini_list = motifs.termini_spec.values.tolist()
-      termini_list = [eval(k) for k in termini_list]
+      termini_list = [eval(k) for k in motifs.termini_spec]
   if libr is None:
     libr = lib
   #count the number of times each motif occurs in a glycan
   if extra == 'termini':
-    ggraph = glycan_to_nxGraph(glycan, libr = libr, termini = 'calc')
-    res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
+    ggraph = ensure_graph(glycan, libr = libr, termini = 'calc')
+    res = [subgraph_isomorphism(ggraph, motifs.motif[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
                               termini_list = termini_list[k],
                                 count = True) for k in range(len(motifs))]*1
   else:
-    ggraph = glycan_to_nxGraph(glycan, libr = libr, termini = 'ignore')
-    res = [subgraph_isomorphism(ggraph, motifs.motif.values.tolist()[k], libr = libr,
+    ggraph = ensure_graph(glycan, libr = libr, termini = 'ignore')
+    res = [subgraph_isomorphism(ggraph, motifs.motif[k], libr = libr,
                               extra = extra,
                               wildcard_list = wildcard_list,
                               termini_list = termini_list,
                                 count = True) for k in range(len(motifs))]*1
       
-  out = pd.DataFrame(columns = motifs.motif_name.values.tolist())
+  out = pd.DataFrame(columns = motifs.motif_name)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
-  out.index = [glycan]
+  if isinstance(glycan, str):
+    out.index = [glycan]
+  else:
+    out.index = [graph_to_string(glycan)]
   return out
 
 def get_molecular_properties(glycan_list, verbose = False, placeholder = False) :
@@ -265,7 +185,7 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False) 
   df.index = glycan_list
   return df
 
-def annotate_dataset(glycans, motifs = None, libr = None,
+def annotate_dataset(glycans, motifs = None,
                      feature_set = ['known'], extra = 'termini',
                      wildcard_list = [], termini_list = [],
                      condense = False, estimate_speedup = False):
@@ -274,11 +194,10 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   | :-
   | glycans (list): list of IUPAC-condensed glycan sequences as strings
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), and 'chemical' (molecular properties of glycan)
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
   | condense (bool): if True, throws away columns with only zeroes; default:False
   | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
   | Returns:
@@ -287,16 +206,14 @@ def annotate_dataset(glycans, motifs = None, libr = None,
   """
   if motifs is None:
     motifs = motif_list
-  if libr is None:
-    libr = lib
+  libr = get_lib(glycans + motifs.motif.values.tolist())
   #non-exhaustive speed-up that should only be used if necessary
   if estimate_speedup:
     motifs = estimate_lower_bound(glycans, motifs)
   #checks whether termini information is provided
   if extra == 'termini':
     if len(termini_list) < 1:
-      termini_list = motifs.termini_spec.values.tolist()
-      termini_list = [eval(k) for k in termini_list]
+      termini_list = [eval(k) for k in motifs.termini_spec]
   shopping_cart = []
   if 'known' in feature_set:
     #counts literature-annotated motifs in each glycan
@@ -309,13 +226,22 @@ def annotate_dataset(glycans, motifs = None, libr = None,
     shopping_cart.append(pd.concat([generate_graph_features(k, libr = libr) for k in glycans], axis = 0))
   if 'exhaustive' in feature_set:
     #counts disaccharides and glycoletters in each glycan
-    temp = motif_matrix(pd.DataFrame({'glycans':glycans, 'labels':range(len(glycans))}),
-                                                   'glycans', 'labels', libr = libr)
+    temp = motif_matrix(glycans)
     temp.index = glycans
-    temp.drop(['labels'], axis = 1, inplace = True)
     shopping_cart.append(temp)
   if 'chemical' in feature_set:
     shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
+  if 'terminal' in feature_set:
+    bag = [get_terminal_structures(glycan, libr = libr) for glycan in glycans]
+    repertoire = set(unwrap(bag))
+    bag_out = pd.DataFrame([{i:j.count(i) for i in repertoire} for j in bag])
+    if '?' in ''.join(repertoire):
+      bag_out = bag_out.loc[:,~bag_out.columns.str.contains(r'\?')]
+      shadow_glycans = [[re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in b] for b in bag]
+      shadow_bag = pd.DataFrame([{i:j.count(i) for i in repertoire if '?' in i} for j in shadow_glycans])
+      bag_out = pd.concat([bag_out, shadow_bag], axis = 1).reset_index(drop = True)
+    bag_out.index = glycans
+    shopping_cart.append(bag_out)
   if condense:
     #remove motifs that never occur
     temp = pd.concat(shopping_cart, axis = 1)
@@ -371,7 +297,7 @@ def get_k_saccharides(glycan, size = 3, libr = None):
 
   # return the list of subgraphs
   subgraphs = [nx.relabel_nodes(k, {list(k.nodes())[n]:n for n in range(len(k.nodes()))}) for k in subgraphs]
-  subgraphs = [graph_to_string(k, libr = libr) for k in subgraphs]
+  subgraphs = [graph_to_string(k) for k in subgraphs]
   subgraphs = [k for k in subgraphs if k[0] not in ['a', 'b', '?']]
   return list(set(subgraphs))
 
@@ -389,5 +315,4 @@ def get_terminal_structures(glycan, libr = None):
     libr = lib
   ggraph = ensure_graph(glycan, libr = libr)
   nodeDict = dict(ggraph.nodes(data = True))
-  termini = [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]
-  return termini
+  return [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]

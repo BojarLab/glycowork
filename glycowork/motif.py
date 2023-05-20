@@ -4,6 +4,7 @@
 __all__ = []
 
 # %% ../03_motif.ipynb 2
+from .motif.draw import *
 from .motif.analysis import *
 from .motif.annotate import *
 from .motif.graph import *

@@ -26,7 +26,7 @@ def get_insight(glycan, libr = None, motifs = None):
         idx = np.where([compare_glycans(glycan, k, libr = libr) for k in df_glycan.glycan.values.tolist()])[0][0]
     species = ast.literal_eval(df_glycan.Species.values.tolist()[idx])
     if len(species) > 0:
-        print("\nThis glycan occurs in the following species: " + str(list(sorted(species))))
+        print("\nThis glycan occurs in the following species: " + str(sorted(species)))
     else:
         try:
             species = df_glycan.predicted_taxonomy.values.tolist()[idx]
@@ -34,7 +34,7 @@ def get_insight(glycan, libr = None, motifs = None):
         except:
             pass
     if len(species) > 5:
-        phyla = list(sorted(list(set(eval(df_glycan.Phylum.values.tolist()[idx])))))
+        phyla = sorted(set(eval(df_glycan.Phylum.values.tolist()[idx])))
         print("\nPuh, that's quite a lot! Here are the phyla of those species: " + str(phyla))
     found_motifs = annotate_glycan(glycan, motifs = motifs, libr = libr)
     found_motifs = found_motifs.loc[:, (found_motifs != 0).any(axis = 0)].columns.values.tolist()
@@ -49,7 +49,7 @@ def get_insight(glycan, libr = None, motifs = None):
             print("\nThis glycan is likely to be non-immunogenic to humans.")
     if len(df_glycan.tissue_sample.values.tolist()[idx]) > 2:
         tissue = ast.literal_eval(df_glycan.tissue_sample.values.tolist()[idx])
-        print("\nThis glycan has been reported to be expressed in: " + str(list(sorted(tissue))))
+        print("\nThis glycan has been reported to be expressed in: " + str(sorted(tissue)))
     if len(df_glycan.disease_association.values.tolist()[idx]) > 2:
         disease = ast.literal_eval(df_glycan.disease_association.values.tolist()[idx])
         direction = ast.literal_eval(df_glycan.disease_direction.values.tolist()[idx])

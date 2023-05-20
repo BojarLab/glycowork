@@ -382,7 +382,7 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
     return optimizer_ft, scheduler, criterion
 
 def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
-                   feature_calc = False, libr = None, return_features = False,
+                   feature_calc = False, return_features = False,
                    feature_set = ['known','exhaustive'], additional_features_train = None,
                    additional_features_test = None):
     """wrapper function to train standard machine learning models on glycans\n
@@ -392,7 +392,6 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     | y_train, y_test (list): lists of labels
     | mode (string): 'classification' or 'regression'; default:'classification'
     | feature_calc (bool): set to True for calculating motifs from glycans; default:False
-    | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
     | return_features (bool): whether to return calculated features; default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), and 'exhaustive' (all mono- and disaccharide features)
     | additional_features_train (dataframe): additional features (apart from glycans) to be used for training. Has to be of the same length as X_train; default:None
@@ -411,11 +410,9 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     #get features
     if feature_calc:
         print("\nCalculating Glycan Features...")
-        if libr is None:
-            libr = lib
-        X_train = annotate_dataset(X_train, libr = libr, feature_set = feature_set,
+        X_train = annotate_dataset(X_train, feature_set = feature_set,
                                    condense = True)
-        X_test = annotate_dataset(X_test, libr = libr, feature_set = feature_set,
+        X_test = annotate_dataset(X_test, feature_set = feature_set,
                                    condense = True)
         for k in X_test.columns.values.tolist():
             if k not in X_train.columns.values.tolist():

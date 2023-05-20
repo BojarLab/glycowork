@@ -20,6 +20,15 @@ trained_LectinOracle_flex = os.path.join(this_dir, 'glycowork_lectinoracle_600_f
 trained_NSequonPred = os.path.join(this_dir, 'NSequonPred_batch32.pt')
 
 class SweetNet(torch.nn.Module):
+    """given glycan graphs as input, predicts properties via a graph neural network\n
+    | Arguments:
+    | :-
+    | lib_size (int): number of unique tokens for graph nodes; usually len(lib)
+    | num_classes (int): number of output classes; only >1 for multilabel classification; default:1\n
+    | Returns:
+    | :-
+    | Returns batch-wise predictions
+    """
     def __init__(self, lib_size, num_classes = 1):
         super(SweetNet, self).__init__()
 
@@ -65,6 +74,11 @@ class SweetNet(torch.nn.Module):
           return x
 
 class NSequonPred(torch.nn.Module):
+    """given an ESM1b representation of N and 20 AA up + downstream, predicts whether it's a sequon\n
+    | Returns:
+    | :-
+    | Returns batch-wise predictions
+    """
     def __init__(self):
         super(NSequonPred, self).__init__() 
 
@@ -96,6 +110,19 @@ class SigmoidRange(torch.nn.Module):
     def forward(self, x): return sigmoid_range(x, self.low, self.high)
 
 class LectinOracle(torch.nn.Module):
+  """given glycan graphs and protein representations as input, predicts protein-glycan binding\n
+  | Arguments:
+  | :-
+  | input_size_glyco (int): number of unique tokens for graph nodes; usually len(lib)
+  | hidden_size (int): layer size for the graph convolutions; default:128
+  | num_classes (int): number of output classes; only >1 for multilabel classification; default:1
+  | data_min (float): minimum observed value in training data; default: -11.355
+  | data_max (float): maximum observed value in training data; default: 23.892
+  | input_size_prot (int): dimensionality of protein representations used as input; default:1280\n
+  | Returns:
+  | :-
+  | Returns batch-wise predictions
+  """
   def __init__(self, input_size_glyco, hidden_size = 128, num_classes = 1, data_min = -11.355,
                data_max = 23.892, input_size_prot = 1280):
     super(LectinOracle,self).__init__()
@@ -179,6 +206,19 @@ class LectinOracle(torch.nn.Module):
       return out
 
 class LectinOracle_flex(torch.nn.Module):
+  """given glycan graphs and protein sequences as input, predicts protein-glycan binding\n
+  | Arguments:
+  | :-
+  | input_size_glyco (int): number of unique tokens for graph nodes; usually len(lib)
+  | hidden_size (int): layer size for the graph convolutions; default:128
+  | num_classes (int): number of output classes; only >1 for multilabel classification; default:1
+  | data_min (float): minimum observed value in training data; default: -11.355
+  | data_max (float): maximum observed value in training data; default: 23.892
+  | input_size_prot (int): maximum length of protein sequence for padding/cutting; default:1000\n
+  | Returns:
+  | :-
+  | Returns batch-wise predictions
+  """
   def __init__(self, input_size_glyco, hidden_size = 128, num_classes = 1, data_min = -11.355,
                data_max = 23.892, input_size_prot = 1000):
     super(LectinOracle_flex,self).__init__()

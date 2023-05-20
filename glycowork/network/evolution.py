@@ -58,9 +58,9 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
   | Returns a rank x rank distance matrix
   """
   #subset df to only contain ranks with a minimum number of data points
-  df_min = list(sorted([(df[rank].value_counts() >= cut_off).index.tolist()[k]
+  df_min = sorted([(df[rank].value_counts() >= cut_off).index.tolist()[k]
                            for k in range(len((df[rank].value_counts() >= cut_off).index.tolist()))
-                           if (df[rank].value_counts() >= cut_off).values.tolist()[k]]))
+                           if (df[rank].value_counts() >= cut_off).values.tolist()[k]])
   df_idx = [df.index[df[rank] == k].values.tolist() for k in df_min]
   #retrieve and average embeddings for all glycans
   if averaging == 'median':
@@ -70,8 +70,7 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
   else:
     print("Only 'median' and 'mean' are permitted averaging choices.")
   #get the distance matrix
-  dm = calculate_distance_matrix(avgs, cosine, label_list = df_min)
-  return dm
+  return calculate_distance_matrix(avgs, cosine, label_list = df_min)
 
 def jaccard(list1, list2):
   """calculates Jaccard distance from two networks\n
@@ -83,9 +82,9 @@ def jaccard(list1, list2):
   | :-
   | Returns Jaccard distance between list1 and list2
   """
-  intersection = len(list(set(list1).intersection(list2)))
+  intersection = len(set(list1).intersection(list2))
   union = (len(list1) + len(list2)) - intersection
-  return 1- float(intersection) / union
+  return 1 - float(intersection) / union
 
 def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = "Species"):
   """calculates a distance matrix of generated networks based on provided metric\n
@@ -106,13 +105,12 @@ def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = 
   else:
     print("Not a defined metric. At the moment, only 'Jaccard' is available as a metric.")
   #get all objects to calculate distance between
-  specs = list(sorted(list(set(df[rank].values.tolist()))))
+  specs = sorted(set(df[rank].values.tolist()))
   idx_min = [k for k in range(len(specs)) if len(df[df[rank] == specs[k]]) >= cut_off]
   specs_min = [specs[k] for k in idx_min]
   networks_min = [networks[k] for k in idx_min]
   #get distance matrix
-  dm = calculate_distance_matrix(networks_min, dist_func, label_list = specs_min)
-  return dm
+  return calculate_distance_matrix(networks_min, dist_func, label_list = specs_min)
 
 def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
   """plots a dendrogram from distance matrix\n
@@ -135,7 +133,7 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
       p = 300,  # show only the last p merged clusters
       show_leaf_counts = False,  # otherwise numbers in brackets are counts
       leaf_rotation = 0.,
-      labels = dm.columns.values.tolist(),
+      labels = dm.columns.tolist(),
       leaf_font_size = 11.,
       show_contracted = True,  # to get a distribution impression in truncated branches
       )
@@ -164,19 +162,19 @@ def check_conservation(glycan, df, network_dic = None, libr = None, rank = 'Orde
   if network_dic is None:
     network_dic = net_dic
   #subset species with at least the threshold-number of glycans
-  all_specs = list(sorted(list(set(df.Species.values.tolist()))))
+  all_specs = sorted(set(df.Species.values.tolist()))
   allowed = [k for k in all_specs if df.Species.values.tolist().count(k) >= threshold]
   df_freq = df[df.Species.isin(allowed)].reset_index(drop = True)
-  all_specs = list(sorted(list(set(df_freq.Species.values.tolist()))))
+  all_specs = sorted(set(df_freq.Species.values.tolist()))
   #subset members of rank with at least two species
-  pool = list(set(df_freq[rank].values.tolist()))
-  pool = [k for k in pool if len(list(set(df_freq[df_freq[rank] == k].Species.tolist()))) > 1]
+  pool = set(df_freq[rank].values.tolist())
+  pool = [k for k in pool if len(set(df_freq[df_freq[rank] == k].Species.tolist())) > 1]
   #subset networks
   network_dic = {k:j for k,j in network_dic.items() if k in all_specs}
   #for each member of rank, get all species networks and search for motif
   conserved = {}
   for k in pool:
-    specs = list(set(df_freq[df_freq[rank] == k].Species.values.tolist()))
+    specs = set(df_freq[df_freq[rank] == k].Species.values.tolist())
     nets = [network_dic[j] for j in specs]
     nets = [list(j.nodes()) for j in nets]
     if motif:
@@ -206,11 +204,10 @@ def get_communities(graph_list, label_list = None):
   #label the communities by species name and running number to distinguish them afterwards
   i = 0
   for comm in comm_list:
-    comm_dict = {str(num)+'_'+str(label_list[i]):[] for num in list(set(comm.values()))}
+    comm_dict = {str(num) + '_' + str(label_list[i]):[] for num in set(comm.values())}
     for k,v in comm.items():
-      comm_dict[str(v)+'_'+str(label_list[i])].append(k)
+      comm_dict[str(v) + '_' + str(label_list[i])].append(k)
     comm_dicts.append(comm_dict)
     i += 1
   #unwrap dictionaries
-  comm_dicts = {k: v for d in comm_dicts for k, v in d.items()}
-  return comm_dicts
+  return {k: v for d in comm_dicts for k, v in d.items()}

@@ -5,14 +5,14 @@ import pickle
 import itertools
 import pkg_resources
 
-io = pkg_resources.resource_stream(__name__, "v7_sugarbase.csv")
+io = pkg_resources.resource_stream(__name__, "v8_sugarbase.csv")
 df_glycan = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
 motif_list = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_binding.csv")
 glycan_binding = pd.read_csv(io)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
-data_path = os.path.join(this_dir, 'lib_v7.pkl')
+data_path = os.path.join(this_dir, 'lib_v8.pkl')
 lib = pickle.load(open(data_path, 'rb'))
 
 #lib = get_lib(list(set(df_glycan.glycan.values.tolist() +
@@ -31,8 +31,7 @@ Sia = ['Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia']
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""
-  out = list(itertools.chain(*nested_list))
-  return out
+  return list(itertools.chain(*nested_list))
 
 def find_nth(haystack, needle, n):
   """finds n-th instance of motif\n
@@ -66,8 +65,7 @@ def reindex(df_new, df_old, out_col, ind_col, inp_col):
   """
   if ind_col != inp_col:
     print("Mismatching column names for ind_col and inp_col. Doesn't mean it's wrong but pay attention.")
-  out = [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
-  return out
+  return [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
 
 def stringify_dict(dicty):
   """Converts dictionary into a string\n
@@ -79,8 +77,22 @@ def stringify_dict(dicty):
   | Returns string of type key:value for sorted items
   """
   dicty = dict(sorted(dicty.items()))
-  dicty = ''.join(str(key) + str(value) for key, value in dicty.items())
-  return dicty
+  return ''.join(str(key) + str(value) for key, value in dicty.items())
+
+def multireplace(string, remove_dic):
+  """
+  Replaces all occurences of items in a set with a given string\n
+  | Arguments:
+  | :-
+  | string (str): string to perform replacements on
+  | remove_dic (set): dict of form to_replace:replace_with\n
+  | Returns:
+  | :-
+  | (str) modified string
+  """
+  for k,v in remove_dic.items():
+    string = string.replace(k, v)
+  return string
 
 def build_custom_df(df, kind = 'df_species'):
   """creates custom df from df_glycan\n
@@ -92,27 +104,26 @@ def build_custom_df(df, kind = 'df_species'):
   | :-
   | Returns custom df in the form of one glycan - species/tissue/disease association per row
   """
-  if kind == 'df_species':
-    cols = ['glycan', 'Species','Genus','Family','Order','Class',
-                   'Phylum','Kingdom','Domain', 'ref']
-  elif kind == 'df_tissue':
-    cols = ['glycan', 'tissue_sample', 'tissue_species', 'tissue_id', 'tissue_ref']
-  elif kind == 'df_disease':
-    cols = ['glycan', 'disease_association', 'disease_sample', 'disease_direction', 'disease_species', 'disease_id', 'disease_ref']
-  else:
-    print("Only df_species, df_tissue, and df_disease are currently possible as input.")
-  df = df[df[cols[1]].str.len() > 2].reset_index(drop = True)
-  df = df.loc[:,cols]
-  df.columns = ['target'] + df.columns.values.tolist()[1:]
-  df.index = df.target
-  df.drop(['target'], axis = 1, inplace = True)
-  df = df.applymap(lambda x: ast.literal_eval(x))
+  kind_to_cols = {
+        'df_species': ['glycan', 'Species','Genus','Family','Order','Class',
+                       'Phylum','Kingdom','Domain', 'ref'],
+        'df_tissue': ['glycan', 'tissue_sample', 'tissue_species', 'tissue_id', 'tissue_ref'],
+        'df_disease': ['glycan', 'disease_association', 'disease_sample', 'disease_direction',
+                       'disease_species', 'disease_id', 'disease_ref']
+    }
+  cols = kind_to_cols.get(kind, None)
+  if cols is None:
+    raise ValueError("Invalid value for 'kind' argument, only df_species, df_tissue, and df_disease are supported.")
+  df = df.loc[df[cols[1]].str.len() > 2, cols]
+  df.set_index('glycan', inplace = True)
+  df.index.name = 'target'
+  df = df.applymap(ast.literal_eval)
   try:
-    df = df.explode(cols[1:])
+    df = df.explode(cols[1:]).reset_index()
   except:
     raise ImportError("Seems like you're using pandas<1.3.0; please upgrade to allow for multi-column explode")
-  df.reset_index(inplace = True)
-  df = df.sort_values([cols[1], 'target'], ascending = [True, True]).reset_index(drop = True)
+  df.sort_values([cols[1], 'target'], ascending = [True, True], inplace = True)
+  df.reset_index(drop = True, inplace = True)
   return df
 
 df_species = build_custom_df(df_glycan, kind = 'df_species')

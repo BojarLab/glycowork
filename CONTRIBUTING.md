@@ -21,6 +21,10 @@ nbdev_install_hooks
 
 ## PR submission guidelines
 
+* Before submitting a PR, run this command locally, that will run all tests and return any errors that may have occurred:
+```
+nbdev_prepare
+```
 * Keep each PR focused. While it's more convenient, do not combine several unrelated fixes together. Create as many branches as needing to keep each PR focused.
 * Do not mix style changes/fixes with "functional" changes. It's very difficult to review such PRs and it most likely gets rejected.
 * Do not add/remove vertical whitespace. Preserve the original style of the file you edit as much as you can.
@@ -32,9 +36,8 @@ nbdev_install_hooks
 * Docs are automatically created from the notebooks in the nbs folder.
 
 
-## Wishlist for future glycowork updates (last update: 2022-03-16)
+## Wishlist for future glycowork updates (last update: 2023-04-21)
 #### Urgent
-* add the possibility of drawing glycans on plots (e.g., have SNFG glycans on x-axis for a bar plot etc.)
 * add functions to convert other nomenclatures (WURCS, GlycoCT, etc.) into IUPAC-condensed
 * more, and more informative, error messages
 

@@ -2,7 +2,7 @@ import re
 import copy
 import networkx as nx
 from glycowork.glycan_data.loader import lib, unwrap, find_nth, df_glycan
-from glycowork.motif.processing import min_process_glycans
+from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, expand_lib
 import numpy as np
 import pandas as pd
 from scipy.sparse.linalg import eigsh
@@ -20,8 +20,7 @@ def character_to_label(character, libr = None):
   """
   if libr is None:
     libr = lib
-  character_label = libr.index(character)
-  return character_label
+  return libr.index(character)
 
 def string_to_labels(character_string, libr = None):
   """tokenizes word by indexing characters in passed library\n
@@ -57,19 +56,6 @@ def evaluate_adjacency(glycan_part, adjustment):
     else:
       return False
   return False
-
-def bracket_removal(glycan_part):
-  """iteratively removes (nested) branches between start and end of glycan_part\n
-  | Arguments:
-  | :-
-  | glycan_part (string): residual part of a glycan from within glycan_to_graph\n
-  | Returns:
-  | :-
-  | Returns glycan_part without interfering branches
-  """
-  while bool(re.search('\[[^\[\]]+\]', glycan_part)):
-    glycan_part = re.sub('\[[^\[\]]+\]', '', glycan_part)
-  return glycan_part
 
 def glycan_to_graph(glycan):
   """the monumental function for converting glycans into graphs\n
@@ -115,16 +101,14 @@ def glycan_to_graph(glycan):
   return mask_dic, adj_matrix
 
 def glycan_to_nxGraph_int(glycan, libr = None,
-                      termini = 'ignore', termini_list = None,
-                      override_reducing_end = False):
+                      termini = 'ignore', termini_list = None):
   """converts glycans into networkx graphs\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
-  | override_reducing_end (bool): if True, it allows graph generation for glycans ending in a linkage; though the output doesn't work with all downstream functions; default:False\n
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
   | :-
   | Returns networkx graph object of glycan
@@ -132,13 +116,16 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   if libr is None:
     libr = lib
   #this allows to make glycan graphs of motifs ending in a linkage
-  if override_reducing_end and glycan[-1] == ')':
+  if glycan[-1] == ')':
+    cache = True
     glycan = glycan + 'Hex'
+  else:
+    cache = False
   #map glycan string to node labels and adjacency matrix
   node_dict, adj_matrix = glycan_to_graph(glycan)
   #convert adjacency matrix to networkx graph
   if len(node_dict) > 1:
-    g1 = nx.from_numpy_matrix(adj_matrix)
+    g1 = nx.from_numpy_array(adj_matrix)
     #needed for compatibility with monosaccharide-only graphs (size = 1)
     for n1, n2, d in g1.edges(data = True):
       del d['weight']
@@ -146,12 +133,12 @@ def glycan_to_nxGraph_int(glycan, libr = None,
     g1 = nx.Graph()  
     g1.add_node(0)
   #remove the helper monosaccharide if used
-  if override_reducing_end:
+  if cache:
     if glycan[-1] == 'x':
+      del node_dict[len(g1.nodes) - 1]
       g1.remove_node(len(g1.nodes) - 1)
   #add node labels
-  nx.set_node_attributes(g1, {k:libr.index(node_dict[k]) for k in range(len(node_dict))}, 'labels')
-  nx.set_node_attributes(g1, {k:node_dict[k] for k in range(len(node_dict))}, 'string_labels')
+  nx.set_node_attributes(g1, {i:{'labels':libr.index(k), 'string_labels':k} for i,k in enumerate(node_dict.values())})
   if termini == 'ignore':
     pass
   elif termini == 'calc':
@@ -161,16 +148,14 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   return g1
 
 def glycan_to_nxGraph(glycan, libr = None,
-                      termini = 'ignore', termini_list = None,
-                      override_reducing_end = False):
+                      termini = 'ignore', termini_list = None):
   """wrapper for converting glycans into networkx graphs; also works with floating substituents\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
-  | override_reducing_end (bool): if True, it allows graph generation for glycans ending in a linkage; though the output doesn't work with all downstream functions; default:False\n
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
   | :-
   | Returns networkx graph object of glycan
@@ -179,25 +164,25 @@ def glycan_to_nxGraph(glycan, libr = None,
     libr = lib
   if '{' in glycan:
     parts = glycan.replace('}','{').split('{')
-    parts = [k for k in parts if len(k) > 0]
     parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
-                                   termini_list = termini_list, override_reducing_end = True) for k in parts]
-    len_org = len(parts[-1].nodes())
+                                   termini_list = termini_list) for k in parts if len(k) > 0]
+    len_org = len(parts[-1])
     for p in range(len(parts)-1):
       parts[p] = nx.relabel_nodes(parts[p], {pn:pn+len_org for pn in parts[p].nodes()})
-      len_org += len(parts[p].nodes())
+      len_org += len(parts[p])
     g1 = nx.algorithms.operators.all.compose_all(parts)
   else:
     g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
-                                   termini_list = termini_list, override_reducing_end = override_reducing_end)
+                                   termini_list = termini_list)
   return g1
 
-def ensure_graph(glycan, libr = None):
+def ensure_graph(glycan, libr = None, **kwargs):
   """ensures function compatibility with string glycans and graph glycans\n
   | Arguments:
   | :-
   | glycan (string or networkx graph): glycan in IUPAC-condensed format or as a networkx graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | **kwargs: keyword arguments that are directly passed on to glycan_to_nxGraph\n
   | Returns:
   | :-
   | Returns networkx graph object of glycan
@@ -205,7 +190,7 @@ def ensure_graph(glycan, libr = None):
   if libr is None:
     libr = lib
   if isinstance(glycan, str):
-    return glycan_to_nxGraph(glycan, libr = libr)
+    return glycan_to_nxGraph(glycan, libr = libr, **kwargs)
   else:
     return glycan
 
@@ -240,15 +225,17 @@ def categorical_termini_match(attr1, attr2, default1, default2):
   return match
 
 def compare_glycans(glycan_a, glycan_b, libr = None,
-                    wildcards = False, wildcard_list = []):
+                    wildcards = False, wildcard_list = [],
+                    wildcards_ptm = False):
   """returns True if glycans are the same and False if not\n
   | Arguments:
   | :-
   | glycan_a (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-  | wildcards (bool): set to True to allow wildcards (e.g., '?1-?', 'monosaccharide'); default is False
-  | wildcard_list (list): list of wildcards to consider, in the form of '?1-?' etc.\n
+  | wildcards (bool): set to True to allow wildcards (e.g., '?1-?', 'monosaccharide'); default:False
+  | wildcard_list (list): list of wildcards to consider, in the form of '?1-?' etc.
+  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
   | Returns:
   | :-  
   | Returns True if two glycans are the same and False if not
@@ -258,8 +245,19 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   if isinstance(glycan_a, str):
     #check whether glycan_a and glycan_b have the same length
     if len(set([len(k) for k in min_process_glycans([glycan_a, glycan_b])])) == 1:
-      g1 = glycan_to_nxGraph(glycan_a, libr = libr)
-      g2 = glycan_to_nxGraph(glycan_b, libr = libr)
+      if wildcards_ptm:
+        glycan_a = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', glycan_a).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+        glycan_b = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', glycan_b).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+        libr = expand_lib(libr, [glycan_a, glycan_b])
+      if wildcards is False:
+        if sorted(glycan_a.replace('[','').replace(']','')) == sorted(glycan_b.replace('[','').replace(']','')):
+          g1 = glycan_to_nxGraph(glycan_a, libr = libr)
+          g2 = glycan_to_nxGraph(glycan_b, libr = libr)
+        else:
+          return False
+      else:
+        g1 = glycan_to_nxGraph(glycan_a, libr = libr)
+        g2 = glycan_to_nxGraph(glycan_b, libr = libr)
     else:
       return False
   else:
@@ -280,7 +278,8 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
 
 def subgraph_isomorphism(glycan, motif, libr = None,
                          extra = 'ignore', wildcard_list = [],
-                         termini_list = [], count = False):
+                         termini_list = [], count = False,
+                         wildcards_ptm = False):
   """returns True if motif is in glycan and False if not\n
   | Arguments:
   | :-
@@ -290,7 +289,8 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
-  | count (bool): whether to return the number or absence/presence of motifs; default:False\n
+  | count (bool): whether to return the number or absence/presence of motifs; default:False
+  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
   | Returns:
   | :-
   | Returns True if motif is in glycan and False if not
@@ -301,36 +301,40 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     wildcard_list = [libr.index(k) for k in wildcard_list]
   motif_comp = min_process_glycans([motif])[0]
   if isinstance(glycan, str):
+    if wildcards_ptm:
+      glycan = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', glycan).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+      motif = re.sub(r'(?<=[a-zA-Z])\d+(?=[a-zA-Z])', 'O', motif).replace('NeuOAc','Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+      libr = expand_lib(libr, [glycan, motif])
     if extra == 'termini':
       g1 = glycan_to_nxGraph(glycan, libr = libr, termini = 'calc')
       g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided',
-                             termini_list = termini_list, override_reducing_end = True)
+                             termini_list = termini_list)
     else:
       g1 = glycan_to_nxGraph(glycan, libr = libr)
-      g2 = glycan_to_nxGraph(motif, libr = libr, override_reducing_end = True)
+      g2 = glycan_to_nxGraph(motif, libr = libr)
   else:
     g1 = copy.deepcopy(glycan)
     if extra == 'termini':
       g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided',
-                             termini_list = termini_list, override_reducing_end = True)
+                             termini_list = termini_list)
     else:
-      g2 = glycan_to_nxGraph(motif, libr = libr, override_reducing_end = True)
+      g2 = glycan_to_nxGraph(motif, libr = libr)
 
   #check whether length of glycan is larger or equal than the motif
   if len(g1.nodes) >= len(g2.nodes): 
     if extra == 'ignore':
       if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
       else:
         if count:
           return 0
         else:
           return False
     elif extra == 'wildcards':
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
     elif extra == 'termini':
       if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
       else:
         if count:
           return 0
@@ -345,14 +349,14 @@ def subgraph_isomorphism(glycan, motif, libr = None,
         g1.remove_nodes_from(graph_pair.mapping.keys())
         if extra == 'ignore':
           if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
           else:
             return counts
         elif extra == 'wildcards':
-          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
         elif extra == 'termini':
           if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1,g2,node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
+            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
           else:
             return counts
       return counts
@@ -384,9 +388,9 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     else:
       g = glycan
       glycan = label
-      nbr_node_types = len(set(list(g.nodes())))
+      nbr_node_types = len(set(g.nodes()))
     #adjacency matrix:
-    A = nx.to_numpy_matrix(g)
+    A = nx.to_numpy_array(g)
     N = A.shape[0]
     if nx.is_directed(g):
       directed = True
@@ -525,68 +529,66 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     feat_dic = {col_names[k]:features[k] for k in range(len(features))}
     return pd.DataFrame(feat_dic, index = [glycan])
 
-def graph_to_string(graph, fallback = False, libr = None):
+def neighbor_is_branchpoint(graph, node):
+  """checks whether node is connected to downstream node with more than two branches\n
+  | Arguments:
+  | :-
+  | graph (networkx object): glycan graph
+  | node (int): node index\n
+  | Returns:
+  | :-
+  | Returns True if node is connected to downstream multi-branch node and False if not
+  """
+  edges = list(graph.edges(node))
+  edges = unwrap([e for e in edges if sum(e) > 2*node])
+  edges = [graph.degree[e] for e in set(edges) if e != node]
+  if len(edges) > 0 and max(edges) > 3:
+    return True
+  else:
+    return False
+
+def graph_to_string_int(graph):
   """converts glycan graph back to IUPAC-condensed format\n
   | Arguments:
   | :-
-  | graph (networkx object): glycan graph, works with most glycans. Will often not properly format repeat glycans, e.g., xyloglucan etc
-  | fallback (bool): just searches for the corresponding string in df_glycan; default:False
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | graph (networkx object): glycan graph\n
   | Returns:
   | :-
   | Returns glycan in IUPAC-condensed format (string)
   """
-  if libr is None:
-    libr = lib
-  if fallback:
-    len_dist = min_process_glycans(df_glycan.glycan.values.tolist())
-    len_dist = [len(k) for k in len_dist]
-    df_glycan2 = [k for k in range(len(df_glycan)) if len_dist[k] == len(graph.nodes())]
-    df_glycan2 = df_glycan.iloc[df_glycan2, :].reset_index(drop = True)
-    idx = np.where([compare_glycans(graph, glycan_to_nxGraph(k, libr = libr), libr = libr) for k in df_glycan2.glycan.values.tolist()])[0][0]
-    glycan = df_glycan2.glycan.values.tolist()[idx]
-    return glycan
-  node_labels = nx.get_node_attributes(graph, 'string_labels')
-  edges = graph.edges()
-  branch_points = [e[1] for e in edges if abs(e[0]-e[1]) > 1]
+  nodes = list(nx.get_node_attributes(graph, "string_labels").values())
+  nodes = [k+')' if graph.degree[min(i+1,len(nodes)-1)] > 2 or neighbor_is_branchpoint(graph,i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i,k in enumerate(nodes)]
+  if graph.degree[len(graph)-1] < 2:
+    nodes = ''.join(nodes)[1:][::-1].replace('(', '', 1)[::-1]
+  else:
+    nodes[-1] = ')'+nodes[-1]
+    nodes = ''.join(nodes)[1:]
+  if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')') == nodes[:nodes.index(')(')].count('('))):
+    nodes = nodes.replace(')(', '(', 1)
+  return canonicalize_iupac(nodes)
 
-  #note if a monosaccharide is a bona fide branch point
-  skeleton = [']'+str(k) if k in branch_points else str(k) for k in node_labels.keys()]
-  
-  for k in range(len(skeleton)):
-    #multibranch situation on reducing end
-    if skeleton[k] == skeleton[-1] and graph.degree()[k] == 3:
-      idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
-      skeleton[idx-1] = skeleton[idx-1] + ']'
-    #note whether a multibranch situation exists
-    if graph.degree()[k] == 4:
-      idx = np.where(['[' in m for m in skeleton[:k]])[0][-1]
-      skeleton[idx-1] = skeleton[idx-1] + ']'
-    #note whether a branch separates neighbors
-    elif graph.degree()[k] > 2:
-      skeleton[k] = ']' + skeleton[k]
-    #note whether a branch starts
-    elif graph.degree()[k] == 1 and k > 0:
-      skeleton[k] = '[' + skeleton[k]
-
-  #combine the skeleton, format, and map to the monosaccharides/linkages
-  glycan = '('.join(skeleton)[:-1]
-  glycan = re.sub('(\([^\()]*)\(', r'\1)', glycan)
-  glycan = glycan.replace('[)', ')[')
-  glycan = glycan.replace('])', ')]')
-  while ']]' in glycan:
-    glycan = glycan.replace(']]', ']')
-  while '[[' in glycan:
-    glycan = glycan.replace('[[', '[')
-  for k,j in dict(sorted(node_labels.items(), reverse = True)).items():
-    if k != 0 and k != len(node_labels)-1:
-      if j[0].isdigit():
-        j = '_' + j
-      glycan = re.sub('([^0-9a-zA-Z\-,])%s([^0-9a-zA-Z\-,])' % str(k), r'\1%s\2' % j, glycan)
-  glycan = node_labels[0]+glycan[1:]
-  glycan = max(glycan[:glycan.rfind(')')+1], glycan[:glycan.rfind(']')+1]) + node_labels[len(node_labels)-1]
-  glycan = glycan.replace('_', '')
-  return glycan
+def graph_to_string(graph):
+  """converts glycan graph back to IUPAC-condensed format\n
+  | Arguments:
+  | :-
+  | graph (networkx object): glycan graph\n
+  | Returns:
+  | :-
+  | Returns glycan in IUPAC-condensed format (string)
+  """
+  if nx.number_connected_components(graph) > 1:
+    parts = [graph.subgraph(sorted(c)) for c in nx.connected_components(graph)]
+    len_org = len(parts[-1])
+    for p in range(len(parts)-1):
+      H = nx.Graph()
+      H.add_nodes_from(sorted(parts[p].nodes(data = True)))
+      H.add_edges_from(parts[p].edges(data = True))
+      parts[p] = nx.relabel_nodes(H, {pn:pn-len_org for pn in H.nodes()})
+      len_org += len(H)
+    parts = '}'.join(['{'+graph_to_string_int(p) for p in parts])  
+    return parts[:parts.rfind('{')] + parts[parts.rfind('{')+1:]
+  else:
+    return graph_to_string_int(graph)
 
 def try_string_conversion(graph, libr = None):
   """check whether glycan graph describes a valid glycan\n
@@ -627,25 +629,23 @@ def largest_subgraph(glycan_a, glycan_b, libr = None):
   largest_common_subgraph = list(ismags.largest_common_subgraph())
   lgs = graph_a.subgraph(list(largest_common_subgraph[0].keys()))
   if nx.is_connected(lgs):
-    min_num = min(list(lgs.nodes()))
-    node_dic = {k:k-min_num for k in list(lgs.nodes())}
+    min_num = min(lgs.nodes())
+    node_dic = {k:k-min_num for k in lgs.nodes()}
     lgs = nx.relabel_nodes(lgs, node_dic)
-    if len(list(lgs.nodes())) > 0:
-      try:
-        return graph_to_string(lgs)
-      except:
-        return graph_to_string(lgs, fallback = True, libr = libr)
+    if len(lgs) > 0:
+      return graph_to_string(lgs)
     else:
       return ""
   else:
     return ""
 
-def get_possible_topologies(glycan, libr = None):
+def get_possible_topologies(glycan, libr = None, exhaustive = False):
   """creates possible glycans given a floating substituent; only works with max one floating substituent\n
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format or as networkx graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | exhaustive (bool): whether to also allow additions at internal positions; default:False\n
   | Returns:
   | :-
   | Returns list of NetworkX-like glycan graphs of possible topologies
@@ -658,32 +658,40 @@ def get_possible_topologies(glycan, libr = None):
   ggraph = ensure_graph(glycan, libr = libr)
   parts = [ggraph.subgraph(c) for c in nx.connected_components(ggraph)]
   topologies = []
-  for k in list(parts[-1].nodes()):
+  for k in list(parts[-1].nodes())[::2]:
     #only add to non-reducing ends
-    if parts[-1].degree[k] == 1 and k != max(list(parts[-1].nodes())):
+    if not exhaustive:
+      if parts[-1].degree[k] == 1 and k != max(parts[-1].nodes()):
+        ggraph2 = copy.deepcopy(ggraph)
+        ggraph2.add_edge(max(parts[0].nodes()), k)
+        ggraph2 = nx.relabel_nodes(ggraph2, {k:i for i,k in enumerate(ggraph2.nodes())})
+        topologies.append(ggraph2)
+    else:
       ggraph2 = copy.deepcopy(ggraph)
-      ggraph2.add_edge(max(list(parts[0].nodes())), k)
-      ggraph2 = nx.relabel_nodes(ggraph2, {list(ggraph2.nodes())[j]:j for j in list(range(len(ggraph2.nodes())))})
+      ggraph2.add_edge(max(parts[0].nodes()), k)
+      ggraph2 = nx.relabel_nodes(ggraph2, {k:i for i,k in enumerate(ggraph2.nodes())})
       topologies.append(ggraph2)
   return topologies
 
-def possible_topology_check(glycan, glycans, libr = None):
+def possible_topology_check(glycan, glycans, libr = None, exhaustive = False, **kwargs):
   """checks whether glycan with floating substituent could match glycans from a list; only works with max one floating substituent\n
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
   | glycans (list): list of glycans in IUPAC-condensed format (or networkx graphs; should not contain floating substituents)
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | exhaustive (bool): whether to also allow additions at internal positions; default:False
+  | **kwargs: keyword arguments that are directly passed on to compare_glycans\n
   | Returns:
   | :-
   | Returns list of glycans that could match input glycan
   """
   if libr is None:
     libr = lib
-  topologies = get_possible_topologies(glycan, libr = libr)
+  topologies = get_possible_topologies(glycan, libr = libr, exhaustive = exhaustive)
   out_glycs = []
   for g in glycans:
     ggraph = ensure_graph(g, libr = libr)
-    if any([compare_glycans(t, ggraph, libr = libr) for t in topologies]):
+    if any([compare_glycans(t, ggraph, libr = libr, **kwargs) for t in topologies]):
       out_glycs.append(g)
   return out_glycs
