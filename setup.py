@@ -29,6 +29,8 @@ setuptools.setup(
                       "python-louvain"],
     extras_require={'all':["torch_geometric", "pycairo", "CairoSVG",
                            "drawSvg~=2.0"],
+                    'dev':["torch_geometric", "pycairo", "CairoSVG",
+                           "drawSvg~=2.0"],
                     'ml':["torch_geometric"],
                     'draw':["pycairo", "CairoSVG", "drawSvg~=2.0"]},
 )
