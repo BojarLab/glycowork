@@ -352,3 +352,10 @@ def cohen_d(x,y):
   ny = len(y)
   dof = nx + ny - 2
   return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
+
+def variance_stabilization(data):
+  # Apply log1p transformation
+  data = np.log1p(data) 
+  # Scale data to have zero mean and unit variance
+  data = (data - np.mean(data, axis = 0)) / np.std(data, axis = 0)
+  return data

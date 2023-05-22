@@ -9,9 +9,10 @@ from collections import Counter
 from scipy.stats import ttest_ind
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
+from sklearn.impute import KNNImputer
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
-from glycowork.motif.processing import cohen_d
+from glycowork.motif.processing import cohen_d, variance_stabilization
 from glycowork.motif.annotate import annotate_dataset, link_find
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -71,7 +72,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                         df_neg.iloc[:,k].values.tolist()+[1],
                         equal_var = False)[1]/2 if np.mean(df_pos.iloc[:,k])>np.mean(df_neg.iloc[:,k]) else 1.0 for k in range(0,
                                                                                                                                df_motif.shape[1]-1)]
-    ttests_corr = multipletests(ttests, method = 'hs')[1].tolist()
+    ttests_corr = multipletests(ttests, method = 'fdr_bh')[1].tolist()
     out = pd.DataFrame(list(zip(df_motif.columns.tolist()[:-1], ttests, ttests_corr)))
     out.columns = ['motif', 'pval', 'corr_pval']
     if sorting:
@@ -373,15 +374,28 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
                   bbox_inches = 'tight')
   plt.show()
 
-def replace_zero_with_random_gaussian(x, mean = 0.01, std_dev = 0.01):
-  if x == 0:
-    return np.random.normal(loc = mean, scale = std_dev)
-  else:
-    return x
+def replace_zero_with_random_gaussian_knn(df, group1_size, mean = 0.01,
+                                          std_dev = 0.01, group_mean_threshold = 1,
+                                          n_neighbors = 3):
+    df = df.T
+    # Replace zeros with NaNs temporarily
+    df = df.replace(0, np.nan)
+    
+    # If group mean < 1, replace NaNs (originally zeros) with Gaussian values
+    for col in df.columns:
+        if df[col][:group1_size].mean() < group_mean_threshold:
+            df[col][:group1_size] = df[col][:group1_size].apply(lambda x: max([np.random.normal(loc=mean, scale=std_dev),0]) if pd.isna(x) else x)
+        if df[col][group1_size:].mean() < group_mean_threshold:
+            df[col][group1_size:] = df[col][group1_size:].apply(lambda x: max([np.random.normal(loc=mean, scale=std_dev),0]) if pd.isna(x) else x)
+
+    # Perform KNN imputation for the rest
+    imputer = KNNImputer(n_neighbors = n_neighbors)
+    df[:] = imputer.fit_transform(df)
+    
+    return df.T
 
 def get_differential_expression(df, group1, group2, normalized = True,
-                                motifs = False, feature_set = ['exhaustive', 'known'], libr = None,
-                                impute = False):
+                                motifs = False, feature_set = ['exhaustive', 'known'], impute = False):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -391,7 +405,6 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:uses glycowork-internal list
   | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution; default:False\n
   | Returns:
   | :-
@@ -401,19 +414,17 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | (iii) Corrected p-values (Welch's t-test with Holm-Sidak correction)
   | (iv) Effect size as Cohen's d
   """
-  if libr is None:
-    libr = lib
+  group1 = [df.columns.tolist()[k] for k in group1]
+  group2 = [df.columns.tolist()[k] for k in group2]
+  df = df.loc[:,[df.columns.tolist()[0]]+group1+group2]
   if impute:
     thresh = int(round(len(group1+group2)/2))
-    df = df[df.iloc[:,group1+group2].apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]
-    df = df.applymap(replace_zero_with_random_gaussian)
+    df = df[df.apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]
+    df.iloc[:,1:] = replace_zero_with_random_gaussian_knn(df.iloc[:,1:], len(group1))
   if not normalized:
     for col in df.columns.tolist()[1:]:
       df[col] = [k/sum(df.loc[:,col])*100 for k in df.loc[:,col].values.tolist()]
   glycans = df.iloc[:,0].values.tolist()
-  group1 = [df.columns.tolist()[k] for k in group1]
-  group2 = [df.columns.tolist()[k] for k in group2]
-  df = df.loc[:,[df.columns.tolist()[0]]+group1+group2]
   if motifs:
     df_motif = annotate_dataset(df.iloc[:,0].values.tolist(),
                                 feature_set = feature_set,
@@ -427,11 +438,12 @@ def get_differential_expression(df, group1, group2, normalized = True,
     df = pd.DataFrame(collect_dic)
     df = clean_up_heatmap(df.T)
     glycans = df.index.tolist()
+  df = variance_stabilization(df)
   df_a = df.loc[:,group1]
   df_b = df.loc[:,group2]
   pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1] for k in range(len(df_a))]
-  pvals = multipletests(pvals)[1]
-  fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
+  pvals = multipletests(pvals, method = 'fdr_bh')[1]
+  fc = np.log2(abs(df_b.mean(axis = 1) / df_a.mean(axis = 1))).tolist()
   effect_sizes = [cohen_d(df_b.iloc[k,:], df_a.iloc[k,:]) for k in range(len(df_a))]
   out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
