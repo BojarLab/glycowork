@@ -12,7 +12,7 @@ try:
   from torch_geometric.data import Data
   from torch_geometric.loader import DataLoader
 except ImportError:
-  raise ImportError('<torch_geometric missing; cannot do deep learning>')
+  raise ImportError("<torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 
 io = pkg_resources.resource_stream(__name__,
                                    "glycowork_lectinoracle_background_correction.csv")

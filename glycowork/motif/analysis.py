@@ -6,14 +6,14 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 plt.style.use('default')
 from collections import Counter
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind, f
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
 from sklearn.impute import KNNImputer
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
 from glycowork.motif.processing import cohen_d, variance_stabilization
-from glycowork.motif.annotate import annotate_dataset, link_find
+from glycowork.motif.annotate import annotate_dataset, link_find, create_correlation_network
 from glycowork.motif.graph import subgraph_isomorphism
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
@@ -394,8 +394,35 @@ def replace_zero_with_random_gaussian_knn(df, group1_size, mean = 0.01,
     
     return df.T
 
+def hotellings_t2(group1, group2):
+  """Hotelling's T^2 test (the t-test for multivariate comparisons)\n
+  """
+  n1, p = group1.shape
+  n2, _ = group2.shape
+  # Calculate the means of each group
+  mean1 = np.mean(group1, axis = 0)
+  mean2 = np.mean(group2, axis = 0)
+  # Calculate the difference between the means
+  diff = mean1 - mean2
+  # Calculate the covariance matrices of each group
+  cov1 = np.cov(group1.T)
+  cov2 = np.cov(group2.T)
+  # Calculate the pooled covariance matrix
+  pooled_cov = ((n1 - 1) * cov1 + (n2 - 1) * cov2) / (n1 + n2 - 2)
+  pooled_cov += np.eye(p) * 1e-6
+  # Calculate the Hotelling's T^2 statistic
+  T2 = (n1 * n2) / (n1 + n2) * diff @ np.linalg.inv(pooled_cov) @ diff.T
+  # Convert the T^2 statistic to an F statistic
+  F = T2 * (n1 + n2 - p - 1) / ((n1 + n2 - 2) * p)
+  if F == 0:
+    return F, 1.0
+  # Calculate the p-value of the F statistic
+  p_value = f.sf(F, p, n1 + n2 - p - 1)
+  return F, p_value
+
 def get_differential_expression(df, group1, group2, normalized = True,
-                                motifs = False, feature_set = ['exhaustive', 'known'], impute = False):
+                                motifs = False, feature_set = ['exhaustive', 'known'],
+                                impute = False, sets = False, set_thresh = 0.9):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -405,14 +432,16 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-  | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution; default:False\n
+  | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:False
+  | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
+  | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9\n
   | Returns:
   | :-
   | Returns a dataframe with:
-  | (i) Differentially expressed glycans/motifs
+  | (i) Differentially expressed glycans/motifs/sets
   | (ii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
-  | (iii) Corrected p-values (Welch's t-test with Holm-Sidak correction)
-  | (iv) Effect size as Cohen's d
+  | (iii) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction)
+  | (iv) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
   """
   group1 = [df.columns.tolist()[k] for k in group1]
   group2 = [df.columns.tolist()[k] for k in group2]
@@ -438,16 +467,40 @@ def get_differential_expression(df, group1, group2, normalized = True,
     df = pd.DataFrame(collect_dic)
     df = clean_up_heatmap(df.T)
     glycans = df.index.tolist()
-  df = variance_stabilization(df)
   df_a = df.loc[:,group1]
   df_b = df.loc[:,group2]
-  pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1] for k in range(len(df_a))]
+  if sets:
+    df2 = variance_stabilization(df)
+    clusters = create_correlation_network(df2.T, set_thresh)
+    glycans = []
+    pvals = []
+    fc = []
+    effect_sizes = []
+    for cluster in clusters:
+      if len(cluster) > 1:
+        glycans.append(cluster)
+        gp1 = df_a.loc[list(cluster),:]
+        gp2 = df_b.loc[list(cluster),:]
+        fc.append(np.log2((gp2.mean(axis = 1) + 1e-8) / (gp1.mean(axis = 1) + 1e-8)).mean())
+        gp1 = df2.loc[:,group1].loc[list(cluster),:]
+        gp2 = df2.loc[:,group2].loc[list(cluster),:]
+        statistic, p_value = hotellings_t2(gp1.values, gp2.values)
+        pvals.append(p_value)
+        # Calculate Mahalanobis distance as measure of effect size
+        pooled_cov_inv = np.linalg.pinv((np.cov(gp1.values) + np.cov(gp2.values)) / 2)
+        diff_means = (gp2.mean(axis = 1) - gp1.mean(axis = 1)).values.reshape(-1,1)
+        mahalanobis_d = np.sqrt(np.clip(diff_means.T @ pooled_cov_inv @ diff_means, 0, None))
+        effect_sizes.append(mahalanobis_d[0][0])
+  else:
+    fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
+    df_a = variance_stabilization(df_a)
+    df_b = variance_stabilization(df_b)
+    pvals = [ttest_ind(df_a.iloc[k,:], df_b.iloc[k,:], equal_var = False)[1] for k in range(len(df_a))]
+    effect_sizes = [cohen_d(df_b.iloc[k,:], df_a.iloc[k,:]) for k in range(len(df_a))]
   pvals = multipletests(pvals, method = 'fdr_bh')[1]
-  fc = np.log2(abs(df_b.mean(axis = 1) / df_a.mean(axis = 1))).tolist()
-  effect_sizes = [cohen_d(df_b.iloc[k,:], df_a.iloc[k,:]) for k in range(len(df_a))]
   out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
-  out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'Cohens d']
+  out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'Effect size']
   out = out.dropna()
   return out.sort_values(by = 'corr p-val')
 

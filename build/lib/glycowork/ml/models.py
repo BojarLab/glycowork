@@ -5,7 +5,7 @@ try:
     from torch_geometric.nn import GraphConv
     from torch_geometric.nn import global_mean_pool as gap
 except ImportError:
-    raise ImportError('<torch_geometric missing; cannot do deep learning>')
+  raise ImportError("<torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 import torch.nn.functional as F
 from glycowork.glycan_data.loader import lib
 

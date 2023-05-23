@@ -6,7 +6,7 @@ try:
   from torch_geometric.loader import DataLoader
   from torch_geometric.utils.convert import from_networkx
 except ImportError:
-    raise ImportError('<torch or torch_geometric missing; cannot do deep learning>')
+  raise ImportError("<torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 
 def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long):
   """wrapper function to convert a whole list of glycans into a graph dataset\n

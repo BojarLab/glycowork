@@ -316,3 +316,25 @@ def get_terminal_structures(glycan, libr = None):
   ggraph = ensure_graph(glycan, libr = libr)
   nodeDict = dict(ggraph.nodes(data = True))
   return [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in ggraph.nodes() if ggraph.degree[k] == 1 and k != max(list(ggraph.nodes()))]
+
+def create_correlation_network(df, correlation_threshold):
+  """finds clusters of motifs/glycans that correlate to at least the correlation_threshold\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with samples as rows and glycans/motifs as columns
+  | correlation_threshold (float): correlation value used as a threshold for clusters\n
+  | Returns:
+  | :-
+  | Returns a list of sets, which correspond to the glycans/motifs that are put in a cluster
+  """
+  # Calculate the correlation matrix
+  correlation_matrix = df.corr()
+  # Create an adjacency matrix based on the correlation threshold
+  adjacency_matrix = (correlation_matrix > correlation_threshold).astype(int)
+  # Create a graph from the adjacency matrix
+  graph = nx.from_numpy_array(adjacency_matrix.values)
+  # Use the graph to find connected components (clusters of highly correlated glycans)
+  clusters = list(nx.connected_components(graph))
+  # Convert indices back to original labels
+  clusters = [set(df.columns[list(cluster)]) for cluster in clusters]
+  return clusters
