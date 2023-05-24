@@ -394,7 +394,7 @@ def mz_to_composition(mz_value, mode = 'positive', mass_value = 'monoisotopic',
 def mz_to_composition2(mz_value, mode = 'negative', mass_value = 'monoisotopic', reduced = False,
                       sample_prep = 'underivatized', mass_tolerance = 0.5, kingdom = 'Animalia',
                       glycan_class = 'N', df_use = None, filter_out = set()):
-  """experimental! only use if you know what you're doing; mapping a m/z value to a matching monosaccharide composition\n
+  """Mapping a m/z value to a matching monosaccharide composition within SugarBase\n
   | Arguments:
   | :-
   | mz_value (float): the actual m/z value from mass spectrometry

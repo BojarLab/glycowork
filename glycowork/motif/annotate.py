@@ -3,10 +3,11 @@ import networkx as nx
 import pandas as pd
 import itertools
 import re
+from collections import defaultdict
 
-from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap
+from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap, replace_every_second
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
-from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, in_lib
 
 def link_find(glycan):
   """finds all disaccharide motifs in a glycan sequence using its isomorphs\n
@@ -40,37 +41,6 @@ def link_find(glycan):
       b = [k[:find_nth(k, '*', 1)] + '(' + k[find_nth(k, '*', 1)+1:] for k in b]
       coll += [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
   return list(set(coll))
-
-def motif_matrix(glycans):
-  """generates dataframe with counted glycoletters and disaccharides in glycans\n
-  | Arguments:
-  | :-
-  | glycans (list): list of IUPAC-condensed glycan sequences as strings\n
-  | Returns:
-  | :-
-  | Returns dataframe with glycoletter + disaccharide counts (columns) for each glycan (rows)
-  """
-  shadow_glycans = [re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in glycans]
-  out_matrix = []
-  for c,gs in enumerate([glycans, shadow_glycans]):
-    #get all disaccharides
-    wga_di = [link_find(i) for i in gs]
-    #collect disaccharide repertoire
-    if c == 0:
-      libr = {k for k in get_lib(gs) if '?' not in k and k not in linkages}
-      lib_di = {k for k in set(unwrap(wga_di)) if '?' not in k}
-    else:
-      libr = {k for k in get_lib(gs) if '?' in k and k not in linkages}
-      lib_di = set(unwrap(wga_di))
-    #count each disaccharide in each glycan
-    wga_di_out = pd.DataFrame([{i:j.count(i) if i in j else 0 for i in lib_di} for j in wga_di])
-    #counts glycoletters in each glycan
-    wga_letter = pd.DataFrame([{i:g.count(i) if i in g else 0 for i in libr} for g in gs])
-    out_matrix.append(pd.concat([wga_letter, wga_di_out], axis = 1))
-  org_len = out_matrix[0].shape[1]
-  out_matrix = pd.concat(out_matrix, axis = 1).reset_index(drop = True)
-  out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()].copy()
-  return out_matrix.drop([col2 for col1,col2 in itertools.product(out_matrix.columns.tolist()[:org_len], out_matrix.columns.tolist()[org_len:]) if out_matrix[col1].sum()==out_matrix[col2].sum() and re.sub(r"([ab])(\d)-(\d)", r"\1\2-?", col1) == col2], axis = 1)
 
 def estimate_lower_bound(glycans, motifs):
   """searches for motifs which are present in at least one glycan; not 100% exact but useful for speedup\n
@@ -206,7 +176,7 @@ def annotate_dataset(glycans, motifs = None,
   """
   if motifs is None:
     motifs = motif_list
-  libr = get_lib(glycans + motifs.motif.values.tolist())
+  libr = get_lib(glycans + motifs.motif.values.tolist() + linkages)
   #non-exhaustive speed-up that should only be used if necessary
   if estimate_speedup:
     motifs = estimate_lower_bound(glycans, motifs)
@@ -226,7 +196,7 @@ def annotate_dataset(glycans, motifs = None,
     shopping_cart.append(pd.concat([generate_graph_features(k, libr = libr) for k in glycans], axis = 0))
   if 'exhaustive' in feature_set:
     #counts disaccharides and glycoletters in each glycan
-    temp = motif_matrix(glycans)
+    temp = get_k_saccharides(glycans, size = 2, up_to = True, libr = libr)
     temp.index = glycans
     shopping_cart.append(temp)
   if 'chemical' in feature_set:
@@ -249,57 +219,72 @@ def annotate_dataset(glycans, motifs = None,
   else:
     return pd.concat(shopping_cart, axis = 1)
 
-def get_k_saccharides(glycan, size = 3, libr = None):
-  """function to retrieve k-saccharides (default:trisaccharides) occurring in a glycan\n
+def count_unique_subgraphs_of_size_k(graph, size = 2):
+  """function to count unique, connected subgraphs of size k (default:disaccharides) occurring in a glycan graph\n
   | Arguments:
   | :-
-  | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
-  | size (int): number of monosaccharides per -saccharide, default:3 (for trisaccharides)
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib\n
+  | graph (networkx): glycan graph as returned by glycan_to_nxGraph
+  | size (int): number of monosaccharides per -saccharide, default:2 (for disaccharides)\n
   | Returns:
   | :-                               
-  | Returns list of trisaccharides in glycan in IUPAC-condensed nomenclature
+  | Returns dictionary of type k-saccharide:count
+  """
+  size = size + (size-1)
+  paths = nx.all_pairs_shortest_path(graph, cutoff = size-1)
+  labels = nx.get_node_attributes(graph, 'string_labels')
+  counts = defaultdict(int)
+  for _, path_dict in paths:
+    for path in path_dict.values():
+      if len(path) == size:
+        if labels[path[0]][0] not in {'a', 'b', '?', '('}:
+          path_sorted = sorted(path)
+          path_str = '('.join(labels[node] for node in path_sorted)
+          path_str = replace_every_second(path_str, '(', ')')
+          counts[path_str] += 0.5
+  return counts
+
+def get_k_saccharides(glycans, size = 2, libr = None, up_to = False):
+  """function to retrieve k-saccharides (default:disaccharides) occurring in a list of glycans\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed nomenclature
+  | size (int): number of monosaccharides per -saccharide, default:2 (for disaccharides)
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
+  | up_to (bool): in theory: include -saccharides up to size k; in practice: include monosaccharides; default:False\n
+  | Returns:
+  | :-                               
+  | Returns dataframe with k-saccharide counts (columns) for each glycan (rows)
   """
   if libr is None:
     libr = lib
-  size = size + (size-1)
-  glycan = ensure_graph(glycan, libr = libr)
-  if len(glycan.nodes()) < size:
-    return []
-  # initialize a list to store the subgraphs
-  subgraphs = set()
-
-  # define a recursive function to traverse the graph
-  def traverse(node, path):
-    # add the current node to the path
-    path.append(node)
-
-    # check if the path has the desired size
-    if len(path) == size:
-      # add the path as a subgraph to the list of subgraphs
-      subgraph = glycan.subgraph(path).copy()
-      subgraphs.add(subgraph)
-
-    # iterate over the neighbors of the current node
-    for neighbor in glycan[node]:
-      # check if the neighbor is already in the path
-      if neighbor not in path:
-        # traverse the neighbor
-        traverse(neighbor, path)
-
-    # remove the current node from the path
-    path.pop()
-
-  # iterate over the nodes in the graph
-  for node in glycan.nodes():
-    # traverse the graph starting from the current node
-    traverse(node, [])
-
-  # return the list of subgraphs
-  subgraphs = [nx.relabel_nodes(k, {list(k.nodes())[n]:n for n in range(len(k.nodes()))}) for k in subgraphs]
-  subgraphs = [graph_to_string(k) for k in subgraphs]
-  subgraphs = [k for k in subgraphs if k[0] not in ['a', 'b', '?']]
-  return list(set(subgraphs))
+  if up_to:
+    wga_letter = pd.DataFrame([{i:g.count(i) if i in g else 0 for i in get_lib(glycans) if i not in linkages} for g in glycans])
+  ggraphs = [glycan_to_nxGraph(g, libr = libr) for g in glycans]
+  regex = re.compile(r"\(([ab])(\d)-(\d)\)")
+  shadow_glycans = [regex.sub(r"(\1\2-?)", g) for g in glycans]
+  shadow_glycans = [glycan_to_nxGraph(g, libr = libr) if in_lib(g, libr) else ggraphs[i] for i,g in enumerate(shadow_glycans)]
+  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size) for g in ggraphs])
+  ggraphs = ggraphs.drop(columns = [col for col in ggraphs.columns if '?' in col])
+  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size) for g in shadow_glycans])
+  org_len = ggraphs.shape[1]
+  out_matrix = pd.concat([ggraphs, shadow_glycans], axis = 1).reset_index(drop = True)
+  out_matrix = out_matrix.loc[:,~out_matrix.columns.duplicated()].copy()
+  #throw out redundant columns
+  cols = out_matrix.columns.tolist()
+  first_half_cols = cols[:org_len]
+  second_half_cols = cols[org_len:]
+  drop_columns = []
+  col_sums = {col: out_matrix[col].sum() for col in cols}
+  col_subs = {col: re.sub(r"([ab])(\d)-(\d)", r"\1\2-?", col) for col in cols}
+  for col1 in first_half_cols:
+    for col2 in second_half_cols:
+      if col_sums[col1] == col_sums[col2] and col_subs[col1] == col2:
+        drop_columns.append(col2)
+  out_matrix = out_matrix.drop(drop_columns, axis = 1)
+  if up_to:
+    return pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
+  else:
+    return out_matrix.fillna(0).astype(int)
 
 def get_terminal_structures(glycan, libr = None):
   """returns terminal structures from all non-reducing ends (monosaccharide+linkage)\n

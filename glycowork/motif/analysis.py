@@ -276,7 +276,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   if rank is not None:
     df = df[df[rank] == focus]
   #get all disaccharides for linkage analysis
-  pool_in = unwrap([link_find(k) for k in df[glycan_col_name].values.tolist()])
+  pool_in = unwrap([link_find(k) for k in df[glycan_col_name]])
   pool_in = [k.replace('(', '*').replace(')', '*') for k in pool_in]
 
   if mode == 'bond':
@@ -384,9 +384,9 @@ def replace_zero_with_random_gaussian_knn(df, group1_size, mean = 0.01,
     # If group mean < 1, replace NaNs (originally zeros) with Gaussian values
     for col in df.columns:
         if df[col][:group1_size].mean() < group_mean_threshold:
-            df[col][:group1_size] = df[col][:group1_size].apply(lambda x: max([np.random.normal(loc=mean, scale=std_dev),0]) if pd.isna(x) else x)
+            df[col][:group1_size] = df[col][:group1_size].apply(lambda x: max([np.random.normal(loc = mean, scale = std_dev),0]) if pd.isna(x) else x)
         if df[col][group1_size:].mean() < group_mean_threshold:
-            df[col][group1_size:] = df[col][group1_size:].apply(lambda x: max([np.random.normal(loc=mean, scale=std_dev),0]) if pd.isna(x) else x)
+            df[col][group1_size:] = df[col][group1_size:].apply(lambda x: max([np.random.normal(loc = mean, scale = std_dev),0]) if pd.isna(x) else x)
 
     # Perform KNN imputation for the rest
     imputer = KNNImputer(n_neighbors = n_neighbors)

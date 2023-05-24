@@ -54,6 +54,19 @@ def expand_lib(libr, glycan_list):
   """
   return sorted(set(libr + get_lib(glycan_list)))
 
+def in_lib(glycan, libr):
+  """checks whether all glycoletters of glycan are in libr\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed nomenclature
+  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | Returns:
+  | :-
+  | Returns True if all glycoletters are in libr and False if not
+  """
+  glycan = min_process_glycans([glycan])[0]
+  return set(glycan).issubset(set(libr))
+
 def bracket_removal(glycan_part):
   """iteratively removes (nested) branches between start and end of glycan_part\n
   | Arguments:
@@ -63,8 +76,9 @@ def bracket_removal(glycan_part):
   | :-
   | Returns glycan_part without interfering branches
   """
-  while bool(re.search(r'\[[^\[\]]+\]', glycan_part)):
-    glycan_part = re.sub(r'\[[^\[\]]+\]', '', glycan_part)
+  regex = re.compile(r'\[[^\[\]]+\]')
+  while regex.search(glycan_part):
+    glycan_part = regex.sub('', glycan_part)
   return glycan_part
 
 def find_isomorphs(glycan):

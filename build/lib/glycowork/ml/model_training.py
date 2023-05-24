@@ -414,12 +414,14 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
                                    condense = True)
         X_test = annotate_dataset(X_test, feature_set = feature_set,
                                    condense = True)
-        for k in X_test.columns.values.tolist():
-            if k not in X_train.columns.values.tolist():
-                X_train[k] = [0]*len(X_train)
-        for k in X_train.columns.values.tolist():
-            if k not in X_test.columns.values.tolist():
-                X_test[k] = [0]*len(X_test)
+        # Get the difference between the columns
+        missing_in_X_train = set(X_test.columns) - set(X_train.columns)
+        missing_in_X_test = set(X_train.columns) - set(X_test.columns)
+        # Fill in the missing columns
+        for k in missing_in_X_train:
+            X_train[k] = 0
+        for k in missing_in_X_test:
+            X_test[k] = 0
         X_train = X_train.apply(pd.to_numeric)
         X_test = X_test.apply(pd.to_numeric)
         if additional_features_train is not None:

@@ -20,7 +20,7 @@ lib = pickle.load(open(data_path, 'rb'))
 #                       glycan_binding.columns.values.tolist()[:-2] +
 #                       ['Monosaccharide','Sia'])))
 
-linkages = ['a1-1','a1-2','a1-3','a1-4','a1-5','a1-6','a1-7','a1-8','a1-9','a1-11','a1-?','a2-1','a2-2','a2-3','a2-4','a2-5','a2-6','a2-7','a2-8','a2-9','a2-11','a2-?','b1-1','b1-2','b1-3','b1-4','b1-5','b1-6','b1-7','b1-8','b1-9','b1-?','b2-1','b2-2','b2-3','b2-4','b2-5','b2-6','b2-7','b2-8','?1-?','?2-?','?1-2','?1-3','?1-4','?1-6','?2-3','?2-6','?2-8']
+linkages = ['1-4','a1-1','a1-2','a1-3','a1-4','a1-5','a1-6','a1-7','a1-8','a1-9','a1-11','a1-?','a2-1','a2-2','a2-3','a2-4','a2-5','a2-6','a2-7','a2-8','a2-9','a2-11','a2-?','b1-1','b1-2','b1-3','b1-4','b1-5','b1-6','b1-7','b1-8','b1-9','b1-?','b2-1','b2-2','b2-3','b2-4','b2-5','b2-6','b2-7','b2-8','?1-?','?2-?','?1-2','?1-3','?1-4','?1-6','?2-3','?2-6','?2-8']
 Hex = ['Glc', 'Gal', 'Man', 'Ins', 'Galf', 'Hex']
 dHex = ['Fuc', 'Qui', 'Rha', 'dHex']
 HexA = ['GlcA', 'ManA', 'GalA', 'IdoA', 'HexA']
@@ -78,6 +78,30 @@ def stringify_dict(dicty):
   """
   dicty = dict(sorted(dicty.items()))
   return ''.join(str(key) + str(value) for key, value in dicty.items())
+
+def replace_every_second(string, old_char, new_char):
+  """function to replace every second occurrence of old_char in string with new_char\n
+  | Arguments:
+  | :-
+  | string (string): a string
+  | old_char (string): a string character to be replaced (every second occurrence)
+  | new_char (string): the string character to replace old_char with\n
+  | Returns:
+  | :-                               
+  | Returns string with replaced characters
+  """
+  count = 0
+  result = ""
+  for char in string:
+    if char == old_char:
+      count += 1
+      if count % 2 == 0:
+        result += new_char
+      else:
+        result += char
+    else:
+      result += char
+  return result
 
 def multireplace(string, remove_dic):
   """

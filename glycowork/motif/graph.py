@@ -46,15 +46,15 @@ def evaluate_adjacency(glycan_part, adjustment):
   | :-
   | Returns True if adjacent and False if not
   """
+  last_char = glycan_part[-1]
+  len_glycan_part = len(glycan_part)
   #check whether glycoletters are adjacent in the main chain
-  if any([glycan_part[-1] == '(', glycan_part[-1] == ')']) and len(glycan_part) < 2+adjustment:
+  if last_char in {'(',')'} and len_glycan_part < 2+adjustment:
     return True
   #check whether glycoletters are connected but separated by a branch delimiter
-  elif glycan_part[-1] == ']':
-    if any([glycan_part[:-1][-1] == '(', glycan_part[:-1][-1] == ')']) and len(glycan_part[:-1]) < 2+adjustment:
+  elif last_char == ']':
+    if glycan_part[-2] in {'(',')'} and len_glycan_part-1 < 2+adjustment:
       return True
-    else:
-      return False
   return False
 
 def glycan_to_graph(glycan):
@@ -69,35 +69,32 @@ def glycan_to_graph(glycan):
   """
   #get glycoletters
   glycan_proc = min_process_glycans([glycan])[0]
+  n = len(glycan_proc)
   #map glycoletters to integers
-  mask_dic = {k:glycan_proc[k] for k in range(len(glycan_proc))}
+  mask_dic = {k:glycan_proc[k] for k in range(n)}
   for k,j in mask_dic.items():
     glycan = glycan.replace(j, str(k), 1)
   #initialize adjacency matrix
-  adj_matrix = np.zeros((len(glycan_proc), len(glycan_proc)), dtype = int)
+  adj_matrix = np.zeros((n, n), dtype = int)
+  # caching index positions
+  glycan_indexes = {str(i): glycan.index(str(i)) for i in range(n)}
   #loop through each pair of glycoletters
-  for k in range(len(mask_dic)):
-    for j in range(len(mask_dic)):
-      if k < j:
-        #integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
-        if k >= 100:
-          adjustment = 2
-        elif k >= 10:
-          adjustment = 1
-        else:
-          adjustment = 0
-        #subset the part of the glycan that is bookended by k and j
-        glycan_part = glycan[glycan.index(str(k))+1:glycan.index(str(j))]
-        #immediately adjacent residues
-        if evaluate_adjacency(glycan_part, adjustment):
+  for k in range(n):
+    for j in range(k+1, n):
+      #integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
+      adjustment = 2 if k >= 100 else 1 if k >= 10 else 0
+      #subset the part of the glycan that is bookended by k and j
+      glycan_part = glycan[glycan_indexes[str(k)]+1:glycan_indexes[str(j)]]
+      #immediately adjacent residues
+      if evaluate_adjacency(glycan_part, adjustment):
+        adj_matrix[k,j] = 1
+        continue
+      #adjacent residues separated by branches in the string
+      res = bracket_removal(glycan_part)
+      if len(res) <= 2+adjustment:
+        if evaluate_adjacency(res, adjustment):
           adj_matrix[k,j] = 1
           continue
-        #adjacent residues separated by branches in the string
-        if len(bracket_removal(glycan_part)) <= 2+adjustment:
-          glycan_part = bracket_removal(glycan_part)
-          if evaluate_adjacency(glycan_part, adjustment):
-                adj_matrix[k,j] = 1
-                continue  
   return mask_dic, adj_matrix
 
 def glycan_to_nxGraph_int(glycan, libr = None,
@@ -274,7 +271,6 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
         return False
   else:
     return False
-
 
 def subgraph_isomorphism(glycan, motif, libr = None,
                          extra = 'ignore', wildcard_list = [],
