@@ -67,21 +67,21 @@ def character_to_label(character, libr = None):
   | Arguments:
   | :-
   | character (string): character to index
-  | libr (list): list of library items\n
+  | libr (dict): dict of library items\n
   | Returns:
   | :-
   | Returns index of character in library
   """
   if libr is None:
     libr = lib
-  return libr.index(character)
+  return libr[character]
 
 def string_to_labels(character_string, libr = None):
   """tokenizes word by indexing characters in passed library\n
   | Arguments:
   | :-
   | character_string (string): string of characters to index
-  | libr (list): list of library items\n
+  | libr (dict): dict of library items\n
   | Returns:
   | :-
   | Returns indexes of characters in library
@@ -170,12 +170,12 @@ def get_stem_lib(libr):
   """creates a mapping file to map modified monosaccharides to core monosaccharides\n
   | Arguments:
   | :-
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns dictionary of form modified_monosaccharide:core_monosaccharide
   """
-  return {k:get_core(k) for k in libr}
+  return {k:get_core(k) for k in libr.keys()}
 
 stem_lib = get_stem_lib(lib)
 
@@ -185,7 +185,7 @@ def stemify_glycan(glycan, stem_lib = None, libr = None):
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
+  | libr (dict): dictionary of form glycoletter:index; default:lib\n
   | Returns:
   | :-
   | Returns stemmed glycan as string
@@ -249,7 +249,7 @@ def stemify_dataset(df, stem_lib = None, libr = None,
   | :-
   | df (dataframe): dataframe with glycans in IUPAC-condensed format in column glycan_col_name
   | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | libr (dict): dictionary of form glycoletter:index; default:lib
   | glycan_col_name (string): column name under which glycans are stored; default:target
   | rarity_filter (int): how often monosaccharide modification has to occur to not get removed; default:1\n
   | Returns:
@@ -487,7 +487,7 @@ def condense_composition_matching(matched_composition, libr = None):
   | Arguments:
   | :-
   | matched_composition (list): list of glycans matching to a composition
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
+  | libr (dict): dictionary of form glycoletter:index; default:lib\n
   | Returns:
   | :-
   | Returns minimal list of glycans that match a composition
@@ -527,7 +527,7 @@ def compositions_to_structures(composition_list, group = 'Homo_sapiens', level =
   | level (string): Species, Genus, Family, Order, Class, Phylum, Kingdom, or Domain; default:Species
   | abundances (dataframe): every row one composition (matching composition_list in order), every column one sample;default:pd.DataFrame([range(len(composition_list))]*2).T
   | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | libr (dict): dictionary of form glycoletter:index; default:lib
   | reducing_end (string): filters possible glycans by reducing end monosaccharide; default:None
   | verbose (bool): whether to print any non-matching compositions; default:False\n
   | Returns:
@@ -582,7 +582,7 @@ def mz_to_structures(mz_list, reducing_end, group = 'Homo_sapiens', level = 'Spe
   | check_specific_adduct (string): choose adduct from 'H+', 'Na+', 'K+', 'H', 'Acetate', 'Trifluoroacetic acid'; default:None
   | ptm (bool): whether to check for post-translational modification (sulfation, phosphorylation); default:False
   | df (dataframe): glycan dataframe for searching glycan structures; default:df_species
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib
+  | libr (dict): dictionary of form glycoletter:index; default:lib
   | verbose (bool): whether to print any non-matching compositions; default:False\n
   | Returns:
   | :-
@@ -726,7 +726,7 @@ def structure_to_basic(glycan, libr = None):
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed nomenclature
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns the glycan topology as a string

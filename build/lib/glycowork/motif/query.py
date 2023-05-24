@@ -11,8 +11,8 @@ def get_insight(glycan, libr = None, motifs = None):
     | Arguments:
     | :-
     | glycan (string): glycan in IUPAC-condensed format
-    | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
-    | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
+    | libr (dict): dictionary of form glycoletter:index
+    | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list\n
     """
     if libr is None:
         libr = lib
@@ -20,7 +20,7 @@ def get_insight(glycan, libr = None, motifs = None):
         motifs = motif_list
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
     #find glycan as string or as graph in df_glycan
-    if glycan in df_glycan.glycan.values.tolist():
+    if glycan in df_glycan.glycan:
         idx = df_glycan.glycan.values.tolist().index(glycan)
     else:       
         idx = np.where([compare_glycans(glycan, k, libr = libr) for k in df_glycan.glycan.values.tolist()])[0][0]

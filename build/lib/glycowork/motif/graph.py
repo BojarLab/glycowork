@@ -103,7 +103,7 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
@@ -135,7 +135,8 @@ def glycan_to_nxGraph_int(glycan, libr = None,
       del node_dict[len(g1.nodes) - 1]
       g1.remove_node(len(g1.nodes) - 1)
   #add node labels
-  nx.set_node_attributes(g1, {i:{'labels':libr.index(k), 'string_labels':k} for i,k in enumerate(node_dict.values())})
+  node_attributes = {i:{'labels':libr[k], 'string_labels':k} for i,k in enumerate(node_dict.values())}
+  nx.set_node_attributes(g1, node_attributes)
   if termini == 'ignore':
     pass
   elif termini == 'calc':
@@ -150,7 +151,7 @@ def glycan_to_nxGraph(glycan, libr = None,
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
@@ -178,7 +179,7 @@ def ensure_graph(glycan, libr = None, **kwargs):
   | Arguments:
   | :-
   | glycan (string or networkx graph): glycan in IUPAC-condensed format or as a networkx graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | **kwargs: keyword arguments that are directly passed on to glycan_to_nxGraph\n
   | Returns:
   | :-
@@ -229,7 +230,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   | :-
   | glycan_a (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | wildcards (bool): set to True to allow wildcards (e.g., '?1-?', 'monosaccharide'); default:False
   | wildcard_list (list): list of wildcards to consider, in the form of '?1-?' etc.
   | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
@@ -281,7 +282,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   | :-
   | glycan (string): glycan in IUPAC-condensed format or as graph in NetworkX format
   | motif (string): glycan motif in IUPAC-condensed format
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
@@ -294,7 +295,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   if libr is None:
     libr = lib
   if len(wildcard_list) >= 1:
-    wildcard_list = [libr.index(k) for k in wildcard_list]
+    wildcard_list = [libr[k] for k in wildcard_list]
   motif_comp = min_process_glycans([motif])[0]
   if isinstance(glycan, str):
     if wildcards_ptm:
@@ -369,7 +370,7 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     | :-
     | glycan (string or networkx object): glycan in IUPAC-condensed format (or glycan network if glycan_graph=False)
     | glycan_graph (bool): True expects a glycan, False expects a network (from construct_network); default:True
-    | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+    | libr (dict): dictionary of form glycoletter:index
     | label (string): Label to place in output dataframe if glycan_graph=False; default:'network'\n
     | Returns:
     | :-
@@ -591,7 +592,7 @@ def try_string_conversion(graph, libr = None):
   | Arguments:
   | :-
   | graph (networkx object): glycan graph, works with branched glycans
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns glycan in IUPAC-condensed format (string) if glycan is valid, otherwise returns None
@@ -611,7 +612,7 @@ def largest_subgraph(glycan_a, glycan_b, libr = None):
   | :-
   | glycan_a (string or networkx): glycan in IUPAC-condensed format or as networkx graph
   | glycan_b (string or networkx): glycan in IUPAC-condensed format or as networkx graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-  
   | Returns the largest common subgraph as a string in IUPAC-condensed; returns empty string if there is no common subgraph
@@ -640,7 +641,7 @@ def get_possible_topologies(glycan, libr = None, exhaustive = False):
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format or as networkx graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | exhaustive (bool): whether to also allow additions at internal positions; default:False\n
   | Returns:
   | :-
@@ -675,7 +676,7 @@ def possible_topology_check(glycan, glycans, libr = None, exhaustive = False, **
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
   | glycans (list): list of glycans in IUPAC-condensed format (or networkx graphs; should not contain floating substituents)
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | exhaustive (bool): whether to also allow additions at internal positions; default:False
   | **kwargs: keyword arguments that are directly passed on to compare_glycans\n
   | Returns:

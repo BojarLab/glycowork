@@ -341,7 +341,7 @@ def prep_model(model_type, num_classes, libr = None,
     | :-
     | model_type (string): string indicating the type of model
     | num_classes (int): number of unique classes for classification
-    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+    | libr (dict): dictionary of form glycoletter:index\n
     | Returns:
     | :-
     | Returns PyTorch model object

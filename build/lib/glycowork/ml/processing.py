@@ -14,7 +14,7 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long)
   | :-
   | glycan_list (list): list of IUPAC-condensed glycan sequences as strings
   | labels (list): list of labels
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | libr (dict): dictionary of form glycoletter:index
   | label_type (torch object): which tensor type for label, default is torch.long for binary labels, change to torch.float for continuous\n
   | Returns:
   | :-
@@ -39,7 +39,7 @@ def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
   | :-
   | glycan_list (list): list of IUPAC-condensed glycan sequences as strings
   | labels (list): list of labels
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | libr (dict): dictionary of form glycoletter:index
   | batch_size (int): how many samples should be in each batch; default:32
   | shuffle (bool): if samples should be shuffled when making dataloader; default:True
   | drop_last (bool): whether last batch is dropped; default:False
@@ -76,7 +76,7 @@ def split_data_to_train(glycan_list_train, glycan_list_val,
   | glycan_list_val (list): list of IUPAC-condensed glycan sequences as strings
   | labels_train (list): list of labels
   | labels_val (list): list of labels
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | libr (dict): dictionary of form glycoletter:index
   | batch_size (int): how many samples should be in each batch; default:32
   | drop_last (bool): whether last batch is dropped; default:False
   | extra_feature_train (list): can be used to feed another input to the dataloader; default:None

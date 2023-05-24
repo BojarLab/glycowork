@@ -71,7 +71,7 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | libr (dict): dictionary of form glycoletter:index
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; will only be handled with string input; default:'termini'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')\n
@@ -249,7 +249,7 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False):
   | :-
   | glycans (list): list of glycans in IUPAC-condensed nomenclature
   | size (int): number of monosaccharides per -saccharide, default:2 (for disaccharides)
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our data; default:lib
+  | libr (dict): dictionary of form glycoletter:index
   | up_to (bool): in theory: include -saccharides up to size k; in practice: include monosaccharides; default:False\n
   | Returns:
   | :-                               
@@ -258,7 +258,7 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False):
   if libr is None:
     libr = lib
   if up_to:
-    wga_letter = pd.DataFrame([{i:g.count(i) if i in g else 0 for i in get_lib(glycans) if i not in linkages} for g in glycans])
+    wga_letter = pd.DataFrame([{i:g.count(i) if i in g else 0 for i in get_lib(glycans).keys() if i not in linkages} for g in glycans])
   ggraphs = [glycan_to_nxGraph(g, libr = libr) for g in glycans]
   regex = re.compile(r"\(([ab])(\d)-(\d)\)")
   shadow_glycans = [regex.sub(r"(\1\2-?)", g) for g in glycans]
@@ -291,7 +291,7 @@ def get_terminal_structures(glycan, libr = None):
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns a list of terminal structures (strings)

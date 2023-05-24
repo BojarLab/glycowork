@@ -29,43 +29,46 @@ def min_process_glycans(glycan_list):
   return [small_motif_find(k).split('*') for k in glycan_list]
 
 def get_lib(glycan_list):
-  """returns sorted list of unique glycoletters in list of glycans\n
+  """returns dictionary of form glycoletter:index\n
   | Arguments:
   | :-
   | glycan_list (list): list of IUPAC-condensed glycan sequences as strings\n
   | Returns:
   | :-
-  | Returns sorted list of unique glycoletters (strings) in glycan_list
+  | Returns dictionary of form glycoletter:index
   """
-  #convert to glycoletters & flatten
+  #convert to glycoletters & flatten & get unique vocab
   lib = unwrap(min_process_glycans(set(glycan_list)))
-  #get unique vocab
-  return sorted(set(lib))
+  lib = sorted(set(lib))
+  #convert to dict
+  return {k:i for i,k in enumerate(lib)}
 
 def expand_lib(libr, glycan_list):
   """updates libr with newly introduced glycoletters\n
   | Arguments:
   | :-
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | libr (dict): dictionary of form glycoletter:index
   | glycan_list (list): list of IUPAC-condensed glycan sequences as strings\n
   | Returns:
   | :-
   | Returns new lib
   """
-  return sorted(set(libr + get_lib(glycan_list)))
+  new_libr = get_lib(glycan_list)
+  new_libr = {k:v+len(libr) for k,v in new_libr.items() if k not in libr.keys()}
+  return {**libr, **new_libr}
 
 def in_lib(glycan, libr):
   """checks whether all glycoletters of glycan are in libr\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed nomenclature
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns True if all glycoletters are in libr and False if not
   """
   glycan = min_process_glycans([glycan])[0]
-  return set(glycan).issubset(set(libr))
+  return set(glycan).issubset(libr.keys())
 
 def bracket_removal(glycan_part):
   """iteratively removes (nested) branches between start and end of glycan_part\n

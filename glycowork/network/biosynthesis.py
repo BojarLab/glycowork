@@ -30,7 +30,7 @@ def safe_compare(g1, g2, libr):
   | :-
   | g1 (networkx object): glycan graph from glycan_to_nxGraph
   | g2 (networkx object): glycan graph from glycan_to_nxGraph
-  | libr (list): library of monosaccharides\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-  
   | Returns True if two glycans are the same and False if not; returns False if 'except' is triggered
@@ -60,7 +60,7 @@ def safe_index(glycan, graph_dic, libr):
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
-  | libr (list): library of monosaccharides\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns a glycan graph, either from graph_dic or freshly generated
@@ -79,7 +79,7 @@ def get_neighbors(ggraph, glycans, graphs, libr = None,
   | ggraph (networkx): glycan graph as networkx object
   | glycans (list): list of glycans in IUPAC-condensed format
   | graphs (list): list of glycans in df as graphs
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
@@ -92,25 +92,22 @@ def get_neighbors(ggraph, glycans, graphs, libr = None,
   if len(ggraph.nodes()) <= 1:
     return ([], [])
   #get biosynthetic precursors
-  ggraph_nb = create_neighbors(ggraph, libr = libr, min_size = min_size)
+  ggraph_nb = create_neighbors(ggraph, min_size = min_size)
   #find out whether any member in 'glycans' is a biosynthetic precursor of 'glycan'
   idx = [np.where([safe_compare(k, j, libr = libr) for k in graphs])[0].tolist() for j in ggraph_nb]
   nb = [glycans[k[0]] for k in idx if len(k) > 0]
   return nb, idx
 
-def create_neighbors(ggraph, libr = None, min_size = 1):
+def create_neighbors(ggraph, min_size = 1):
   """creates biosynthetic precursor glycans\n
   | Arguments:
   | :-
   | ggraph (networkx object): glycan graph from glycan_to_nxGraph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
   | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
   | Returns biosynthetic precursor glycans
   """
-  if libr is None:
-    libr = lib
   #check whether glycan large enough to allow for precursors
   if len(ggraph.nodes()) <= min_size:
     return []
@@ -134,7 +131,7 @@ def get_virtual_nodes(glycan, graph_dic, libr = None, min_size = 1):
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
@@ -148,7 +145,7 @@ def get_virtual_nodes(glycan, graph_dic, libr = None, min_size = 1):
   #get glycan graph
   ggraph = safe_index(glycan, graph_dic, libr = libr)
   #get biosynthetic precursors
-  ggraph_nb_t = create_neighbors(ggraph, libr = libr, min_size = min_size)
+  ggraph_nb_t = create_neighbors(ggraph, min_size = min_size)
   ggraph_nb_t = [graph_to_string(k) for k in ggraph_nb_t]
   #ggraph_nb_t = [k if k[0] != '[' else k.replace('[','',1).replace(']','',1) for k in ggraph_nb_t]
 
@@ -171,7 +168,7 @@ def find_diff(glycan_a, glycan_b, graph_dic, libr = None):
   | glycan_a (networkx): glycan graph as networkx object
   | glycan_b (networkx): glycan graph as networkx object
   | graph_dic (dict): dictionary of form glycan : glycan-graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns difference between glycan_a and glycan_b in IUPAC-condensed
@@ -215,7 +212,7 @@ def find_shared_virtuals(glycan_a, glycan_b, graph_dic, libr = None, min_size = 
   | glycan_a (string): glycan in IUPAC-condensed format
   | glycan_b (string): glycan in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
@@ -257,7 +254,7 @@ def create_adjacency_matrix(glycans, graph_dic, libr = None, min_size = 1):
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
@@ -318,7 +315,7 @@ def find_path(glycan_a, glycan_b, graph_dic, libr = None,
   | glycan_a (string): glycan in IUPAC-condensed format
   | glycan_b (string): glycan in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | permitted_roots (set): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
   | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
@@ -352,7 +349,7 @@ def find_shortest_path(goal_glycan, glycan_list, graph_dic, libr = None,
   | goal_glycan (string): glycan in IUPAC-condensed format
   | glycan_list (list): list of glycans in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | permitted_roots (set): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
   | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
@@ -420,7 +417,7 @@ def stemify_glycan_fast(ggraph_in, stem_lib = None, libr = None):
   | :-
   | ggraph_in (networkx): glycan graph as a networkx object
   | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:lib\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | (1) stemified glycan in IUPAC-condensed as a string
@@ -431,7 +428,7 @@ def stemify_glycan_fast(ggraph_in, stem_lib = None, libr = None):
   if stem_lib is None:
     stem_lib = get_stem_lib(libr)
   ggraph = copy.deepcopy(ggraph_in)
-  nx.set_node_attributes(ggraph, {k:{"string_labels":stem_lib[v], "labels":libr.index(stem_lib[v])} for k,v in nx.get_node_attributes(ggraph, "string_labels").items()})
+  nx.set_node_attributes(ggraph, {k:{"string_labels":stem_lib[v], "labels":libr[stem_lib[v]]} for k,v in nx.get_node_attributes(ggraph, "string_labels").items()})
   return graph_to_string(ggraph), ggraph
 
 def find_ptm(glycan, glycans, graph_dic, allowed_ptms = allowed_ptms,
@@ -443,7 +440,7 @@ def find_ptm(glycan, glycans, graph_dic, allowed_ptms = allowed_ptms,
   | glycans (list): list of glycans in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
   | allowed_ptms (set): list of PTMs to consider
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | ggraphs (list): list of precomputed graphs of the glycan list
   | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'
   | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib\n
@@ -464,7 +461,7 @@ def find_ptm(glycan, glycans, graph_dic, allowed_ptms = allowed_ptms,
   glycan_stem = glycan_stem + suffix
   if suffix == '-ol':
     g_stem.nodes[len(g_stem)-1]['string_labels'] = g_stem.nodes[len(g_stem)-1]['string_labels'] + suffix
-    g_stem.nodes[len(g_stem)-1]['labels'] = libr.index(g_stem.nodes[len(g_stem)-1]['string_labels'])
+    g_stem.nodes[len(g_stem)-1]['labels'] = libr[g_stem.nodes[len(g_stem)-1]['string_labels']]
   if ('Sug' in glycan_stem) or ('Neu(' in glycan_stem):
     return 0
   if ggraphs is None:
@@ -488,7 +485,7 @@ def process_ptm(glycans, graph_dic, allowed_ptms = allowed_ptms,
   | glycans (list): list of glycans in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
   | allowed_ptms (set): list of PTMs to consider
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'\n
   | Returns:
   | :-
@@ -568,7 +565,7 @@ def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, lib
   | network (networkx object): network that should be modified
   | graph_dic (dict): dictionary of form glycan : glycan-graph
   | permitted_roots (set): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | min_size (int): length of smallest root in biosynthetic network; default:1\n
   | Returns:
   | :-
@@ -633,7 +630,7 @@ def deorphanize_edge_labels(network, graph_dic, libr = None):
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
   | graph_dic (dict): dictionary of form glycan : glycan-graph
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns a network with completed edge labels
@@ -676,7 +673,7 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | allowed_ptms (set): list of PTMs to consider
   | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide'), monosaccharide(linkage) ('monolink'), or enzyme catalyzing the reaction ('enzyme'); default:'monolink'
   | permitted_roots (set): which nodes should be considered as roots; default:will be inferred\n
@@ -1024,7 +1021,7 @@ def choose_path(diamond, species_list, network_dic, libr = None, threshold = 0.,
   | diamond (dict): dictionary of form position-in-diamond : glycan-string, describing the diamond
   | species_list (list): list of species to compare network to
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | threshold (float): everything below or equal to that threshold will be cut; default:0.
   | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
   | Returns:
@@ -1065,7 +1062,7 @@ def find_diamonds(network, libr = None, nb_intermediates = 2):
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
   | Returns:
   | :-
@@ -1091,7 +1088,7 @@ def find_diamonds(network, libr = None, nb_intermediates = 2):
   graph_pair = nx.algorithms.isomorphism.GraphMatcher(network, g1)
   #find diamonds within those networks
   matchings_list = list(graph_pair.subgraph_isomorphisms_iter())
-  unique_keys = list(set([tuple(list(sorted(k.keys()))) for k in matchings_list]))
+  unique_keys = set([tuple(list(sorted(k.keys()))) for k in matchings_list])
   #map found diamonds to the same format
   matchings_list = [[d for d in matchings_list if k == tuple(list(sorted(d.keys())))][0] for k in unique_keys]
   matchings_list2 = []
@@ -1132,7 +1129,7 @@ def trace_diamonds(network, species_list, network_dic, libr = None, threshold = 
   | network (networkx object): biosynthetic network, returned from construct_network
   | species_list (list): list of species to compare network to
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | threshold (float): everything below or equal to that threshold will be cut; default:0.
   | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
   | Returns:
@@ -1182,7 +1179,7 @@ def evoprune_network(network, network_dic = None, species_list = None, libr = No
   | network (networkx object): biosynthetic network, returned from construct_network
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks
   | species_list (list): list of species to compare network to; default:species from pre-computed milk networks
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | node_attr (string): which (numerical) node attribute to use for pruning; default:'abundance'
   | threshold (float): everything below or equal to that threshold will be cut; default:0.01
   | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
@@ -1222,7 +1219,7 @@ def highlight_network(network, highlight, motif = None,
   | conservation_df (dataframe): highlight=conservation; dataframe containing glycans from different species
   | network_dic (dict): highlight=conservation/species; dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks
   | species (string): highlight=species; which species to highlight in a multi-species network
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used\n
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns a network with the additional 'origin' (motif/species) or 'abundance' (abundance/conservation) node attribute storing the highlight
@@ -1255,7 +1252,7 @@ def highlight_network(network, highlight, motif = None,
     nx.set_node_attributes(network_out, node_presence, name = 'origin')
   #add relative intensity values as 'abundance' node attribute used for node size scaling
   elif highlight == 'abundance':
-    node_abundance = {node:(abundance_df[intensity_col].values.tolist()[abundance_df[glycan_col].values.tolist().index(node)]*100 if node in abundance_df[glycan_col].values.tolist() else 50) for node in network_out.nodes()}
+    node_abundance = {node:(abundance_df[intensity_col].values.tolist()[abundance_df[glycan_col].values.tolist().index(node)]*100 if node in abundance_df[glycan_col] else 50) for node in network_out.nodes()}
     nx.set_node_attributes(network_out, node_abundance, name = 'abundance')
   #add the degree of evolutionary conervation as 'abundance' node attribute used for node size scaling
   elif highlight == 'conservation':

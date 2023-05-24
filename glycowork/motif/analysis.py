@@ -70,7 +70,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     #test statistical enrichment for motifs in above vs below
     ttests = [ttest_ind(df_pos.iloc[:,k].values.tolist()+[1],
                         df_neg.iloc[:,k].values.tolist()+[1],
-                        equal_var = False)[1]/2 if np.mean(df_pos.iloc[:,k])>np.mean(df_neg.iloc[:,k]) else 1.0 for k in range(0,
+                        equal_var = False)[1]/2 if np.mean(df_pos.iloc[:,k]) > np.mean(df_neg.iloc[:,k]) else 1.0 for k in range(0,
                                                                                                                                df_motif.shape[1]-1)]
     ttests_corr = multipletests(ttests, method = 'fdr_bh')[1].tolist()
     out = pd.DataFrame(list(zip(df_motif.columns.tolist()[:-1], ttests, ttests_corr)))
@@ -85,7 +85,7 @@ def get_representative_substructures(enrichment_df, libr = None):
     | Arguments:
     | :-
     | enrichment_df (dataframe): output from get_pvals_motifs
-    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset\n
+    | libr (dict): dictionary of form glycoletter:index\n
     | Returns:
     | :-
     | Returns up to 10 minimal glycans in a list
@@ -505,7 +505,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   return out.sort_values(by = 'corr p-val')
 
 def make_volcano(df, group1, group2, normalized = True,
-                                motifs = False, feature_set = ['exhaustive', 'known'], libr = None,
+                                motifs = False, feature_set = ['exhaustive', 'known'],
                                 impute = False, filepath = '', y_thresh = 0.05, x_thresh = 1.0, 
                                 label_changed = True, x_metric = 'Log2FC'):
   """Plots glycan differential expression results in a volcano plot\n
@@ -517,7 +517,6 @@ def make_volcano(df, group1, group2, normalized = True,
   | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset; default:uses glycowork-internal list
   | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution; default:False
   | filepath (string): absolute path including full filename allows for saving the plot
   | y_thresh (float): corr p threshhold for labeling datapoints; default:0.05
@@ -531,7 +530,7 @@ def make_volcano(df, group1, group2, normalized = True,
 
   # get DE  
   de_res = get_differential_expression(df = df, group1 = group1, group2 = group2, normalized = normalized, motifs = motifs,
-                                        feature_set = feature_set, libr = libr, impute = impute)
+                                        feature_set = feature_set, impute = impute)
   de_res['log_p'] = -np.log10(de_res['corr p-val'].values.tolist())
   x = de_res[x_metric].values.tolist()
   y = de_res['log_p'].values.tolist()

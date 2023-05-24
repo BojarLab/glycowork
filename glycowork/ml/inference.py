@@ -45,7 +45,7 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
     | :-
     | glycans (list): list of glycans in IUPAC-condensed as strings
     | model (PyTorch object): trained graph neural network (such as SweetNet) for analyzing glycans
-    | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+    | libr (dict): dictionary of form glycoletter:index
     | batch_size (int): change to batch_size used during training; default:32
     | rep (bool): True returns representations, False returns actual predicted labels; default is True
     | class_list (list): list of unique classes to map predictions\n
@@ -96,7 +96,7 @@ def get_multi_pred(prot, glycans, model, prot_dic,
   | background_correction (bool): whether to correct predictions for background; default:False
   | correction_df (dataframe): background prediction for (ideally) all provided glycans; default:None
   | batch_size (int): change to batch_size used during training; default:128
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | libr (dict): dictionary of form glycoletter:index
   | flex (bool): depends on whether you use LectinOracle (False) or LectinOracle_flex (True); default:False\n
   | Returns:
   | :-
@@ -156,7 +156,7 @@ def get_lectin_preds(prot, glycans, model, prot_dic = {}, background_correction 
   | background_correction (bool): whether to correct predictions for background; default:False
   | correction_df (dataframe): background prediction for (ideally) all provided glycans; default:V4 correction file
   | batch_size (int): change to batch_size used during training; default:128
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | libr (dict): dictionary of form glycoletter:index
   | sort (bool): whether to sort prediction results descendingly; default:True
   | flex (bool): depends on whether you use LectinOracle (False) or LectinOracle_flex (True); default:False\n
   | Returns:
@@ -164,7 +164,7 @@ def get_lectin_preds(prot, glycans, model, prot_dic = {}, background_correction 
   | Returns dataframe of glycan sequences and predicted binding to prot
   """
   if libr is None:
-      libr = lib
+    libr = lib
   if correction_df is None:
     correction_df = df_corr
   if len(prot_dic) < 1 and not flex:

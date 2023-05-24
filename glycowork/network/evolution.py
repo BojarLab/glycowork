@@ -149,7 +149,7 @@ def check_conservation(glycan, df, network_dic = None, libr = None, rank = 'Orde
   | glycan (string): full glycan or glycan motif in IUPAC-condensed nomenclature
   | df (dataframe): dataframe in the style of df_species, each row one glycan and columns are the taxonomic levels
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks
-  | libr (list): library of monosaccharides; if you have one use it, otherwise a comprehensive lib will be used
+  | libr (dict): dictionary of form glycoletter:index
   | rank (string): at which taxonomic level to assess conservation; default:Order
   | threshold (int): threshold of how many glycans a species needs to have to consider the species;default:5
   | motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False\n
