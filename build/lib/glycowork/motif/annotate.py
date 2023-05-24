@@ -1,7 +1,6 @@
 import pubchempy as pcp
 import networkx as nx
 import pandas as pd
-import itertools
 import re
 from collections import defaultdict
 
@@ -176,7 +175,7 @@ def annotate_dataset(glycans, motifs = None,
   """
   if motifs is None:
     motifs = motif_list
-  libr = get_lib(glycans + motifs.motif.values.tolist() + linkages)
+  libr = get_lib(glycans + motifs.motif.values.tolist() + list(linkages))
   #non-exhaustive speed-up that should only be used if necessary
   if estimate_speedup:
     motifs = estimate_lower_bound(glycans, motifs)

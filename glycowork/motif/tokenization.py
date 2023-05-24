@@ -714,9 +714,9 @@ def map_to_basic(glycoletter):
     return 'Pen'
   elif glycoletter in linkages:
     return '?1-?'
-  elif (g2 := re.sub(r'\d', 'O', glycoletter)) in [k+'OS' for k in Hex]:
+  elif (g2 := re.sub(r'\d', 'O', glycoletter)) in {k+'OS' for k in Hex}:
     return 'HexOS'
-  elif g2 in [k+'OS' for k in HexNAc]:
+  elif g2 in {k+'OS' for k in HexNAc}:
     return 'HexNAcOS'
   else:
     return glycoletter

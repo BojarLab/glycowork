@@ -3,7 +3,7 @@ import numpy as np
 import random
 import re
 from glyles import convert
-from glycowork.glycan_data.loader import unwrap, linkages, multireplace, find_nth
+from glycowork.glycan_data.loader import unwrap, multireplace, find_nth
 
 def small_motif_find(glycan):
   """processes IUPACcondensed glycan sequence (string) without splitting it into glycowords\n

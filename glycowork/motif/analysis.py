@@ -172,15 +172,16 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
       df_motif = annotate_dataset(df.columns.tolist(),
                               feature_set = feature_set,
                                   extra = extra, wildcard_list = wildcard_list,
-                                  estimate_speedup = estimate_speedup)
+                                  estimate_speedup = estimate_speedup, condense = True)
       df_motif = df_motif.replace(0,np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
       collect_dic = {}
       #distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
       if datatype == 'response':
-        for col in df_motif.columns:
+        for c,col in enumerate(df_motif.columns):
           indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
-          temp = df.iloc[:, indices].sum(axis = 1)
-          collect_dic[col] = temp
+          temp = df.iloc[:,indices]
+          temp.columns = range(temp.columns.size)
+          collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
         df = pd.DataFrame(collect_dic)
       elif datatype == 'presence':
         idx = df.index.tolist()
@@ -190,6 +191,9 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
         df.index = idx
   df.dropna(axis = 1, inplace = True)
   df = clean_up_heatmap(df.T)
+  for col in df.columns:
+      col_sum = max([sum(df.loc[:,col]), 0.1])
+      df[col] = [k/col_sum*100 for k in df.loc[:,col]]
   #cluster the motif abundances
   sns.clustermap(df, **kwargs)
   plt.xlabel('Samples')
@@ -452,7 +456,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
     df.iloc[:,1:] = replace_zero_with_random_gaussian_knn(df.iloc[:,1:], len(group1))
   if not normalized:
     for col in df.columns.tolist()[1:]:
-      df[col] = [k/sum(df.loc[:,col])*100 for k in df.loc[:,col].values.tolist()]
+      df[col] = [k/sum(df.loc[:,col])*100 for k in df.loc[:,col]]
   glycans = df.iloc[:,0].values.tolist()
   if motifs:
     df_motif = annotate_dataset(df.iloc[:,0].values.tolist(),
@@ -460,12 +464,15 @@ def get_differential_expression(df, group1, group2, normalized = True,
                                 condense = True)
     collect_dic = {}
     df = df.iloc[:,1:].T
-    for col in df_motif.columns:
+    for c,col in enumerate(df_motif.columns):
       indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
-      temp = df.iloc[:, indices].sum(axis = 1)
-      collect_dic[col] = temp
+      temp = df.iloc[:,indices]
+      temp.columns = range(temp.columns.size)
+      collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
     df = pd.DataFrame(collect_dic)
     df = clean_up_heatmap(df.T)
+    for col in df.columns:
+      df[col] = [k/sum(df.loc[:,col])*100 for k in df.loc[:,col]]
     glycans = df.index.tolist()
   df_a = df.loc[:,group1]
   df_b = df.loc[:,group2]
