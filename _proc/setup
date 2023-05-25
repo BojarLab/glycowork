@@ -24,7 +24,7 @@ setuptools.setup(
     install_requires=["scikit-learn", "regex", "networkx>=3.0",
                       "statsmodels", "scipy", "torch",
                       "seaborn", "xgboost", "mpld3",
-                      "requests", "pandas", "glyles",
+                      "requests", "pandas>=1.3", "glyles",
                       "pubchempy", "matplotlib-inline",
                       "python-louvain"],
     extras_require={'all':["torch_geometric", "pycairo", "CairoSVG",

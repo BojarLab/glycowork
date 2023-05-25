@@ -11,7 +11,7 @@ from collections import Counter
 from sklearn.cluster import DBSCAN
 
 from glycowork.glycan_data.loader import lib, motif_list, unwrap, find_nth, multireplace, df_species, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, Sia, linkages
-from glycowork.motif.processing import small_motif_find, min_process_glycans, choose_correct_isoform, canonicalize_iupac
+from glycowork.motif.processing import min_process_glycans, choose_correct_isoform, canonicalize_iupac
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 
 chars = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','P','Q','R','S','T',

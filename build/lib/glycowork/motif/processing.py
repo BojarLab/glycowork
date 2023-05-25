@@ -1,21 +1,9 @@
 import pandas as pd
 import numpy as np
-import random
 import re
 from glyles import convert
 from glycowork.glycan_data.loader import unwrap, multireplace, find_nth
 
-def small_motif_find(glycan):
-  """processes IUPACcondensed glycan sequence (string) without splitting it into glycowords\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns string in which glycoletters are separated by asterisks
-  """
-  b = glycan.replace('[', '').replace(']', '').replace('{', '').replace('}', '').replace(')', '(').split('(')
-  return '*'.join(b)
 
 def min_process_glycans(glycan_list):
   """converts list of glycans into a nested lists of glycoletters\n
@@ -26,7 +14,8 @@ def min_process_glycans(glycan_list):
   | :-
   | Returns list of glycoletter lists
   """
-  return [small_motif_find(k).split('*') for k in glycan_list]
+  return [multireplace(k, {'[': '', ']': '', '{': '', '}': '', ')': '('}).split('(') for k in glycan_list]
+
 
 def get_lib(glycan_list):
   """returns dictionary of form glycoletter:index\n
@@ -41,7 +30,8 @@ def get_lib(glycan_list):
   lib = unwrap(min_process_glycans(set(glycan_list)))
   lib = sorted(set(lib))
   #convert to dict
-  return {k:i for i,k in enumerate(lib)}
+  return {k: i for i, k in enumerate(lib)}
+
 
 def expand_lib(libr, glycan_list):
   """updates libr with newly introduced glycoletters\n
@@ -54,8 +44,9 @@ def expand_lib(libr, glycan_list):
   | Returns new lib
   """
   new_libr = get_lib(glycan_list)
-  new_libr = {k:v+len(libr) for k,v in new_libr.items() if k not in libr.keys()}
+  new_libr = {k: v+len(libr) for k, v in new_libr.items() if k not in libr.keys()}
   return {**libr, **new_libr}
+
 
 def in_lib(glycan, libr):
   """checks whether all glycoletters of glycan are in libr\n
@@ -70,6 +61,7 @@ def in_lib(glycan, libr):
   glycan = min_process_glycans([glycan])[0]
   return set(glycan).issubset(libr.keys())
 
+
 def bracket_removal(glycan_part):
   """iteratively removes (nested) branches between start and end of glycan_part\n
   | Arguments:
@@ -83,6 +75,7 @@ def bracket_removal(glycan_part):
   while regex.search(glycan_part):
     glycan_part = regex.sub('', glycan_part)
   return glycan_part
+
 
 def find_isomorphs(glycan):
   """returns a set of isomorphic glycans by swapping branches etc.\n
@@ -127,6 +120,7 @@ def find_isomorphs(glycan):
     out_list = {floaty+k for k in out_list}
   return list(out_list)
 
+
 def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species'):
   """converts a dataframe such as df_species to absence/presence matrix\n
   | Arguments:
@@ -141,16 +135,17 @@ def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species
   glycans = sorted(set(df[glycan_col_name].values.tolist()))
   species = sorted(set(df[label_col_name].values.tolist()))
   #get a count matrix for each rank - glycan combination
-  mat_dic = {k:[df[df[label_col_name] == j][glycan_col_name].values.tolist().count(k) for j in species] for k in glycans}
+  mat_dic = {k: [df[df[label_col_name] == j][glycan_col_name].values.tolist().count(k) for j in species] for k in glycans}
   mat = pd.DataFrame(mat_dic)
   mat.index = species
   return mat
+
 
 def find_matching_brackets_indices(s):
   stack = []
   opening_indices = {}
   matching_indices = []
-    
+
   for i, c in enumerate(s):
     if c == '[':
       stack.append(i)
@@ -167,6 +162,7 @@ def find_matching_brackets_indices(s):
   else:
     matching_indices.sort()
     return matching_indices
+
 
 def choose_correct_isoform(glycans, reverse = False):
   """given a list of glycan branch isomers, this function returns the correct isomer\n
@@ -187,7 +183,7 @@ def choose_correct_isoform(glycans, reverse = False):
   #heuristic: main chain should contain the most monosaccharides of all chains
   mains = [bracket_removal(g) for g in glycans]
   mains = [len(k) for k in min_process_glycans(mains)]
-  glycans2 = [g for k,g in enumerate(glycans) if mains[k] == max(mains)]
+  glycans2 = [g for k, g in enumerate(glycans) if mains[k] == max(mains)]
   #handle neighboring branches
   kill_list = []
   for g in glycans2:
@@ -204,10 +200,10 @@ def choose_correct_isoform(glycans, reverse = False):
   glycans2 = [k for k in glycans2 if k not in kill_list]
   #choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(glycans2) > 1:
-    candidates = {k:find_matching_brackets_indices(k) for k in glycans2}
+    candidates = {k: find_matching_brackets_indices(k) for k in glycans2}
     prefix = [min_process_glycans([k[j[0]+1:j[1]] for j in candidates[k]]) for k in candidates.keys()]
     prefix = [np.argmax([len(j) for j in k]) for k in prefix]
-    prefix = min_process_glycans([k[:candidates[k][prefix[i]][0]] for i,k in enumerate(candidates.keys())])
+    prefix = min_process_glycans([k[:candidates[k][prefix[i]][0]] for i, k in enumerate(candidates.keys())])
     branch_endings = [k[-2][-1] if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in prefix]
     if len(set(branch_endings)) == 1:
       branch_endings = [ord(k[0][0]) for k in prefix]
@@ -217,7 +213,7 @@ def choose_correct_isoform(glycans, reverse = False):
         preprefix = min_process_glycans([glyc[:glyc.index('[')] for glyc in glycans2])
         branch_endings = [k[-2][-1] if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in preprefix]
         branch_endings = [int(k) for k in branch_endings]
-        glycans2 = [g for k,g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
+        glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
         if len(glycans2) > 1:
           correct_isoform = sorted(glycans2)[0]
         else:
@@ -233,6 +229,7 @@ def choose_correct_isoform(glycans, reverse = False):
     correct_isoform = glycans
   return correct_isoform
 
+
 def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   """given a glycan and glycan class, determines whether glycan is from this class\n
   | Arguments:
@@ -246,7 +243,7 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   | Returns True if glycan is in glycan class and False if not
   """
   if glycan_class == 'O':
-    pool =  ['GalNAc', 'GalNAcOS', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
+    pool = ['GalNAc', 'GalNAcOS', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
   elif glycan_class == 'N':
     pool = ['GlcNAc']
   elif glycan_class == 'free' or glycan_class == 'lipid':
@@ -259,6 +256,7 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
     if conf > extra_thresh:
       truth = True
   return truth
+
 
 def IUPAC_to_SMILES(glycan_list):
   """given a list of IUPAC-condensed glycans, uses GlyLES to return a list of corresponding isomeric SMILES\n
@@ -273,6 +271,7 @@ def IUPAC_to_SMILES(glycan_list):
     raise TypeError("Input must be a list")
   return [convert(g)[0][1] for g in glycan_list]
 
+
 def canonicalize_iupac(glycan):
   """converts a glycan from any IUPAC flavor into the exact IUPAC-condensed version that is optimized for glycowork\n
   | Arguments:
@@ -283,8 +282,10 @@ def canonicalize_iupac(glycan):
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
   #canonicalize usage of monosaccharides and linkages
-  replace_dic = {'Nac':'NAc', 'AC':'Ac', 'NeuAc':'Neu5Ac', 'NeuNAc':'Neu5Ac', 'NeuGc':'Neu5Gc', '\u03B1':'a', '\u03B2':'b', 'N(Gc)':'NGc', 'GL':'Gl', '(9Ac)':'9Ac',
-                 'KDN':'Kdn', 'OSO3':'S', '-O-Su-':'S', '(S)':'S', 'H2PO3':'P', '(P)':'P', '–':'-', ' ':'', ',':'-', 'α':'a', 'β':'b', '.':'', '((':'(', '))':')'}
+  replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
+                 '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', '(9Ac)': '9Ac',
+                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
+                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')'}
   glycan = multireplace(glycan, replace_dic)
   #trim linkers
   if '-' in glycan:
@@ -323,9 +324,9 @@ def canonicalize_iupac(glycan):
     glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
   #introduce parentheses for linkages
   if '(' not in glycan and len(glycan) > 6:
-    for k in range(1,glycan.count('-')+1):
+    for k in range(1, glycan.count('-')+1):
       idx = find_nth(glycan, '-', k)
-      if (glycan[idx-1].isnumeric()) and (glycan[idx+1].isnumeric() or glycan[idx+1]=='?'):
+      if (glycan[idx-1].isnumeric()) and (glycan[idx+1].isnumeric() or glycan[idx+1] == '?'):
         glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+2] + ')' + glycan[idx+2:]
       elif (glycan[idx-1].isnumeric()) and bool(re.search(r'[A-Z]', glycan[idx+1])):
         glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+1] + '?)' + glycan[idx+1:]
@@ -344,8 +345,8 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'([1-9]?[SP])([A-Z][^\(^\[]+)', r'\2\1', glycan)
   if bool(re.search(r'\-ol[0-9]?[SP]', glycan)):
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
-  post_process = {'5Ac(?1':'5Ac(a2', '5Gc(?1':'5Gc(a2', 'Fuc(?':'Fuc(a', 'GalS':'GalOS', 'GlcNAcS':'GlcNAcOS',
-                  'GalNAcS':'GalNAcOS'}
+  post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', 'Fuc(?': 'Fuc(a', 'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS',
+                  'GalNAcS': 'GalNAcOS'}
   glycan = multireplace(glycan, post_process)
   #canonicalize branch ordering
   if '[' in glycan:
@@ -355,7 +356,8 @@ def canonicalize_iupac(glycan):
     glycan = '{'+glycan.replace('+', '}')
   return glycan
 
-def cohen_d(x,y):
+
+def cohen_d(x, y):
   """calculates effect size between two groups\n
     | Arguments:
     | :-
@@ -370,9 +372,12 @@ def cohen_d(x,y):
   dof = nx + ny - 2
   return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
 
+
 def variance_stabilization(data):
+  """Variance stabilization normalization\n
+  """
   # Apply log1p transformation
-  data = np.log1p(data) 
+  data = np.log1p(data)
   # Scale data to have zero mean and unit variance
   data = (data - np.mean(data, axis = 0)) / np.std(data, axis = 0)
   return data
