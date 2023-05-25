@@ -40,19 +40,19 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | :-
     | Returns dataframe with p-values and corrected p-values for every glycan motif
     """
-    #reformat to allow for proper annotation in all samples
+    # Reformat to allow for proper annotation in all samples
     if multiple_samples:
         if 'target' in df.columns:
           df.drop(['target'], axis = 1, inplace = True)
         df = df.T
         df = df.reset_index()
         df.columns = [glycan_col_name] + df.columns.values.tolist()[1:]
-    #annotate glycan motifs in dataset
+    # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 motifs = motifs, feature_set = feature_set,
                                 extra = extra, wildcard_list = wildcard_list,
                                 estimate_speedup = estimate_speedup)
-    #broadcast the dataframe to the correct size given the number of samples
+    # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
         df.set_index(glycan_col_name, inplace = True)
         df.columns = [label_col_name]*len(df.columns)
@@ -62,12 +62,12 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
         df_motif = df_motif[cols]
     else:
         df_motif[label_col_name] = df[label_col_name].values.tolist()
-    #throw away any motifs that are always zero
+    # Throw away any motifs that are always zero
     df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
-    #divide into motifs with expression above threshold & below
+    # Divide into motifs with expression above threshold & below
     df_pos = df_motif[df_motif[label_col_name] > thresh]
     df_neg = df_motif[df_motif[label_col_name] <= thresh]
-    #test statistical enrichment for motifs in above vs below
+    # Test statistical enrichment for motifs in above vs below
     ttests = [ttest_ind(df_pos.iloc[:, k].values.tolist()+[1],
                         df_neg.iloc[:, k].values.tolist()+[1],
                         equal_var = False)[1]/2 if np.mean(df_pos.iloc[:, k]) > np.mean(df_neg.iloc[:, k]) else 1.0 for k in range(0,
@@ -94,19 +94,19 @@ def get_representative_substructures(enrichment_df, libr = None):
     if libr is None:
         libr = lib
     glycans = list(set(df_species.target))
-    #only consider motifs that are significantly enriched
+    # Only consider motifs that are significantly enriched
     filtered_df = enrichment_df[enrichment_df.corr_pval < 0.05].reset_index(drop = True)
     pvals = filtered_df.pval.values.tolist()
     weights = -np.log10(pvals) / max(-np.log10(pvals))
     motifs = filtered_df.motif.values.tolist()
 
-    #pair glycoletters & disaccharides with their pvalue-based weight
+    # Pair glycoletters & disaccharides with their pvalue-based weight
     mono, mono_weights = list(zip(*[(motifs[k], weights[k]) for k in range(len(motifs)) if '(' not in motifs[k]]))
     di, di_weights = list(zip(*[(motifs[k], weights[k]) for k in range(len(motifs)) if '(' in motifs[k]]))
     mono_scores = [sum([mono_weights[j] for j in range(len(mono)) if mono[j] in k]) for k in glycans]
     di_scores = [sum([di_weights[j] for j in range(len(di)) if subgraph_isomorphism(k, di[j],
                                                                                     libr = libr)]) for k in glycans]
-    #for each glycan, get their glycoletter & disaccharide scores, normalized by glycan length
+    # For each glycan, get their glycoletter & disaccharide scores, normalized by glycan length
     motif_scores = [a + b for a, b in zip(mono_scores, di_scores)]
     length_scores = [len(k) for k in glycans]
 
@@ -115,12 +115,12 @@ def get_representative_substructures(enrichment_df, libr = None):
                         columns = ['glycan', 'motif_score', 'length_score', 'combined_score'])
     df_score = df_score.sort_values(by = 'combined_score',
                                     ascending = False)
-    #take the 10 glycans with the highest score
+    # Take the 10 glycans with the highest score
     rep_motifs = df_score.glycan.values.tolist()[:10]
     rep_motifs.sort(key = len)
 
     clean_list = []
-    #make sure that the list only contains the minimum number of representative glycans
+    # Make sure that the list only contains the minimum number of representative glycans
     for k in rep_motifs:
         if sum([subgraph_isomorphism(j, k, libr = libr) for j in rep_motifs]) > 1:
             rep_motifs.remove(k)
@@ -171,14 +171,14 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
       df.set_index(index_col, inplace = True)
   df.fillna(0, inplace = True)
   if mode == 'motif':
-      #count glycan motifs and remove rare motifs from the result
+      # Count glycan motifs and remove rare motifs from the result
       df_motif = annotate_dataset(df.columns.tolist(),
                                   feature_set = feature_set,
                                   extra = extra, wildcard_list = wildcard_list,
                                   estimate_speedup = estimate_speedup, condense = True)
       df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
       collect_dic = {}
-      #distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
+      # Distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
       if datatype == 'response':
         for c, col in enumerate(df_motif.columns):
           indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
@@ -197,7 +197,7 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
   for col in df.columns:
       col_sum = max([sum(df.loc[:, col]), 0.1])
       df[col] = [k/col_sum*100 for k in df.loc[:, col]]
-  #cluster the motif abundances
+  # Cluster the motif abundances
   sns.clustermap(df, **kwargs)
   plt.xlabel('Samples')
   if mode == 'sequence':
@@ -230,19 +230,19 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     idx = [k for k in range(len(glycans)) if '{' not in glycans[k]]
     glycans = [glycans[k] for k in idx]
     label_list = [label_list[k] for k in idx]
-    #get all glycan embeddings
+    # Get all glycan embeddings
     if emb is None:
         this_dir, this_filename = os.path.split(__file__)
         data_path = os.path.join(this_dir, 'glycan_representations.pkl')
         emb = pickle.load(open(data_path, 'rb'))
-    #get the subset of embeddings corresponding to 'glycans'
+    # Get the subset of embeddings corresponding to 'glycans'
     if isinstance(emb, pd.DataFrame):
         emb = {glycans[k]: emb.iloc[k, :] for k in range(len(glycans))}
     embs = np.array([emb[k] for k in glycans])
-    #calculate t-SNE of embeddings
+    # Calculate t-SNE of embeddings
     embs = TSNE(random_state = 42,
                 init = 'pca', learning_rate = 'auto').fit_transform(embs)
-    #plot the t-SNE
+    # Plot the t-SNE
     markers = None
     if shape_feature is not None:
         markers = {shape_feature: "X", "Absent": "o"}
@@ -284,16 +284,16 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
     df = df_species
   if rank is not None:
     df = df[df[rank] == focus]
-  #get all disaccharides for linkage analysis
+  # Get all disaccharides for linkage analysis
   pool_in = unwrap([link_find(k) for k in df[glycan_col_name]])
   pool_in = [k.replace('(', '*').replace(')', '*') for k in pool_in]
 
   if mode == 'bond':
-    #get upstream monosaccharides for a specific linkage
+    # Get upstream monosaccharides for a specific linkage
     pool = [k.split('*')[0] for k in pool_in if k.split('*')[1] == sugar]
     lab = 'Observed Monosaccharides Making Linkage %s' % sugar
   elif mode == 'sugar':
-    #get downstream monosaccharides for a specific monosaccharide
+    # Get downstream monosaccharides for a specific monosaccharide
     if modifications:
       sugars = [k.split('*')[0] for k in pool_in if sugar in k.split('*')[0]]
       pool = [k.split('*')[2] for k in pool_in if sugar in k.split('*')[0]]
@@ -301,7 +301,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
       pool = [k.split('*')[2] for k in pool_in if k.split('*')[0] == sugar]
     lab = 'Observed Monosaccharides Paired with %s' % sugar
   elif mode == 'sugarbond':
-    #get downstream linkages for a specific monosaccharide
+    # Get downstream linkages for a specific monosaccharide
     if modifications:
       sugars = [k.split('*')[0] for k in pool_in if sugar in k.split('*')[0]]
       pool = [k.split('*')[1] for k in pool_in if sugar in k.split('*')[0]]
@@ -309,27 +309,27 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
       pool = [k.split('*')[1] for k in pool_in if k.split('*')[0] == sugar]
     lab = 'Observed Linkages Made by %s' % sugar
 
-  #count objects in pool, filter by rarity, and calculate proportion
+  # Count objects in pool, filter by rarity, and calculate proportion
   cou = Counter(pool).most_common()
   cou_k = [k[0] for k in cou if k[1] > thresh]
   cou_v_in = [k[1] for k in cou if k[1] > thresh]
   cou_v = [v / len(pool) for v in cou_v_in]
 
-  #start plotting
+  # Start plotting
   fig, (a0, a1) = plt.subplots(1, 2, figsize = (8, 4), gridspec_kw = {'width_ratios': [1, 1]})
   if modifications:
       if mode == 'bond':
           print("Modifications currently only work in mode == 'sugar' and mode == 'sugarbond'.")
-      #get counts and proportions for the input monosaccharide + its modifications
+      # Get counts and proportions for the input monosaccharide + its modifications
       cou2 = Counter(sugars).most_common()
       cou_k2 = [k[0] for k in cou2 if k[1] > thresh]
       cou_v2_in = [k[1] for k in cou2 if k[1] > thresh]
       cou_v2 = [v / len(sugars) for v in cou_v2_in]
-      #map the input monosaccharide + its modifications to colors
+      # Map the input monosaccharide + its modifications to colors
       color_list = plt.cm.get_cmap('tab20')
       color_map = {cou_k2[k]: color_list(k/len(cou_k2)) for k in range(len(cou_k2))}
       palette = [color_map[k] for k in cou_k2]
-      #start linking downstream monosaccharides / linkages to the input monosaccharide + its modifications
+      # Start linking downstream monosaccharides / linkages to the input monosaccharide + its modifications
       if mode == 'sugar':
           pool_in2 = [k for k in pool_in if k.split('*')[2] in cou_k]
       elif mode == 'sugarbond':
@@ -361,7 +361,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   a1.set_title(str(sugar) + ' and variants are connected to')
   plt.setp(a0.get_xticklabels(), rotation = 'vertical')
 
-  #confusingly, this second plot block refers to the *first* plot, depicting the input monosaccharide + its modifications
+  # Confusingly, this second plot block refers to the *first* plot, depicting the input monosaccharide + its modifications
   if modifications:
     if len(cou_k2) > 1:
         cou_df2 = pd.DataFrame({'monosaccharides': cou_k2, 'counts': cou_v2})
@@ -544,7 +544,7 @@ def make_volcano(df, group1, group2, normalized = True,
   | Prints volcano plot
   """
 
-  # get DE 
+  # Get DE 
   de_res = get_differential_expression(df = df, group1 = group1, group2 = group2, normalized = normalized, motifs = motifs,
                                        feature_set = feature_set, impute = impute)
   de_res['log_p'] = -np.log10(de_res['corr p-val'].values.tolist())
@@ -552,7 +552,7 @@ def make_volcano(df, group1, group2, normalized = True,
   y = de_res['log_p'].values.tolist()
   label = de_res['Glycan'].values.tolist()
 
-  # make plot
+  # Make plot
   ax = sns.scatterplot(x = x_metric, y = 'log_p', data = de_res, color = '#3E3E3E', alpha = 0.8)
   ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)', title = '')
   plt.axhline(y = -np.log10(y_thresh), c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
@@ -560,11 +560,11 @@ def make_volcano(df, group1, group2, normalized = True,
   plt.axvline(x = -x_thresh, c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
   sns.despine(bottom = True, left = True)
 
-  # text labels
+  # Text labels
   if label_changed:
     [plt.text(x[i], y[i], label[i]) for i in range(len(x)) if y[i] > -np.log10(y_thresh) and abs(x[i]) > x_thresh]
 
-  # save to file
+  # Save to file
   if len(filepath) > 1:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                 bbox_inches = 'tight')

@@ -1,7 +1,7 @@
-import networkx as nx
 from glycowork.glycan_data.loader import lib
 from glycowork.motif.tokenization import check_nomenclature
-from glycowork.motif.graph import glycan_to_graph, glycan_to_nxGraph, compare_glycans
+from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
+
 
 def check_presence(glycan, df, colname = 'target', libr = None,
                    name = None, rank = 'Species', fast = False):

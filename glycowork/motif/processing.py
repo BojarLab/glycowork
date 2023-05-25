@@ -26,10 +26,10 @@ def get_lib(glycan_list):
   | :-
   | Returns dictionary of form glycoletter:index
   """
-  #convert to glycoletters & flatten & get unique vocab
+  # Convert to glycoletters & flatten & get unique vocab
   lib = unwrap(min_process_glycans(set(glycan_list)))
   lib = sorted(set(lib))
-  #convert to dict
+  # Convert to dict
   return {k: i for i, k in enumerate(lib)}
 
 
@@ -91,7 +91,7 @@ def find_isomorphs(glycan):
     floaty = glycan[:glycan.rindex('}')+1]
     glycan = glycan[glycan.rindex('}')+1:]
   out_list = {glycan}
-  #starting branch swapped with next side branch
+  # Starting branch swapped with next side branch
   if '[' in glycan and glycan.index('[') > 0:
     if not bool(re.search(r'\[[^\]]+\[', glycan)):
       glycan2 = re.sub(r'^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
@@ -101,7 +101,7 @@ def find_isomorphs(glycan):
       out_list.add(glycan2)
     except:
       pass
-  #double branch swap
+  # Double branch swap
   temp = set()
   for k in out_list:
     if '][' in k:
@@ -109,7 +109,7 @@ def find_isomorphs(glycan):
       temp.add(glycan2)
   out_list.update(temp)
   temp = set()
-  #starting branch swapped with next side branch again to also include double branch swapped isomorphs
+  # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
   for k in out_list:
     if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
       glycan2 = re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1)
@@ -134,7 +134,7 @@ def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species
   """
   glycans = sorted(set(df[glycan_col_name].values.tolist()))
   species = sorted(set(df[label_col_name].values.tolist()))
-  #get a count matrix for each rank - glycan combination
+  # Get a count matrix for each rank - glycan combination
   mat_dic = {k: [df[df[label_col_name] == j][glycan_col_name].values.tolist().count(k) for j in species] for k in glycans}
   mat = pd.DataFrame(mat_dic)
   mat.index = species
@@ -180,11 +180,11 @@ def choose_correct_isoform(glycans, reverse = False):
   if '{' in glycans[0]:
     floaty = glycans[0][:glycans[0].rindex('}')+1]
     glycans = [k[k.rindex('}')+1:] for k in glycans]
-  #heuristic: main chain should contain the most monosaccharides of all chains
+  # Heuristic: main chain should contain the most monosaccharides of all chains
   mains = [bracket_removal(g) for g in glycans]
   mains = [len(k) for k in min_process_glycans(mains)]
   glycans2 = [g for k, g in enumerate(glycans) if mains[k] == max(mains)]
-  #handle neighboring branches
+  # Handle neighboring branches
   kill_list = []
   for g in glycans2:
     if '][' in g:
@@ -198,7 +198,7 @@ def choose_correct_isoform(glycans, reverse = False):
       except:
         pass
   glycans2 = [k for k in glycans2 if k not in kill_list]
-  #choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
+  # Choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(glycans2) > 1:
     candidates = {k: find_matching_brackets_indices(k) for k in glycans2}
     prefix = [min_process_glycans([k[j[0]+1:j[1]] for j in candidates[k]]) for k in candidates.keys()]
@@ -281,48 +281,48 @@ def canonicalize_iupac(glycan):
   | :-
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
-  #canonicalize usage of monosaccharides and linkages
+  # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')'}
   glycan = multireplace(glycan, replace_dic)
-  #trim linkers
+  # Trim linkers
   if '-' in glycan:
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and '-ol' not in glycan:
       glycan = glycan[:glycan.rindex('-')]
-  #canonicalize usage of brackets and parentheses
+  # Canonicalize usage of brackets and parentheses
   if bool(re.search(r'\([A-Z3-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
-  #canonicalize linkage uncertainty
-  #open linkages
+  # Canonicalize linkage uncertainty
+  # Open linkages
   if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
     glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
-  #open linkages2
+  # Open linkages2
   if bool(re.search(r'[1-2]\-\)', glycan)):
     glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
-  #missing linkages
+  # Missing linkages
   if bool(re.search(r'[^hr][a-b][\(\)]', glycan)):
     glycan = re.sub(r'([a-b])([\(\)])', r'\1?1-?\2', glycan)
-  #open linkages in front of branches
+  # Open linkages in front of branches
   if bool(re.search(r'[0-9]\-[\[\]]', glycan)):
     glycan = re.sub(r'([0-9])\-([\[\]])', r'\1-?\2', glycan)
-  #open linkages in front of branches (with missing information)
+  # Open linkages in front of branches (with missing information)
   if bool(re.search(r'[a-z]\-[\[\]]', glycan)):
     glycan = re.sub(r'([a-z])\-([\[\]])', r'\1?1-?\2', glycan)
-  #branches without linkages
+  # Branches without linkages
   if bool(re.search(r'\[([a-zA-Z])+\]', glycan)):
     glycan = re.sub(r'(\[[a-zA-Z]+)(\])', r'\1?1-?\2', glycan)
-  #missing linkages in front of branches
+  # Missing linkages in front of branches
   if bool(re.search(r'[a-z]\[[A-Z]', glycan)):
     glycan = re.sub(r'([a-z])(\[[A-Z])', r'\1?1-?\2', glycan)
-  #missing anomer info
+  # Missing anomer info
   if bool(re.search(r'\([1-2]', glycan)):
     glycan = re.sub(r'(\()([1-2])', r'\1?\2', glycan)
-  #smudge uncertainty
+  # Smudge uncertainty
   while '/' in glycan:
     glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
-  #introduce parentheses for linkages
+  # Introduce parentheses for linkages
   if '(' not in glycan and len(glycan) > 6:
     for k in range(1, glycan.count('-')+1):
       idx = find_nth(glycan, '-', k)
@@ -330,7 +330,7 @@ def canonicalize_iupac(glycan):
         glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+2] + ')' + glycan[idx+2:]
       elif (glycan[idx-1].isnumeric()) and bool(re.search(r'[A-Z]', glycan[idx+1])):
         glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+1] + '?)' + glycan[idx+1:]
-  #canonicalize reducing end
+  # Canonicalize reducing end
   if bool(re.search(r'[a-z]ol', glycan)):
     if 'Glcol' not in glycan:
       glycan = glycan[:-2]
@@ -338,7 +338,7 @@ def canonicalize_iupac(glycan):
       glycan = glycan[:-2] + '-ol'
   if (glycan.endswith('a') or glycan.endswith('b')) and not glycan.endswith('Rha') and not glycan.endswith('Ara'):
     glycan = glycan[:-1]
-  #handle modifications
+  # Handle modifications
   if bool(re.search(r'\[[1-9]?[SP]\][A-Z][^\(^\[]+', glycan)):
     glycan = re.sub(r'\[([1-9]?[SP])\]([A-Z][^\(^\[]+)', r'\2\1', glycan)
   if bool(re.search(r'(\)|\]|^)[1-9]?[SP][A-Z][^\(^\[]+', glycan)):
@@ -348,7 +348,7 @@ def canonicalize_iupac(glycan):
   post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', 'Fuc(?': 'Fuc(a', 'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS',
                   'GalNAcS': 'GalNAcOS'}
   glycan = multireplace(glycan, post_process)
-  #canonicalize branch ordering
+  # Canonicalize branch ordering
   if '[' in glycan:
     isos = find_isomorphs(glycan)
     glycan = choose_correct_isoform(isos)

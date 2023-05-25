@@ -1,10 +1,10 @@
 import ast
 import numpy as np
-import pandas as pd
 
 from glycowork.glycan_data.loader import lib, motif_list, df_glycan
 from glycowork.motif.graph import compare_glycans
 from glycowork.motif.annotate import annotate_glycan
+
 
 def get_insight(glycan, libr = None, motifs = None):
     """prints out meta-information about a glycan\n
@@ -19,10 +19,10 @@ def get_insight(glycan, libr = None, motifs = None):
     if motifs is None:
         motifs = motif_list
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
-    #find glycan as string or as graph in df_glycan
+    # Find glycan as string or as graph in df_glycan
     if glycan in df_glycan.glycan:
         idx = df_glycan.glycan.values.tolist().index(glycan)
-    else:       
+    else:     
         idx = np.where([compare_glycans(glycan, k, libr = libr) for k in df_glycan.glycan.values.tolist()])[0][0]
     species = ast.literal_eval(df_glycan.Species.values.tolist()[idx])
     if len(species) > 0:
@@ -54,11 +54,14 @@ def get_insight(glycan, libr = None, motifs = None):
         disease = ast.literal_eval(df_glycan.disease_association.values.tolist()[idx])
         direction = ast.literal_eval(df_glycan.disease_direction.values.tolist()[idx])
         disease_sample = ast.literal_eval(df_glycan.disease_sample.values.tolist()[idx])
-        print("\nThis glycan has been reported to be dysregulated in (disease, direction, sample): " \
-              + str([(disease[k],
-                     direction[k],
-                     disease_sample[k]) for k in range(len(disease))]))
+        print(
+            "\nThis glycan has been reported to be dysregulated in (disease, direction, sample): "
+            + str([(disease[k],
+                    direction[k],
+                    disease_sample[k]) for k in range(len(disease))])
+            )
     print("\nThat's all we can do for you at this point!")
+
 
 def glytoucan_to_glycan(ids, revert = False):
     """interconverts GlyTouCan IDs and glycans in IUPAC-condensed\n
@@ -73,10 +76,10 @@ def glytoucan_to_glycan(ids, revert = False):
     if revert:
         ids = [df_glycan.glytoucan_id.values.tolist()[df_glycan.glycan.values.tolist().index(k)[0]] for k in ids]
         if any([k not in df_glycan.glycan.values.tolist() for k in ids]):
-            print('These glycans are not in our database: ' + str([k for k in ids if k not in df_glycan.glycan.values.tolist()]))
+            print('These glycans are not in our database: ' + str([k for k in ids if k not in df_glycan.glycan]))
         return ids
     else:
-        glycans = [df_glycan.glycan.values.tolist()[df_glycan.glytoucan_id.values.tolist().index(k)] if k in df_glycan.glytoucan_id.values.tolist() else k for k in ids]
-        if any([k not in df_glycan.glytoucan_id.values.tolist() for k in ids]):
-            print('These IDs are not in our database: ' + str([k for k in ids if k not in df_glycan.glytoucan_id.values.tolist()]))
+        glycans = [df_glycan.glycan.values.tolist()[df_glycan.glytoucan_id.values.tolist().index(k)] if k in df_glycan.glytoucan_id else k for k in ids]
+        if any([k not in df_glycan.glytoucan_id for k in ids]):
+            print('These IDs are not in our database: ' + str([k for k in ids if k not in df_glycan.glytoucan_id]))
         return glycans
