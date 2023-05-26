@@ -466,30 +466,44 @@ def get_differential_expression(df, group1, group2, normalized = True,
       df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
   glycans = df.iloc[:, 0].values.tolist()
   if motifs:
+    # Motif extraction
     df_motif = annotate_dataset(df.iloc[:, 0].values.tolist(),
                                 feature_set = feature_set,
                                 condense = True)
     collect_dic = {}
     df = df.iloc[:, 1:].T
+    # Motif quantification
     for c, col in enumerate(df_motif.columns):
       indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
       temp = df.iloc[:, indices]
       temp.columns = range(temp.columns.size)
       collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
     df = pd.DataFrame(collect_dic)
+    # Deduplication
     df = clean_up_heatmap(df.T)
+    # Re-normalization
     for col in df.columns:
       df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+      
+    # Variance-based filtering of motifs
+    min_motif_variance = 0.01  # Minimum variance to include a motif in the analysis
+    motif_variances = df.var(axis = 1)
+    variable_motifs = motif_variances[motif_variances > min_motif_variance].index
+    # Subsetting df to only include motifs with enough variance
+    df = df.loc[variable_motifs]
     glycans = df.index.tolist()
+    
   df_a = df.loc[:, group1]
   df_b = df.loc[:, group2]
   if sets:
+    # Motif set enrichment
     df2 = variance_stabilization(df)
     clusters = create_correlation_network(df2.T, set_thresh)
     glycans = []
     pvals = []
     fc = []
     effect_sizes = []
+    # Testing differential expression of each set/cluster
     for cluster in clusters:
       if len(cluster) > 1:
         glycans.append(cluster)
@@ -498,6 +512,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
         fc.append(np.log2((gp2.mean(axis = 1) + 1e-8) / (gp1.mean(axis = 1) + 1e-8)).mean())
         gp1 = df2.loc[:, group1].loc[list(cluster),:]
         gp2 = df2.loc[:, group2].loc[list(cluster),:]
+        # Hotelling's T^2 test for multivariate comparisons
         statistic, p_value = hotellings_t2(gp1.values, gp2.values)
         pvals.append(p_value)
         # Calculate Mahalanobis distance as measure of effect size
@@ -511,6 +526,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
     df_b = variance_stabilization(df_b)
     pvals = [ttest_ind(df_a.iloc[k, :], df_b.iloc[k, :], equal_var = False)[1] for k in range(len(df_a))]
     effect_sizes, _ = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :]) for k in range(len(df_a))])
+  # Multiple testing correction
   pvals = multipletests(pvals, method = 'fdr_bh')[1]
   out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
