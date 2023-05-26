@@ -2335,9 +2335,7 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
 
   for match in matches:
     # Keep track of current label and position in figure
-    current_label = re.findall(r'<!--\s*(.*?)\s*-->', match)[0]
-    current_pos = '<g transform' + re.findall(r'<g transform\s*(.*?)\s*">', match)[0] + '">'
-    current_pos = current_pos.replace('scale(0.1 -0.1)', glycan_size_dict[glycan_size])
+    current_label = re.findall(r'<!--\s*(.*?)\s*-->', match)[0]    
     # Check if label is glycan
     try:
       glycan_to_nxGraph(current_label)
@@ -2351,6 +2349,8 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
       pass
     # Delete text label, append glycan figure
     if edit_svg:
+      current_pos = '<g transform' + re.findall(r'<g transform\s*(.*?)\s*">', match)[0] + '">'
+      current_pos = current_pos.replace('scale(0.1 -0.1)', glycan_size_dict[glycan_size])
       svg_tmp = svg_tmp.replace(match, '')
       if glycan_scale == '':
         d = GlycoDraw(current_label, compact = compact)
