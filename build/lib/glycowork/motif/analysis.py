@@ -510,7 +510,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
     df_a = variance_stabilization(df_a)
     df_b = variance_stabilization(df_b)
     pvals = [ttest_ind(df_a.iloc[k, :], df_b.iloc[k, :], equal_var = False)[1] for k in range(len(df_a))]
-    effect_sizes, _ = [cohen_d(df_b.iloc[k, :], df_a.iloc[k, :]) for k in range(len(df_a))]
+    effect_sizes, _ = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :]) for k in range(len(df_a))])
   pvals = multipletests(pvals, method = 'fdr_bh')[1]
   out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)

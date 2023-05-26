@@ -204,12 +204,13 @@ def annotate_dataset(glycans, motifs = None,
   if 'terminal' in feature_set:
     bag = [get_terminal_structures(glycan, libr = libr) for glycan in glycans]
     repertoire = set(unwrap(bag))
-    bag_out = pd.DataFrame([{i: j.count(i) for i in repertoire} for j in bag])
-    if '?' in ''.join(repertoire):
-      bag_out = bag_out.loc[:, ~bag_out.columns.str.contains(r'\?')]
-      shadow_glycans = [[re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in b] for b in bag]
-      shadow_bag = pd.DataFrame([{i: j.count(i) for i in repertoire if '?' in i} for j in shadow_glycans])
-      bag_out = pd.concat([bag_out, shadow_bag], axis = 1).reset_index(drop = True)
+    repertoire2 = [re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in repertoire]
+    repertoire2 = set([k for k in repertoire2 if repertoire2.count(k) > 1 and k not in repertoire])
+    repertoire.update(repertoire2)
+    bag_out = pd.DataFrame([{i: j.count(i) for i in repertoire if '?' not in i} for j in bag])
+    shadow_glycans = [[re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in b] for b in bag]
+    shadow_bag = pd.DataFrame([{i: j.count(i) for i in repertoire if '?' in i} for j in shadow_glycans])
+    bag_out = pd.concat([bag_out, shadow_bag], axis = 1).reset_index(drop = True)
     bag_out.index = glycans
     shopping_cart.append(bag_out)
   if condense:
