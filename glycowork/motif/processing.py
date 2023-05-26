@@ -365,12 +365,14 @@ def cohen_d(x, y):
     | y (list or 1D-array): comparison group containing numerical data\n
     | Returns:
     | :-
-    | Returns Cohen's d as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)
+    | Returns Cohen's d (and its variance) as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)
   """
   nx = len(x)
   ny = len(y)
   dof = nx + ny - 2
-  return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
+  d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
+  var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
+  return d, var_d
 
 
 def variance_stabilization(data):

@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 plt.style.use('default')
 from collections import Counter
-from scipy.stats import ttest_ind, f
+from scipy.stats import ttest_ind, f, norm
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
 from sklearn.impute import KNNImputer
@@ -213,8 +213,7 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
 
 def plot_embeddings(glycans, emb = None, label_list = None,
                     shape_feature = None, filepath = '', alpha = 0.8,
-                    palette = 'colorblind',
-                    **kwargs):
+                    palette = 'colorblind', **kwargs):
     """plots glycan representations for a list of glycans\n
     | Arguments:
     | :-
@@ -385,7 +384,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
 
 
 def replace_zero_with_random_gaussian_knn(df, group1_size, mean = 0.01,
-                                          std_dev = 0.01, group_mean_threshold = 1,
+                                          std_dev = 0.01, group_mean_threshold = 3,
                                           n_neighbors = 3):
     df = df.T
     # Replace zeros with NaNs temporarily
@@ -511,7 +510,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
     df_a = variance_stabilization(df_a)
     df_b = variance_stabilization(df_b)
     pvals = [ttest_ind(df_a.iloc[k, :], df_b.iloc[k, :], equal_var = False)[1] for k in range(len(df_a))]
-    effect_sizes = [cohen_d(df_b.iloc[k, :], df_a.iloc[k, :]) for k in range(len(df_a))]
+    effect_sizes, _ = [cohen_d(df_b.iloc[k, :], df_a.iloc[k, :]) for k in range(len(df_a))]
   pvals = multipletests(pvals, method = 'fdr_bh')[1]
   out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
@@ -570,3 +569,27 @@ def make_volcano(df, group1, group2, normalized = True,
                 bbox_inches = 'tight')
 
   plt.show()
+
+
+def get_meta_analysis(effect_sizes, variances):
+    """Fixed-effects model for meta-analysis of glycan effect sizes\n
+    | Arguments:
+    | :-
+    | effect_sizes (array-like): Effect sizes (e.g., Cohen's d) from each study
+    | variances (array-like): Corresponding effect size variances from each study\n
+    | Returns:
+    | :-
+    | (1) The combined effect size 
+    | (2) The p-value for the combined effect size
+    """
+    weights = 1 / np.array(variances)
+    combined_effect_size = np.sum(weights * effect_sizes) / np.sum(weights)
+
+    # Calculate standard error and z-score
+    se = np.sqrt(1 / np.sum(weights))
+    z = combined_effect_size / se
+
+    # Two-tailed p-value
+    p_value = 2 * (1 - norm.cdf(abs(z)))
+
+    return combined_effect_size, p_value
