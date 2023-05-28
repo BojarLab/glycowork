@@ -484,19 +484,21 @@ def get_differential_expression(df, group1, group2, normalized = True,
     # Re-normalization
     for col in df.columns:
       df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+  else:
+    df.set_index(df.columns.tolist()[0], inplace = True)
       
-    # Variance-based filtering of motifs
-    min_motif_variance = 0.01  # Minimum variance to include a motif in the analysis
-    motif_variances = df.var(axis = 1)
-    variable_motifs = motif_variances[motif_variances > min_motif_variance].index
-    # Subsetting df to only include motifs with enough variance
-    df = df.loc[variable_motifs]
-    glycans = df.index.tolist()
+  # Variance-based filtering of features
+  min_feature_variance = 0.01  # Minimum variance to include a feature in the analysis
+  feature_variances = df.var(axis = 1)
+  variable_features = feature_variances[feature_variances > min_feature_variance].index
+  # Subsetting df to only include features with enough variance
+  df = df.loc[variable_features]
+  glycans = df.index.tolist()
     
   df_a = df.loc[:, group1]
   df_b = df.loc[:, group2]
   if sets:
-    # Motif set enrichment
+    # Motif/sequence set enrichment
     df2 = variance_stabilization(df)
     clusters = create_correlation_network(df2.T, set_thresh)
     glycans = []
@@ -515,7 +517,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
         # Hotelling's T^2 test for multivariate comparisons
         statistic, p_value = hotellings_t2(gp1.values, gp2.values)
         pvals.append(p_value)
-        # Calculate Mahalanobis distance as measure of effect size
+        # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
         pooled_cov_inv = np.linalg.pinv((np.cov(gp1.values) + np.cov(gp2.values)) / 2)
         diff_means = (gp2.mean(axis = 1) - gp1.mean(axis = 1)).values.reshape(-1, 1)
         mahalanobis_d = np.sqrt(np.clip(diff_means.T @ pooled_cov_inv @ diff_means, 0, None))
