@@ -12,7 +12,7 @@ from sklearn.manifold import TSNE
 from sklearn.impute import KNNImputer
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
-from glycowork.motif.processing import cohen_d, mahalanobis_distance, variance_stabilization
+from glycowork.motif.processing import cohen_d, mahalanobis_distance, mahalanobis_variance, variance_stabilization
 from glycowork.motif.annotate import annotate_dataset, link_find, create_correlation_network
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -520,7 +520,8 @@ def get_differential_expression(df, group1, group2, normalized = True,
         pvals.append(hotellings_t2(gp1.values, gp2.values)[1])
         # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
         effect_sizes.append(mahalanobis_distance(gp1, gp2))
-        # still need to add variances here
+        if effect_size_variance:
+          variances.append(mahalanobis_variance(gp1, gp2))
   else:
     fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
     df_a = variance_stabilization(df_a)

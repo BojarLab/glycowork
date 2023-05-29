@@ -379,16 +379,50 @@ def mahalanobis_distance(x, y):
   """calculates effect size between two groups in a multivariate comparison\n
     | Arguments:
     | :-
-    | x (list or 1D-array): comparison group containing numerical data
-    | y (list or 1D-array): comparison group containing numerical data\n
+    | x (list or 1D-array or dataframe): comparison group containing numerical data
+    | y (list or 1D-array or dataframe): comparison group containing numerical data\n
     | Returns:
     | :-
     | Returns Mahalanobis distance as a measure of effect size
   """
-  pooled_cov_inv = np.linalg.pinv((np.cov(x.values) + np.cov(y.values)) / 2)
-  diff_means = (y.mean(axis = 1) - x.mean(axis = 1)).values.reshape(-1, 1)
+  if isinstance(x, pd.DataFrame):
+    x = x.values
+  if isinstance(y, pd.DataFrame):
+    y = y.values
+  pooled_cov_inv = np.linalg.pinv((np.cov(x) + np.cov(y)) / 2)
+  diff_means = (np.mean(y, axis = 1) - np.mean(x, axis = 1)).reshape(-1, 1)
   mahalanobis_d = np.sqrt(np.clip(diff_means.T @ pooled_cov_inv @ diff_means, 0, None))
   return mahalanobis_d[0][0]
+
+
+def mahalanobis_variance(x, y):
+  """Estimates variance of Mahalanobis distance via bootstrapping\n
+    | Arguments:
+    | :-
+    | x (list or 1D-array or dataframe): comparison group containing numerical data
+    | y (list or 1D-array or dataframe): comparison group containing numerical data\n
+    | Returns:
+    | :-
+    | Returns Mahalanobis distance as a measure of effect size
+  """
+  # Combine gp1 and gp2 into a single matrix
+  data = np.concatenate((x, y), axis = 0)
+  # Initialize an empty list to store the bootstrap samples
+  bootstrap_samples = []
+  # Perform bootstrap resampling
+  n_iterations = 1000
+  for _ in range(n_iterations):
+      # Generate a random bootstrap sample
+      sample = data[np.random.choice(range(data.shape[0]), size = data.shape[0], replace = True)]
+      # Split the bootstrap sample into two groups
+      x_sample = sample[:x.shape[0]]
+      y_sample = sample[x.shape[0]:]
+      # Calculate the Mahalanobis distance for the bootstrap sample
+      bootstrap_samples.append(mahalanobis_distance(x_sample, y_sample))
+  # Convert the list of bootstrap samples into a numpy array
+  bootstrap_samples = np.array(bootstrap_samples)
+  # Estimate the variance of the Mahalanobis distance
+  return np.var(bootstrap_samples)
 
 
 def variance_stabilization(data):

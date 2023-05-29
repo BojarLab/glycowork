@@ -12,7 +12,7 @@ from sklearn.manifold import TSNE
 from sklearn.impute import KNNImputer
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
-from glycowork.motif.processing import cohen_d, mahalanobis_distance, variance_stabilization
+from glycowork.motif.processing import cohen_d, mahalanobis_distance, mahalanobis_variance, variance_stabilization
 from glycowork.motif.annotate import annotate_dataset, link_find, create_correlation_network
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -445,7 +445,8 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
   | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:False
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
-  | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9\n
+  | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
+  | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -453,6 +454,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | (ii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
   | (iii) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction)
   | (iv) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
+  | (v) [only if effect_size_variance=True] Effect size variance
   """
   group1 = [df.columns.tolist()[k] for k in group1]
   group2 = [df.columns.tolist()[k] for k in group2]
@@ -518,7 +520,8 @@ def get_differential_expression(df, group1, group2, normalized = True,
         pvals.append(hotellings_t2(gp1.values, gp2.values)[1])
         # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
         effect_sizes.append(mahalanobis_distance(gp1, gp2))
-        # still need to add variances here
+        if effect_size_variance:
+          variances.append(mahalanobis_variance(gp1, gp2))
   else:
     fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
     df_a = variance_stabilization(df_a)
