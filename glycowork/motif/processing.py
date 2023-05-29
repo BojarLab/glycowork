@@ -375,6 +375,22 @@ def cohen_d(x, y):
   return d, var_d
 
 
+def mahalanobis_distance(x, y):
+  """calculates effect size between two groups in a multivariate comparison\n
+    | Arguments:
+    | :-
+    | x (list or 1D-array): comparison group containing numerical data
+    | y (list or 1D-array): comparison group containing numerical data\n
+    | Returns:
+    | :-
+    | Returns Mahalanobis distance as a measure of effect size
+  """
+  pooled_cov_inv = np.linalg.pinv((np.cov(x.values) + np.cov(y.values)) / 2)
+  diff_means = (y.mean(axis = 1) - x.mean(axis = 1)).values.reshape(-1, 1)
+  mahalanobis_d = np.sqrt(np.clip(diff_means.T @ pooled_cov_inv @ diff_means, 0, None))
+  return mahalanobis_d[0][0]
+
+
 def variance_stabilization(data):
   """Variance stabilization normalization\n
   """

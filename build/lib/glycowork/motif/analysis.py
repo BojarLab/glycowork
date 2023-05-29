@@ -12,7 +12,7 @@ from sklearn.manifold import TSNE
 from sklearn.impute import KNNImputer
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
-from glycowork.motif.processing import cohen_d, variance_stabilization
+from glycowork.motif.processing import cohen_d, mahalanobis_distance, variance_stabilization
 from glycowork.motif.annotate import annotate_dataset, link_find, create_correlation_network
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -433,7 +433,7 @@ def hotellings_t2(group1, group2):
 
 def get_differential_expression(df, group1, group2, normalized = True,
                                 motifs = False, feature_set = ['exhaustive', 'known'],
-                                impute = False, sets = False, set_thresh = 0.9):
+                                impute = False, sets = False, set_thresh = 0.9, effect_size_variance = False):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -515,24 +515,23 @@ def get_differential_expression(df, group1, group2, normalized = True,
         gp1 = df2.loc[:, group1].loc[list(cluster),:]
         gp2 = df2.loc[:, group2].loc[list(cluster),:]
         # Hotelling's T^2 test for multivariate comparisons
-        statistic, p_value = hotellings_t2(gp1.values, gp2.values)
-        pvals.append(p_value)
+        pvals.append(hotellings_t2(gp1.values, gp2.values)[1])
         # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
-        pooled_cov_inv = np.linalg.pinv((np.cov(gp1.values) + np.cov(gp2.values)) / 2)
-        diff_means = (gp2.mean(axis = 1) - gp1.mean(axis = 1)).values.reshape(-1, 1)
-        mahalanobis_d = np.sqrt(np.clip(diff_means.T @ pooled_cov_inv @ diff_means, 0, None))
-        effect_sizes.append(mahalanobis_d[0][0])
+        effect_sizes.append(mahalanobis_distance(gp1, gp2))
+        # still need to add variances here
   else:
     fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
     df_a = variance_stabilization(df_a)
     df_b = variance_stabilization(df_b)
     pvals = [ttest_ind(df_a.iloc[k, :], df_b.iloc[k, :], equal_var = False)[1] for k in range(len(df_a))]
-    effect_sizes, _ = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :]) for k in range(len(df_a))])
+    effect_sizes, variances = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :]) for k in range(len(df_a))])
   # Multiple testing correction
   pvals = multipletests(pvals, method = 'fdr_bh')[1]
   out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
   out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'Effect size']
+  if effect_size_variance:
+      out['Effect size variance'] = variances
   out = out.dropna()
   return out.sort_values(by = 'corr p-val')
 
