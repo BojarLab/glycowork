@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 plt.style.use('default')
 from collections import Counter
-from scipy.stats import ttest_ind, f, norm
+from scipy.stats import ttest_ind, ttest_rel, f, norm
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
 from sklearn.impute import KNNImputer
@@ -432,7 +432,7 @@ def hotellings_t2(group1, group2):
 
 
 def get_differential_expression(df, group1, group2, normalized = True,
-                                motifs = False, feature_set = ['exhaustive', 'known'],
+                                motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = False, sets = False, set_thresh = 0.9, effect_size_variance = False):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
@@ -443,6 +443,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
   | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:False
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
   | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
@@ -526,7 +527,11 @@ def get_differential_expression(df, group1, group2, normalized = True,
     fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
     df_a = variance_stabilization(df_a)
     df_b = variance_stabilization(df_b)
-    pvals = [ttest_ind(df_a.iloc[k, :], df_b.iloc[k, :], equal_var = False)[1] for k in range(len(df_a))]
+    if paired:
+        assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
+        pvals = [ttest_rel(df_a.iloc[k, :], df_b.iloc[k, :])[1] for k in range(len(df_a))]
+    else:
+        pvals = [ttest_ind(df_a.iloc[k, :], df_b.iloc[k, :], equal_var = False)[1] for k in range(len(df_a))]
     effect_sizes, variances = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :]) for k in range(len(df_a))])
   # Multiple testing correction
   pvals = multipletests(pvals, method = 'fdr_bh')[1]
