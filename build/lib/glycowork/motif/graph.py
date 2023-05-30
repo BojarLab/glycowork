@@ -50,14 +50,9 @@ def evaluate_adjacency(glycan_part, adjustment):
   """
   last_char = glycan_part[-1]
   len_glycan_part = len(glycan_part)
-  # Check whether glycoletters are adjacent in the main chain
-  if last_char in {'(', ')'} and len_glycan_part < 2+adjustment:
-    return True
-  # Check whether glycoletters are connected but separated by a branch delimiter
-  elif last_char == ']':
-    if glycan_part[-2] in {'(', ')'} and len_glycan_part-1 < 2+adjustment:
-      return True
-  return False
+  # Check whether (i) glycoletters are adjacent in the main chain or (ii) whether glycoletters are connected but separated by a branch delimiter
+  return ((last_char in {'(', ')'} and len_glycan_part < 2+adjustment) or 
+          (last_char == ']' and glycan_part[-2] in {'(', ')'} and len_glycan_part-1 < 2+adjustment))
 
 
 def glycan_to_graph(glycan):
@@ -83,9 +78,10 @@ def glycan_to_graph(glycan):
   glycan_indexes = {str(i): glycan.index(str(i)) for i in range(n)}
   # Loop through each pair of glycoletters
   for k in range(n):
+    # Integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
+    adjustment = 2 if k >= 100 else 1 if k >= 10 else 0
+    adjustment2 = 2+adjustment
     for j in range(k+1, n):
-      # Integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
-      adjustment = 2 if k >= 100 else 1 if k >= 10 else 0
       # Subset the part of the glycan that is bookended by k and j
       glycan_part = glycan[glycan_indexes[str(k)]+1:glycan_indexes[str(j)]]
       # Immediately adjacent residues
@@ -94,7 +90,7 @@ def glycan_to_graph(glycan):
         continue
       # Adjacent residues separated by branches in the string
       res = bracket_removal(glycan_part)
-      if len(res) <= 2+adjustment:
+      if len(res) <= adjustment2:
         if evaluate_adjacency(res, adjustment):
           adj_matrix[k, j] = 1
           continue
@@ -117,36 +113,30 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   if libr is None:
     libr = lib
   # This allows to make glycan graphs of motifs ending in a linkage
-  if glycan[-1] == ')':
-    cache = True
-    glycan = glycan + 'Hex'
-  else:
-    cache = False
+  cache = glycan[-1] == ')'
+  if cache:
+    glycan += 'Hex'
   # Map glycan string to node labels and adjacency matrix
   node_dict, adj_matrix = glycan_to_graph(glycan)
   # Convert adjacency matrix to networkx graph
+  g1 = nx.from_numpy_array(adj_matrix) if len(node_dict) > 1 else nx.Graph()
   if len(node_dict) > 1:
-    g1 = nx.from_numpy_array(adj_matrix)
     # Needed for compatibility with monosaccharide-only graphs (size = 1)
     for n1, n2, d in g1.edges(data = True):
       del d['weight']
   else:
-    g1 = nx.Graph()
     g1.add_node(0)
   # Remove the helper monosaccharide if used
-  if cache:
-    if glycan[-1] == 'x':
-      del node_dict[len(g1.nodes) - 1]
-      g1.remove_node(len(g1.nodes) - 1)
+  if cache and glycan[-1] == 'x':
+    del node_dict[len(g1.nodes) - 1]
+    g1.remove_node(len(g1.nodes) - 1)
   # Add node labels
   node_attributes = {i: {'labels': libr[k], 'string_labels': k} for i, k in enumerate(node_dict.values())}
   nx.set_node_attributes(g1, node_attributes)
-  if termini == 'ignore':
-    pass
-  elif termini == 'calc':
+  if termini == 'calc':
     nx.set_node_attributes(g1, {k: 'terminal' if g1.degree[k] == 1 else 'internal' for k in g1.nodes()}, 'termini')
   elif termini == 'provided':
-    nx.set_node_attributes(g1, {k: j for k, j in zip(g1.nodes(), termini_list)}, 'termini')
+    nx.set_node_attributes(g1, dict(zip(g1.nodes(), termini_list)), 'termini')
   return g1
 
 
@@ -163,16 +153,13 @@ def glycan_to_nxGraph(glycan, libr = None,
   | :-
   | Returns networkx graph object of glycan
   """
-  if libr is None:
-    libr = lib
   if '{' in glycan:
-    parts = glycan.replace('}', '{').split('{')
     parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
-                                   termini_list = termini_list) for k in parts if len(k) > 0]
+                                   termini_list = termini_list) for k in glycan.replace('}', '{').split('{') if k]
     len_org = len(parts[-1])
-    for p in range(len(parts)-1):
-      parts[p] = nx.relabel_nodes(parts[p], {pn: pn+len_org for pn in parts[p].nodes()})
-      len_org += len(parts[p])
+    for p in parts[:-1]:
+      p = nx.relabel_nodes(p, {pn: pn+len_org for pn in p.nodes()})
+      len_org += len(p)
     g1 = nx.algorithms.operators.all.compose_all(parts)
   else:
     g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
