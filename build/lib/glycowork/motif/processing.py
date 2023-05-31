@@ -357,34 +357,47 @@ def canonicalize_iupac(glycan):
   return glycan
 
 
-def cohen_d(x, y):
+def cohen_d(x, y, paired = False):
   """calculates effect size between two groups\n
     | Arguments:
     | :-
     | x (list or 1D-array): comparison group containing numerical data
-    | y (list or 1D-array): comparison group containing numerical data\n
+    | y (list or 1D-array): comparison group containing numerical data
+    | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
     | Returns:
     | :-
     | Returns Cohen's d (and its variance) as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)
   """
-  nx = len(x)
-  ny = len(y)
-  dof = nx + ny - 2
-  d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
-  var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
+  if paired:
+    assert len(x) == len(y), "For paired samples, the size of x and y should be the same"
+    diff = np.array(x) - np.array(y)
+    n = len(diff)
+    d = np.mean(diff) / np.std(diff, ddof = 1)
+    var_d = 1 / n + d**2 / (2 * n)
+  else:
+    nx = len(x)
+    ny = len(y)
+    dof = nx + ny - 2
+    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
+    var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
   return d, var_d
 
 
-def mahalanobis_distance(x, y):
+def mahalanobis_distance(x, y, paired = False):
   """calculates effect size between two groups in a multivariate comparison\n
     | Arguments:
     | :-
     | x (list or 1D-array or dataframe): comparison group containing numerical data
-    | y (list or 1D-array or dataframe): comparison group containing numerical data\n
+    | y (list or 1D-array or dataframe): comparison group containing numerical data
+    | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
     | Returns:
     | :-
     | Returns Mahalanobis distance as a measure of effect size
   """
+  if paired:
+    assert x.shape == y.shape, "For paired samples, the size of x and y should be the same"
+    x = np.array(x) - np.array(y)
+    y = np.zeros_like(x)
   if isinstance(x, pd.DataFrame):
     x = x.values
   if isinstance(y, pd.DataFrame):
@@ -395,12 +408,13 @@ def mahalanobis_distance(x, y):
   return mahalanobis_d[0][0]
 
 
-def mahalanobis_variance(x, y):
+def mahalanobis_variance(x, y, paired = False):
   """Estimates variance of Mahalanobis distance via bootstrapping\n
     | Arguments:
     | :-
     | x (list or 1D-array or dataframe): comparison group containing numerical data
-    | y (list or 1D-array or dataframe): comparison group containing numerical data\n
+    | y (list or 1D-array or dataframe): comparison group containing numerical data
+    | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
     | Returns:
     | :-
     | Returns Mahalanobis distance as a measure of effect size
@@ -418,7 +432,7 @@ def mahalanobis_variance(x, y):
       x_sample = sample[:x.shape[0]]
       y_sample = sample[x.shape[0]:]
       # Calculate the Mahalanobis distance for the bootstrap sample
-      bootstrap_samples.append(mahalanobis_distance(x_sample, y_sample))
+      bootstrap_samples.append(mahalanobis_distance(x_sample, y_sample, paired = paired))
   # Convert the list of bootstrap samples into a numpy array
   bootstrap_samples = np.array(bootstrap_samples)
   # Estimate the variance of the Mahalanobis distance

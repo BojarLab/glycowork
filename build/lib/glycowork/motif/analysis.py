@@ -404,9 +404,13 @@ def replace_zero_with_random_gaussian_knn(df, group1_size, mean = 0.01,
     return df.T
 
 
-def hotellings_t2(group1, group2):
+def hotellings_t2(group1, group2, paired = False):
   """Hotelling's T^2 test (the t-test for multivariate comparisons)\n
   """
+  if paired:
+    assert group1.shape == group2.shape, "For paired samples, the size of group1 and group2 should be the same"
+    group1 = np.array(group1) - np.array(group2)
+    group2 = 0
   n1, p = group1.shape
   n2, _ = group2.shape
   # Calculate the means of each group
@@ -514,17 +518,23 @@ def get_differential_expression(df, group1, group2, normalized = True,
         glycans.append(cluster)
         gp1 = df_a.loc[list(cluster), :]
         gp2 = df_b.loc[list(cluster), :]
-        fc.append(np.log2((gp2.mean(axis = 1) + 1e-8) / (gp1.mean(axis = 1) + 1e-8)).mean())
+        if paired:
+            fc.append(np.log2(((gp2 + 1e-8) / (gp1 + 1e-8)).mean(axis = 1)).mean())
+        else:
+            fc.append(np.log2((gp2.mean(axis = 1) + 1e-8) / (gp1.mean(axis = 1) + 1e-8)).mean())
         gp1 = df2.loc[:, group1].loc[list(cluster),:]
         gp2 = df2.loc[:, group2].loc[list(cluster),:]
         # Hotelling's T^2 test for multivariate comparisons
-        pvals.append(hotellings_t2(gp1.values, gp2.values)[1])
+        pvals.append(hotellings_t2(gp1.values, gp2.values, paired = paired)[1])
         # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
-        effect_sizes.append(mahalanobis_distance(gp1, gp2))
+        effect_sizes.append(mahalanobis_distance(gp1, gp2, paired = paired))
         if effect_size_variance:
-          variances.append(mahalanobis_variance(gp1, gp2))
+          variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
   else:
-    fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
+    if paired:
+        fc = np.log2((df_b / df_a).mean(axis = 1)).tolist()
+    else:
+        fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
     df_a = variance_stabilization(df_a)
     df_b = variance_stabilization(df_b)
     if paired:
@@ -532,7 +542,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
         pvals = [ttest_rel(df_a.iloc[k, :], df_b.iloc[k, :])[1] for k in range(len(df_a))]
     else:
         pvals = [ttest_ind(df_a.iloc[k, :], df_b.iloc[k, :], equal_var = False)[1] for k in range(len(df_a))]
-    effect_sizes, variances = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :]) for k in range(len(df_a))])
+    effect_sizes, variances = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :], paired = paired) for k in range(len(df_a))])
   # Multiple testing correction
   pvals = multipletests(pvals, method = 'fdr_bh')[1]
   out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
