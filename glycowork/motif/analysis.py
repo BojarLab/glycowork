@@ -410,17 +410,21 @@ def hotellings_t2(group1, group2, paired = False):
   if paired:
     assert group1.shape == group2.shape, "For paired samples, the size of group1 and group2 should be the same"
     group1 = np.array(group1) - np.array(group2)
-    group2 = 0
+    group2 = None
+  # Calculate the means and covariances of each group
   n1, p = group1.shape
-  n2, _ = group2.shape
-  # Calculate the means of each group
   mean1 = np.mean(group1, axis = 0)
-  mean2 = np.mean(group2, axis = 0)
+  cov1 = np.cov(group1.T)
+  if group2 is not None:
+    n2, _ = group2.shape
+    mean2 = np.mean(group2, axis = 0)
+    cov2 = np.cov(group2.T)
+  else:
+    n2 = 0
+    mean2 = np.zeros_like(mean1)
+    cov2 = np.zeros_like(cov1)
   # Calculate the difference between the means
   diff = mean1 - mean2
-  # Calculate the covariance matrices of each group
-  cov1 = np.cov(group1.T)
-  cov2 = np.cov(group2.T)
   # Calculate the pooled covariance matrix
   pooled_cov = ((n1 - 1) * cov1 + (n2 - 1) * cov2) / (n1 + n2 - 2)
   pooled_cov += np.eye(p) * 1e-6
@@ -437,7 +441,7 @@ def hotellings_t2(group1, group2, paired = False):
 
 def get_differential_expression(df, group1, group2, normalized = True,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
-                                impute = False, sets = False, set_thresh = 0.9, effect_size_variance = False):
+                                impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -448,7 +452,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:False
+  | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
   | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
   | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False\n
@@ -523,7 +527,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
         gp1 = df_a.loc[list(cluster), :]
         gp2 = df_b.loc[list(cluster), :]
         if paired:
-            fc.append(np.log2(((gp2 + 1e-8) / (gp1 + 1e-8)).mean(axis = 1)).mean())
+            fc.append(np.log2(((gp2.values + 1e-8) / (gp1.values + 1e-8)).mean(axis = 1)).mean())
         else:
             fc.append(np.log2((gp2.mean(axis = 1) + 1e-8) / (gp1.mean(axis = 1) + 1e-8)).mean())
         gp1 = df2.loc[:, group1].loc[list(cluster), :]
@@ -536,7 +540,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
           variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
   else:
     if paired:
-        fc = np.log2((df_b / df_a).mean(axis = 1)).tolist()
+        fc = np.log2(((df_b.values + 1e-8)/ (df_a.values + 1e-8)).mean(axis = 1)).tolist()
     else:
         fc = np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1)).tolist()
     df_a = variance_stabilization(df_a)
