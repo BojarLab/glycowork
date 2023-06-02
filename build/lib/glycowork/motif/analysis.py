@@ -442,8 +442,8 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | Arguments:
   | :-
   | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
-  | group1 (list): list of column indices for the first group of samples, usually the control
-  | group2 (list): list of column indices for the second group of samples
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
   | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
@@ -461,9 +461,13 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | (iv) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
   | (v) [only if effect_size_variance=True] Effect size variance
   """
-  group1 = [df.columns.tolist()[k] for k in group1]
-  group2 = [df.columns.tolist()[k] for k in group2]
+  if isinstance(group1[0], str):
+      pass
+  else:
+    group1 = [df.columns.tolist()[k] for k in group1]
+    group2 = [df.columns.tolist()[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2]
+  df.fillna(0, inplace = True)
   if impute:
     thresh = int(round(len(group1+group2)/2))
     df = df[df.apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]

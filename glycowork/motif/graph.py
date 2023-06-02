@@ -157,8 +157,8 @@ def glycan_to_nxGraph(glycan, libr = None,
     parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
                                    termini_list = termini_list) for k in glycan.replace('}', '{').split('{') if k]
     len_org = len(parts[-1])
-    for p in parts[:-1]:
-      p = nx.relabel_nodes(p, {pn: pn+len_org for pn in p.nodes()})
+    for i, p in enumerate(parts[:-1]):
+      parts[i] = nx.relabel_nodes(p, {pn: pn+len_org for pn in p.nodes()})
       len_org += len(p)
     g1 = nx.algorithms.operators.all.compose_all(parts)
   else:
