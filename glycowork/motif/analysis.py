@@ -426,12 +426,19 @@ def hotellings_t2(group1, group2, paired = False):
   # Calculate the difference between the means
   diff = mean1 - mean2
   # Calculate the pooled covariance matrix
-  pooled_cov = ((n1 - 1) * cov1 + (n2 - 1) * cov2) / (n1 + n2 - 2)
-  pooled_cov += np.eye(p) * 1e-6
+  denom = (n1 + n2 - 2)
+  if denom < 1:
+      pooled_cov = cov1
+  else:
+      pooled_cov = ((n1 - 1) * cov1 + (n2 - 1) * cov2) / denom
+      pooled_cov += np.eye(p) * 1e-6
   # Calculate the Hotelling's T^2 statistic
-  T2 = (n1 * n2) / (n1 + n2) * diff @ np.linalg.inv(pooled_cov) @ diff.T
+  T2 = (n1 * n2) / (n1 + n2) * diff @ np.linalg.pinv(pooled_cov) @ diff.T
   # Convert the T^2 statistic to an F statistic
-  F = T2 * (n1 + n2 - p - 1) / ((n1 + n2 - 2) * p)
+  if denom < 1:
+      F = 0
+  else:
+      F = T2 * (n1 + n2 - p - 1) / (denom * p)
   if F == 0:
     return F, 1.0
   # Calculate the p-value of the F statistic
