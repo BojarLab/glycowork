@@ -295,28 +295,28 @@ def canonicalize_iupac(glycan):
   if bool(re.search(r'\([A-Z3-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
   # Canonicalize linkage uncertainty
-  # Open linkages
+  # Open linkages (e.g., "c-")
   if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
     glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
-  # Open linkages2
+  # Open linkages2 (e.g., "1-")
   if bool(re.search(r'[1-2]\-\)', glycan)):
     glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
-  # Missing linkages
+  # Missing linkages (e.g., "c)")
   if bool(re.search(r'[^hr][a-b][\(\)]', glycan)):
     glycan = re.sub(r'([a-b])([\(\)])', r'\1?1-?\2', glycan)
-  # Open linkages in front of branches
+  # Open linkages in front of branches (e.g., "1-[")
   if bool(re.search(r'[0-9]\-[\[\]]', glycan)):
     glycan = re.sub(r'([0-9])\-([\[\]])', r'\1-?\2', glycan)
-  # Open linkages in front of branches (with missing information)
+  # Open linkages in front of branches (with missing information) (e.g., "c-[")
   if bool(re.search(r'[a-z]\-[\[\]]', glycan)):
     glycan = re.sub(r'([a-z])\-([\[\]])', r'\1?1-?\2', glycan)
-  # Branches without linkages
+  # Branches without linkages (e.g., "[GalGlcNAc]")
   if bool(re.search(r'\[([a-zA-Z])+\]', glycan)):
     glycan = re.sub(r'(\[[a-zA-Z]+)(\])', r'\1?1-?\2', glycan)
-  # Missing linkages in front of branches
+  # Missing linkages in front of branches (e.g., "c[G")
   if bool(re.search(r'[a-z]\[[A-Z]', glycan)):
     glycan = re.sub(r'([a-z])(\[[A-Z])', r'\1?1-?\2', glycan)
-  # Missing anomer info
+  # Missing anomer info (e.g., "(1")
   if bool(re.search(r'\([1-2]', glycan)):
     glycan = re.sub(r'(\()([1-2])', r'\1?\2', glycan)
   # Smudge uncertainty

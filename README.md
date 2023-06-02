@@ -6,7 +6,7 @@ glycowork
 ![CI](https://github.com/BojarLab/glycowork/workflows/CI/badge.svg)
 [![HitCount](https://hits.dwyl.com/BojarLab/glycowork.svg?style=flat-square)](http://hits.dwyl.com/BojarLab/glycowork)![PyPI -
 Downloads](https://img.shields.io/pypi/dm/glycowork?color=brightgreen.png)[![contributions
-welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/dwyl/esta/issues)
+welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/BojarLab/glycowork/issues)
 
 <img src="./glycowork_badge_wo_bg.jpg" width="200" />
 
@@ -340,30 +340,32 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <th>entropyStation</th>
       <th>N</th>
       <th>dens</th>
-      <th>GalNAc</th>
       <th>Fuc</th>
+      <th>GalNAc</th>
       <th>GlcN</th>
+      <th>GlcN1P</th>
+      <th>GlcN4P</th>
+      <th>GlcNAc</th>
       <th>GlcNAcA</th>
       <th>Kdo</th>
-      <th>GlcN1P</th>
       <th>Man</th>
-      <th>GlcN4P</th>
       <th>Xyl</th>
-      <th>GlcNAc</th>
-      <th>GlcNAcA(a1-4)Kdo</th>
-      <th>Kdo(a2-6)GlcN4P</th>
-      <th>GlcN(b1-7)Kdo</th>
-      <th>Kdo(a2-4)Kdo</th>
-      <th>Fuc(a1-3)GlcNAc</th>
-      <th>Man(a1-6)Man</th>
-      <th>Man(a1-2)Man</th>
-      <th>GlcNAc(b1-4)GlcNAc</th>
       <th>Man(a1-3)Man</th>
+      <th>Man(a1-6)Man</th>
       <th>Xyl(b1-2)Man</th>
-      <th>Kdo(a2-5)Kdo</th>
       <th>Man(b1-4)GlcNAc</th>
-      <th>GlcN4P(b1-6)GlcN1P</th>
+      <th>GlcNAc(b1-4)GlcNAc</th>
+      <th>Fuc(a1-3)GlcNAc</th>
+      <th>Man(a1-2)Man</th>
       <th>GalNAc(a1-4)GlcNAcA</th>
+      <th>GlcNAcA(a1-4)Kdo</th>
+      <th>GlcN(b1-7)Kdo</th>
+      <th>Kdo(a2-5)Kdo</th>
+      <th>Kdo(a2-4)Kdo</th>
+      <th>Kdo(a2-6)GlcN4P</th>
+      <th>GlcN4P(b1-6)GlcN1P</th>
+      <th>Man(a1-?)Man</th>
+      <th>Kdo(a2-?)Kdo</th>
     </tr>
   </thead>
   <tbody>
@@ -569,29 +571,31 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>-2.075921</td>
       <td>13.0</td>
       <td>12.0</td>
-      <td>0</td>
       <td>1</td>
+      <td>0</td>
       <td>2</td>
       <td>0</td>
+      <td>0</td>
+      <td>2</td>
       <td>0</td>
       <td>0</td>
       <td>3</td>
-      <td>0</td>
       <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
       <td>2</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
-      <td>1</td>
-      <td>1</td>
-      <td>0</td>
-      <td>1</td>
-      <td>1</td>
-      <td>1</td>
-      <td>0</td>
-      <td>1</td>
-      <td>0</td>
       <td>0</td>
     </tr>
     <tr>
@@ -801,9 +805,16 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>2</td>
       <td>0</td>
       <td>0</td>
+      <td>2</td>
+      <td>0</td>
       <td>0</td>
       <td>6</td>
       <td>0</td>
+      <td>2</td>
+      <td>1</td>
+      <td>0</td>
+      <td>1</td>
+      <td>1</td>
       <td>0</td>
       <td>2</td>
       <td>0</td>
@@ -811,14 +822,9 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>0</td>
-      <td>1</td>
-      <td>1</td>
-      <td>1</td>
-      <td>1</td>
       <td>0</td>
       <td>0</td>
-      <td>1</td>
-      <td>0</td>
+      <td>5</td>
       <td>0</td>
     </tr>
     <tr>
@@ -1023,20 +1029,17 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>-2.688625</td>
       <td>15.0</td>
       <td>14.0</td>
-      <td>1</td>
       <td>0</td>
+      <td>1</td>
       <td>4</td>
       <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
       <td>3</td>
-      <td>1</td>
       <td>0</td>
-      <td>1</td>
       <td>0</td>
-      <td>1</td>
-      <td>1</td>
-      <td>1</td>
-      <td>1</td>
-      <td>1</td>
+      <td>0</td>
       <td>0</td>
       <td>0</td>
       <td>0</td>
@@ -1044,9 +1047,14 @@ out = annotate_dataset(glycans, feature_set = ['known', 'graph', 'exhaustive']).
       <td>0</td>
       <td>0</td>
       <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
+      <td>1</td>
       <td>0</td>
-      <td>1</td>
-      <td>1</td>
+      <td>2</td>
     </tr>
   </tbody>
 </table>
@@ -1072,9 +1080,9 @@ print(get_terminal_structures('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-
     ['Man(a1-3)', 'Man(a1-6)', 'Fuc(a1-6)']
 
 ``` python
-#given a composition, find matching glycan structures in sugarbase; can be set to species-specific structures
+#given a composition, find matching glycan structures in SugarBase; specific for glycan classes and taxonomy
 from glycowork.motif.tokenization import compositions_to_structures
-print(compositions_to_structures([{'Hex':3, 'HexNAc':4}], reducing_end = 'GlcNAc'))
+print(compositions_to_structures([{'Hex':3, 'HexNAc':4}], glycan_class = 'N'))
 
 #or we could calculate the mass of this composition
 from glycowork.motif.tokenization import composition_to_mass
@@ -1083,17 +1091,23 @@ print(composition_to_mass({'Hex':3, 'HexNAc':4}))
 ```
 
     0 compositions could not be matched. Run with verbose = True to see which compositions.
-                                                  glycan  abundance
-    0  GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Ma...          0
-    1  GlcNAc(?1-?)Man(a1-3)[GlcNAc(?1-?)Man(a1-6)]Ma...          0
-    2  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
-    3  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
-    4  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
-    5  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][G...          0
-    6  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4...          0
-    7  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]...          0
-    8  GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-...          0
-    9  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
+                                                   glycan  abundance
+    0   GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Ma...          0
+    1   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
+    2   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][G...          0
+    3   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4...          0
+    4   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]...          0
+    5   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
+    6   GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
+    7   GlcNAc(b1-2)Man(a1-6)[Man(a1-3)][GlcNAc(b1-4)]...          0
+    8   Man(a1-3)[GlcNAc(b1-4)][GlcNAc(b1-2)Man(a1-6)]...          0
+    9   GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-...          0
+    10  GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[Man(a1-6)]...          0
+    11  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
+    12  GlcNAc(?1-?)Man(a1-3)[GlcNAc(?1-?)Man(a1-6)]Ma...          0
+    13  HexNAc(?1-?)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Ma...          0
+    14  Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-6)]Man(a1-6)]...          0
+    15  GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Ma...          0
 
     Mass of the composition Hex3HexNAc4
     1316.4865545999999
