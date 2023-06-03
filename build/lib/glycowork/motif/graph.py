@@ -280,8 +280,8 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   """returns True if motif is in glycan and False if not\n
   | Arguments:
   | :-
-  | glycan (string): glycan in IUPAC-condensed format or as graph in NetworkX format
-  | motif (string): glycan motif in IUPAC-condensed format
+  | glycan (string or networkx): glycan in IUPAC-condensed format or as graph in NetworkX format
+  | motif (string or networkx): glycan motif in IUPAC-condensed format or as graph in NetworkX format
   | libr (dict): dictionary of form glycoletter:index
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
@@ -296,9 +296,9 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     libr = lib
   if wildcard_list:
     wildcard_list = [libr[k] for k in wildcard_list]
-  motif_comp = min_process_glycans([motif])[0]
   len_libr = len(libr)
   if isinstance(glycan, str):
+    motif_comp = min_process_glycans([motif])[0]
     if wildcards_ptm:
       glycan = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
       motif = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', motif).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
@@ -311,12 +311,9 @@ def subgraph_isomorphism(glycan, motif, libr = None,
       g1 = glycan_to_nxGraph(glycan, libr = libr)
       g2 = glycan_to_nxGraph(motif, libr = libr)
   else:
+    motif_comp = nx.get_node_attributes(motif, "string_labels").values()
     g1 = copy.deepcopy(glycan)
-    if extra == 'termini':
-      g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided',
-                             termini_list = termini_list)
-    else:
-      g2 = glycan_to_nxGraph(motif, libr = libr)
+    g2 = motif
 
   # Check whether length of glycan is larger or equal than the motif
   if len(g1.nodes) >= len(g2.nodes):

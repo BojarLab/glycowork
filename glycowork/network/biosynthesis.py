@@ -375,7 +375,7 @@ def find_shortest_path(goal_glycan, glycan_list, graph_dic, libr = None,
   for k in glycan_list:
     # For each glycan, check whether it could constitute a precursor (i.e., is it a sub-graph + does it stem from the correct root)
     if len(k) < len(goal_glycan) and goal_glycan[-5:] == k[-5:]:
-      if subgraph_isomorphism(ggraph, k, libr = libr):
+      if subgraph_isomorphism(ggraph, safe_index(k, graph_dic, libr = libr), libr = libr):
         try:
           # Finding a path through shells of generated virtual nodes
           virtual_edges, edge_labels = find_path(goal_glycan, k, graph_dic, libr = libr,
@@ -610,7 +610,7 @@ def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, lib
       r_target = ''
       g_node = safe_index(node, graph_dic, libr = libr)
       for r in real_nodes:
-        if subgraph_isomorphism(g_node, r, libr = libr):
+        if subgraph_isomorphism(g_node, safe_index(r, graph_dic, libr = libr), libr = libr):
           r_target = r
           break
         else:

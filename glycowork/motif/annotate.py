@@ -67,7 +67,7 @@ def estimate_lower_bound(glycans, motifs):
 
 
 def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
-                    wildcard_list = [], termini_list = []):
+                    wildcard_list = [], termini_list = [], gmotifs = None):
   """searches for known motifs in glycan sequence\n
   | Arguments:
   | :-
@@ -76,7 +76,8 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   | libr (dict): dictionary of form glycoletter:index
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; will only be handled with string input; default:'termini'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')\n
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
+  | gmotifs (networkx): precalculated motif graphs for speed-up; default:None\n
   | Returns:
   | :-
   | Returns dataframe with counts of motifs in glycan
@@ -84,20 +85,22 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   if motifs is None:
     motifs = motif_list
   # Check whether termini are specified
-  if extra == 'termini':
-    if len(termini_list) < 1:
-      termini_list = [eval(k) for k in motifs.termini_spec]
+  if extra == 'termini' and len(termini_list) < 1:
+    termini_list = [eval(k) for k in motifs.termini_spec]
   if libr is None:
     libr = lib
+  if gmotifs is None:
+    termini = 'provided' if extra == 'termini' else 'ignore'
+    gmotifs = [glycan_to_nxGraph(g, libr = libr, termini = 'provided', termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
   # Count the number of times each motif occurs in a glycan
   if extra == 'termini':
     ggraph = ensure_graph(glycan, libr = libr, termini = 'calc')
-    res = [subgraph_isomorphism(ggraph, motifs.motif[k], libr = libr, extra = extra,
+    res = [subgraph_isomorphism(ggraph, gmotifs[k], libr = libr, extra = extra,
                                 wildcard_list = wildcard_list, termini_list = termini_list[k],
                                 count = True) for k in range(len(motifs))]*1
   else:
     ggraph = ensure_graph(glycan, libr = libr, termini = 'ignore')
-    res = [subgraph_isomorphism(ggraph, motifs.motif[k], libr = libr, extra = extra,
+    res = [subgraph_isomorphism(ggraph, gmotifs[k], libr = libr, extra = extra,
                                 wildcard_list = wildcard_list, termini_list = termini_list,
                                 count = True) for k in range(len(motifs))]*1
  
@@ -181,14 +184,16 @@ def annotate_dataset(glycans, motifs = None,
   if estimate_speedup:
     motifs = estimate_lower_bound(glycans, motifs)
   # Checks whether termini information is provided
-  if extra == 'termini':
-    if len(termini_list) < 1:
-      termini_list = [eval(k) for k in motifs.termini_spec]
+  if extra == 'termini' and len(termini_list) < 1:
+    termini_list = [eval(k) for k in motifs.termini_spec]
   shopping_cart = []
   if 'known' in feature_set:
+    termini = 'provided' if extra == 'termini' else 'ignore'
+    termini_list = termini_list if extra == 'termini' else ['ignore']*len(motifs)
+    gmotifs = [glycan_to_nxGraph(g, libr = libr, termini = termini, termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
     # Counts literature-annotated motifs in each glycan
     shopping_cart.append(pd.concat([annotate_glycan(k, motifs = motifs, libr = libr,
-                                                    extra = extra,
+                                                    extra = extra, gmotifs = gmotifs,
                                                     wildcard_list = wildcard_list,
                                                     termini_list = termini_list) for k in glycans], axis = 0))
   if 'graph' in feature_set:
