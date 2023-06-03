@@ -296,29 +296,21 @@ def canonicalize_iupac(glycan):
     glycan = glycan.replace('(', '[').replace(')', ']')
   # Canonicalize linkage uncertainty
   # Open linkages (e.g., "c-")
-  if bool(re.search(r'[a-z]\-[A-Z]', glycan)):
-    glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
+  glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
   # Open linkages2 (e.g., "1-")
-  if bool(re.search(r'[1-2]\-\)', glycan)):
-    glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
+  glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
   # Missing linkages (e.g., "c)")
-  if bool(re.search(r'[^hr][a-b][\(\)]', glycan)):
-    glycan = re.sub(r'([a-b])([\(\)])', r'\1?1-?\2', glycan)
+  glycan = re.sub(r'(?<![hr])([a-b])([\(\)])', r'\1?1-?\2', glycan)
   # Open linkages in front of branches (e.g., "1-[")
-  if bool(re.search(r'[0-9]\-[\[\]]', glycan)):
-    glycan = re.sub(r'([0-9])\-([\[\]])', r'\1-?\2', glycan)
+  glycan = re.sub(r'([0-9])\-([\[\]])', r'\1-?\2', glycan)
   # Open linkages in front of branches (with missing information) (e.g., "c-[")
-  if bool(re.search(r'[a-z]\-[\[\]]', glycan)):
-    glycan = re.sub(r'([a-z])\-([\[\]])', r'\1?1-?\2', glycan)
+  glycan = re.sub(r'([a-z])\-([\[\]])', r'\1?1-?\2', glycan)
   # Branches without linkages (e.g., "[GalGlcNAc]")
-  if bool(re.search(r'\[([a-zA-Z])+\]', glycan)):
-    glycan = re.sub(r'(\[[a-zA-Z]+)(\])', r'\1?1-?\2', glycan)
+  glycan = re.sub(r'(\[[a-zA-Z]+)(\])', r'\1?1-?\2', glycan)
   # Missing linkages in front of branches (e.g., "c[G")
-  if bool(re.search(r'[a-z]\[[A-Z]', glycan)):
-    glycan = re.sub(r'([a-z])(\[[A-Z])', r'\1?1-?\2', glycan)
+  glycan = re.sub(r'([a-z])(\[[A-Z])', r'\1?1-?\2', glycan)
   # Missing anomer info (e.g., "(1")
-  if bool(re.search(r'\([1-2]', glycan)):
-    glycan = re.sub(r'(\()([1-2])', r'\1?\2', glycan)
+  glycan = re.sub(r'(\()([1-2])', r'\1?\2', glycan)
   # Smudge uncertainty
   while '/' in glycan:
     glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
@@ -352,6 +344,7 @@ def canonicalize_iupac(glycan):
   if '[' in glycan:
     isos = find_isomorphs(glycan)
     glycan = choose_correct_isoform(isos)
+  # Floating bits
   if '+' in glycan:
     glycan = '{'+glycan.replace('+', '}')
   return glycan

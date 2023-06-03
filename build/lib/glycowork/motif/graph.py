@@ -294,9 +294,10 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   """
   if libr is None:
     libr = lib
-  if len(wildcard_list) >= 1:
+  if wildcard_list:
     wildcard_list = [libr[k] for k in wildcard_list]
   motif_comp = min_process_glycans([motif])[0]
+  len_libr = len(libr)
   if isinstance(glycan, str):
     if wildcards_ptm:
       glycan = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
@@ -319,24 +320,19 @@ def subgraph_isomorphism(glycan, motif, libr = None,
 
   # Check whether length of glycan is larger or equal than the motif
   if len(g1.nodes) >= len(g2.nodes):
+    g1_node_attr = set(nx.get_node_attributes(g1, "string_labels").values())
     if extra == 'ignore':
-      if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+      if all(k in g1_node_attr for k in motif_comp):
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
       else:
-        if count:
-          return 0
-        else:
-          return False
+        return 0 if count else False
     elif extra == 'wildcards':
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list))
     elif extra == 'termini':
-      if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
+      if all(k in g1_node_attr for k in motif_comp):
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_termini_match('labels', 'termini', len_libr, 'flexible'))
       else:
-        if count:
-          return 0
-        else:
-          return False
+        return 0 if count else False
 
     # Count motif occurrence
     if count:
@@ -344,26 +340,24 @@ def subgraph_isomorphism(glycan, motif, libr = None,
       while graph_pair.subgraph_is_isomorphic():
         counts += 1
         g1.remove_nodes_from(graph_pair.mapping.keys())
+        g1_node_attr = set(nx.get_node_attributes(g1, "string_labels").values())
         if extra == 'ignore':
-          if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len(libr)))
+          if all(k in g1_node_attr for k in motif_comp):
+            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
           else:
             return counts
         elif extra == 'wildcards':
-          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list))
+          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list))
         elif extra == 'termini':
-          if all(k in nx.get_node_attributes(g1, "string_labels").values() for k in motif_comp):
-            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_termini_match('labels', 'termini', len(libr), 'flexible'))
+          if all(k in g1_node_attr for k in motif_comp):
+            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_termini_match('labels', 'termini', len_libr, 'flexible'))
           else:
             return counts
       return counts
     else:
       return graph_pair.subgraph_is_isomorphic()
   else:
-    if count:
-      return 0
-    else:
-      return False
+    return 0 if count else False
 
 
 def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'network'):
