@@ -91,7 +91,7 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
     libr = lib
   if gmotifs is None:
     termini = 'provided' if extra == 'termini' else 'ignore'
-    gmotifs = [glycan_to_nxGraph(g, libr = libr, termini = 'provided', termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
+    gmotifs = [glycan_to_nxGraph(g, libr = libr, termini = termini, termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
   # Count the number of times each motif occurs in a glycan
   if extra == 'termini':
     ggraph = ensure_graph(glycan, libr = libr, termini = 'calc')

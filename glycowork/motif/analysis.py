@@ -3,10 +3,12 @@ import pickle
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import statsmodels.api as sm
 import matplotlib.pyplot as plt
 plt.style.use('default')
 from collections import Counter
 from scipy.stats import ttest_ind, ttest_rel, f, norm
+from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
 from sklearn.impute import KNNImputer
@@ -383,7 +385,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   plt.show()
 
 
-def replace_zero_with_random_gaussian_knn(df, group1_size, mean = 0.01,
+def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
                                           std_dev = 0.01, group_mean_threshold = 3,
                                           n_neighbors = 3):
     df = df.T
@@ -391,17 +393,41 @@ def replace_zero_with_random_gaussian_knn(df, group1_size, mean = 0.01,
     df = df.replace(0, np.nan)
 
     # If group mean < 1, replace NaNs (originally zeros) with Gaussian values
-    for col in df.columns:
-        if df[col][:group1_size].mean() < group_mean_threshold:
-            df[col][:group1_size] = df[col][:group1_size].apply(lambda x: max([np.random.normal(loc = mean, scale = std_dev), 0]) if pd.isna(x) else x)
-        if df[col][group1_size:].mean() < group_mean_threshold:
-            df[col][group1_size:] = df[col][group1_size:].apply(lambda x: max([np.random.normal(loc = mean, scale = std_dev), 0]) if pd.isna(x) else x)
+    last_group_end = 0
+    for group_size in group_sizes:
+        group_end = last_group_end + group_size
+        for col in df.columns:
+            if df[col][last_group_end:group_end].mean() < group_mean_threshold:
+                df[col][last_group_end:group_end] = df[col][last_group_end:group_end].apply(lambda x: max([np.random.normal(loc = mean, scale = std_dev), 0]) if pd.isna(x) else x)
+        last_group_end = group_end
 
     # Perform KNN imputation for the rest
     imputer = KNNImputer(n_neighbors = n_neighbors)
     df[:] = imputer.fit_transform(df)
- 
+
     return df.T
+
+
+def impute_and_normalize(df, group_sizes, impute = True, normalized = True):
+    """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
+    | group_sizes (list): list of group sizes as integers
+    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
+    | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True\n
+    | Returns:
+    | :-
+    | Returns a dataframe in the same style as the input 
+    """
+    thresh = int(round((df.shape[1]-1)/2))
+    df = df[df.apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]
+    if impute:
+        df.iloc[:, 1:] = replace_zero_with_random_gaussian_knn(df.iloc[:, 1:], group_sizes)
+    if not normalized:
+        for col in df.columns.tolist()[1:]:
+            df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+    return df
 
 
 def hotellings_t2(group1, group2, paired = False):
@@ -459,7 +485,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
+  | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
   | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
   | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False\n
@@ -479,13 +505,8 @@ def get_differential_expression(df, group1, group2, normalized = True,
     group2 = [df.columns.tolist()[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2]
   df.fillna(0, inplace = True)
-  if impute:
-    thresh = int(round(len(group1+group2)/2))
-    df = df[df.apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]
-    df.iloc[:, 1:] = replace_zero_with_random_gaussian_knn(df.iloc[:, 1:], len(group1))
-  if not normalized:
-    for col in df.columns.tolist()[1:]:
-      df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+  df = impute_and_normalize(df, [len(group1), len(group2)],
+                            impute = impute, normalized = normalized)
   glycans = df.iloc[:, 0].values.tolist()
   if motifs:
     # Motif extraction
@@ -619,6 +640,40 @@ def make_volcano(df, group1, group2, normalized = True,
                 bbox_inches = 'tight')
 
   plt.show()
+
+
+def get_glycanova(df, groups, impute = True, normalized = True):
+    """Calculate an ANOVA for each glycan in the DataFrame\n
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
+    | group_sizes (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3])
+    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
+    | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True\n
+    | Returns:
+    | :-
+    | Returns a pandas DataFrame with an F statistic and p-value for each glycan.
+    """
+    results = []
+    df.fillna(0, inplace = True)
+    df = impute_and_normalize(df, [groups.count(i) for i in sorted(set(groups))],
+                              impute = impute, normalized = normalized)
+    glycans = df.iloc[:,0].values.tolist()
+    df.drop([df.columns.tolist()[0]], axis = 1, inplace = True)
+    for i, glycan in enumerate(glycans):
+        # Create a DataFrame with the glycan abundance and group identifier for each sample
+        data = pd.DataFrame({"Abundance": df.iloc[i], "Group": groups})
+        # Run an ANOVA
+        model = ols("Abundance ~ C(Group)", data = data).fit()
+        anova_table = sm.stats.anova_lm(model, typ = 2)
+        f_value = anova_table["F"]["C(Group)"]
+        p_value = anova_table["PR(>F)"]["C(Group)"]
+        results.append((glycan, f_value, p_value))
+
+    results_df = pd.DataFrame(results, columns=["Glycan", "F statistic", "corr p-val"])
+    results_df['corr p-val'] = multipletests(results_df['corr p-val'].values.tolist(),
+                                             method = 'fdr_bh')[1]
+    return results_df.sort_values(by = 'corr p-val')
 
 
 def get_meta_analysis(effect_sizes, variances):
