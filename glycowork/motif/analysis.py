@@ -10,6 +10,7 @@ from collections import Counter
 from scipy.stats import ttest_ind, ttest_rel, f, norm
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
+from statsmodels.stats.weightstats import DescrStatsW
 from sklearn.manifold import TSNE
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
@@ -632,19 +633,33 @@ def get_glycanova(df, groups, impute = True, normalized = True,
     return results_df.sort_values(by = 'corr p-val')
 
 
-def get_meta_analysis(effect_sizes, variances):
-    """Fixed-effects model for meta-analysis of glycan effect sizes\n
+def get_meta_analysis(effect_sizes, variances, model = 'fixed'):
+    """Fixed-effects model or random-effects model for meta-analysis of glycan effect sizes\n
     | Arguments:
     | :-
     | effect_sizes (array-like): Effect sizes (e.g., Cohen's d) from each study
-    | variances (array-like): Corresponding effect size variances from each study\n
+    | variances (array-like): Corresponding effect size variances from each study
+    | model (string): Whether to use 'fixed' or 'random' effects model\n
     | Returns:
     | :-
     | (1) The combined effect size 
     | (2) The p-value for the combined effect size
     """
+    if model not in ['fixed', 'random']:
+        raise ValueError("Model must be 'fixed' or 'random'")
     weights = 1 / np.array(variances)
     combined_effect_size = np.sum(weights * effect_sizes) / np.sum(weights)
+
+    if model == 'random':
+        # Estimate between-study variance (tau squared) using DerSimonian-Laird method
+        q = np.sum(weights * (effect_sizes - combined_effect_size)**2)
+        df = len(effect_sizes) - 1
+        c = np.sum(weights) - np.sum(weights**2) / np.sum(weights)
+        tau_squared = max((q - df) / c, 0)
+        # Update weights for tau_squared
+        weights = 1 / (variances + tau_squared)
+        # Recalculate combined effect size
+        combined_effect_size = np.sum(weights * effect_sizes) / np.sum(weights)
 
     # Calculate standard error and z-score
     se = np.sqrt(1 / np.sum(weights))

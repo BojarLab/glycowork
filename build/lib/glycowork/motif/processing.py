@@ -450,7 +450,7 @@ def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
     # Replace zeros with NaNs temporarily
     df = df.replace(0, np.nan)
 
-    # If group mean < 1, replace NaNs (originally zeros) with Gaussian values
+    # If group mean < group_mean_threshold, replace NaNs (originally zeros) with Gaussian values
     last_group_end = 0
     for group_size in group_sizes:
         group_end = last_group_end + group_size
