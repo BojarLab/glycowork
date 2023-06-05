@@ -226,6 +226,33 @@ def annotate_dataset(glycans, motifs = None,
     return pd.concat(shopping_cart, axis = 1)
 
 
+def quantify_motifs(df, glycans, feature_set):
+    """Extracts and quantifies motifs for a dataset\n
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe containing relative abundances (each sample one column)
+    | glycans(list): glycans as IUPAC-condensed strings
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+    | Returns:
+    | :-
+    | Returns a pandas DataFrame with motifs as columns and samples as rows
+    """
+    # Motif extraction
+    df_motif = annotate_dataset(glycans,
+                                feature_set = feature_set,
+                                condense = True)
+    collect_dic = {}
+    df = df.T
+    # Motif quantification
+    for c, col in enumerate(df_motif.columns):
+      indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
+      temp = df.iloc[:, indices]
+      temp.columns = range(temp.columns.size)
+      collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
+    df = pd.DataFrame(collect_dic)
+    return df
+
+
 def count_unique_subgraphs_of_size_k(graph, size = 2):
   """function to count unique, connected subgraphs of size k (default:disaccharides) occurring in a glycan graph\n
   | Arguments:

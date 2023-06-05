@@ -11,11 +11,10 @@ from scipy.stats import ttest_ind, ttest_rel, f, norm
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
-from sklearn.impute import KNNImputer
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
-from glycowork.motif.processing import cohen_d, mahalanobis_distance, mahalanobis_variance, variance_stabilization
-from glycowork.motif.annotate import annotate_dataset, link_find, create_correlation_network
+from glycowork.motif.processing import cohen_d, mahalanobis_distance, mahalanobis_variance, variance_stabilization, impute_and_normalize, variance_based_filtering
+from glycowork.motif.annotate import annotate_dataset, quantify_motifs, link_find, create_correlation_network
 from glycowork.motif.graph import subgraph_isomorphism
 
 
@@ -385,51 +384,6 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   plt.show()
 
 
-def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
-                                          std_dev = 0.01, group_mean_threshold = 3,
-                                          n_neighbors = 3):
-    df = df.T
-    # Replace zeros with NaNs temporarily
-    df = df.replace(0, np.nan)
-
-    # If group mean < 1, replace NaNs (originally zeros) with Gaussian values
-    last_group_end = 0
-    for group_size in group_sizes:
-        group_end = last_group_end + group_size
-        for col in df.columns:
-            if df[col][last_group_end:group_end].mean() < group_mean_threshold:
-                df[col][last_group_end:group_end] = df[col][last_group_end:group_end].apply(lambda x: max([np.random.normal(loc = mean, scale = std_dev), 0]) if pd.isna(x) else x)
-        last_group_end = group_end
-
-    # Perform KNN imputation for the rest
-    imputer = KNNImputer(n_neighbors = n_neighbors)
-    df[:] = imputer.fit_transform(df)
-
-    return df.T
-
-
-def impute_and_normalize(df, group_sizes, impute = True, normalized = True):
-    """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
-    | Arguments:
-    | :-
-    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
-    | group_sizes (list): list of group sizes as integers
-    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
-    | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True\n
-    | Returns:
-    | :-
-    | Returns a dataframe in the same style as the input 
-    """
-    thresh = int(round((df.shape[1]-1)/2))
-    df = df[df.apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]
-    if impute:
-        df.iloc[:, 1:] = replace_zero_with_random_gaussian_knn(df.iloc[:, 1:], group_sizes)
-    if not normalized:
-        for col in df.columns.tolist()[1:]:
-            df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
-    return df
-
-
 def hotellings_t2(group1, group2, paired = False):
   """Hotelling's T^2 test (the t-test for multivariate comparisons)\n
   """
@@ -509,19 +463,8 @@ def get_differential_expression(df, group1, group2, normalized = True,
                             impute = impute, normalized = normalized)
   glycans = df.iloc[:, 0].values.tolist()
   if motifs:
-    # Motif extraction
-    df_motif = annotate_dataset(df.iloc[:, 0].values.tolist(),
-                                feature_set = feature_set,
-                                condense = True)
-    collect_dic = {}
-    df = df.iloc[:, 1:].T
-    # Motif quantification
-    for c, col in enumerate(df_motif.columns):
-      indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
-      temp = df.iloc[:, indices]
-      temp.columns = range(temp.columns.size)
-      collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
-    df = pd.DataFrame(collect_dic)
+    # Motif extraction and quantification
+    df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set)
     # Deduplication
     df = clean_up_heatmap(df.T)
     # Re-normalization
@@ -529,13 +472,10 @@ def get_differential_expression(df, group1, group2, normalized = True,
       df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
   else:
     df.set_index(df.columns.tolist()[0], inplace = True)
+    df = df.groupby(df.index).mean()
       
   # Variance-based filtering of features
-  min_feature_variance = 0.01  # Minimum variance to include a feature in the analysis
-  feature_variances = df.var(axis = 1)
-  variable_features = feature_variances[feature_variances > min_feature_variance].index
-  # Subsetting df to only include features with enough variance
-  df = df.loc[variable_features]
+  df = variance_based_filtering(df)
   glycans = df.index.tolist()
     
   df_a = df.loc[:, group1]
@@ -642,27 +582,43 @@ def make_volcano(df, group1, group2, normalized = True,
   plt.show()
 
 
-def get_glycanova(df, groups, impute = True, normalized = True):
-    """Calculate an ANOVA for each glycan in the DataFrame\n
+def get_glycanova(df, groups, impute = True, normalized = True,
+                  motifs = False, feature_set = ['exhaustive', 'known']):
+    """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
     | group_sizes (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3])
     | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
-    | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True\n
+    | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
+    | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)\n
     | Returns:
     | :-
-    | Returns a pandas DataFrame with an F statistic and p-value for each glycan.
+    | Returns a pandas DataFrame with an F statistic and corrected p-value for each glycan.
     """
     results = []
     df.fillna(0, inplace = True)
     df = impute_and_normalize(df, [groups.count(i) for i in sorted(set(groups))],
                               impute = impute, normalized = normalized)
     glycans = df.iloc[:,0].values.tolist()
-    df.drop([df.columns.tolist()[0]], axis = 1, inplace = True)
-    for i, glycan in enumerate(glycans):
+    if motifs:
+        df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set)
+        # Deduplication
+        df = clean_up_heatmap(df.T)
+        # Re-normalization
+        for col in df.columns:
+            df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+    else:
+        df.set_index(df.columns.tolist()[0], inplace = True)
+        df = df.groupby(df.index).mean()
+    # Variance-based filtering of features
+    df = variance_based_filtering(df)
+    df = variance_stabilization(df)
+    glycans = df.index.tolist()
+    for glycan in glycans:
         # Create a DataFrame with the glycan abundance and group identifier for each sample
-        data = pd.DataFrame({"Abundance": df.iloc[i], "Group": groups})
+        data = pd.DataFrame({"Abundance": df.loc[glycan], "Group": groups})
         # Run an ANOVA
         model = ols("Abundance ~ C(Group)", data = data).fit()
         anova_table = sm.stats.anova_lm(model, typ = 2)

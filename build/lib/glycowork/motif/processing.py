@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import re
 from glyles import convert
+from sklearn.impute import KNNImputer
 from glycowork.glycan_data.loader import unwrap, multireplace, find_nth
 
 
@@ -440,3 +441,65 @@ def variance_stabilization(data):
   # Scale data to have zero mean and unit variance
   data = (data - np.mean(data, axis = 0)) / np.std(data, axis = 0)
   return data
+
+
+def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
+                                          std_dev = 0.01, group_mean_threshold = 3,
+                                          n_neighbors = 3):
+    df = df.T
+    # Replace zeros with NaNs temporarily
+    df = df.replace(0, np.nan)
+
+    # If group mean < 1, replace NaNs (originally zeros) with Gaussian values
+    last_group_end = 0
+    for group_size in group_sizes:
+        group_end = last_group_end + group_size
+        for col in df.columns:
+            if df[col][last_group_end:group_end].mean() < group_mean_threshold:
+                df[col][last_group_end:group_end] = df[col][last_group_end:group_end].apply(lambda x: max([np.random.normal(loc = mean, scale = std_dev), 0]) if pd.isna(x) else x)
+        last_group_end = group_end
+
+    # Perform KNN imputation for the rest
+    imputer = KNNImputer(n_neighbors = n_neighbors)
+    df[:] = imputer.fit_transform(df)
+
+    return df.T
+
+
+def impute_and_normalize(df, group_sizes, impute = True, normalized = True):
+    """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
+    | group_sizes (list): list of group sizes as integers
+    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
+    | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True\n
+    | Returns:
+    | :-
+    | Returns a dataframe in the same style as the input 
+    """
+    thresh = int(round((df.shape[1]-1)/2))
+    df = df[df.apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]
+    if impute:
+        df.iloc[:, 1:] = replace_zero_with_random_gaussian_knn(df.iloc[:, 1:], group_sizes)
+    if not normalized:
+        for col in df.columns.tolist()[1:]:
+            df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+    return df
+
+
+def variance_based_filtering(df, min_feature_variance = 0.01):
+    """Variance-based filtering of features\n
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe containing glycan sequences in index and samples in columns
+    | min_feature_variance (float): Minimum variance to include a feature in the analysis\n
+    | Returns:
+    | :-
+    | Returns a pandas DataFrame with remaining glycans as indices and samples in columns
+    """
+    feature_variances = df.var(axis = 1)
+    variable_features = feature_variances[feature_variances > min_feature_variance].index
+    # Subsetting df to only include features with enough variance
+    df = df.loc[variable_features]
+    return df
