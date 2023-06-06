@@ -10,7 +10,6 @@ from collections import Counter
 from scipy.stats import ttest_ind, ttest_rel, f, norm
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
-from statsmodels.stats.weightstats import DescrStatsW
 from sklearn.manifold import TSNE
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
@@ -483,7 +482,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   df_b = df.loc[:, group2]
   if sets:
     # Motif/sequence set enrichment
-    df2 = variance_stabilization(df)
+    df2 = variance_stabilization(df, groups = [group1, group2])
     clusters = create_correlation_network(df2.T, set_thresh)
     glycans = []
     pvals = []
@@ -615,7 +614,9 @@ def get_glycanova(df, groups, impute = True, normalized = True,
         df = df.groupby(df.index).mean()
     # Variance-based filtering of features
     df = variance_based_filtering(df)
-    df = variance_stabilization(df)
+    col_names = [[col for group, col in zip(groups, df.columns) if group == unique_group]
+                 for unique_group in sorted(set(groups))]
+    df = variance_stabilization(df, groups = col_names)
     glycans = df.index.tolist()
     for glycan in glycans:
         # Create a DataFrame with the glycan abundance and group identifier for each sample

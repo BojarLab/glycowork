@@ -353,14 +353,14 @@ def canonicalize_iupac(glycan):
 
 def cohen_d(x, y, paired = False):
   """calculates effect size between two groups\n
-    | Arguments:
-    | :-
-    | x (list or 1D-array): comparison group containing numerical data
-    | y (list or 1D-array): comparison group containing numerical data
-    | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
-    | Returns:
-    | :-
-    | Returns Cohen's d (and its variance) as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)
+  | Arguments:
+  | :-
+  | x (list or 1D-array): comparison group containing numerical data
+  | y (list or 1D-array): comparison group containing numerical data
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | Returns Cohen's d (and its variance) as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)
   """
   if paired:
     assert len(x) == len(y), "For paired samples, the size of x and y should be the same"
@@ -379,14 +379,14 @@ def cohen_d(x, y, paired = False):
 
 def mahalanobis_distance(x, y, paired = False):
   """calculates effect size between two groups in a multivariate comparison\n
-    | Arguments:
-    | :-
-    | x (list or 1D-array or dataframe): comparison group containing numerical data
-    | y (list or 1D-array or dataframe): comparison group containing numerical data
-    | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
-    | Returns:
-    | :-
-    | Returns Mahalanobis distance as a measure of effect size
+  | Arguments:
+  | :-
+  | x (list or 1D-array or dataframe): comparison group containing numerical data
+  | y (list or 1D-array or dataframe): comparison group containing numerical data
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | Returns Mahalanobis distance as a measure of effect size
   """
   if paired:
     assert x.shape == y.shape, "For paired samples, the size of x and y should be the same"
@@ -404,14 +404,14 @@ def mahalanobis_distance(x, y, paired = False):
 
 def mahalanobis_variance(x, y, paired = False):
   """Estimates variance of Mahalanobis distance via bootstrapping\n
-    | Arguments:
-    | :-
-    | x (list or 1D-array or dataframe): comparison group containing numerical data
-    | y (list or 1D-array or dataframe): comparison group containing numerical data
-    | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
-    | Returns:
-    | :-
-    | Returns Mahalanobis distance as a measure of effect size
+  | Arguments:
+  | :-
+  | x (list or 1D-array or dataframe): comparison group containing numerical data
+  | y (list or 1D-array or dataframe): comparison group containing numerical data
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | Returns Mahalanobis distance as a measure of effect size
   """
   # Combine gp1 and gp2 into a single matrix
   data = np.concatenate((x, y), axis = 0)
@@ -433,13 +433,25 @@ def mahalanobis_variance(x, y, paired = False):
   return np.var(bootstrap_samples)
 
 
-def variance_stabilization(data):
+def variance_stabilization(data, groups = None):
   """Variance stabilization normalization\n
+  | Arguments:
+  | :-
+  | data (dataframe): pandas dataframe with glycans/motifs as indices and samples as columns
+  | groups (nested list): list containing lists of column names of samples from same group for group-specific normalization; otherwise global; default:None\n
+  | Returns:
+  | :-
+  | Returns a dataframe in the same style as the input
   """
   # Apply log1p transformation
   data = np.log1p(data)
   # Scale data to have zero mean and unit variance
-  data = (data - np.mean(data, axis = 0)) / np.std(data, axis = 0)
+  if groups is None:
+    data = (data - np.mean(data, axis = 0)) / np.std(data, axis = 0)
+  else:
+    for group in groups:
+      group_data = data.loc[:, group]
+      data.loc[:, group] = (group_data - np.mean(group_data, axis = 0)) / np.std(group_data, axis = 0)
   return data
 
 
