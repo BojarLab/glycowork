@@ -43,29 +43,6 @@ def link_find(glycan):
   return list(set(coll))
 
 
-def estimate_lower_bound(glycans, motifs):
-  """searches for motifs which are present in at least one glycan; not 100% exact but useful for speedup\n
-  | Arguments:
-  | :-
-  | glycans (string): list of IUPAC-condensed glycan sequences
-  | motifs (dataframe): dataframe of glycan motifs (name + sequence)\n
-  | Returns:
-  | :-
-  | Returns motif dataframe, only retaining motifs that are present in glycans
-  """
-  # Pseudo-linearize glycans by removing branch boundaries + branches altogether
-  glycans_a = [k.replace('[', '').replace(']', '') for k in glycans]
-  glycans_b = [re.sub(r"\[[^[]\]", '', k) for k in glycans]
-  glycans = glycans_a + glycans_b
-  # Convert everything to one giant string
-  glycans = '_'.join(glycans)
-  # Pseudo-linearize motifs
-  motif_ish = [k.replace('[', '').replace(']', '') for k in motifs.motif]
-  # Check if a motif occurs in giant string
-  idx = [k for k, j in enumerate(motif_ish) if j in glycans]
-  return motifs.iloc[idx, :].reset_index(drop = True)
-
-
 def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
                     wildcard_list = [], termini_list = [], gmotifs = None):
   """searches for known motifs in glycan sequence\n
@@ -161,7 +138,7 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
 def annotate_dataset(glycans, motifs = None,
                      feature_set = ['known'], extra = 'termini',
                      wildcard_list = [], termini_list = [],
-                     condense = False, estimate_speedup = False):
+                     condense = False):
   """wrapper function to annotate motifs in list of glycans\n
   | Arguments:
   | :-
@@ -171,8 +148,7 @@ def annotate_dataset(glycans, motifs = None,
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
   | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
-  | condense (bool): if True, throws away columns with only zeroes; default:False
-  | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
+  | condense (bool): if True, throws away columns with only zeroes; default:False\n
   | Returns:
   | :-                      
   | Returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
@@ -180,9 +156,6 @@ def annotate_dataset(glycans, motifs = None,
   if motifs is None:
     motifs = motif_list
   libr = get_lib(glycans + motifs.motif.values.tolist() + list(linkages))
-  # Non-exhaustive speed-up that should only be used if necessary
-  if estimate_speedup:
-    motifs = estimate_lower_bound(glycans, motifs)
   # Checks whether termini information is provided
   if extra == 'termini' and len(termini_list) < 1:
     termini_list = [eval(k) for k in motifs.termini_spec]

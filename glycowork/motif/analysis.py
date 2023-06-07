@@ -22,7 +22,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      thresh = 1.645, sorting = True,
                      feature_set = ['exhaustive'], extra = 'termini',
                      wildcard_list = [], multiple_samples = False,
-                     motifs = None, estimate_speedup = False):
+                     motifs = None):
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
     | :-
@@ -35,8 +35,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
     | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
     | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
-    | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None
-    | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False\n
+    | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None\n
     | Returns:
     | :-
     | Returns dataframe with p-values and corrected p-values for every glycan motif
@@ -52,7 +51,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 motifs = motifs, feature_set = feature_set,
                                 extra = extra, wildcard_list = wildcard_list,
-                                estimate_speedup = estimate_speedup)
+                                condense = True)
     # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
         df.set_index(glycan_col_name, inplace = True)
@@ -63,8 +62,6 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
         df_motif = df_motif[cols]
     else:
         df_motif[label_col_name] = df[label_col_name].values.tolist()
-    # Throw away any motifs that are always zero
-    df_motif = df_motif.loc[:, (df_motif != 0).any(axis = 0)]
     # Divide into motifs with expression above threshold & below
     df_pos = df_motif[df_motif[label_col_name] > thresh]
     df_neg = df_motif[df_motif[label_col_name] <= thresh]
@@ -149,7 +146,7 @@ def clean_up_heatmap(df):
 def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
-                 estimate_speedup = False, **kwargs):
+                 **kwargs):
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
   | Arguments:
   | :-
@@ -162,7 +159,6 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
   | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
   | filepath (string): absolute path including full filename allows for saving the plot
   | index_col (string): default column to convert to dataframe index; default:'target'
-  | estimate_speedup (bool): if True, pre-selects motifs for those which are present in glycans, not 100% exact; default:False
   | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                      
   | Returns:
   | :-
@@ -176,7 +172,7 @@ def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
       df_motif = annotate_dataset(df.columns.tolist(),
                                   feature_set = feature_set,
                                   extra = extra, wildcard_list = wildcard_list,
-                                  estimate_speedup = estimate_speedup, condense = True)
+                                  condense = True)
       df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
       collect_dic = {}
       # Distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
