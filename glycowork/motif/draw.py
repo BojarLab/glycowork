@@ -2174,8 +2174,9 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   # Canvas size
   width = ((((max_x+1)*2)-1)*dim)+dim
   if floaty_bits != []:
-    width = width + (max([len(k) for k in min_process_glycans(floaty_bits)], default = 0)+1) * dim
-
+    len_one_gw = ((max([len(j) for k in min_process_glycans(floaty_bits) for j in k]) / 6) + 1) * dim
+    len_multiple_gw = (max([len(k) for k in min_process_glycans(floaty_bits)], default = 0)+1) * dim
+    width = width + max([len_one_gw, len_multiple_gw])
   if len(floaty_bits) > len(list(set(floaty_bits))):
      width = width + dim
   height = ((((max(abs(min_y), max_y)+1)*2)-1)*dim)+10+50
