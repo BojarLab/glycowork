@@ -1,4 +1,3 @@
-import pubchempy as pcp
 import networkx as nx
 import pandas as pd
 import re
@@ -102,6 +101,10 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
   | :-
   | Returns a dataframe with all the molecular parameters retrieved from PubChem
   """
+  try:
+    import pubchempy as pcp
+  except ImportError:
+    raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
   smiles_list = IUPAC_to_SMILES(glycan_list)
   if placeholder:
     dummy = IUPAC_to_SMILES(['Glc'])[0]

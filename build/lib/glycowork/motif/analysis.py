@@ -19,10 +19,8 @@ from glycowork.motif.graph import subgraph_isomorphism
 
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
-                     thresh = 1.645, sorting = True,
-                     feature_set = ['exhaustive'], extra = 'termini',
-                     wildcard_list = [], multiple_samples = False,
-                     motifs = None):
+                     thresh = 1.645, sorting = True, feature_set = ['exhaustive'], extra = 'termini',
+                     wildcard_list = [], multiple_samples = False, motifs = None):
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
     | :-

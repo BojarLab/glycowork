@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import re
-from glyles import convert
 from sklearn.impute import KNNImputer
 from glycowork.glycan_data.loader import unwrap, multireplace, find_nth
 
@@ -268,6 +267,10 @@ def IUPAC_to_SMILES(glycan_list):
   | :-
   | Returns a list of corresponding isomeric SMILES
   """
+  try:
+    from glyles import convert
+  except ImportError:
+    raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
   if not isinstance(glycan_list, list):
     raise TypeError("Input must be a list")
   return [convert(g)[0][1] for g in glycan_list]
