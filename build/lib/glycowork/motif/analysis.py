@@ -7,7 +7,7 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 plt.style.use('default')
 from collections import Counter
-from scipy.stats import ttest_ind, ttest_rel, f, norm
+from scipy.stats import ttest_ind, ttest_rel, f, norm, levene
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
@@ -442,9 +442,10 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | Returns a dataframe with:
   | (i) Differentially expressed glycans/motifs/sets
   | (ii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
-  | (iii) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction)
-  | (iv) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
-  | (v) [only if effect_size_variance=True] Effect size variance
+  | (iii) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
+  | (iv) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
+  | (v) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
+  | (vi) [only if effect_size_variance=True] Effect size variance
   """
   if isinstance(group1[0], str):
     pass
@@ -478,10 +479,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
     # Motif/sequence set enrichment
     df2 = variance_stabilization(df, groups = [group1, group2])
     clusters = create_correlation_network(df2.T, set_thresh)
-    glycans = []
-    pvals = []
-    fc = []
-    effect_sizes = []
+    glycans, pvals, fc, effect_sizes, levene_pvals = [], [], [], [], []
     # Testing differential expression of each set/cluster
     for cluster in clusters:
       if len(cluster) > 1:
@@ -496,6 +494,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
         gp2 = df2.loc[:, group2].loc[list(cluster), :]
         # Hotelling's T^2 test for multivariate comparisons
         pvals.append(hotellings_t2(gp1.values, gp2.values, paired = paired)[1])
+        levene_pvals.append(np.mean([levene(gp1.loc[variable, :], gp2.loc[variable, :])[1] for variable in cluster]))
         # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
         effect_sizes.append(mahalanobis_distance(gp1, gp2, paired = paired))
         if effect_size_variance:
@@ -512,12 +511,14 @@ def get_differential_expression(df, group1, group2, normalized = True,
         pvals = [ttest_rel(df_a.iloc[k, :], df_b.iloc[k, :])[1] for k in range(len(df_a))]
     else:
         pvals = [ttest_ind(df_a.iloc[k, :], df_b.iloc[k, :], equal_var = False)[1] for k in range(len(df_a))]
+    levene_pvals = [levene(df_a.iloc[k, :], df_b.iloc[k, :])[1] for k in range(len(df_a))]
     effect_sizes, variances = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :], paired = paired) for k in range(len(df_a))])
   # Multiple testing correction
   pvals = multipletests(pvals, method = 'fdr_bh')[1]
-  out = [(glycans[k], fc[k], pvals[k], effect_sizes[k]) for k in range(len(glycans))]
+  levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
+  out = [(glycans[k], fc[k], pvals[k], levene_pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
-  out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'Effect size']
+  out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'corr Levene p-val', 'Effect size']
   if effect_size_variance:
       out['Effect size variance'] = variances
   out = out.dropna()

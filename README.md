@@ -52,7 +52,9 @@ Note that we have optional extra installs for specialized use (even
 further instructions can be found in the `Examples` tab), such as: <br>
 *deep learning* <br> `pip install glycowork[ml]` <br> *drawing glycan
 images with GlycoDraw* <br> `pip install glycowork[draw]` <br>
-*everything* <br> `pip install glycowork[all]` <br>
+*analyzing atomic/chemical properties of glycans* <br>
+`pip install glycowork[chem]` <br> *everything* <br>
+`pip install glycowork[all]` <br>
 
 ## Data & Models
 
