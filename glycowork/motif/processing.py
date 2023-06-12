@@ -495,12 +495,13 @@ def impute_and_normalize(df, group_sizes, impute = True, normalized = True):
     """
     thresh = int(round((df.shape[1]-1)/2))
     df = df[df.apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]
+    df.set_index(df.columns.tolist()[0], inplace = True)
     if impute:
-        df.iloc[:, 1:] = replace_zero_with_random_gaussian_knn(df.iloc[:, 1:], group_sizes)
+        df = replace_zero_with_random_gaussian_knn(df, group_sizes)
     if not normalized:
-        for col in df.columns.tolist()[1:]:
+        for col in df.columns:
             df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
-    return df
+    return df.reset_index()
 
 
 def variance_based_filtering(df, min_feature_variance = 0.01):

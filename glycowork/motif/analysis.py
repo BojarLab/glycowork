@@ -658,8 +658,8 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed'):
         combined_effect_size = np.sum(weights * effect_sizes) / np.sum(weights)
 
     # Calculate standard error and z-score
-    se = np.sqrt(1 / np.sum(weights))
-    z = combined_effect_size / se
+    se = np.sqrt(1 / (np.sum(weights) + 1e-8))
+    z = combined_effect_size / (se + 1e-8)
 
     # Two-tailed p-value
     p_value = 2 * (1 - norm.cdf(abs(z)))
