@@ -420,7 +420,7 @@ def hotellings_t2(group1, group2, paired = False):
   return F, p_value
 
 
-def get_differential_expression(df, group1, group2, normalized = True,
+def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
@@ -429,7 +429,6 @@ def get_differential_expression(df, group1, group2, normalized = True,
   | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
   | group1 (list): list of column indices or names for the first group of samples, usually the control
   | group2 (list): list of column indices or names for the second group of samples
-  | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
@@ -454,8 +453,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
     group2 = [df.columns.tolist()[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2]
   df.fillna(0, inplace = True)
-  df = impute_and_normalize(df, [len(group1), len(group2)],
-                            impute = impute, normalized = normalized)
+  df = impute_and_normalize(df, [len(group1), len(group2)], impute = impute)
   glycans = df.iloc[:, 0].values.tolist()
   if motifs:
     # Motif extraction and quantification
@@ -525,7 +523,7 @@ def get_differential_expression(df, group1, group2, normalized = True,
   return out.sort_values(by = 'corr p-val')
 
 
-def make_volcano(df, group1, group2, normalized = True,
+def make_volcano(df, group1, group2,
                  motifs = False, feature_set = ['exhaustive', 'known'],
                  impute = False, filepath = '', y_thresh = 0.05, x_thresh = 1.0,
                  label_changed = True, x_metric = 'Log2FC'):
@@ -535,7 +533,6 @@ def make_volcano(df, group1, group2, normalized = True,
   | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
   | group1 (list): list of column indices for the first group of samples, usually the control
   | group2 (list): list of column indices for the second group of samples
-  | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
   | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution; default:False
@@ -550,7 +547,7 @@ def make_volcano(df, group1, group2, normalized = True,
   """
 
   # Get DE 
-  de_res = get_differential_expression(df = df, group1 = group1, group2 = group2, normalized = normalized, motifs = motifs,
+  de_res = get_differential_expression(df = df, group1 = group1, group2 = group2, motifs = motifs,
                                        feature_set = feature_set, impute = impute)
   de_res['log_p'] = -np.log10(de_res['corr p-val'].values.tolist())
   x = de_res[x_metric].values.tolist()
@@ -577,7 +574,7 @@ def make_volcano(df, group1, group2, normalized = True,
   plt.show()
 
 
-def get_glycanova(df, groups, impute = True, normalized = True,
+def get_glycanova(df, groups, impute = True,
                   motifs = False, feature_set = ['exhaustive', 'known']):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
@@ -585,7 +582,6 @@ def get_glycanova(df, groups, impute = True, normalized = True,
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
     | group_sizes (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3])
     | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
-    | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)\n
     | Returns:
@@ -594,8 +590,7 @@ def get_glycanova(df, groups, impute = True, normalized = True,
     """
     results = []
     df.fillna(0, inplace = True)
-    df = impute_and_normalize(df, [groups.count(i) for i in sorted(set(groups))],
-                              impute = impute, normalized = normalized)
+    df = impute_and_normalize(df, [groups.count(i) for i in sorted(set(groups))], impute = impute)
     glycans = df.iloc[:,0].values.tolist()
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set)

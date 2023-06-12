@@ -481,14 +481,13 @@ def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
     return df.T
 
 
-def impute_and_normalize(df, group_sizes, impute = True, normalized = True):
+def impute_and_normalize(df, group_sizes, impute = True):
     """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
     | group_sizes (list): list of group sizes as integers
-    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
-    | normalized (bool): whether the abundances are already normalized, if False, the data will be normalized by dividing by the total; default:True\n
+    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True\n
     | Returns:
     | :-
     | Returns a dataframe in the same style as the input 
@@ -499,10 +498,9 @@ def impute_and_normalize(df, group_sizes, impute = True, normalized = True):
     glycans = df[colname]
     df.drop([colname], axis = 1, inplace = True)
     if impute:
-        df = replace_zero_with_random_gaussian_knn(df, group_sizes)
-    if not normalized:
-        for col in df.columns:
-            df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+      df = replace_zero_with_random_gaussian_knn(df, group_sizes)
+    for col in df.columns:
+      df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
     df.insert(loc = 0, column = colname, value = glycans)
     return df
 
