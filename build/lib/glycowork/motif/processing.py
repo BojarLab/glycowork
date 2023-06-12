@@ -494,14 +494,17 @@ def impute_and_normalize(df, group_sizes, impute = True, normalized = True):
     | Returns a dataframe in the same style as the input 
     """
     thresh = int(round((df.shape[1]-1)/2))
-    df = df[df.apply(lambda row: (row != 0).sum(), axis = 1) >= thresh]
-    df.set_index(df.columns.tolist()[0], inplace = True)
+    df = df[df.apply(lambda row: (row != 0).sum(), axis = 1) >= thresh].copy()
+    colname = df.columns.tolist()[0]
+    glycans = df[colname]
+    df.drop([colname], axis = 1, inplace = True)
     if impute:
         df = replace_zero_with_random_gaussian_knn(df, group_sizes)
     if not normalized:
         for col in df.columns:
             df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
-    return df.reset_index()
+    df.insert(loc = 0, column = colname, value = glycans)
+    return df
 
 
 def variance_based_filtering(df, min_feature_variance = 0.01):
