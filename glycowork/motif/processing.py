@@ -3,6 +3,7 @@ import numpy as np
 import re
 from sklearn.impute import KNNImputer
 from glycowork.glycan_data.loader import unwrap, multireplace, find_nth
+rng = np.random.default_rng(42)
 
 
 def min_process_glycans(glycan_list):
@@ -424,7 +425,7 @@ def mahalanobis_variance(x, y, paired = False):
   n_iterations = 1000
   for _ in range(n_iterations):
       # Generate a random bootstrap sample
-      sample = data[np.random.choice(range(data.shape[0]), size = data.shape[0], replace = True)]
+      sample = data[rng.choice(range(data.shape[0]), size = data.shape[0], replace = True)]
       # Split the bootstrap sample into two groups
       x_sample = sample[:x.shape[0]]
       y_sample = sample[x.shape[0]:]
@@ -471,7 +472,7 @@ def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
         group_end = last_group_end + group_size
         for col in df.columns:
             if df[col][last_group_end:group_end].mean() < group_mean_threshold:
-                df[col][last_group_end:group_end] = df[col][last_group_end:group_end].apply(lambda x: max([np.random.normal(loc = mean, scale = std_dev), 0]) if pd.isna(x) else x)
+                df[col][last_group_end:group_end] = df[col][last_group_end:group_end].apply(lambda x: max([rng.normal(loc = mean, scale = std_dev), 0]) if pd.isna(x) else x)
         last_group_end = group_end
 
     # Perform KNN imputation for the rest

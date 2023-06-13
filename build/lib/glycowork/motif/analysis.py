@@ -141,7 +141,7 @@ def clean_up_heatmap(df):
   return result
 
 
-def make_heatmap(df, mode = 'sequence', feature_set = ['known'],
+def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
                  extra = 'termini', wildcard_list = [], datatype = 'response',
                  rarity_filter = 0.05, filepath = '', index_col = 'target',
                  **kwargs):
@@ -523,7 +523,7 @@ def get_differential_expression(df, group1, group2,
   return out.sort_values(by = 'corr p-val')
 
 
-def make_volcano(df, group1, group2,
+def get_volcano(df, group1, group2,
                  motifs = False, feature_set = ['exhaustive', 'known'],
                  impute = False, filepath = '', y_thresh = 0.05, x_thresh = 1.0,
                  label_changed = True, x_metric = 'Log2FC'):
