@@ -470,6 +470,7 @@ def get_differential_expression(df, group1, group2,
   # Variance-based filtering of features
   df = variance_based_filtering(df)
   glycans = df.index.tolist()
+  mean_abundance = df.iloc[:, 1:].mean(axis=1)
     
   df_a = df.loc[:, group1]
   df_b = df.loc[:, group2]
@@ -477,10 +478,11 @@ def get_differential_expression(df, group1, group2,
     # Motif/sequence set enrichment
     df2 = variance_stabilization(df, groups = [group1, group2])
     clusters = create_correlation_network(df2.T, set_thresh)
-    glycans, pvals, fc, effect_sizes, levene_pvals = [], [], [], [], []
+    glycans, mean_abundance, pvals, fc, effect_sizes, levene_pvals = [], [], [], [], [], []
     # Testing differential expression of each set/cluster
     for cluster in clusters:
       if len(cluster) > 1:
+        mean_abundance.append('')
         glycans.append(cluster)
         gp1 = df_a.loc[list(cluster), :]
         gp2 = df_b.loc[list(cluster), :]
@@ -512,11 +514,11 @@ def get_differential_expression(df, group1, group2,
     levene_pvals = [levene(df_a.iloc[k, :], df_b.iloc[k, :])[1] for k in range(len(df_a))]
     effect_sizes, variances = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :], paired = paired) for k in range(len(df_a))])
   # Multiple testing correction
-  pvals = multipletests(pvals, method = 'fdr_bh')[1]
+  corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
   levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
-  out = [(glycans[k], fc[k], pvals[k], levene_pvals[k], effect_sizes[k]) for k in range(len(glycans))]
+  out = [(glycans[k], mean_abundance[k], fc[k], pvals[k], corrpvals[k], levene_pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
-  out.columns = ['Glycan', 'Log2FC', 'corr p-val', 'corr Levene p-val', 'Effect size']
+  out.columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'corr Levene p-val', 'Effect size']
   if effect_size_variance:
       out['Effect size variance'] = variances
   out = out.dropna()
