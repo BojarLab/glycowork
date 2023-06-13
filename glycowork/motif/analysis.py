@@ -11,6 +11,8 @@ from scipy.stats import ttest_ind, ttest_rel, f, norm, levene
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from sklearn.manifold import TSNE
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
 from glycowork.motif.processing import cohen_d, mahalanobis_distance, mahalanobis_variance, variance_stabilization, impute_and_normalize, variance_based_filtering
@@ -420,6 +422,54 @@ def hotellings_t2(group1, group2, paired = False):
   return F, p_value
 
 
+def get_pca(df, groups = None, pc_x = 1, pc_y = 2, color = None, shape = None, filepath = ''):
+  """ PCA plot from glycomics abundance dataframe\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
+  | groups (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3]); default:None
+  |                alternatively: design dataframe with 'id' column of samples names and additional columns with meta information
+  | pc_x (int): principal component to plot on x axis; default:1
+  | pc_y (int): principal component to plot on y axis; default:2
+  | color (string): if design dataframe is provided: column name for color grouping; default:None
+  | shape (string): if design dataframe is provided: column name for shape grouping; default:None
+  | filepath (string): absolute path including full filename allows for saving the plot\n
+  | Returns:
+  | :-
+  | Prints PCA plot
+  """
+  # get pca
+  X = np.array(df.iloc[:, 1:].T)
+  scaler = StandardScaler()
+  X_std = scaler.fit_transform(X)
+  pca = PCA()
+  X_pca = pca.fit_transform(X_std)
+  percent_var = list(pca.explained_variance_ratio_*100)
+  df_pca = pd.DataFrame(X_pca)
+  
+  # merge with metadata
+  if isinstance(groups, pd.DataFrame):
+    df_pca['id'] = groups.id.values.tolist()
+    df_pca = df_pca.merge(groups)
+
+  # manual grouping assignment
+  if isinstance(groups, list):
+    color = groups
+  
+  # make plot
+  ax = sns.scatterplot(x = pc_x-1, y = pc_y-1, data = df_pca, hue = color, style = shape)
+  if color or shape:
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
+  ax.set(xlabel = 'PC'+ str(pc_x) + ': ' + str(round(percent_var[pc_x-1])) + '% variance' , 
+        ylabel =  'PC'+ str(pc_y) + ': ' + str(round(percent_var[pc_y-1])) + '% variance' , 
+        title = '' )
+  
+  # save to file
+  if len(filepath) > 1:
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+  
+  plt.show()
+
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False):
@@ -524,6 +574,69 @@ def get_differential_expression(df, group1, group2,
   out = out.dropna()
   return out.sort_values(by = 'corr p-val')
 
+
+def get_pval_distribution(df_res, filepath = ''):
+  """ p-value distribution plot of glycan differential expression result\n
+  | Arguments:
+  | :-
+  | df_res (dataframe): output from get_differential_expression
+  | filepath (string): absolute path including full filename allows for saving the plot\n
+  | Returns:
+  | :-
+  | prints p-value distribution plot
+  """  
+  # make plot
+  ax = sns.histplot(x = 'p-val', data = df_res, stat = 'frequency')
+  ax.set(xlabel = 'p-values' , 
+        ylabel =  'Frequency' , 
+        title = '' )
+  
+  # save to file
+  if len(filepath) > 1:
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+  
+  plt.show()  
+
+
+get_pval_distribution(res)
+
+def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
+  """ MA plot of glycan differential expression result\n
+  | Arguments:
+  | :-
+  | df_res (dataframe): output from get_differential_expression
+  | log2fc_thresh (int): absolute Log2FC threshold for highlighting datapoints
+  | sig_thresh (int): significance threshold for highlighting datapoints
+  | filepath (string): absolute path including full filename allows for saving the plot\n
+  | Returns:
+  | :-
+  | prints MA plot
+  """
+  # reorder to draw significant glycans/motifs last
+  df_res = df_res.sort_values('corr p-val', ascending = False)
+  
+  # color points by log2fc/pval
+  custom_palette = []
+  alphas = []
+  for k in range(len(df_res)):
+    if abs(df_res['Log2FC'].values.tolist()[k]) > log2fc_thresh and df_res['corr p-val'].values.tolist()[k] < sig_thresh:
+      custom_palette.append('#CC4446')
+      alphas.append(0.95)
+    else:
+      custom_palette.append('grey')
+      alphas.append(0.5)  
+  
+  # make plot
+  ax = sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res, c = custom_palette, alpha = alphas)
+  ax.set(xlabel = 'Mean Abundance' , 
+        ylabel =  'Log2FC' , 
+        title = '' )
+  
+  # save to file
+  if len(filepath) > 1:
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+  
+  plt.show()  
 
 def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
                  label_changed = True, x_metric = 'Log2FC', filepath = ''):
