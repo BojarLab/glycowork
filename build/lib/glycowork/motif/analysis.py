@@ -523,39 +523,29 @@ def get_differential_expression(df, group1, group2,
   return out.sort_values(by = 'corr p-val')
 
 
-def get_volcano(df, group1, group2,
-                 motifs = False, feature_set = ['exhaustive', 'known'],
-                 impute = False, filepath = '', y_thresh = 0.05, x_thresh = 1.0,
-                 label_changed = True, x_metric = 'Log2FC'):
+def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
+                 label_changed = True, x_metric = 'Log2FC', filepath = ''):
   """Plots glycan differential expression results in a volcano plot\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
-  | group1 (list): list of column indices for the first group of samples, usually the control
-  | group2 (list): list of column indices for the second group of samples
-  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-  | impute (bool): removes rows with too many missing values & replaces zeroes with draws from left-shifted distribution; default:False
-  | filepath (string): absolute path including full filename allows for saving the plot
+  | df_res (dataframe): output from get_differential_expression
   | y_thresh (float): corr p threshhold for labeling datapoints; default:0.05
   | x_thresh (float): absolute x metric threshold for labeling datapoints; defualt:1.0
   | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
-  | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2Fc', 'Cohens d'\n
+  | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2Fc', 'Cohens d'
+  | filepath (string): absolute path including full filename allows for saving the plot\n
   | Returns:
   | :-
   | Prints volcano plot
   """
 
-  # Get DE 
-  de_res = get_differential_expression(df = df, group1 = group1, group2 = group2, motifs = motifs,
-                                       feature_set = feature_set, impute = impute)
-  de_res['log_p'] = -np.log10(de_res['corr p-val'].values.tolist())
-  x = de_res[x_metric].values.tolist()
-  y = de_res['log_p'].values.tolist()
-  label = de_res['Glycan'].values.tolist()
+  df_res['log_p'] = -np.log10(df_res['corr p-val'].values.tolist())
+  x = df_res[x_metric].values.tolist()
+  y = df_res['log_p'].values.tolist()
+  label = df_res['Glycan'].values.tolist()
 
   # Make plot
-  ax = sns.scatterplot(x = x_metric, y = 'log_p', data = de_res, color = '#3E3E3E', alpha = 0.8)
+  ax = sns.scatterplot(x = x_metric, y = 'log_p', data = df_res, color = '#3E3E3E', alpha = 0.8)
   ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)', title = '')
   plt.axhline(y = -np.log10(y_thresh), c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
   plt.axvline(x = x_thresh, c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
