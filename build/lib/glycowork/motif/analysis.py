@@ -202,7 +202,7 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   else:
       plt.ylabel('Motifs')
   plt.tight_layout()
-  if len(filepath) > 1:
+  if filepath:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
   plt.show()
@@ -251,7 +251,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     plt.ylabel('Dim2')
     plt.legend(bbox_to_anchor = (1.05, 1), loc = 2, borderaxespad = 0.)
     plt.tight_layout()
-    if len(filepath) > 1:
+    if filepath:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
     plt.show()
@@ -374,7 +374,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
 
   fig.suptitle('Characterizing ' + str(sugar))
   fig.tight_layout()
-  if len(filepath) > 1:
+  if filepath:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
   plt.show()
@@ -422,13 +422,16 @@ def hotellings_t2(group1, group2, paired = False):
   return F, p_value
 
 
-def get_pca(df, groups = None, pc_x = 1, pc_y = 2, color = None, shape = None, filepath = ''):
+def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhaustive'],
+            pc_x = 1, pc_y = 2, color = None, shape = None, filepath = ''):
   """ PCA plot from glycomics abundance dataframe\n
   | Arguments:
   | :-
   | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
   | groups (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3]); default:None
-  |                alternatively: design dataframe with 'id' column of samples names and additional columns with meta information
+  |                     alternatively: design dataframe with 'id' column of samples names and additional columns with meta information
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
   | pc_x (int): principal component to plot on x axis; default:1
   | pc_y (int): principal component to plot on y axis; default:2
   | color (string): if design dataframe is provided: column name for color grouping; default:None
@@ -439,6 +442,9 @@ def get_pca(df, groups = None, pc_x = 1, pc_y = 2, color = None, shape = None, f
   | Prints PCA plot
   """
   # get pca
+  if motifs:
+      # Motif extraction and quantification
+      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set).T.reset_index()
   X = np.array(df.iloc[:, 1:].T)
   scaler = StandardScaler()
   X_std = scaler.fit_transform(X)
@@ -459,16 +465,17 @@ def get_pca(df, groups = None, pc_x = 1, pc_y = 2, color = None, shape = None, f
   # make plot
   ax = sns.scatterplot(x = pc_x-1, y = pc_y-1, data = df_pca, hue = color, style = shape)
   if color or shape:
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc = 'upper left', borderaxespad = 0)
   ax.set(xlabel = 'PC'+ str(pc_x) + ': ' + str(round(percent_var[pc_x-1])) + '% variance' , 
         ylabel =  'PC'+ str(pc_y) + ': ' + str(round(percent_var[pc_y-1])) + '% variance' , 
         title = '' )
   
   # save to file
-  if len(filepath) > 1:
+  if filepath:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
   
   plt.show()
+
 
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
@@ -490,11 +497,13 @@ def get_differential_expression(df, group1, group2,
   | :-
   | Returns a dataframe with:
   | (i) Differentially expressed glycans/motifs/sets
-  | (ii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
-  | (iii) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
-  | (iv) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
-  | (v) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
-  | (vi) [only if effect_size_variance=True] Effect size variance
+  | (ii) Their mean abundance across all samples in group1 + group2
+  | (iii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
+  | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
+  | (v) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
+  | (vi) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
+  | (vii) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
+  | (viiii) [only if effect_size_variance=True] Effect size variance
   """
   if isinstance(group1[0], str):
     pass
@@ -520,7 +529,7 @@ def get_differential_expression(df, group1, group2,
   # Variance-based filtering of features
   df = variance_based_filtering(df)
   glycans = df.index.tolist()
-  mean_abundance = df.iloc[:, 1:].mean(axis=1)
+  mean_abundance = df.mean(axis = 1)
     
   df_a = df.loc[:, group1]
   df_b = df.loc[:, group2]
@@ -528,14 +537,14 @@ def get_differential_expression(df, group1, group2,
     # Motif/sequence set enrichment
     df2 = variance_stabilization(df, groups = [group1, group2])
     clusters = create_correlation_network(df2.T, set_thresh)
-    glycans, mean_abundance, pvals, fc, effect_sizes, levene_pvals = [], [], [], [], [], []
+    glycans, mean_abundance_c, pvals, fc, effect_sizes, levene_pvals = [], [], [], [], [], []
     # Testing differential expression of each set/cluster
     for cluster in clusters:
       if len(cluster) > 1:
-        mean_abundance.append('')
         glycans.append(cluster)
         gp1 = df_a.loc[list(cluster), :]
         gp2 = df_b.loc[list(cluster), :]
+        mean_abundance_c.append(mean_abundance.loc[list(cluster)].mean())
         if paired:
             fc.append(np.log2(((gp2.values + 1e-8) / (gp1.values + 1e-8)).mean(axis = 1)).mean())
         else:
@@ -549,6 +558,7 @@ def get_differential_expression(df, group1, group2,
         effect_sizes.append(mahalanobis_distance(gp1, gp2, paired = paired))
         if effect_size_variance:
           variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
+    mean_abundance = mean_abundance_c
   else:
     if paired:
         fc = np.log2(((df_b.values + 1e-8)/ (df_a.values + 1e-8)).mean(axis = 1)).tolist()
@@ -587,18 +597,16 @@ def get_pval_distribution(df_res, filepath = ''):
   """  
   # make plot
   ax = sns.histplot(x = 'p-val', data = df_res, stat = 'frequency')
-  ax.set(xlabel = 'p-values' , 
-        ylabel =  'Frequency' , 
-        title = '' )
+  ax.set(xlabel = 'p-values', 
+        ylabel =  'Frequency', 
+        title = '')
   
   # save to file
-  if len(filepath) > 1:
+  if filepath:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
   
   plt.show()  
 
-
-get_pval_distribution(res)
 
 def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   """ MA plot of glycan differential expression result\n
@@ -628,15 +636,16 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   
   # make plot
   ax = sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res, c = custom_palette, alpha = alphas)
-  ax.set(xlabel = 'Mean Abundance' , 
-        ylabel =  'Log2FC' , 
-        title = '' )
+  ax.set(xlabel = 'Mean Abundance',
+        ylabel =  'Log2FC',
+        title = '')
   
   # save to file
-  if len(filepath) > 1:
+  if filepath:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
   
   plt.show()  
+
 
 def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
                  label_changed = True, x_metric = 'Log2FC', filepath = ''):
@@ -647,7 +656,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   | y_thresh (float): corr p threshhold for labeling datapoints; default:0.05
   | x_thresh (float): absolute x metric threshold for labeling datapoints; defualt:1.0
   | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
-  | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2Fc', 'Cohens d'
+  | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2FC', 'Effect size'
   | filepath (string): absolute path including full filename allows for saving the plot\n
   | Returns:
   | :-
@@ -679,8 +688,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   plt.show()
 
 
-def get_glycanova(df, groups, impute = True,
-                  motifs = False, feature_set = ['exhaustive', 'known']):
+def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known']):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
