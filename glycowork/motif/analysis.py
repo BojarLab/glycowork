@@ -503,7 +503,7 @@ def get_differential_expression(df, group1, group2,
   | (v) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
   | (vi) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
   | (vii) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
-  | (viiii) [only if effect_size_variance=True] Effect size variance
+  | (viii) [only if effect_size_variance=True] Effect size variance
   """
   if isinstance(group1[0], str):
     pass
@@ -512,7 +512,7 @@ def get_differential_expression(df, group1, group2,
     group2 = [df.columns.tolist()[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2]
   df.fillna(0, inplace = True)
-  df = impute_and_normalize(df, [len(group1), len(group2)], impute = impute)
+  df = impute_and_normalize(df, [group1, group2], impute = impute)
   glycans = df.iloc[:, 0].values.tolist()
   if motifs:
     # Motif extraction and quantification
@@ -703,7 +703,8 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     """
     results = []
     df.fillna(0, inplace = True)
-    df = impute_and_normalize(df, [groups.count(i) for i in sorted(set(groups))], impute = impute)
+    groups_unq = sorted(set(groups))
+    df = impute_and_normalize(df, [[df.columns.tolist()[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute)
     glycans = df.iloc[:,0].values.tolist()
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set)
