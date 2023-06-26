@@ -784,13 +784,11 @@ def get_glycan_change_over_time(data):
     """Tests if the abundance of a glycan changes significantly over time using an OLS model\n
     | Arguments:
     | :-
-    | 
     | data (numpy array): a 2D numpy array with two columns (time and glycan abundance) and one row per observation\n
     | Returns:
     | :-
-    | 
-    | (1) slope -- the slope of the regression line (i.e., the rate of change of glycan expression over time)
-    | (2) p_value -- the p-value of the t-test for the slope
+    | (i) slope -- the slope of the regression line (i.e., the rate of change of glycan expression over time)
+    | (ii) p_value -- the p-value of the t-test for the slope
     """
 
     # Extract arrays for time and glycan abundance from the 2D input array
@@ -809,3 +807,50 @@ def get_glycan_change_over_time(data):
     p_value = results.pvalues[1]
 
     return slope, p_value
+
+
+def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], min_samples = None):
+    """Analyzes time series data of glycans using an OLS model\n
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe containing sample IDs of style sampleID_UnitTimepoint_replicate (e.g., T1_h5_r1) in first column and glycan relative abundances in subsequent columns
+    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
+    | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
+    | Returns:
+    | :-
+    | Returns a dataframe with:
+    | (i) Glycans/motifs potentially exhibiting significant changes over time
+    | (ii) The slope of their expression curve over time
+    | (iii) Uncorrected p-values (t-test) for testing whether slope is significantly different from zero
+    | (iv) Corrected p-values (t-test with Benjamini-Hochberg correction) for testing whether slope is significantly different from zero
+    """
+    df.fillna(0, inplace = True)
+    df = df.set_index(df.columns.tolist()[0]).T
+    df = impute_and_normalize(df, [df.columns.tolist()[1:]], impute = impute, min_samples = min_samples)
+    df = df.reset_index()
+    glycans = df.iloc[:,0].values.tolist()
+    if motifs:
+        df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set)
+        # Deduplication
+        df = clean_up_heatmap(df.T)
+        # Re-normalization
+        for col in df.columns:
+            df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+    else:
+        df.set_index(df.columns.tolist()[0], inplace = True)
+    df = df.T.reset_index()
+    df[df.columns.tolist()[0]] = [float(k.split('_')[1][1:]) for k in df.iloc[:,0].values.tolist()]
+    df = df.sort_values(by = df.columns.tolist()[0])
+    time = np.array(df.iloc[:, 0].values.tolist())  # Time points
+    res = []
+    for c in df.columns.tolist()[1:]:
+        glycan_abundance = np.array(df.loc[:,c].values.tolist())  # Glycan abundances for each time point and replicate
+        data = np.column_stack((time, glycan_abundance))
+        s, p = get_glycan_change_over_time(data)
+        res.append((c, s, p))
+    res = pd.DataFrame(res)
+    res.columns = ['Glycan', 'Change', 'p-val']
+    res['corr p-val'] = multipletests(res['p-val'].values.tolist(), method = 'fdr_bh')[1]
+    return res.sort_values(by = 'corr p-val')
