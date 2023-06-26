@@ -479,7 +479,8 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
 
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
-                                impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False):
+                                impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
+                                min_samples = None):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -492,7 +493,8 @@ def get_differential_expression(df, group1, group2,
   | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
   | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
-  | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False\n
+  | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False
+  | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -512,7 +514,7 @@ def get_differential_expression(df, group1, group2,
     group2 = [df.columns.tolist()[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2]
   df.fillna(0, inplace = True)
-  df = impute_and_normalize(df, [group1, group2], impute = impute)
+  df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   glycans = df.iloc[:, 0].values.tolist()
   if motifs:
     # Motif extraction and quantification
@@ -688,7 +690,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   plt.show()
 
 
-def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known']):
+def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'], min_samples = None):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
@@ -696,7 +698,8 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | group_sizes (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3])
     | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)\n
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
     | Returns:
     | :-
     | Returns a pandas DataFrame with an F statistic and corrected p-value for each glycan.
@@ -704,7 +707,8 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     results = []
     df.fillna(0, inplace = True)
     groups_unq = sorted(set(groups))
-    df = impute_and_normalize(df, [[df.columns.tolist()[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute)
+    df = impute_and_normalize(df, [[df.columns.tolist()[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
+                              min_samples = min_samples)
     glycans = df.iloc[:,0].values.tolist()
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set)
@@ -760,11 +764,11 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed'):
         q = np.sum(weights * (effect_sizes - combined_effect_size)**2)
         df = len(effect_sizes) - 1
         c = np.sum(weights) - np.sum(weights**2) / np.sum(weights)
-        tau_squared = max((q - df) / c, 0)
+        tau_squared = max((q - df) / (c + 1e-8), 0)
         # Update weights for tau_squared
         weights = 1 / (variances + tau_squared)
         # Recalculate combined effect size
-        combined_effect_size = np.sum(weights * effect_sizes) / np.sum(weights)
+        combined_effect_size = np.sum(weights * effect_sizes) / (np.sum(weights) + 1e-8)
 
     # Calculate standard error and z-score
     se = np.sqrt(1 / (np.sum(weights) + 1e-8))
@@ -774,3 +778,34 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed'):
     p_value = 2 * (1 - norm.cdf(abs(z)))
 
     return combined_effect_size, p_value
+
+
+def get_glycan_change_over_time(data):
+    """Tests if the abundance of a glycan changes significantly over time using an OLS model\n
+    | Arguments:
+    | :-
+    | 
+    | data (numpy array): a 2D numpy array with two columns (time and glycan abundance) and one row per observation\n
+    | Returns:
+    | :-
+    | 
+    | (1) slope -- the slope of the regression line (i.e., the rate of change of glycan expression over time)
+    | (2) p_value -- the p-value of the t-test for the slope
+    """
+
+    # Extract arrays for time and glycan abundance from the 2D input array
+    time = data[:, 0]
+    glycan_abundance = data[:, 1]
+
+    # Add a constant (for the intercept term)
+    time_with_intercept = sm.add_constant(time)
+
+    # Fit the OLS model
+    model = sm.OLS(glycan_abundance, time_with_intercept)
+    results = model.fit()
+
+    # Get the slope & the p-value for the slope from the model summary
+    slope = results.params[1]
+    p_value = results.pvalues[1]
+
+    return slope, p_value

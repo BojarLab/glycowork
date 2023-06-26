@@ -482,23 +482,27 @@ def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
     return df.T
 
 
-def impute_and_normalize(df, groups, impute = True):
+def impute_and_normalize(df, groups, impute = True, min_samples = None):
     """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
     | groups (list): nested list of column name lists, one list per group
-    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True\n
+    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
     | Returns:
     | :-
     | Returns a dataframe in the same style as the input 
     """
     masks = []
     for group_cols in groups:
-        thresh = int(round(len(group_cols) / 2))
+        if min_samples is None:
+          thresh = int(round(len(group_cols) / 2))
+        else:
+          thresh = min_samples
         mask = df[group_cols].apply(lambda row: (row != 0).sum(), axis = 1) >= thresh
         masks.append(mask)
-    df = df[np.all(masks, axis=0)].copy()
+    df = df[np.all(masks, axis = 0)].copy()
     colname = df.columns.tolist()[0]
     glycans = df[colname]
     df.drop([colname], axis = 1, inplace = True)
