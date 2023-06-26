@@ -830,7 +830,8 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     df = df.set_index(df.columns.tolist()[0]).T
     df = impute_and_normalize(df, [df.columns.tolist()[1:]], impute = impute, min_samples = min_samples)
     df = df.reset_index()
-    glycans = df.iloc[:,0].values.tolist()
+    glycans = df.iloc[:, 0].values.tolist()
+    glycans = [k.split('.')[0] for k in glycans]
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set)
         # Deduplication
@@ -839,14 +840,16 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
         for col in df.columns:
             df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
     else:
-        df.set_index(df.columns.tolist()[0], inplace = True)
+        df.index = glycans
+        df.drop([df.columns.tolist()[0]], axis = 1, inplace = True)
+        df = df.groupby(df.index).mean()
     df = df.T.reset_index()
-    df[df.columns.tolist()[0]] = [float(k.split('_')[1][1:]) for k in df.iloc[:,0].values.tolist()]
+    df[df.columns.tolist()[0]] = [float(k.split('_')[1][1:]) for k in df.iloc[:, 0].values.tolist()]
     df = df.sort_values(by = df.columns.tolist()[0])
     time = np.array(df.iloc[:, 0].values.tolist())  # Time points
     res = []
     for c in df.columns.tolist()[1:]:
-        glycan_abundance = np.array(df.loc[:,c].values.tolist())  # Glycan abundances for each time point and replicate
+        glycan_abundance = np.array(df.loc[:, c].values.tolist())  # Glycan abundances for each time point and replicate
         data = np.column_stack((time, glycan_abundance))
         s, p = get_glycan_change_over_time(data)
         res.append((c, s, p))
