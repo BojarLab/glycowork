@@ -312,7 +312,7 @@ def get_terminal_structures(glycan, libr = None):
     libr = lib
   ggraph = ensure_graph(glycan, libr = libr)
   nodeDict = dict(ggraph.nodes(data = True))
-  return [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in list(ggraph.nodes())[:-1] if ggraph.degree[k] == 1 and k+1 in nodeDict.keys()]
+  return [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in list(ggraph.nodes())[:-1] if ggraph.degree[k] == 1 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages]
 
 
 def create_correlation_network(df, correlation_threshold):
