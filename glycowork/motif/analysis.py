@@ -742,13 +742,16 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     return results_df.sort_values(by = 'corr p-val')
 
 
-def get_meta_analysis(effect_sizes, variances, model = 'fixed'):
+def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
+                      study_names = []):
     """Fixed-effects model or random-effects model for meta-analysis of glycan effect sizes\n
     | Arguments:
     | :-
     | effect_sizes (array-like): Effect sizes (e.g., Cohen's d) from each study
     | variances (array-like): Corresponding effect size variances from each study
-    | model (string): Whether to use 'fixed' or 'random' effects model\n
+    | model (string): Whether to use 'fixed' or 'random' effects model
+    | filepath (string): absolute path including full filename allows for saving the Forest plot
+    | study_names (list): list of strings indicating the name of each study\n
     | Returns:
     | :-
     | (1) The combined effect size 
@@ -776,6 +779,40 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed'):
 
     # Two-tailed p-value
     p_value = 2 * (1 - norm.cdf(abs(z)))
+
+    # Check whether Forest plot should be constructed and saved
+    if len(filepath) > 1:
+        df_temp = pd.DataFrame([study_names, effect_sizes, variances]).T
+        df_temp.columns = ['Study', 'EffectSize', 'EffectSizeVariance']
+        # sort studies by effect size
+        df_temp = df_temp.sort_values(by = 'EffectSize', key = abs, ascending = False)
+        # calculate standard error
+        standard_error = np.sqrt(df_temp.EffectSizeVariance.values.tolist())
+        # calculate the confidence interval
+        df_temp['lower'] = df_temp.EffectSize.values - 1.96 * standard_error
+        df_temp['upper'] = df_temp.EffectSize.values + 1.96 * standard_error
+        # Create a new figure and a axes to plot on
+        fig, ax = plt.subplots(figsize = (8, df_temp.shape[0]*0.6))  # adjust the size as needed
+        y_pos = np.arange(df_temp.shape[0])
+        # Draw a horizontal line for each study, with x-values between the lower and upper confidence bounds
+        ax.hlines(y_pos, df_temp['lower'], df_temp['upper'], color = 'skyblue')
+        # Draw a marker at the effect size
+        ax.plot(df_temp['EffectSize'], y_pos, 'o', color = 'skyblue')
+        # Draw a vertical line at x=0 (or change to the desired reference line)
+        ax.vlines(0, -1, len(df_temp), colors = 'gray', linestyles = 'dashed')
+        # Label the y-axis with the study names
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(df_temp['Study'])
+        # Invert y-axis so that studies are displayed top-down
+        ax.invert_yaxis()
+        # Label the x-axis and give the plot a title
+        ax.set_xlabel('Effect size')
+        # Remove plot borders
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        plt.tight_layout()
+        plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+                    bbox_inches = 'tight')
 
     return combined_effect_size, p_value
 

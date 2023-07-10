@@ -176,7 +176,7 @@ def annotate_dataset(glycans, motifs = None,
     # Calculates graph features of each glycan
     shopping_cart.append(pd.concat([generate_graph_features(k, libr = libr) for k in glycans], axis = 0))
   if 'exhaustive' in feature_set:
-    # Counts disaccharides and glycoletters in each glycan
+    # Counts disaccharides and monosaccharides in each glycan
     temp = get_k_saccharides(glycans, size = 2, up_to = True, libr = libr)
     temp.index = glycans
     shopping_cart.append(temp)
