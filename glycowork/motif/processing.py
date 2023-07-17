@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import re
 from sklearn.impute import KNNImputer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.base import BaseEstimator
 from glycowork.glycan_data.loader import unwrap, multireplace, find_nth
 rng = np.random.default_rng(42)
 
@@ -481,6 +483,56 @@ def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
 
     return df.T
 
+class MissForest:
+    """Parameters
+    (adapted from https://github.com/yuenshingyan/MissForest)
+    ----------
+    regressor : estimator object.
+    A object of that type is instantiated for each imputation.
+    This object is assumed to implement the scikit-learn estimator API.
+
+    n_iter : int
+    Determines the number of iterations for the imputation process.
+    """
+
+    def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), n_iter = 5):
+        self.regressor = regressor
+        self.n_iter = n_iter
+
+    def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        # Step 1: Initialization 
+        # Keep track of where NaNs are in the original dataset
+        X_nan = X.isnull()
+
+        # Replace NaNs with median of the column in a new dataset that will be transformed
+        X_transform = X.copy()
+        X_transform.fillna(X_transform.median(), inplace = True)
+
+        for _ in range(self.n_iter):
+            # Step 2: Imputation
+            # Sort columns by the number of NaNs (ascending)
+            sorted_columns = X_nan.sum().sort_values().index.tolist()
+
+            for column in sorted_columns:
+                if X_nan[column].any():  # if column has missing values in original dataset
+                    # Split data into observed and missing for the current column
+                    observed = X_transform.loc[~X_nan[column]]
+                    missing = X_transform.loc[X_nan[column]]
+                    
+                    # Use other columns to predict the current column
+                    X_other_columns = observed.drop(columns = column)
+                    y_observed = observed[column]
+
+                    self.regressor.fit(X_other_columns, y_observed)
+                    
+                    X_missing_other_columns = missing.drop(columns = column)
+                    y_missing_pred = self.regressor.predict(X_missing_other_columns)
+
+                    # Replace missing values in the current column with predictions
+                    X_transform.loc[X_nan[column], column] = y_missing_pred
+
+        return X_transform
+
 
 def impute_and_normalize(df, groups, impute = True, min_samples = None):
     """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
@@ -494,6 +546,7 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
     | :-
     | Returns a dataframe in the same style as the input 
     """
+    old_cols = []
     masks = []
     for group_cols in groups:
         if min_samples is None:
@@ -506,10 +559,18 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
     colname = df.columns.tolist()[0]
     glycans = df[colname]
     df.drop([colname], axis = 1, inplace = True)
+    if isinstance(df.columns.tolist()[0], int):
+      old_cols = df.columns
+      df.columns = df.columns.astype(str)
     if impute:
-      df = replace_zero_with_random_gaussian_knn(df, [len(group) for group in groups])
+      #df = replace_zero_with_random_gaussian_knn(df, [len(group) for group in groups])
+      mf = MissForest()
+      df.replace(0, np.nan, inplace = True)
+      df = mf.fit_transform(df)
     for col in df.columns:
       df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+    if len(old_cols) > 0:
+      df.columns = old_cols
     df.insert(loc = 0, column = colname, value = glycans)
     return df
 
