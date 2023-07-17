@@ -483,6 +483,7 @@ def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
 
     return df.T
 
+
 class MissForest:
     """Parameters
     (adapted from https://github.com/yuenshingyan/MissForest)
@@ -530,7 +531,8 @@ class MissForest:
 
                     # Replace missing values in the current column with predictions
                     X_transform.loc[X_nan[column], column] = y_missing_pred
-
+        # Avoiding zeros
+        X_transform += 1e-6
         return X_transform
 
 
