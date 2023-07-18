@@ -10,6 +10,7 @@ from collections import Counter
 from scipy.stats import ttest_ind, ttest_rel, f, norm, levene
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -690,7 +691,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   plt.show()
 
 
-def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'], min_samples = None):
+def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'], min_samples = None, posthoc = True):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
@@ -699,12 +700,15 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
+    | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True\n
     | Returns:
     | :-
-    | Returns a pandas DataFrame with an F statistic and corrected p-value for each glycan.
+    | (i)a pandas DataFrame with an F statistic and corrected p-value for each glycan.
+    | (ii) a dictionary of type glycan : pandas DataFrame, with post-hoc results for each glycan with a significant ANOVA.
     """
     results = []
+    posthoc_results = {}
     df.fillna(0, inplace = True)
     groups_unq = sorted(set(groups))
     df = impute_and_normalize(df, [[df.columns.tolist()[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
@@ -735,11 +739,14 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
         f_value = anova_table["F"]["C(Group)"]
         p_value = anova_table["PR(>F)"]["C(Group)"]
         results.append((glycan, f_value, p_value))
+        if p_value < 0.05 and posthoc:
+            posthoc = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = 0.05)
+            posthoc_results[glycan] = pd.DataFrame(data = posthoc._results_table.data[1:], columns = posthoc._results_table.data[0])
 
     results_df = pd.DataFrame(results, columns=["Glycan", "F statistic", "corr p-val"])
     results_df['corr p-val'] = multipletests(results_df['corr p-val'].values.tolist(),
                                              method = 'fdr_bh')[1]
-    return results_df.sort_values(by = 'corr p-val')
+    return results_df.sort_values(by = 'corr p-val'), posthoc_results
 
 
 def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
