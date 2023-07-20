@@ -540,7 +540,7 @@ def get_differential_expression(df, group1, group2,
     # Motif/sequence set enrichment
     df2 = variance_stabilization(df, groups = [group1, group2])
     clusters = create_correlation_network(df2.T, set_thresh)
-    glycans, mean_abundance_c, pvals, fc, effect_sizes, levene_pvals = [], [], [], [], [], []
+    glycans, mean_abundance_c, pvals, fc, levene_pvals, effect_sizes, variances = [], [], [], [], [], [], []
     # Testing differential expression of each set/cluster
     for cluster in clusters:
       if len(cluster) > 1:
@@ -552,10 +552,10 @@ def get_differential_expression(df, group1, group2,
             fc.append(np.log2(((gp2.values + 1e-8) / (gp1.values + 1e-8)).mean(axis = 1)).mean())
         else:
             fc.append(np.log2((gp2.mean(axis = 1) + 1e-8) / (gp1.mean(axis = 1) + 1e-8)).mean())
-        gp1 = df2.loc[:, group1].loc[list(cluster), :]
-        gp2 = df2.loc[:, group2].loc[list(cluster), :]
+        gp1 = df2.loc[list(cluster), group1]
+        gp2 = df2.loc[list(cluster), group2]
         # Hotelling's T^2 test for multivariate comparisons
-        pvals.append(hotellings_t2(gp1.values, gp2.values, paired = paired)[1])
+        pvals.append(hotellings_t2(gp1.T.values, gp2.T.values, paired = paired)[1])
         levene_pvals.append(np.mean([levene(gp1.loc[variable, :], gp2.loc[variable, :])[1] for variable in cluster]))
         # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
         effect_sizes.append(mahalanobis_distance(gp1, gp2, paired = paired))
@@ -704,7 +704,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True\n
     | Returns:
     | :-
-    | (i)a pandas DataFrame with an F statistic and corrected p-value for each glycan.
+    | (i) a pandas DataFrame with an F statistic and corrected p-value for each glycan.
     | (ii) a dictionary of type glycan : pandas DataFrame, with post-hoc results for each glycan with a significant ANOVA.
     """
     results = []
@@ -743,7 +743,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
             posthoc = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = 0.05)
             posthoc_results[glycan] = pd.DataFrame(data = posthoc._results_table.data[1:], columns = posthoc._results_table.data[0])
 
-    results_df = pd.DataFrame(results, columns=["Glycan", "F statistic", "corr p-val"])
+    results_df = pd.DataFrame(results, columns = ["Glycan", "F statistic", "corr p-val"])
     results_df['corr p-val'] = multipletests(results_df['corr p-val'].values.tolist(),
                                              method = 'fdr_bh')[1]
     return results_df.sort_values(by = 'corr p-val'), posthoc_results

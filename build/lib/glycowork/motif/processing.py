@@ -420,7 +420,7 @@ def mahalanobis_variance(x, y, paired = False):
   | Returns Mahalanobis distance as a measure of effect size
   """
   # Combine gp1 and gp2 into a single matrix
-  data = np.concatenate((x, y), axis = 0)
+  data = np.concatenate((x.T, y.T), axis = 0)
   # Initialize an empty list to store the bootstrap samples
   bootstrap_samples = []
   # Perform bootstrap resampling
@@ -429,10 +429,10 @@ def mahalanobis_variance(x, y, paired = False):
       # Generate a random bootstrap sample
       sample = data[rng.choice(range(data.shape[0]), size = data.shape[0], replace = True)]
       # Split the bootstrap sample into two groups
-      x_sample = sample[:x.shape[0]]
-      y_sample = sample[x.shape[0]:]
+      x_sample = sample[:x.shape[1]]
+      y_sample = sample[x.shape[1]:]
       # Calculate the Mahalanobis distance for the bootstrap sample
-      bootstrap_samples.append(mahalanobis_distance(x_sample, y_sample, paired = paired))
+      bootstrap_samples.append(mahalanobis_distance(x_sample.T, y_sample.T, paired = paired))
   # Convert the list of bootstrap samples into a numpy array
   bootstrap_samples = np.array(bootstrap_samples)
   # Estimate the variance of the Mahalanobis distance
