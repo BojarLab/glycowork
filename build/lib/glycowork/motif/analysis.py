@@ -129,6 +129,14 @@ def get_representative_substructures(enrichment_df, libr = None):
 
 
 def clean_up_heatmap(df):
+  """removes redundant motifs from the dataframe\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with glycan data, rows are glycan motifs and columns are samples\n
+  | Returns:
+  | :-
+  | Returns a cleaned up dataframe of the same format as the input
+  """
   df.index = [k+' '*20 if k in motif_list.motif_name else k for k in df.index]
   # Group the DataFrame by identical rows
   grouped = df.groupby(list(df.columns))
@@ -577,8 +585,11 @@ def get_differential_expression(df, group1, group2,
     levene_pvals = [levene(df_a.iloc[k, :], df_b.iloc[k, :])[1] for k in range(len(df_a))]
     effect_sizes, variances = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :], paired = paired) for k in range(len(df_a))])
   # Multiple testing correction
-  corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
-  levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
+  if len(pvals) > 0:
+      corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
+      levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
+  else:
+      corrpvals = []
   out = [(glycans[k], mean_abundance[k], fc[k], pvals[k], corrpvals[k], levene_pvals[k], effect_sizes[k]) for k in range(len(glycans))]
   out = pd.DataFrame(out)
   out.columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'corr Levene p-val', 'Effect size']
@@ -657,7 +668,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   | :-
   | df_res (dataframe): output from get_differential_expression
   | y_thresh (float): corr p threshhold for labeling datapoints; default:0.05
-  | x_thresh (float): absolute x metric threshold for labeling datapoints; defualt:1.0
+  | x_thresh (float): absolute x metric threshold for labeling datapoints; default:1.0
   | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
   | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2FC', 'Effect size'
   | filepath (string): absolute path including full filename allows for saving the plot\n

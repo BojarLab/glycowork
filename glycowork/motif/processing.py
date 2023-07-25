@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import re
-from sklearn.impute import KNNImputer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from glycowork.glycan_data.loader import unwrap, multireplace, find_nth
@@ -459,29 +458,6 @@ def variance_stabilization(data, groups = None):
       group_data = data.loc[:, group]
       data.loc[:, group] = (group_data - np.mean(group_data, axis = 0)) / np.std(group_data, axis = 0)
   return data
-
-
-def replace_zero_with_random_gaussian_knn(df, group_sizes, mean = 0.01,
-                                          std_dev = 0.01, group_mean_threshold = 3,
-                                          n_neighbors = 3):
-    df = df.T
-    # Replace zeros with NaNs temporarily
-    df = df.replace(0, np.nan)
-
-    # If group mean < group_mean_threshold, replace NaNs (originally zeros) with Gaussian values
-    last_group_end = 0
-    for group_size in group_sizes:
-        group_end = last_group_end + group_size
-        for col in df.columns:
-            if df[col][last_group_end:group_end].mean() < group_mean_threshold:
-                df[col][last_group_end:group_end] = df[col][last_group_end:group_end].apply(lambda x: max([rng.normal(loc = mean, scale = std_dev), 0]) if pd.isna(x) else x)
-        last_group_end = group_end
-
-    # Perform KNN imputation for the rest
-    imputer = KNNImputer(n_neighbors = n_neighbors)
-    df[:] = imputer.fit_transform(df)
-
-    return df.T
 
 
 class MissForest:
