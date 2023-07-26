@@ -2300,10 +2300,11 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
   | scale_range (tuple): tuple of two integers defining min/max glycan dim; default:(25,80)
   | compact (bool): if True, draw compact glycan figures; default:False
   | glycan_size (string): modify glycan size; default:'medium'; options are 'small', 'medium', 'large'
+  | filepath (string): absolute path including full filename allows for saving the plot
   | scale_by_DE_res (df): result table from motif_analysis.get_differential_expression. Include to scale glycan figure size by -10logp
-  | y_thresh (float): corr p threshhold for datapoints included for scaling, set to match get_differential_expression; default:0.05
   | x_thresh (float): absolute x metric threshold for datapoints included for scaling, set to match get_differential_expression; default:1.0
-  | filepath (string): absolute path including full filename allows for saving the plot\n
+  | y_thresh (float): corr p threshhold for datapoints included for scaling, set to match get_differential_expression; default:0.05
+  | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2FC', 'Effect size'\n
   | Returns:
   | :-
   | Modified figure svg code

@@ -7,7 +7,7 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 plt.style.use('default')
 from collections import Counter
-from scipy.stats import ttest_ind, ttest_rel, f, norm, levene
+from scipy.stats import ttest_ind, ttest_rel, f, norm, levene, f_oneway
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
@@ -835,11 +835,12 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
     return combined_effect_size, p_value
 
 
-def get_glycan_change_over_time(data):
+def get_glycan_change_over_time(data, degree = 1):
     """Tests if the abundance of a glycan changes significantly over time using an OLS model\n
     | Arguments:
     | :-
-    | data (numpy array): a 2D numpy array with two columns (time and glycan abundance) and one row per observation\n
+    | data (numpy array): a 2D numpy array with two columns (time and glycan abundance) and one row per observation
+    | degree (int): degree of the polynomial for regression, default:1 for linear regression\n
     | Returns:
     | :-
     | (i) slope -- the slope of the regression line (i.e., the rate of change of glycan expression over time)
@@ -849,22 +850,35 @@ def get_glycan_change_over_time(data):
     # Extract arrays for time and glycan abundance from the 2D input array
     time = data[:, 0]
     glycan_abundance = data[:, 1]
+    
+    if degree == 1:
+        # Add a constant (for the intercept term)
+        time_with_intercept = sm.add_constant(time)
 
-    # Add a constant (for the intercept term)
-    time_with_intercept = sm.add_constant(time)
+        # Fit the OLS model
+        model = sm.OLS(glycan_abundance, time_with_intercept)
+        results = model.fit()
 
-    # Fit the OLS model
-    model = sm.OLS(glycan_abundance, time_with_intercept)
-    results = model.fit()
+        # Get the slope & the p-value for the slope from the model summary
+        coefficients = results.params[1]
+        p_value = results.pvalues[1]
 
-    # Get the slope & the p-value for the slope from the model summary
-    slope = results.params[1]
-    p_value = results.pvalues[1]
+    else:
+        # Polynomial Regression
+        coeffs = np.polyfit(time, glycan_abundance, degree)
+        p = np.poly1d(coeffs)
 
-    return slope, p_value
+        # Calculate the residuals
+        residuals = glycan_abundance - p(time)
+        
+        # Perform F-test to get p_value
+        _, p_value = f_oneway(glycan_abundance, residuals)
+        coefficients = coeffs
+
+    return coefficients, p_value
 
 
-def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], min_samples = None):
+def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1, min_samples = None):
     """Analyzes time series data of glycans using an OLS model\n
     | Arguments:
     | :-
@@ -872,6 +886,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+    | degree (int): degree of the polynomial for regression, default:1 for linear regression
     | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
     | Returns:
     | :-
@@ -906,7 +921,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     for c in df.columns.tolist()[1:]:
         glycan_abundance = np.array(df.loc[:, c].values.tolist())  # Glycan abundances for each time point and replicate
         data = np.column_stack((time, glycan_abundance))
-        s, p = get_glycan_change_over_time(data)
+        s, p = get_glycan_change_over_time(data, degree = degree)
         res.append((c, s, p))
     res = pd.DataFrame(res)
     res.columns = ['Glycan', 'Change', 'p-val']

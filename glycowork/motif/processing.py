@@ -541,7 +541,6 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
       old_cols = df.columns
       df.columns = df.columns.astype(str)
     if impute:
-      #df = replace_zero_with_random_gaussian_knn(df, [len(group) for group in groups])
       mf = MissForest()
       df.replace(0, np.nan, inplace = True)
       df = mf.fit_transform(df)
