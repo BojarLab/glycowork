@@ -431,6 +431,35 @@ def hotellings_t2(group1, group2, paired = False):
   return F, p_value
 
 
+def get_coverage(df, filepath = ''):
+  """ Plot glycan coverage across samples, ordered by average intensity\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
+  | filepath (string): absolute path including full filename allows for saving the plot\n
+  | Returns:
+  | :-
+  | Prints the heatmap
+  """
+
+  d = df.iloc[:,1:]
+
+  # arrange by mean intensity across all samples
+  order = d.mean(axis = 1).rank(ascending = True).sort_values().index
+
+  # plot figure
+  ax = sns.heatmap(d.loc[order], cmap = sns.cubehelix_palette(as_cmap=True, start = 3, dark = 0.50, light = 0.90),
+                   cbar_kws={'label': 'Relative Intensity'}, cbar = True, mask = d.loc[order] == 0)
+
+  ax.set(xlabel = 'Samples', ylabel =  'Glycan ID', title = '')
+
+  # save figure
+  if len(filepath) > 1:
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+
+  plt.show()
+  
+
 def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhaustive'],
             pc_x = 1, pc_y = 2, color = None, shape = None, filepath = ''):
   """ PCA plot from glycomics abundance dataframe\n
