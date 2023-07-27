@@ -2052,7 +2052,7 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50):
     d.append(p)
 
 
-def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, output = None):
+def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, filepath = None):
   """Draws a glycan structure based on the provided input.\n
   | Arguments:
   | :-
@@ -2061,7 +2061,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   | compact (bool, optional): Set to True to draw the structure in a compact form. Default: False.
   | show_linkage (bool, optional): Set to False to hide the linkage information. Default: True.
   | dim (int, optional): The dimension (size) of the individual sugar units in the structure. Default: 50.
-  | output (string, optional): The path to the output file to save as SVG or PDF. Default: None.\n
+  | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.\n
   """
   bond_hack = False
   if 'Man(a1-?)' in draw_this:
@@ -2258,18 +2258,21 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
 
   d2.append(d)
 
-  if output is not None:
+  if filepath is not None:
+
+      filepath = filepath.replace('?', '_')
+
       data = d2.as_svg()
       data = re.sub(r'<text font-size="17.5" ', r'<text font-size="17.5" font-family="century gothic" font-weight="bold" ', data)
       data = re.sub(r'<text font-size="20.0" ', r'<text font-size="20" font-family="century gothic" ', data)
       data = re.sub(r'<text font-size="15.0" ', r'<text font-size="17.5" font-family="century gothic" font-style="italic" ', data)
 
-      if 'svg' in output:
-        with open(output, 'w') as f:
+      if 'svg' in filepath:
+        with open(filepath, 'w') as f:
           f.write(data)
 
-      elif 'pdf' in output:
-        cairosvg.svg2pdf(bytestring = data, write_to = output)
+      elif 'pdf' in filepath:
+        cairosvg.svg2pdf(bytestring = data, write_to = filepath)
   return d2
 
 
