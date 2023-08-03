@@ -1,7 +1,7 @@
-import networkx as nx
 from glycowork.glycan_data.loader import lib
 from glycowork.motif.tokenization import check_nomenclature
-from glycowork.motif.graph import glycan_to_graph, glycan_to_nxGraph, compare_glycans
+from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
+
 
 def check_presence(glycan, df, colname = 'target', libr = None,
                    name = None, rank = 'Species', fast = False):
@@ -10,7 +10,7 @@ def check_presence(glycan, df, colname = 'target', libr = None,
   | :-
   | glycan (string): IUPAC-condensed glycan sequence
   | df (dataframe): glycan dataframe where glycans are under colname and ideally taxonomic labels are columns
-  | libr (list): sorted list of unique glycoletters observed in the glycans of our dataset
+  | libr (dict): dictionary of form glycoletter:index
   | name (string): name of the species (etc.) of interest
   | rank (string): column name for filtering; default: species
   | fast (bool): True uses precomputed glycan graphs, only use if df has column 'graph' with glycan graphs\n
@@ -28,9 +28,9 @@ def check_presence(glycan, df, colname = 'target', libr = None,
         print("This is the best: %s is not in dataset" % name)
     if fast:
       ggraph = glycan_to_nxGraph(glycan, libr = libr)
-      check_all = [compare_glycans(ggraph, k, libr = libr) for k in df.graph.values.tolist()]
+      check_all = [compare_glycans(ggraph, k, libr = libr) for k in df.graph]
     else:
-      check_all = [compare_glycans(glycan, k, libr = libr) for k in df[colname].values.tolist()]
+      check_all = [compare_glycans(glycan, k, libr = libr) for k in df[colname]]
     if any(check_all):
       print("Glycan already in dataset.")
     else:

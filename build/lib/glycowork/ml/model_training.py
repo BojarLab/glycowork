@@ -9,12 +9,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error, label_ranking_average_precision_score, ndcg_score
 from glycowork.motif.annotate import annotate_dataset
-from glycowork.glycan_data.loader import lib
 
-#choose the correct computing architecture
+# Choose the correct computing architecture
 device = "cpu"
 if torch.cuda.is_available():
     device = "cuda:0"
+
 
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
@@ -23,7 +23,7 @@ class EarlyStopping:
         Args:
             patience (int): How long to wait after last time validation loss improved.
                             Default: 7
-            verbose (bool): If True, prints a message for each validation loss improvement. 
+            verbose (bool): If True, prints a message for each validation loss improvement.
                             Default: False
         """
         self.patience = patience
@@ -54,13 +54,16 @@ class EarlyStopping:
         '''Saves model when validation loss decrease.'''
         if self.verbose:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-        #torch.save(model.state_dict(), 'drive/My Drive/checkpoint.pt')
+        # torch.save(model.state_dict(), 'drive/My Drive/checkpoint.pt')
         self.val_loss_min = val_loss
 
+
 def sigmoid(x):
-       return 1 / (1 + math.exp(-x))
+    return 1 / (1 + math.exp(-x))
+
 
 def disable_running_stats(model):
+
     def _disable(module):
         if isinstance(module, torch.nn.BatchNorm1d):
             module.backup_momentum = module.momentum
@@ -68,12 +71,15 @@ def disable_running_stats(model):
 
     model.apply(_disable)
 
+
 def enable_running_stats(model):
+
     def _enable(module):
         if isinstance(module, torch.nn.BatchNorm1d) and hasattr(module, "backup_momentum"):
             module.momentum = module.backup_momentum
 
     model.apply(_enable)
+
 
 def train_model(model, dataloaders, criterion, optimizer,
                 scheduler, num_epochs = 25, patience = 50,
@@ -105,22 +111,22 @@ def train_model(model, dataloaders, criterion, optimizer,
       best_acc = 100.0
   val_losses = []
   val_acc = []
-  
+
   for epoch in range(num_epochs):
     print('Epoch {}/{}'.format(epoch, num_epochs - 1))
     print('-'*10)
-    
+
     for phase in ['train', 'val']:
       if phase == 'train':
         model.train()
       else:
         model.eval()
-        
+  
       running_loss = []
       running_acc = []
       running_mcc = []
       for data in dataloaders[phase]:
-        #get all relevant node attributes; top LectinOracle-style models, bottom SweetNet-style models
+        # Get all relevant node attributes; top LectinOracle-style models, bottom SweetNet-style models
         try:
             x, y, edge_index, prot, batch = data.labels, data.y, data.edge_index, data.train_idx, data.batch
             prot = prot.view(max(batch)+1, -1).to(device)
@@ -136,12 +142,12 @@ def train_model(model, dataloaders, criterion, optimizer,
         optimizer.zero_grad()
 
         with torch.set_grad_enabled(phase == 'train'):
-          #first forward pass
+          # First forward pass
           if mode+mode2 == 'classificationmulti' or mode+mode2 == 'multilabelmulti':
               enable_running_stats(model)
           try:
               pred = model(prot, x, edge_index, batch)
-              loss = criterion(pred, y.view(-1,1))
+              loss = criterion(pred, y.view(-1, 1))
           except:
               pred = model(x, edge_index, batch)
               loss = criterion(pred, y)
@@ -150,17 +156,17 @@ def train_model(model, dataloaders, criterion, optimizer,
             loss.backward()
             if mode+mode2 == 'classificationmulti' or mode+mode2 == 'multilabelmulti':
                 optimizer.first_step(zero_grad = True)
-                #second forward pass
+                # Second forward pass
                 disable_running_stats(model)
                 try:
-                    criterion(model(prot, x, edge_index, batch), y.view(-1,1)).backward()
+                    criterion(model(prot, x, edge_index, batch), y.view(-1, 1)).backward()
                 except:
                     criterion(model(x, edge_index, batch), y).backward()
                 optimizer.second_step(zero_grad = True)
             else:
                 optimizer.step()
 
-        #collecting relevant metrics            
+        # Collecting relevant metrics         
         running_loss.append(loss.item())
         if mode == 'classification':
             if mode2 == 'multi':
@@ -168,18 +174,17 @@ def train_model(model, dataloaders, criterion, optimizer,
             else:
                 pred2 = [sigmoid(x) for x in pred.cpu().detach().numpy()]
                 pred2 = [np.round(x) for x in pred2]
-            running_acc.append(accuracy_score(
-                                   y.cpu().detach().numpy().astype(int), pred2))
+            running_acc.append(accuracy_score(y.cpu().detach().numpy().astype(int), pred2))
             running_mcc.append(matthews_corrcoef(y.detach().cpu().numpy(), pred2))
         elif mode == 'multilabel':
             running_acc.append(label_ranking_average_precision_score(y.cpu().detach().numpy().astype(int),
-                                                                 pred.cpu().detach().numpy()))
+                                                                     pred.cpu().detach().numpy()))
             running_mcc.append(ndcg_score(y.cpu().detach().numpy().astype(int),
-                                                                 pred.cpu().detach().numpy()))
+                                          pred.cpu().detach().numpy()))
         else:
             running_acc.append(mean_squared_error(y.cpu().detach().numpy(), pred.cpu().detach().numpy()))
 
-      #averaging metrics at end of epoch  
+      # Averaging metrics at end of epoch
       epoch_loss = np.mean(running_loss)
       epoch_acc = np.mean(running_acc)
       if mode != 'regression':
@@ -187,16 +192,13 @@ def train_model(model, dataloaders, criterion, optimizer,
       else:
           epoch_mcc = 0
       if mode == 'classification':
-          print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(
-              phase, epoch_loss, epoch_acc, epoch_mcc))
+          print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, epoch_loss, epoch_acc, epoch_mcc))
       elif mode == 'multilabel':
-          print('{} Loss: {:.4f} LRAP: {:.4f} NDCG: {:.4f}'.format(
-              phase, epoch_loss, epoch_acc, epoch_mcc))
+          print('{} Loss: {:.4f} LRAP: {:.4f} NDCG: {:.4f}'.format(phase, epoch_loss, epoch_acc, epoch_mcc))
       else:
-          print('{} Loss: {:.4f} MSE: {:.4f}'.format(
-              phase, epoch_loss, epoch_acc))
+          print('{} Loss: {:.4f} MSE: {:.4f}'.format(phase, epoch_loss, epoch_acc))
 
-      #keep best model state_dict
+      # Keep best model state_dict
       if phase == 'val' and epoch_loss <= best_loss:
         best_loss = epoch_loss
         best_model_wts = copy.deepcopy(model.state_dict())
@@ -209,18 +211,18 @@ def train_model(model, dataloaders, criterion, optimizer,
       if phase == 'val':
         val_losses.append(epoch_loss)
         val_acc.append(epoch_acc)
-        #check Early Stopping & adjust learning rate if needed
+        # Check Early Stopping & adjust learning rate if needed
         early_stopping(epoch_loss, model)
         try:
             scheduler.step(epoch_loss)
         except:
             scheduler.step()
-        
+
     if early_stopping.early_stop:
       print("Early stopping")
       break
     print()
-    
+
   time_elapsed = time.time() - since
   print('Training complete in {:.0f}m {:.0f}s'.format(
       time_elapsed // 60, time_elapsed % 60))
@@ -232,13 +234,13 @@ def train_model(model, dataloaders, criterion, optimizer,
       print('Best val loss: {:4f}, best MSE score: {:.4f}'.format(best_loss, best_acc))
   model.load_state_dict(best_model_wts)
 
-  ## plot loss & score over the course of training 
-  fig, ax = plt.subplots(nrows = 2, ncols = 1) 
+  # Plot loss & score over the course of training
+  fig, ax = plt.subplots(nrows = 2, ncols = 1)
   plt.subplot(2, 1, 1)
   plt.plot(range(epoch+1), val_losses)
   plt.title('Model Training')
   plt.ylabel('Validation Loss')
-  plt.legend(['Validation Loss'],loc = 'best')
+  plt.legend(['Validation Loss'], loc = 'best')
 
   plt.subplot(2, 1, 2)
   plt.plot(range(epoch+1), val_acc)
@@ -254,8 +256,10 @@ def train_model(model, dataloaders, criterion, optimizer,
       plt.legend(['Validation MSE'], loc = 'best')
   return model
 
+
 class SAM(torch.optim.Optimizer):
-    #adapted from https://github.com/davda54/sam
+    # Adapted from https://github.com/davda54/sam
+
     def __init__(self, params, base_optimizer, rho = 0.5, alpha = 0.0,
                  adaptive = False, **kwargs):
         assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
@@ -276,42 +280,47 @@ class SAM(torch.optim.Optimizer):
             scale = group["rho"] / (grad_norm + 1e-12)
 
             for p in group["params"]:
-                if p.grad is None: continue
+                if p.grad is None:
+                    continue
                 self.state[p]["old_p"] = p.data.clone()
                 if self.minimize_surrogate_gap:
                     self.state[p]["old_g"] = p.grad.data.clone()
                 e_w = (torch.pow(p, 2) if group["adaptive"] else 1.0) * p.grad * scale.to(p)
-                p.add_(e_w)  # climb to the local maximum "w + e(w)"
+                p.add_(e_w)  # Climb to the local maximum "w + e(w)"
 
-        if zero_grad: self.zero_grad()
+        if zero_grad:
+            self.zero_grad()
 
     @torch.no_grad()
     def second_step(self, zero_grad=False):
         for group in self.param_groups:
             for p in group["params"]:
-                if p.grad is None: continue
-                p.data = self.state[p]["old_p"]  # get back to "w" from "w + e(w)"
+                if p.grad is None:
+                    continue
+                p.data = self.state[p]["old_p"]  # Get back to "w" from "w + e(w)"
 
         if self.minimize_surrogate_gap:
             self._gradient_decompose()
-        self.base_optimizer.step()  # do the actual "sharpness-aware" update
-        
-        if zero_grad: self.zero_grad()
+        self.base_optimizer.step()  # Do the actual "sharpness-aware" update
+
+        if zero_grad:
+            self.zero_grad()
 
     @torch.no_grad()
     def step(self, closure = None):
         assert closure is not None, "Sharpness Aware Minimization requires closure, but it was not provided"
-        closure = torch.enable_grad()(closure)  # the closure should do a full forward-backward pass
+        closure = torch.enable_grad()(closure)  # The closure should do a full forward-backward pass
 
         self.first_step(zero_grad = True)
         closure()
         self.second_step()
-        
+
     def _gradient_decompose(self):
         coeff_nomin, coeff_denom = 0.0, 0.0
         for group in self.param_groups:
             for p in group['params']:
-                if p.grad is None: continue
+                if p.grad is None:
+                    continue
 
                 coeff_nomin += (self.state[p]['old_g'] * p.grad).sum()
                 coeff_denom += p.grad.pow(2).sum()
@@ -320,13 +329,14 @@ class SAM(torch.optim.Optimizer):
 
         for group in self.param_groups:
             for p in group['params']:
-                if p.grad is None: continue
+                if p.grad is None:
+                    continue
 
                 rejection = self.state[p]['old_g'] - coeff * p.grad
                 p.grad.data.add_(rejection, alpha=-group["alpha"])
 
     def _grad_norm(self):
-        shared_device = self.param_groups[0]["params"][0].device  # put everything on the same device, in case of model parallelism
+        shared_device = self.param_groups[0]["params"][0].device  # Put everything on the same device, in case of model parallelism
         norm = torch.norm(
                     torch.stack([
                         ((torch.abs(p) if group["adaptive"] else 1.0) * p.grad).norm(p=2).to(shared_device)
@@ -340,6 +350,7 @@ class SAM(torch.optim.Optimizer):
     def load_state_dict(self, state_dict):
         super().load_state_dict(state_dict)
         self.base_optimizer.param_groups = self.param_groups
+
 
 def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.0001,
                    mode = 'multiclass', gsam_alpha = 0.):
@@ -357,18 +368,18 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
     | :-
     | Returns optimizer, learning rate scheduler, and loss criterion objects
     """
-    #choose optimizer & learning rate scheduler
-    if mode in ['multiclass', 'multilabel']:
+    # Choose optimizer & learning rate scheduler
+    if mode in {'multiclass', 'multilabel'}:
         optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, alpha = gsam_alpha, lr = lr,
-                       weight_decay = weight_decay)
+                           weight_decay = weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
-                                                           factor = factor, verbose = True)
+                                                               factor = factor, verbose = True)
     else:
         optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
                                          weight_decay = weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
-                                                           factor = factor, verbose = True)
-    #choose loss function
+                                                               factor = factor, verbose = True)
+    # Choose loss function
     if mode == 'multiclass':
         criterion = torch.nn.CrossEntropyLoss().to(device)
     elif mode == 'multilabel':
@@ -381,9 +392,10 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
         print("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
     return optimizer_ft, scheduler, criterion
 
+
 def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
                    feature_calc = False, return_features = False,
-                   feature_set = ['known','exhaustive'], additional_features_train = None,
+                   feature_set = ['known', 'exhaustive'], additional_features_train = None,
                    additional_features_test = None):
     """wrapper function to train standard machine learning models on glycans\n
     | Arguments:
@@ -398,28 +410,26 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     | additional_features_test (dataframe): additional features (apart from glycans) to be used for evaluation. Has to be of the same length as X_test; default:None\n
     | Returns:
     | :-
-    | Returns trained model                           
+    | Returns trained model                        
     """
-    #choose model type
+    # Choose model type
     if mode == 'classification':
-        model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,
-                                  max_depth = 3)
+        model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,  max_depth = 3)
     elif mode == 'regression':
-        model = xgb.XGBRegressor(random_state = 42, n_estimators = 100,
-                                 objective = 'reg:squarederror')
-    #get features
+        model = xgb.XGBRegressor(random_state = 42, n_estimators = 100, objective = 'reg:squarederror')
+    # Get features
     if feature_calc:
         print("\nCalculating Glycan Features...")
-        X_train = annotate_dataset(X_train, feature_set = feature_set,
-                                   condense = True)
-        X_test = annotate_dataset(X_test, feature_set = feature_set,
-                                   condense = True)
-        for k in X_test.columns.values.tolist():
-            if k not in X_train.columns.values.tolist():
-                X_train[k] = [0]*len(X_train)
-        for k in X_train.columns.values.tolist():
-            if k not in X_test.columns.values.tolist():
-                X_test[k] = [0]*len(X_test)
+        X_train = annotate_dataset(X_train, feature_set = feature_set, condense = True)
+        X_test = annotate_dataset(X_test, feature_set = feature_set, condense = True)
+        # Get the difference between the columns
+        missing_in_X_train = set(X_test.columns) - set(X_train.columns)
+        missing_in_X_test = set(X_train.columns) - set(X_test.columns)
+        # Fill in the missing columns
+        for k in missing_in_X_train:
+            X_train[k] = 0
+        for k in missing_in_X_test:
+            X_test[k] = 0
         X_train = X_train.apply(pd.to_numeric)
         X_test = X_test.apply(pd.to_numeric)
         if additional_features_train is not None:
@@ -427,12 +437,12 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
             X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")
     model.fit(X_train, y_train)
-    #keep track of column order & re-order test set accordingly
+    # Keep track of column order & re-order test set accordingly
     cols_when_model_builds = model.get_booster().feature_names
     X_test = X_test[cols_when_model_builds]
     print("\nEvaluating model...")
     preds = model.predict(X_test)
-    #get metrics of trained model
+    # Get metrics of trained model
     if mode == 'classification':
         out = accuracy_score(y_test, preds)
         print("Accuracy of trained model on separate validation set: " + str(out))
@@ -444,18 +454,19 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     else:
         return model
 
+
 def analyze_ml_model(model):
     """plots relevant features for model prediction\n
     | Arguments:
     | :-
     | model (model object): trained machine learning model from train_ml_model
     """
-    #get important features
+    # Get important features
     feat_imp = model.get_booster().get_score(importance_type = 'gain')
     feat_imp = pd.DataFrame(feat_imp, index = [0]).T
     feat_imp = feat_imp.sort_values(by = feat_imp.columns.values.tolist()[0], ascending = False)
     feat_imp = feat_imp[:10]
-    #plot important features
+    # Plot important features
     sns.barplot(x = feat_imp.index.values.tolist(),
                 y = feat_imp[feat_imp.columns.values.tolist()[0]],
                 color = 'cornflowerblue')
@@ -466,6 +477,7 @@ def analyze_ml_model(model):
     plt.title('Feature Importance')
     plt.tight_layout()
     plt.show()
+
 
 def get_mismatch(model, X_test, y_test, n = 10):
     """analyzes misclassifications of trained machine learning model\n
@@ -479,13 +491,13 @@ def get_mismatch(model, X_test, y_test, n = 10):
     | :-
     | Returns tuples of misclassifications and their predicted probability
     """
-    #get predictions
+    # Get predictions
     preds = model.predict(X_test)
     preds_proba = model.predict_proba(X_test)
-    #get false predictions
+    # Get false predictions
     idx = [k for k in range(len(preds)) if preds[k] != y_test[k]]
     preds = X_test.iloc[idx, :].index.values.tolist()
     preds_proba = [preds_proba[k].tolist()[1] for k in idx]
-    #return the mismatches
-    mismatch = [tuple([i,j]) for i,j in zip(preds, preds_proba)]
-    return mismatch[:min(len(mismatch),n)]
+    # Return the mismatches
+    mismatch = [tuple([i, j]) for i, j in zip(preds, preds_proba)]
+    return mismatch[:min(len(mismatch), n)]

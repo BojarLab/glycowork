@@ -22,7 +22,9 @@ glycowork/glycan_data/__init__.py
 glycowork/glycan_data/data_entry.py
 glycowork/glycan_data/glycan_binding.csv
 glycowork/glycan_data/glycan_motifs.csv
+glycowork/glycan_data/lib_v8.pkl
 glycowork/glycan_data/loader.py
+glycowork/glycan_data/v8_sugarbase.csv
 glycowork/ml/NSequonPred_batch32.pt
 glycowork/ml/__init__.py
 glycowork/ml/glycowork_lectinoracle_600.pt
@@ -38,6 +40,7 @@ glycowork/motif/__init__.py
 glycowork/motif/analysis.py
 glycowork/motif/annotate.py
 glycowork/motif/draw.py
+glycowork/motif/glycan_representations.pkl
 glycowork/motif/graph.py
 glycowork/motif/mz_to_composition.csv
 glycowork/motif/processing.py
