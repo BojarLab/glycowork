@@ -327,7 +327,7 @@ def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', 
       if not filter_out.intersection(c.keys()):
         out = [c]
         break
-  if len(out) > 0:
+  if out:
     return out
   else:
     for m, c in cache.items():
@@ -335,7 +335,7 @@ def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', 
         if not filter_out.intersection(c.keys()):
           out = [c]
           break
-    if len(out) > 0:
+    if out:
       return out
     else:
       mz_value = (mz_value+0.5*multiplier)*2+(reduced*1)
@@ -669,11 +669,14 @@ def composition_to_mass(dict_comp, mass_value = 'monoisotopic',
   | :-
   | Returns the theoretical mass of input composition
   """
-  mass_dict = dict(zip(mapping_file.composition, mapping_file[sample_prep + '_' + mass_value]))
+  if sample_prep + '_' + mass_value == "underivatized_monoisotopic":
+    mass_dict_in = mass_dict
+  else:
+    mass_dict_in = dict(zip(mapping_file.composition, mapping_file[sample_prep + '_' + mass_value]))
   for old_key, new_key in {'S': 'Sulphate', 'P': 'Phosphate', 'Me': 'Methyl', 'Ac': 'Acetate'}.items():
     if old_key in dict_comp:
       dict_comp[new_key] = dict_comp.pop(old_key)
-  return sum(mass_dict.get(k, 0) * v for k, v in dict_comp.items()) + mass_dict['red_end']
+  return sum(mass_dict_in.get(k, 0) * v for k, v in dict_comp.items()) + mass_dict_in['red_end']
 
 
 def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized', stem_libr = None):

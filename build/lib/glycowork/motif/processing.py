@@ -134,13 +134,11 @@ def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species
   | :-
   | Returns pandas dataframe with labels as rows and glycan occurrences as columns
   """
-  glycans = sorted(set(df[glycan_col_name].values.tolist()))
-  species = sorted(set(df[label_col_name].values.tolist()))
-  # Get a count matrix for each rank - glycan combination
-  mat_dic = {k: [df[df[label_col_name] == j][glycan_col_name].values.tolist().count(k) for j in species] for k in glycans}
-  mat = pd.DataFrame(mat_dic)
-  mat.index = species
-  return mat
+  # Create a grouped dataframe where we count the occurrences of each glycan in each species group
+  grouped_df = df.groupby([label_col_name, glycan_col_name]).size().unstack(fill_value = 0)
+  # Sort the index and columns
+  grouped_df = grouped_df.sort_index().sort_index(axis = 1)
+  return grouped_df
 
 
 def find_matching_brackets_indices(s):
@@ -153,12 +151,12 @@ def find_matching_brackets_indices(s):
       stack.append(i)
       opening_indices[i] = len(stack) - 1
     elif c == ']':
-      if len(stack) > 0:
+      if stack:
         opening_index = stack.pop()
         matching_indices.append((opening_index, i))
         del opening_indices[opening_index]
 
-  if len(stack) > 0:
+  if stack:
     print("Unmatched opening brackets:", [s[i] for i in stack])
     return None
   else:

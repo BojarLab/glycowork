@@ -2,170 +2,170 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
     width="700" height="510" viewBox="-650.0 -305.0 700 510">
 <defs>
-<path d="M-100,-100.0 L0,-100.0" stroke-width="4.0" stroke="black" id="nJLMTG5O0" />
-<path d="M-200,-100.0 L-100,-100.0" stroke-width="4.0" stroke="black" id="nJLMTG5O1" />
-<path d="M-300,0 L-200,-100.0" stroke-width="4.0" stroke="black" id="nJLMTG5O2" />
-<path d="M-400,0 L-300,0" stroke-width="4.0" stroke="black" id="nJLMTG5O3" />
-<path d="M-500,0 L-400,0" stroke-width="4.0" stroke="black" id="nJLMTG5O4" />
-<path d="M-600,0 L-500,0" stroke-width="4.0" stroke="black" id="nJLMTG5O5" />
-<path d="M-400,-200 L-300,-200" stroke-width="4.0" stroke="black" id="nJLMTG5O6" />
-<path d="M-500,-200 L-400,-200" stroke-width="4.0" stroke="black" id="nJLMTG5O7" />
-<path d="M-600,-200 L-500,-200" stroke-width="4.0" stroke="black" id="nJLMTG5O8" />
-<path d="M-400,100 L-400,0" stroke-width="4.0" stroke="black" id="nJLMTG5O9" />
-<path d="M-300,-100 L-200,-100.0" stroke-width="4.0" stroke="black" id="nJLMTG5O10" />
-<path d="M-300,-200 L-200,-100.0" stroke-width="4.0" stroke="black" id="nJLMTG5O11" />
-<path d="M0,-200.0 L0,-100.0" stroke-width="4.0" stroke="black" id="nJLMTG5O12" />
-<path d="M-50,-75.0 L50,-75.0" stroke-width="0" id="nJLMTG5O13" />
-<path d="M-50,-100.0 L50,-100.0" stroke-width="0" id="nJLMTG5O14" />
-<path d="M-150,-75.0 L-50,-75.0" stroke-width="0" id="nJLMTG5O15" />
-<path d="M-150,-100.0 L-50,-100.0" stroke-width="0" id="nJLMTG5O16" />
-<path d="M-250,-75.0 L-150,-75.0" stroke-width="0" id="nJLMTG5O17" />
-<path d="M-250,-100.0 L-150,-100.0" stroke-width="0" id="nJLMTG5O18" />
-<path d="M-350,25.0 L-250,25.0" stroke-width="0" id="nJLMTG5O19" />
-<path d="M-350,0 L-250,0" stroke-width="0" id="nJLMTG5O20" />
-<path d="M-450,25.0 L-350,25.0" stroke-width="0" id="nJLMTG5O21" />
-<path d="M-450,0 L-350,0" stroke-width="0" id="nJLMTG5O22" />
-<path d="M-550,25.0 L-450,25.0" stroke-width="0" id="nJLMTG5O23" />
-<path d="M-550,0 L-450,0" stroke-width="0" id="nJLMTG5O24" />
-<path d="M-650,25.0 L-550,25.0" stroke-width="0" id="nJLMTG5O25" />
-<path d="M-650,0 L-550,0" stroke-width="0" id="nJLMTG5O26" />
-<path d="M-450,125.0 L-350,125.0" stroke-width="0" id="nJLMTG5O27" />
-<path d="M-450,100 L-350,100" stroke-width="0" id="nJLMTG5O28" />
-<path d="M-350,-75.0 L-250,-75.0" stroke-width="0" id="nJLMTG5O29" />
-<path d="M-350,-100 L-250,-100" stroke-width="0" id="nJLMTG5O30" />
-<path d="M-350,-175.0 L-250,-175.0" stroke-width="0" id="nJLMTG5O31" />
-<path d="M-350,-200 L-250,-200" stroke-width="0" id="nJLMTG5O32" />
-<path d="M-450,-175.0 L-350,-175.0" stroke-width="0" id="nJLMTG5O33" />
-<path d="M-450,-200 L-350,-200" stroke-width="0" id="nJLMTG5O34" />
-<path d="M-550,-175.0 L-450,-175.0" stroke-width="0" id="nJLMTG5O35" />
-<path d="M-550,-200 L-450,-200" stroke-width="0" id="nJLMTG5O36" />
-<path d="M-650,-175.0 L-550,-175.0" stroke-width="0" id="nJLMTG5O37" />
-<path d="M-650,-200 L-550,-200" stroke-width="0" id="nJLMTG5O38" />
-<path d="M-50,-175.0 L50,-175.0" stroke-width="0" id="nJLMTG5O39" />
-<path d="M-50,-200.0 L50,-200.0" stroke-width="0" id="nJLMTG5O40" />
+<path d="M-100,-100.0 L0,-100.0" stroke-width="4.0" stroke="black" id="Qn1NWdsO0" />
+<path d="M-200,-100.0 L-100,-100.0" stroke-width="4.0" stroke="black" id="Qn1NWdsO1" />
+<path d="M-300,0 L-200,-100.0" stroke-width="4.0" stroke="black" id="Qn1NWdsO2" />
+<path d="M-400,0 L-300,0" stroke-width="4.0" stroke="black" id="Qn1NWdsO3" />
+<path d="M-500,0 L-400,0" stroke-width="4.0" stroke="black" id="Qn1NWdsO4" />
+<path d="M-600,0 L-500,0" stroke-width="4.0" stroke="black" id="Qn1NWdsO5" />
+<path d="M-400,-200 L-300,-200" stroke-width="4.0" stroke="black" id="Qn1NWdsO6" />
+<path d="M-500,-200 L-400,-200" stroke-width="4.0" stroke="black" id="Qn1NWdsO7" />
+<path d="M-600,-200 L-500,-200" stroke-width="4.0" stroke="black" id="Qn1NWdsO8" />
+<path d="M-400,100 L-400,0" stroke-width="4.0" stroke="black" id="Qn1NWdsO9" />
+<path d="M-300,-100 L-200,-100.0" stroke-width="4.0" stroke="black" id="Qn1NWdsO10" />
+<path d="M-300,-200 L-200,-100.0" stroke-width="4.0" stroke="black" id="Qn1NWdsO11" />
+<path d="M0,-200.0 L0,-100.0" stroke-width="4.0" stroke="black" id="Qn1NWdsO12" />
+<path d="M-50,-75.0 L50,-75.0" stroke-width="0" id="Qn1NWdsO13" />
+<path d="M-50,-100.0 L50,-100.0" stroke-width="0" id="Qn1NWdsO14" />
+<path d="M-150,-75.0 L-50,-75.0" stroke-width="0" id="Qn1NWdsO15" />
+<path d="M-150,-100.0 L-50,-100.0" stroke-width="0" id="Qn1NWdsO16" />
+<path d="M-250,-75.0 L-150,-75.0" stroke-width="0" id="Qn1NWdsO17" />
+<path d="M-250,-100.0 L-150,-100.0" stroke-width="0" id="Qn1NWdsO18" />
+<path d="M-350,25.0 L-250,25.0" stroke-width="0" id="Qn1NWdsO19" />
+<path d="M-350,0 L-250,0" stroke-width="0" id="Qn1NWdsO20" />
+<path d="M-450,25.0 L-350,25.0" stroke-width="0" id="Qn1NWdsO21" />
+<path d="M-450,0 L-350,0" stroke-width="0" id="Qn1NWdsO22" />
+<path d="M-550,25.0 L-450,25.0" stroke-width="0" id="Qn1NWdsO23" />
+<path d="M-550,0 L-450,0" stroke-width="0" id="Qn1NWdsO24" />
+<path d="M-650,25.0 L-550,25.0" stroke-width="0" id="Qn1NWdsO25" />
+<path d="M-650,0 L-550,0" stroke-width="0" id="Qn1NWdsO26" />
+<path d="M-450,125.0 L-350,125.0" stroke-width="0" id="Qn1NWdsO27" />
+<path d="M-450,100 L-350,100" stroke-width="0" id="Qn1NWdsO28" />
+<path d="M-350,-75.0 L-250,-75.0" stroke-width="0" id="Qn1NWdsO29" />
+<path d="M-350,-100 L-250,-100" stroke-width="0" id="Qn1NWdsO30" />
+<path d="M-350,-175.0 L-250,-175.0" stroke-width="0" id="Qn1NWdsO31" />
+<path d="M-350,-200 L-250,-200" stroke-width="0" id="Qn1NWdsO32" />
+<path d="M-450,-175.0 L-350,-175.0" stroke-width="0" id="Qn1NWdsO33" />
+<path d="M-450,-200 L-350,-200" stroke-width="0" id="Qn1NWdsO34" />
+<path d="M-550,-175.0 L-450,-175.0" stroke-width="0" id="Qn1NWdsO35" />
+<path d="M-550,-200 L-450,-200" stroke-width="0" id="Qn1NWdsO36" />
+<path d="M-650,-175.0 L-550,-175.0" stroke-width="0" id="Qn1NWdsO37" />
+<path d="M-650,-200 L-550,-200" stroke-width="0" id="Qn1NWdsO38" />
+<path d="M-50,-175.0 L50,-175.0" stroke-width="0" id="Qn1NWdsO39" />
+<path d="M-50,-200.0 L50,-200.0" stroke-width="0" id="Qn1NWdsO40" />
 </defs>
 <g transform="rotate(0 350.0 255.0)">
-<use xlink:href="#nJLMTG5O0" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O0" startOffset="50%">
+<use xlink:href="#Qn1NWdsO0" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO0" startOffset="50%">
 <tspan dy="-0.5em">β 4</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O1" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O1" startOffset="50%">
+<use xlink:href="#Qn1NWdsO1" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO1" startOffset="50%">
 <tspan dy="-0.5em">β 4</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O2" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O2" startOffset="50%">
+<use xlink:href="#Qn1NWdsO2" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO2" startOffset="50%">
 <tspan dy="-0.5em">α 3</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O3" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O3" startOffset="50%">
+<use xlink:href="#Qn1NWdsO3" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO3" startOffset="50%">
 <tspan dy="-0.5em">β 2</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O4" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O4" startOffset="50%">
+<use xlink:href="#Qn1NWdsO4" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO4" startOffset="50%">
 <tspan dy="-0.5em">β 4</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O5" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O5" startOffset="50%">
+<use xlink:href="#Qn1NWdsO5" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO5" startOffset="50%">
 <tspan dy="-0.5em">α 3</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O6" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O6" startOffset="50%">
+<use xlink:href="#Qn1NWdsO6" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO6" startOffset="50%">
 <tspan dy="-0.5em">β 2</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O7" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O7" startOffset="50%">
+<use xlink:href="#Qn1NWdsO7" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO7" startOffset="50%">
 <tspan dy="-0.5em">β 4</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O8" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O8" startOffset="50%">
+<use xlink:href="#Qn1NWdsO8" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO8" startOffset="50%">
 <tspan dy="-0.5em">α 6</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O9" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O9" startOffset="50%">
+<use xlink:href="#Qn1NWdsO9" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO9" startOffset="50%">
 <tspan dy="-0.5em">α 3</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O10" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O10" startOffset="50%">
+<use xlink:href="#Qn1NWdsO10" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO10" startOffset="50%">
 <tspan dy="-0.5em">β 4</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O11" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O11" startOffset="50%">
+<use xlink:href="#Qn1NWdsO11" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO11" startOffset="50%">
 <tspan dy="-0.5em">α 6</tspan>
 </textPath></text>
-<use xlink:href="#nJLMTG5O12" />
-<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#nJLMTG5O12" startOffset="50%">
+<use xlink:href="#Qn1NWdsO12" />
+<text font-size="20.0" text-anchor="middle" valign="middle"><textPath xlink:href="#Qn1NWdsO12" startOffset="50%">
 <tspan dy="-0.5em">α 6</tspan>
 </textPath></text>
 <rect x="-25.0" y="-125.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O13" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O13" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O14" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O14" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO13" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO13" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO14" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO14" startOffset="50%"></textPath></text>
 <rect x="-125.0" y="-125.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O15" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O15" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O16" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O16" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO15" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO15" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO16" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO16" startOffset="50%"></textPath></text>
 <circle cx="-200" cy="-100.0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O17" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O17" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O18" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O18" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO17" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO17" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO18" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO18" startOffset="50%"></textPath></text>
 <circle cx="-300" cy="0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O19" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O19" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O20" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O20" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO19" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO19" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO20" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO20" startOffset="50%"></textPath></text>
 <rect x="-425.0" y="-25.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O21" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O21" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O22" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O22" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO21" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO21" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO22" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO22" startOffset="50%"></textPath></text>
 <circle cx="-500" cy="0" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O23" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O23" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O24" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O24" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO23" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO23" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO24" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO24" startOffset="50%"></textPath></text>
 <path d="M-600,25.0 L-575.0,0 L-600,-25.0 L-625.0,0 Z" fill="#A15989" stroke="black" stroke-width="2.0" />
-<use xlink:href="#nJLMTG5O25" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O25" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O26" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O26" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO25" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO25" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO26" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO26" startOffset="50%"></textPath></text>
 <path d="M-425.0,121.65063509461096 L-400.0,78.34936490538904 L-375.0,121.65063509461096 Z" fill="#C23537" stroke="black" stroke-width="2.0" />
-<use xlink:href="#nJLMTG5O27" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O27" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O28" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O28" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO27" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO27" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO28" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO28" startOffset="50%"></textPath></text>
 <rect x="-325.0" y="-125.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O29" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O29" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O30" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O30" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO29" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO29" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO30" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO30" startOffset="50%"></textPath></text>
 <circle cx="-300" cy="-200" r="25.0" fill="#058F60" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O31" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O31" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O32" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O32" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO31" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO31" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO32" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO32" startOffset="50%"></textPath></text>
 <rect x="-425.0" y="-225.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O33" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O33" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O34" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O34" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO33" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO33" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO34" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO34" startOffset="50%"></textPath></text>
 <circle cx="-500" cy="-200" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="black" />
-<use xlink:href="#nJLMTG5O35" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O35" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O36" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O36" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO35" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO35" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO36" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO36" startOffset="50%"></textPath></text>
 <path d="M-600,-175.0 L-575.0,-200 L-600,-225.0 L-625.0,-200 Z" fill="#91D3E3" stroke="black" stroke-width="2.0" />
-<use xlink:href="#nJLMTG5O37" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O37" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O38" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O38" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO37" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO37" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO38" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO38" startOffset="50%"></textPath></text>
 <path d="M-25.0,-178.34936490538902 L0.0,-221.65063509461095 L25.0,-178.34936490538902 Z" fill="#C23537" stroke="black" stroke-width="2.0" />
-<use xlink:href="#nJLMTG5O39" />
-<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#nJLMTG5O39" startOffset="50%"></textPath></text>
-<use xlink:href="#nJLMTG5O40" />
-<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#nJLMTG5O40" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO39" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO39" startOffset="50%"></textPath></text>
+<use xlink:href="#Qn1NWdsO40" />
+<text font-size="15.0" text-anchor="middle"><textPath xlink:href="#Qn1NWdsO40" startOffset="50%"></textPath></text>
 </g>
 </svg>
