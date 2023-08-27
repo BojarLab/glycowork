@@ -14,8 +14,9 @@ from glycowork.glycan_data.loader import lib, unwrap, df_species, df_glycan, Hex
 from glycowork.motif.processing import min_process_glycans, canonicalize_iupac
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 
-chars = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T',
-         'V', 'W', 'Y', 'X', 'Z'] + ['z']
+chars = {'A':1, 'B':2, 'C':3, 'D':4, 'E':5, 'F':6, 'G':7, 'H':8, 'I':9, 'J':10, 'K':11,
+         'L':12, 'M':13, 'N':14, 'P':15, 'Q':16, 'R':17, 'S':18, 'T':19,
+         'V':20, 'W':21, 'Y':22, 'X':23, 'Z':24, 'z':25}
 
 io = pkg_resources.resource_stream(__name__, "mz_to_composition.csv")
 mapping_file = pd.read_csv(io)
@@ -35,7 +36,7 @@ def constrain_prot(proteins, libr = None):
   if libr is None:
     libr = chars
   # Check whether any character is not in libr and replace it with a 'z' placeholder character
-  forbidden = [k for k in set(list(''.join(proteins))) if k not in libr]
+  forbidden = [k for k in set(list(''.join(proteins))) if k not in libr.keys()]
   for k in forbidden:
     proteins = [j.replace(k, 'z') for j in proteins]
   return proteins
