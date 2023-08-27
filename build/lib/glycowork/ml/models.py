@@ -291,14 +291,14 @@ class LectinOracle_flex(torch.nn.Module):
     # Fully connected part
     h_n = self.act1_n(self.bn1_n(self.fc1_n(h_n)))
 
-    x1 = self.fc2(self.dp1(h_n))
-    x2 = self.fc2(self.dp1(h_n))
-    x3 = self.fc2(self.dp1(h_n))
-    x4 = self.fc2(self.dp1(h_n))
-    x5 = self.fc2(self.dp1(h_n))
-    x6 = self.fc2(self.dp1(h_n))
-    x7 = self.fc2(self.dp1(h_n))
-    x8 = self.fc2(self.dp1(h_n))
+    x1 = self.fc2_n(self.dp1(h_n))
+    x2 = self.fc2_n(self.dp1(h_n))
+    x3 = self.fc2_n(self.dp1(h_n))
+    x4 = self.fc2_n(self.dp1(h_n))
+    x5 = self.fc2_n(self.dp1(h_n))
+    x6 = self.fc2_n(self.dp1(h_n))
+    x7 = self.fc2_n(self.dp1(h_n))
+    x8 = self.fc2_n(self.dp1(h_n))
 
     out = self.sigmoid(torch.mean(torch.stack([x1, x2, x3, x4, x5, x6, x7, x8]), dim = 0))
 
@@ -345,25 +345,25 @@ def prep_model(model_type, num_classes, libr = None,
         model = SweetNet(len(libr), num_classes = num_classes)
         model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
         if trained:
-            model.load_state_dict(torch.load(trained_SweetNet))
+            model.load_state_dict(torch.load(trained_SweetNet, map_location = device))
         model = model.to(device)
     elif model_type == 'LectinOracle':
         model = LectinOracle(len(libr), num_classes = num_classes)
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
-            model.load_state_dict(torch.load(trained_LectinOracle))
+            model.load_state_dict(torch.load(trained_LectinOracle, map_location = device))
         model = model.to(device)
     elif model_type == 'LectinOracle_flex':
         model = LectinOracle_flex(len(libr), num_classes = num_classes)
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
-            model.load_state_dict(torch.load(trained_LectinOracle_flex))
+            model.load_state_dict(torch.load(trained_LectinOracle_flex, map_location = device))
         model = model.to(device)
     elif model_type == 'NSequonPred':
         model = NSequonPred()
         model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
         if trained:
-            model.load_state_dict(torch.load(trained_NSequonPred))
+            model.load_state_dict(torch.load(trained_NSequonPred, map_location = device))
         model = model.to(device)
     else:
         print("Invalid Model Type")
