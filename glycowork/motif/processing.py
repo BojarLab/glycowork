@@ -315,6 +315,9 @@ def canonicalize_iupac(glycan):
   glycan = re.sub(r'([a-z])(\[[A-Z])', r'\1?1-?\2', glycan)
   # Missing anomer info (e.g., "(1")
   glycan = re.sub(r'(\()([1-2])', r'\1?\2', glycan)
+  # If still no '-' in glycan, assume 'a3' type of linkage denomination
+  if '-' not in glycan:
+      glycan = re.sub(r'(a|b)(\d)', r'\g<1>1-\g<2>', glycan)
   # Smudge uncertainty
   while '/' in glycan:
     glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
