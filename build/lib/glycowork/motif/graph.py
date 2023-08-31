@@ -620,7 +620,7 @@ def largest_subgraph(glycan_a, glycan_b, libr = None):
     min_num = min(lgs.nodes())
     node_dic = {k: k-min_num for k in lgs.nodes()}
     lgs = nx.relabel_nodes(lgs, node_dic)
-    if len(lgs) > 0:
+    if lgs:
       return graph_to_string(lgs)
     else:
       return ""

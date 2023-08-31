@@ -287,13 +287,13 @@ def canonicalize_iupac(glycan):
   """
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
-                 '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', '(9Ac)': '9Ac',
+                 '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaNAc': 'GalNAc', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')'}
   glycan = multireplace(glycan, replace_dic)
   # Trim linkers
   if '-' in glycan:
-    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and '-ol' not in glycan:
+    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and 'ol' not in glycan:
       glycan = glycan[:glycan.rindex('-')]
   # Canonicalize usage of brackets and parentheses
   if bool(re.search(r'\([A-Z3-9]', glycan)):
@@ -315,6 +315,8 @@ def canonicalize_iupac(glycan):
   glycan = re.sub(r'([a-z])(\[[A-Z])', r'\1?1-?\2', glycan)
   # Missing anomer info (e.g., "(1")
   glycan = re.sub(r'(\()([1-2])', r'\1?\2', glycan)
+  # Missing starting carbon (e.g., "b-4")
+  glycan = re.sub(r'(a|b|\?)-(\d)', r'\g<1>1-\2', glycan)
   # If still no '-' in glycan, assume 'a3' type of linkage denomination
   if '-' not in glycan:
       glycan = re.sub(r'(a|b)(\d)', r'\g<1>1-\g<2>', glycan)
@@ -344,8 +346,10 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'([1-9]?[SP])([A-Z][^\(^\[]+)', r'\2\1', glycan)
   if bool(re.search(r'\-ol[0-9]?[SP]', glycan)):
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
-  post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', 'Fuc(?': 'Fuc(a', 'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS',
-                  'GalNAcS': 'GalNAcOS'}
+  if bool(re.search(r'(\[|\)|\]|\^)[1-9]?[SP][A-Za-z]+', glycan)):
+    glycan = re.sub(r'([1-9]?[SP])([A-Za-z]+)', r'\2\1', glycan)
+  post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
+                  'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS'}
   glycan = multireplace(glycan, post_process)
   # Canonicalize branch ordering
   if '[' in glycan:

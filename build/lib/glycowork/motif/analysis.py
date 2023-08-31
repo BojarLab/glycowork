@@ -454,7 +454,7 @@ def get_coverage(df, filepath = ''):
   ax.set(xlabel = 'Samples', ylabel =  'Glycan ID', title = '')
 
   # save figure
-  if len(filepath) > 1:
+  if filepath:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
 
   plt.show()
@@ -614,7 +614,7 @@ def get_differential_expression(df, group1, group2,
     levene_pvals = [levene(df_a.iloc[k, :], df_b.iloc[k, :])[1] for k in range(len(df_a))]
     effect_sizes, variances = zip(*[cohen_d(df_b.iloc[k, :], df_a.iloc[k, :], paired = paired) for k in range(len(df_a))])
   # Multiple testing correction
-  if len(pvals) > 0:
+  if pvals:
       corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
       levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
   else:
@@ -724,7 +724,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
     [plt.text(x[i], y[i], label[i]) for i in range(len(x)) if y[i] > -np.log10(y_thresh) and abs(x[i]) > x_thresh]
 
   # Save to file
-  if len(filepath) > 1:
+  if filepath:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                 bbox_inches = 'tight')
 
