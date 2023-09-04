@@ -200,9 +200,10 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
         df.index = idx
   df.dropna(axis = 1, inplace = True)
   df = clean_up_heatmap(df.T)
-  for col in df.columns:
-      col_sum = max([sum(df.loc[:, col]), 0.1])
-      df[col] = [k/col_sum*100 for k in df.loc[:, col]]
+  if not (df < 0).any().any():
+      for col in df.columns:
+          col_sum = max([sum(df.loc[:, col]), 0.1])
+          df[col] = [k/col_sum*100 for k in df.loc[:, col]]
   # Cluster the motif abundances
   sns.clustermap(df, **kwargs)
   plt.xlabel('Samples')
