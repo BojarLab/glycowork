@@ -243,7 +243,7 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   | Returns True if glycan is in glycan class and False if not
   """
   if glycan_class == 'O':
-    pool = ['GalNAc', 'GalNAcOS', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
+    pool = ['GalNAc', 'GalNAcOS', 'GalNAc4S', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
   elif glycan_class == 'N':
     pool = ['GlcNAc']
   elif glycan_class == 'free' or glycan_class == 'lipid':
@@ -286,7 +286,7 @@ def canonicalize_iupac(glycan):
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
   # Canonicalize usage of monosaccharides and linkages
-  replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
+  replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaNAc': 'GalNAc', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')'}
@@ -466,55 +466,60 @@ def variance_stabilization(data, groups = None):
 
 
 class MissForest:
-    """Parameters
-    (adapted from https://github.com/yuenshingyan/MissForest)
-    ----------
-    regressor : estimator object.
-    A object of that type is instantiated for each imputation.
-    This object is assumed to implement the scikit-learn estimator API.
+  """Parameters
+  (adapted from https://github.com/yuenshingyan/MissForest)
+  ----------
+  regressor : estimator object.
+  A object of that type is instantiated for each imputation.
+  This object is assumed to implement the scikit-learn estimator API.
 
-    n_iter : int
-    Determines the number of iterations for the imputation process.
-    """
+  n_iter : int
+  Determines the number of iterations for the imputation process.
+  """
 
-    def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), n_iter = 5):
-        self.regressor = regressor
-        self.n_iter = n_iter
+  def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol=1e-6):
+    self.regressor = regressor
+    self.max_iter = max_iter
+    self.tol = tol
 
-    def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        # Step 1: Initialization 
-        # Keep track of where NaNs are in the original dataset
-        X_nan = X.isnull()
+  def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+    # Step 1: Initialization 
+    # Keep track of where NaNs are in the original dataset
+    X_nan = X.isnull()
 
-        # Replace NaNs with median of the column in a new dataset that will be transformed
-        X_transform = X.copy()
-        X_transform.fillna(X_transform.median(), inplace = True)
+    # Replace NaNs with median of the column in a new dataset that will be transformed
+    X_transform = X.copy()
+    X_transform.fillna(X_transform.median(), inplace = True)
 
-        for _ in range(self.n_iter):
-            # Step 2: Imputation
-            # Sort columns by the number of NaNs (ascending)
-            sorted_columns = X_nan.sum().sort_values().index.tolist()
+    for _ in range(self.max_iter):
+      X_old = X_transform.copy()
+      # Step 2: Imputation
+      # Sort columns by the number of NaNs (ascending)
+      sorted_columns = X_nan.sum().sort_values().index.tolist()
 
-            for column in sorted_columns:
-                if X_nan[column].any():  # if column has missing values in original dataset
-                    # Split data into observed and missing for the current column
-                    observed = X_transform.loc[~X_nan[column]]
-                    missing = X_transform.loc[X_nan[column]]
-                    
-                    # Use other columns to predict the current column
-                    X_other_columns = observed.drop(columns = column)
-                    y_observed = observed[column]
+      for column in sorted_columns:
+        if X_nan[column].any():  # if column has missing values in original dataset
+          # Split data into observed and missing for the current column
+          observed = X_transform.loc[~X_nan[column]]
+          missing = X_transform.loc[X_nan[column]]
+          
+          # Use other columns to predict the current column
+          X_other_columns = observed.drop(columns = column)
+          y_observed = observed[column]
 
-                    self.regressor.fit(X_other_columns, y_observed)
-                    
-                    X_missing_other_columns = missing.drop(columns = column)
-                    y_missing_pred = self.regressor.predict(X_missing_other_columns)
+          self.regressor.fit(X_other_columns, y_observed)
+          
+          X_missing_other_columns = missing.drop(columns = column)
+          y_missing_pred = self.regressor.predict(X_missing_other_columns)
 
-                    # Replace missing values in the current column with predictions
-                    X_transform.loc[X_nan[column], column] = y_missing_pred
-        # Avoiding zeros
-        X_transform += 1e-6
-        return X_transform
+          # Replace missing values in the current column with predictions
+          X_transform.loc[X_nan[column], column] = y_missing_pred
+      # Check for convergence
+      if np.all(np.abs(X_old - X_transform) < self.tol):
+        break  # Break out of the loop if converged
+    # Avoiding zeros
+    X_transform += 1e-6
+    return X_transform
 
 
 def impute_and_normalize(df, groups, impute = True, min_samples = None):

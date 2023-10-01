@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap, replace_every_second
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
-from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, in_lib
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, expand_lib
 
 
 def link_find(glycan):
@@ -270,10 +270,11 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False):
     libr = lib
   if up_to:
     wga_letter = pd.DataFrame([{i: g.count(i) if i in g else 0 for i in get_lib(glycans).keys() if i not in linkages} for g in glycans])
-  ggraphs = [glycan_to_nxGraph(g, libr = libr) for g in glycans]
   regex = re.compile(r"\(([ab])(\d)-(\d)\)")
   shadow_glycans = [regex.sub(r"(\1\2-?)", g) for g in glycans]
-  shadow_glycans = [glycan_to_nxGraph(g, libr = libr) if in_lib(g, libr) else ggraphs[i] for i, g in enumerate(shadow_glycans)]
+  libr = expand_lib(libr, shadow_glycans)
+  ggraphs = [glycan_to_nxGraph(g, libr = libr) for g in glycans]
+  shadow_glycans = [glycan_to_nxGraph(g, libr = libr) for g in shadow_glycans]
   ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size) for g in ggraphs])
   ggraphs = ggraphs.drop(columns = [col for col in ggraphs.columns if '?' in col])
   shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size) for g in shadow_glycans])
