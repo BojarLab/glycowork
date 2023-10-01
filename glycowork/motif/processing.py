@@ -243,7 +243,7 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   | Returns True if glycan is in glycan class and False if not
   """
   if glycan_class == 'O':
-    pool = ['GalNAc', 'GalNAcOS', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
+    pool = ['GalNAc', 'GalNAcOS', 'GalNAc4S', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
   elif glycan_class == 'N':
     pool = ['GlcNAc']
   elif glycan_class == 'free' or glycan_class == 'lipid':
@@ -286,7 +286,7 @@ def canonicalize_iupac(glycan):
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
   # Canonicalize usage of monosaccharides and linkages
-  replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
+  replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaNAc': 'GalNAc', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')'}
@@ -477,9 +477,10 @@ class MissForest:
     Determines the number of iterations for the imputation process.
     """
 
-    def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), n_iter = 5):
+    def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol=1e-6):
         self.regressor = regressor
-        self.n_iter = n_iter
+        self.max_iter = max_iter
+        self.tol = tol
 
     def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         # Step 1: Initialization 
@@ -490,7 +491,8 @@ class MissForest:
         X_transform = X.copy()
         X_transform.fillna(X_transform.median(), inplace = True)
 
-        for _ in range(self.n_iter):
+        for _ in range(self.max_iter):
+            X_old = X_transform.copy()
             # Step 2: Imputation
             # Sort columns by the number of NaNs (ascending)
             sorted_columns = X_nan.sum().sort_values().index.tolist()
@@ -512,6 +514,9 @@ class MissForest:
 
                     # Replace missing values in the current column with predictions
                     X_transform.loc[X_nan[column], column] = y_missing_pred
+             # Check for convergence
+             if np.all(np.abs(X_old - X_transform) < self.tol):
+                 break  # Break out of the loop if converged
         # Avoiding zeros
         X_transform += 1e-6
         return X_transform
