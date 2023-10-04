@@ -96,26 +96,20 @@ def find_isomorphs(glycan):
   # Starting branch swapped with next side branch
   if '[' in glycan and glycan.index('[') > 0:
     if not bool(re.search(r'\[[^\]]+\[', glycan)):
-      glycan2 = re.sub(r'^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1)
+      out_list.add(re.sub(r'^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1))
     elif not bool(re.search(r'\[[^\]]+\[', glycan[find_nth(glycan, ']', 2):])) and bool(re.search(r'\[[^\]]+\[', glycan[:find_nth(glycan, '[', 3)])):
-      glycan2 = re.sub(r'^(.*?)\[(.*?)(\]{1,1})(.*?)\]', r'\2\3\4[\1]', glycan, 1)
-    try:
-      out_list.add(glycan2)
-    except:
-      pass
+      out_list.add(re.sub(r'^(.*?)\[(.*?)(\]{1,1})(.*?)\]', r'\2\3\4[\1]', glycan, 1))
   # Double branch swap
   temp = set()
   for k in out_list:
     if '][' in k:
-      glycan2 = re.sub(r'\[([^[\]]+)\]\[([^[\]]+)\]', r'[\2][\1]', k)
-      temp.add(glycan2)
+      temp.add(re.sub(r'\[([^[\]]+)\]\[([^[\]]+)\]', r'[\2][\1]', k))
   out_list.update(temp)
   temp = set()
   # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
   for k in out_list:
     if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
-      glycan2 = re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1)
-      temp.add(glycan2)
+      temp.add(re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1))
   out_list.update(temp)
   out_list = {k for k in out_list if not any([j in k for j in ['[[', ']]']])}
   if floaty:
@@ -182,19 +176,19 @@ def choose_correct_isoform(glycans, reverse = False):
     glycans = [k[k.rindex('}')+1:] for k in glycans]
   # Heuristic: main chain should contain the most monosaccharides of all chains
   mains = [bracket_removal(g) for g in glycans]
-  mains = [len(k) for k in min_process_glycans(mains)]
+  mains = [k.count('(') for k in mains]
   glycans2 = [g for k, g in enumerate(glycans) if mains[k] == max(mains)]
   # Handle neighboring branches
-  kill_list = []
+  kill_list = set()
   for g in glycans2:
     if '][' in g:
       try:
         match = re.search(r'\[([^[\]]+)\]\[([^[\]]+)\]', g)
         if match.group(1).count('(') < match.group(2).count('('):
-          kill_list.append(g)
+          kill_list.add(g)
         elif match.group(1).count('(') == match.group(2).count('('):
           if int(match.group(1)[-2]) > int(match.group(2)[-2]):
-            kill_list.append(g)
+            kill_list.add(g)
       except:
         pass
   glycans2 = [k for k in glycans2 if k not in kill_list]
