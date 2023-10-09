@@ -16,7 +16,7 @@ def min_process_glycans(glycan_list):
   | :-
   | Returns list of glycoletter lists
   """
-  return [multireplace(k, {'[': '', ']': '', '{': '', '}': '', ')': '('}).split('(') for k in glycan_list]
+  return [[x for x in multireplace(k, {'[': '', ']': '', '{': '', '}': '', ')': '('}).split('(') if x] for k in glycan_list]
 
 
 def get_lib(glycan_list):
@@ -198,14 +198,14 @@ def choose_correct_isoform(glycans, reverse = False):
     prefix = [min_process_glycans([k[j[0]+1:j[1]] for j in candidates[k]]) for k in candidates.keys()]
     prefix = [np.argmax([len(j) for j in k]) for k in prefix]
     prefix = min_process_glycans([k[:candidates[k][prefix[i]][0]] for i, k in enumerate(candidates.keys())])
-    branch_endings = [k[-2][-1] if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in prefix]
+    branch_endings = [k[-1][-1] if k[-1][-1] != 'd' and k[-1][-1] != '?' else 10 for k in prefix]
     if len(set(branch_endings)) == 1:
       branch_endings = [ord(k[0][0]) for k in prefix]
     branch_endings = [int(k) for k in branch_endings]
     glycans2 = [g for k,g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
     if len(glycans2) > 1:
         preprefix = min_process_glycans([glyc[:glyc.index('[')] for glyc in glycans2])
-        branch_endings = [k[-2][-1] if k[-2][-1] != 'd' and k[-2][-1] != '?' else 10 for k in preprefix]
+        branch_endings = [k[-1][-1] if k[-1][-1] != 'd' and k[-1][-1] != '?' else 10 for k in preprefix]
         branch_endings = [int(k) for k in branch_endings]
         glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
         if len(glycans2) > 1:
