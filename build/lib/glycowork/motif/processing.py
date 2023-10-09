@@ -3,7 +3,7 @@ import numpy as np
 import re
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
-from glycowork.glycan_data.loader import unwrap, multireplace, find_nth
+from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, linkages
 rng = np.random.default_rng(42)
 
 
@@ -62,6 +62,20 @@ def in_lib(glycan, libr):
   """
   glycan = min_process_glycans([glycan])[0]
   return set(glycan).issubset(libr.keys())
+
+
+def get_possible_linkages(wildcard, linkage_list = linkages):
+    """Retrieves all linkages that match a given wildcard pattern from a list of linkages\n
+    | Arguments:
+    | :-
+    | wildcard (string): The pattern to match, where '?' can be used as a wildcard for any single character.
+    | linkage_list (list): List of linkages as strings to search within; default:linkages\n   
+    | Returns:
+    | :-
+    | Returns a list of linkages that match the wildcard pattern.
+    """
+    pattern = wildcard.replace("?", "[a-zA-Z0-9]")
+    return [linkage for linkage in linkage_list if re.fullmatch(pattern, linkage)]
 
 
 def bracket_removal(glycan_part):
