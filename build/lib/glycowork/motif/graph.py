@@ -294,7 +294,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
   | narrow_wildcard_list (list): list of narrow wildcard linkages (such as 'a1-?' or '?1-4') that can match to specified versions (e.g., 'a1-?' to 'a1-3')
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
   | count (bool): whether to return the number or absence/presence of motifs; default:False
   | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
   | Returns:
@@ -309,6 +309,8 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in narrow_wildcard_list}
   else:
     narrow_wildcard_list = {9999:[]}
+  if extra == 'termini' and not termini_list:
+    raise ValueError("Termini list cannot be empty when extra='termini'.")
   len_libr = len(libr)
   if isinstance(glycan, str):
     motif_comp = min_process_glycans([motif])[0]
@@ -348,7 +350,10 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     if count:
       counts = 0
       while graph_pair.subgraph_is_isomorphic():
-        counts += 1
+        mapping = graph_pair.mapping
+        mapping = {v: k for k, v in mapping.items()}
+        if all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges()):
+          counts += 1
         g1.remove_nodes_from(graph_pair.mapping.keys())
         g1_node_attr = set(nx.get_node_attributes(g1, "string_labels").values())
         if extra == 'ignore':
@@ -357,7 +362,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
           else:
             return counts
         elif extra == 'wildcards':
-          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list))
+          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list, narrow_wildcard_list))
         elif extra == 'termini':
           if all(k in g1_node_attr for k in motif_comp):
             graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_termini_match('labels', 'termini', len_libr, 'flexible'))
@@ -365,7 +370,10 @@ def subgraph_isomorphism(glycan, motif, libr = None,
             return counts
       return counts
     else:
-      return graph_pair.subgraph_is_isomorphic()
+      if graph_pair.subgraph_is_isomorphic():
+        mapping = graph_pair.mapping
+        mapping = {v: k for k, v in mapping.items()}
+        return all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges())
   else:
     return 0 if count else False
 
