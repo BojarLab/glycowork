@@ -1,9 +1,11 @@
 motif_name,motif,termini_spec
-LewisX,Gal(b1-4)[Fuc(a1-3)]GlcNAc,"['terminal', 'terminal', 'flexible']"
+Terminal_LewisX,Gal(b1-4)[Fuc(a1-3)]GlcNAc,"['terminal', 'terminal', 'flexible']"
+Internal_LewisX,Gal(b1-4)[Fuc(a1-3)]GlcNAc,"['internal', 'terminal', 'flexible']"
 LewisY,Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc,"['terminal', 'flexible', 'terminal', 'flexible']"
 SialylLewisX,Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc,"['terminal', 'flexible', 'terminal', 'flexible']"
 SulfoSialylLewisX,Neu5Ac(a2-3)Gal6S(b1-4)[Fuc(a1-3)]GlcNAc,"['terminal', 'flexible', 'terminal', 'flexible']"
-LewisA,Gal(b1-3)[Fuc(a1-4)]GlcNAc,"['terminal', 'terminal', 'flexible']"
+Terminal_LewisA,Gal(b1-3)[Fuc(a1-4)]GlcNAc,"['terminal', 'terminal', 'flexible']"
+Internal_LewisA,Gal(b1-3)[Fuc(a1-4)]GlcNAc,"['internal', 'terminal', 'flexible']"
 LewisB,Fuc(a1-2)Gal(b1-3)[Fuc(a1-4)]GlcNAc,"['terminal', 'flexible', 'terminal', 'flexible']"
 SialylLewisA,Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc,"['terminal', 'flexible', 'terminal', 'flexible']"
 SulfoLewisA,Gal3S(b1-3)[Fuc(a1-4)]GlcNAc,"['terminal', 'terminal', 'flexible']"

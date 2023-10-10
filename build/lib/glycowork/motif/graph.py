@@ -294,7 +294,7 @@ def expand_termini_list(motif, termini_list):
   | Returns expanded termini_list
   """
   t_list = copy.deepcopy(termini_list)
-  to_add = ['flexible'] * motif.count('(') if isinstance(motif, str) else ['flexible'] * (len(motif)-1)
+  to_add = ['flexible'] * motif.count('(') if isinstance(motif, str) else ['flexible'] * ((len(motif)-1)//2)
   remainder = 0
   for i, k in enumerate(to_add):
     t_list.insert(i+1+remainder, k)
