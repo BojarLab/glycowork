@@ -98,7 +98,7 @@ def get_neighbors(ggraph, glycans, graphs, libr = None,
   ggraph_nb = create_neighbors(ggraph, min_size = min_size)
   # Find out whether any member in 'glycans' is a biosynthetic precursor of 'glycan'
   idx = [np.where([safe_compare(k, j, libr = libr) for k in graphs])[0].tolist() for j in ggraph_nb]
-  nb = [glycans[k[0]] for k in idx if len(k) > 0]
+  nb = [glycans[k[0]] for k in idx if k]
   return nb, idx
 
 
@@ -112,22 +112,20 @@ def create_neighbors(ggraph, min_size = 1):
   | :-
   | Returns biosynthetic precursor glycans
   """
+  num_nodes = len(ggraph.nodes())
   # Check whether glycan large enough to allow for precursors
-  if len(ggraph.nodes()) <= min_size:
+  if num_nodes <= min_size:
     return []
-  if len(ggraph.nodes()) == 3:
-    ggraph_nb = ggraph.subgraph([2])
-    ggraph_nb = [nx.relabel_nodes(ggraph_nb, {m: i for i, m in enumerate(ggraph_nb.nodes())})]
+  if num_nodes == 3:
+    return [nx.relabel_nodes(ggraph.subgraph([2]), {2: 0})]
   # Generate all precursors by iteratively cleaving off the non-reducing-end monosaccharides
-  else:
-    terminal_pairs = [k for k in ggraph.nodes() if ggraph.degree(k) == 1 and k != max(ggraph.nodes())]
-    terminal_pairs = [set([k, next(ggraph.neighbors(k))]) for k in terminal_pairs]
-    ggraph_nb = []
-    for k in terminal_pairs:
-      # Cleaving off messes with the node labeling, so they have to be re-labeled
-      ggraph_temp = ggraph.subgraph([n for n in ggraph.nodes() if n not in k])
-      ggraph_nb.append(nx.relabel_nodes(ggraph_temp, {m: i for i, m in enumerate(ggraph_temp.nodes())}))
-  return ggraph_nb
+  terminal_pairs = [k for k in ggraph.nodes() if ggraph.degree(k) == 1 and k != max(ggraph.nodes())]
+  terminal_pairs = [{k, next(ggraph.neighbors(k))} for k in terminal_pairs]
+  # Cleaving off messes with the node labeling, so they have to be re-labeled
+  return [
+        nx.relabel_nodes(ggraph.subgraph(set(ggraph.nodes()) - pair), {m: i for i, m in enumerate(ggraph.nodes() - pair)})
+        for pair in terminal_pairs
+    ]
 
 
 def get_virtual_nodes(glycan, graph_dic, libr = None, min_size = 1):
@@ -152,14 +150,13 @@ def get_virtual_nodes(glycan, graph_dic, libr = None, min_size = 1):
   # Get biosynthetic precursors
   ggraph_nb_t = create_neighbors(ggraph, min_size = min_size)
   ggraph_nb_t = [graph_to_string(k) for k in ggraph_nb_t]
-  ggraph_nb_t2 = []
-  ggraph_nb = []
+  ggraph_nb, ggraph_nb_t2 = [], []
   # Get both string and graph versions of the precursors
-  for k in range(len(ggraph_nb_t)):
-    if ggraph_nb_t[k][0] != '(':
+  for k in ggraph_nb_t:
+    if k[0] != '(':
       try:
-        ggraph_nb.append(safe_index(ggraph_nb_t[k], graph_dic, libr = libr))
-        ggraph_nb_t2.append(ggraph_nb_t[k])
+        ggraph_nb.append(safe_index(k, graph_dic, libr = libr))
+        ggraph_nb_t2.append(k)
       except:
         pass
   return ggraph_nb, ggraph_nb_t2
@@ -185,29 +182,23 @@ def find_diff(glycan_a, glycan_b, graph_dic, libr = None):
   # Convert to graphs and get sorted node labels
   glycans = [glycan_a, glycan_b]
   graphs = [sorted(nx.get_node_attributes(safe_index(g, graph_dic, libr = libr), 'string_labels').values()) for g in glycans]
-  larger_graph = max(graphs, key = len)
-  smaller_graph = min(graphs, key = len)
+  larger_graph, smaller_graph = sorted(graphs, key = len, reverse = True)
   # Iteratively subtract the smaller graph from the larger graph --> what remains is the difference
   for k in smaller_graph:
     try:
       larger_graph.remove(k)
     except:
       return 'disregard'
-  if len(larger_graph) > 2:
-    return 'disregard'
   # Final check of whether the smaller glycan is a subgraph of the larger glycan
-  if subgraph_isomorphism(max(glycans, key = len), min(glycans, key = len), libr = libr):
-    linkage = [k for k in larger_graph if k in linkages][0]
-    sugar = [k for k in larger_graph if k not in linkages][0]
-    diff = (sugar + "(" + linkage + ")")
-    if 'S(' in diff or 'P(' in diff:
-      return 'disregard'
-    elif diff is None:
-      return 'disregard'
-    else:
-      return diff
-  else:
+  if len(larger_graph) > 2 or not subgraph_isomorphism(max(glycans, key = len), min(glycans, key = len), libr = libr):
     return 'disregard'
+  linkage = next((k for k in larger_graph if k in linkages), None)
+  sugar = next((k for k in larger_graph if k not in linkages), None)
+  diff = f"{sugar}({linkage})"
+  if 'S(' in diff or 'P(' in diff or diff is None:
+    return 'disregard'
+  else:
+    return diff
 
 
 def find_shared_virtuals(glycan_a, glycan_b, graph_dic, libr = None, min_size = 1):
@@ -228,17 +219,16 @@ def find_shared_virtuals(glycan_a, glycan_b, graph_dic, libr = None, min_size = 
   # Get virtual nodes of both glycans
   ggraph_nb_a, glycans_a = get_virtual_nodes(glycan_a, graph_dic, libr = libr, min_size = min_size)                            
   ggraph_nb_b, glycans_b = get_virtual_nodes(glycan_b, graph_dic, libr = libr, min_size = min_size)
-  out = []
+  if not ggraph_nb_a:
+    return []
+  out = set()
   # Check whether any of the nodes of glycan_a and glycan_b are the same
-  if len(ggraph_nb_a) > 0:
-    for k in range(len(ggraph_nb_a)):
-      for j in range(len(ggraph_nb_b)):
-        if compare_glycans(ggraph_nb_a[k], ggraph_nb_b[j], libr = libr):
-          if [glycan_a, glycans_a[k]] not in [list(m) for m in out]:
-            out.append((glycan_a, glycans_a[k]))
-          if [glycan_b, glycans_b[j]] not in [list(m) for m in out]:
-            out.append((glycan_b, glycans_a[k]))
-  return out
+  for k, graph_a in enumerate(ggraph_nb_a):
+    for graph_b in ggraph_nb_b:
+      if compare_glycans(graph_a, graph_b, libr = libr):
+        out.add((glycan_a, glycans_a[k]))
+        out.add((glycan_b, glycans_a[k]))
+  return list(out)
 
 
 def adjacencyMatrix_to_network(adjacency_matrix):
@@ -286,10 +276,10 @@ def create_adjacency_matrix(glycans, graph_dic, libr = None, min_size = 1):
                                                min_size = min_size) for k in itertools.combinations(glycans, 2)])
   new_nodes = list(set([k[1] for k in virtual_edges if k[1] not in df_out.columns]))
   idx = np.where([any([compare_glycans(k, j, libr = libr) for j in df_out.columns]) for k in new_nodes])[0].tolist()
-  if len(idx) > 0:
+  if idx:
     sub_new = {new_nodes[k] for k in idx}
     virtual_edges = [j for j in virtual_edges if j[1] not in sub_new]
-    new_nodes = [n for k, n in enumerate(new_nodes) if k not in idx]
+    new_nodes = [n for i, n in enumerate(new_nodes) if i not in idx]
   # Add virtual nodes
   for k in new_nodes:
     df_out[k] = 0
@@ -336,13 +326,11 @@ def find_path(glycan_a, glycan_b, graph_dic, libr = None,
   larger_glycan, smaller_glycan = (glycan_a, glycan_b) if len(glycan_a) > len(glycan_b) else (glycan_b, glycan_a)
   # Bridge the distance between a and b by generating biosynthetic precursors
   dist = int(larger_glycan.count('(')-smaller_glycan.count('('))
-  if dist < 1:
-    return [], {}
-  if dist > 5:
+  if dist not in range(1, 6):
     return [], {}
   virtuals_t = [[larger_glycan]]
   # While ensuring that glycans don't become smaller than the root, find biosynthetic precursors of each glycan in glycans
-  virtual_shells_t = [[[larger_glycan]]] + [virtuals_t := [get_virtual_nodes(k, graph_dic, libr = libr, min_size = min_size)[1] for k in unwrap(virtuals_t) if k.count('(') > (min_size-1)] for s in range(dist)]
+  virtual_shells_t = [[[larger_glycan]]] + [virtuals_t := [get_virtual_nodes(k, graph_dic, libr = libr, min_size = min_size)[1] for k in unwrap(virtuals_t) if k.count('(') > (min_size-1)] for _ in range(dist)]
   # Get the edges connecting the starting point to the experimentally observed node
   virtual_edges = unwrap([unwrap(shells_to_edges(virtual_shells_t[k-1], virtual_shells_t[k])) for k in range(1, len(virtual_shells_t))])
   del virtual_shells_t
@@ -370,20 +358,18 @@ def find_shortest_path(goal_glycan, glycan_list, graph_dic, libr = None,
     libr = lib
   ggraph = safe_index(goal_glycan, graph_dic, libr = libr)
   glycan_list = sorted(glycan_list, key = len, reverse = True)
-  virtual_edges = []
-  edge_labels = {}
-  for k in glycan_list:
+  for glycan in glycan_list:
     # For each glycan, check whether it could constitute a precursor (i.e., is it a sub-graph + does it stem from the correct root)
-    if len(k) < len(goal_glycan) and goal_glycan[-5:] == k[-5:]:
-      if subgraph_isomorphism(ggraph, safe_index(k, graph_dic, libr = libr), libr = libr):
+    if len(glycan) < len(goal_glycan) and goal_glycan[-5:] == glycan[-5:]:
+      if subgraph_isomorphism(ggraph, safe_index(glycan, graph_dic, libr = libr), libr = libr):
         try:
           # Finding a path through shells of generated virtual nodes
-          virtual_edges, edge_labels = find_path(goal_glycan, k, graph_dic, libr = libr,
+          virtual_edges, edge_labels = find_path(goal_glycan, glycan, graph_dic, libr = libr,
                                                  permitted_roots = permitted_roots, min_size = min_size)
-          break
+          return virtual_edges, edge_labels
         except:
           continue
-  return virtual_edges, edge_labels
+  return [], {}
 
 
 def filter_disregard(network, attr = 'diffs', value = 'disregard'):
@@ -412,14 +398,9 @@ def detect_ptm(glycans, allowed_ptms = allowed_ptms):
   | :-
   | Returns glycans that contain PTMs
   """
-  out = []
   # Checks for presence of any of the potential PTMs
-  for glycan in glycans:
-    for ptm in allowed_ptms:
-        if ptm in glycan:
-            out.append(glycan)
-            break
-  return out
+  return [glycan for glycan in glycans if any(ptm in glycan for ptm in allowed_ptms)]
+  out = []
 
 
 def stemify_glycan_fast(ggraph_in, stem_lib = None, libr = None):
@@ -466,14 +447,17 @@ def find_ptm(glycan, glycans, graph_dic, allowed_ptms = allowed_ptms,
   if stem_lib is None:
     stem_lib = get_stem_lib(libr)
   # Checks which PTM(s) are present
-  mod = [ptm for ptm in allowed_ptms if ptm in glycan][0]
+  mod = next((ptm for ptm in allowed_ptms if ptm in glycan), None)
+  if mod is None:
+    return 0
   # Stemifying returns the unmodified glycan
   glycan_stem, g_stem = stemify_glycan_fast(safe_index(glycan, graph_dic, libr = libr),
                                             libr = libr, stem_lib = stem_lib)
-  glycan_stem = glycan_stem + suffix
+  glycan_stem += suffix
   if suffix == '-ol':
-    g_stem.nodes[len(g_stem)-1]['string_labels'] = g_stem.nodes[len(g_stem)-1]['string_labels'] + suffix
-    g_stem.nodes[len(g_stem)-1]['labels'] = libr[g_stem.nodes[len(g_stem)-1]['string_labels']]
+    last_node = len(g_stem) - 1
+    g_stem.nodes[last_node]['string_labels'] += suffix
+    g_stem.nodes[last_node]['labels'] = libr[g_stem.nodes[last_node]['string_labels']]
   if ('Sug' in glycan_stem) or ('Neu(' in glycan_stem):
     return 0
   if ggraphs is None:
@@ -481,13 +465,12 @@ def find_ptm(glycan, glycans, graph_dic, allowed_ptms = allowed_ptms,
   idx = np.where([safe_compare(k, g_stem, libr = libr) for k in ggraphs])[0].tolist()
   # If found, add a biosynthetic step of adding the PTM to the unmodified glycan
   if len(idx) > 0:
-    return ((glycan), ([glycans[k] for k in idx][0])), mod
+    return (glycan, glycans[idx[0]]), mod
   # If not, just add a virtual node of the unmodified glycan+corresponding edge; will be connected to the main network later; will not properly work if glycan has multiple PTMs
+  elif ''.join(sorted(glycan)) == ''.join(sorted(glycan_stem + mod)):
+    return ((glycan), (glycan_stem)), mod
   else:
-    if ''.join(sorted(glycan)) == ''.join(sorted(glycan_stem + mod)):
-      return ((glycan), (glycan_stem)), mod
-    else:
-      return 0
+    return 0
 
 
 def process_ptm(glycans, graph_dic, allowed_ptms = allowed_ptms,
@@ -519,7 +502,7 @@ def process_ptm(glycans, graph_dic, allowed_ptms = allowed_ptms,
     edges, edge_labels = zip(*m)
     return list(edges), list(edge_labels)
   else:
-    return []
+    return [], []
 
 
 def update_network(network_in, edge_list, edge_labels = None, node_labels = None):
@@ -535,21 +518,16 @@ def update_network(network_in, edge_list, edge_labels = None, node_labels = None
   | Returns network with added edges
   """
   network = network_in.copy()
-  if edge_labels is None:
-    network.add_edges_from(edge_list)
-  else:
-    network.add_edges_from(edge_list)
+  network.add_edges_from(edge_list)
+  if edge_labels:
     nx.set_edge_attributes(network, {k: edge_labels[i] for i, k in enumerate(edge_list)}, 'diffs')
-  if node_labels is None:
-    for node in network.nodes:
-      try:
-        temp = network.nodes[node]['virtual']
-      except:
-        network.nodes[node]['virtual'] = 1
-    return network
-  else:
+  if node_labels:
     nx.set_node_attributes(network, node_labels, 'virtual')
-    return network
+  else:
+    default_virtual = {'virtual': 1}
+    for node in network.nodes:
+      network.nodes[node].setdefault('virtual', 1)
+  return network
 
 
 def return_unconnected_to_root(network, permitted_roots = permitted_roots):
@@ -563,13 +541,12 @@ def return_unconnected_to_root(network, permitted_roots = permitted_roots):
   | Returns set of nodes that are not connected to the root nodes
   """
   unconnected = set()
-  nodeDict = dict(network.nodes(data = True))
+  # Pre-filter nodes that are observed and not in permitted_roots
+  candidate_nodes = {node for node, attr in network.nodes(data = True) if attr.get('virtual', 1) == 0 and node not in permitted_roots}
   # For each observed node, check whether it has a path to a root; if not, collect and return the node
-  for node in network.nodes():
-    if nodeDict[node]['virtual'] == 0 and (node not in permitted_roots):
-      path_tracing = [nx.algorithms.shortest_paths.generic.has_path(network, node, k) for k in permitted_roots]
-      if not any(path_tracing):
-        unconnected.add(node)
+  for node in candidate_nodes:
+    if not any(nx.algorithms.shortest_paths.generic.has_path(network, node, root) for root in permitted_roots):
+      unconnected.add(node)
   return unconnected
 
 
@@ -589,41 +566,40 @@ def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, lib
   """
   if libr is None:
     libr = lib
-  permitted_roots = [k for k in permitted_roots if k in network.nodes()]
-  if len(permitted_roots) > 0:
-    # Get unconnected observed nodes
-    unconnected_nodes = return_unconnected_to_root(network, permitted_roots = permitted_roots)
-    # Directed needed to detect nodes that appear to be connected (downstream) but are not connected to the root
-    temp_network = prune_directed_edges(network.to_directed())
-    pseudo_connected_nodes = {k[0] for k in temp_network.in_degree if k[1] == 0}
-    pseudo_connected_nodes = {k for k in pseudo_connected_nodes if k not in permitted_roots and k not in unconnected_nodes}
-    unconnected_nodes.update(pseudo_connected_nodes)
-    # Only consider unconnected nodes if they are larger than the root (otherwise they should be pruned anyway)
-    unconnected_nodes = {k for k in unconnected_nodes if len(safe_index(k, graph_dic, libr = libr)) > min_size}
-    nodeDict = dict(network.nodes(data = True))
-    # Subset the observed nodes that are connected to the root and are at least the size of the smallest root
-    real_nodes = sorted([node for node in network.nodes() if nodeDict[node]['virtual'] == 0 and node not in unconnected_nodes and len(safe_index(node, graph_dic, libr = libr)) >= min_size], key = len, reverse = True)
-    edges = []
-    edge_labels = []
-    # For each unconnected node, find the shortest path to its root node
-    for node in unconnected_nodes:
-      r_target = ''
-      g_node = safe_index(node, graph_dic, libr = libr)
-      for r in real_nodes:
-        if subgraph_isomorphism(g_node, safe_index(r, graph_dic, libr = libr), libr = libr):
-          r_target = r
-          break
-        else:
-          r_target = ''
-      if len(r_target) < 1:
-        continue
-      e, el = find_path(node, r_target, graph_dic, libr = libr, permitted_roots = permitted_roots, min_size = min_size)
-      edges.append(e)
-      edge_labels.append(el)
-    edge_labels = unwrap([[k[j] for j in edges[i]] for i, k in enumerate(edge_labels)])
-    edges = unwrap(edges)
-    node_labels = {node: (nodeDict[node]['virtual'] if node in network.nodes() else 1) for node in unwrap(edges)}
-    return update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
+  permitted_roots = {root for root in permitted_roots if root in network.nodes()}
+  if not permitted_roots:
+    return network.copy()
+  # Get unconnected observed nodes
+  unconnected_nodes = return_unconnected_to_root(network, permitted_roots = permitted_roots)
+  # Directed needed to detect nodes that appear to be connected (downstream) but are not connected to the root
+  temp_network = prune_directed_edges(network.to_directed())
+  pseudo_connected_nodes = {node for node, degree in temp_network.in_degree() if degree == 0}
+  pseudo_connected_nodes -= (permitted_roots | unconnected_nodes)
+  unconnected_nodes |= pseudo_connected_nodes
+  # Only consider unconnected nodes if they are larger than the root (otherwise they should be pruned anyway)
+  unconnected_nodes = {k for k in unconnected_nodes if len(safe_index(k, graph_dic, libr = libr)) > min_size}
+  # Subset the observed nodes that are connected to the root and are at least the size of the smallest root
+  real_nodes = sorted([node for node, attr in network.nodes(data = True)
+                         if attr.get('virtual', 1) == 0 and node not in unconnected_nodes and
+                         len(safe_index(node, graph_dic, libr = libr)) >= min_size], key = len, reverse = True)
+  edges, edge_labels = [], []
+  # For each unconnected node, find the shortest path to its root node
+  for node in unconnected_nodes:
+    g_node = safe_index(node, graph_dic, libr = libr)
+    r_target = next((r for r in real_nodes if subgraph_isomorphism(g_node, safe_index(r, graph_dic, libr = libr), libr = libr)), '')
+    if not r_target:
+      continue
+    e, el = find_path(node, r_target, graph_dic, libr = libr, permitted_roots = permitted_roots, min_size = min_size)
+    edges.append(e)
+    edge_labels.append(el)
+  edge_labels = unwrap([[k[j] for j in edges[i]] for i, k in enumerate(edge_labels)])
+  edges = unwrap(edges)
+  existing_nodes = set(network.nodes())
+  all_edge_nodes = set().union(*edges)
+  new_nodes = all_edge_nodes - existing_nodes
+  node_labels = {node: network.nodes[node].get('virtual', 1) for node in existing_nodes}
+  node_labels.update({node: 1 for node in new_nodes})
+  return update_network(network, edges, edge_labels = edge_labels, node_labels = node_labels)
 
 
 def prune_directed_edges(network):
@@ -635,10 +611,8 @@ def prune_directed_edges(network):
   | :-
   | Returns a network with pruned edges that would go in the wrong direction
   """
-  for k in network.nodes():
-    for j in network.nodes():
-      if network.has_edge(k, j) and (len(k) > len(j)):
-        network.remove_edge(k, j)
+  edges_to_remove = [(u, v) for u, v in network.edges() if len(u) > len(v)]
+  network.remove_edges_from(edges_to_remove)
   return network
 
 
@@ -656,9 +630,9 @@ def deorphanize_edge_labels(network, graph_dic, libr = None):
   if libr is None:
     libr = lib
   edge_labels = nx.get_edge_attributes(network, 'diffs')
-  for k in network.edges():
-    if k not in edge_labels.keys():
-      network.edges[k]['diffs'] = find_diff(k[0], k[1], graph_dic, libr = libr)
+  unlabeled_edges = [edge for edge in network.edges() if edge not in edge_labels]
+  for k in unlabeled_edges:
+    network.edges[k]['diffs'] = find_diff(k[0], k[1], graph_dic, libr = libr)
   return network
 
 
