@@ -148,11 +148,13 @@ def glycan_to_nxGraph(glycan, libr = None,
   | glycan (string): glycan in IUPAC-condensed format
   | libr (dict): dictionary of form glycoletter:index
   | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
+  | termini_list (list): list of monosaccharide positions (from 'terminal','internal', and 'flexible')\n
   | Returns:
   | :-
   | Returns networkx graph object of glycan
   """
+  if termini_list:
+    termini_list = expand_termini_list(glycan, termini_list)
   if '{' in glycan:
     parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
                                    termini_list = termini_list) for k in glycan.replace('}', '{').split('{') if k]
@@ -281,6 +283,25 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
     return False
 
 
+def expand_termini_list(motif, termini_list):
+  """Helper function to convert monosaccharide-only termini list into full termini list\n
+  | Arguments:
+  | :-
+  | motif (string or networkx): glycan motif in IUPAC-condensed format or as graph in NetworkX format
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')\n
+  | Returns:
+  | :-
+  | Returns expanded termini_list
+  """
+  t_list = copy.deepcopy(termini_list)
+  to_add = ['flexible'] * motif.count('(') if isinstance(motif, str) else ['flexible'] * (len(motif)-1)
+  remainder = 0
+  for i, k in enumerate(to_add):
+    t_list.insert(i+1+remainder, k)
+    remainder += 1
+  return t_list
+
+
 def subgraph_isomorphism(glycan, motif, libr = None,
                          extra = 'ignore', wildcard_list = [], narrow_wildcard_list = [],
                          termini_list = [], count = False,
@@ -294,7 +315,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'ignore'
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
   | narrow_wildcard_list (list): list of narrow wildcard linkages (such as 'a1-?' or '?1-4') that can match to specified versions (e.g., 'a1-?' to 'a1-3')
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
+  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | count (bool): whether to return the number or absence/presence of motifs; default:False
   | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
   | Returns:
@@ -311,6 +332,8 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     narrow_wildcard_list = {9999:[]}
   if extra == 'termini' and not termini_list:
     raise ValueError("Termini list cannot be empty when extra='termini'.")
+  if termini_list:
+    termini_list = expand_termini_list(motif, termini_list)
   len_libr = len(libr)
   if isinstance(glycan, str):
     motif_comp = min_process_glycans([motif])[0]
