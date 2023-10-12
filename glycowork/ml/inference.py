@@ -59,6 +59,7 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
                                           libr = libr, batch_size = batch_size,
                                           shuffle = False)
     res = []
+    model = model.eval()
     # Get predictions for each mini-batch
     for data in glycan_loader:
         x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
@@ -66,20 +67,17 @@ def glycans_to_emb(glycans, model, libr = None, batch_size = 32, rep = True,
         y = y.to(device)
         edge_index = edge_index.to(device)
         batch = batch.to(device)
-        model = model.eval()
         pred, out = model(x, edge_index, batch, inference = True)
+        # Unpacking and combining predictions
         if rep:
-            res.append(out)
+            res.extend(out.detach().cpu().numpy())
         else:
-            res.append(pred)
-    # Unpacking and combining predictions
-    res2 = [res[k].detach().cpu().numpy() for k in range(len(res))]
-    res2 = pd.DataFrame(np.concatenate(res2))
+            res.extend(pred.detach().cpu().numpy())
     if rep:
-      return res2
+        return pd.DataFrame(res)
     else:
-      preds = [class_list[k] for k in res2.idxmax(axis = "columns")]
-      return preds
+        preds = [class_list[k] for k in np.argmax(res, axis = 1)]
+        return preds
 
 
 def get_multi_pred(prot, glycans, model, prot_dic,
@@ -105,38 +103,27 @@ def get_multi_pred(prot, glycans, model, prot_dic,
       libr = lib
   # Preparing dataset for PyTorch
   if flex:
-    prot = prot_to_coded([prot])
-    train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
-                                         libr = libr, batch_size = batch_size,
-                                         shuffle = False, extra_feature = prot*len(glycans))
+      prot = prot_to_coded([prot])
+      feature = prot * len(glycans)
   else:
-    try:
-      rep = prot_dic[prot]
-    except:
-      print('new protein, no stored embedding')
-    train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
+      rep = prot_dic.get(prot, "new protein, no stored embedding")
+      feature = [rep] * len(glycans)
+  train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
                                          libr = libr, batch_size = batch_size,
-                                         shuffle = False, extra_feature = [rep]*len(glycans))
+                                         shuffle = False, extra_feature = feature)
   model = model.eval()
   res = []
   # Get predictions for each mini-batch
   for k in train_loader:
     x, y, edge_index, prot, batch = k.labels, k.y, k.edge_index, k.train_idx, k.batch
-    x = x.to(device)
-    y = y.to(device)
-    prot = prot.view(max(batch)+1, -1).float().to(device)
-    edge_index = edge_index.to(device)
-    batch = batch.to(device)
+    x, y, edge_index, prot, batch = x.to(device), y.to(device), edge_index.to(device), prot.view(max(batch) + 1, -1).float().to(device), batch.to(device)
     pred = model(prot, x, edge_index, batch)
-    res.append(pred)
-  # Unpacking and combining predictions
-  res = unwrap([res[k].detach().cpu().numpy() for k in range(len(res))])
-  res = [k.tolist()[0] for k in res]
+    res.extend(pred.detach().cpu().numpy())
   # Applying background correction of predictions
   if background_correction:
     correction_df = pd.Series(correction_df.pred.values,
                               index = correction_df.motif).to_dict()
-    bg_res = [correction_df[j] if j in list(correction_df.keys()) else 0 for j in glycans]
+    bg_res = [correction_dict.get(j, 0) for j in glycans]
     if 0 in bg_res:
       print("Warning: not all glycans are in the correction_df; consider adding their background to correction_df")
     res = [a_i - b_i for a_i, b_i in zip(res, bg_res)]
@@ -172,17 +159,13 @@ def get_lectin_preds(prot, glycans, model, prot_dic = {}, background_correction 
   preds = get_multi_pred(prot, glycans, model, prot_dic,
                          batch_size = batch_size, libr = libr,
                          flex = flex)
-  df_pred = pd.DataFrame(glycans, columns = ['motif'])
-  df_pred['pred'] = preds
+  df_pred = pd.DataFrame({'motif': glycans, 'pred': preds})
   if background_correction:
-    correction_df = pd.Series(correction_df.pred.values,
-                              index = correction_df.motif).to_dict()
-    for j in df_pred.motif:
-      motif_idx = df_pred.motif.values.tolist().index(j)
-      try:
-        df_pred.at[motif_idx, 'pred'] = df_pred.iloc[motif_idx, 1] - correction_df[j]
-      except:
-        pass
+    correction_dict = {motif: pred for motif, pred in zip(correction_df['motif'], correction_df['pred'])}
+    for idx, row in df_pred.iterrows():
+        motif = row['motif']
+        if motif in correction_dict:
+            df_pred.at[idx, 'pred'] -= correction_dict[motif]
   if sort:
     df_pred.sort_values('pred', ascending = True, inplace = True)
   return df_pred
@@ -201,21 +184,23 @@ def get_esm1b_representations(prots, model, alphabet):
   """
   # model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
   batch_converter = alphabet.get_batch_converter()
-  prots = list(set(prots))
-  data_list = []
-  for k in range(0, len(prots)):
-    if len(prots[k]) < 1000:
-      data_list.append(('protein'+str(k), prots[k][:np.min([len(prots[k]), 1000])]))
-    else:
-      data_list.append(('protein'+str(k), prots[k][:1000]))
+  unique_prots = list(set(prots))
+  data_list = [
+        ('protein' + str(idx), prot[:min(len(prot), 1000)])
+        for idx, prot in enumerate(unique_prots)
+    ]
   batch_labels, batch_strs, batch_tokens = batch_converter(data_list)
   with torch.no_grad():
       results = model(batch_tokens, repr_layers = [33], return_contacts = False)
   token_representations = results["representations"][33]
-  sequence_representations = []
-  for i, (_, seq) in enumerate(data_list):
-      sequence_representations.append(token_representations[i, 1:len(seq)+1].mean(0))
-  prot_dic = {prots[k]: sequence_representations[k].tolist() for k in range(len(sequence_representations))}
+  sequence_representations = [
+        token_representations[i, 1:len(seq) + 1].mean(0)
+        for i, (_, seq) in enumerate(data_list)
+    ]
+  prot_dic = {
+        unique_prots[k]: sequence_representations[k].tolist() 
+        for k in range(len(sequence_representations))
+    }
   return prot_dic
 
 
@@ -237,14 +222,13 @@ def get_Nsequon_preds(prots, model, prot_dic):
   model = model.eval()
   preds = []
   # Get predictions for each mini-batch
-  for k in loader:
-    x, y = k
+  for x, _ in loader:
     x = x.to(device)
     pred = model(x)
     pred = [sigmoid(x) for x in pred.cpu().detach().numpy()]
-    preds.append(pred)
-  # Unpacking and combining predictions
-  preds = unwrap(preds)
-  df_pred = pd.DataFrame([prots, preds]).T
-  df_pred.columns = ['seq', 'glycosylated']
+    preds.extend(pred)
+  df_pred = pd.DataFrame({
+        'seq': prots,
+        'glycosylated': all_preds
+    })
   return df_pred

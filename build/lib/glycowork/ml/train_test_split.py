@@ -18,18 +18,14 @@ def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
   | :-
   | Returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name
   """
-  added_glycans = []
-  added_labels = []
-  # Each loop has the chance of exchanging glycan parts with each wildcard
-  for k in range(len(glycans)):
-    temp = glycans[k]
-    for j in wildcard_list:
-      if j in temp:
-        if random.uniform(0, 1) < r:
-          added_glycans.append(temp.replace(j, wildcard_name))
-          added_labels.append(labels[k])
-  glycans += added_glycans
-  labels += added_labels
+  added_glycans_labels = [(glycan.replace(j, wildcard_name), label) 
+                             for glycan, label in zip(glycans, labels) 
+                             for j in wildcard_list 
+                             if j in glycan and random.uniform(0, 1) < r]
+  if added_glycans_labels:
+    added_glycans, added_labels = zip(*added_glycans_labels)
+    return glycans + list(added_glycans), labels + list(added_labels)
+    
   return glycans, labels
 
 
