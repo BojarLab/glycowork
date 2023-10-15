@@ -8,36 +8,6 @@ import pandas as pd
 from scipy.sparse.linalg import eigsh
 
 
-def character_to_label(character, libr = None):
-  """tokenizes character by indexing passed library\n
-  | Arguments:
-  | :-
-  | character (string): character to index
-  | libr (list): list of library items\n
-  | Returns:
-  | :-
-  | Returns index of character in library
-  """
-  if libr is None:
-    libr = lib
-  return libr.index(character)
-
-
-def string_to_labels(character_string, libr = None):
-  """tokenizes word by indexing characters in passed library\n
-  | Arguments:
-  | :-
-  | character_string (string): string of characters to index
-  | libr (list): list of library items\n
-  | Returns:
-  | :-
-  | Returns indexes of characters in library
-  """
-  if libr is None:
-    libr = lib
-  return list(map(lambda character: character_to_label(character, libr), character_string))
-
-
 def evaluate_adjacency(glycan_part, adjustment):
   """checks whether two glycoletters are adjacent in the graph-to-be-constructed\n
   | Arguments:
