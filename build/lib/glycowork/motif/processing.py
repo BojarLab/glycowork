@@ -29,8 +29,7 @@ def get_lib(glycan_list):
   | Returns dictionary of form glycoletter:index
   """
   # Convert to glycoletters & flatten & get unique vocab
-  lib = unwrap(min_process_glycans(set(glycan_list)))
-  lib = sorted(set(lib))
+  lib = sorted(set(unwrap(min_process_glycans(set(glycan_list)))))
   # Convert to dict
   return {k: i for i, k in enumerate(lib)}
 
@@ -46,8 +45,11 @@ def expand_lib(libr, glycan_list):
   | Returns new lib
   """
   new_libr = get_lib(glycan_list)
-  new_libr = {k: v+len(libr) for k, v in new_libr.items() if k not in libr.keys()}
-  return {**libr, **new_libr}
+  offset = len(libr)
+  for k, v in new_libr.items():
+    if k not in libr:
+      libr[k] = v + offset
+  return libr
 
 
 def in_lib(glycan, libr):
@@ -114,10 +116,7 @@ def find_isomorphs(glycan):
     elif not bool(re.search(r'\[[^\]]+\[', glycan[find_nth(glycan, ']', 2):])) and bool(re.search(r'\[[^\]]+\[', glycan[:find_nth(glycan, '[', 3)])):
       out_list.add(re.sub(r'^(.*?)\[(.*?)(\]{1,1})(.*?)\]', r'\2\3\4[\1]', glycan, 1))
   # Double branch swap
-  temp = set()
-  for k in out_list:
-    if '][' in k:
-      temp.add(re.sub(r'\[([^[\]]+)\]\[([^[\]]+)\]', r'[\2][\1]', k))
+  temp = {re.sub(r'\[([^[\]]+)\]\[([^[\]]+)\]', k, r'[\2][\1]') for k in out_list if '][' in k}
   out_list.update(temp)
   temp = set()
   # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
@@ -151,18 +150,15 @@ def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species
 
 def find_matching_brackets_indices(s):
   stack = []
-  opening_indices = {}
   matching_indices = []
 
   for i, c in enumerate(s):
     if c == '[':
       stack.append(i)
-      opening_indices[i] = len(stack) - 1
     elif c == ']':
       if stack:
         opening_index = stack.pop()
         matching_indices.append((opening_index, i))
-        del opening_indices[opening_index]
 
   if stack:
     print("Unmatched opening brackets:", [s[i] for i in stack])
@@ -189,20 +185,20 @@ def choose_correct_isoform(glycans, reverse = False):
     floaty = glycans[0][:glycans[0].rindex('}')+1]
     glycans = [k[k.rindex('}')+1:] for k in glycans]
   # Heuristic: main chain should contain the most monosaccharides of all chains
-  mains = [bracket_removal(g) for g in glycans]
-  mains = [k.count('(') for k in mains]
-  glycans2 = [g for k, g in enumerate(glycans) if mains[k] == max(mains)]
+  mains = [bracket_removal(g).count('(') for g in glycans]
+  max_mains = max(mains)
+  glycans2 = [g for k, g in enumerate(glycans) if mains[k] == max_mains]
   # Handle neighboring branches
   kill_list = set()
   for g in glycans2:
     if '][' in g:
       try:
         match = re.search(r'\[([^[\]]+)\]\[([^[\]]+)\]', g)
-        if match.group(1).count('(') < match.group(2).count('('):
+        count1, count2 = match.group(1).count('('), match.group(2).count('(')
+        if count1 < count2:
           kill_list.add(g)
-        elif match.group(1).count('(') == match.group(2).count('('):
-          if int(match.group(1)[-2]) > int(match.group(2)[-2]):
-            kill_list.add(g)
+        elif count1 == count2 and int(match.group(1)[-2]) > int(match.group(2)[-2]):
+          kill_list.add(g)
       except:
         pass
   glycans2 = [k for k in glycans2 if k not in kill_list]
@@ -212,16 +208,18 @@ def choose_correct_isoform(glycans, reverse = False):
     prefix = [min_process_glycans([k[j[0]+1:j[1]] for j in candidates[k]]) for k in candidates.keys()]
     prefix = [np.argmax([len(j) for j in k]) for k in prefix]
     prefix = min_process_glycans([k[:candidates[k][prefix[i]][0]] for i, k in enumerate(candidates.keys())])
-    branch_endings = [k[-1][-1] if k[-1][-1] != 'd' and k[-1][-1] != '?' else 10 for k in prefix]
+    branch_endings = [k[-1][-1] if k[-1][-1].isdigit() else 10 for k in prefix]
     if len(set(branch_endings)) == 1:
       branch_endings = [ord(k[0][0]) for k in prefix]
     branch_endings = [int(k) for k in branch_endings]
-    glycans2 = [g for k,g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
+    min_ending = min(branch_endings)
+    glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min_ending]
     if len(glycans2) > 1:
         preprefix = min_process_glycans([glyc[:glyc.index('[')] for glyc in glycans2])
-        branch_endings = [k[-1][-1] if k[-1][-1] != 'd' and k[-1][-1] != '?' else 10 for k in preprefix]
+        branch_endings = [k[-1][-1] if k[-1][-1].isdigit() else 10 for k in preprefix]
         branch_endings = [int(k) for k in branch_endings]
-        glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min(branch_endings)]
+        min_ending = min(branch_endings)
+        glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min_ending]
         if len(glycans2) > 1:
           correct_isoform = sorted(glycans2)[0]
         else:
@@ -250,19 +248,18 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   | :-
   | Returns True if glycan is in glycan class and False if not
   """
-  if glycan_class == 'O':
-    pool = ['GalNAc', 'GalNAcOS', 'GalNAc4S', 'GalNAc6S' 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S']
-  elif glycan_class == 'N':
-    pool = ['GlcNAc']
-  elif glycan_class == 'free' or glycan_class == 'lipid':
-    pool = ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins']
+  pools = {
+    'O': ['GalNAc', 'GalNAcOS', 'GalNAc4S', 'GalNAc6S', 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S'],
+    'N': ['GlcNAc'],
+    'free': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
+    'lipid': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
+    }
+  pool = pools.get(glycan_class, [])
   truth = any([glycan.endswith(k) for k in pool])
-  if glycan_class == 'free' or glycan_class == 'lipid' or glycan_class == 'O':
-    if any([glycan.endswith(k) for k in ['GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc']]):
-      truth = False
+  if truth and glycan_class in {'free', 'lipid', 'O'}:
+    truth = not any(glycan.endswith(k) for k in ['GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc'])
   if not truth and conf:
-    if conf > extra_thresh:
-      truth = True
+    return conf > extra_thresh
   return truth
 
 
@@ -345,7 +342,7 @@ def canonicalize_iupac(glycan):
       glycan = glycan[:-2]
     else:
       glycan = glycan[:-2] + '-ol'
-  if (glycan.endswith('a') or glycan.endswith('b')) and not glycan.endswith('Rha') and not glycan.endswith('Ara'):
+  if glycan[-1] in 'ab' and glycan[-3:] not in ['Rha', 'Ara']:
     glycan = glycan[:-1]
   # Handle modifications
   if bool(re.search(r'\[[1-9]?[SP]\][A-Z][^\(^\[]+', glycan)):
@@ -433,20 +430,19 @@ def mahalanobis_variance(x, y, paired = False):
   """
   # Combine gp1 and gp2 into a single matrix
   data = np.concatenate((x.T, y.T), axis = 0)
-  # Initialize an empty list to store the bootstrap samples
-  bootstrap_samples = []
   # Perform bootstrap resampling
   n_iterations = 1000
-  for _ in range(n_iterations):
+  # Initialize an empty array to store the bootstrap samples
+  bootstrap_samples = np.empty(n_iterations)
+  size_x = x.shape[1]
+  for i in range(n_iterations):
       # Generate a random bootstrap sample
       sample = data[rng.choice(range(data.shape[0]), size = data.shape[0], replace = True)]
       # Split the bootstrap sample into two groups
-      x_sample = sample[:x.shape[1]]
-      y_sample = sample[x.shape[1]:]
+      x_sample = sample[:size_x]
+      y_sample = sample[size_x:]
       # Calculate the Mahalanobis distance for the bootstrap sample
-      bootstrap_samples.append(mahalanobis_distance(x_sample.T, y_sample.T, paired = paired))
-  # Convert the list of bootstrap samples into a numpy array
-  bootstrap_samples = np.array(bootstrap_samples)
+      bootstrap_samples[i] = mahalanobis_distance(x_sample.T, y_sample.T, paired = paired)
   # Estimate the variance of the Mahalanobis distance
   return np.var(bootstrap_samples)
 
@@ -465,11 +461,11 @@ def variance_stabilization(data, groups = None):
   data = np.log1p(data)
   # Scale data to have zero mean and unit variance
   if groups is None:
-    data = (data - np.mean(data, axis = 0)) / np.std(data, axis = 0)
+    data = (data - data.mean(axis = 0)) / data.std(axis = 0)
   else:
     for group in groups:
       group_data = data.loc[:, group]
-      data.loc[:, group] = (group_data - np.mean(group_data, axis = 0)) / np.std(group_data, axis = 0)
+      data.loc[:, group] = (group_data - group_data.mean(axis = 0)) / group_data.std(axis = 0)
   return data
 
 
@@ -498,13 +494,12 @@ class MissForest:
     # Replace NaNs with median of the column in a new dataset that will be transformed
     X_transform = X.copy()
     X_transform.fillna(X_transform.median(), inplace = True)
+    # Sort columns by the number of NaNs (ascending)
+    sorted_columns = X_nan.sum().sort_values().index.tolist()
 
     for _ in range(self.max_iter):
       X_old = X_transform.copy()
       # Step 2: Imputation
-      # Sort columns by the number of NaNs (ascending)
-      sorted_columns = X_nan.sum().sort_values().index.tolist()
-
       for column in sorted_columns:
         if X_nan[column].any():  # if column has missing values in original dataset
           # Split data into observed and missing for the current column
@@ -542,28 +537,27 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
     | :-
     | Returns a dataframe in the same style as the input 
     """
-    old_cols = []
-    masks = []
-    for group_cols in groups:
-        if min_samples is None:
-          thresh = int(round(len(group_cols) / 2))
-        else:
-          thresh = min_samples
-        mask = df[group_cols].apply(lambda row: (row != 0).sum(), axis = 1) >= thresh
-        masks.append(mask)
+    if min_samples is None:
+      min_samples = [len(group_cols) // 2 for group_cols in groups]
+    else:
+      min_samples = [min_samples] * len(groups)
+    masks = [
+      df[group_cols].apply(lambda row: (row != 0).sum(), axis=1) >= thresh
+      for group_cols, thresh in zip(groups, min_samples)
+      ]
     df = df[np.all(masks, axis = 0)].copy()
-    colname = df.columns.tolist()[0]
-    glycans = df[colname]
-    df.drop([colname], axis = 1, inplace = True)
-    if isinstance(df.columns.tolist()[0], int):
+    colname = df.columns[0]
+    glycans = df[colname].values
+    df = df.iloc[:, 1:]
+    old_cols = []
+    if isinstance(df.columns[0], int):
       old_cols = df.columns
       df.columns = df.columns.astype(str)
     if impute:
       mf = MissForest()
       df.replace(0, np.nan, inplace = True)
       df = mf.fit_transform(df)
-    for col in df.columns:
-      df[col] = [k/sum(df.loc[:, col])*100 for k in df.loc[:, col]]
+    df = (df / df.sum(axis = 0)) * 100
     if len(old_cols) > 0:
       df.columns = old_cols
     df.insert(loc = 0, column = colname, value = glycans)
@@ -583,5 +577,4 @@ def variance_based_filtering(df, min_feature_variance = 0.01):
     feature_variances = df.var(axis = 1)
     variable_features = feature_variances[feature_variances > min_feature_variance].index
     # Subsetting df to only include features with enough variance
-    df = df.loc[variable_features]
-    return df
+    return df.loc[variable_features]

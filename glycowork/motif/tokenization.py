@@ -409,7 +409,7 @@ def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = '
         not_matched_list.append(comp)
   if df_out:
     df_out = pd.DataFrame(df_out, columns = ['glycan'] + ['abundance'] * (abundances.shape[1] - 1))
-  print(f"{not_matched_count} compositions could not be matched. Run with verbose=True to see which compositions.")
+  print(f"{not_matched_count} compositions could not be matched. Run with verbose = True to see which compositions.")
   if verbose:
     print(not_matched_list)
   return df_out

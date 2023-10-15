@@ -80,7 +80,7 @@ def stringify_dict(dicty):
   | Returns string of type key:value for sorted items
   """
   dicty = dict(sorted(dicty.items()))
-  return ''.join(str(key) + str(value) for key, value in dicty.items())
+  return ''.join(f"{key}{value}" for key, value in dicty.items())
 
 
 def replace_every_second(string, old_char, new_char):
@@ -95,17 +95,14 @@ def replace_every_second(string, old_char, new_char):
   | Returns string with replaced characters
   """
   count = 0
-  result = ""
+  result = []
   for char in string:
     if char == old_char:
       count += 1
-      if count % 2 == 0:
-        result += new_char
-      else:
-        result += char
+      result.append(new_char if count % 2 == 0 else char)
     else:
-      result += char
-  return result
+      result.append(char)
+  return ''.join(result)
 
 
 def multireplace(string, remove_dic):
