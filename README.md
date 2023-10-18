@@ -174,7 +174,7 @@ print("\nMass of the composition Hex3HexNAc4")
 print(composition_to_mass({'Hex':3, 'HexNAc':4}))
 ```
 
-    0 compositions could not be matched. Run with verbose=True to see which compositions.
+    0 compositions could not be matched. Run with verbose = True to see which compositions.
                                                    glycan  abundance
     0   GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Ma...          0
     1   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
