@@ -75,148 +75,87 @@ additions = ['-', 'blank', 'red_end', 'free',
 
 # Shape-color mapping
 sugar_dict = {
-  "Hex": ['Hex', snfg_white, False],
-  "Glc": ['Hex', snfg_alt_blue, False],
-  "Glcf": ['Hex', snfg_alt_blue, True],
-  "Man": ['Hex', snfg_green, False],
-  "Manf": ['Hex', snfg_green, True],
-  "Gal": ['Hex', snfg_yellow, False],
-  "Galf": ['Hex', snfg_yellow, True],
-  "Gul": ['Hex', snfg_orange, False],
-  "Alt": ['Hex', snfg_pink, False],
-  "All": ['Hex', snfg_purple, False],
-  "Tal": ['Hex', snfg_light_blue, False],
-  "Ido": ['Hex', snfg_brown, False],
+  "Hex": ['Hex', snfg_white, False], "Glc": ['Hex', snfg_alt_blue, False],
+  "Glcf": ['Hex', snfg_alt_blue, True], "Man": ['Hex', snfg_green, False],
+  "Manf": ['Hex', snfg_green, True], "Gal": ['Hex', snfg_yellow, False],
+  "Galf": ['Hex', snfg_yellow, True], "Gul": ['Hex', snfg_orange, False],
+  "Alt": ['Hex', snfg_pink, False], "All": ['Hex', snfg_purple, False],
+  "Tal": ['Hex', snfg_light_blue, False], "Ido": ['Hex', snfg_brown, False],
 
-  "HexNAc": ['HexNAc', snfg_white, False],
-  "GlcNAc": ['HexNAc', snfg_alt_blue, False],
-  "GlcfNAc": ['HexNAc', snfg_alt_blue, True],
-  "ManNAc": ['HexNAc', snfg_green, False],
-  "ManfNAc": ['HexNAc', snfg_green, True],
-  "GalNAc": ['HexNAc', snfg_yellow, False],
-  "GalfNAc": ['HexNAc', snfg_yellow, True],
-  "GulNAc": ['HexNAc', snfg_orange, False],
-  "AltNAc": ['HexNAc', snfg_pink, False],
-  "AllNAc": ['HexNAc', snfg_purple, False],
-  "TalNAc": ['HexNAc', snfg_light_blue, False],
-  "IdoNAc": ['HexNAc', snfg_brown, False],
+  "HexNAc": ['HexNAc', snfg_white, False], "GlcNAc": ['HexNAc', snfg_alt_blue, False],
+  "GlcfNAc": ['HexNAc', snfg_alt_blue, True], "ManNAc": ['HexNAc', snfg_green, False],
+  "ManfNAc": ['HexNAc', snfg_green, True], "GalNAc": ['HexNAc', snfg_yellow, False],
+  "GalfNAc": ['HexNAc', snfg_yellow, True], "GulNAc": ['HexNAc', snfg_orange, False],
+  "AltNAc": ['HexNAc', snfg_pink, False], "AllNAc": ['HexNAc', snfg_purple, False],
+  "TalNAc": ['HexNAc', snfg_light_blue, False], "IdoNAc": ['HexNAc', snfg_brown, False],
 
-  "HexN": ['HexN', snfg_white, False],
-  "GlcN": ['HexN', snfg_alt_blue, False],
-  "ManN": ['HexN', snfg_green, False],
-  "GalN": ['HexN', snfg_yellow, False],
-  "GulN": ['HexN', snfg_orange, False],
-  "AltN": ['HexN', snfg_pink, False],
-  "AllN": ['HexN', snfg_purple, False],
-  "TalN": ['HexN', snfg_light_blue, False],
+  "HexN": ['HexN', snfg_white, False], "GlcN": ['HexN', snfg_alt_blue, False],
+  "ManN": ['HexN', snfg_green, False], "GalN": ['HexN', snfg_yellow, False],
+  "GulN": ['HexN', snfg_orange, False], "AltN": ['HexN', snfg_pink, False],
+  "AllN": ['HexN', snfg_purple, False], "TalN": ['HexN', snfg_light_blue, False],
   "IdoN": ['HexN', snfg_brown, False],
 
-  "HexA": ['HexA', snfg_white, False],
-  "GlcA": ['HexA', snfg_alt_blue, False],
-  "ManA": ['HexA', snfg_green, False],
-  "GalA": ['HexA', snfg_yellow, False],
-  "GulA": ['HexA', snfg_orange, False],
-  "AltA": ['HexA_2', snfg_pink, False],
-  "AllA": ['HexA', snfg_purple, False],
-  "TalA": ['HexA', snfg_light_blue, False],
+  "HexA": ['HexA', snfg_white, False], "GlcA": ['HexA', snfg_alt_blue, False],
+  "ManA": ['HexA', snfg_green, False], "GalA": ['HexA', snfg_yellow, False],
+  "GulA": ['HexA', snfg_orange, False], "AltA": ['HexA_2', snfg_pink, False],
+  "AllA": ['HexA', snfg_purple, False], "TalA": ['HexA', snfg_light_blue, False],
   "IdoA": ['HexA_2', snfg_brown, False],
 
-  "dHex": ['dHex', snfg_white, False],
-  "Qui": ['dHex', snfg_alt_blue, False],
-  "Rha": ['dHex', snfg_green, False],
-  "6dGul": ['dHex', snfg_orange, False],
-  "6dAlt": ['dHex', snfg_pink, False],
-  "6dAltf": ['dHex', snfg_pink, True],
-  "6dTal": ['dHex', snfg_light_blue, False],
-  "Fuc": ['dHex', snfg_red, False],
+  "dHex": ['dHex', snfg_white, False], "Qui": ['dHex', snfg_alt_blue, False],
+  "Rha": ['dHex', snfg_green, False], "6dGul": ['dHex', snfg_orange, False],
+  "6dAlt": ['dHex', snfg_pink, False], "6dAltf": ['dHex', snfg_pink, True],
+  "6dTal": ['dHex', snfg_light_blue, False], "Fuc": ['dHex', snfg_red, False],
   "Fucf": ['dHex', snfg_red, True],
 
-  "dHexNAc": ['dHexNAc', snfg_white, False],
-  "QuiNAc": ['dHexNAc', snfg_alt_blue, False],
-  "RhaNAc": ['dHexNAc', snfg_green, False],
-  "6dAltNAc": ['dHexNAc', snfg_pink, False],
-  "6dTalNAc": ['dHexNAc', snfg_light_blue, False],
-  "FucNAc": ['dHexNAc', snfg_red, False],
+  "dHexNAc": ['dHexNAc', snfg_white, False], "QuiNAc": ['dHexNAc', snfg_alt_blue, False],
+  "RhaNAc": ['dHexNAc', snfg_green, False], "6dAltNAc": ['dHexNAc', snfg_pink, False],
+  "6dTalNAc": ['dHexNAc', snfg_light_blue, False], "FucNAc": ['dHexNAc', snfg_red, False],
   "FucfNAc": ['dHexNAc', snfg_red, True],
 
-  "ddHex": ['ddHex', snfg_white, False],
-  "Oli": ['ddHex', snfg_alt_blue, False],
-  "Tyv": ['ddHex', snfg_green, False],
-  "Abe": ['ddHex', snfg_orange, False],
-  "Par": ['ddHex', snfg_pink, False],
-  "Dig": ['ddHex', snfg_purple, False],
+  "ddHex": ['ddHex', snfg_white, False], "Oli": ['ddHex', snfg_alt_blue, False],
+  "Tyv": ['ddHex', snfg_green, False], "Abe": ['ddHex', snfg_orange, False],
+  "Par": ['ddHex', snfg_pink, False], "Dig": ['ddHex', snfg_purple, False],
   "Col": ['ddHex', snfg_light_blue, False],
 
-  "Pen": ['Pen', snfg_white, False],
-  "Ara": ['Pen', snfg_green, False],
-  "Araf": ['Pen', snfg_green, True],
-  "Lyx": ['Pen', snfg_yellow, False],
-  "Lyxf": ['Pen', snfg_yellow, True],
-  "Xyl": ['Pen', snfg_orange, False],
-  "Xylf": ['Pen', snfg_orange, True],
-  "Rib": ['Pen', snfg_pink, False],
+  "Pen": ['Pen', snfg_white, False], "Ara": ['Pen', snfg_green, False],
+  "Araf": ['Pen', snfg_green, True], "Lyx": ['Pen', snfg_yellow, False],
+  "Lyxf": ['Pen', snfg_yellow, True], "Xyl": ['Pen', snfg_orange, False],
+  "Xylf": ['Pen', snfg_orange, True], "Rib": ['Pen', snfg_pink, False],
   "Ribf": ['Pen', snfg_pink, True],
 
-  "dNon": ['dNon', snfg_white, False],
-  "Kdn": ['dNon', snfg_green, False],
-  "Neu5Ac": ['dNon', snfg_purple, False],
-  "Neu5Gc": ['dNon', snfg_light_blue, False],
-  "Neu": ['dNon', snfg_brown, False],
-  "Sia": ['dNon', snfg_red, False],
+  "dNon": ['dNon', snfg_white, False], "Kdn": ['dNon', snfg_green, False],
+  "Neu5Ac": ['dNon', snfg_purple, False], "Neu5Gc": ['dNon', snfg_light_blue, False],
+  "Neu": ['dNon', snfg_brown, False], "Sia": ['dNon', snfg_red, False],
 
-  "ddNon": ['ddNon', snfg_white, False],
-  "Pse": ['ddNon', snfg_green, False],
-  "Leg": ['ddNon', snfg_yellow, False],
-  "Aci": ['ddNon', snfg_pink, False],
+  "ddNon": ['ddNon', snfg_white, False], "Pse": ['ddNon', snfg_green, False],
+  "Leg": ['ddNon', snfg_yellow, False], "Aci": ['ddNon', snfg_pink, False],
   "4eLeg": ['ddNon', snfg_light_blue, False],
 
-  "Unknown": ['Unknown', snfg_white, False],
-  "Bac": ['Unknown', snfg_alt_blue, False],
-  "LDManHep": ['Unknown', snfg_green, False],
-  "Kdo": ['Unknown', snfg_yellow, False],
-  "Kdof": ['Unknown', snfg_yellow, True],
-  "Dha": ['Unknown', snfg_orange, False],
-  "DDManHep": ['Unknown', snfg_pink, False],
-  "MurNAc": ['Unknown', snfg_purple, False],
-  "MurNGc": ['Unknown', snfg_light_blue, False],
-  "Mur": ['Unknown', snfg_brown, False],
+  "Unknown": ['Unknown', snfg_white, False], "Bac": ['Unknown', snfg_alt_blue, False],
+  "LDManHep": ['Unknown', snfg_green, False], "Kdo": ['Unknown', snfg_yellow, False],
+  "Kdof": ['Unknown', snfg_yellow, True], "Dha": ['Unknown', snfg_orange, False],
+  "DDManHep": ['Unknown', snfg_pink, False], "MurNAc": ['Unknown', snfg_purple, False],
+  "MurNGc": ['Unknown', snfg_light_blue, False], "Mur": ['Unknown', snfg_brown, False],
 
-  "Assigned": ['Assigned', snfg_white, False],
-  "Api": ['Assigned', snfg_alt_blue, False],
-  "Apif": ['Assigned', snfg_alt_blue, True],
-  "Fru": ['Assigned', snfg_green, False],
-  "Fruf": ['Assigned', snfg_green, True],
-  "Tag": ['Assigned', snfg_yellow, False],
-  "Sor": ['Assigned', snfg_orange, False],
-  "Psi": ['Assigned', snfg_pink, False],
+  "Assigned": ['Assigned', snfg_white, False], "Api": ['Assigned', snfg_alt_blue, False],
+  "Apif": ['Assigned', snfg_alt_blue, True], "Fru": ['Assigned', snfg_green, False],
+  "Fruf": ['Assigned', snfg_green, True], "Tag": ['Assigned', snfg_yellow, False],
+  "Sor": ['Assigned', snfg_orange, False], "Psi": ['Assigned', snfg_pink, False],
   "non_glycan": ['Assigned', 'black', False],
 
-  "blank": ['empty', snfg_white, False],
-  "text": ['text', None, None],
-  "red_end": ['red_end', None, None],
-  "free": ['free', None, None],
-  "04X": ['04X', None, None],
-  "15A": ['15A', None, None],
-  "02A": ['02A', None, None],
-  "13X": ['13X', None, None],
-  "24X": ['24X', None, None],
-  "35X": ['35X', None, None],
-  "04A": ['04A', None, None],
-  "15X": ['15X', None, None],
-  "02X": ['02X', None, None],
-  "13A": ['13A', None, None],
-  "24A": ['24A', None, None],
-  "35A": ['35A', None, None],
-  "25A": ['25A', None, None],
-  "03A": ['03A', None, None],
-  "14X": ['14X', None, None],
-  "25X": ['25X', None, None],
-  "03X": ['03X', None, None],
-  "14A": ['14A', None, None],
-  "Z": ['Z', None, None],
-  "Y": ['Y', None, None],
-  "B": ['B', None, None],
-  "C": ['C', None, None]
+  "blank": ['empty', snfg_white, False], "text": ['text', None, None],
+  "red_end": ['red_end', None, None], "free": ['free', None, None],
+  "04X": ['04X', None, None], "15A": ['15A', None, None],
+  "02A": ['02A', None, None], "13X": ['13X', None, None],
+  "24X": ['24X', None, None], "35X": ['35X', None, None],
+  "04A": ['04A', None, None], "15X": ['15X', None, None],
+  "02X": ['02X', None, None], "13A": ['13A', None, None],
+  "24A": ['24A', None, None], "35A": ['35A', None, None],
+  "25A": ['25A', None, None], "03A": ['03A', None, None],
+  "14X": ['14X', None, None], "25X": ['25X', None, None],
+  "03X": ['03X', None, None], "14A": ['14A', None, None],
+  "Z": ['Z', None, None], "Y": ['Y', None, None],
+  "B": ['B', None, None], "C": ['C', None, None]
 }
 
 
@@ -1039,16 +978,13 @@ def add_bond(x_start, x_stop, y_start, y_stop, label = '', dim = 50, compact = F
   | :-
   |
   """
-  if label == '-':
-    label = ''
-  if not compact:
-    x_start = x_start * 2
-    x_stop = x_stop * 2
-  else:
-    y_start = (y_start * 0.5) * 1.2
-    y_stop = (y_stop * 0.5) * 1.2
-    x_start = x_start * 1.2
-    x_stop = x_stop * 1.2
+  label = label if label != '-' else ''
+  scaling_factor = 1.2 if compact else 2
+  x_start = x_start * scaling_factor
+  x_stop = x_stop * scaling_factor
+  if compact:
+    y_start = y_start * 0.6
+    y_stop = y_stop * 0.6
   p = draw.Path(stroke_width = 0.08*dim, stroke = 'black',)
   p.M(0-x_start*dim, 0+y_start*dim)
   p.L(0-x_stop*dim, 0+y_stop*dim)
@@ -1070,23 +1006,23 @@ def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50,
   | :-
   |
   """
-  if not compact:
-    x_pos = x_pos * 2
-    y_pos = y_pos * 1
-  else:
-    x_pos = x_pos * 1.2
-    y_pos = (y_pos * 0.5) * 1.2
-  if monosaccharide in sugar_dict.keys():
+  x_pos = x_pos * (1.2 if compact else 2)
+  y_pos = y_pos * (0.6 if compact else 1)
+  if monosaccharide in sugar_dict:
     draw_shape(shape = sugar_dict[monosaccharide][0], color = sugar_dict[monosaccharide][1], x_pos = x_pos, y_pos = y_pos,
                modification = modification, conf = conf, furanose = sugar_dict[monosaccharide][2], dim = dim, deg = deg, text_anchor = text_anchor)
   else:
-    p = draw.Path(stroke_width = 0.04*dim, stroke = 'black')
-    p.M(0-x_pos*dim-1/2*dim, 0+y_pos*dim+1/2*dim)
-    p.L(0-x_pos*dim+1/2*dim, 0+y_pos*dim-1/2*dim)
+    x_base = 0 - x_pos * dim
+    y_base = 0 + y_pos * dim
+    stroke_w = 0.04 * dim
+    half_dim = dim / 2
+    p = draw.Path(stroke_width = stroke_w, stroke = 'black')
+    p.M(x_base-half_dim, y_base+half_dim)
+    p.L(x_base+half_dim, y_base-half_dim)
     d.append(p)
-    p = draw.Path(stroke_width = 0.04*dim, stroke = 'black')
-    p.M(0-x_pos*dim+1/2*dim, 0+y_pos*dim+1/2*dim)
-    p.L(0-x_pos*dim-1/2*dim, 0+y_pos*dim-1/2*dim)
+    p = draw.Path(stroke_width = stroke_w, stroke = 'black')
+    p.M(x_base+half_dim, y_base+half_dim)
+    p.L(x_base-half_dim, y_base-half_dim)
     d.append(p)
 
 
@@ -1099,28 +1035,22 @@ def multiple_branches(glycan):
   | :-
   | str: Modified glycan string.
   """
-  if ']' in glycan:
-    tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-
-    open_close = []
-    for openpos, closepos, level in matches(tmp):
-      if level == 0 and not bool(re.search(r"^Fuc\S{6}$", tmp[openpos:closepos])):
-        open_close.append((openpos, closepos))
-
-    for k in range(len(open_close)-1):
-      if open_close[k+1][0] - open_close[k][1] == 2:
-        branch1 = glycan[open_close[k][0]:open_close[k][1]]
-        tmp1 = branch1[-2]
-        branch2 = glycan[open_close[k+1][0]:open_close[k+1][1]]
-        tmp2 = branch2[-2]
-        if tmp1 == '?' and tmp2 == '?':
-          if '?' in [tmp1, tmp2]:
-            if len(branch1) > len(branch2):
-              tmp1, tmp2 = [1, 2]
-            else:
-              tmp1, tmp2 = [2, 1]
-        if tmp1 > tmp2:
-          glycan = glycan[:open_close[k][0]] + branch2 + '][' + branch1 + glycan[open_close[k+1][1]:]
+  if ']' not in glycan:
+    return glycan
+  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
+  open_close = [(openpos, closepos) for openpos, closepos, level in matches(tmp) if level == 0 and not re.search(r"^Fuc\S{6}$", tmp[openpos:closepos])]
+  for k in range(len(open_close)-1):
+    if open_close[k + 1][0] - open_close[k][1] != 2:
+      continue
+    branch1, branch2 = glycan[open_close[k][0]:open_close[k][1]], glycan[open_close[k + 1][0]:open_close[k + 1][1]]
+    tmp1, tmp2 = branch1[-2], branch2[-2]
+    if tmp1 == tmp2 == '?':
+      if len(branch1) > len(branch2):
+        tmp1, tmp2 = [1, 2]
+      else:
+        tmp1, tmp2 = [2, 1]
+    if tmp1 > tmp2:
+      glycan = f"{glycan[:open_close[k][0]]}{branch2}][{branch1}{glycan[open_close[k + 1][1]:]}"
   return glycan
 
 
@@ -1133,11 +1063,12 @@ def multiple_branch_branches(glycan):
   | :-
   | str: Modified glycan string.
   """
-  if ']' in glycan:
-    tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-    for openpos, closepos, level in matches(tmp):
-      if level == 0 and not bool(re.search(r"^Fuc\S{6}$", tmp[openpos:closepos])):
-          glycan = glycan[:openpos] + multiple_branches(glycan[openpos:closepos]) + glycan[closepos:]
+  if ']' not in glycan:
+    return glycan
+  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
+  for openpos, closepos, level in matches(tmp):
+    if level == 0 and not re.search(r"^Fuc\S{6}$", tmp[openpos:closepos]):
+        glycan = glycan[:openpos] + multiple_branches(glycan[openpos:closepos]) + glycan[closepos:]
   return glycan
 
 
@@ -1150,37 +1081,31 @@ def reorder_for_drawing(glycan, by = 'linkage'):
   | :-
   | Returns re-ordered glycan
   """
-  if ']' in glycan:
-    tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-
-    for openpos, closepos, level in matches(tmp):
-      if level == 0 and not bool(re.search(r"^Fuc\S{6}$|^Xyl\S{6}$", tmp[openpos:closepos])):
-
-        # Nested branches
-        glycan = glycan[:openpos] + branch_order(glycan[openpos:closepos]) + glycan[closepos:]
-
-        # Branches
-        group1 = glycan[:openpos-1]
-        group2 = glycan[openpos:closepos]
-        branch_end = [j[-2] for j in [group1, group2]]
+  if ']' not in glycan:
+    return glycan
+  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
+  for openpos, closepos, level in matches(tmp):
+    if level == 0 and not re.search(r"^Fuc\S{6}$|^Xyl\S{6}$", tmp[openpos:closepos]):
+      # Nested branches
+      glycan = glycan[:openpos] + branch_order(glycan[openpos:closepos]) + glycan[closepos:]
+      # Branches
+      group1 = glycan[:openpos-1]
+      group2 = glycan[openpos:closepos]
+      branch_end = [j[-2] for j in [group1, group2]]
+      if by == 'length':
         branch_len = [len(k) for k in min_process_glycans([group1, group2])]
-
-        if by == 'length':
-
-          if branch_len[0] == branch_len[1]:
-            if branch_end[0] == branch_end[1]:
-              glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-            else:
-              glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
-          else:
-            glycan = [group1, group2][np.argmax(branch_len)] + '[' + [group1, group2][np.argmin(branch_len)] + ']' + glycan[closepos+1:]
-
-        elif by == 'linkage':
-
+        if branch_len[0] == branch_len[1]:
           if branch_end[0] == branch_end[1]:
             glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
           else:
             glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
+        else:
+          glycan = [group1, group2][np.argmax(branch_len)] + '[' + [group1, group2][np.argmin(branch_len)] + ']' + glycan[closepos+1:]
+      elif by == 'linkage':
+        if branch_end[0] == branch_end[1]:
+          glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
+        else:
+          glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
   return glycan
 
 
@@ -1194,17 +1119,14 @@ def branch_order(glycan, by = 'linkage'):
   | Returns re-ordered glycan
   """
   tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-
   for openpos, closepos, level in matches(tmp):
-    if level == 0 and not bool(re.search(r"^Fuc\S{6}$|^Xyl\S{6}$", tmp[openpos:closepos])):
+    if level == 0 and not re.search(r"^Fuc\S{6}$|^Xyl\S{6}$", tmp[openpos:closepos]):
       group1 = glycan[:openpos-1]
       group2 = glycan[openpos:closepos]
       branch_end = [j[-2] for j in [group1, group2]]
       branch_end = [k.replace('z', '9') for k in branch_end]
-      branch_len = [len(k) for k in min_process_glycans([group1, group2])]
-
       if by == 'length':
-
+        branch_len = [len(k) for k in min_process_glycans([group1, group2])]
         if branch_len[0] == branch_len[1]:
           if branch_end[0] == branch_end[1]:
             glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
@@ -1212,9 +1134,7 @@ def branch_order(glycan, by = 'linkage'):
             glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
         else:
           glycan = [group1, group2][np.argmax(branch_len)] + '[' + [group1, group2][np.argmin(branch_len)] + ']' + glycan[closepos+1:]
-
       elif by == 'linkage':
-
         if branch_end[0] == branch_end[1]:
           glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
         else:
@@ -1234,20 +1154,15 @@ def split_node(G, node):
   ref: https://stackoverflow.com/questions/65853641/networkx-how-to-split-nodes-into-two-effectively-disconnecting-edges
   """
   edges = G.edges(node, data = True)
-
   new_edges = []
   new_nodes = []
-
   H = G.__class__()
   H.add_nodes_from(G.subgraph(node))
-
   for i, (s, t, data) in enumerate(edges):
-   
-      new_node = '{}_{}'.format(node, i)
+      new_node = f"{node}_{i}"
       Ix = nx.relabel_nodes(H, {node: new_node})
       new_nodes += list(Ix.nodes(data = True))
       new_edges.append((new_node, t, data))
-
   G.remove_node(node)
   G.add_nodes_from(new_nodes)
   G.add_edges_from(new_edges)
@@ -1273,7 +1188,7 @@ def get_indices(x, y):
   | Arguments:
   | :-
   | x (list):
-  | y (list): \n
+  | y (list) elements can be lists: \n
   | Returns:
   | :-
   | list of list of indices\n
@@ -1290,51 +1205,26 @@ def process_bonds(linkage_list):
   | :-
   | processed linkage_list\n
   """
-  tmp = []
-  bonds = []
+  def process_single_linkage(linkage, regex_dict):
+    if '?' in linkage[0] and '?' in linkage[-1]:
+        return '?'
+    elif '?' in linkage[0]:
+        return ' ' + linkage[-1]
+    elif '?' in linkage[-1]:
+        return regex_dict['alpha'].match(linkage) and '\u03B1' or regex_dict['beta'].match(linkage) and '\u03B2' or '-'
+    elif regex_dict['alpha'].match(linkage):
+        return '\u03B1 ' + linkage[-1]
+    elif regex_dict['beta'].match(linkage):
+        return '\u03B2 ' + linkage[-1]
+    elif regex_dict['digit'].match(linkage):
+        return linkage[0] + ' - ' + linkage[-1]
+    else:
+        return '-'
+  regex_dict = {'alpha': re.compile(r"^a\d"), 'beta': re.compile(r"^b\d"), 'digit': re.compile(r"^\d-\d")}
   if any(isinstance(el, list) for el in linkage_list):
-    for j in linkage_list:
-      for k in j:
-        if '?' in k[0] and '?' in k[-1]:
-          tmp.append('?')
-        elif '?' in k[0]:
-          tmp.append(' '+k[-1])
-        elif '?' in k[-1]:
-          if bool(re.compile(r"^a\d").match(k)):
-            tmp.append('\u03B1')
-          elif bool(re.compile(r"^b\d").match(k)):
-            tmp.append('\u03B2')
-        elif bool(re.compile(r"^a\d").match(k)):
-          tmp.append('\u03B1 '+k[-1])
-        elif bool(re.compile(r"^b\d").match(k)):
-          tmp.append('\u03B2 '+k[-1])
-        elif bool(re.compile(r"^\d-\d").match(k)):
-          tmp.append(k[0]+' - '+k[-1])
-        else:
-          tmp.append('-')
-      bonds.append(tmp)
-      tmp = []
-    return bonds
+    return [[process_single_linkage(linkage, regex_dict) for linkage in sub_list] for sub_list in linkage_list]
   else:
-    for k in linkage_list:
-      if '?' in k[0] and '?' in k[-1]:
-        bonds.append('?')
-      elif '?' in k[0]:
-        bonds.append(' '+k[-1])
-      elif '?' in k[-1]:
-        if bool(re.compile(r"^a\d").match(k)):
-          bonds.append('\u03B1')
-        elif bool(re.compile(r"^b\d").match(k)):
-          bonds.append('\u03B2')
-      elif bool(re.compile(r"^a\d").match(k)):
-        bonds.append('\u03B1 '+k[-1])
-      elif bool(re.compile(r"^b\d").match(k)):
-        bonds.append('\u03B2 '+k[-1])
-      elif bool(re.compile(r"^\d-\d").match(k)):
-        bonds.append(k[0]+' - '+k[-1])
-      else:
-        bonds.append('-')
-    return bonds
+    return [process_single_linkage(linkage, regex_dict) for linkage in linkage_list]
 
 
 def split_monosaccharide_linkage(label_list):
@@ -1349,20 +1239,17 @@ def split_monosaccharide_linkage(label_list):
   |   - sugar_modification (list): List of sugar modifications
   |   - bond (list): List of bond information
   """
-  if any(isinstance(el, list) for el in label_list):
-    sugar = [k[::2][::-1] for k in label_list]
-    sugar_modification = [[get_modification(k) if k in lib else '' for k in y] for y in sugar]
-    sugar_modification = [[multireplace(k, {'O': '', '-ol': ''}) for k in y] for y in sugar_modification]
-    sugar = [[get_core(k) if k not in additions else k for k in y] for y in sugar]
-    bond = [k[1::2][::-1] for k in label_list]
-  else:
-    sugar = label_list[::2][::-1]
-    sugar_modification = [get_modification(k) if k not in additions else '' for k in sugar]
-    sugar_modification = [multireplace(k, {'O': '', '-ol': ''}) for k in sugar_modification]
+  def process_sublist(sub_list):
+    sugar = sub_list[::2][::-1]
+    mod = [get_modification(k) if k not in additions else '' for k in sugar]
+    mod = [multireplace(k, {'O': '', '-ol': ''}) for k in mod]
     sugar = [get_core(k) if k not in additions else k for k in sugar]
-    bond = label_list[1::2][::-1]
-
-  return sugar, sugar_modification, bond
+    bond = sub_list[1::2][::-1]
+    return sugar, mod, bond
+  if any(isinstance(el, list) for el in label_list):
+    return zip(*[process_sublist(sub) for sub in label_list])
+  else:
+    return process_sublist(label_list)
 
 
 def glycan_to_skeleton(glycan_string):
@@ -1375,21 +1262,14 @@ def glycan_to_skeleton(glycan_string):
   | node label skeleton of glycan (string)\n
   """
   tmp = multireplace(glycan_string, {'(': ',', ')': ',', '[': ',[,', ']': ',],'})
-  tmp = tmp.split(',')
-  tmp = [k for k in tmp if k != '']
-
-  tmp2 = []
-  idx = 0
-  for k in tmp:
+  elements, idx = [], 0
+  for k in filter(bool, tmp.split(',')):
     if k in {'[', ']'}:
-      tmp2.append(k)
+      elements.append(k)
     else:
-      tmp2.append(str(idx))
-      idx = idx + 1
-
-  tmp2 = '-'.join(tmp2)
-  tmp2 = multireplace(tmp2, {'[-': '[', '-]': ']'})
-  return (tmp2)
+      elements.append(str(idx))
+      idx += 1
+  return multireplace( '-'.join(elements), {'[-': '[', '-]': ']'})
 
 
 def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_lib, extend_lib = False):
@@ -1408,53 +1288,46 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
   if extend_lib:
     draw_lib = expand_lib(draw_lib, [draw_this])
 
-  if not bool(re.search(r"^\[", draw_this)):
-    draw_this = multiple_branch_branches(draw_this)
-    draw_this = multiple_branches(draw_this)
+  if not draw_this.startswith('['):
+    draw_this = multiple_branches(multiple_branch_branches(draw_this))
     draw_this = reorder_for_drawing(draw_this)
-    draw_this = multiple_branches(draw_this)
-    draw_this = multiple_branch_branches(draw_this)
+    draw_this = multiple_branch_branches(multiple_branches(draw_this))
 
   graph = glycan_to_nxGraph(draw_this, libr = draw_lib)
   node_labels = nx.get_node_attributes(graph, 'string_labels')
-  edges = graph.edges()
+  edges = list(graph.edges())
   glycan = glycan_to_skeleton(draw_this)
 
   # Split main & branches, get labels
-  branch_branch_branch_node = []
-  branch_branch_node = []
-  branch_node = []
-
   levels = [2, 1, 0]
-  parts = [branch_branch_branch_node, branch_branch_node, branch_node]
+  parts = [[] for _ in levels]
 
   if ']' in glycan:
     glycan = glycan.replace('[', '(').replace(']', ')')
-    for k in range(len(levels)):
+    for k, lev in enumerate(levels):
       for openpos, closepos, level in matches(glycan):
-        if level == levels[k]:
+        if level == lev:
           parts[k].append(glycan[openpos:closepos])
           glycan = glycan[:openpos-1] + len(glycan[openpos-1:closepos+1])*'*' + glycan[closepos+1:]
       glycan = glycan.replace('*', '')
-      parts[k] = [[i for i in k if i != ''] for k in [k.split('-') for k in parts[k]]]
+    parts = [[[i for i in k.split('-') if i] for k in part] for part in parts]
 
   main_node = glycan.split('-')
   main_node = [k for k in main_node if k != '']
+  node_values = list(node_labels.values())
+  graph_nodes = list(graph.nodes())
   branch_branch_branch_node, branch_branch_node, branch_node = parts
 
   branch_label = []
   for k in range(len(branch_node)):
-    branch_label.append([list(node_labels.values())[j] for j in range(len(list(graph.nodes()))) if list(graph.nodes())[j] in list(map(int, branch_node[k]))])
-
+    branch_label.append([node_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, branch_node[k])])
   branch_branch_label = []
   for k in range(len(branch_branch_node)):
-    branch_branch_label.append([list(node_labels.values())[j] for j in range(len(list(graph.nodes()))) if list(graph.nodes())[j] in list(map(int, branch_branch_node[k]))])
-
+    branch_branch_label.append([node_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, branch_branch_node[k])])
   bbb_label = []
   for k in range(len(branch_branch_branch_node)):
-    bbb_label.append([list(node_labels.values())[j] for j in range(len(list(graph.nodes()))) if list(graph.nodes())[j] in list(map(int, branch_branch_branch_node[k]))])
-
-  main_label = [list(node_labels.values())[j] for j in range(len(list(graph.nodes()))) if list(graph.nodes())[j] in list(map(int, main_node))]
+    bbb_label.append([node_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, branch_branch_branch_node[k])])
+  main_label = [node_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, main_node)]
 
   # Split in monosaccharide & linkages
   main_sugar, main_sugar_modification, main_bond = split_monosaccharide_linkage(main_label)
@@ -1471,20 +1344,21 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
   # Get connectivity
   branch_connection = []
   for x in branch_node:
-    branch_connection = branch_connection + [list(edges)[k][1] for k in range(len(list(edges))) if list(edges)[k][0] == int(x[-1])]
+    branch_connection = branch_connection + [edges[k][1] for k in range(len(edges)) if edges[k][0] == int(x[-1])]
   branch_connection = unwrap(get_indices(main_node[::2][::-1], [str(k) for k in branch_connection]))
 
   branch_node_old = branch_node
   if '?' not in [k[0] for k in branch_bond]:
-    branch_sugar = [branch_sugar[k] for k in list(np.argsort(branch_connection))[::-1]]
-    branch_sugar_modification = [branch_sugar_modification[k] for k in list(np.argsort(branch_connection))[::-1]]
-    branch_bond = [branch_bond[k] for k in list(np.argsort(branch_connection))[::-1]]
-    branch_node = [branch_node[k] for k in list(np.argsort(branch_connection))[::-1]]
-    branch_connection = [branch_connection[k] for k in list(np.argsort(branch_connection))[::-1]]
+    sorted_indices = np.argsort(branch_connection)[::-1]
+    branch_sugar = [branch_sugar[k] for k in sorted_indices]
+    branch_sugar_modification = [branch_sugar_modification[k] for k in sorted_indices]
+    branch_bond = [branch_bond[k] for k in sorted_indices]
+    branch_node = [branch_node[k] for k in sorted_indices]
+    branch_connection = [branch_connection[k] for k in sorted_indices]
 
   branch_branch_connection = []
   for x in branch_branch_node:
-    branch_branch_connection = branch_branch_connection + [list(edges)[k][1] for k in range(len(list(edges))) if list(edges)[k][0] == int(x[-1])]
+    branch_branch_connection = branch_branch_connection + [edges[k][1] for k in range(len(edges)) if edges[k][0] == int(x[-1])]
   tmp = []
   for k in branch_branch_connection:
     tmp.append([(i, color.index(str(k))) for i, color in enumerate([k[::2][::-1] for k in branch_node]) if str(k) in color])
@@ -1492,7 +1366,7 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
 
   bbb_connection = []
   for x in branch_branch_branch_node:
-    bbb_connection = bbb_connection + [list(edges)[k][1] for k in range(len(list(edges))) if list(edges)[k][0] == int(x[-1])]
+    bbb_connection = bbb_connection + [edges[k][1] for k in range(len(edges)) if edges[k][0] == int(x[-1])]
   tmp = []
   for k in bbb_connection:
     tmp.append([(i, color.index(str(k))) for i, color in enumerate([k[::2][::-1] for k in branch_branch_node]) if str(k) in color])
@@ -1500,12 +1374,12 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
 
   # Order multiple connections on a branch level
   new_order = []
-  for k in list(set(branch_connection))[::-1]:
+  for k in sorted(set(branch_connection), reverse = True):
     idx = unwrap(get_indices(branch_connection, [k]))
     if len(idx) == 1:
-      new_order = new_order + idx
+      new_order.extend(idx)
     else:
-      new_order = new_order + [idx[i] for i in np.argsort([k[0][-1] for k in [j for j in [branch_bond[k] for k in idx]]])]
+      new_order.extend([idx[i] for i in np.argsort([k[0][-1] for k in [j for j in [branch_bond[k] for k in idx]]])])
 
   branch_sugar = [branch_sugar[i] for i in new_order]
   branch_sugar_modification = [branch_sugar_modification[i] for i in new_order]
@@ -1519,12 +1393,12 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
 
   # Order multiple connections on a branch_branch level
   new_order = []
-  for k in list(set(branch_branch_connection))[::-1]:
+  for k in sorted(set(branch_branch_connection), reverse = True):
     idx = unwrap(get_indices(branch_branch_connection, [k]))
     if len(idx) == 1:
-      new_order = new_order + idx
+      new_order.extend(idx)
     else:
-      new_order = new_order + [idx[i] for i in np.argsort([k[0][-1] for k in [j for j in [branch_branch_bond[k] for k in idx]]])]
+      new_order.extend([idx[i] for i in np.argsort([k[0][-1] for k in [j for j in [branch_branch_bond[k] for k in idx]]])])
 
   branch_branch_sugar = [branch_branch_sugar[i] for i in new_order]
   branch_branch_sugar_modification = [branch_branch_sugar_modification[i] for i in new_order]
@@ -1533,66 +1407,44 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
   branch_branch_connection = [branch_branch_connection[i] for i in new_order]
 
   # Main chain x y
-  main_sugar_x_pos = [k for k in range(len(main_sugar))]
-  main_sugar_y_pos = [0 for k in range(len(main_sugar))]
-
-  if main_sugar[-1] in {'Fuc', 'Xyl'} and branch_sugar != []:
-    if len(main_sugar) != 2:
-      main_sugar_x_pos[-1] = main_sugar_x_pos[-1]-1
-      main_sugar_y_pos[-1] = main_sugar_y_pos[-1]-2
-    else:
-      main_sugar_x_pos[-1] = main_sugar_x_pos[-1]-1
-      main_sugar_y_pos[-1] = main_sugar_y_pos[-1]+2
+  main_length = len(main_sugar)
+  main_sugar_x_pos = list(range(main_length))
+  main_sugar_y_pos = [0] * main_length
+  if main_sugar[-1] in {'Fuc', 'Xyl'} and branch_sugar:
+    main_sugar_x_pos[-1] -= 1
+    main_sugar_y_pos[-1] += -2 if main_length != 2 else 2
 
   # Branch x
   branch_x_pos = []
-  tmp = []
-  for j in range(len(branch_sugar)):
-    for k in range(len(branch_sugar[j])):
-      tmp.append(main_sugar_x_pos[branch_connection[j]]+1+k)
-    if branch_sugar[j][-1] not in {'Fuc', 'Xyl'}:
-      branch_x_pos.append(tmp)
-    else:
-      tmp[-1] = tmp[-1]-1
-      branch_x_pos.append(tmp)
-    tmp = []
+  for j, branch in enumerate(branch_sugar):
+    start_x = main_sugar_x_pos[branch_connection[j]]
+    tmp = [start_x + 1 + k for k in range(len(branch))]
+    if branch[-1] in {'Fuc', 'Xyl'}:
+        tmp[-1] -= 1
+    branch_x_pos.append(tmp)
 
   # Branch branch x
   branch_branch_x_pos = []
-  tmp = []
-  for j in range(len(branch_branch_sugar)):
-    for k in range(len(branch_branch_sugar[j])):
-      tmp.append(branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]+(k+1))
-    if branch_branch_sugar[j][-1] not in {'Fuc', 'Xyl'}:  # Is not in list of perpendicular monosaccharides. Add Xyl etc.
-      branch_branch_x_pos.append(tmp)
-    else:
-      tmp[-1] = tmp[-1]-1
-      branch_branch_x_pos.append(tmp)
-    tmp = []
+  for j, branch_branch in enumerate(branch_branch_sugar):
+    start_x = branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]
+    tmp = [start_x + 1 + k for k in range(len(branch_branch))]
+    if branch_branch[-1] in {'Fuc', 'Xyl'}:
+      tmp[-1] -= 1
+    branch_branch_x_pos.append(tmp)
 
   # Branch branch branch x
   bbb_x_pos = []
-  tmp = []
-  for j in range(len(bbb_sugar)):
-    for k in range(len(bbb_sugar[j])):
-      tmp.append(branch_branch_x_pos[bbb_connection[j][0]][bbb_connection[j][1]]+(k+1))
-    if bbb_sugar[j][-1] not in {'Fuc', 'Xyl'}:  # Is not in list of perpendicular monosaccharides. Add Xyl etc.
-      bbb_x_pos.append(tmp)
-    else:
-      tmp[-1] = tmp[-1]-1
-      bbb_x_pos.append(tmp)
-    tmp = []
+  for j, bbb in enumerate(bbb_sugar):
+    start_x = branch_branch_x_pos[bbb_connection[j][0]][bbb_connection[j][1]]
+    tmp = [start_x + 1 + k for k in range(len(bbb))]
+    if bbb[-1] in {'Fuc', 'Xyl'}:
+      tmp[-1] -= 1
+    bbb_x_pos.append(tmp)
 
   # Branch y
-  branch_y_pos_zeros = [[0 for x in y] for y in branch_x_pos]
-  branch_y_pos = branch_y_pos_zeros
-
-  branch_branch_y_pos_zeros = [[0 for x in y] for y in branch_branch_x_pos]
-  branch_branch_y_pos = branch_branch_y_pos_zeros
-
-  bbb_y_pos_zeros = [[0 for x in y] for y in bbb_x_pos]
-  bbb_y_pos = bbb_y_pos_zeros
-
+  branch_y_pos = [[0 for _ in y] for y in branch_x_pos]
+  branch_branch_y_pos = [[0 for _ in y] for y in branch_branch_x_pos]
+  bbb_y_pos = [[0 for _ in y] for y in bbb_x_pos]
   counter = 0
   for k in range(len(branch_x_pos)):
     # Branch terminating in fucose
