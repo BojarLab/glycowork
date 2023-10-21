@@ -42,7 +42,7 @@ def link_find(glycan):
   return list(set(coll))
 
 
-def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
+def annotate_glycan(glycan, motifs = None, libr = None,
                     wildcard_list = [], narrow_wildcard_list = [], termini_list = [], gmotifs = None):
   """searches for known motifs in glycan sequence\n
   | Arguments:
@@ -50,7 +50,6 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | libr (dict): dictionary of form glycoletter:index
-  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; will only be handled with string input; default:'termini'
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | narrow_wildcard_list (list): list of narrow wildcard linkages (such as 'a1-?' or '?1-4') that can match to specified versions (e.g., 'a1-?' to 'a1-3')
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
@@ -62,22 +61,22 @@ def annotate_glycan(glycan, motifs = None, libr = None, extra = 'termini',
   if motifs is None:
     motifs = motif_list
   # Check whether termini are specified
-  if extra == 'termini' and len(termini_list) < 1:
+  if not termini_list:
     termini_list = [eval(k) for k in motifs.termini_spec]
   if libr is None:
     libr = lib
   if gmotifs is None:
-    termini = 'provided' if extra == 'termini' else 'ignore'
+    termini = 'provided' if termini_list else 'ignore'
     gmotifs = [glycan_to_nxGraph(g, libr = libr, termini = termini, termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
   # Count the number of times each motif occurs in a glycan
-  if extra == 'termini':
+  if termini_list:
     ggraph = ensure_graph(glycan, libr = libr, termini = 'calc')
-    res = [subgraph_isomorphism(ggraph, gmotifs[k], libr = libr, extra = extra,
+    res = [subgraph_isomorphism(ggraph, gmotifs[k], libr = libr,
                                 wildcard_list = wildcard_list, narrow_wildcard_list = narrow_wildcard_list, termini_list = termini_list[k],
                                 count = True) for k in range(len(motifs))]*1
   else:
     ggraph = ensure_graph(glycan, libr = libr, termini = 'ignore')
-    res = [subgraph_isomorphism(ggraph, gmotifs[k], libr = libr, extra = extra,
+    res = [subgraph_isomorphism(ggraph, gmotifs[k], libr = libr,
                                 wildcard_list = wildcard_list, narrow_wildcard_list = narrow_wildcard_list, termini_list = termini_list,
                                 count = True) for k in range(len(motifs))]*1
  
@@ -140,16 +139,14 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
 
 
 def annotate_dataset(glycans, motifs = None,
-                     feature_set = ['known'], extra = 'termini',
-                     wildcard_list = [], narrow_wildcard_list = [], termini_list = [],
-                     condense = False):
+                     feature_set = ['known'], wildcard_list = [], narrow_wildcard_list = [],
+                     termini_list = [], condense = False):
   """wrapper function to annotate motifs in list of glycans\n
   | Arguments:
   | :-
   | glycans (list): list of IUPAC-condensed glycan sequences as strings
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-  | extra (string): 'ignore' skips this, 'wildcards' allows for wildcard matching', and 'termini' allows for positional matching; default:'termini'
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | narrow_wildcard_list (list): list of narrow wildcard linkages (such as 'a1-?' or '?1-4') that can match to specified versions (e.g., 'a1-?' to 'a1-3')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
@@ -162,17 +159,16 @@ def annotate_dataset(glycans, motifs = None,
     motifs = motif_list
   libr = get_lib(glycans + motifs.motif.values.tolist() + list(linkages))
   # Checks whether termini information is provided
-  if extra == 'termini' and len(termini_list) < 1:
+  if not termini_list:
     termini_list = [eval(k) for k in motifs.termini_spec]
   shopping_cart = []
   if 'known' in feature_set:
-    termini = 'provided' if extra == 'termini' else 'ignore'
-    termini_list = termini_list if extra == 'termini' else ['ignore']*len(motifs)
+    termini = 'provided' if termini_list else 'ignore'
+    termini_list = termini_list if termini_list else ['ignore']*len(motifs)
     gmotifs = [glycan_to_nxGraph(g, libr = libr, termini = termini, termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
     # Counts literature-annotated motifs in each glycan
     shopping_cart.append(pd.concat([annotate_glycan(k, motifs = motifs, libr = libr,
-                                                    extra = extra, gmotifs = gmotifs,
-                                                    wildcard_list = wildcard_list, narrow_wildcard_list = narrow_wildcard_list,
+                                                    gmotifs = gmotifs, wildcard_list = wildcard_list, narrow_wildcard_list = narrow_wildcard_list,
                                                     termini_list = termini_list) for k in glycans], axis = 0))
   if 'graph' in feature_set:
     # Calculates graph features of each glycan
