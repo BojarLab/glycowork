@@ -1701,9 +1701,9 @@ def get_coordinates_and_labels(draw_this, show_linkage = True, draw_lib = draw_l
         for k in range(len(main_sugar)):
           if main_sugar_x_pos[k] < min([x for x in unwrap(branch_x_pos) if x > 0]):
             tmp_listy.append(main_sugar_x_pos[k])
+        for k in range(len(tmp_listy)):
+          main_sugar_y_pos[k] += (to_add/2)
 
-      for k in range(len(tmp_listy)):
-        main_sugar_y_pos[k] += (to_add/2)
       for list_to_update in [branch_branch_y_pos, bbb_y_pos]:
         for k in range(len(list_to_update)):
           for j in range(len(list_to_update[k])):
