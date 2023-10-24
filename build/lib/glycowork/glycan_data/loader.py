@@ -7,6 +7,8 @@ import pkg_resources
 
 io = pkg_resources.resource_stream(__name__, "v8_sugarbase.csv")
 df_glycan = pd.read_csv(io)
+io = pkg_resources.resource_stream(__name__, "v8_df_species.csv")
+df_species = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
 motif_list = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_binding.csv")
@@ -149,6 +151,3 @@ def build_custom_df(df, kind = 'df_species'):
   df.sort_values([cols[1], 'target'], ascending = [True, True], inplace = True)
   df.reset_index(drop = True, inplace = True)
   return df
-
-
-df_species = build_custom_df(df_glycan, kind = 'df_species')
