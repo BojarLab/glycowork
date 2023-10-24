@@ -246,8 +246,20 @@ def count_unique_subgraphs_of_size_k(graph, size = 2):
       if len(path) == size:
         if labels[path[0]][0] not in {'a', 'b', '?', '('}:
           path_sorted = sorted(path)
-          path_str = '('.join(labels[node] for node in path_sorted)
+          path_str = ""
+          path_str_list = []
+          for index, node in enumerate(path_sorted):
+            prefix = ""
+            # Check degree and add prefix accordingly
+            degree = graph.degree[node]
+            if degree == 1 and node > 0 and index > 0:
+              prefix = "["
+            elif degree > 2 or (degree == 2 and node == len(graph)-1):
+              prefix = "]"
+            path_str_list.append(prefix + labels[node])
+          path_str = '('.join(path_str_list)
           path_str = replace_every_second(path_str, '(', ')')
+          path_str = path_str[:path_str.index('[')+1].replace('[', '') + path_str[path_str.index('['):] if '[' in path_str else path_str.replace(']', '')
           counts[path_str] += 0.5
   return counts
 
