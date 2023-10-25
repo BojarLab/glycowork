@@ -359,146 +359,55 @@ def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'n
     """
     if libr is None:
       libr = lib
-    if glycan_graph:
-      g = ensure_graph(glycan, libr = libr)
-      # Number of different node features:
-      nbr_node_types = len(set(nx.get_node_attributes(g, "labels")))
-    else:
-      g = glycan
-      glycan = label
-      nbr_node_types = len(set(g.nodes()))
+    g = ensure_graph(glycan, libr = libr) if glycan_graph else glycan
+    glycan = label if not glycan_graph else glycan
+    nbr_node_types = len(set(nx.get_node_attributes(g, "labels") if glycan_graph else g.nodes()))
     # Adjacency matrix:
     A = nx.to_numpy_array(g)
     N = A.shape[0]
-    if nx.is_directed(g):
-      directed = True
-    else:
-      directed = False
-    if not directed:
-      if nx.is_connected(g):
-        diameter = nx.algorithms.distance_measures.diameter(g)
-      else:
-        diameter = np.nan
-    else:
-      diameter = np.nan
-    deg = np.array([np.sum(A[i, :]) for i in range(N)])
-    dens = np.sum(deg)/2
-    avgDeg = np.mean(deg)
-    varDeg = np.var(deg)
-    maxDeg = np.max(deg)
-    nbrDeg4 = np.sum(deg > 3)
-    branching = np.sum(deg > 2)
-    nbrLeaves = np.sum(deg == 1)
+    directed = nx.is_directed(g)
+    connected = nx.is_connected(g)
+    deg = np.sum(A, axis = 1)
     deg_to_leaves = np.array([np.sum(A[:, deg == 1]) for i in range(N)])
-    max_deg_leaves = np.max(deg_to_leaves)
-    mean_deg_leaves = np.mean(deg_to_leaves)
-    deg_assort = nx.degree_assortativity_coefficient(g)
-    betweeness_centr = np.array(pd.DataFrame(nx.betweenness_centrality(g), index = [0]).iloc[0, :])
-    betweeness = np.mean(betweeness_centr)
-    betwVar = np.var(betweeness_centr)
-    betwMax = np.max(betweeness_centr)
-    eigen = np.array(pd.DataFrame(nx.katz_centrality_numpy(g), index = [0]).iloc[0, :])
-    eigenMax = np.max(eigen)
-    eigenMin = np.min(eigen)
-    eigenAvg = np.mean(eigen)
-    eigenVar = np.var(eigen)
-    close = np.array(pd.DataFrame(nx.closeness_centrality(g), index = [0]).iloc[0, :])
-    closeMax = np.max(close)
-    closeMin = np.min(close)
-    closeAvg = np.mean(close)
-    closeVar = np.var(close)
-    if not directed:
-      if nx.is_connected(g):
-        flow = np.array(pd.DataFrame(nx.current_flow_betweenness_centrality(g), index = [0]).iloc[0, :])
-        flowMax = np.max(flow)
-        flowAvg = np.mean(flow)
-        flowVar = np.var(flow)
-        flow_edge = np.array(pd.DataFrame(nx.edge_current_flow_betweenness_centrality(g), index = [0]).iloc[0, :])
-        flow_edgeMax = np.max(flow_edge)
-        flow_edgeMin = np.min(flow_edge)
-        flow_edgeAvg = np.mean(flow_edge)
-        flow_edgeVar = np.var(flow_edge)
-      else:
-        flow = np.nan
-        flowMax = np.nan
-        flowAvg = np.nan
-        flowVar = np.nan
-        flow_edge = np.nan
-        flow_edgeMax = np.nan
-        flow_edgeMin = np.nan
-        flow_edgeAvg = np.nan
-        flow_edgeVar = np.nan
-    else:
-      flow = np.nan
-      flowMax = np.nan
-      flowAvg = np.nan
-      flowVar = np.nan
-      flow_edge = np.nan
-      flow_edgeMax = np.nan
-      flow_edgeMin = np.nan
-      flow_edgeAvg = np.nan
-      flow_edgeVar = np.nan
-    load = np.array(pd.DataFrame(nx.load_centrality(g), index = [0]).iloc[0, :])
-    loadMax = np.max(load)
-    loadAvg = np.mean(load)
-    loadVar = np.var(load)
-    harm = np.array(pd.DataFrame(nx.harmonic_centrality(g), index = [0]).iloc[0, :])
-    harmMax = np.max(harm)
-    harmMin = np.min(harm)
-    harmAvg = np.mean(harm)
-    harmVar = np.var(harm)
-    if not directed:
-      if nx.is_connected(g):
-        secorder = np.array(pd.DataFrame(nx.second_order_centrality(g), index = [0]).iloc[0, :])
-        secorderMax = np.max(secorder)
-        secorderMin = np.min(secorder)
-        secorderAvg = np.mean(secorder)
-        secorderVar = np.var(secorder)
-      else:
-        secorder = np.nan
-        secorderMax = np.nan
-        secorderMin = np.nan
-        secorderAvg = np.nan
-        secorderVar = np.nan
-    else:
-      secorder = np.nan
-      secorderMax = np.nan
-      secorderMin = np.nan
-      secorderAvg = np.nan
-      secorderVar = np.nan
-    x = np.array([len(nx.k_corona(g, k).nodes()) for k in range(N)])
-    size_corona = x[x > 0][-1]
-    x = np.array([len(nx.k_core(g, k).nodes()) for k in range(N)])
-    size_core = x[x > 0][-1]
-    M = ((A + np.diag(np.ones(N))).T/(deg + 1)).T
+    centralities = {
+      'betweeness': list(nx.betweenness_centrality(g).values()),
+      'eigen': list(nx.katz_centrality_numpy(g).values()),
+      'close': list(nx.closeness_centrality(g).values()),
+      'load': list(nx.load_centrality(g).values()),
+      'harm': list(nx.harmonic_centrality(g).values()),
+      'flow': list(nx.current_flow_betweenness_centrality(g).values()) if not directed and connected else [],
+      'flow_edge': list(nx.edge_current_flow_betweenness_centrality(g).values()) if not directed and connected else [],
+      'secorder': list(nx.second_order_centrality(g).values()) if not directed and connected else []
+      }
+    features = {
+      'diameter': np.nan if directed or not connected else nx.diameter(g),
+      'branching': np.sum(deg > 2),
+      'nbrLeaves': np.sum(deg == 1),
+      'avgDeg': np.mean(deg),
+      'varDeg': np.var(deg),
+      'maxDeg': np.max(deg),
+      'nbrDeg4': np.sum(deg > 3),
+      'max_deg_leaves': np.max(deg_to_leaves),
+      'mean_deg_leaves': np.mean(deg_to_leaves),
+      'deg_assort': nx.degree_assortativity_coefficient(g),
+      'size_corona': len(nx.k_corona(g, N).nodes()) if N > 0 else 0,
+      'size_core': len(nx.k_core(g, N).nodes()) if N > 0 else 0,
+      'nbr_node_types': nbr_node_types,
+      'N': N,
+      'dens': np.sum(deg) / 2
+      }
+    for centr, vals in centralities.items():
+      features.update({
+        f"{centr}Max": np.nan if not vals else np.max(vals),
+        f"{centr}Min": np.nan if not vals else np.min(vals),
+        f"{centr}Avg": np.nan if not vals else np.mean(vals),
+        f"{centr}Var": np.nan if not vals else np.var(vals)
+        })
+    M = ((A + np.diag(np.ones(N))).T / (deg + 1)).T
     eigval, vec = eigsh(M, 2, which = 'LM')
-    egap = 1 - eigval[0]
-    distr = np.abs(vec[:, -1])
-    distr = distr/sum(distr)
-    entropyStation = np.sum(distr*np.log(distr))
-    features = np.array(
-        [diameter, branching, nbrLeaves, avgDeg, varDeg, maxDeg, nbrDeg4, max_deg_leaves, mean_deg_leaves,
-         deg_assort, betweeness, betwVar, betwMax, eigenMax, eigenMin, eigenAvg, eigenVar, closeMax, closeMin,
-         closeAvg, closeVar, flowMax, flowAvg, flowVar,
-         flow_edgeMax, flow_edgeMin, flow_edgeAvg, flow_edgeVar,
-         loadMax, loadAvg, loadVar,
-         harmMax, harmMin, harmAvg, harmVar,
-         secorderMax, secorderMin, secorderAvg, secorderVar,
-         size_corona, size_core, nbr_node_types,
-         egap, entropyStation, N, dens
-         ])
-    col_names = ['diameter', 'branching', 'nbrLeaves', 'avgDeg', 'varDeg',
-                 'maxDeg', 'nbrDeg4', 'max_deg_leaves', 'mean_deg_leaves',
-                 'deg_assort', 'betweeness', 'betwVar', 'betwMax', 'eigenMax',
-                 'eigenMin', 'eigenAvg', 'eigenVar', 'closeMax', 'closeMin',
-                 'closeAvg', 'closeVar', 'flowMax', 'flowAvg', 'flowVar',
-                 'flow_edgeMax', 'flow_edgeMin', 'flow_edgeAvg', 'flow_edgeVar',
-                 'loadMax', 'loadAvg', 'loadVar', 'harmMax', 'harmMin', 'harmAvg',
-                 'harmVar', 'secorderMax', 'secorderMin', 'secorderAvg', 'secorderVar',
-                 'size_corona', 'size_core', 'nbr_node_types', 'egap', 'entropyStation',
-                 'N', 'dens']
-    feat_dic = {col_names[k]: features[k] for k in range(len(features))}
-    return pd.DataFrame(feat_dic, index = [glycan])
+    distr = np.abs(vec[:, -1]) / sum(np.abs(vec[:, -1]))
+    features.update({'egap': 1 - eigval[0], 'entropyStation': np.sum(distr * np.log(distr))})
+    return pd.DataFrame(features, index = [glycan])
 
 
 def neighbor_is_branchpoint(graph, node):
