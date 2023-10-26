@@ -1434,8 +1434,10 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   if '?' not in [k[0] for k in branch_bond]:
     sorted_indices = np.argsort(branch_connection)[::-1]
     branch_sugar = [branch_sugar[k] for k in sorted_indices]
+    branch_sugar_label = [branch_sugar_label[k] for k in sorted_indices]
     branch_sugar_modification = [branch_sugar_modification[k] for k in sorted_indices]
     branch_bond = [branch_bond[k] for k in sorted_indices]
+    branch_bond_label = [branch_bond_label[k] for k in sorted_indices]
     branch_node = [branch_node[k] for k in sorted_indices]
     branch_connection = [branch_connection[k] for k in sorted_indices]
 
