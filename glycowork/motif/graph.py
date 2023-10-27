@@ -289,8 +289,6 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in narrow_wildcard_list}
   else:
     narrow_wildcard_list = {}
-  if termini_list:
-    termini_list = expand_termini_list(motif, termini_list)
   len_libr = len(libr)
   if isinstance(glycan, str):
     motif_comp = min_process_glycans([motif])[0]
