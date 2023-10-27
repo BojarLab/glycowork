@@ -1,7 +1,7 @@
 from glycowork.glycan_data.loader import lib, unwrap, motif_list, multireplace
 from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import expand_lib, min_process_glycans
+from glycowork.motif.processing import expand_lib, min_process_glycans, get_possible_linkages
 import networkx as nx
 import copy
 
@@ -1306,7 +1306,7 @@ def glycan_to_skeleton(glycan_string):
   return multireplace( '-'.join(elements), {'[-': '[', '-]': ']'})
 
 
-def get_highlight_attribute(glycan_graph, motif_string, wildcard_list = [], narrow_wildcard_list = [], termini_list = []):
+def get_highlight_attribute(glycan_graph, motif_string, wildcard_list = [], termini_list = []):
   '''
   Label nodes in parent glycan (graph) by presence in motif (string)
   | Arguments:
@@ -1314,7 +1314,6 @@ def get_highlight_attribute(glycan_graph, motif_string, wildcard_list = [], narr
   | glycan_graph (networkx object): Glycan as networkx object.
   | motif_string (string): Glycan as named motif or in IUPAC-condensed format. 
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
-  | narrow_wildcard_list (list): CURRENTLY NOT IN USE
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
@@ -1337,6 +1336,7 @@ def get_highlight_attribute(glycan_graph, motif_string, wildcard_list = [], narr
       g2 = glycan_to_nxGraph(motif_string, libr = libr, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_string, libr = libr)
 
   g1_node_labels = nx.get_node_attributes(g1, 'string_labels')
+  narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in g1_node_labels if '?' in k}
 
   if termini_list or wildcard_list or narrow_wildcard_list:
     graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list, narrow_wildcard_list, 'termini', 'flexible'))
@@ -1365,7 +1365,7 @@ def get_highlight_attribute(glycan_graph, motif_string, wildcard_list = [], narr
 
   return g1
 
-def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, draw_lib = draw_lib, extend_lib = False, wildcard_list = [], narrow_wildcard_list = [], termini_list = []):
+def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, draw_lib = draw_lib, extend_lib = False, wildcard_list = [], termini_list = []):
   """Extract monosaccharide labels and calculate coordinates for drawing\n
   | Arguments:
   | :-
@@ -1374,7 +1374,6 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   | draw_lib (dict): lib extended with non-standard glycoletters
   | extend_lib (bool): If True, further extend the library with given input. Default: False.
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
-  | narrow_wildcard_list (list): CURRENTLY NOT IN USE
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-

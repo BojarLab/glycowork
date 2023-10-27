@@ -43,7 +43,7 @@ def link_find(glycan):
 
 
 def annotate_glycan(glycan, motifs = None, libr = None,
-                    wildcard_list = [], narrow_wildcard_list = [], termini_list = [], gmotifs = None):
+                    wildcard_list = [], termini_list = [], gmotifs = None):
   """searches for known motifs in glycan sequence\n
   | Arguments:
   | :-
@@ -51,7 +51,6 @@ def annotate_glycan(glycan, motifs = None, libr = None,
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | libr (dict): dictionary of form glycoletter:index
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
-  | narrow_wildcard_list (list): list of narrow wildcard linkages (such as 'a1-?' or '?1-4') that can match to specified versions (e.g., 'a1-?' to 'a1-3')
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | gmotifs (networkx): precalculated motif graphs for speed-up; default:None\n
   | Returns:
@@ -72,12 +71,12 @@ def annotate_glycan(glycan, motifs = None, libr = None,
   if termini_list:
     ggraph = ensure_graph(glycan, libr = libr, termini = 'calc')
     res = [subgraph_isomorphism(ggraph, gmotifs[k], libr = libr,
-                                wildcard_list = wildcard_list, narrow_wildcard_list = narrow_wildcard_list, termini_list = termini_list[k],
+                                wildcard_list = wildcard_list, termini_list = termini_list[k],
                                 count = True) for k in range(len(motifs))]*1
   else:
     ggraph = ensure_graph(glycan, libr = libr, termini = 'ignore')
     res = [subgraph_isomorphism(ggraph, gmotifs[k], libr = libr,
-                                wildcard_list = wildcard_list, narrow_wildcard_list = narrow_wildcard_list, termini_list = termini_list,
+                                wildcard_list = wildcard_list, termini_list = termini_list,
                                 count = True) for k in range(len(motifs))]*1
  
   out = pd.DataFrame(columns = motifs.motif_name)
@@ -139,7 +138,7 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
 
 
 def annotate_dataset(glycans, motifs = None,
-                     feature_set = ['known'], wildcard_list = [], narrow_wildcard_list = [],
+                     feature_set = ['known'], wildcard_list = [],
                      termini_list = [], condense = False):
   """wrapper function to annotate motifs in list of glycans\n
   | Arguments:
@@ -148,7 +147,6 @@ def annotate_dataset(glycans, motifs = None,
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
-  | narrow_wildcard_list (list): list of narrow wildcard linkages (such as 'a1-?' or '?1-4') that can match to specified versions (e.g., 'a1-?' to 'a1-3')
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
   | condense (bool): if True, throws away columns with only zeroes; default:False\n
   | Returns:
@@ -168,7 +166,7 @@ def annotate_dataset(glycans, motifs = None,
     gmotifs = [glycan_to_nxGraph(g, libr = libr, termini = termini, termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
     # Counts literature-annotated motifs in each glycan
     shopping_cart.append(pd.concat([annotate_glycan(k, motifs = motifs, libr = libr,
-                                                    gmotifs = gmotifs, wildcard_list = wildcard_list, narrow_wildcard_list = narrow_wildcard_list,
+                                                    gmotifs = gmotifs, wildcard_list = wildcard_list,
                                                     termini_list = termini_list) for k in glycans], axis = 0))
   if 'graph' in feature_set:
     # Calculates graph features of each glycan

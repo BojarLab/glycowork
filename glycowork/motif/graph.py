@@ -186,8 +186,7 @@ def categorical_node_match_wildcard(attr, default, wildcard_list, narrow_wildcar
 
 
 def compare_glycans(glycan_a, glycan_b, libr = None,
-                    wildcard_list = [], narrow_wildcard_list = [],
-                    wildcards_ptm = False):
+                    wildcard_list = [], wildcards_ptm = False):
   """returns True if glycans are the same and False if not\n
   | Arguments:
   | :-
@@ -195,7 +194,6 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | libr (dict): dictionary of form glycoletter:index
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
-  | narrow_wildcard_list (list): list of narrow wildcard linkages (such as 'a1-?' or '?1-4') that can match to specified versions (e.g., 'a1-?' to 'a1-3')
   | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
   | Returns:
   | :-
@@ -205,32 +203,25 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
     libr = lib
   if wildcard_list:
     wildcard_list = [libr[k] for k in wildcard_list]
-  if narrow_wildcard_list:
-    narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in narrow_wildcard_list}
-  else:
-    narrow_wildcard_list = {}
   if isinstance(glycan_a, str):
-    # Check whether glycan_a and glycan_b have the same length
-    if len(set([len(k) for k in min_process_glycans([glycan_a, glycan_b])])) == 1:
+    proc = min_process_glycans([glycan_a, glycan_b])
+    # Check whether glycan_a and glycan_b have the same length // pay attention that future narrow wildcards don't mess with this
+    if len(set([len(k) for k in proc])) == 1:
       if wildcards_ptm:
         glycan_a = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan_a).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
         glycan_b = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan_b).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
         libr = expand_lib(libr, [glycan_a, glycan_b])
-      if not wildcard_list and not narrow_wildcard_list:
-        if sorted(glycan_a.replace('[', '').replace(']', '')) == sorted(glycan_b.replace('[', '').replace(']', '')):
-          g1 = glycan_to_nxGraph(glycan_a, libr = libr)
-          g2 = glycan_to_nxGraph(glycan_b, libr = libr)
-        else:
-          return False
-      else:
-        g1 = glycan_to_nxGraph(glycan_a, libr = libr)
-        g2 = glycan_to_nxGraph(glycan_b, libr = libr)
+      proc = set(unwrap(proc))
+      g1 = glycan_to_nxGraph(glycan_a, libr = libr)
+      g2 = glycan_to_nxGraph(glycan_b, libr = libr)
     else:
       return False
   else:
+    proc = set(list(nx.get_node_attributes(glycan_a, "string_labels").values()) + list(nx.get_node_attributes(glycan_b, "string_labels").values()))
     g1 = glycan_a
     g2 = glycan_b
   if len(g1.nodes) == len(g2.nodes):
+    narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in proc if '?' in k}
     if wildcard_list or narrow_wildcard_list:
       return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list, narrow_wildcard_list, 'termini', 'flexible'))
     else:
@@ -262,10 +253,8 @@ def expand_termini_list(motif, termini_list):
   return t_list
 
 
-def subgraph_isomorphism(glycan, motif, libr = None,
-                         wildcard_list = [], narrow_wildcard_list = [],
-                         termini_list = [], count = False,
-                         wildcards_ptm = False):
+def subgraph_isomorphism(glycan, motif, libr = None, wildcard_list = [],
+                         termini_list = [], count = False, wildcards_ptm = False):
   """returns True if motif is in glycan and False if not\n
   | Arguments:
   | :-
@@ -273,7 +262,6 @@ def subgraph_isomorphism(glycan, motif, libr = None,
   | motif (string or networkx): glycan motif in IUPAC-condensed format or as graph in NetworkX format
   | libr (dict): dictionary of form glycoletter:index
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
-  | narrow_wildcard_list (list): list of narrow wildcard linkages (such as 'a1-?' or '?1-4') that can match to specified versions (e.g., 'a1-?' to 'a1-3')
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | count (bool): whether to return the number or absence/presence of motifs; default:False
   | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
@@ -285,13 +273,9 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     libr = lib
   if wildcard_list:
     wildcard_list = [libr[k] for k in wildcard_list]
-  if narrow_wildcard_list:
-    narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in narrow_wildcard_list}
-  else:
-    narrow_wildcard_list = {}
   len_libr = len(libr)
   if isinstance(glycan, str):
-    motif_comp = min_process_glycans([motif])[0]
+    motif_comp = min_process_glycans([motif, glycan])
     if wildcards_ptm:
       glycan = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
       motif = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', motif).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
@@ -299,9 +283,10 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     g1 = glycan_to_nxGraph(glycan, libr = libr, termini = 'calc') if termini_list else glycan_to_nxGraph(glycan, libr = libr)
     g2 = glycan_to_nxGraph(motif, libr = libr, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif, libr = libr)
   else:
-    motif_comp = nx.get_node_attributes(motif, "string_labels").values()
+    motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
     g1 = copy.deepcopy(glycan)
     g2 = motif
+  narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in set(unwrap(motif_comp)) if '?' in k}
 
   # Check whether length of glycan is larger or equal than the motif
   if len(g1.nodes) >= len(g2.nodes):
@@ -309,7 +294,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     if termini_list or wildcard_list or narrow_wildcard_list:
       graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list, narrow_wildcard_list, 'termini', 'flexible'))
     else:
-      if all(k in g1_node_attr for k in motif_comp):
+      if all(k in g1_node_attr for k in motif_comp[0]):
         graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
       else:
         return 0 if count else False
@@ -327,7 +312,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
         if termini_list or wildcard_list or narrow_wildcard_list:
           graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list, narrow_wildcard_list, 'termini', 'flexible'))
         else:
-          if all(k in g1_node_attr for k in motif_comp):
+          if all(k in g1_node_attr for k in motif_comp[0]):
             graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
           else:
             return counts
