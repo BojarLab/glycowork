@@ -1321,6 +1321,7 @@ def get_highlight_attribute(glycan_graph, motif_string):
   len_libr = len(libr)
 
   g1 = glycan_graph
+  g_tmp = copy.deepcopy(g1)
   if not motif_string:
     g2 = copy.deepcopy(g1)
   else:
@@ -1331,12 +1332,21 @@ def get_highlight_attribute(glycan_graph, motif_string):
 
   g1_node_labels = nx.get_node_attributes(g1, 'string_labels')
 
-  graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
+  graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
   graph_pair.subgraph_is_isomorphic()
   mapping = graph_pair.mapping
   mapping = {v: k for k, v in mapping.items()}
   mapping_show = {v: 'show' for v in list(graph_pair.mapping.keys())}
-  mapping_hide = {v: 'hide' for v in list(set(list(g1_node_labels.keys())) - set(list(graph_pair.mapping.keys())))}
+
+  while list(graph_pair.mapping.keys()) != []:
+    g_tmp.remove_nodes_from(graph_pair.mapping.keys())
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
+    graph_pair.subgraph_is_isomorphic()
+    mapping = graph_pair.mapping
+    mapping = {v: k for k, v in mapping.items()}
+    mapping_show.update({v: 'show' for v in list(graph_pair.mapping.keys())})
+
+  mapping_hide = {v: 'hide' for v in list(set(list(g1_node_labels.keys())) - set(list(mapping_show.keys())))}
   mapping_show.update(mapping_hide)
   
   nx.set_node_attributes(g1, dict(sorted(mapping_show.items())), 'highlight_labels')
@@ -1465,7 +1475,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
       new_order.extend(idx)
     else:
       new_order.extend([idx[i] for i in np.argsort([k[0][-1] for k in [j for j in [branch_bond[k] for k in idx]]])])
-
+  
   branch_sugar = [branch_sugar[i] for i in new_order]
   branch_sugar_label = [branch_sugar_label[i] for i in new_order]
   branch_sugar_modification = [branch_sugar_modification[i] for i in new_order]
