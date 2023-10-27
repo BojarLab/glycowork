@@ -1,5 +1,5 @@
 from glycowork.glycan_data.loader import lib, unwrap, motif_list, multireplace
-from glycowork.motif.graph import glycan_to_nxGraph
+from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import expand_lib, min_process_glycans
 import networkx as nx
@@ -1306,13 +1306,16 @@ def glycan_to_skeleton(glycan_string):
   return multireplace( '-'.join(elements), {'[-': '[', '-]': ']'})
 
 
-def get_highlight_attribute(glycan_graph, motif_string):
+def get_highlight_attribute(glycan_graph, motif_string, wildcard_list = [], narrow_wildcard_list = [], termini_list = []):
   '''
   Label nodes in parent glycan (graph) by presence in motif (string)
   | Arguments:
   | :-
-  | glycan_graph (networkx graph): Glycan as a networkx graph.
-  | motif_string (string): Glycan as named motif or in IUPAC-condensed format. \n
+  | glycan_graph (networkx object): Glycan as networkx object.
+  | motif_string (string): Glycan as named motif or in IUPAC-condensed format. 
+  | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
+  | narrow_wildcard_list (list): CURRENTLY NOT IN USE
+  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
   | Returns networkx object of glycan, annotated with the node attribute 'highlight_labels', labeling nodes that constitute the motif ('show') or not ('hide').
@@ -1320,19 +1323,25 @@ def get_highlight_attribute(glycan_graph, motif_string):
   libr = draw_lib
   len_libr = len(libr)
 
+  if wildcard_list:
+    wildcard_list = [libr[k] for k in wildcard_list]
+
   g1 = glycan_graph
   g_tmp = copy.deepcopy(g1)
   if not motif_string:
     g2 = copy.deepcopy(g1)
   else:
     try:
-      g2 = glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0])
+      g2 = glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0], libr = libr, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0], libr = libr)
     except:
-      g2 = glycan_to_nxGraph(motif_string)
+      g2 = glycan_to_nxGraph(motif_string, libr = libr, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_string, libr = libr)
 
   g1_node_labels = nx.get_node_attributes(g1, 'string_labels')
 
-  graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
+  if termini_list or wildcard_list or narrow_wildcard_list:
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list, narrow_wildcard_list, 'termini', 'flexible'))
+  else:
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
   graph_pair.subgraph_is_isomorphic()
   mapping = graph_pair.mapping
   mapping = {v: k for k, v in mapping.items()}
@@ -1340,7 +1349,10 @@ def get_highlight_attribute(glycan_graph, motif_string):
 
   while list(graph_pair.mapping.keys()) != []:
     g_tmp.remove_nodes_from(graph_pair.mapping.keys())
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
+    if termini_list or wildcard_list or narrow_wildcard_list:
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list, narrow_wildcard_list, 'termini', 'flexible'))
+    else:
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
     graph_pair.subgraph_is_isomorphic()
     mapping = graph_pair.mapping
     mapping = {v: k for k, v in mapping.items()}
@@ -1353,14 +1365,17 @@ def get_highlight_attribute(glycan_graph, motif_string):
 
   return g1
 
-def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, draw_lib = draw_lib, extend_lib = False):
+def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, draw_lib = draw_lib, extend_lib = False, wildcard_list = [], narrow_wildcard_list = [], termini_list = []):
   """Extract monosaccharide labels and calculate coordinates for drawing\n
   | Arguments:
   | :-
   | draw_this (string): Glycan structure to be drawn.
   | show_linkage (bool, optional): Flag indicating whether to show linkages. Default: True.
   | draw_lib (dict): lib extended with non-standard glycoletters
-  | extend_lib (bool): If True, further extend the library with given input. Default: False.\n
+  | extend_lib (bool): If True, further extend the library with given input. Default: False.
+  | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
+  | narrow_wildcard_list (list): CURRENTLY NOT IN USE
+  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
   | data_combined (list of lists)
@@ -1374,8 +1389,8 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
     draw_this = reorder_for_drawing(draw_this)
     draw_this = multiple_branch_branches(multiple_branches(draw_this))
 
-  graph = glycan_to_nxGraph(draw_this, libr = draw_lib)
-  graph = get_highlight_attribute(graph, highlight_motif)
+  graph = glycan_to_nxGraph(draw_this, libr = draw_lib, termini = 'calc') if termini_list else glycan_to_nxGraph(draw_this, libr = draw_lib)
+  graph = get_highlight_attribute(graph, highlight_motif, wildcard_list = wildcard_list, termini_list = termini_list)
   node_labels = nx.get_node_attributes(graph, 'string_labels')
   highlight_labels = nx.get_node_attributes(graph, 'highlight_labels')
   edges = list(graph.edges())
@@ -1864,7 +1879,7 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50,  highlight = 'show
     d.append(p)
 
 
-def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, filepath = None):
+def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_wildcard_list = [], highlight_termini_list = [], filepath = None):
   """Draws a glycan structure based on the provided input.\n
   | Arguments:
   | :-
@@ -1874,6 +1889,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   | show_linkage (bool, optional): Set to False to hide the linkage information. Default: True.
   | dim (int, optional): The dimension (size) of the individual sugar units in the structure. Default: 50.
   | highlight_motif (string, optional): Glycan motif to highlight within the parent structure.
+  | highlight_wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
+  | highlight_termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.\n
   """
   bond_hack = False
@@ -1893,14 +1910,14 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   draw_this = draw_this.replace('*', '')
 
   try:
-    data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif)
+    data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, wildcard_list = highlight_wildcard_list, termini_list = highlight_termini_list)
   except:
     try:
       draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values.tolist()[0]
-      data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif)
+      data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, wildcard_list = highlight_wildcard_list, termini_list = highlight_termini_list)
     except:
         try:
-          data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, extend_lib = True, highlight_motif = highlight_motif)
+          data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, extend_lib = True, highlight_motif = highlight_motif, wildcard_list = highlight_wildcard_list, termini_list = highlight_termini_list)
         except:
           return print('Error: did you enter a real glycan or motif?')
           sys.exit(1)
