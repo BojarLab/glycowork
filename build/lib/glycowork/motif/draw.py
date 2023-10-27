@@ -1336,7 +1336,8 @@ def get_highlight_attribute(glycan_graph, motif_string, wildcard_list = [], term
       g2 = glycan_to_nxGraph(motif_string, libr = libr, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_string, libr = libr)
 
   g1_node_labels = nx.get_node_attributes(g1, 'string_labels')
-  narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in g1_node_labels.values() if '?' in k}
+  relevant_labels = set(list(g1_node_labels.values()) + list(nx.get_node_attributes(g2, 'string_labels').values()))
+  narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in relevant_labels if '?' in k}
 
   if termini_list or wildcard_list or narrow_wildcard_list:
     graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, wildcard_list, narrow_wildcard_list, 'termini', 'flexible'))
