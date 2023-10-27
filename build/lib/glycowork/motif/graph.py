@@ -186,7 +186,7 @@ def categorical_node_match_wildcard(attr, default, wildcard_list, narrow_wildcar
 
 
 def compare_glycans(glycan_a, glycan_b, libr = None,
-                    wildcards = False, wildcard_list = [], narrow_wildcard_list = [],
+                    wildcard_list = [], narrow_wildcard_list = [],
                     wildcards_ptm = False):
   """returns True if glycans are the same and False if not\n
   | Arguments:
@@ -194,7 +194,6 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
   | glycan_a (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
   | libr (dict): dictionary of form glycoletter:index
-  | wildcards (bool): set to True to allow wildcards (e.g., '?1-?', 'monosaccharide'); default:False
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
   | narrow_wildcard_list (list): list of narrow wildcard linkages (such as 'a1-?' or '?1-4') that can match to specified versions (e.g., 'a1-?' to 'a1-3')
   | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
@@ -217,7 +216,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
         glycan_a = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan_a).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
         glycan_b = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan_b).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
         libr = expand_lib(libr, [glycan_a, glycan_b])
-      if wildcards is False:
+      if not wildcard_list and not narrow_wildcard_list:
         if sorted(glycan_a.replace('[', '').replace(']', '')) == sorted(glycan_b.replace('[', '').replace(']', '')):
           g1 = glycan_to_nxGraph(glycan_a, libr = libr)
           g2 = glycan_to_nxGraph(glycan_b, libr = libr)
@@ -232,7 +231,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
     g1 = glycan_a
     g2 = glycan_b
   if len(g1.nodes) == len(g2.nodes):
-    if wildcards:
+    if wildcard_list or narrow_wildcard_list:
       return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list, narrow_wildcard_list, 'termini', 'flexible'))
     else:
       # First check whether components of both glycan graphs are identical, then check graph isomorphism (costly)

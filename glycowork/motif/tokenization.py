@@ -348,7 +348,7 @@ def condense_composition_matching(matched_composition, libr = None):
   n = len(matched_composition)
   # Establish glycan equality given the wildcards
   match_matrix = pd.DataFrame(
-    [[compare_glycans(k, j, libr = libr, wildcards = True, wildcards_ptm = True, wildcard_list = wildcards)
+    [[compare_glycans(k, j, libr = libr, wildcards_ptm = True, wildcard_list = wildcards)
       for j in matched_composition] for k in matched_composition],
     columns = matched_composition
     )

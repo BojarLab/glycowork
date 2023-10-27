@@ -114,13 +114,15 @@ def find_isomorphs(glycan):
     if not bool(re.search(r'\[[^\]]+\[', glycan)):
       out_list.add(re.sub(r'^(.*?)\[(.*?)\]', r'\2[\1]', glycan, 1))
     elif not bool(re.search(r'\[[^\]]+\[', glycan[find_nth(glycan, ']', 2):])) and bool(re.search(r'\[[^\]]+\[', glycan[:find_nth(glycan, '[', 3)])):
-      out_list.add(re.sub(r'^(.*?)\[(.*?)(\]{1,1})(.*?)\]', r'\2\3\4[\1]', glycan, 1))
+      out_list.add(re.sub(r'^(.*?)\[(.*?)(\])((?:[^\[\]]|\[[^\[\]]*\])*)\]', r'\2\3\4[\1]', glycan, 1))
   # Double branch swap
   temp = {re.sub(r'\[([^[\]]+)\]\[([^[\]]+)\]', k, r'[\2][\1]') for k in out_list if '][' in k}
   out_list.update(temp)
   temp = set()
   # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
   for k in out_list:
+    if not bool(re.search(r'\[[^\]]+\[', k)):
+      temp.add(re.sub(r'^(.*?)\[(.*?)\]', r'\2[\1]', k, 1))
     if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
       temp.add(re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1))
   out_list.update(temp)
