@@ -265,6 +265,42 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   return truth
 
 
+def canonicalize_composition(comp):
+  """converts a composition from any common format into the dictionary that is optimized for glycowork\n
+  | Arguments:
+  | :-
+  | comp (string): composition formatted either in the style of HexNAc2Hex1Fuc3Neu5Ac1 or N2H1F3A1\n
+  | Returns:
+  | :-
+  | Returns composition as a dictionary of style monosaccharide : count
+  """
+  comp_dict = {}
+  i = 0
+  comp = comp.replace("Neu5Ac", "NeuAc").replace("Neu5Gc", "NeuGc")
+  n = len(comp)
+  # Dictionary to map letter codes to full names
+  code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac',
+                  'Hex': 'Hex', 'HexNAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex',
+                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac'}
+  while i < n:
+    # Code initialization
+    code = ''
+    # Read until you hit a number or the end of the string
+    while i < n and not comp[i].isdigit():
+      code += comp[i]
+      i += 1
+    # Initialize a variable to hold the number of occurrences
+    num = 0
+    # Parse the number following the code
+    while i < n and comp[i].isdigit():
+      num = num * 10 + int(comp[i])
+      i += 1
+    # Map code to full name and store in dictionary
+    name = code_to_name.get(code, code)
+    comp_dict[name] = num
+  return comp_dict
+
+
 def IUPAC_to_SMILES(glycan_list):
   """given a list of IUPAC-condensed glycans, uses GlyLES to return a list of corresponding isomeric SMILES\n
   | Arguments:
