@@ -303,7 +303,7 @@ def canonicalize_iupac(glycan):
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and 'ol' not in glycan:
       glycan = glycan[:glycan.rindex('-')]
   # Canonicalize usage of brackets and parentheses
-  if bool(re.search(r'\([A-Z3-9]', glycan)):
+  if bool(re.search(r'\([A-Zd3-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
   # Canonicalize linkage uncertainty
   # Open linkages (e.g., "c-")

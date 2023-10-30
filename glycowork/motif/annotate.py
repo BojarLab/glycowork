@@ -262,14 +262,15 @@ def count_unique_subgraphs_of_size_k(graph, size = 2):
   return counts
 
 
-def get_k_saccharides(glycans, size = 2, libr = None, up_to = False):
+def get_k_saccharides(glycans, size = 2, libr = None, up_to = False, just_motifs = False):
   """function to retrieve k-saccharides (default:disaccharides) occurring in a list of glycans\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed nomenclature
   | size (int): number of monosaccharides per -saccharide, default:2 (for disaccharides)
   | libr (dict): dictionary of form glycoletter:index
-  | up_to (bool): in theory: include -saccharides up to size k; in practice: include monosaccharides; default:False\n
+  | up_to (bool): in theory: include -saccharides up to size k; in practice: include monosaccharides; default:False
+  | just_motifs (bool): if you only want the motifs as a nested list, no dataframe with counts; default:False\n
   | Returns:
   | :-                 
   | Returns dataframe with k-saccharide counts (columns) for each glycan (rows)
@@ -302,9 +303,16 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False):
         drop_columns.append(col2)
   out_matrix = out_matrix.drop(drop_columns, axis = 1)
   if up_to:
-    return pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
+    combined_df= pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
+    if just_motifs:
+      return combined_df.apply(lambda x: list(combined_df.columns[x > 0]), axis = 1).tolist()
+    else:
+      return combined_df
   else:
-    return out_matrix.fillna(0).astype(int)
+    if just_motifs:
+      return out_matrix.apply(lambda x: list(out_matrix.columns[x > 0]), axis = 1).tolist()
+    else:
+      return out_matrix.fillna(0).astype(int)
 
 
 def get_terminal_structures(glycan, libr = None):
