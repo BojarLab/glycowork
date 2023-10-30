@@ -250,7 +250,7 @@ def count_unique_subgraphs_of_size_k(graph, size = 2):
             prefix = ""
             # Check degree and add prefix accordingly
             degree = graph.degree[node]
-            if degree == 1 and node > 0 and index > 0:
+            if degree == 1 and node > 0 and index > 0 and node != len(graph)-1:
               prefix = "["
             elif degree > 2 or (degree == 2 and node == len(graph)-1):
               prefix = "]"
