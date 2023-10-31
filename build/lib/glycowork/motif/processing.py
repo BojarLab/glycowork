@@ -276,12 +276,13 @@ def canonicalize_composition(comp):
   """
   comp_dict = {}
   i = 0
-  comp = comp.replace("Neu5Ac", "NeuAc").replace("Neu5Gc", "NeuGc")
+  replace_dic = {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", '(': '', ')': ''}
+  comp = multireplace(comp, replace_dic)
   n = len(comp)
   # Dictionary to map letter codes to full names
   code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac',
                   'Hex': 'Hex', 'HexNAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex',
-                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac'}
+                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'HexNac': 'HexNAc'}
   while i < n:
     # Code initialization
     code = ''
