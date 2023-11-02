@@ -254,7 +254,8 @@ def expand_termini_list(motif, termini_list):
 
 
 def subgraph_isomorphism(glycan, motif, libr = None, wildcard_list = [],
-                         termini_list = [], count = False, wildcards_ptm = False):
+                         termini_list = [], count = False, wildcards_ptm = False,
+                         return_matches = False):
   """returns True if motif is in glycan and False if not\n
   | Arguments:
   | :-
@@ -264,7 +265,8 @@ def subgraph_isomorphism(glycan, motif, libr = None, wildcard_list = [],
   | wildcard_list (list): list of full wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia') that can match to anything
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | count (bool): whether to return the number or absence/presence of motifs; default:False
-  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False\n
+  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'), only works when strings are provided; default:False
+  | return_matches (bool): whether the matched subgraphs in input glycan should be returned as node lists as an additional output; default:False\n
   | Returns:
   | :-
   | Returns True if motif is in glycan and False if not
@@ -299,6 +301,9 @@ def subgraph_isomorphism(glycan, motif, libr = None, wildcard_list = [],
       else:
         return 0 if count else False
 
+    if return_matches:
+      mappings = [list(isos.keys()) for isos in graph_pair.subgraph_isomorphisms_iter()]
+
     # Count motif occurrence
     if count:
       counts = 0
@@ -315,13 +320,14 @@ def subgraph_isomorphism(glycan, motif, libr = None, wildcard_list = [],
           if all(k in g1_node_attr for k in motif_comp[0]):
             graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
           else:
-            return counts
-      return counts
+            return counts if not return_matches else (counts, mappings)
+      return counts if not return_matches else (counts, mappings)
     else:
       if graph_pair.subgraph_is_isomorphic():
         mapping = graph_pair.mapping
         mapping = {v: k for k, v in mapping.items()}
-        return all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges())
+        res = all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges())
+        return res if not return_matches else (res, mappings)
       return False
   else:
     return 0 if count else False
