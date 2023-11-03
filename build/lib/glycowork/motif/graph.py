@@ -426,6 +426,8 @@ def graph_to_string_int(graph):
   | :-
   | Returns glycan in IUPAC-condensed format (string)
   """
+  if min(graph.nodes()) > 0:
+    graph = nx.relabel_nodes(graph, {n: i for i, n in enumerate(graph.nodes())})
   nodes = list(nx.get_node_attributes(graph, "string_labels").values())
   nodes = [k+')' if graph.degree[min(i+1, len(nodes)-1)] > 2 or neighbor_is_branchpoint(graph, i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
   if graph.degree[len(graph)-1] < 2:
