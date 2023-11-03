@@ -11,7 +11,7 @@ from collections import Counter
 from sklearn.cluster import DBSCAN
 
 from glycowork.glycan_data.loader import lib, unwrap, df_species, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages
-from glycowork.motif.processing import min_process_glycans, canonicalize_iupac
+from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, rescue_glycans, rescue_compositions
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 
 chars = {'A':1, 'B':2, 'C':3, 'D':4, 'E':5, 'F':6, 'G':7, 'H':8, 'I':9, 'J':10, 'K':11,
@@ -573,6 +573,7 @@ def structure_to_basic(glycan, libr = None):
   return graph_to_string(ggraph)
 
 
+@rescue_glycans
 def glycan_to_composition(glycan, stem_libr = None):
   """maps glycan to its composition\n
   | Arguments:
@@ -605,6 +606,7 @@ def glycan_to_composition(glycan, stem_libr = None):
     return dict(composition)
 
 
+@rescue_compositions
 def composition_to_mass(dict_comp, mass_value = 'monoisotopic',
                       sample_prep = 'underivatized'):
   """given a composition, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n

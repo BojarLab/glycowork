@@ -2,7 +2,7 @@ import re
 import copy
 import networkx as nx
 from glycowork.glycan_data.loader import lib, unwrap
-from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, expand_lib, get_possible_linkages, get_possible_monosaccharides
+from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, expand_lib, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
 import numpy as np
 import pandas as pd
 from scipy.sparse.linalg import eigsh
@@ -110,6 +110,7 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   return g1
 
 
+@rescue_glycans
 def glycan_to_nxGraph(glycan, libr = None,
                       termini = 'ignore', termini_list = None):
   """wrapper for converting glycans into networkx graphs; also works with floating substituents\n

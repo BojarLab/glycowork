@@ -278,15 +278,13 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False, just_motifs
   if libr is None:
     libr = lib
   if up_to:
-    wga_letter = pd.DataFrame([{i: g.count(i) if i in g else 0 for i in get_lib(glycans).keys() if i not in linkages} for g in glycans])
+    wga_letter = pd.DataFrame([{i: g.count(i) if i in g else 0 for i in get_lib(glycans) if i not in linkages} for g in glycans])
   regex = re.compile(r"\(([ab])(\d)-(\d)\)")
   shadow_glycans = [regex.sub(r"(\1\2-?)", g) for g in glycans]
   libr = expand_lib(libr, shadow_glycans)
-  ggraphs = [glycan_to_nxGraph(g, libr = libr) for g in glycans]
-  shadow_glycans = [glycan_to_nxGraph(g, libr = libr) for g in shadow_glycans]
-  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size) for g in ggraphs])
+  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g, libr = libr), size = size) for g in glycans])
   ggraphs = ggraphs.drop(columns = [col for col in ggraphs.columns if '?' in col])
-  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size) for g in shadow_glycans])
+  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g, libr = libr), size = size) for g in shadow_glycans])
   org_len = ggraphs.shape[1]
   out_matrix = pd.concat([ggraphs, shadow_glycans], axis = 1).reset_index(drop = True)
   out_matrix = out_matrix.loc[:, ~out_matrix.columns.duplicated()].copy()
@@ -296,7 +294,7 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False, just_motifs
   second_half_cols = cols[org_len:]
   drop_columns = []
   col_sums = {col: out_matrix[col].sum() for col in cols}
-  col_subs = {col: re.sub(r"([ab])(\d)-(\d)", r"\1\2-?", col) for col in cols}
+  col_subs = {col: regex.sub(r"\1\2-?", col) for col in cols}
   for col1 in first_half_cols:
     for col2 in second_half_cols:
       if col_sums[col1] == col_sums[col2] and col_subs[col1] == col2:

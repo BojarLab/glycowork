@@ -421,6 +421,32 @@ def canonicalize_iupac(glycan):
   return glycan
 
 
+def rescue_glycans(func):
+  def wrapper(*args, **kwargs):
+    try:
+      # Try running the original function
+      return func(*args, **kwargs)
+    except Exception as e:
+      # If an error occurs, attempt to rescue the glycan sequences
+      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else arg for arg in args]
+      # After rescuing, attempt to run the function again
+      return func(*rescued_args, **kwargs)
+  return wrapper
+
+
+def rescue_compositions(func):
+  def wrapper(*args, **kwargs):
+    try:
+      # Try running the original function
+      return func(*args, **kwargs)
+    except Exception as e:
+      # If an error occurs, attempt to rescue the glycan sequences
+      rescued_args = [canonicalize_composition(arg) if isinstance(arg, str) else arg for arg in args]
+      # After rescuing, attempt to run the function again
+      return func(*rescued_args, **kwargs)
+  return wrapper
+
+
 def cohen_d(x, y, paired = False):
   """calculates effect size between two groups\n
   | Arguments:
