@@ -2,7 +2,7 @@ import re
 import copy
 import networkx as nx
 from glycowork.glycan_data.loader import lib, unwrap
-from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, expand_lib, get_possible_linkages
+from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, expand_lib, get_possible_linkages, get_possible_monosaccharides
 import numpy as np
 import pandas as pd
 from scipy.sparse.linalg import eigsh
@@ -222,6 +222,8 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
     g2 = glycan_b
   if len(g1.nodes) == len(g2.nodes):
     narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in proc if '?' in k}
+    narrow_wildcard_list2 = {libr[k]:[libr[j] for j in get_possible_monosaccharides(k, libr = libr)] for k in proc if k in ['Hex', 'HexNAc', 'dHex', 'Sia']}
+    narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
     if wildcard_list or narrow_wildcard_list:
       return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('labels', len(libr), wildcard_list, narrow_wildcard_list, 'termini', 'flexible'))
     else:
@@ -289,6 +291,8 @@ def subgraph_isomorphism(glycan, motif, libr = None, wildcard_list = [],
     g1 = copy.deepcopy(glycan)
     g2 = motif
   narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in set(unwrap(motif_comp)) if '?' in k}
+  narrow_wildcard_list2 = {libr[k]:[libr[j] for j in get_possible_monosaccharides(k, libr = libr)] for k in set(unwrap(motif_comp)) if k in ['Hex', 'HexNAc', 'dHex', 'Sia']}
+  narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
 
   # Check whether length of glycan is larger or equal than the motif
   if len(g1.nodes) >= len(g2.nodes):
