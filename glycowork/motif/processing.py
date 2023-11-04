@@ -294,7 +294,7 @@ def canonicalize_composition(comp):
   comp = multireplace(comp, replace_dic)
   n = len(comp)
   # Dictionary to map letter codes to full names
-  code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac',
+  code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc',
                   'Hex': 'Hex', 'HexNAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex',
                   'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'HexNac': 'HexNAc'}
   while i < n:
@@ -334,6 +334,21 @@ def IUPAC_to_SMILES(glycan_list):
   return [convert(g)[0][1] for g in glycan_list]
 
 
+def linearcode_to_iupac(linearcode):
+  """converts a glycan from LinearCode into a barebones IUPAC-condensed version that is cleaned up by canonicalize_iupac\n
+  | Arguments:
+  | :-
+  | linearcode (string): glycan sequence in LinearCode format\n
+  | Returns:
+  | :-
+  | Returns glycan as a string in a barebones IUPAC-condensed form
+  """
+  replace_dic = {'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GN': 'GlcNAc',
+                 'AN': 'GalNAc', 'F': 'Fuc', '[': '', ']': ''}
+  glycan = multireplace(linearcode.split(';')[0], replace_dic)
+  return glycan
+
+
 def canonicalize_iupac(glycan):
   """converts a glycan from any IUPAC flavor into the exact IUPAC-condensed version that is optimized for glycowork\n
   | Arguments:
@@ -343,6 +358,9 @@ def canonicalize_iupac(glycan):
   | :-
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
+  # Check for different nomenclatures: LinearCode
+  if ';' in glycan:
+    glycan = linearcode_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaNAc': 'GalNAc', '(9Ac)': '9Ac',
@@ -380,7 +398,7 @@ def canonicalize_iupac(glycan):
       glycan = re.sub(r'(a|b)(\d)', r'\g<1>1-\g<2>', glycan)
   # Smudge uncertainty
   while '/' in glycan:
-    glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+1:]
+    glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+2:]
   # Introduce parentheses for linkages
   if '(' not in glycan and len(glycan) > 6:
     for k in range(1, glycan.count('-')+1):
@@ -440,7 +458,7 @@ def rescue_compositions(func):
       # Try running the original function
       return func(*args, **kwargs)
     except Exception as e:
-      # If an error occurs, attempt to rescue the glycan sequences
+      # If an error occurs, attempt to rescue the glycan compositions
       rescued_args = [canonicalize_composition(arg) if isinstance(arg, str) else arg for arg in args]
       # After rescuing, attempt to run the function again
       return func(*rescued_args, **kwargs)

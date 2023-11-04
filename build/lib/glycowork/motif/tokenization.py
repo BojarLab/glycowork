@@ -525,8 +525,10 @@ def check_nomenclature(glycan):
     return
   if '=' in glycan:
     print("Could it be that you're using WURCS? Please convert to IUPACcondensed for using glycowork.")
-  if 'RES' in glycan:
+  elif 'RES' in glycan:
     print("Could it be that you're using GlycoCT? Please convert to IUPACcondensed for using glycowork.")
+  elif ';' in glycan:
+    print("Could it be that you're using LinearCode? Please convert to IUPACcondensed for using glycowork.")
   return canonicalize_iupac(glycan)
 
 
