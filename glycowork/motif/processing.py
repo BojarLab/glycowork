@@ -296,7 +296,7 @@ def canonicalize_composition(comp):
   # Dictionary to map letter codes to full names
   code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc',
                   'Hex': 'Hex', 'HexNAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex',
-                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'HexNac': 'HexNAc'}
+                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc'}
   while i < n:
     # Code initialization
     code = ''
@@ -343,10 +343,34 @@ def linearcode_to_iupac(linearcode):
   | :-
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
-  replace_dic = {'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GN': 'GlcNAc',
-                 'AN': 'GalNAc', 'F': 'Fuc', '[': '', ']': ''}
+  replace_dic = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GlcN': 'GlcNAc', 'GN': 'GlcNAc',
+                 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
+                 'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac'}
   glycan = multireplace(linearcode.split(';')[0], replace_dic)
   return glycan
+
+
+def iupac_extended_to_condensed(iupac_extended):
+  """converts a glycan from IUPAC-extended into a barebones IUPAC-condensed version that is cleaned up by canonicalize_iupac\n
+  | Arguments:
+  | :-
+  | iupac_extended (string): glycan sequence in IUPAC-extended format\n
+  | Returns:
+  | :-
+  | Returns glycan as a string in a barebones IUPAC-condensed form
+  """
+  # Find all occurrences of the pattern and apply the changes
+  def replace_pattern(match):
+    # Move the α or β after the next opening parenthesis
+    return f"{match.group('after')}{match.group('alpha_beta')}"
+  # The regular expression looks for α-D- or β-D- followed by any characters until an open parenthesis
+  pattern = re.compile(r"(?P<alpha_beta>[αβ])-D-(?P<after>[^\)]*\()")
+  # Substitute the pattern in the string with our replace_pattern function
+  adjusted_string = pattern.sub(replace_pattern, iupac_extended)
+  adjusted_string = re.sub(r"-\(", "(", adjusted_string)
+  adjusted_string = re.sub(r"\)-", ")", adjusted_string)
+  adjusted_string = re.sub(r"\]-", "]", adjusted_string)
+  return adjusted_string[:adjusted_string.rindex('(')]
 
 
 def canonicalize_iupac(glycan):
@@ -358,14 +382,17 @@ def canonicalize_iupac(glycan):
   | :-
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
-  # Check for different nomenclatures: LinearCode
+  # Check for different nomenclatures: LinearCode, IUPAC-extended
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
+  if '-D-' in glycan:
+    glycan = iupac_extended_to_condensed(glycan)
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaNAc': 'GalNAc', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
-                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')'}
+                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')', '→': '-',
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man'}
   glycan = multireplace(glycan, replace_dic)
   # Trim linkers
   if '-' in glycan:
