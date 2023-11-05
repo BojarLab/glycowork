@@ -296,7 +296,8 @@ def canonicalize_composition(comp):
   # Dictionary to map letter codes to full names
   code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc',
                   'Hex': 'Hex', 'HexNAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex',
-                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc'}
+                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc',
+                  'Su': 'S', 's': 'S', 'p': 'P', 'Pent': 'Pen'}
   while i < n:
     # Code initialization
     code = ''
@@ -344,7 +345,7 @@ def linearcode_to_iupac(linearcode):
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
   replace_dic = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GlcN': 'GlcNAc', 'GN': 'GlcNAc',
-                 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
+                 'AN': 'GalNAc', 'GalN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
                  'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac'}
   glycan = multireplace(linearcode.split(';')[0], replace_dic)
   return glycan
@@ -373,6 +374,27 @@ def iupac_extended_to_condensed(iupac_extended):
   return adjusted_string[:adjusted_string.rindex('(')]
 
 
+def check_nomenclature(glycan):
+  """checks whether the proposed glycan has the correct nomenclature for glycowork\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed format
+  | Returns:
+  | :-
+  | If salvageable, returns the re-formatted glycan; if not, prints the reason why it's not convertable
+  """
+  if not isinstance(glycan, str):
+    print("You need to format your glycan sequences as strings.")
+    return
+  if '=' in glycan:
+    print("Could it be that you're using WURCS? Please convert to a glycowork-supported nomenclature.")
+    return
+  elif 'RES' in glycan:
+    print("Could it be that you're using GlycoCT? Please convert to a glycowork-supported nomenclature.")
+    return
+  return
+
+
 def canonicalize_iupac(glycan):
   """converts a glycan from any IUPAC flavor into the exact IUPAC-condensed version that is optimized for glycowork\n
   | Arguments:
@@ -385,14 +407,17 @@ def canonicalize_iupac(glycan):
   # Check for different nomenclatures: LinearCode, IUPAC-extended
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
-  if '-D-' in glycan:
+  elif '-D-' in glycan:
     glycan = iupac_extended_to_condensed(glycan)
+  elif any([p in glycan for p in ['RES', '=']]) or not isinstance(glycan, str):
+    check_nomenclature(glycan)
+    return
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaNAc': 'GalNAc', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')', '→': '-',
-                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man'}
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu'}
   glycan = multireplace(glycan, replace_dic)
   # Trim linkers
   if '-' in glycan:

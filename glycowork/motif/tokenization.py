@@ -511,27 +511,6 @@ def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkag
   return out
 
 
-def check_nomenclature(glycan):
-  """checks whether the proposed glycan has the correct nomenclature for glycowork\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format
-  | Returns:
-  | :-
-  | If salvageable, returns the re-formatted glycan; if not, prints the reason why it's not convertable
-  """
-  if not isinstance(glycan, str):
-    print("You need to format your glycan sequences as strings.")
-    return
-  if '=' in glycan:
-    print("Could it be that you're using WURCS? Please convert to IUPACcondensed for using glycowork.")
-  elif 'RES' in glycan:
-    print("Could it be that you're using GlycoCT? Please convert to IUPACcondensed for using glycowork.")
-  elif ';' in glycan:
-    print("Could it be that you're using LinearCode? Please convert to IUPACcondensed for using glycowork.")
-  return canonicalize_iupac(glycan)
-
-
 def map_to_basic(glycoletter):
   """given a monosaccharide/linkage, try to map it to the corresponding base monosaccharide/linkage\n
   | Arguments:
