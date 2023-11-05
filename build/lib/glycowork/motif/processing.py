@@ -345,7 +345,7 @@ def linearcode_to_iupac(linearcode):
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
   replace_dic = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GlcN': 'GlcNAc', 'GN': 'GlcNAc',
-                 'AN': 'GalNAc', 'GalN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
+                 'GalN': 'GalNAc', 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
                  'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac'}
   glycan = multireplace(linearcode.split(';')[0], replace_dic)
   return glycan
@@ -365,7 +365,7 @@ def iupac_extended_to_condensed(iupac_extended):
     # Move the α or β after the next opening parenthesis
     return f"{match.group('after')}{match.group('alpha_beta')}"
   # The regular expression looks for α-D- or β-D- followed by any characters until an open parenthesis
-  pattern = re.compile(r"(?P<alpha_beta>[αβ])-D-(?P<after>[^\)]*\()")
+  pattern = re.compile(r"(?P<alpha_beta>[αβab\?])-[DL]-(?P<after>[^\)]*\()")
   # Substitute the pattern in the string with our replace_pattern function
   adjusted_string = pattern.sub(replace_pattern, iupac_extended)
   adjusted_string = re.sub(r"-\(", "(", adjusted_string)
@@ -389,7 +389,7 @@ def check_nomenclature(glycan):
   if '=' in glycan:
     print("Could it be that you're using WURCS? Please convert to a glycowork-supported nomenclature.")
     return
-  elif 'RES' in glycan:
+  if 'RES' in glycan:
     print("Could it be that you're using GlycoCT? Please convert to a glycowork-supported nomenclature.")
     return
   return
