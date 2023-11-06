@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import re
+from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, linkages, Hex, HexNAc, dHex, Sia
@@ -374,6 +375,68 @@ def iupac_extended_to_condensed(iupac_extended):
   return adjusted_string[:adjusted_string.rindex('(')]
 
 
+def glycoct_to_iupac(glycoct):
+  """converts a glycan from GlycoCT into a barebones IUPAC-condensed version that is cleaned up by canonicalize_iupac\n
+  | Arguments:
+  | :-
+  | glycoct (string): glycan sequence in GlycoCT format\n
+  | Returns:
+  | :-
+  | Returns glycan as a string in a barebones IUPAC-condensed form
+  """
+  # Dictionaries to hold the mapping of residues and linkages
+  residue_dic = {}
+  iupac_parts = {}
+  degrees = defaultdict(lambda:1)
+  mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc'}
+  sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'S'}
+
+  # Split the input by lines and iterate over them
+  for line in glycoct.split('\n'):
+    if line.startswith('RES'):
+      residues = True
+    elif line.startswith('LIN'):
+      residues = False
+    elif residues:
+      parts = line.split(':')
+      if parts[0][-1] == 'b':
+        res_id = int(parts[0][:-1])
+        res_type = parts[1].split('-')[1] + parts[1].split('-')[0]
+        residue_dic[res_id] = multireplace(res_type, mono_replace)
+      elif parts[0][-1] == 's':
+        res_id = int(parts[0][:-1])-1
+        res_type = multireplace(parts[1], sub_replace)
+        residue_dic[res_id] = residue_dic[res_id][:-1] + res_type + residue_dic[res_id][-1]
+      else:
+        parts = re.findall(r'(\d+)[do]\((\d+)\+(\d+)\)(\d+)', line)[0]
+        parent_id, child_id = int(parts[0]), int(parts[3])
+        link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
+        if parent_id not in iupac_parts:
+          iupac_parts[parent_id] = []
+        if not link_type.startswith('99'):
+          iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
+          degrees[parent_id] += 1
+  # Build the IUPAC-condensed string
+  for r in residue_dic:
+    if r not in degrees:
+      degrees[r] = 1
+  iupac = residue_dic[1]
+  for parent, children in iupac_parts.items():
+    child_strings = []
+    for child in children:
+      prefix = '[' if degrees[child[1]] == 1 else ''
+      child_strings.append(prefix + residue_dic[child[1]] + '(' + child[0] + ')')
+    prefix = ']' if degrees[parent] > 2 else ''
+    iupac = ']'.join(child_strings) + prefix + iupac
+  iupac = iupac[:-1]
+  pattern = re.compile(r'([ab\?])\(')
+  iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
+  iupac = iupac.strip('[]')
+  if iupac.index(']') < iupac.index('['):
+    iupac = iupac.replace(']', '', 1)
+  return iupac
+
+
 def check_nomenclature(glycan):
   """checks whether the proposed glycan has the correct nomenclature for glycowork\n
   | Arguments:
@@ -389,9 +452,6 @@ def check_nomenclature(glycan):
   if '=' in glycan:
     print("Could it be that you're using WURCS? Please convert to a glycowork-supported nomenclature.")
     return
-  if 'RES' in glycan:
-    print("Could it be that you're using GlycoCT? Please convert to a glycowork-supported nomenclature.")
-    return
   return
 
 
@@ -404,12 +464,14 @@ def canonicalize_iupac(glycan):
   | :-
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
-  # Check for different nomenclatures: LinearCode, IUPAC-extended
+  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
   elif '-D-' in glycan:
     glycan = iupac_extended_to_condensed(glycan)
-  elif any([p in glycan for p in ['RES', '=']]) or not isinstance(glycan, str):
+  elif 'RES' in glycan:
+    glycan = glycoct_to_iupac(glycan)
+  elif any([p in glycan for p in ['=']]) or not isinstance(glycan, str):
     check_nomenclature(glycan)
     return
   # Canonicalize usage of monosaccharides and linkages
