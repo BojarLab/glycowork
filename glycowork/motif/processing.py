@@ -386,10 +386,10 @@ def glycoct_to_iupac(glycoct):
   """
   # Dictionaries to hold the mapping of residues and linkages
   residue_dic = {}
-  iupac_parts = {}
+  iupac_parts = defaultdict(list)
   degrees = defaultdict(lambda:1)
   mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc'}
-  sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'S'}
+  sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP'}
 
   # Split the input by lines and iterate over them
   for line in glycoct.split('\n'):
@@ -404,15 +404,15 @@ def glycoct_to_iupac(glycoct):
         res_type = parts[1].split('-')[1] + parts[1].split('-')[0]
         residue_dic[res_id] = multireplace(res_type, mono_replace)
       elif parts[0][-1] == 's':
-        res_id = int(parts[0][:-1])-1
+        res_id = max(residue_dic.keys())
         res_type = multireplace(parts[1], sub_replace)
         residue_dic[res_id] = residue_dic[res_id][:-1] + res_type + residue_dic[res_id][-1]
       else:
         parts = re.findall(r'(\d+)[do]\((\d+)\+(\d+)\)(\d+)', line)[0]
         parent_id, child_id = int(parts[0]), int(parts[3])
         link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
-        if parent_id not in iupac_parts:
-          iupac_parts[parent_id] = []
+        if link_type.startswith('99'):
+          residue_dic[parent_id] = re.sub(r'(\w)(?=S|P)', parts[1], residue_dic[parent_id], count = 1)
         if not link_type.startswith('99'):
           iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
           degrees[parent_id] += 1
@@ -427,7 +427,7 @@ def glycoct_to_iupac(glycoct):
       prefix = '[' if degrees[child[1]] == 1 else ''
       child_strings.append(prefix + residue_dic[child[1]] + '(' + child[0] + ')')
     prefix = ']' if degrees[parent] > 2 else ''
-    iupac = ']'.join(child_strings) + prefix + iupac
+    iupac = ''.join(child_strings) + prefix + iupac
   iupac = iupac[:-1]
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
