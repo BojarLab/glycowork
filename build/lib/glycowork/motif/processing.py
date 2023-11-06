@@ -388,8 +388,9 @@ def glycoct_to_iupac(glycoct):
   residue_dic = {}
   iupac_parts = defaultdict(list)
   degrees = defaultdict(lambda:1)
-  mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc'}
-  sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP'}
+  mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu',
+                  'dxyl': 'Xyl'}
+  sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc'}
 
   # Split the input by lines and iterate over them
   for line in glycoct.split('\n'):
@@ -408,7 +409,8 @@ def glycoct_to_iupac(glycoct):
         res_type = multireplace(parts[1], sub_replace)
         residue_dic[res_id] = residue_dic[res_id][:-1] + res_type + residue_dic[res_id][-1]
       else:
-        parts = re.findall(r'(\d+)[do]\((\d+)\+(\d+)\)(\d+)', line)[0]
+        line = line.replace('-1', '?')
+        parts = re.findall(r'(\d+)[do]\(([\d\?]+)\+(\d+)\)(\d+)', line)[0]
         parent_id, child_id = int(parts[0]), int(parts[3])
         link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
         if link_type.startswith('99'):
@@ -431,6 +433,8 @@ def glycoct_to_iupac(glycoct):
   iupac = iupac[:-1]
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
+  iupac = re.sub(r'(\?)(?=S|P)', 'O', iupac)
+  iupac = re.sub(r'([1-9\?O][SP])NAc', r'NAc\1', iupac)
   iupac = iupac.strip('[]')
   if iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
