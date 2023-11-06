@@ -36,9 +36,9 @@ nbdev_prepare
 * Docs are automatically created from the notebooks in the nbs folder.
 
 
-## Wishlist for future glycowork updates (last update: 2023-04-21)
+## Wishlist for future glycowork updates (last update: 2023-11-06)
 #### Urgent
-* add functions to convert other nomenclatures (WURCS, GlycoCT, etc.) into IUPAC-condensed
+* add function to convert WURCS into IUPAC-condensed
 * more, and more informative, error messages
 
 

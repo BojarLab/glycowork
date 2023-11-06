@@ -247,6 +247,9 @@ def expand_termini_list(motif, termini_list):
   | :-
   | Returns expanded termini_list
   """
+  if len(termini_list[0]) < 2:
+    mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
+    termini_list = [mapping[t] for t in termini_list]
   t_list = copy.deepcopy(termini_list)
   to_add = ['flexible'] * motif.count('(') if isinstance(motif, str) else ['flexible'] * ((len(motif)-1)//2)
   remainder = 0
