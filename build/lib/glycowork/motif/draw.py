@@ -1890,7 +1890,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   | highlight_termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.\n
   """
-  if any([k in draw_this for k in [';', 'RES']]):
+  if any([k in draw_this for k in [';', '-D-', 'RES']]):
     raise Exception
   bond_hack = False
   if 'Man(a1-?)' in draw_this and 'Man(a1-3)' not in draw_this and 'Man(a1-6)' not in draw_this:

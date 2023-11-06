@@ -104,7 +104,8 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   node_attributes = {i: {'labels': libr[k], 'string_labels': k} for i, k in enumerate(node_dict.values())}
   nx.set_node_attributes(g1, node_attributes)
   if termini == 'calc':
-    nx.set_node_attributes(g1, {k: 'terminal' if g1.degree[k] == 1 else 'internal' for k in g1.nodes()}, 'termini')
+    last_node = max(g1.nodes())
+    nx.set_node_attributes(g1, {k: 'terminal' if g1.degree[k] == 1 or k == last_node else 'internal' for k in g1.nodes()}, 'termini')
   elif termini == 'provided':
     nx.set_node_attributes(g1, dict(zip(g1.nodes(), termini_list)), 'termini')
   return g1
@@ -124,6 +125,8 @@ def glycan_to_nxGraph(glycan, libr = None,
   | :-
   | Returns networkx graph object of glycan
   """
+  if any([k in glycan for k in [';', '-D-', 'RES']]):
+    raise Exception
   if termini_list:
     termini_list = expand_termini_list(glycan, termini_list)
   if '{' in glycan:
@@ -153,10 +156,7 @@ def ensure_graph(glycan, libr = None, **kwargs):
   """
   if libr is None:
     libr = lib
-  if isinstance(glycan, str):
-    return glycan_to_nxGraph(glycan, libr = libr, **kwargs)
-  else:
-    return glycan
+  return glycan_to_nxGraph(glycan, libr = libr, **kwargs) if isinstance(glycan, str) else glycan
 
 
 def categorical_node_match_wildcard(attr, default, wildcard_list, narrow_wildcard_list, attr2, default2):

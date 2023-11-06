@@ -408,16 +408,16 @@ def glycoct_to_iupac(glycoct):
         res_id = max(residue_dic.keys())
         res_type = multireplace(parts[1], sub_replace)
         residue_dic[res_id] = residue_dic[res_id][:-1] + res_type + residue_dic[res_id][-1]
-      else:
-        line = line.replace('-1', '?')
-        parts = re.findall(r'(\d+)[do]\(([\d\?]+)\+(\d+)\)(\d+)', line)[0]
-        parent_id, child_id = int(parts[0]), int(parts[3])
-        link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
-        if link_type.startswith('99'):
-          residue_dic[parent_id] = re.sub(r'(\w)(?=S|P)', parts[1], residue_dic[parent_id], count = 1)
-        if not link_type.startswith('99'):
-          iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
-          degrees[parent_id] += 1
+    else:
+      line = line.replace('-1', '?')
+      parts = re.findall(r'(\d+)[do]\(([\d\?]+)\+(\d+)\)(\d+)', line)[0]
+      parent_id, child_id = int(parts[0]), int(parts[3])
+      link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
+      if link_type.startswith('99'):
+        residue_dic[parent_id] = re.sub(r'(\w)(?=S|P)', parts[1], residue_dic[parent_id], count = 1)
+      if not link_type.startswith('99'):
+        iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
+        degrees[parent_id] += 1
   # Build the IUPAC-condensed string
   for r in residue_dic:
     if r not in degrees:
@@ -436,7 +436,7 @@ def glycoct_to_iupac(glycoct):
   iupac = re.sub(r'(\?)(?=S|P)', 'O', iupac)
   iupac = re.sub(r'([1-9\?O][SP])NAc', r'NAc\1', iupac)
   iupac = iupac.strip('[]')
-  if iupac.index(']') < iupac.index('['):
+  if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
   return iupac
 
@@ -564,7 +564,7 @@ def rescue_glycans(func):
       return func(*args, **kwargs)
     except Exception as e:
       # If an error occurs, attempt to rescue the glycan sequences
-      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else arg for arg in args]
+      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and isinstance(arg[0], str) else arg for arg in args]
       # After rescuing, attempt to run the function again
       return func(*rescued_args, **kwargs)
   return wrapper
