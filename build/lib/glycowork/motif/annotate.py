@@ -137,6 +137,7 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
   return df
 
 
+@rescue_glycans
 def annotate_dataset(glycans, motifs = None,
                      feature_set = ['known'], wildcard_list = [],
                      termini_list = [], condense = False):
@@ -153,6 +154,8 @@ def annotate_dataset(glycans, motifs = None,
   | :-                      
   | Returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
   """
+  if any([k in glycans[0] for k in [';', '-D-', 'RES']]):
+    raise Exception
   if motifs is None:
     motifs = motif_list
   libr = get_lib(glycans + motifs.motif.values.tolist() + list(linkages))
@@ -282,7 +285,6 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False, just_motifs
     libr = lib
   if up_to:
     wga_letter = pd.DataFrame([{i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(glycans) if i not in linkages} for g in glycans])
-    #wga_letter = pd.DataFrame([{i: g.count(i) if i in g else 0 for i in get_lib(glycans) if i not in linkages} for g in glycans])
   regex = re.compile(r"\(([ab])(\d)-(\d)\)")
   shadow_glycans = [regex.sub(r"(\1\2-?)", g) for g in glycans]
   libr = expand_lib(libr, shadow_glycans)
