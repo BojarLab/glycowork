@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
-from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, linkages, Hex, HexNAc, dHex, Sia, HexA, Pen
+from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, find_nth_reverse, linkages, Hex, HexNAc, dHex, Sia, HexA, Pen
 rng = np.random.default_rng(42)
 
 
@@ -475,6 +475,9 @@ def wurcs_to_iupac(wurcs):
   connectivity = parts[-2].split('-')
   connectivity = {chr(97 + i): int(num) for i, num in enumerate(connectivity)}
   degrees = {c: ''.join(topology).count(c) for c in connectivity}
+  inverted_connectivity = {}
+  for key, value in connectivity.items():
+    inverted_connectivity.setdefault(value, []).append(key)
   iupac_parts = []
   for link in topology:
     source, target = link.split('-')
@@ -486,8 +489,9 @@ def wurcs_to_iupac(wurcs):
   iupac_parts = sorted(iupac_parts, key=lambda x: x[2])
   iupac = iupac_parts[0][0]
   for parts, tgt, src in iupac_parts[1:]:
+    nth = [k.index(src) for k in inverted_connectivity.values() if src in k][0] + 1
     overlap = parts.split(')')[-1]
-    idx = iupac.index(overlap)
+    idx = find_nth_reverse(iupac, overlap, nth)
     prefix = '[' if degrees[tgt] == 1 else ''
     suffix = ']' if (degrees[src] > 2) or (degrees[src] == 2 and src =='a') else ''
     iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]

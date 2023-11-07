@@ -54,6 +54,26 @@ def find_nth(haystack, needle, n):
   return start
 
 
+def find_nth_reverse(string, substring, n):
+  # Reverse the string and the substring
+  reversed_string = string[::-1]
+  reversed_substring = substring[::-1]
+  # Initialize the start index for the search
+  start_index = 0
+  # Loop to find the n-th occurrence
+  for i in range(n):
+    # Find the next occurrence index
+    idx = reversed_string.find(reversed_substring, start_index)
+    # If the substring is not found, return -1
+    if idx == -1:
+      return -1
+    # Update the start index
+    start_index = idx + len(substring)
+  # Calculate and return the original starting index
+  original_start_index = len(string) - start_index
+  return original_start_index
+
+
 def reindex(df_new, df_old, out_col, ind_col, inp_col):
   """Returns columns values in order of new dataframe rows\n
   | Arguments:
