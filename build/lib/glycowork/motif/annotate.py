@@ -151,7 +151,7 @@ def annotate_dataset(glycans, motifs = None,
   | :-                      
   | Returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
   """
-  if any([k in glycans[0] for k in [';', '-D-', 'RES']]):
+  if any([k in glycans[0] for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if motifs is None:
     motifs = motif_list
@@ -277,7 +277,7 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False, just_motifs
   | :-                 
   | Returns dataframe with k-saccharide counts (columns) for each glycan (rows)
   """
-  if any([k in glycans[0] for k in [';', '-D-', 'RES']]):
+  if any([k in glycans[0] for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if libr is None:
     libr = lib

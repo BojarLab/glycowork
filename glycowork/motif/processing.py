@@ -452,6 +452,51 @@ def glycoct_to_iupac(glycoct):
   return iupac
 
 
+def wurcs_to_iupac(wurcs):
+  """converts a glycan from WURCS into a barebones IUPAC-condensed version that is cleaned up by canonicalize_iupac\n
+  | Arguments:
+  | :-
+  | wurcs (string): glycan sequence in WURCS format\n
+  | Returns:
+  | :-
+  | Returns glycan as a string in a barebones IUPAC-condensed form
+  """
+  wurcs = wurcs[wurcs.index('/')+1:]
+  monosaccharide_mapping = {
+    'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAcb',
+    'a1122h-1b_1-5': 'Manb',
+    'a1122h-1a_1-5': 'Mana'
+    }
+  parts = wurcs.split('/')
+  topology = parts[-1].split('_')
+  monosaccharides = '/'.join(parts[1:-2]).strip('[]').split('][')
+  connectivity = parts[-2].split('-')
+  connectivity = {chr(97 + i): int(num) for i, num in enumerate(connectivity)}
+  degrees = {c: ''.join(topology).count(c) for c in connectivity}
+  iupac_parts = []
+  for link in topology:
+    source, target = link.split('-')
+    source_index, source_carbon = connectivity[source[:-1]], source[-1]
+    target_index, target_carbon = connectivity[target[0]], target[1:]
+    source_mono = monosaccharide_mapping[monosaccharides[int(source_index)-1]]
+    target_mono = monosaccharide_mapping[monosaccharides[int(target_index)-1]]
+    iupac_parts.append(f"{target_mono}({target_carbon}-{source_carbon}){source_mono}")
+  iupac = iupac_parts[0]
+  i = 2
+  for parts in iupac_parts[1:]:
+    overlap = parts.split(')')[-1]
+    idx = iupac.index(overlap)
+    prefix = '[' if degrees[chr(97 + i)] == 1 else ''
+    suffix = ']' if degrees[chr(97 + i - 2)] > 2 else ''
+    iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
+    i += 1
+  iupac = iupac[:-1]
+  pattern = re.compile(r'([ab\?])\(')
+  iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
+  iupac = iupac.strip('[]')
+  return iupac
+
+
 def check_nomenclature(glycan):
   """checks whether the proposed glycan has the correct nomenclature for glycowork\n
   | Arguments:
@@ -463,9 +508,6 @@ def check_nomenclature(glycan):
   """
   if not isinstance(glycan, str):
     print("You need to format your glycan sequences as strings.")
-    return
-  if '=' in glycan:
-    print("Could it be that you're using WURCS? Please convert to a glycowork-supported nomenclature.")
     return
   return
 
@@ -479,14 +521,16 @@ def canonicalize_iupac(glycan):
   | :-
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
-  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT
+  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
   elif '-D-' in glycan:
     glycan = iupac_extended_to_condensed(glycan)
   elif 'RES' in glycan:
     glycan = glycoct_to_iupac(glycan)
-  elif any([p in glycan for p in ['=']]) or not isinstance(glycan, str):
+  elif '=' in glycan:
+    glycan = wurcs_to_iupac(glycan)
+  elif not isinstance(glycan, str):
     check_nomenclature(glycan)
     return
   # Canonicalize usage of monosaccharides and linkages
