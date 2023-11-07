@@ -96,7 +96,7 @@ def get_possible_monosaccharides(wildcard, libr = None):
   wildcard_dict = {'Hex': Hex, 'HexNAc': HexNAc, 'dHex': dHex, 'Sia': Sia, 'HexA': HexA, 'Pen': Pen,
                    'Monosaccharide': set().union(*[Hex, HexNAc, dHex, Sia, HexA, Pen])}
   possible_monosaccharides = wildcard_dict.get(wildcard, [])
-  return possible_monosaccharides if libr is None else list(possible_monosaccharides & libr.keys())
+  return list(possible_monosaccharides) if libr is None else list(possible_monosaccharides & libr.keys())
 
 
 def bracket_removal(glycan_part):
