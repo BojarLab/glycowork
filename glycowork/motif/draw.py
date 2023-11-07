@@ -1333,12 +1333,12 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
 
   g1_node_labels = nx.get_node_attributes(g1, 'string_labels')
   relevant_labels = set(list(g1_node_labels.values()) + list(nx.get_node_attributes(g2, 'string_labels').values()))
-  narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k)] for k in relevant_labels if '?' in k}
+  narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k, libr = libr)] for k in relevant_labels if '?' in k}
   narrow_wildcard_list2 = {libr[k]:[libr[j] for j in get_possible_monosaccharides(k, libr = libr)] for k in relevant_labels if k in ['Hex', 'HexNAc', 'dHex', 'Sia']}
   narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
 
   if termini_list or narrow_wildcard_list:
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, [], narrow_wildcard_list, 'termini', 'flexible'))
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
   else:
     graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
   graph_pair.subgraph_is_isomorphic()
@@ -1349,7 +1349,7 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
   while list(graph_pair.mapping.keys()) != []:
     g_tmp.remove_nodes_from(graph_pair.mapping.keys())
     if termini_list or narrow_wildcard_list:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, [], narrow_wildcard_list, 'termini', 'flexible'))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
     else:
       graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
     graph_pair.subgraph_is_isomorphic()

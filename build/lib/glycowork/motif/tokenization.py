@@ -343,12 +343,9 @@ def condense_composition_matching(matched_composition, libr = None):
   """
   if libr is None:
     libr = lib
-  # Define uncertainty wildcards
-  wildcards = ['?1-?', '?2-?', 'a2-?', 'a1-?', 'b1-?']
-  n = len(matched_composition)
   # Establish glycan equality given the wildcards
   match_matrix = pd.DataFrame(
-    [[compare_glycans(k, j, libr = libr, wildcards_ptm = True, wildcard_list = wildcards)
+    [[compare_glycans(k, j, libr = libr, wildcards_ptm = True)
       for j in matched_composition] for k in matched_composition],
     columns = matched_composition
     )
@@ -359,7 +356,7 @@ def condense_composition_matching(matched_composition, libr = None):
   # For each cluster, get the most well-defined glycan and return it
   for k in range(num_clusters):
     cluster_glycans = np.array(matched_composition)[np.where(clustering.labels_ == k)[0]].tolist()
-    county = np.array([sum(j.count(w) for w in wildcards) for j in cluster_glycans])
+    county = np.array([j.count("?") for j in cluster_glycans])
     idx = np.where(county == county.min())[0]
     if len(idx) == 1:
       sum_glycans.append(cluster_glycans[idx[0]])

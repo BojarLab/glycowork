@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
-from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, linkages, Hex, HexNAc, dHex, Sia
+from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, linkages, Hex, HexNAc, dHex, Sia, HexA, Pen
 rng = np.random.default_rng(42)
 
 
@@ -67,32 +67,36 @@ def in_lib(glycan, libr):
   return set(glycan).issubset(libr.keys())
 
 
-def get_possible_linkages(wildcard, linkage_list = linkages):
+def get_possible_linkages(wildcard, linkage_list = linkages, libr = None):
   """Retrieves all linkages that match a given wildcard pattern from a list of linkages\n
   | Arguments:
   | :-
   | wildcard (string): The pattern to match, where '?' can be used as a wildcard for any single character.
-  | linkage_list (list): List of linkages as strings to search within; default:linkages\n   
+  | linkage_list (list): List of linkages as strings to search within; default:linkages
+  | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns a list of linkages that match the wildcard pattern.
   """
-  pattern = wildcard.replace("?", "[a-zA-Z0-9]")
-  return [linkage for linkage in linkage_list if re.fullmatch(pattern, linkage)]
+  pattern = wildcard.replace("?", "[a-zA-Z0-9\?]")
+  possible_linkages = [linkage for linkage in linkage_list if re.fullmatch(pattern, linkage)]
+  return possible_linkages if libr is None else list(possible_linkages & libr.keys())
 
 
 def get_possible_monosaccharides(wildcard, libr = None):
   """Retrieves all matching common monosaccharides of a type, given the type\n
   | Arguments:
   | :-
-  | wildcard (string): Monosaccharide type, from "HexNAc", "Hex", "dHex", "Sia"
+  | wildcard (string): Monosaccharide type, from "HexNAc", "Hex", "dHex", "Sia", "HexA", "Pen"
   | libr (dict): dictionary of form glycoletter:index\n
   | Returns:
   | :-
   | Returns a list of specified monosaccharides of that type
   """
-  out = Hex if wildcard == 'Hex' else HexNAc if wildcard == 'HexNAc' else dHex if wildcard == 'dHex' else Sia if wildcard == 'Sia' else []
-  return out if libr is None else list(out & libr.keys())
+  wildcard_dict = {'Hex': Hex, 'HexNAc': HexNAc, 'dHex': dHex, 'Sia': Sia, 'HexA': HexA, 'Pen': Pen,
+                   'Monosaccharide': set().union(*[Hex, HexNAc, dHex, Sia, HexA, Pen])}
+  possible_monosaccharides = wildcard_dict.get(wildcard, [])
+  return possible_monosaccharides if libr is None else list(possible_monosaccharides & libr.keys())
 
 
 def bracket_removal(glycan_part):

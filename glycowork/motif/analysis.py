@@ -23,7 +23,7 @@ from glycowork.motif.graph import subgraph_isomorphism
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      thresh = 1.645, sorting = True, feature_set = ['exhaustive'],
-                     wildcard_list = [], multiple_samples = False, motifs = None):
+                     multiple_samples = False, motifs = None):
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
     | :-
@@ -33,7 +33,6 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | thresh (float): threshold value to separate positive/negative; default is 1.645 for Z-scores
     | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-    | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
     | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
     | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None\n
     | Returns:
@@ -47,7 +46,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 motifs = motifs, feature_set = feature_set,
-                                wildcard_list = wildcard_list, condense = True)
+                                condense = True)
     # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
         df.set_index(glycan_col_name, inplace = True)
@@ -136,15 +135,13 @@ def clean_up_heatmap(df):
 
 
 def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
-                 wildcard_list = [], datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'target',
-                 **kwargs):
+                 datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'target', **kwargs):
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
   | Arguments:
   | :-
   | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans
   | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'exhaustive'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
-  | wildcard_list (list): list of wildcard names (such as '?1-?', 'Hex', 'HexNAc', 'Sia')
   | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
   | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
   | filepath (string): absolute path including full filename allows for saving the plot
@@ -159,8 +156,7 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   df.fillna(0, inplace = True)
   if mode == 'motif':
       # Count glycan motifs and remove rare motifs from the result
-      df_motif = annotate_dataset(df.columns.tolist(), feature_set = feature_set,
-                                  wildcard_list = wildcard_list, condense = True)
+      df_motif = annotate_dataset(df.columns.tolist(), feature_set = feature_set, condense = True)
       df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
       # Distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
       if datatype == 'response':
