@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 import os
 import ast
 import pickle
@@ -54,7 +55,7 @@ def find_nth(haystack, needle, n):
   return start
 
 
-def find_nth_reverse(string, substring, n):
+def find_nth_reverse(string, substring, n, ignore_branches = False):
   # Reverse the string and the substring
   reversed_string = string[::-1]
   reversed_substring = substring[::-1]
@@ -71,6 +72,13 @@ def find_nth_reverse(string, substring, n):
     start_index = idx + len(substring)
   # Calculate and return the original starting index
   original_start_index = len(string) - start_index
+  if ignore_branches:
+    # Find branches preceding the match
+    branch_pattern = r'\][^\[\]]*\['
+    preceding_branches = re.findall(branch_pattern, string[:original_start_index][::-1])
+    if preceding_branches:
+      # Calculate the index including the last full branch
+      original_start_index -= len(preceding_branches[0])
   return original_start_index
 
 

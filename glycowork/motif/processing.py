@@ -467,7 +467,9 @@ def wurcs_to_iupac(wurcs):
     'a1122h-1b_1-5': 'Manb', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Aca',
     'a1122h-1a_1-5': 'Mana', 'a2112h-1b_1-5': 'Galb', 'Aad21122h-2a_2-6_5*NCCO/3=O': 'Neu5Gca',
     'a2112h-1b_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOSb', 'a2112h-1b_1-5_2*NCC/3=O': 'GalNAcb',
-    'a1221m-1a_1-5': 'Fuca', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb'
+    'a1221m-1a_1-5': 'Fuca', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a212h-1b_1-5': 'Xylb',
+    'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAcb', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc?', 'a2112h-1x_1-5': 'Gal?',
+    'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -488,19 +490,27 @@ def wurcs_to_iupac(wurcs):
     iupac_parts.append((f"{target_mono}({target_carbon}-{source_carbon}){source_mono}", target[0], source[0]))
   iupac_parts = sorted(iupac_parts, key=lambda x: x[2])
   iupac = iupac_parts[0][0]
+  prefix = '[' if degrees[iupac_parts[0][1]] == 1 else ''
+  suffix = ']' if prefix == '[' and iupac_parts[0][2] == 'a' else ''
+  iupac = prefix + iupac[:iupac.index(')')+1] + suffix + iupac[iupac.index(')')+1:]
   for parts, tgt, src in iupac_parts[1:]:
     nth = [k.index(src) for k in inverted_connectivity.values() if src in k][0] + 1
     overlap = parts.split(')')[-1]
-    idx = find_nth_reverse(iupac, overlap, nth)
+    idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = True)
     prefix = '[' if degrees[tgt] == 1 else ''
-    suffix = ']' if (degrees[src] > 2) or (degrees[src] == 2 and src =='a') else ''
+    suffix = ']' if (degrees[src] > 2) or (degrees[tgt] == 1 and src =='a')  else ''
     iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
   iupac = iupac[:-1]
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
   iupac = iupac.strip('[]')
+  # Define the pattern to find two ][ separated by a string with exactly one (
+  pattern = r'(\]\[[^\[\]]*\([^\[\]]*)\]\['
+  iupac = re.sub(pattern, r'\1[', iupac)
   if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
+  if '[' in iupac and ']' not in iupac[iupac.index('['):]:
+    iupac = iupac[:iupac.rfind(')')+1] + ']' + iupac[iupac.rfind(')')+1:]
   return iupac
 
 
