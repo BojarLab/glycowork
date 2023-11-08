@@ -427,19 +427,18 @@ def glycoct_to_iupac(glycoct):
     if r not in degrees:
       degrees[r] = 1
   iupac = residue_dic[1]
-  last_idx_interior = False
+  inverted_residue_dic = {}
+  for key, value in residue_dic.items():
+    inverted_residue_dic.setdefault(value, []).append(key)
   for parent, children in iupac_parts.items():
     child_strings = []
     for child in children:
       prefix = '[' if degrees[child[1]] == 1 else ''
-      child_strings.append(prefix + residue_dic[child[1]] + '(' + child[0] + ')')
-    prefix = ']' if degrees[parent] > 2 else ''
-    idx = iupac.index(residue_dic[parent])
-    if ''.join(child_strings) in iupac[:idx] or last_idx_interior:
-      idx = find_nth(iupac, residue_dic[parent], 2)
-      last_idx_interior = True
-    else:
-      last_idx_interior = False
+      suffix = ']' if children.index(child) > 0 else ''
+      child_strings.append(prefix + residue_dic[child[1]] + '(' + child[0] + ')' + suffix)
+    prefix = ']' if degrees[parent] > 2 and len(children) == 1 else ''
+    nth = [k.index(parent) for k in inverted_residue_dic.values() if parent in k][0] + 1
+    idx = find_nth_reverse(iupac, residue_dic[parent], nth, ignore_branches = True)
     iupac = iupac[:idx] + ''.join(child_strings) + prefix + iupac[idx:]
   iupac = iupac[:-1]
   pattern = re.compile(r'([ab\?])\(')
