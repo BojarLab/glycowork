@@ -379,6 +379,43 @@ def iupac_extended_to_condensed(iupac_extended):
   return adjusted_string[:adjusted_string.rindex('(')]
 
 
+def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
+  # Dictionaries to hold the mapping of residues and linkages
+  residue_dic = {}
+  iupac_parts = defaultdict(list)
+  degrees = defaultdict(lambda:1)
+  for line in glycoct.split('\n'):
+    if line.startswith('RES'):
+      residues = True
+    if line.startswith('LIN'):
+      residues = False
+    elif residues:
+      parts = line.split(':')
+      if parts[0][-1] == 'b':
+        res_id = int(parts[0][:-1])
+        res_type = parts[1].split('-')[1] + parts[1].split('-')[0].replace('x', '?')
+        residue_dic[res_id] = multireplace(res_type, mono_replace)
+      elif parts[0][-1] == 's':
+        res_id = max(residue_dic.keys())
+        res_type = multireplace(parts[1], sub_replace)
+        residue_dic[res_id] = residue_dic[res_id][:-1] + res_type + residue_dic[res_id][-1]
+    elif len(line) > 0:
+      line = line.replace('-1', '?')
+      line = re.sub("\d\|\d", "?", line)
+      parts = re.findall(r'(\d+)[do]\(([\d\?]+)\+(\d+)\)(\d+)', line)[0]
+      parent_id, child_id = int(parts[0]), int(parts[3])
+      link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
+      if link_type.startswith('99'):
+        residue_dic[parent_id] = re.sub(r'(\w)(?=S|P)', parts[1], residue_dic[parent_id], count = 1)
+      if not link_type.startswith('99'):
+        iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
+        degrees[parent_id] += 1
+  for r in residue_dic:
+    if r not in degrees:
+      degrees[r] = 1
+  return residue_dic, iupac_parts, degrees
+
+
 def glycoct_to_iupac(glycoct):
   """converts a glycan from GlycoCT into a barebones IUPAC-condensed version that is cleaned up by canonicalize_iupac\n
   | Arguments:
@@ -388,44 +425,24 @@ def glycoct_to_iupac(glycoct):
   | :-
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
-  # Dictionaries to hold the mapping of residues and linkages
-  residue_dic = {}
-  iupac_parts = defaultdict(list)
-  degrees = defaultdict(lambda:1)
+  floating_bits = []
+  floating_part = ''
   mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu',
-                  'dxyl': 'Xyl'}
+                  'dxyl': 'Xyl', 'dara': 'Ara', 'HEX': 'Hex'}
   sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc'}
-
+  if len(glycoct.split("UND")) > 1:
+      floating_bits = glycoct.split("UND")[2:]
+      floating_bits = ["RES" + f.split('RES')[1] for f in floating_bits]
+      glycoct = glycoct.split("UND")[0]
   # Split the input by lines and iterate over them
-  for line in glycoct.split('\n'):
-    if line.startswith('RES'):
-      residues = True
-    elif line.startswith('LIN'):
-      residues = False
-    elif residues:
-      parts = line.split(':')
-      if parts[0][-1] == 'b':
-        res_id = int(parts[0][:-1])
-        res_type = parts[1].split('-')[1] + parts[1].split('-')[0]
-        residue_dic[res_id] = multireplace(res_type, mono_replace)
-      elif parts[0][-1] == 's':
-        res_id = max(residue_dic.keys())
-        res_type = multireplace(parts[1], sub_replace)
-        residue_dic[res_id] = residue_dic[res_id][:-1] + res_type + residue_dic[res_id][-1]
-    else:
-      line = line.replace('-1', '?')
-      parts = re.findall(r'(\d+)[do]\(([\d\?]+)\+(\d+)\)(\d+)', line)[0]
-      parent_id, child_id = int(parts[0]), int(parts[3])
-      link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
-      if link_type.startswith('99'):
-        residue_dic[parent_id] = re.sub(r'(\w)(?=S|P)', parts[1], residue_dic[parent_id], count = 1)
-      if not link_type.startswith('99'):
-        iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
-        degrees[parent_id] += 1
+  residue_dic, iupac_parts, degrees = glycoct_to_iupac_int(glycoct, mono_replace, sub_replace)
+  if floating_bits:
+    for f in floating_bits:
+      residue_dic_f, iupac_parts_f, degrees_f = glycoct_to_iupac_int(f, mono_replace, sub_replace)
+      if len(residue_dic_f) == 1:
+        expr = "(1-?)}"
+        floating_part += f"{'{'}{list(residue_dic_f.values())[0]}{expr}"
   # Build the IUPAC-condensed string
-  for r in residue_dic:
-    if r not in degrees:
-      degrees[r] = 1
   iupac = residue_dic[1]
   inverted_residue_dic = {}
   for key, value in residue_dic.items():
@@ -440,14 +457,15 @@ def glycoct_to_iupac(glycoct):
     nth = [k.index(parent) for k in inverted_residue_dic.values() if parent in k][0] + 1
     idx = find_nth_reverse(iupac, residue_dic[parent], nth, ignore_branches = True)
     iupac = iupac[:idx] + ''.join(child_strings) + prefix + iupac[idx:]
-  iupac = iupac[:-1]
+  iupac = iupac.strip('[]')
+  iupac = floating_part + iupac[:-1]
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
   iupac = re.sub(r'(\?)(?=S|P)', 'O', iupac)
   iupac = re.sub(r'([1-9\?O][SP])NAc', r'NAc\1', iupac)
-  iupac = iupac.strip('[]')
   if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
+  iupac = iupac.replace('[[', '[').replace(']]', ']')
   return iupac
 
 
@@ -520,8 +538,11 @@ def check_nomenclature(glycan):
   | glycan (string): glycan in IUPAC-condensed format
   | Returns:
   | :-
-  | If salvageable, returns the re-formatted glycan; if not, prints the reason why it's not convertable
+  | Prints the reason why it's not convertable
   """
+  if '@' in glycan:
+    print("Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around.")
+    return
   if not isinstance(glycan, str):
     print("You need to format your glycan sequences as strings.")
     return
@@ -529,10 +550,10 @@ def check_nomenclature(glycan):
 
 
 def canonicalize_iupac(glycan):
-  """converts a glycan from any IUPAC flavor into the exact IUPAC-condensed version that is optimized for glycowork\n
+  """converts a glycan from IUPAC-extended, LinearCode, GlycoCT, and WURCS into the exact IUPAC-condensed version that is optimized for glycowork\n
   | Arguments:
   | :-
-  | glycan (string): glycan sequence in IUPAC; some post-biosynthetic modifications could still be an issue\n
+  | glycan (string): glycan sequence; some rare post-biosynthetic modifications could still be an issue\n
   | Returns:
   | :-
   | Returns glycan as a string in canonicalized IUPAC-condensed
@@ -546,7 +567,7 @@ def canonicalize_iupac(glycan):
     glycan = glycoct_to_iupac(glycan)
   elif '=' in glycan:
     glycan = wurcs_to_iupac(glycan)
-  elif not isinstance(glycan, str):
+  elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
     check_nomenclature(glycan)
     return
   # Canonicalize usage of monosaccharides and linkages
