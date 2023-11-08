@@ -135,7 +135,7 @@ def find_isomorphs(glycan):
     elif not bool(re.search(r'\[[^\]]+\[', glycan[find_nth(glycan, ']', 2):])) and bool(re.search(r'\[[^\]]+\[', glycan[:find_nth(glycan, '[', 3)])):
       out_list.add(re.sub(r'^(.*?)\[(.*?)(\])((?:[^\[\]]|\[[^\[\]]*\])*)\]', r'\2\3\4[\1]', glycan, 1))
   # Double branch swap
-  temp = {re.sub(r'\[([^[\]]+)\]\[([^[\]]+)\]', k, r'[\2][\1]') for k in out_list if '][' in k}
+  temp = {re.sub(r'\[([^[\]]+)\]\[([^[\]]+)\]', r'[\2][\1]', k) for k in out_list if '][' in k}
   out_list.update(temp)
   temp = set()
   # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
@@ -387,7 +387,7 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
   for line in glycoct.split('\n'):
     if line.startswith('RES'):
       residues = True
-    if line.startswith('LIN'):
+    elif line.startswith('LIN'):
       residues = False
     elif residues:
       parts = line.split(':')
@@ -449,6 +449,8 @@ def glycoct_to_iupac(glycoct):
     inverted_residue_dic.setdefault(value, []).append(key)
   for parent, children in iupac_parts.items():
     child_strings = []
+    children_degree = [degrees[c[1]] for c in children]
+    children = [x for _, x in sorted(zip(children_degree, children), reverse = True)]
     for child in children:
       prefix = '[' if degrees[child[1]] == 1 else ''
       suffix = ']' if children.index(child) > 0 else ''
