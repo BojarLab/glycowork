@@ -385,20 +385,33 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
   iupac_parts = defaultdict(list)
   degrees = defaultdict(lambda:1)
   for line in glycoct.split('\n'):
+    if len(line) < 1:
+      continue
     if line.startswith('RES'):
       residues = True
     elif line.startswith('LIN'):
       residues = False
     elif residues:
       parts = line.split(':')
+      #monosaccharide
       if parts[0][-1] == 'b':
         res_id = int(parts[0][:-1])
         res_type = parts[1].split('-')[1] + parts[1].split('-')[0].replace('x', '?')
         residue_dic[res_id] = multireplace(res_type, mono_replace)
+      #modification
       elif parts[0][-1] == 's':
-        res_id = max(residue_dic.keys())
+        tgt = '\n' + str(int(parts[0][:-1])-1)+':'
+        pattern = re.escape(tgt)
+        matched = re.search(pattern, glycoct)
+        if matched:
+          start_index = matched.end()
+          numerical_part = re.search(r'\d+', glycoct[start_index:])
+          res_id = int(numerical_part.group())
+        else:
+          res_id = max(residue_dic.keys())
         res_type = multireplace(parts[1], sub_replace)
         residue_dic[res_id] = residue_dic[res_id][:-1] + res_type + residue_dic[res_id][-1]
+    #linkage
     elif len(line) > 0:
       line = line.replace('-1', '?')
       line = re.sub("\d\|\d", "?", line)
@@ -414,6 +427,26 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
     if r not in degrees:
       degrees[r] = 1
   return residue_dic, iupac_parts, degrees
+
+
+def glycoct_build_iupac(iupac_parts, residue_dic, degrees):
+  iupac = residue_dic[min(residue_dic.keys())]
+  inverted_residue_dic = {}
+  for key, value in residue_dic.items():
+    inverted_residue_dic.setdefault(value, []).append(key)
+  for parent, children in iupac_parts.items():
+    child_strings = []
+    children_degree = [degrees[c[1]] for c in children]
+    children = [x for _, x in sorted(zip(children_degree, children), reverse = True)]
+    for child in children:
+      prefix = '[' if degrees[child[1]] == 1 else ''
+      suffix = ']' if children.index(child) > 0 else ''
+      child_strings.append(prefix + residue_dic[child[1]] + '(' + child[0] + ')' + suffix)
+    prefix = ']' if degrees[parent] > 2 and len(children) == 1 else ''
+    nth = [k.index(parent) for k in inverted_residue_dic.values() if parent in k][0] + 1
+    idx = find_nth_reverse(iupac, residue_dic[parent], nth, ignore_branches = True)
+    iupac = iupac[:idx] + ''.join(child_strings) + prefix + iupac[idx:]
+  return iupac.strip('[]')
 
 
 def glycoct_to_iupac(glycoct):
@@ -439,27 +472,14 @@ def glycoct_to_iupac(glycoct):
   if floating_bits:
     for f in floating_bits:
       residue_dic_f, iupac_parts_f, degrees_f = glycoct_to_iupac_int(f, mono_replace, sub_replace)
+      expr = "(1-?)}"
       if len(residue_dic_f) == 1:
-        expr = "(1-?)}"
         floating_part += f"{'{'}{list(residue_dic_f.values())[0]}{expr}"
+      else:
+        part = glycoct_build_iupac(iupac_parts_f, residue_dic_f, degrees_f)
+        floating_part += f"{'{'}{part}{expr}"
   # Build the IUPAC-condensed string
-  iupac = residue_dic[1]
-  inverted_residue_dic = {}
-  for key, value in residue_dic.items():
-    inverted_residue_dic.setdefault(value, []).append(key)
-  for parent, children in iupac_parts.items():
-    child_strings = []
-    children_degree = [degrees[c[1]] for c in children]
-    children = [x for _, x in sorted(zip(children_degree, children), reverse = True)]
-    for child in children:
-      prefix = '[' if degrees[child[1]] == 1 else ''
-      suffix = ']' if children.index(child) > 0 else ''
-      child_strings.append(prefix + residue_dic[child[1]] + '(' + child[0] + ')' + suffix)
-    prefix = ']' if degrees[parent] > 2 and len(children) == 1 else ''
-    nth = [k.index(parent) for k in inverted_residue_dic.values() if parent in k][0] + 1
-    idx = find_nth_reverse(iupac, residue_dic[parent], nth, ignore_branches = True)
-    iupac = iupac[:idx] + ''.join(child_strings) + prefix + iupac[idx:]
-  iupac = iupac.strip('[]')
+  iupac = glycoct_build_iupac(iupac_parts, residue_dic, degrees)
   iupac = floating_part + iupac[:-1]
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
