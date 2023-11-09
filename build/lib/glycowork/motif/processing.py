@@ -501,6 +501,9 @@ def wurcs_to_iupac(wurcs):
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
   wurcs = wurcs[wurcs.index('/')+1:]
+  pattern = r'\b[a-z]\d(?:\|[a-z]\d)+\}'
+  wurcs = re.sub(pattern, lambda m: f'?{m.group()[1]}', wurcs)
+  floating_part = ''
   monosaccharide_mapping = {
     'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAcb', 'a2112h-1a_1-5_2*NCC/3=O': 'GalNAca',
     'a1122h-1b_1-5': 'Manb', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Aca',
@@ -508,7 +511,8 @@ def wurcs_to_iupac(wurcs):
     'a2112h-1b_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOSb', 'a2112h-1b_1-5_2*NCC/3=O': 'GalNAcb',
     'a1221m-1a_1-5': 'Fuca', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a212h-1b_1-5': 'Xylb',
     'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAcb', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc?', 'a2112h-1x_1-5': 'Gal?',
-    'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala'
+    'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala',
+    'a1122h-1x_1-5': 'Man?'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -523,8 +527,11 @@ def wurcs_to_iupac(wurcs):
   for link in topology:
     source, target = link.split('-')
     source_index, source_carbon = connectivity[source[:-1]], source[-1]
-    target_index, target_carbon = connectivity[target[0]], target[1:]
     source_mono = monosaccharide_mapping[monosaccharides[int(source_index)-1]]
+    if target[0] == '?':
+      floating_part += f"{'{'}{source_mono}({source_carbon}-{target[1:]}){'}'}"
+      continue
+    target_index, target_carbon = connectivity[target[0]], target[1:]
     target_mono = monosaccharide_mapping[monosaccharides[int(target_index)-1]]
     iupac_parts.append((f"{target_mono}({target_carbon}-{source_carbon}){source_mono}", target[0], source[0]))
   iupac_parts = sorted(iupac_parts, key=lambda x: x[2])
@@ -540,9 +547,10 @@ def wurcs_to_iupac(wurcs):
     suffix = ']' if (degrees[src] > 2) or (degrees[tgt] == 1 and src =='a')  else ''
     iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
   iupac = iupac[:-1]
+  iupac = iupac.strip('[]')
+  iupac = floating_part + iupac
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
-  iupac = iupac.strip('[]')
   # Define the pattern to find two ][ separated by a string with exactly one (
   pattern = r'(\]\[[^\[\]]*\([^\[\]]*)\]\['
   iupac = re.sub(pattern, r'\1[', iupac)
@@ -594,7 +602,7 @@ def canonicalize_iupac(glycan):
     return
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
-                 '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaNAc': 'GalNAc', '(9Ac)': '9Ac',
+                 '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')', '→': '-',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu'}
@@ -668,6 +676,10 @@ def canonicalize_iupac(glycan):
   # Floating bits
   if '+' in glycan:
     glycan = '{'+glycan.replace('+', '}')
+  if '{' in glycan:
+    floating_bits = re.findall(r'\{.*?\}', glycan)
+    sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))
+    glycan = sorted_floating_bits + glycan[glycan.rfind('}')+1:]
   return glycan
 
 
