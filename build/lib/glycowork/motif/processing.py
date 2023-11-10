@@ -172,7 +172,6 @@ def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species
 def find_matching_brackets_indices(s):
   stack = []
   matching_indices = []
-
   for i, c in enumerate(s):
     if c == '[':
       stack.append(i)
@@ -180,7 +179,6 @@ def find_matching_brackets_indices(s):
       if stack:
         opening_index = stack.pop()
         matching_indices.append((opening_index, i))
-
   if stack:
     print("Unmatched opening brackets:", [s[i] for i in stack])
     return None
@@ -662,8 +660,8 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'([1-9]?[SP])([A-Z][^\(^\[]+)', r'\2\1', glycan)
   if bool(re.search(r'\-ol[0-9]?[SP]', glycan)):
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
-  if bool(re.search(r'(\[|\)|\]|\^)[1-9]?[SP][A-Za-z]+', glycan)):
-    glycan = re.sub(r'([1-9]?[SP])([A-Za-z]+)', r'\2\1', glycan)
+  if bool(re.search(r'(\[|\)|\]|\^)[1-9]?[SP](?!en)[A-Za-z]+', glycan)):
+    glycan = re.sub(r'([1-9]?[SP])(?!en)([A-Za-z]+)', r'\2\1', glycan)
   if bool(re.search(r'[1-9]?[SP]-[A-Za-z]+', glycan)):
     glycan = re.sub(r'([1-9]?[SP])-([A-Za-z]+)', r'\2\1', glycan)
   post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
