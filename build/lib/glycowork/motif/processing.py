@@ -499,8 +499,12 @@ def wurcs_to_iupac(wurcs):
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
   wurcs = wurcs[wurcs.index('/')+1:]
-  pattern = r'\b[a-z]\d(?:\|[a-z]\d)+\}'
-  wurcs = re.sub(pattern, lambda m: f'?{m.group()[1]}', wurcs)
+  pattern = r'\b([a-z])\d(?:\|\1\d)+\}?|\b[a-z](\d)(?:\|[a-z]\2)+\}?'
+  additional_pattern = r'\b([a-z])\?(?:\|\w\?)+\}?'
+  def replacement(match):
+    return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
+  wurcs = re.sub(pattern, replacement, wurcs)
+  wurcs = re.sub(additional_pattern, '?', wurcs)
   floating_part = ''
   monosaccharide_mapping = {
     'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAcb', 'a2112h-1a_1-5_2*NCC/3=O': 'GalNAca',
@@ -510,7 +514,8 @@ def wurcs_to_iupac(wurcs):
     'a1221m-1a_1-5': 'Fuca', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a212h-1b_1-5': 'Xylb',
     'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAcb', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc?', 'a2112h-1x_1-5': 'Gal?',
     'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala',
-    'a1122h-1x_1-5': 'Man?'
+    'a1122h-1x_1-5': 'Man?', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gca', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Aca',
+    'a1221m-1x_1-5': 'Fuca'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -544,6 +549,7 @@ def wurcs_to_iupac(wurcs):
     prefix = '[' if degrees[tgt] == 1 else ''
     suffix = ']' if (degrees[src] > 2) or (degrees[tgt] == 1 and src =='a')  else ''
     iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
+    iupac = iupac.replace('?-1', '1-?')
   iupac = iupac[:-1]
   iupac = iupac.strip('[]')
   iupac = floating_part + iupac
