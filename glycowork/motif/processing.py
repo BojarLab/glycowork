@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import copy
 import re
 from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
@@ -485,7 +486,7 @@ def glycoct_to_iupac(glycoct):
   iupac = re.sub(r'([1-9\?O][SP])NAc', r'NAc\1', iupac)
   if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
-  iupac = iupac.replace('[[', '[').replace(']]', ']')
+  iupac = iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
   return iupac
 
 
@@ -515,7 +516,7 @@ def wurcs_to_iupac(wurcs):
     'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAcb', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc?', 'a2112h-1x_1-5': 'Gal?',
     'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala',
     'a1122h-1x_1-5': 'Man?', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gca', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Aca',
-    'a1221m-1x_1-5': 'Fuca'
+    'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -536,8 +537,12 @@ def wurcs_to_iupac(wurcs):
       continue
     target_index, target_carbon = connectivity[target[0]], target[1:]
     target_mono = monosaccharide_mapping[monosaccharides[int(target_index)-1]]
-    iupac_parts.append((f"{target_mono}({target_carbon}-{source_carbon}){source_mono}", target[0], source[0]))
-  iupac_parts = sorted(iupac_parts, key=lambda x: x[2])
+    if '?' in target:
+      iupac_parts.append((f"{source_mono}({source_carbon}-{target_carbon}){target_mono}", source[0], target[0]))
+    else:
+      iupac_parts.append((f"{target_mono}({target_carbon}-{source_carbon}){source_mono}", target[0], source[0]))
+  degrees_for_brackets = copy.deepcopy(degrees)
+  iupac_parts = sorted(iupac_parts, key = lambda x: x[2])
   iupac = iupac_parts[0][0]
   prefix = '[' if degrees[iupac_parts[0][1]] == 1 else ''
   suffix = ']' if prefix == '[' and iupac_parts[0][2] == 'a' else ''
@@ -547,9 +552,9 @@ def wurcs_to_iupac(wurcs):
     overlap = parts.split(')')[-1]
     idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = True)
     prefix = '[' if degrees[tgt] == 1 else ''
-    suffix = ']' if (degrees[src] > 2) or (degrees[tgt] == 1 and src =='a')  else ''
+    suffix = ']' if (degrees[src] > 2 and degrees_for_brackets[src] < degrees[src]) or (degrees[src] > 3 and degrees[tgt] == 1) or (degrees[tgt] == 1 and src =='a')  else ''
     iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
-    iupac = iupac.replace('?-1', '1-?')
+    degrees_for_brackets[src] -= 1
   iupac = iupac[:-1]
   iupac = iupac.strip('[]')
   iupac = floating_part + iupac
