@@ -73,12 +73,19 @@ def find_nth_reverse(string, substring, n, ignore_branches = False):
   # Calculate and return the original starting index
   original_start_index = len(string) - start_index
   if ignore_branches:
-    # Find branches preceding the match
-    branch_pattern = r'\][^\[\]]*\['
-    preceding_branches = re.findall(branch_pattern, string[:original_start_index][::-1])
-    if preceding_branches:
-      # Calculate the index including the last full branch
-      original_start_index -= len(preceding_branches[0])
+    # Check if there is an immediate branch preceding the match
+    branch_end_idx = original_start_index - 1
+    if branch_end_idx > 0 and string[branch_end_idx] == ']' and string[branch_end_idx - 1] != '[':
+      # Find the start of the immediate branch
+      bracket_count = 1
+      for i in range(branch_end_idx - 1, -1, -1):
+        if string[i] == ']':
+          bracket_count += 1
+        elif string[i] == '[':
+          bracket_count -= 1
+        if bracket_count == 0:
+          original_start_index = i
+          break
   return original_start_index
 
 

@@ -516,7 +516,7 @@ def wurcs_to_iupac(wurcs):
     'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAcb', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc?', 'a2112h-1x_1-5': 'Gal?',
     'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala',
     'a1122h-1x_1-5': 'Man?', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gca', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Aca',
-    'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?'
+    'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?', 'a2122A-1b_1-5': 'GlcAb'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -525,8 +525,6 @@ def wurcs_to_iupac(wurcs):
   connectivity = {chr(97 + i): int(num) for i, num in enumerate(connectivity)}
   degrees = {c: ''.join(topology).count(c) for c in connectivity}
   inverted_connectivity = {}
-  for key, value in connectivity.items():
-    inverted_connectivity.setdefault(value, []).append(key)
   iupac_parts = []
   for link in topology:
     source, target = link.split('-')
@@ -544,29 +542,45 @@ def wurcs_to_iupac(wurcs):
   degrees_for_brackets = copy.deepcopy(degrees)
   iupac_parts = sorted(iupac_parts, key = lambda x: x[2])
   iupac = iupac_parts[0][0]
+  inverted_connectivity.setdefault(connectivity[iupac_parts[0][2]], []).append(iupac_parts[0][2])
+  inverted_connectivity.setdefault(connectivity[iupac_parts[0][1]], []).append(iupac_parts[0][1])
   prefix = '[' if degrees[iupac_parts[0][1]] == 1 else ''
   suffix = ']' if prefix == '[' and iupac_parts[0][2] == 'a' else ''
   iupac = prefix + iupac[:iupac.index(')')+1] + suffix + iupac[iupac.index(')')+1:]
   for parts, tgt, src in iupac_parts[1:]:
     nth = [k.index(src) for k in inverted_connectivity.values() if src in k][0] + 1
     overlap = parts.split(')')[-1]
-    idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = True)
+    ignore = True if degrees[src] > 2 or (degrees[src] == 2 and src == 'a') else False
+    idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)
     prefix = '[' if degrees[tgt] == 1 else ''
     suffix = ']' if (degrees[src] > 2 and degrees_for_brackets[src] < degrees[src]) or (degrees[src] > 3 and degrees[tgt] == 1) or (degrees[tgt] == 1 and src =='a')  else ''
     iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
     degrees_for_brackets[src] -= 1
+    insertion_idx = iupac[:idx].count(parts.split(')')[0][:-4])
+    if insertion_idx > 0:
+      inverted_connectivity.setdefault(connectivity[tgt], []).insert(-insertion_idx, tgt)
+    else:
+      inverted_connectivity.setdefault(connectivity[tgt], []).append(tgt)
   iupac = iupac[:-1]
   iupac = iupac.strip('[]')
   iupac = floating_part + iupac
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
   # Define the pattern to find two ][ separated by a string with exactly one (
-  pattern = r'(\]\[[^\[\]]*\([^\[\]]*)\]\['
+  pattern = r'(\]\[[^\[\]]*\([^][]*\)\][^\[\]]*)\]\['
   iupac = re.sub(pattern, r'\1[', iupac)
   if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
   if '[' in iupac and ']' not in iupac[iupac.index('['):]:
     iupac = iupac[:iupac.rfind(')')+1] + ']' + iupac[iupac.rfind(')')+1:]
+  def remove_first_unmatched_opening_bracket(s):
+    balance = 0
+    for i, char in enumerate(s):
+      balance += (char == '[') - (char == ']')
+      if balance < 0:
+        return s[:i] + s[i + 1:]
+    return s
+  iupac = remove_first_unmatched_opening_bracket(iupac)
   return iupac
 
 
@@ -676,7 +690,8 @@ def canonicalize_iupac(glycan):
   if bool(re.search(r'[1-9]?[SP]-[A-Za-z]+', glycan)):
     glycan = re.sub(r'([1-9]?[SP])-([A-Za-z]+)', r'\2\1', glycan)
   post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
-                  'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS'}
+                  'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?1': 'Kdn(a2',
+                  'Kdn(a1': 'Kdn(a2'}
   glycan = multireplace(glycan, post_process)
   # Canonicalize branch ordering
   if '[' in glycan:
