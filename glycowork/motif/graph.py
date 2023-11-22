@@ -60,10 +60,8 @@ def glycan_to_graph(glycan):
         continue
       # Adjacent residues separated by branches in the string
       res = bracket_removal(glycan_part)
-      if len(res) <= adjustment2:
-        if evaluate_adjacency(res, adjustment):
-          adj_matrix[k, j] = 1
-          continue
+      if len(res) <= adjustment2 and evaluate_adjacency(res, adjustment):
+        adj_matrix[k, j] = 1
   return mask_dic, adj_matrix
 
 
@@ -83,7 +81,7 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   if libr is None:
     libr = lib
   # This allows to make glycan graphs of motifs ending in a linkage
-  cache = glycan[-1] == ')'
+  cache = glycan.endswith(')')
   if cache:
     glycan += 'Hex'
   # Map glycan string to node labels and adjacency matrix
@@ -97,9 +95,10 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   else:
     g1.add_node(0)
   # Remove the helper monosaccharide if used
-  if cache and glycan[-1] == 'x':
-    del node_dict[len(g1.nodes) - 1]
-    g1.remove_node(len(g1.nodes) - 1)
+  if cache and glycan.endswith('x'):
+    node_to_remove = len(g1) - 1
+    del node_dict[node_to_remove]
+    g1.remove_node(node_to_remove)
   # Add node labels
   node_attributes = {i: {'labels': libr[k], 'string_labels': k} for i, k in enumerate(node_dict.values())}
   nx.set_node_attributes(g1, node_attributes)
@@ -125,7 +124,7 @@ def glycan_to_nxGraph(glycan, libr = None,
   | :-
   | Returns networkx graph object of glycan
   """
-  if any([k in glycan for k in [';', '-D-', 'RES']]):
+  if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if termini_list:
     termini_list = expand_termini_list(glycan, termini_list)

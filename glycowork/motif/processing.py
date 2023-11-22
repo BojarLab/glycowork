@@ -507,6 +507,7 @@ def wurcs_to_iupac(wurcs):
   wurcs = re.sub(pattern, replacement, wurcs)
   wurcs = re.sub(additional_pattern, '?', wurcs)
   floating_part = ''
+  floating_parts = []
   monosaccharide_mapping = {
     'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAcb', 'a2112h-1a_1-5_2*NCC/3=O': 'GalNAca',
     'a1122h-1b_1-5': 'Manb', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Aca',
@@ -532,6 +533,7 @@ def wurcs_to_iupac(wurcs):
     source_mono = monosaccharide_mapping[monosaccharides[int(source_index)-1]]
     if target[0] == '?':
       floating_part += f"{'{'}{source_mono}({source_carbon}-{target[1:]}){'}'}"
+      floating_parts.append(source[0])
       continue
     target_index, target_carbon = connectivity[target[0]], target[1:]
     target_mono = monosaccharide_mapping[monosaccharides[int(target_index)-1]]
@@ -547,8 +549,12 @@ def wurcs_to_iupac(wurcs):
   prefix = '[' if degrees[iupac_parts[0][1]] == 1 else ''
   suffix = ']' if prefix == '[' and iupac_parts[0][2] == 'a' else ''
   iupac = prefix + iupac[:iupac.index(')')+1] + suffix + iupac[iupac.index(')')+1:]
+  iupac = floating_part + iupac
+  for fp in floating_parts:
+    inverted_connectivity.setdefault(connectivity[fp], []).append(fp)
   for parts, tgt, src in iupac_parts[1:]:
-    nth = [k.index(src) for k in inverted_connectivity.values() if src in k][0] + 1
+    indices = [k.index(src) for k in inverted_connectivity.values() if src in k]
+    nth = (indices[0] if indices else 0) + 1
     overlap = parts.split(')')[-1]
     ignore = True if degrees[src] > 2 or (degrees[src] == 2 and src == 'a') else False
     idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)
@@ -563,7 +569,7 @@ def wurcs_to_iupac(wurcs):
       inverted_connectivity.setdefault(connectivity[tgt], []).append(tgt)
   iupac = iupac[:-1]
   iupac = iupac.strip('[]')
-  iupac = floating_part + iupac
+  iupac = iupac.replace('}[', '}').replace('{[', '{')
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
   # Define the pattern to find two ][ separated by a string with exactly one (
@@ -628,7 +634,7 @@ def canonicalize_iupac(glycan):
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')', '→': '-',
-                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu'}
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1'}
   glycan = multireplace(glycan, replace_dic)
   # Trim linkers
   if '-' in glycan:
