@@ -517,7 +517,8 @@ def wurcs_to_iupac(wurcs):
     'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAcb', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc?', 'a2112h-1x_1-5': 'Gal?',
     'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala',
     'a1122h-1x_1-5': 'Man?', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gca', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Aca',
-    'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?', 'a2122A-1b_1-5': 'GlcAb'
+    'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?', 'a2122A-1b_1-5': 'GlcAb',
+    'a2112h-1b_1-5_3*OC': 'Gal3Meb'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -546,6 +547,7 @@ def wurcs_to_iupac(wurcs):
   iupac = iupac_parts[0][0]
   inverted_connectivity.setdefault(connectivity[iupac_parts[0][2]], []).append(iupac_parts[0][2])
   inverted_connectivity.setdefault(connectivity[iupac_parts[0][1]], []).append(iupac_parts[0][1])
+  degrees_for_brackets[iupac_parts[0][2]] -= 1
   prefix = '[' if degrees[iupac_parts[0][1]] == 1 else ''
   suffix = ']' if prefix == '[' and iupac_parts[0][2] == 'a' else ''
   iupac = prefix + iupac[:iupac.index(')')+1] + suffix + iupac[iupac.index(')')+1:]
@@ -559,7 +561,7 @@ def wurcs_to_iupac(wurcs):
     ignore = True if degrees[src] > 2 or (degrees[src] == 2 and src == 'a') else False
     idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)
     prefix = '[' if degrees[tgt] == 1 else ''
-    suffix = ']' if (degrees[src] > 2 and degrees_for_brackets[src] < degrees[src]) or (degrees[src] > 3 and degrees[tgt] == 1) or (degrees[tgt] == 1 and src =='a')  else ''
+    suffix = ']' if (degrees[src] > 2 and degrees_for_brackets[src] < degrees[src]) or (degrees[src] == 2 and degrees_for_brackets[src] < degrees[src] and src == 'a') or (degrees[src] > 3 and degrees[tgt] == 1) or (degrees[tgt] == 1 and src =='a')  else ''
     iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
     degrees_for_brackets[src] -= 1
     insertion_idx = iupac[:idx].count(parts.split(')')[0][:-4])
