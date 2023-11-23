@@ -3,7 +3,7 @@ import pandas as pd
 import re
 from collections import defaultdict
 
-from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap, replace_every_second
+from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, expand_lib, rescue_glycans
 
@@ -304,6 +304,8 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False, just_motifs
       if col_sums[col1] == col_sums[col2] and col_subs[col1] == col2:
         drop_columns.append(col2)
   out_matrix = out_matrix.drop(drop_columns, axis = 1)
+  if size > 3:
+    out_matrix.columns = [remove_unmatched_brackets(g) for g in out_matrix.columns]
   if up_to:
     combined_df= pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
     if just_motifs:

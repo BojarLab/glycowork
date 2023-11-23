@@ -89,6 +89,37 @@ def find_nth_reverse(string, substring, n, ignore_branches = False):
   return original_start_index
 
 
+def remove_unmatched_brackets(s):
+  """Removes all unmatched brackets from the string s.\n
+  | Arguments:
+  | :-
+  | s (string): glycan string in IUPAC-condensed\n
+  | Returns:
+  | :-
+  | Returns glycan without unmatched brackets
+   """
+  while True:
+    # Keep track of the indexes of the brackets
+    stack = []
+    unmatched_open = set()
+    unmatched_close = set()
+    for i, char in enumerate(s):
+      if char == '[':
+        stack.append(i)
+      elif char == ']':
+        if stack:
+          stack.pop()
+        else:
+          unmatched_close.add(i)
+    unmatched_open.update(stack)
+    # If there are no unmatched brackets, break the loop
+    if not unmatched_open and not unmatched_close:
+      break
+    # Build a new string without the unmatched brackets
+    s = ''.join([char for i, char in enumerate(s) if i not in unmatched_open and i not in unmatched_close])
+  return s
+
+
 def reindex(df_new, df_old, out_col, ind_col, inp_col):
   """Returns columns values in order of new dataframe rows\n
   | Arguments:
