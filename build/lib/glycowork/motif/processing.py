@@ -298,9 +298,9 @@ def canonicalize_composition(comp):
   comp = multireplace(comp, replace_dic)
   n = len(comp)
   # Dictionary to map letter codes to full names
-  code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc',
-                  'Hex': 'Hex', 'HexNAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex',
-                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc',
+  code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc', 'NeuGc': 'Neu5Gc',
+                  'Hex': 'Hex', 'HexNAc': 'HexNAc', 'HexAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex', 'deHex': 'dHex',
+                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc', 'HexNc': 'HexNAc',
                   'Su': 'S', 's': 'S', 'p': 'P', 'Pent': 'Pen'}
   while i < n:
     # Code initialization
@@ -460,7 +460,7 @@ def glycoct_to_iupac(glycoct):
   floating_bits = []
   floating_part = ''
   mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu',
-                  'dxyl': 'Xyl', 'dara': 'Ara', 'HEX': 'Hex'}
+                  'dxyl': 'Xyl', 'dara': 'Ara', 'HEX': 'Hex', 'lman': 'L-Man'}
   sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc'}
   if len(glycoct.split("UND")) > 1:
       floating_bits = glycoct.split("UND")[2:]
@@ -518,7 +518,8 @@ def wurcs_to_iupac(wurcs):
     'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala',
     'a1122h-1x_1-5': 'Man?', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gca', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Aca',
     'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?', 'a2122A-1b_1-5': 'GlcAb',
-    'a2112h-1b_1-5_3*OC': 'Gal3Meb'
+    'a2112h-1b_1-5_3*OC': 'Gal3Meb', 'a1122h-1a_1-5_2*NCC/3=O': 'ManNAca', 'a2122h-1x_1-5': 'Glc?',
+    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc?', 'axxxxh-1x_1-5': 'Hex?', 'a2112h-1b_1-4': 'Galfb'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
