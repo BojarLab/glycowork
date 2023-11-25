@@ -396,7 +396,11 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
       if parts[0][-1] == 'b':
         res_id = int(parts[0][:-1])
         res_type = parts[1].split('-')[1] + parts[1].split('-')[0].replace('x', '?')
-        residue_dic[res_id] = multireplace(res_type, mono_replace)
+        suffix = 'f' if parts[2].startswith('4') else 'A' if (len(parts) == 4 and parts[3].startswith('a')) else ''
+        clean_mono = multireplace(res_type, mono_replace)
+        if suffix:
+          clean_mono = clean_mono[:-1] + suffix + clean_mono[-1]
+        residue_dic[res_id] = clean_mono
       #modification
       elif parts[0][-1] == 's':
         tgt = '\n' + str(int(parts[0][:-1])-1)+':'
@@ -530,6 +534,8 @@ def wurcs_to_iupac(wurcs):
   inverted_connectivity = {}
   iupac_parts = []
   for link in topology:
+    if '-' not in link:
+      return monosaccharide_mapping[monosaccharides[0]]
     source, target = link.split('-')
     source_index, source_carbon = connectivity[source[:-1]], source[-1]
     source_mono = monosaccharide_mapping[monosaccharides[int(source_index)-1]]
@@ -578,7 +584,7 @@ def wurcs_to_iupac(wurcs):
   # Define the pattern to find two ][ separated by a string with exactly one (
   pattern = r'(\]\[[^\[\]]*\([^][]*\)\][^\[\]]*)\]\['
   iupac = re.sub(pattern, r'\1[', iupac)
-  if ']' in iupac and iupac.index(']') < iupac.index('['):
+  if ']' in iupac and '[' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
   if '[' in iupac and ']' not in iupac[iupac.index('['):]:
     iupac = iupac[:iupac.rfind(')')+1] + ']' + iupac[iupac.rfind(')')+1:]
