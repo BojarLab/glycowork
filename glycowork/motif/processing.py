@@ -433,18 +433,26 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
 
 
 def glycoct_build_iupac(iupac_parts, residue_dic, degrees):
-  iupac = residue_dic[min(residue_dic.keys())]
+  start = min(residue_dic.keys())
+  iupac = residue_dic[start]
   inverted_residue_dic = {}
-  for key, value in residue_dic.items():
-    inverted_residue_dic.setdefault(value, []).append(key)
+  inverted_residue_dic.setdefault(residue_dic[start], []).append(start)
   for parent, children in iupac_parts.items():
     child_strings = []
     children_degree = [degrees[c[1]] for c in children]
     children = [x for _, x in sorted(zip(children_degree, children), reverse = True)]
+    i = 0
+    last_child = 0
     for child in children:
       prefix = '[' if degrees[child[1]] == 1 else ''
       suffix = ']' if children.index(child) > 0 else ''
       child_strings.append(prefix + residue_dic[child[1]] + '(' + child[0] + ')' + suffix)
+      if i > 0 and residue_dic[child[1]] == residue_dic[last_child]:
+        inverted_residue_dic.setdefault(residue_dic[child[1]], []).insert(-1, child[1])
+      else:
+        inverted_residue_dic.setdefault(residue_dic[child[1]], []).append(child[1])
+      i += 1
+      last_child = child[1]
     prefix = ']' if degrees[parent] > 2 and len(children) == 1 else ''
     nth = [k.index(parent) for k in inverted_residue_dic.values() if parent in k][0] + 1
     idx = find_nth_reverse(iupac, residue_dic[parent], nth, ignore_branches = True)
@@ -523,7 +531,8 @@ def wurcs_to_iupac(wurcs):
     'a1122h-1x_1-5': 'Man?', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gca', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Aca',
     'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?', 'a2122A-1b_1-5': 'GlcAb',
     'a2112h-1b_1-5_3*OC': 'Gal3Meb', 'a1122h-1a_1-5_2*NCC/3=O': 'ManNAca', 'a2122h-1x_1-5': 'Glc?',
-    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc?', 'axxxxh-1x_1-5': 'Hex?', 'a2112h-1b_1-4': 'Galfb'
+    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc?', 'axxxxh-1x_1-5': 'Hex?', 'a2112h-1b_1-4': 'Galfb',
+    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc?'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -540,7 +549,7 @@ def wurcs_to_iupac(wurcs):
     source_index, source_carbon = connectivity[source[:-1]], source[-1]
     source_mono = monosaccharide_mapping[monosaccharides[int(source_index)-1]]
     if target[0] == '?':
-      floating_part += f"{'{'}{source_mono}({source_carbon}-{target[1:]}){'}'}"
+      floating_part += f"{'{'}{source_mono}(1-{target[1:]}){'}'}"
       floating_parts.append(source[0])
       continue
     target_index, target_carbon = connectivity[target[0]], target[1:]
