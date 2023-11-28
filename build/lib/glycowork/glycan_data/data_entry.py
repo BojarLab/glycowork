@@ -3,7 +3,7 @@ from glycowork.motif.processing import check_nomenclature
 from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
 
 
-def check_presence(glycan, df, colname = 'target', libr = None,
+def check_presence(glycan, df, colname = 'glycan', libr = None,
                    name = None, rank = 'Species', fast = False):
   """checks whether glycan (of that species) is already present in dataset\n
   | Arguments:

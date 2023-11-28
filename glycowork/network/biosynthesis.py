@@ -1103,7 +1103,7 @@ def trace_diamonds(network, species_list, network_dic, libr = None, threshold = 
   paths = [choose_path(d, species_list, network_dic, libr = libr,
                        threshold = threshold, nb_intermediates = nb_intermediates) for d in matchings_list]
   df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
-  df_out.columns = ['target', 'probability']
+  df_out.columns = ['glycan', 'probability']
   return df_out
 
 
@@ -1166,7 +1166,7 @@ def evoprune_network(network, network_dic = None, species_list = None, libr = No
 
 
 def highlight_network(network, highlight, motif = None,
-                      abundance_df = None, glycan_col = 'target',
+                      abundance_df = None, glycan_col = 'glycan',
                       intensity_col = 'rel_intensity', conservation_df = None,
                       network_dic = None, species = None, libr = None):
   """highlights a certain attribute in the network that will be visible when using plot_network\n

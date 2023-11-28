@@ -30,7 +30,7 @@ def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
 
 
 def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False, wildcard_list = None,
-                     wildcard_name = None, r = 0.1, col = 'target'):
+                     wildcard_name = None, r = 0.1, col = 'glycan'):
   """stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes\n
   | Arguments:
   | :-
@@ -41,7 +41,7 @@ def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False,
   | wildcard_list (list): list which glycoletters a wildcard encompasses
   | wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature
   | r (float): rate of replacement, default:0.1 or 10%
-  | col (string): column name for glycan sequences; default:target\n
+  | col (string): column name for glycan sequences; default:glycan\n
   | Returns:
   | :-
   | Returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)
@@ -64,7 +64,7 @@ def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False,
   # For each class in rank, get unique set of glycans
   for i in range(len(class_list)):
     t = df[df[rank] == class_list[i]]
-    t = t.drop_duplicates('target', keep = 'first')
+    t = t.drop_duplicates('glycan', keep = 'first')
     temp.append(t)
   df = pd.concat(temp).reset_index(drop = True)
 
@@ -117,13 +117,13 @@ def general_split(glycans, labels, test_size = 0.2):
                           test_size = test_size, random_state = 42)
 
 
-def prepare_multilabel(df, rank = 'Species', glycan_col = 'target'):
+def prepare_multilabel(df, rank = 'Species', glycan_col = 'glycan'):
   """converts a one row per glycan-species/tissue/disease association file to a format of one glycan - all associations\n
   | Arguments:
   | :-
   | df (dataframe): dataframe where each row is one glycan - species association
   | rank (string): which label column should be used; default:Species
-  | glycan_col (string): column name of where the glycan sequences are stored; default:target\n
+  | glycan_col (string): column name of where the glycan sequences are stored; default:glycan\n
   | Returns:
   | :-
   | (1) list of unique glycans in df

@@ -1,4 +1,3 @@
-import ast
 import numpy as np
 
 from glycowork.glycan_data.loader import lib, motif_list, df_glycan
@@ -24,17 +23,11 @@ def get_insight(glycan, libr = None, motifs = None):
         idx = df_glycan.glycan.values.tolist().index(glycan)
     else:     
         idx = np.where([compare_glycans(glycan, k, libr = libr) for k in df_glycan.glycan.values.tolist()])[0][0]
-    species = ast.literal_eval(df_glycan.Species.values.tolist()[idx])
+    species = df_glycan.Species.values.tolist()[idx]
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(sorted(species)))
-    else:
-        try:
-            species = df_glycan.predicted_taxonomy.values.tolist()[idx]
-            print("\nNo definitive information in our database but this glycan is predicted to occur here: " + str(species))
-        except:
-            pass
     if len(species) > 5:
-        phyla = sorted(set(eval(df_glycan.Phylum.values.tolist()[idx])))
+        phyla = sorted(set(df_glycan.Phylum.values.tolist()[idx]))
         print("\nPuh, that's quite a lot! Here are the phyla of those species: " + str(phyla))
     found_motifs = annotate_glycan(glycan, motifs = motifs, libr = libr)
     found_motifs = found_motifs.loc[:, (found_motifs != 0).any(axis = 0)].columns.values.tolist()
@@ -42,18 +35,13 @@ def get_insight(glycan, libr = None, motifs = None):
         print("\nThis glycan contains the following motifs: " + str(found_motifs))
     if isinstance(df_glycan.glytoucan_id.values.tolist()[idx], str):
         print("\nThis is the GlyTouCan ID for this glycan: " + str(df_glycan.glytoucan_id.values.tolist()[idx]))
-    if isinstance(df_glycan.immunogenicity.values.tolist()[idx], float):
-        if df_glycan.immunogenicity.values.tolist()[idx] > 0:
-            print("\nThis glycan is likely to be immunogenic to humans.")
-        elif df_glycan.immunogenicity.values.tolist()[idx] < 1:
-            print("\nThis glycan is likely to be non-immunogenic to humans.")
     if len(df_glycan.tissue_sample.values.tolist()[idx]) > 2:
-        tissue = ast.literal_eval(df_glycan.tissue_sample.values.tolist()[idx])
+        tissue = df_glycan.tissue_sample.values.tolist()[idx]
         print("\nThis glycan has been reported to be expressed in: " + str(sorted(tissue)))
     if len(df_glycan.disease_association.values.tolist()[idx]) > 2:
-        disease = ast.literal_eval(df_glycan.disease_association.values.tolist()[idx])
-        direction = ast.literal_eval(df_glycan.disease_direction.values.tolist()[idx])
-        disease_sample = ast.literal_eval(df_glycan.disease_sample.values.tolist()[idx])
+        disease = df_glycan.disease_association.values.tolist()[idx]
+        direction = df_glycan.disease_direction.values.tolist()[idx]
+        disease_sample = df_glycan.disease_sample.values.tolist()[idx]
         print(
             "\nThis glycan has been reported to be dysregulated in (disease, direction, sample): "
             + str([(disease[k],

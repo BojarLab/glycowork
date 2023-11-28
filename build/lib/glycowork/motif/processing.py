@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import copy
 import re
+from functools import wraps
 from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
@@ -152,12 +153,12 @@ def find_isomorphs(glycan):
   return list(out_list)
 
 
-def presence_to_matrix(df, glycan_col_name = 'target', label_col_name = 'Species'):
+def presence_to_matrix(df, glycan_col_name = 'glycan', label_col_name = 'Species'):
   """converts a dataframe such as df_species to absence/presence matrix\n
   | Arguments:
   | :-
   | df (dataframe): dataframe with glycan occurrence, rows are glycan-label pairs
-  | glycan_col_name (string): column name under which glycans are stored; default:target
+  | glycan_col_name (string): column name under which glycans are stored; default:glycan
   | label_col_name (string): column name under which labels are stored; default:Species\n
   | Returns:
   | :-
@@ -732,6 +733,7 @@ def canonicalize_iupac(glycan):
 
 
 def rescue_glycans(func):
+  @wraps(func)
   def wrapper(*args, **kwargs):
     try:
       # Try running the original function
@@ -745,6 +747,7 @@ def rescue_glycans(func):
 
 
 def rescue_compositions(func):
+  @wraps(func)
   def wrapper(*args, **kwargs):
     try:
       # Try running the original function

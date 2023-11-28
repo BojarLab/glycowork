@@ -1,14 +1,11 @@
 import pandas as pd
 import re
 import os
-import ast
 import pickle
 import itertools
 import pkg_resources
 
-io = pkg_resources.resource_stream(__name__, "v8_sugarbase.csv")
-df_glycan = pd.read_csv(io)
-io = pkg_resources.resource_stream(__name__, "v8_df_species.csv")
+io = pkg_resources.resource_stream(__name__, "v9_df_species.csv")
 df_species = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
 motif_list = pd.read_csv(io)
@@ -17,6 +14,8 @@ glycan_binding = pd.read_csv(io)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
 data_path = os.path.join(this_dir, 'lib_v8.pkl')
 lib = pickle.load(open(data_path, 'rb'))
+data_path = os.path.join(this_dir, 'v9_sugarbase.pkl')
+df_glycan = pickle.load(open(data_path, 'rb'))
 
 linkages = {
   '1-4', '1-6', 'a1-1', 'a1-2', 'a1-3', 'a1-4', 'a1-5', 'a1-6', 'a1-7', 'a1-8', 'a1-9', 'a1-11', 'a1-?', 'a2-1', 'a2-2', 'a2-3', 'a2-4', 'a2-5', 'a2-6', 'a2-7', 'a2-8', 'a2-9',
@@ -209,11 +208,9 @@ def build_custom_df(df, kind = 'df_species'):
   cols = kind_to_cols.get(kind, None)
   if cols is None:
     raise ValueError("Invalid value for 'kind' argument, only df_species, df_tissue, and df_disease are supported.")
-  df = df.loc[df[cols[1]].str.len() > 2, cols]
+  df = df.loc[df[cols[1]].str.len() > 0, cols]
   df.set_index('glycan', inplace = True)
-  df.index.name = 'target'
-  df = df.applymap(ast.literal_eval)
   df = df.explode(cols[1:]).reset_index()
-  df.sort_values([cols[1], 'target'], ascending = [True, True], inplace = True)
+  df.sort_values([cols[1], 'glycan'], ascending = [True, True], inplace = True)
   df.reset_index(drop = True, inplace = True)
   return df

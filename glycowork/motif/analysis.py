@@ -89,7 +89,7 @@ def get_representative_substructures(enrichment_df, libr = None):
     """
     if libr is None:
         libr = lib
-    glycans = list(set(df_species.target))
+    glycans = list(set(df_species.glycan))
     # Only consider motifs that are significantly enriched
     filtered_df = enrichment_df[enrichment_df.corr_pval < 0.05].reset_index(drop = True)
     log_pvals = -np.log10(filtered_df.pval.values)
@@ -137,7 +137,7 @@ def clean_up_heatmap(df):
 
 
 def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
-                 datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'target', **kwargs):
+                 datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan', **kwargs):
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
   | Arguments:
   | :-
@@ -147,7 +147,7 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
   | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
   | filepath (string): absolute path including full filename allows for saving the plot
-  | index_col (string): default column to convert to dataframe index; default:'target'
+  | index_col (string): default column to convert to dataframe index; default:'glycan'
   | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                      
   | Returns:
   | :-
@@ -239,7 +239,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     plt.show()
 
 
-def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_name = 'target',
+def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_name = 'glycan',
                                 rank = None, focus = None, modifications = False, filepath = '', thresh = 10):
   """for a given monosaccharide/linkage, return typical neighboring linkage/monosaccharide\n
   | Arguments:
@@ -247,7 +247,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   | sugar (string): monosaccharide or linkage
   | df (dataframe): dataframe to use for analysis; default:df_species
   | mode (string): either 'sugar' (connected monosaccharides), 'bond' (monosaccharides making a provided linkage), or 'sugarbond' (linkages that a provided monosaccharides makes); default:'sugar'
-  | glycan_col_name (string): column name under which glycans can be found; default:'target'
+  | glycan_col_name (string): column name under which glycans can be found; default:'glycan'
   | rank (string): add column name as string if you want to filter for a group
   | focus (string): add row value as string if you want to filter for a group
   | modifications (bool): set to True if you want to consider modified versions of a monosaccharide; default:False

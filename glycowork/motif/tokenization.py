@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import networkx as nx
 import re
-import ast
 import copy
 import math
 import pkg_resources
@@ -228,14 +227,14 @@ def stemify_glycan(glycan, stem_lib = None, libr = None):
 
 
 def stemify_dataset(df, stem_lib = None, libr = None,
-                    glycan_col_name = 'target', rarity_filter = 1):
+                    glycan_col_name = 'glycan', rarity_filter = 1):
   """stemifies all glycans in a dataset by removing monosaccharide modifications\n
   | Arguments:
   | :-
   | df (dataframe): dataframe with glycans in IUPAC-condensed format in column glycan_col_name
   | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
   | libr (dict): dictionary of form glycoletter:index; default:lib
-  | glycan_col_name (string): column name under which glycans are stored; default:target
+  | glycan_col_name (string): column name under which glycans are stored; default:glycan
   | rarity_filter (int): how often monosaccharide modification has to occur to not get removed; default:1\n
   | Returns:
   | :-
@@ -276,15 +275,12 @@ def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', 
   | Returns a list of matching compositions in dict form
   """
   if df_use is None:
-    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.str.contains(kingdom))]
+    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
   adduct = mass_dict['Acetate'] if mode == 'negative' else mass_dict['Na+']
   if reduced:
     mz_value -= 1.0078
   multiplier = 1 if mode == 'negative' else -1
-  if isinstance(df_use.Composition.tolist()[0], str):
-    comp_pool = [ast.literal_eval(k) for k in sorted(df_use.Composition.unique(), reverse = True) if isinstance(k, str)]
-  else:
-    comp_pool = [dict(t) for t in {tuple(d.items()) for d in df_use.Composition}]
+  comp_pool = [dict(t) for t in {tuple(d.items()) for d in df_use.Composition}]
   out = []
   cache = {}
   # Iterate over the composition pool
@@ -308,6 +304,7 @@ def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', 
   return out
 
 
+@rescue_compositions
 def match_composition_relaxed(composition, glycan_class = 'N', kingdom = 'Animalia', df_use = None, reducing_end = None):
   """Given a coarse-grained monosaccharide composition (Hex, HexNAc, etc.), it returns all corresponding glycans\n
   | Arguments:
@@ -321,7 +318,7 @@ def match_composition_relaxed(composition, glycan_class = 'N', kingdom = 'Animal
   | Returns list of glycans matching composition in IUPAC-condensed
   """
   if df_use is None:
-    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.str.contains(kingdom))]
+    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
   # Subset for glycans with the right number of monosaccharides
   comp_count = sum(composition.values())
   len_distr = [len(k) - (len(k)-1)/2 for k in min_process_glycans(df_use.glycan.values.tolist())]
@@ -365,6 +362,7 @@ def condense_composition_matching(matched_composition, libr = None):
   return sum_glycans
 
 
+@rescue_compositions
 def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = 'Animalia', abundances = None,
                                df_use = None, libr = None, verbose = False):
   """wrapper function to map compositions to structures, condense them, and match them with relative intensities\n
@@ -384,7 +382,7 @@ def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = '
   if libr is None:
     libr = lib
   if df_use is None:
-    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.str.contains(kingdom))]
+    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
   if abundances is None:
     abundances = pd.DataFrame([range(len(composition_list))]*2).T
   abundances_values = abundances.iloc[:, 1:].values.tolist()
@@ -438,12 +436,12 @@ def mz_to_structures(mz_list, glycan_class, kingdom = 'Animalia', abundances = N
   if libr is None:
     libr = lib
   if df_use is None:
-    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.str.contains(kingdom))]
+    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
   if abundances is None:
     abundances = pd.DataFrame([range(len(mz_list))]*2).T
   # Check glycan class
   if glycan_class not in {'N', 'O', 'free', 'lipid'}:
-    print("Not a valid class for mz_to_composition; currently N/O/free/lipid matching is supported. For everything else run composition_to_structures separately.")
+    print("Not a valid class for mz_to_composition; currently N/O/free/lipid matching is supported. For everything else run compositions_to_structures separately.")
   # Map each m/z value to potential compositions
   compositions = [mz_to_composition(mz, mode = mode, mass_value = mass_value, reduced = reduced, sample_prep = sample_prep,
                                     mass_tolerance = mass_tolerance, kingdom = kingdom, glycan_class = glycan_class,
@@ -451,12 +449,8 @@ def mz_to_structures(mz_list, glycan_class, kingdom = 'Animalia', abundances = N
   # Map each of these potential compositions to potential structures
   out_structures = []
   for m, comp in enumerate(compositions):
-    for k in comp:
-      structures = compositions_to_structures([k], glycan_class = glycan_class,
-                                              abundances = abundances.iloc[[m]], kingdom = kingdom, df_use = df_use, libr = libr, verbose = verbose)
-      # Do not return matches if one m/z value matches multiple compositions that *each* match multiple structures, because of error propagation
-      if not structures.empty and len(structures) == 1:
-        out_structures.append(structures[0])
+    out_structures.append(compositions_to_structures(comp, glycan_class = glycan_class,
+                                              abundances = abundances.iloc[[m]], kingdom = kingdom, df_use = df_use, libr = libr, verbose = verbose))
   if out_structures:
     return pd.concat(out_structures, axis = 0)
   else:
