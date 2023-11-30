@@ -299,10 +299,10 @@ def canonicalize_composition(comp):
   comp = multireplace(comp, replace_dic)
   n = len(comp)
   # Dictionary to map letter codes to full names
-  code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc', 'NeuGc': 'Neu5Gc',
-                  'Hex': 'Hex', 'HexNAc': 'HexNAc', 'HexAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex', 'deHex': 'dHex',
+  code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc', 'NeuGc': 'Neu5Gc', 'Gc': 'Neu5Gc',
+                  'Hex': 'Hex', 'HexNAc': 'HexNAc', 'HexAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex', 'deHex': 'dHex', 'HexA': 'HexA',
                   'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc', 'HexNc': 'HexNAc',
-                  'Su': 'S', 's': 'S', 'p': 'P', 'Pent': 'Pen'}
+                  'Su': 'S', 's': 'S', 'Sul': 'S', 'p': 'P', 'Pent': 'Pen', 'Xyl': 'Pen'}
   while i < n:
     # Code initialization
     code = ''
@@ -609,6 +609,56 @@ def wurcs_to_iupac(wurcs):
   return iupac
 
 
+def oxford_to_iupac(oxford):
+  """converts a glycan from Oxford into a barebones IUPAC-condensed version that is cleaned up by canonicalize_iupac\n
+  | Arguments:
+  | :-
+  | oxford (string): glycan sequence in Oxford format\n
+  | Returns:
+  | :-
+  | Returns glycan as a string in a barebones IUPAC-condensed form
+  """
+  iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+  mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-?)", "S": "Neu5Ac(a2-?)",
+                  "Sg": "Neu5Gc(a2-?)", "Ga": "Gal(a1-?)"}
+  if 'B' in oxford:
+    split = iupac.index(']')
+    iupac = iupac[:split+1] + "[GlcNAc(b1-4)]" + iupac[split+1:]
+  elif 'X' in oxford:
+    split = iupac.index(']')
+    iupac = iupac[:split+1] + "[Xyl(b1-2)]" + iupac[split+1:]
+  if oxford.startswith('F'):
+    split = iupac.rindex(')')
+    fuc = "[Fuc(a1-3)]" if "X" in oxford else "[Fuc(a1-6)]"
+    iupac = iupac[:split+1] + fuc + iupac[split+1:]
+  if 'M' in oxford:
+    M_count = int(oxford[oxford.index("M")+1]) - 3
+    for m in range(M_count):
+      iupac = "{Man(a1-?)}" + iupac
+    return iupac
+  branches = {"A": int(oxford[oxford.index("A")+1]) if "A" in oxford else 0,
+              "G": int(oxford[oxford.index("G")+1]) if "G" in oxford else 0,
+              "S": int(oxford[oxford.index("S")+1]) if "S" in oxford else 0}
+  built_branches = []
+  while sum(branches.values()) > 0:
+    temp = ''
+    for c in ["S", "G", "A"]:
+      if branches[c] > 0:
+        temp += mapping_dict[c]
+        branches[c] -= 1
+    if temp:
+      built_branches.append(temp)
+  i = 0
+  for b in built_branches:
+    if i == 0:
+      iupac = b + iupac
+    else:
+      split = iupac.index("[Man")
+      iupac = iupac[:split+1] + b + iupac[split+1:]
+    i += 1
+  return iupac.strip('[]')
+
+
 def check_nomenclature(glycan):
   """checks whether the proposed glycan has the correct nomenclature for glycowork\n
   | Arguments:
@@ -636,7 +686,7 @@ def canonicalize_iupac(glycan):
   | :-
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
-  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS
+  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
   elif '-D-' in glycan:
@@ -648,6 +698,8 @@ def canonicalize_iupac(glycan):
   elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
     check_nomenclature(glycan)
     return
+  elif glycan[-1].isdigit() and 'e' not in glycan:
+    glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac',
