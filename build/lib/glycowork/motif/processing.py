@@ -620,7 +620,8 @@ def oxford_to_iupac(oxford):
   """
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
   mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-?)", "S": "Neu5Ac(a2-?)",
-                  "Sg": "Neu5Gc(a2-?)", "Ga": "Gal(a1-?)"}
+                  "Sg": "Neu5Gc(a2-?)", "Ga": "Gal(a1-?)", "GalNAc": "GalNAc(?1-?)",
+                  "Lac": "Gal(b1-?)GlcNAc(b1-?)"}
   if 'B' in oxford:
     split = iupac.index(']')
     iupac = iupac[:split+1] + "[GlcNAc(b1-4)]" + iupac[split+1:]
@@ -637,8 +638,10 @@ def oxford_to_iupac(oxford):
       iupac = "{Man(a1-?)}" + iupac
     return iupac
   branches = {"A": int(oxford[oxford.index("A")+1]) if "A" in oxford else 0,
-              "G": int(oxford[oxford.index("G")+1]) if "G" in oxford else 0,
-              "S": int(oxford[oxford.index("S")+1]) if "S" in oxford else 0}
+              "G": int(oxford[oxford.index("G")+1]) if "G" in oxford and oxford[oxford.index("G")+1] != 'a' else 0,
+              "S": int(oxford[oxford.index("S")+1]) if "S" in oxford and oxford[oxford.index("S")+1] != 'g' else 0}
+  extras = {"Sg": int(oxford[oxford.index("Sg")+2]) if "Sg" in oxford else 0,
+            "Ga": int(oxford[oxford.index("Ga")+2]) if "Ga" in oxford else 0}
   built_branches = []
   while sum(branches.values()) > 0:
     temp = ''
@@ -652,10 +655,23 @@ def oxford_to_iupac(oxford):
   for b in built_branches:
     if i == 0:
       iupac = b + iupac
-    else:
+    elif i == 1:
       split = iupac.index("[Man")
       iupac = iupac[:split+1] + b + iupac[split+1:]
+    elif i == 2:
+      split = iupac.index("Man")
+      iupac = iupac[:split] + "[" + b + "]" + iupac[split:]
+    elif i == 3:
+      split = find_nth(iupac, "Man", 2)
+      iupac = iupac[:split] + "[" + b + "]" + iupac[split:]
     i += 1
+  for e,v in extras.items():
+    if v:
+      if iupac.startswith("Gal(b"):
+        iupac = mapping_dict[e] + iupac
+      elif "[Gal(b" in iupac:
+        split = iupac.index("[Gal(b")
+        iupac = iupac[:split+1] + mapping_dict[e] + iupac[split+1:]
   return iupac.strip('[]')
 
 
@@ -698,7 +714,7 @@ def canonicalize_iupac(glycan):
   elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
     check_nomenclature(glycan)
     return
-  elif glycan[-1].isdigit() and 'e' not in glycan:
+  elif glycan[-1].isdigit() and 'e' not in glycan and '-' not in glycan:
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
