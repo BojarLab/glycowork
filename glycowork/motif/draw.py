@@ -222,7 +222,7 @@ def hex(x_pos, y_pos, dim, col_dict, color = 'white'):
   | Returns:
   | :-
   | None
-  """
+  """  
   x_base = 0 - x_pos * dim
   y_base = 0 + y_pos * dim
   half_dim = 0.5 * dim
@@ -1364,6 +1364,21 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
 
   return g1
 
+
+def process_repeat(repeat):
+  """prepare input for repeat unit\n
+  | Arguments:
+  | :-
+  | repeat (string): Repeat unit in IUPAC-condensed format, terminating either in linkage connecting units or first monosaccharide of the unit\n
+  | Returns:
+  | :-
+  | processed repeat unit in GlycoDraw-ready IUPAC-condensed format\n
+  """
+  backbone = re.findall(r'.*\((?!.*\()', repeat)[0]
+  repeat_connection = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', repeat))
+  return 'blank(?1-' + repeat_connection[-1] + ')' + backbone + repeat_connection[:2] + '-?)'
+
+
 def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, draw_lib = draw_lib, extend_lib = False, termini_list = []):
   """Extract monosaccharide labels and calculate coordinates for drawing\n
   | Arguments:
@@ -1842,7 +1857,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   return data_combined
 
 
-def draw_bracket(x, y_min_max, direction = 'right', dim = 50,  highlight = 'show'):
+def draw_bracket(x, y_min_max, direction = 'right', dim = 50,  highlight = 'show', deg = 0):
   """Draw a bracket shape at the specified position and dimensions.\n
   | Arguments:
   | :-
@@ -1863,21 +1878,28 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50,  highlight = 'show
   x_common = 0 - (x * dim)
   y_min = 0 + (y_min_max[0] * dim) - 0.75 * dim
   y_max = 0 + (y_min_max[1] * dim) + 0.75 * dim
+  # rot = 'rotate(' + str(deg) + ' ' + str(0-abs(x*2)*(dim)) + ' ' + str(0-abs(y_min)*(dim)) + ')'
+  rot = 'rotate(' + str(deg) + ' ' + str(x_common) + ' ' + str(np.mean(y_min_max)) + ')'
   # Vertical
+
+  g = draw.Group(transform = rot)
   p = draw.Path(**stroke_opts)
   p.M(x_common, y_max)
   p.L(x_common, y_min)
-  d.append(p)
+  # d.append(p)
+  g.append(p)
   dir_mult = 1 if direction == 'right' else -1
   for y in [y_min, y_max]:
     p = draw.Path(**stroke_opts)
     p.M(x_common - (0.02 * dim * dir_mult), y)
     p.L(x_common + (0.25 * dim * dir_mult), y)
-    d.append(p)
+    # d.append(p)
+    g.append(p)
+  d.append(g)
 
 
 @rescue_glycans
-def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [], filepath = None):
+def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [], repeat = None, repeat_range = None, filepath = None):
   """Draws a glycan structure based on the provided input.\n
   | Arguments:
   | :-
@@ -1888,6 +1910,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   | dim (int, optional): The dimension (size) of the individual sugar units in the structure. Default: 50.
   | highlight_motif (string, optional): Glycan motif to highlight within the parent structure.
   | highlight_termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
+  | repeat (bool | int | str): If specified, indicate repeat unit by brackets (True: n units, int: # of units, str: range of units)
+  | repeat_range (list of 2 int): List of index integers for the first and last main-chain monosaccharide in repeating unit. Monosaccharides are numbered starting from 0 (invisible placeholder = 0 in case of structure terminating in a linkage) at the reducing end. 
   | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.\n
   """
   if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
@@ -1896,6 +1920,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   if 'Man(a1-?)' in draw_this and 'Man(a1-3)' not in draw_this and 'Man(a1-6)' not in draw_this:
     draw_this = 'Man(a1-6)'.join(draw_this.rsplit('Man(a1-?)', 1))
     bond_hack = True
+  if repeat and not repeat_range:
+    draw_this = process_repeat(draw_this)
   if draw_this[-1] == ')':
     draw_this += 'blank'
   if compact:
@@ -2069,6 +2095,45 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     bracket_x = max_x * (2 if not compact else 1.2) + 1
     bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
     draw_bracket(bracket_x, bracket_y, direction = 'right', dim = dim, highlight = highlight)
+
+  # add brackets around repeating unit
+  if repeat:
+
+    # process annotation
+    repeat_annot = 'n'
+    if isinstance(repeat, (str, int)):
+      if repeat!= True:
+        repeat_annot += ' = ' + str(repeat)
+    
+    # repeat range code block
+    if repeat_range:
+      bracket_open = (main_sugar_x_pos[repeat_range[1]]*2)+1 if not compact else (main_sugar_x_pos[repeat_range[1]]*1.2)+0.6
+      bracket_close = (main_sugar_x_pos[repeat_range[0]]*2)-1 if not compact else (main_sugar_x_pos[repeat_range[0]]*1.2)-0.6
+      bracket_y_open =  (main_sugar_y_pos[repeat_range[1]], main_sugar_y_pos[repeat_range[1]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2)-0.0)
+      bracket_y_close = (main_sugar_y_pos[repeat_range[0]], main_sugar_y_pos[repeat_range[0]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2)-0.0)
+      text_x = main_sugar_x_pos[repeat_range[0]]-0.5 
+      text_y = main_sugar_y_pos[0]+1.05 if not compact else (main_sugar_y_pos[0]+1.03)/0.6
+      draw_bracket(bracket_close, bracket_y_close, direction = 'left', dim = dim, highlight = highlight, deg = 0)
+      draw_bracket(bracket_open, bracket_y_open, direction = 'right', dim = dim, highlight = highlight, deg = 0)
+      add_sugar('text', text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
+
+    # repeat unit code block
+    else:
+      open_deg = calculate_degree(main_sugar_y_pos[-1], main_sugar_y_pos[-2], main_sugar_x_pos[-1], main_sugar_x_pos[-2])
+      if open_deg == 0:
+        bracket_open = np.mean([k*2 for k in main_sugar_x_pos][-2:])+0.2 if not compact else np.mean([k*1.2 for k in main_sugar_x_pos][-2:])+0.15
+        bracket_y_open = (np.mean(main_sugar_y_pos[-2:]), np.mean(main_sugar_y_pos[-2:])) if not compact else (((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)-0.0)
+        bracket_y_close = (main_sugar_y_pos[0], main_sugar_y_pos[0]) if not compact else (((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)-0.0)
+      else:
+        bracket_open = np.mean([k*2 for k in main_sugar_x_pos][-2:])+0.0 if not compact else np.mean([k*1.2 for k in main_sugar_x_pos][-2:])+0
+        bracket_y_open = (np.mean(main_sugar_y_pos[-2:]), np.mean(main_sugar_y_pos[-2:])) if not compact else (((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)+0.3, ((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)-0.3)
+        bracket_y_close = (main_sugar_y_pos[0], main_sugar_y_pos[0]) if not compact else (((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)+0.3, ((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)-0.3)
+      bracket_close = np.mean([k*2 for k in main_sugar_x_pos][:2])-0.2 if not compact else np.mean([k*1.2 for k in main_sugar_x_pos][:2])-0.15
+      text_x = bracket_close-(0.42) if not compact else bracket_close-(0.13)
+      text_y = main_sugar_y_pos[0]+1.05 if not compact else (main_sugar_y_pos[0]+1.03)/0.6
+      draw_bracket(bracket_open, bracket_y_open, direction = 'right', dim = dim, highlight = highlight, deg = open_deg)
+      draw_bracket(bracket_close, bracket_y_close, direction = 'left', dim = dim, highlight = highlight, deg = 0)
+      add_sugar('text', text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
 
   d2.append(d)
 
