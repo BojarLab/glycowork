@@ -422,8 +422,8 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
       parts = re.findall(r'(\d+)[do]\(([\d\?]+)\+(\d+)\)(\d+)', line)[0]
       parent_id, child_id = int(parts[0]), int(parts[3])
       link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
-      if link_type.startswith('99'):
-        residue_dic[parent_id] = re.sub(r'(\w)(?=S|P)', parts[1], residue_dic[parent_id], count = 1)
+      if link_type.startswith('99') and parts[1] not in ['2', '5']:
+        residue_dic[parent_id] = re.sub(r'(O)(?=S|P|Ac)', parts[1], residue_dic[parent_id], count = 1)
       if not link_type.startswith('99'):
         iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
         degrees[parent_id] += 1
@@ -450,6 +450,10 @@ def glycoct_build_iupac(iupac_parts, residue_dic, degrees):
       child_strings.append(prefix + residue_dic[child[1]] + '(' + child[0] + ')' + suffix)
       if i > 0 and residue_dic[child[1]] == residue_dic[last_child]:
         inverted_residue_dic.setdefault(residue_dic[child[1]], []).insert(-1, child[1])
+      elif (residue_dic[child[1]] in iupac[:iupac.index(residue_dic[parent])]):
+        idx = inverted_residue_dic[residue_dic[parent]].index(parent)
+        county = iupac[:find_nth(iupac, residue_dic[parent], idx)].count(residue_dic[child[1]])
+        inverted_residue_dic.setdefault(residue_dic[child[1]], []).insert(-county, child[1])
       else:
         inverted_residue_dic.setdefault(residue_dic[child[1]], []).append(child[1])
       i += 1
@@ -474,7 +478,8 @@ def glycoct_to_iupac(glycoct):
   floating_part = ''
   mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu',
                   'dxyl': 'Xyl', 'dara': 'Ara', 'HEX': 'Hex', 'lman': 'L-Man'}
-  sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc'}
+  sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc',
+                 'acetyl': 'OAc'}
   if len(glycoct.split("UND")) > 1:
       floating_bits = glycoct.split("UND")[2:]
       floating_bits = ["RES" + f.split('RES')[1] for f in floating_bits]
@@ -496,7 +501,7 @@ def glycoct_to_iupac(glycoct):
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
   iupac = re.sub(r'(\?)(?=S|P)', 'O', iupac)
-  iupac = re.sub(r'([1-9\?O][SP])NAc', r'NAc\1', iupac)
+  iupac = re.sub(r'([1-9\?O](S|P|Ac))NAc', r'NAc\1', iupac)
   if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
   iupac = iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
@@ -533,7 +538,9 @@ def wurcs_to_iupac(wurcs):
     'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?', 'a2122A-1b_1-5': 'GlcAb',
     'a2112h-1b_1-5_3*OC': 'Gal3Meb', 'a1122h-1a_1-5_2*NCC/3=O': 'ManNAca', 'a2122h-1x_1-5': 'Glc?',
     'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc?', 'axxxxh-1x_1-5': 'Hex?', 'a2112h-1b_1-4': 'Galfb',
-    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc?'
+    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc?',
+    'axxxxh-1a_1-5_2*NCC/3=O': 'HexNAca', 'Aad21122h-2a_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Aca',
+    'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4Sb'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
