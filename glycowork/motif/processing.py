@@ -448,11 +448,12 @@ def glycoct_build_iupac(iupac_parts, residue_dic, degrees):
       prefix = '[' if degrees[child[1]] == 1 else ''
       suffix = ']' if children.index(child) > 0 else ''
       child_strings.append(prefix + residue_dic[child[1]] + '(' + child[0] + ')' + suffix)
+      idx = inverted_residue_dic[residue_dic[parent]].index(parent)+1 if residue_dic[parent] in inverted_residue_dic else 0
+      pre = iupac[:find_nth_reverse(iupac, residue_dic[parent], idx, ignore_branches = True)] if idx else ''
       if i > 0 and residue_dic[child[1]] == residue_dic[last_child]:
         inverted_residue_dic.setdefault(residue_dic[child[1]], []).insert(-1, child[1])
-      elif (residue_dic[child[1]] in iupac[:iupac.index(residue_dic[parent])]):
-        idx = inverted_residue_dic[residue_dic[parent]].index(parent)
-        county = iupac[:find_nth(iupac, residue_dic[parent], idx)].count(residue_dic[child[1]])
+      elif (residue_dic[child[1]] in pre):
+        county = pre.count(residue_dic[child[1]])
         inverted_residue_dic.setdefault(residue_dic[child[1]], []).insert(-county, child[1])
       else:
         inverted_residue_dic.setdefault(residue_dic[child[1]], []).append(child[1])
@@ -540,7 +541,7 @@ def wurcs_to_iupac(wurcs):
     'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc?', 'axxxxh-1x_1-5': 'Hex?', 'a2112h-1b_1-4': 'Galfb',
     'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc?',
     'axxxxh-1a_1-5_2*NCC/3=O': 'HexNAca', 'Aad21122h-2a_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Aca',
-    'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4Sb'
+    'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4Sb', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3Sb'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -625,10 +626,12 @@ def oxford_to_iupac(oxford):
   | :-
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
+  oxford = re.sub(r'\([^)]*\)', '', oxford)
+  antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
   mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-?)", "S": "Neu5Ac(a2-?)",
                   "Sg": "Neu5Gc(a2-?)", "Ga": "Gal(a1-?)", "GalNAc": "GalNAc(?1-?)",
-                  "Lac": "Gal(b1-?)GlcNAc(b1-?)"}
+                  "Lac": "Gal(b1-?)GlcNAc(b1-?)", "F": "Fuc(a1-?)"}
   if 'B' in oxford:
     split = iupac.index(']')
     iupac = iupac[:split+1] + "[GlcNAc(b1-4)]" + iupac[split+1:]
@@ -639,6 +642,8 @@ def oxford_to_iupac(oxford):
     split = iupac.rindex(')')
     fuc = "[Fuc(a1-3)]" if "X" in oxford else "[Fuc(a1-6)]"
     iupac = iupac[:split+1] + fuc + iupac[split+1:]
+  elif 'F' in oxford:
+    antennae["F"] = int(oxford[oxford.index("F")+1])
   if 'M' in oxford:
     M_count = int(oxford[oxford.index("M")+1]) - 3
     for m in range(M_count):
@@ -648,7 +653,8 @@ def oxford_to_iupac(oxford):
               "G": int(oxford[oxford.index("G")+1]) if "G" in oxford and oxford[oxford.index("G")+1] != 'a' else 0,
               "S": int(oxford[oxford.index("S")+1]) if "S" in oxford and oxford[oxford.index("S")+1] != 'g' else 0}
   extras = {"Sg": int(oxford[oxford.index("Sg")+2]) if "Sg" in oxford else 0,
-            "Ga": int(oxford[oxford.index("Ga")+2]) if "Ga" in oxford else 0}
+            "Ga": int(oxford[oxford.index("Ga")+2]) if "Ga" in oxford else 0,
+            "Lac": int(oxford[oxford.index("Lac")+3]) if "Lac" in oxford else 0}
   built_branches = []
   while sum(branches.values()) > 0:
     temp = ''
@@ -673,12 +679,19 @@ def oxford_to_iupac(oxford):
       iupac = iupac[:split] + "[" + b + "]" + iupac[split:]
     i += 1
   for e,v in extras.items():
-    if v:
+    while v > 0:
       if iupac.startswith("Gal(b"):
         iupac = mapping_dict[e] + iupac
       elif "[Gal(b" in iupac:
         split = iupac.index("[Gal(b")
         iupac = iupac[:split+1] + mapping_dict[e] + iupac[split+1:]
+      v -= 1
+  if antennae:
+    for k, v in antennae.items():
+      while v > 0:
+        split = iupac.index("Gal(b1-?)Glc")
+        iupac = iupac[:split+len("Gal(b1-?)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-?)"):]
+        v -= 1
   return iupac.strip('[]')
 
 
