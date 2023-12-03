@@ -428,7 +428,8 @@ def graph_to_string_int(graph):
   if min(graph.nodes()) > 0:
     graph = nx.relabel_nodes(graph, {n: i for i, n in enumerate(graph.nodes())})
   nodes = list(nx.get_node_attributes(graph, "string_labels").values())
-  nodes = [k+')' if graph.degree[min(i+1, len(nodes)-1)] > 2 or neighbor_is_branchpoint(graph, i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
+  edges = {k: v for k, v in graph.edges()}
+  nodes = [k+')' if graph.degree[edges.get(i, len(graph)-1)] > 2 or neighbor_is_branchpoint(graph, i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
   if graph.degree[len(graph)-1] < 2:
     nodes = ''.join(nodes)[1:][::-1].replace('(', '', 1)[::-1]
   else:
@@ -436,7 +437,7 @@ def graph_to_string_int(graph):
     nodes = ''.join(nodes)[1:]
   if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')') == nodes[:nodes.index(')(')].count('('))):
     nodes = nodes.replace(')(', '(', 1)
-  return canonicalize_iupac(nodes)
+  return canonicalize_iupac(nodes.strip('()'))
 
 
 def graph_to_string(graph):
