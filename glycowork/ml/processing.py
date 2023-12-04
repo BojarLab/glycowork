@@ -28,8 +28,8 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long)
   # Converting graphs to Pytorch Geometric Data objects
   data = [from_networkx(k) for k in glycan_graphs]
   # Adding graph labels
-  for k in range(len(labels)):
-    data[k].y = torch.tensor(labels[k])
+  for data_obj, label in zip(data, labels):
+    data_obj.y = torch.tensor(label, dtype = label_type)
   return data
 
 
@@ -58,13 +58,10 @@ def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
                                     libr = libr, label_type = label_type)
   # Adding (optional) extra feature to the Data objects
   if extra_feature is not None:
-    for k in range(len(glycan_graphs)):
-      glycan_graphs[k].train_idx = torch.tensor(extra_feature[k],
-                                                dtype = torch.float)
+    for graph, feature in zip(glycan_graphs, extra_feature):
+      graph.train_idx = torch.tensor(feature, dtype = torch.float)
   # Generating the dataloader from the data objects
-  glycan_loader = DataLoader(glycan_graphs, batch_size = batch_size,
-                             shuffle = shuffle, drop_last = drop_last)
-  return glycan_loader
+  return DataLoader(glycan_graphs, batch_size = batch_size, shuffle = shuffle, drop_last = drop_last)
 
 
 def split_data_to_train(glycan_list_train, glycan_list_val,

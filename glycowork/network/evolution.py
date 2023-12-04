@@ -25,22 +25,24 @@ def calculate_distance_matrix(to_compare, dist_func, label_list = None):
   | :-
   | Returns a len(to_compare) x len(to_compare) distance matrix
   """
-  dm = np.zeros((len(to_compare), len(to_compare)))
+  n = len(to_compare)
+  dm = np.zeros((n, n))
   # Check whether comparison objects are in a dict or list
   if isinstance(to_compare, dict):
-    label_list = list(to_compare.keys())
-  elif label_list is None:
-    label_list = list(range(len(to_compare)))
-  dm = pd.DataFrame(dm, columns = label_list)
-  # Calculate pairwise distances
-  if isinstance(to_compare, dict):
-    for i in range(len(to_compare)):
-      for j in range(len(to_compare)):
-        dm.iloc[i, j] = dist_func(to_compare[label_list[i]], to_compare[label_list[j]])
+    items = list(to_compare.values())
+    if label_list is None:
+      label_list = list(to_compare.keys())
   else:
-    for i in range(len(to_compare)):
-      for j in range(len(to_compare)):
-        dm.iloc[i, j] = dist_func(to_compare[i], to_compare[j])
+    items = to_compare
+    if label_list is None:
+      label_list = list(range(n))
+  # Calculate pairwise distances
+  for i in range(n):
+    for j in range(i+1, n):
+      distance = dist_func(items[i], items[j])
+      dm[i, j] = distance
+      dm[j, i] = distance
+  dm = pd.DataFrame(dm, columns = label_list, index = label_list)
   return dm
 
 
@@ -58,20 +60,20 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
   | :-
   | Returns a rank x rank distance matrix
   """
-  # Subset df to only contain ranks with a minimum number of data points
-  df_min = sorted([(df[rank].value_counts() >= cut_off).index.tolist()[k]
-                   for k in range(len((df[rank].value_counts() >= cut_off).index.tolist()))
-                   if (df[rank].value_counts() >= cut_off).values.tolist()[k]])
-  df_idx = [df.index[df[rank] == k].values.tolist() for k in df_min]
-  # Retrieve and average embeddings for all glycans
-  if averaging == 'median':
-    avgs = [np.median(embeddings.iloc[k, :], axis = 0) for k in df_idx]
-  elif averaging == 'mean':
-    avgs = [np.mean(embeddings.iloc[k, :], axis = 0) for k in df_idx]
-  else:
+  if averaging not in ['mean', 'median']:
     print("Only 'median' and 'mean' are permitted averaging choices.")
+    return
+  # Subset df to only contain ranks with a minimum number of data points
+  value_counts = df[rank].value_counts()
+  valid_ranks = value_counts.index[value_counts >= cut_off]
+  df_filtered = df[df[rank].isin(valid_ranks)]
+  # Retrieve and average embeddings for all glycans
+  embeddings_filtered = embeddings.loc[df_filtered.index]
+  grouped = df_filtered.groupby(rank)
+  avg_embeddings = grouped.apply(lambda g: embeddings_filtered.loc[g.index].agg(averaging)).reset_index()
+  avg_values = np.vstack(avg_embeddings[0].values)
   # Get the distance matrix
-  return calculate_distance_matrix(avgs, cosine, label_list = df_min)
+  return calculate_distance_matrix(avg_values, cosine, label_list = valid_ranks)
 
 
 def jaccard(list1, list2):
@@ -103,17 +105,17 @@ def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = 
   | Returns a rank x rank distance matrix
   """
   # Choose distance metric
-  if metric == "Jaccard":
-    dist_func = jaccard
-  else:
+  metric_funcs = {"Jaccard": jaccard}
+  dist_func = metric_funcs.get(metric)
+  if dist_func is None:
     print("Not a defined metric. At the moment, only 'Jaccard' is available as a metric.")
+    return
   # Get all objects to calculate distance between
-  specs = sorted(set(df[rank].values.tolist()))
-  idx_min = [k for k in range(len(specs)) if len(df[df[rank] == specs[k]]) >= cut_off]
-  specs_min = [specs[k] for k in idx_min]
-  networks_min = [networks[k] for k in idx_min]
+  value_counts = df[rank].value_counts()
+  valid_ranks = value_counts.index[value_counts >= cut_off]
+  valid_networks = [net for spec, net in zip(df[rank], networks) if spec in valid_ranks]
   # Get distance matrix
-  return calculate_distance_matrix(networks_min, dist_func, label_list = specs_min)
+  return calculate_distance_matrix(valid_networks, dist_func, label_list = valid_ranks.tolist())
 
 
 def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
@@ -167,28 +169,28 @@ def check_conservation(glycan, df, network_dic = None, libr = None, rank = 'Orde
   if network_dic is None:
     network_dic = net_dic
   # Subset species with at least the threshold-number of glycans
-  all_specs = sorted(set(df.Species.values.tolist()))
-  allowed = [k for k in all_specs if df.Species.values.tolist().count(k) >= threshold]
-  df_freq = df[df.Species.isin(allowed)].reset_index(drop = True)
-  all_specs = sorted(set(df_freq.Species.values.tolist()))
+  species_counts = df['Species'].value_counts()
+  valid_species = species_counts.index[species_counts >= threshold]
+  df_filtered = df[df['Species'].isin(valid_species)]
   # Subset members of rank with at least two species
-  pool = set(df_freq[rank].values.tolist())
-  pool = [k for k in pool if len(set(df_freq[df_freq[rank] == k].Species.tolist())) > 1]
+  rank_counts = df_filtered.groupby(rank)['Species'].nunique()
+  valid_ranks = rank_counts.index[rank_counts > 1]
   # Subset networks
-  network_dic = {k: j for k, j in network_dic.items() if k in all_specs}
+  filtered_network_dic = {k: v for k, v in network_dic.items() if k in valid_species}
   # For each member of rank, get all species networks and search for motif
   conserved = {}
-  for k in pool:
-    specs = set(df_freq[df_freq[rank] == k].Species.values.tolist())
-    nets = [network_dic[j] for j in specs]
-    nets = [list(j.nodes()) for j in nets]
+  for r in valid_ranks:
+    rank_df = df_filtered[df_filtered[rank] == r]
+    rank_species = rank_df['Species'].unique()
+    rank_networks = [filtered_network_dic[spec] for spec in rank_species]
+    rank_nodes = [list(net.nodes()) for net in rank_networks]
     if motif:
       if glycan[-1] == ')':
-        conserved[k] = sum([glycan in "".join(j) for j in nets]) / len(nets)
+        conserved[r] = sum(glycan in "".join(nodes) for nodes in rank_nodes) / len(rank_nodes)
       else:
-        conserved[k] = sum([any([subgraph_isomorphism(m, glycan, libr = libr) for m in j]) for j in nets]) / len(nets)
+        conserved[r] =  sum(any(subgraph_isomorphism(node, glycan, libr = libr) for node in nodes) for nodes in rank_nodes) / len(rank_nodes)
     else:
-      conserved[k] = sum([glycan in j for j in nets]) / len(nets)
+      conserved[r] = sum(glycan in nodes for nodes in rank_nodes) / len(rank_nodes)
   return conserved
 
 
@@ -206,14 +208,12 @@ def get_communities(graph_list, label_list = None):
   comm_list = [community_louvain.best_partition(g) for g in graph_list]
   if label_list is None:
     label_list = list(range(len(comm_list)))
-  comm_dicts = []
+  final_comm_dict = []
   # Label the communities by species name and running number to distinguish them afterwards
-  i = 0
-  for comm in comm_list:
-    comm_dict = {str(num) + '_' + str(label_list[i]): [] for num in set(comm.values())}
-    for k, v in comm.items():
-      comm_dict[str(v) + '_' + str(label_list[i])].append(k)
-    comm_dicts.append(comm_dict)
-    i += 1
-  # Unwrap dictionaries
-  return {k: v for d in comm_dicts for k, v in d.items()}
+  for comm_dict, label in zip(comm_list, label_list):
+    updated_dict = {
+            f"{value}_{label}": [k for k, v in comm_dict.items() if v == value]
+            for value in set(comm_dict.values())
+        }
+    final_comm_dict.update(updated_dict)
+  return final_comm_dict

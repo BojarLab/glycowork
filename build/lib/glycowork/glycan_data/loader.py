@@ -1,12 +1,12 @@
 import pandas as pd
+import re
 import os
-import ast
 import pickle
 import itertools
 import pkg_resources
 
-io = pkg_resources.resource_stream(__name__, "v8_sugarbase.csv")
-df_glycan = pd.read_csv(io)
+io = pkg_resources.resource_stream(__name__, "v9_df_species.csv")
+df_species = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
 motif_list = pd.read_csv(io)
 io = pkg_resources.resource_stream(__name__, "glycan_binding.csv")
@@ -14,6 +14,8 @@ glycan_binding = pd.read_csv(io)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
 data_path = os.path.join(this_dir, 'lib_v8.pkl')
 lib = pickle.load(open(data_path, 'rb'))
+data_path = os.path.join(this_dir, 'v9_sugarbase.pkl')
+df_glycan = pickle.load(open(data_path, 'rb'))
 
 linkages = {
   '1-4', '1-6', 'a1-1', 'a1-2', 'a1-3', 'a1-4', 'a1-5', 'a1-6', 'a1-7', 'a1-8', 'a1-9', 'a1-11', 'a1-?', 'a2-1', 'a2-2', 'a2-3', 'a2-4', 'a2-5', 'a2-6', 'a2-7', 'a2-8', 'a2-9',
@@ -52,6 +54,71 @@ def find_nth(haystack, needle, n):
   return start
 
 
+def find_nth_reverse(string, substring, n, ignore_branches = False):
+  # Reverse the string and the substring
+  reversed_string = string[::-1]
+  reversed_substring = substring[::-1]
+  # Initialize the start index for the search
+  start_index = 0
+  # Loop to find the n-th occurrence
+  for i in range(n):
+    # Find the next occurrence index
+    idx = reversed_string.find(reversed_substring, start_index)
+    # If the substring is not found, return -1
+    if idx == -1:
+      return -1
+    # Update the start index
+    start_index = idx + len(substring)
+  # Calculate and return the original starting index
+  original_start_index = len(string) - start_index
+  if ignore_branches:
+    # Check if there is an immediate branch preceding the match
+    branch_end_idx = original_start_index - 1
+    if branch_end_idx > 0 and string[branch_end_idx] == ']' and string[branch_end_idx - 1] != '[':
+      # Find the start of the immediate branch
+      bracket_count = 1
+      for i in range(branch_end_idx - 1, -1, -1):
+        if string[i] == ']':
+          bracket_count += 1
+        elif string[i] == '[':
+          bracket_count -= 1
+        if bracket_count == 0:
+          original_start_index = i
+          break
+  return original_start_index
+
+
+def remove_unmatched_brackets(s):
+  """Removes all unmatched brackets from the string s.\n
+  | Arguments:
+  | :-
+  | s (string): glycan string in IUPAC-condensed\n
+  | Returns:
+  | :-
+  | Returns glycan without unmatched brackets
+   """
+  while True:
+    # Keep track of the indexes of the brackets
+    stack = []
+    unmatched_open = set()
+    unmatched_close = set()
+    for i, char in enumerate(s):
+      if char == '[':
+        stack.append(i)
+      elif char == ']':
+        if stack:
+          stack.pop()
+        else:
+          unmatched_close.add(i)
+    unmatched_open.update(stack)
+    # If there are no unmatched brackets, break the loop
+    if not unmatched_open and not unmatched_close:
+      break
+    # Build a new string without the unmatched brackets
+    s = ''.join([char for i, char in enumerate(s) if i not in unmatched_open and i not in unmatched_close])
+  return s
+
+
 def reindex(df_new, df_old, out_col, ind_col, inp_col):
   """Returns columns values in order of new dataframe rows\n
   | Arguments:
@@ -80,7 +147,7 @@ def stringify_dict(dicty):
   | Returns string of type key:value for sorted items
   """
   dicty = dict(sorted(dicty.items()))
-  return ''.join(str(key) + str(value) for key, value in dicty.items())
+  return ''.join(f"{key}{value}" for key, value in dicty.items())
 
 
 def replace_every_second(string, old_char, new_char):
@@ -95,17 +162,14 @@ def replace_every_second(string, old_char, new_char):
   | Returns string with replaced characters
   """
   count = 0
-  result = ""
+  result = []
   for char in string:
     if char == old_char:
       count += 1
-      if count % 2 == 0:
-        result += new_char
-      else:
-        result += char
+      result.append(new_char if count % 2 == 0 else char)
     else:
-      result += char
-  return result
+      result.append(char)
+  return ''.join(result)
 
 
 def multireplace(string, remove_dic):
@@ -144,14 +208,9 @@ def build_custom_df(df, kind = 'df_species'):
   cols = kind_to_cols.get(kind, None)
   if cols is None:
     raise ValueError("Invalid value for 'kind' argument, only df_species, df_tissue, and df_disease are supported.")
-  df = df.loc[df[cols[1]].str.len() > 2, cols]
+  df = df.loc[df[cols[1]].str.len() > 0, cols]
   df.set_index('glycan', inplace = True)
-  df.index.name = 'target'
-  df = df.applymap(ast.literal_eval)
   df = df.explode(cols[1:]).reset_index()
-  df.sort_values([cols[1], 'target'], ascending = [True, True], inplace = True)
+  df.sort_values([cols[1], 'glycan'], ascending = [True, True], inplace = True)
   df.reset_index(drop = True, inplace = True)
   return df
-
-
-df_species = build_custom_df(df_glycan, kind = 'df_species')
