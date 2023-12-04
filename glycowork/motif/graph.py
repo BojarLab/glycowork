@@ -326,10 +326,10 @@ def subgraph_isomorphism(glycan, motif, libr = None,
         mapping = graph_pair.mapping
         mapping = {v: k for k, v in mapping.items()}
         res = all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges())
-        return res if not return_matches else (res, mappings)
-      return False
+        return res if not return_matches else (int(res), mappings)
+      return False if not return_matches else (0, [])
   else:
-    return 0 if count else False
+    return (0, []) if return_matches else 0 if count else False
 
 
 def generate_graph_features(glycan, glycan_graph = True, libr = None, label = 'network'):

@@ -36,9 +36,8 @@ nbdev_prepare
 * Docs are automatically created from the notebooks in the nbs folder.
 
 
-## Wishlist for future glycowork updates (last update: 2023-11-06)
+## Wishlist for future glycowork updates (last update: 2023-12-04)
 #### Urgent
-* add function to convert WURCS into IUPAC-condensed
 * more, and more informative, error messages
 
 
@@ -47,3 +46,4 @@ nbdev_prepare
 * characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context
 * allow users to specify their own deep learning architecture in ml.models
 * implement multiple sequence alignment and other substitution matrices
+* parallelize motif matching
