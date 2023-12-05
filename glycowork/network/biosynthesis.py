@@ -754,7 +754,8 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   if len(isomeric_graphs) > 0:
     isomeric_nodes = [[virtual_nodes[virtual_graphs.index(k[0])],
                        virtual_nodes[virtual_graphs.index(k[1])]] for k in isomeric_graphs]
-    network.remove_nodes_from([choose_correct_isoform(k, reverse = True)[0] for k in isomeric_nodes])
+    isomeric_nodes = [choose_correct_isoform(k, reverse = True) for k in isomeric_nodes if len(set(k)) > 1]
+    network.remove_nodes_from([n[0] for n in isomeric_nodes if n])
   network.remove_edges_from(nx.selfloop_edges(network))
   # Make network directed
   network = prune_directed_edges(network.to_directed())
