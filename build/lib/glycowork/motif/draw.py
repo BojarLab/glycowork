@@ -2148,7 +2148,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
         try:
           from cairosvg import svg2pdf
           svg2pdf(bytestring = data, write_to = filepath)
-        except ImportError:
+        except:
           raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   return d2
 
@@ -2254,7 +2254,7 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
         svg2svg(bytestring = svg_tmp, write_to = filepath, dpi = 300)
       elif filepath.split('.')[-1] == 'png':
         svg2png(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-    except ImportError:
+    except:
       raise ImportError("You're missing some draw dependencies. Either don't use filepath or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   else:
     return svg_tmp
