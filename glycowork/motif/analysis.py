@@ -876,7 +876,7 @@ def get_jtk(df, timepoints, replicates, periods, interval, motifs = False, featu
     df.replace(0, np.nan, inplace = True)
     df = mf.fit_transform(df)
     if motifs:
-        df = quantify_motifs(pd.DataFrame(df.iloc[:, 1:], df.iloc[:, 0].values.tolist()), feature_set).T
+        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set).T
     res = df.apply(jtkx, param_dic = param_dic, axis = 1)
     JTK_BHQ = pd.DataFrame(sm.stats.multipletests(res[0], method = 'fdr_bh')[1])
     Results = pd.concat([res.iloc[:, 0], JTK_BHQ, res.iloc[:, 1:]], axis = 1)

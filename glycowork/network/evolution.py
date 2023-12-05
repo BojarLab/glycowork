@@ -208,7 +208,7 @@ def get_communities(graph_list, label_list = None):
   comm_list = [community_louvain.best_partition(g) for g in graph_list]
   if label_list is None:
     label_list = list(range(len(comm_list)))
-  final_comm_dict = []
+  final_comm_dict = {}
   # Label the communities by species name and running number to distinguish them afterwards
   for comm_dict, label in zip(comm_list, label_list):
     updated_dict = {

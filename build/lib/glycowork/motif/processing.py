@@ -200,8 +200,11 @@ def choose_correct_isoform(glycans, reverse = False):
   | :-
   | Returns the correct isomer as a string (if reverse=False; otherwise it returns a list of strings)
   """
+  glycans = list(set(glycans))
   if len(glycans) == 1:
     return glycans[0]
+  if not any(['[' in g for g in glycans]):
+    return [] if reverse else glycans
   floaty = False
   if '{' in glycans[0]:
     floaty = glycans[0][:glycans[0].rindex('}')+1]

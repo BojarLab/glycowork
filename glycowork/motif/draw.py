@@ -6,11 +6,9 @@ import networkx as nx
 import copy
 
 try:
-  import cairosvg
   import drawsvg as draw
 except ImportError:
   raise ImportError("<draw dependencies missing; did you do 'pip install glycowork[draw]'?>")
-import networkx as nx
 import numpy as np
 import sys
 import re
@@ -2147,7 +2145,11 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
         with open(filepath, 'w') as f:
           f.write(data)
       elif 'pdf' in filepath:
-        cairosvg.svg2pdf(bytestring = data, write_to = filepath)
+        try:
+          from cairosvg import svg2pdf
+          svg2pdf(bytestring = data, write_to = filepath)
+        except ImportError:
+          raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   return d2
 
 
@@ -2244,11 +2246,15 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
   svg_tmp += '</svg>'
 
   if filepath:
+    try:
+      from cairosvg import svg2pdf, svg2svg, svg2png
       if filepath.split('.')[-1] == 'pdf':
-        cairosvg.svg2pdf(bytestring = svg_tmp, write_to = filepath, dpi = 300)
+        svg2pdf(bytestring = svg_tmp, write_to = filepath, dpi = 300)
       elif filepath.split('.')[-1] == 'svg':
-        cairosvg.svg2svg(bytestring = svg_tmp, write_to = filepath, dpi = 300)
+        svg2svg(bytestring = svg_tmp, write_to = filepath, dpi = 300)
       elif filepath.split('.')[-1] == 'png':
-        cairosvg.svg2png(bytestring = svg_tmp, write_to = filepath, dpi = 300) 
+        svg2png(bytestring = svg_tmp, write_to = filepath, dpi = 300)
+    except ImportError:
+      raise ImportError("You're missing some draw dependencies. Either don't use filepath or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   else:
-      return svg_tmp
+    return svg_tmp
