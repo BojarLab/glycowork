@@ -7,6 +7,9 @@ from functools import wraps
 from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
+from scipy.special import gammaln
+from scipy.stats import wilcoxon, rankdata, norm
+from statsmodels.stats.multitest import multipletests
 from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, find_nth_reverse, linkages, Hex, HexNAc, dHex, Sia, HexA, Pen, hlm, update_cf_for_m_n
 rng = np.random.default_rng(42)
 
@@ -297,16 +300,23 @@ def canonicalize_composition(comp):
   | :-
   | Returns composition as a dictionary of style monosaccharide : count
   """
+  if '_' in comp:
+    values = comp.split('_')
+    temp = {"Hex": int(values[0]), "HexNAc": int(values[1]), "Neu5Ac": int(values[2]), "dHex": int(values[3])}
+    return {k: v for k, v in temp.items() if v}
+  elif comp.isdigit():
+    temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+    return {k: v for k, v in temp.items() if v}
   comp_dict = {}
   i = 0
-  replace_dic = {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", '(': '', ')': ''}
+  replace_dic = {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", '(': '', ')': '', ' ': '', '+': ''}
   comp = multireplace(comp, replace_dic)
   n = len(comp)
   # Dictionary to map letter codes to full names
   code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc', 'NeuGc': 'Neu5Gc', 'Gc': 'Neu5Gc',
                   'Hex': 'Hex', 'HexNAc': 'HexNAc', 'HexAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex', 'deHex': 'dHex', 'HexA': 'HexA',
                   'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc', 'HexNc': 'HexNAc',
-                  'Su': 'S', 's': 'S', 'Sul': 'S', 'p': 'P', 'Pent': 'Pen', 'Xyl': 'Pen'}
+                  'Su': 'S', 's': 'S', 'Sul': 'S', 'p': 'P', 'Pent': 'Pen', 'Xyl': 'Pen', 'Man': 'Hex', 'GlcNAc': 'HexNAc', 'Deoxyhexose': 'dHex'}
   while i < n:
     # Code initialization
     code = ''
@@ -322,7 +332,10 @@ def canonicalize_composition(comp):
       i += 1
     # Map code to full name and store in dictionary
     name = code_to_name.get(code, code)
-    comp_dict[name] = num
+    if name in comp_dict:
+      comp_dict[name] += num
+    else:
+      comp_dict[name] = num
   return comp_dict
 
 
@@ -1069,7 +1082,7 @@ def variance_based_filtering(df, min_feature_variance = 0.01):
 
 def jtkdist(timepoints, param_dic, reps = 1, normal = False):
   """Precalculates all possible JT test statistic permutation probabilities for reference later, speeding up the
-  | analysis. Calculates the exact null distribution using thr Harding algorithm.\n
+  | analysis. Calculates the exact null distribution using the Harding algorithm.\n
   | Arguments:
   | :-
   | timepoints (int): number of timepoints within the experiment.
