@@ -1175,7 +1175,7 @@ def jtkinit(periods, param_dic, interval = 1, replicates = 1):
     jrange = np.arange(cycles * period)
     cos_s = np.sign(cos_v)[jrange]
     cos_s = np.repeat(cos_s, (tim[jrange]))
-    if reps == 1:
+    if replicates == 1:
       param_dic["SIGNCOS"][:, i] = cos_s
     else:
       param_dic["SIGNCOS"][i] = cos_s
@@ -1194,7 +1194,7 @@ def jtkinit(periods, param_dic, interval = 1, replicates = 1):
       cos_v = cos_v.flatten()
       cos_s = np.sign(cos_v)[jrange]
       cos_s = np.repeat(cos_s, (tim[jrange]))
-      if reps == 1:
+      if replicates == 1:
         param_dic["SIGNCOS"][:, j] = cos_s
       else:
         param_dic["SIGNCOS"][j] = cos_s

@@ -851,14 +851,13 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     return res.sort_values(by = 'corr p-val')
 
 
-def get_jtk(df, timepoints, replicates, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal']):
-    """Wrapper function running the analysis \n
+def get_jtk(df, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal']):
+    """Detecting rhythmically expressed glycans via the Jonckheere–Terpstra–Kendall (JTK) algorithm\n
     | Arguments:
     | :-
     | df (pd.DataFrame): A dataframe containing data for analysis.
     |   (column 0 = molecule IDs, then arranged in groups and by ascending timepoints)
-    | timepoints (int): number of timepoints in the experiment.
-    | replicates (int): number of replicates per timepoints.
+    | timepoints (int): number of timepoints in the experiment (each timepoint must have the same number of replicates).
     | periods (int): number of timepoints per cycle.
     | interval (int): units of time (Arbitrary units) between experimental timepoints.
     | motifs (bool): a flag for running structural of motif-based analysis (True = run motif analysis); default:False.
@@ -868,17 +867,20 @@ def get_jtk(df, timepoints, replicates, periods, interval, motifs = False, featu
     | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
     | molecule in the analysis.
     """
+    replicates = (df.shape[1] - 1) // timepoints
     param_dic = {"GRP_SIZE": [], "NUM_GRPS": [], "MAX": [], "DIMS": [], "EXACT": bool(True),
                  "VAR": [], "EXV": [], "SDV": [], "CGOOSV": []}
     param_dic = jtkdist(timepoints, param_dic, replicates)
     param_dic = jtkinit(periods, param_dic, interval, replicates)
     mf = MissForest()
     df.replace(0, np.nan, inplace = True)
+    annot = df.pop(df.columns.tolist()[0])
     df = mf.fit_transform(df)
+    df.insert(0, 'Molecule_Name', annot)
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set).T
-    res = df.apply(jtkx, param_dic = param_dic, axis = 1)
+    res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
     JTK_BHQ = pd.DataFrame(sm.stats.multipletests(res[0], method = 'fdr_bh')[1])
-    Results = pd.concat([res.iloc[:, 0], JTK_BHQ, res.iloc[:, 1:]], axis = 1)
+    Results = pd.concat([df.iloc[:, 0], JTK_BHQ, res], axis = 1)
     Results.columns = ['Molecule_Name', 'BH_Q_Value', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude']
-    return Results
+    return Results.sort_values("Adjusted_P_value")
