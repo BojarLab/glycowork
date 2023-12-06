@@ -16,7 +16,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
-from glycowork.motif.processing import cohen_d, mahalanobis_distance, mahalanobis_variance, variance_stabilization, impute_and_normalize, variance_based_filtering, jtkdist, jtkinit, MissForest, jtkx
+from glycowork.motif.processing import cohen_d, mahalanobis_distance, mahalanobis_variance, variance_stabilization, impute_and_normalize, variance_based_filtering, jtkdist, jtkinit, MissForest, jtkx, get_alphaN
 from glycowork.motif.annotate import annotate_dataset, quantify_motifs, link_find, create_correlation_network
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -488,9 +488,10 @@ def get_differential_expression(df, group1, group2,
   | (iii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
   | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
   | (v) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
-  | (vi) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
-  | (vii) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
-  | (viii) [only if effect_size_variance=True] Effect size variance
+  | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  | (vii) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
+  | (viii) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
+  | (xi) [only if effect_size_variance=True] Effect size variance
   """
   if isinstance(df, str):
       df = pd.read_csv(df)
@@ -500,6 +501,8 @@ def get_differential_expression(df, group1, group2,
       group2 = [columns_list[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
+  # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+  alpha = get_alphaN(df.shape[1] - 1)
   if motifs:
       # Motif extraction and quantification
       df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set)
@@ -551,8 +554,9 @@ def get_differential_expression(df, group1, group2,
       levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
   else:
       corrpvals = []
-  out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, levene_pvals, effect_sizes)),
-                     columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'corr Levene p-val', 'Effect size'])
+  significance = [p < alpha for p in corrpvals]
+  out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes)),
+                     columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size'])
   if effect_size_variance:
       out['Effect size variance'] = variances
   return out.dropna().sort_values(by = 'corr p-val')
@@ -662,7 +666,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True\n
     | Returns:
     | :-
-    | (i) a pandas DataFrame with an F statistic and corrected p-value for each glycan.
+    | (i) a pandas DataFrame with an F statistic, corrected p-value, and indication of its significance for each glycan.
     | (ii) a dictionary of type glycan : pandas DataFrame, with post-hoc results for each glycan with a significant ANOVA.
     """
     if isinstance(df, str):
@@ -672,6 +676,8 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     groups_unq = sorted(set(groups))
     df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
                               min_samples = min_samples)
+    # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+    alpha = get_alphaN(df.shape[1] - 1)
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], df.iloc[:,0].values.tolist(), feature_set)
         # Deduplication
@@ -695,11 +701,12 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
         f_value = anova_table["F"]["C(Group)"]
         p_value = anova_table["PR(>F)"]["C(Group)"]
         results.append((glycan, f_value, p_value))
-        if p_value < 0.05 and posthoc:
-            posthoc = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = 0.05)
+        if p_value < alpha and posthoc:
+            posthoc = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = alpha)
             posthoc_results[glycan] = pd.DataFrame(data = posthoc._results_table.data[1:], columns = posthoc._results_table.data[0])
     results_df = pd.DataFrame(results, columns = ["Glycan", "F statistic", "corr p-val"])
     results_df['corr p-val'] = multipletests(results_df['corr p-val'].values.tolist(), method = 'fdr_bh')[1]
+    results_df['significant'] = [p < alpha for p in results_df['corr p-val']]
     return results_df.sort_values(by = 'corr p-val'), posthoc_results
 
 
@@ -824,12 +831,15 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     | (ii) The slope of their expression curve over time
     | (iii) Uncorrected p-values (t-test) for testing whether slope is significantly different from zero
     | (iv) Corrected p-values (t-test with Benjamini-Hochberg correction) for testing whether slope is significantly different from zero
+    | (v) Significance: True/False whether the corrected p-value lies below the sample size-appropriate significance threshold
     """
     if isinstance(df, str):
         df = pd.read_csv(df)
     df.fillna(0, inplace = True)
     df = df.set_index(df.columns[0]).T
     df = impute_and_normalize(df, [df.columns], impute = impute, min_samples = min_samples).reset_index()
+    # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+    alpha = get_alphaN(df.shape[1] - 1)
     glycans = [k.split('.')[0] for k in df.iloc[:, 0]]
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set)
@@ -848,6 +858,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     res = [(c, *get_glycan_change_over_time(np.column_stack((time, df[c].to_numpy())), degree = degree)) for c in df.columns[1:]]
     res = pd.DataFrame(res, columns = ['Glycan', 'Change', 'p-val'])
     res['corr p-val'] = multipletests(res['p-val'], method = 'fdr_bh')[1]
+    res['significant'] = [p < alpha for p in res['corr p-val']]
     return res.sort_values(by = 'corr p-val')
 
 
@@ -858,7 +869,7 @@ def get_jtk(df, timepoints, periods, interval, motifs = False, feature_set = ['k
     | df (pd.DataFrame): A dataframe containing data for analysis.
     |   (column 0 = molecule IDs, then arranged in groups and by ascending timepoints)
     | timepoints (int): number of timepoints in the experiment (each timepoint must have the same number of replicates).
-    | periods (int): number of timepoints per cycle.
+    | periods (list): number of timepoints (as int) per cycle.
     | interval (int): units of time (Arbitrary units) between experimental timepoints.
     | motifs (bool): a flag for running structural of motif-based analysis (True = run motif analysis); default:False.
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)\n

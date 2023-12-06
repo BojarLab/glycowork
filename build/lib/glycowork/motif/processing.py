@@ -8,7 +8,8 @@ from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t
+import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
 from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, find_nth_reverse, linkages, Hex, HexNAc, dHex, Sia, HexA, Pen, hlm, update_cf_for_m_n
 rng = np.random.default_rng(42)
@@ -1292,3 +1293,55 @@ def jtkx(z, param_dic, ampci = False):
   JTK_AMP_CI = best_results['maxamp_ci']
   JTK_AMP_PVAL = best_results['maxamp_pval']
   return pd.Series([JTK_ADJP, JTK_PERIOD, JTK_LAG, JTK_AMP])
+
+
+def get_BF(n, p, z = False, method = "robust", upper = 10):
+  """Transforms a p-value into Jeffreys' approximate Bayes factor (BF)\n
+  | Arguments:
+  | :-
+  | n (int): Sample size.
+  | p (float): The p-value.
+  | z (bool): True if the p-value is based on a z-statistic, False if t-statistic; default:False
+  | method (str): Method used for the choice of 'b'. Options are "JAB", "min", "robust", "balanced"; default:'robust'
+  | upper (float): The upper limit for the range of realistic effect sizes. Only relevant when method="balanced"; default:10\n
+  | Returns:
+  | :-
+  | float: A numeric value for the BF in favour of H1.
+  """
+  method_dict = {
+    "JAB": lambda n: 1/n,
+    "min": lambda n: 2/n,
+    "robust": lambda n: max(2/n, 1/np.sqrt(n)),
+    }
+  if method == "balanced":
+    integrand = lambda x: np.exp(-n * x**2 / 4)
+    method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
+  t_statistic = norm.ppf(1 - p/2) if z else t.ppf(1 - p/2, n - 2)
+  b = method_dict.get(method, lambda n: 1/n)(n)
+  BF = np.exp(0.5 * t_statistic**2) * np.sqrt(b)
+  return BF
+
+
+def get_alphaN(n, BF = 3, method = "robust", upper = 10):
+  """Set the alpha level based on sample size via Bayesian-Adaptive Alpha Adjustment.\n
+  | Arguments:
+  | :-
+  | n (int): Sample size.
+  | BF (float): Bayes factor you would like to match; default:3
+  | method (str): Method used for the choice of 'b'. Options are "JAB", "min", "robust", "balanced"; default:"robust"
+  | upper (float): The upper limit for the range of realistic effect sizes. Only relevant when method="balanced"; default:10\n
+  | Returns:
+  | :-
+  | float: Numeric alpha level required to achieve the desired level of evidence.
+  """
+  method_dict = {
+    "JAB": lambda n: 1/n,
+    "min": lambda n: 2/n,
+    "robust": lambda n: max(2/n, 1/np.sqrt(n)),
+    }
+  if method == "balanced":
+    integrand = lambda x: np.exp(-n * x**2 / 4)
+    method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
+  b = method_dict.get(method, lambda n: 1/n)(n)
+  alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(b)), 1)
+  return alpha
