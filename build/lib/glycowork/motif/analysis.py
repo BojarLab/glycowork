@@ -889,7 +889,7 @@ def get_jtk(df, timepoints, periods, interval, motifs = False, feature_set = ['k
     df = mf.fit_transform(df)
     df.insert(0, 'Molecule_Name', annot)
     if motifs:
-        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set).T
+        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set).T.reset_index()
     res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
     JTK_BHQ = pd.DataFrame(sm.stats.multipletests(res[0], method = 'fdr_bh')[1])
     Results = pd.concat([df.iloc[:, 0], JTK_BHQ, res], axis = 1)

@@ -46,6 +46,7 @@ glycowork/motif/graph.py
 glycowork/motif/mz_to_composition.csv
 glycowork/motif/processing.py
 glycowork/motif/query.py
+glycowork/motif/re.py
 glycowork/motif/tokenization.py
 glycowork/network/__init__.py
 glycowork/network/biosynthesis.py

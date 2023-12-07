@@ -172,8 +172,7 @@ def presence_to_matrix(df, glycan_col_name = 'glycan', label_col_name = 'Species
   # Create a grouped dataframe where we count the occurrences of each glycan in each species group
   grouped_df = df.groupby([label_col_name, glycan_col_name]).size().unstack(fill_value = 0)
   # Sort the index and columns
-  grouped_df = grouped_df.sort_index().sort_index(axis = 1)
-  return grouped_df
+  return grouped_df.sort_index().sort_index(axis = 1)
 
 
 def find_matching_brackets_indices(s):
@@ -962,11 +961,11 @@ def variance_stabilization(data, groups = None):
   data = np.log1p(data)
   # Scale data to have zero mean and unit variance
   if groups is None:
-    data = (data - data.mean(axis = 0)) / data.std(axis = 0)
+    data = (data - data.mean(axis = 0)) / data.std(axis = 0, ddof = 1)
   else:
     for group in groups:
-      group_data = data.loc[:, group]
-      data.loc[:, group] = (group_data - group_data.mean(axis = 0)) / group_data.std(axis = 0)
+      group_data = data[group]
+      data[group] = (group_data - group_data.mean(axis = 0)) / group_data.std(axis = 0, ddof = 1)
   return data
 
 
@@ -982,7 +981,7 @@ class MissForest:
   Determines the number of iterations for the imputation process.
   """
 
-  def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol=1e-6):
+  def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol = 1e-6):
     self.regressor = regressor
     self.max_iter = max_iter
     self.tol = tol
@@ -991,35 +990,27 @@ class MissForest:
     # Step 1: Initialization 
     # Keep track of where NaNs are in the original dataset
     X_nan = X.isnull()
-
     # Replace NaNs with median of the column in a new dataset that will be transformed
-    X_transform = X.copy()
-    X_transform.fillna(X_transform.median(), inplace = True)
+    X_transform = X.fillna(X.median())
     # Sort columns by the number of NaNs (ascending)
-    sorted_columns = X_nan.sum().sort_values().index.tolist()
-
+    sorted_columns = X_nan.sum().sort_values().index
     for _ in range(self.max_iter):
-      X_old = X_transform.copy()
+      total_change = 0
       # Step 2: Imputation
       for column in sorted_columns:
-        if X_nan[column].any():  # if column has missing values in original dataset
+        missing_idx = X_nan[column]
+        if missing_idx.any():  # if column has missing values in original dataset
           # Split data into observed and missing for the current column
-          observed = X_transform.loc[~X_nan[column]]
-          missing = X_transform.loc[X_nan[column]]
-          
+          observed = X_transform.loc[~missing_idx]
+          missing = X_transform.loc[missing_idx]
           # Use other columns to predict the current column
-          X_other_columns = observed.drop(columns = column)
-          y_observed = observed[column]
-
-          self.regressor.fit(X_other_columns, y_observed)
-          
-          X_missing_other_columns = missing.drop(columns = column)
-          y_missing_pred = self.regressor.predict(X_missing_other_columns)
-
+          self.regressor.fit(observed.drop(columns = column), observed[column])
+          y_missing_pred = self.regressor.predict(missing.drop(columns = column))
           # Replace missing values in the current column with predictions
-          X_transform.loc[X_nan[column], column] = y_missing_pred
+          total_change += np.sum(np.abs(X_transform.loc[missing_idx, column] - y_missing_pred))
+          X_transform.loc[missing_idx, column] = y_missing_pred
       # Check for convergence
-      if np.all(np.abs(X_old - X_transform) < self.tol):
+      if total_change < self.tol:
         break  # Break out of the loop if converged
     # Avoiding zeros
     X_transform += 1e-6
@@ -1032,7 +1023,7 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
     | groups (list): nested list of column name lists, one list per group
-    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
+    | impute (bool): replaces zeroes with predictions from MissForest; default:True
     | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
     | Returns:
     | :-
@@ -1042,16 +1033,13 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
       min_samples = [len(group_cols) // 2 for group_cols in groups]
     else:
       min_samples = [min_samples] * len(groups)
-    masks = [
-      df[group_cols].apply(lambda row: (row != 0).sum(), axis=1) >= thresh
-      for group_cols, thresh in zip(groups, min_samples)
-      ]
-    df = df[np.all(masks, axis = 0)].copy()
+    masks = [(df[group_cols] != 0).sum(axis = 1) >= thresh for group_cols, thresh in zip(groups, min_samples)]
+    df = df[np.all(masks, axis = 0)]
     colname = df.columns[0]
-    glycans = df[colname].values
+    glycans = df[colname]
     df = df.iloc[:, 1:]
     old_cols = []
-    if isinstance(df.columns[0], int):
+    if isinstance(colname, int):
       old_cols = df.columns
       df.columns = df.columns.astype(str)
     if impute:
@@ -1075,10 +1063,7 @@ def variance_based_filtering(df, min_feature_variance = 0.01):
     | :-
     | Returns a pandas DataFrame with remaining glycans as indices and samples in columns
     """
-    feature_variances = df.var(axis = 1)
-    variable_features = feature_variances[feature_variances > min_feature_variance].index
-    # Subsetting df to only include features with enough variance
-    return df.loc[variable_features]
+    return df[df.var(axis = 1) > min_feature_variance]
 
 
 def jtkdist(timepoints, param_dic, reps = 1, normal = False):
