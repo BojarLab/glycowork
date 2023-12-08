@@ -15,9 +15,8 @@ def preprocess_pattern(pattern):
   | :-
   | Returns list of chunks to be used by downstream functions
   """
-  # Use regular expression to identify the conditional parts (with optional parentheses)
-  # and keep other chunks together
-  components = re.split(r'(-?\s*\(?\[[^)^\?]*\]\)?\s*(?:\{\d*,?\d*\}|\+|\*|\?)?\s*-?)', pattern)
+  # Use regular expression to identify the conditional parts and keep other chunks together
+  components = re.split(r'(-?\s*\(?\[.*?\]\)?\s*(?:\{,?\d*,?\d*\}|\+|\*|\?)\s*-?)', pattern)
   # Remove any empty strings and trim whitespace
   return [x.strip('-').strip() for x in components if x]
 
@@ -364,7 +363,7 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
   | :-
   | Returns node indices from match that can be used to extend the trace
   """
-  if not all_match_nodes:
+  if not all_match_nodes or max([len(k) for k in all_match_nodes]) < 1:
     return True if min_occur == 0 else False
   if max_occur > 1:
     all_match_nodes = all_combinations(all_match_nodes, min_len = min_occur, max_len = max_occur)
@@ -414,7 +413,7 @@ def trace_path(pattern_matches, ggraph):
   patterns = list(pattern_matches.keys())
   edges = list(ggraph.edges())
   optional_components = {p: parse_pattern(p) for p in patterns if any(x in p for x in ['{', '*', '+', '?'])}
-  start_pattern = next((p for p in patterns if pattern_matches[p] or optional_components.get(p, (99,99))[0] > 0), patterns[0])
+  start_pattern = next((p for p in patterns if pattern_matches[p][0] or optional_components.get(p, (99,99))[0] > 0), patterns[0])
   idx = patterns.index(start_pattern) + 1
   for start_match in pattern_matches[start_pattern]:
     if not start_match and optional_components.get(start_pattern, (99,99))[0] > 0:
@@ -467,7 +466,7 @@ def filter_traces(traces, used_patterns, glycan, ggraph, libr = None):
         if ggraph.degree[traces[j][i]] != 1:
           to_append = False
           break
-      i += p.count('-') + 2
+      i += len(p.split('-')) + p.count('-') + 1
     if to_append:
       traces_out.append(traces[j])
   return traces_out
@@ -510,12 +509,7 @@ def format_retrieved_matches(lists, ggraph):
   | :-
   | Returns a list of glycan strings that match the glyco-regular expression
   """
-  lists = fill_missing_in_list(lists)
-  out = []
-  for l in lists:
-    sub_g = ggraph.subgraph(l)
-    out.append(graph_to_string(sub_g))
-  return out
+  return [graph_to_string(ggraph.subgraph(trace)) for trace in lists]
 
 
 def get_match(pattern, glycan, libr = None, return_matches = True):
@@ -538,6 +532,7 @@ def get_match(pattern, glycan, libr = None, return_matches = True):
   pattern_matches = match_it_up(pattern_components, glycan, ggraph, libr = libr)
   if pattern_matches:
     traces, used_patterns = trace_path(pattern_matches, ggraph)
+    traces = fill_missing_in_list(traces)
     traces = filter_traces(traces, used_patterns, glycan, ggraph, libr = libr)
     if traces:
       return True if not return_matches else format_retrieved_matches(traces, ggraph)
