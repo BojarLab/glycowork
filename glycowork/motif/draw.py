@@ -1,4 +1,5 @@
 from glycowork.glycan_data.loader import lib, unwrap, motif_list, multireplace
+from glycowork.motif.re import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import expand_lib, min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
@@ -1382,6 +1383,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   | Arguments:
   | :-
   | draw_this (string): Glycan structure to be drawn.
+  | highlight_motif (string): Glycan as named motif or in IUPAC-condensed format.
   | show_linkage (bool, optional): Flag indicating whether to show linkages. Default: True.
   | draw_lib (dict): lib extended with non-standard glycoletters
   | extend_lib (bool): If True, further extend the library with given input. Default: False.
@@ -1924,6 +1926,9 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     draw_this += 'blank'
   if compact:
     show_linkage = False
+  if isinstance(highlight_motif, str) and highlight_motif[0] == 'r':
+    temp = get_match(highlight_motif[1:], draw_this)
+    highlight_motif = temp[0] if temp else None
 
   # Handle floaty bits if present
   floaty_bits = []
