@@ -1,5 +1,6 @@
 import re
 import copy
+import networkx as nx
 from itertools import product, combinations, chain
 from glycowork.glycan_data.loader import replace_every_second, lib, unwrap
 from glycowork.motif.processing import min_process_glycans, bracket_removal, canonicalize_iupac
@@ -273,8 +274,14 @@ def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
     len_look = p.split(')')[0].count('-') * 2
     matches = [m[len_look:] for m in matches]
   elif '?=' in p:
-    len_look = p.split('=')[1].count('-') * 2
-    matches = [m[:-len_look] for m in matches]
+    len_look = p.split('=')[1]
+    len_look = len([l for l in len_look.split('-') if l]) + len_look.count('-')
+    if matches and not max([len(m) for m in matches]) > len_look:
+      matches = [[m[1]] for m in matches if len(m) > 1]
+      global lookahead_snuck_in
+      lookahead_snuck_in = True
+    else:
+      matches = [m[:-len_look] for m in matches]
   return matches
 
 
@@ -308,16 +315,16 @@ def match_it_up(pattern_components, glycan, ggraph, libr = None):
   | libr (dict): dictionary of form glycoletter:index; default:glycowork-internal libr\n
   | Returns:
   | :-
-  | Returns dictionary of form pattern component : list of matches as node indices
+  | Returns list of tuples of form (pattern component, list of matches as node indices)
   """
   libr = libr if libr is not None else lib
-  pattern_matches = {}
+  pattern_matches = []
   for p in pattern_components:
     p2 = convert_pattern_component(p)
     match_location = 'start' if '^' in p2 else 'end' if '$' in p2 else None
     p2 = glycan_to_nxGraph(p2.strip('^$'), libr = libr) if isinstance(p2, str) else p2
     res = process_pattern(p, p2, ggraph, glycan, libr, match_location)
-    pattern_matches[p] = res if res else []
+    pattern_matches.append((p, res) if res else (p, []))
   return pattern_matches
 
 
@@ -350,7 +357,7 @@ def all_combinations(nested_list, min_len = 1, max_len = 2):
   return sorted(intra_list_combinations | inter_list_combinations)
 
 
-def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur = 1):
+def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur = 1, branch = False):
   """tries to extend current trace to the matches of the next pattern component\n
   | Arguments:
   | :-
@@ -358,7 +365,8 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
   | all_match_nodes (list): nested list of matches of next pattern component as lists of node indices
   | edges (list): list of edges as tuples of connected node indices in glycan graph
   | min_occur (int): how long the combination has to be at least; default:1
-  | max_occur (int): how long the combination can be at most; default:1\n
+  | max_occur (int): how long the combination can be at most; default:1
+  | branch (bool): whether next pattern component should be searched for in a different branch; default:False\n
   | Returns:
   | :-
   | Returns node indices from match that can be used to extend the trace
@@ -372,8 +380,13 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
   else:
     if all_match_nodes[0] and isinstance(all_match_nodes[0][0], list):
       all_match_nodes = unwrap(all_match_nodes)
-    idx = [(current_trace[-1] - node[0] == -2) or ((current_trace[-1]+1, node[0]) in edges) for node in all_match_nodes]
+    idx = [(current_trace[-1] - node[0] == -2) or \
+           ((current_trace[-1]+1, node[0]) in edges) or \
+           (current_trace[-1] - node[0] <= -4 and branch and not (current_trace[-1]+1, node[0]) in edges) and ((current_trace[-1]+1, node[-1]+2) in edges) \
+           for node in all_match_nodes]
   matched_nodes = [node for i, node in enumerate(all_match_nodes) if (idx[i])]
+  if branch and matched_nodes:
+    matched_nodes = [nodes for nodes in matched_nodes if nodes and not (current_trace[-1]+1, nodes[0]) in edges]
   if not matched_nodes and min_occur == 0:
     return True
   return matched_nodes
@@ -402,7 +415,7 @@ def trace_path(pattern_matches, ggraph):
   """given all matches to all pattern components, try to connect them in one trace\n
   | Arguments:
   | :-
-  | pattern_matches (dict): dictionary of form pattern component : list of matches as lists of node indices 
+  | pattern_matches (list): list of tuples of form (pattern component, list of matches as lists of node indices)
   | ggraph (networkx): glycan graph as a networkx object\n
   | Returns:
   | :-
@@ -410,22 +423,22 @@ def trace_path(pattern_matches, ggraph):
   | ii) nested list containing which pattern components are present in corresponding trace, as lists
   """
   all_traces, all_used_patterns = [], []
-  patterns = list(pattern_matches.keys())
+  patterns = [p[0] for p in pattern_matches]
   edges = list(ggraph.edges())
   optional_components = {p: parse_pattern(p) for p in patterns if any(x in p for x in ['{', '*', '+', '?'])}
-  start_pattern = next((p for p in patterns if pattern_matches[p][0] or optional_components.get(p, (99,99))[0] > 0), patterns[0])
-  idx = patterns.index(start_pattern) + 1
-  for start_match in pattern_matches[start_pattern]:
-    if not start_match and optional_components.get(start_pattern, (99,99))[0] > 0:
+  start_pattern = next(((p, m) for p, m in pattern_matches if (m and m[0]) or optional_components.get(p, (99,99))[0] > 0), patterns[0])
+  idx = patterns.index(start_pattern[0]) + 1
+  for start_match in start_pattern[1]:
+    if not start_match and optional_components.get(start_pattern[0], (99,99))[0] > 0:
       return []
     trace = copy.deepcopy(start_match)
-    used_patterns = [start_pattern]
-    trace = unwrap(trace) if isinstance(trace[0], list) else trace
+    used_patterns = [start_pattern[0]]
+    trace = trace[0] if isinstance(trace[0], list) else trace
     successful = True
-    for component, component_matches in list(pattern_matches.items())[idx:]:
+    for component, component_matches in pattern_matches[idx:]:
       extended = False
       min_occur, max_occur = optional_components.get(component, (1, 1))
-      to_extend = try_matching(trace, component_matches, edges, min_occur, max_occur)
+      to_extend = try_matching(trace, component_matches, edges, min_occur, max_occur, branch = '[' in component)
       if to_extend:
         extend = to_extend[-1] if not isinstance(to_extend, bool) else []
         extend = list(extend) if isinstance(extend, tuple) else extend
@@ -441,37 +454,6 @@ def trace_path(pattern_matches, ggraph):
   return all_traces, all_used_patterns
 
 
-def filter_traces(traces, used_patterns, glycan, ggraph, libr = None):
-  """given potential traces, filter out undesired traces\n
-  | Arguments:
-  | :-
-  | traces (list): nested list containing traces as lists of node indices
-  | used_patterns (list): nested list containing which pattern components are present in corresponding trace, as lists
-  | glycan (string): glycan sequence in IUPAC-condensed
-  | ggraph (networkx): glycan graph as a networkx object
-  | libr (dict): dictionary of form glycoletter:index; default:glycowork-internal libr\n
-  | Returns:
-  | :-
-  | Returns a filtered nested list containing traces as lists
-  """
-  libr = libr if libr is not None else lib
-  edges = list(ggraph.edges())
-  traces_out = []
-  for j, pattern in enumerate(used_patterns):
-    to_append = True
-    i = 0
-    for p in pattern:
-      p = p.split(')')[-1] if p.startswith('(?') else p
-      if '(' in p and '(?' not in p:
-        if ggraph.degree[traces[j][i]] != 1:
-          to_append = False
-          break
-      i += len(p.split('-')) + p.count('-') + 1
-    if to_append:
-      traces_out.append(traces[j])
-  return traces_out
-
-
 def fill_missing_in_list(lists):
   """Fills in the missing integers in a list of lists to make a full range\n
   | Arguments:
@@ -481,6 +463,8 @@ def fill_missing_in_list(lists):
   | :-
   | Returns a list of list of int: The input list with missing integers filled in.
   """
+  if lookahead_snuck_in:
+    lists = [l[:-1] for l in lists]
   filled_lists = []
   for sublist in lists:
     if not sublist:
@@ -509,7 +493,7 @@ def format_retrieved_matches(lists, ggraph):
   | :-
   | Returns a list of glycan strings that match the glyco-regular expression
   """
-  return [graph_to_string(ggraph.subgraph(trace)) for trace in lists]
+  return sorted([graph_to_string(ggraph.subgraph(trace)) for trace in lists if nx.is_connected(ggraph.subgraph(trace))])
 
 
 def get_match(pattern, glycan, libr = None, return_matches = True):
@@ -524,6 +508,8 @@ def get_match(pattern, glycan, libr = None, return_matches = True):
   | :-
   | Returns either a boolean (return_matches = False) or a list of matches as strings (return_matches = True)
   """
+  global lookahead_snuck_in
+  lookahead_snuck_in = False
   if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
     glycan = canonicalize_iupac(glycan)
   libr = libr if libr is not None else lib
@@ -533,7 +519,6 @@ def get_match(pattern, glycan, libr = None, return_matches = True):
   if pattern_matches:
     traces, used_patterns = trace_path(pattern_matches, ggraph)
     traces = fill_missing_in_list(traces)
-    traces = filter_traces(traces, used_patterns, glycan, ggraph, libr = libr)
     if traces:
       return True if not return_matches else format_retrieved_matches(traces, ggraph)
     else:
