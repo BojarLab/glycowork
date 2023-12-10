@@ -97,6 +97,7 @@ def convert_pattern_component(pattern_component):
   pattern, occurrence = None, None
   if '[' in pattern_component:
     pattern = pattern_component.split('[')[1].split(']')[0].split('|')
+    pattern = [replace_patterns(p) for p in pattern]
   if '{' in pattern_component:
     occurrence = process_occurrence(pattern_component.split('{')[1].split('}')[0])
   elif '*' in pattern_component:
@@ -260,13 +261,17 @@ def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
     counts, matches = zip(*[x for x in counts_matches if x])
   len_matches = [list(set([len(j) for j in k])) for k in matches]
   len_matches_comb = calculate_len_matches_comb(len_matches)
-  if not any([l in list(p2.values())[0] for l in len_matches_comb]) and '{' in p:
+  len_motif = list(p2.keys())[0]
+  len_motif = (len([l for l in len_motif.split('-') if l]) + len_motif.count('-'))
+  len_motif = [v*len_motif for v in list(p2.values())[0]]
+  if not any([l in len_motif for l in len_matches_comb]) and '{' in p:
     return False
   matches = list(matches) if not isinstance(matches, list) else matches
   if '=' in p or '!' in p:
     matches = unwrap(matches)
   if match_location:
     matches = filter_matches_by_location(matches, ggraph, match_location)
+  matches = matches if (matches and matches[0] and isinstance(matches[0][0], int)) else unwrap(matches)
   matches = [m for m in matches if all(x < y for x, y in zip(m, m[1:]))]
   if '!' in p:
     matches = check_negative_look(matches, p, glycan)
@@ -380,9 +385,9 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
   else:
     if all_match_nodes[0] and isinstance(all_match_nodes[0][0], list):
       all_match_nodes = unwrap(all_match_nodes)
-    idx = [(current_trace[-1] - node[0] == -2) or \
+    idx = [(current_trace[-1] - node[0] == -2 and not branch) or \
            ((current_trace[-1]+1, node[0]) in edges) or \
-           (current_trace[-1] - node[0] <= -4 and branch and not (current_trace[-1]+1, node[0]) in edges) and ((current_trace[-1]+1, node[-1]+2) in edges) \
+           (current_trace[-1] - node[0] <= -2 and branch and not (current_trace[-1]+1, node[0]) in edges) and ((current_trace[-1]+1, node[-1]+2) in edges) \
            for node in all_match_nodes]
   matched_nodes = [node for i, node in enumerate(all_match_nodes) if (idx[i])]
   if branch and matched_nodes:
@@ -493,7 +498,7 @@ def format_retrieved_matches(lists, ggraph):
   | :-
   | Returns a list of glycan strings that match the glyco-regular expression
   """
-  return sorted([graph_to_string(ggraph.subgraph(trace)) for trace in lists if nx.is_connected(ggraph.subgraph(trace))])
+  return sorted([graph_to_string(ggraph.subgraph(trace)) for trace in lists if nx.is_connected(ggraph.subgraph(trace))], key = len, reverse = True)
 
 
 def get_match(pattern, glycan, libr = None, return_matches = True):

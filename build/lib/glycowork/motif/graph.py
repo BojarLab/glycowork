@@ -425,8 +425,7 @@ def graph_to_string_int(graph):
   | :-
   | Returns glycan in IUPAC-condensed format (string)
   """
-  if min(graph.nodes()) > 0:
-    graph = nx.relabel_nodes(graph, {n: i for i, n in enumerate(sorted(graph.nodes()))})
+  graph = nx.relabel_nodes(graph, {n: i for i, n in enumerate(sorted(graph.nodes()))})
   sorted_nodes = sorted(graph.nodes())
   nodes = [graph.nodes[node]["string_labels"] for node in sorted_nodes]
   edges = {k: v for k, v in graph.edges()}

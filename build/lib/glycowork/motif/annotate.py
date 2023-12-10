@@ -89,7 +89,7 @@ def annotate_glycan(glycan, motifs = None, libr = None,
 
 
 def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
-  """given a list of SMILES glycans, uses pubchempy to return various molecular parameters retrieved from PubChem\n
+  """given a list of glycans, uses pubchempy to return various molecular parameters retrieved from PubChem\n
   | Arguments:
   | :-
   | glycan_list (list): list of glycans in IUPAC-condensed
