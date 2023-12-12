@@ -38,7 +38,7 @@ def specify_linkages(pattern_component):
       number = match.group(2)
       return f'({letter}1-{number})'
     pattern_component = re.sub(pattern, replacer, pattern_component)
-  return pattern_component
+  return pattern_component.replace('5Ac(a1', '5Ac(a2').replace('5Gc(a1', '5Gc(a2').replace('Kdn(a1', 'Kdn(a2').replace('Sia(a1', 'Sia(a2')
 
 
 def replace_patterns(s):
@@ -443,7 +443,8 @@ def trace_path(pattern_matches, ggraph):
     for component, component_matches in pattern_matches[idx:]:
       extended = False
       min_occur, max_occur = optional_components.get(component, (1, 1))
-      to_extend = try_matching(trace, component_matches, edges, min_occur, max_occur, branch = '[' in component)
+      branch = '(' in component and '(?' not in component
+      to_extend = try_matching(trace, component_matches, edges, min_occur, max_occur, branch = branch)
       if to_extend:
         extend = to_extend[-1] if not isinstance(to_extend, bool) else []
         extend = list(extend) if isinstance(extend, tuple) else extend
@@ -481,7 +482,7 @@ def fill_missing_in_list(lists):
       # Check whether the gap between current and previous element is exactly 2
       if gap == 2:
         filled_sublist.append(sublist[i] - 1)
-      elif gap > 2:
+      elif gap > 2 and gap % 2 == 0:
         filled_sublist.append(sublist[i-1] + 1)
       filled_sublist.append(sublist[i])
     filled_lists.append(filled_sublist)

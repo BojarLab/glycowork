@@ -6,6 +6,7 @@ from collections import defaultdict
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, expand_lib, rescue_glycans
+from glycowork.motif.re import get_match
 
 
 def link_find(glycan):
@@ -48,7 +49,7 @@ def annotate_glycan(glycan, motifs = None, libr = None,
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
-  | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
+  | motifs (dataframe): dataframe of glycan motifs (name + sequence), can be used with a list of glycans too; default:motif_list
   | libr (dict): dictionary of form glycoletter:index
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | gmotifs (networkx): precalculated motif graphs for speed-up; default:None\n
@@ -59,7 +60,7 @@ def annotate_glycan(glycan, motifs = None, libr = None,
   if motifs is None:
     motifs = motif_list
   # Check whether termini are specified
-  if not termini_list:
+  if not termini_list and isinstance(motifs, pd.DataFrame):
     termini_list = [eval(k) for k in motifs.termini_spec]
   if libr is None:
     libr = lib
@@ -78,7 +79,7 @@ def annotate_glycan(glycan, motifs = None, libr = None,
                                 termini_list = termini_list,
                                 count = True) for k in range(len(motifs))]*1
  
-  out = pd.DataFrame(columns = motifs.motif_name)
+  out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
   if isinstance(glycan, str):
@@ -137,16 +138,19 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
 
 
 @rescue_glycans
-def annotate_dataset(glycans, motifs = None,
-                     feature_set = ['known'], termini_list = [], condense = False):
+def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
+                     termini_list = [], condense = False, custom_motifs = []):
   """wrapper function to annotate motifs in list of glycans\n
   | Arguments:
   | :-
   | glycans (list): list of IUPAC-condensed glycan sequences as strings
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
+  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
+  |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
-  | condense (bool): if True, throws away columns with only zeroes; default:False\n
+  | condense (bool): if True, throws away columns with only zeroes; default:False
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
   | Returns:
   | :-                      
   | Returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
@@ -167,6 +171,13 @@ def annotate_dataset(glycans, motifs = None,
     # Counts literature-annotated motifs in each glycan
     shopping_cart.append(pd.concat([annotate_glycan(k, motifs = motifs, libr = libr,
                                                     gmotifs = gmotifs, termini_list = termini_list) for k in glycans], axis = 0))
+  if 'custom' in feature_set:
+    normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
+    gmotifs = [glycan_to_nxGraph(g, libr = libr) for g in normal_motifs]
+    shopping_cart.append(pd.concat([annotate_glycan(k, motifs = normal_motifs, libr = libr,
+                                                    gmotifs = gmotifs) for k in glycans], axis = 0))
+    regex_motifs = [m[1:] for m in custom_motifs if m.startswith('r')]
+    shopping_cart.append(pd.concat([pd.DataFrame([len(get_match(p, k)) for p in regex_motifs], columns = regex_motifs, index = [k]) for k in glycans], axis = 0))
   if 'graph' in feature_set:
     # Calculates graph features of each glycan
     shopping_cart.append(pd.concat([generate_graph_features(k, libr = libr) for k in glycans], axis = 0))
