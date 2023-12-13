@@ -502,11 +502,24 @@ def format_retrieved_matches(lists, ggraph):
   return sorted([graph_to_string(ggraph.subgraph(trace)) for trace in lists if nx.is_connected(ggraph.subgraph(trace))], key = len, reverse = True)
 
 
+def compile(pattern):
+  """pre-compiles glyco-regular expression for faster processing\n
+  | Arguments:
+  | :-
+  | pattern (string): glyco-regular expression in the form of "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"\n
+  | Returns:
+  | :-
+  | Returns a list of pattern components
+  """
+  pattern = pattern[1:] if pattern.startswith('r') else pattern
+  return preprocess_pattern(pattern)
+
+
 def get_match(pattern, glycan, libr = None, return_matches = True):
   """finds matches for a glyco-regular expression in a glycan\n
   | Arguments:
   | :-
-  | pattern (string): glyco-regular expression in the form of "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
+  | pattern (string): glyco-regular expression in the form of "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"; accepts pre-compiled pattern
   | glycan (string): glycan sequence in IUPAC-condensed
   | libr (dict): dictionary of form glycoletter:index; default:glycowork-internal libr
   | return_matches (bool): whether to return True/False or return the matches as a list of strings; default:True\n
@@ -520,7 +533,7 @@ def get_match(pattern, glycan, libr = None, return_matches = True):
     glycan = canonicalize_iupac(glycan)
   libr = libr if libr is not None else lib
   ggraph = glycan_to_nxGraph(glycan, libr = libr)
-  pattern_components = preprocess_pattern(pattern)
+  pattern_components = preprocess_pattern(pattern) if isinstance(pattern, str) else pattern
   pattern_matches = match_it_up(pattern_components, glycan, ggraph, libr = libr)
   if pattern_matches:
     traces, used_patterns = trace_path(pattern_matches, ggraph)
