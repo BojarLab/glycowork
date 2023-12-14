@@ -17,7 +17,8 @@ def preprocess_pattern(pattern):
   | Returns list of chunks to be used by downstream functions
   """
   # Use regular expression to identify the conditional parts and keep other chunks together
-  components = re.split(r'(-?\s*\(?\[.*?\]\)?\s*(?:\{,?\d*,?\d*\}|\+|\*|\?)\s*-?)', pattern)
+  pattern = pattern.replace('.', 'Monosaccharide')
+  components = re.split(r'(-?\s*\(?\[.*?\]\)?\s*(?:\{,?\d*,?\d*\}\?|\{,?\d*,?\d*\}|\*\?|\+\?|\?|\*|\+)\s*-?)', pattern)
   # Remove any empty strings and trim whitespace
   return [x.strip('-').strip() for x in components if x]
 
@@ -100,10 +101,16 @@ def convert_pattern_component(pattern_component):
     pattern = [replace_patterns(p) for p in pattern]
   if '{' in pattern_component:
     occurrence = process_occurrence(pattern_component.split('{')[1].split('}')[0])
+    if '?' in pattern_component:
+      occurrence = [occurrence[0], occurrence[0]]
   elif '*' in pattern_component:
     occurrence = list(range(0, 5))
+    if '?' in pattern_component:
+      occurrence = [occurrence[0], occurrence[0]]
   elif '+' in pattern_component:
     occurrence = list(range(1, 5))
+    if '?' in pattern_component:
+      occurrence = [occurrence[0], occurrence[0]]
   elif '?' in pattern_component:
     occurrence, pattern = process_question_mark(pattern_component, pattern)
   if pattern is None:
@@ -376,6 +383,8 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
   | :-
   | Returns node indices from match that can be used to extend the trace
   """
+  if max_occur == 0 and branch:
+    return True
   if not all_match_nodes or max([len(k) for k in all_match_nodes]) < 1:
     return True if min_occur == 0 else False
   if max_occur > 1:
@@ -411,28 +420,14 @@ def parse_pattern(pattern):
                           (int(temp[0]) if temp[0] else 0, int(temp[1]) if temp[1] else 5) if temp else \
                           (0, 5) if '*' in pattern else \
                           (1, 5) if '+' in pattern else \
-                          (0, 1) if '?' in pattern and '=' not in pattern and '!' not in pattern else \
+                          (0, 1) if '?' in pattern and '=' not in pattern and '!' not in pattern and '}' not in pattern else \
                           (1, 1)
+  max_occur = min_occur if any([k in pattern for k in ['.?', '}?', '*?', '+?']]) else max_occur
   return min_occur, max_occur
 
 
-def trace_path(pattern_matches, ggraph):
-  """given all matches to all pattern components, try to connect them in one trace\n
-  | Arguments:
-  | :-
-  | pattern_matches (list): list of tuples of form (pattern component, list of matches as lists of node indices)
-  | ggraph (networkx): glycan graph as a networkx object\n
-  | Returns:
-  | :-
-  | i) nested list containing traces as lists of node indices
-  | ii) nested list containing which pattern components are present in corresponding trace, as lists
-  """
+def do_trace(start_pattern, idx, pattern_matches, optional_components, edges):
   all_traces, all_used_patterns = [], []
-  patterns = [p[0] for p in pattern_matches]
-  edges = list(ggraph.edges())
-  optional_components = {p: parse_pattern(p) for p in patterns if any(x in p for x in ['{', '*', '+', '?'])}
-  start_pattern = next(((p, m) for p, m in pattern_matches if (m and m[0]) or optional_components.get(p, (99,99))[0] > 0), patterns[0])
-  idx = patterns.index(start_pattern[0]) + 1
   for start_match in start_pattern[1]:
     if not start_match and optional_components.get(start_pattern[0], (99,99))[0] > 0:
       return []
@@ -457,6 +452,37 @@ def trace_path(pattern_matches, ggraph):
     if successful:
       all_traces.append(trace)
       all_used_patterns.append(used_patterns)
+  return all_traces, all_used_patterns
+
+
+def trace_path(pattern_matches, ggraph):
+  """given all matches to all pattern components, try to connect them in one trace\n
+  | Arguments:
+  | :-
+  | pattern_matches (list): list of tuples of form (pattern component, list of matches as lists of node indices)
+  | ggraph (networkx): glycan graph as a networkx object\n
+  | Returns:
+  | :-
+  | i) nested list containing traces as lists of node indices
+  | ii) nested list containing which pattern components are present in corresponding trace, as lists
+  """
+  all_traces, all_used_patterns = [], []
+  patterns = [p[0] for p in pattern_matches]
+  edges = list(ggraph.edges())
+  optional_components = {p: parse_pattern(p) for p in patterns if any(x in p for x in ['{', '*', '+', '?'])}
+  start_pattern = next(((p, m) for p, m in pattern_matches if (m and m[0] and not any([q in p for q in ['.?', '}?', '*?', '+?']])) or optional_components.get(p, (99,99))[0] > 0), patterns[0])
+  idx = patterns.index(start_pattern[0]) + 1
+  all_traces, all_used_patterns = do_trace(start_pattern, idx, pattern_matches, optional_components, edges)
+  if not all_traces and optional_components.get(start_pattern[0], (99,99))[0] == 0:
+    for p in range(len(patterns)-idx-1):
+      if not all_traces and optional_components.get(start_pattern[0], (99,99))[0] == 0:
+        start_pattern = pattern_matches[idx+1]
+        idx += 1
+        all_traces, all_used_patterns = do_trace(start_pattern, idx, pattern_matches, optional_components, edges)
+        if all_traces:
+          break
+      else:
+        break
   return all_traces, all_used_patterns
 
 

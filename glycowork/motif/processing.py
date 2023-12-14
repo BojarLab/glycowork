@@ -560,7 +560,7 @@ def wurcs_to_iupac(wurcs):
     'axxxxh-1a_1-5_2*NCC/3=O': 'HexNAca', 'Aad21122h-2a_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Aca',
     'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4Sb', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3Sb',
     'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4Sb', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS?',
-    'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3Sb', 'a2211m-1x_1-5': 'Rha?'
+    'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3Sb', 'a2211m-1x_1-5': 'Rha?', 'a2211m-1a_1-5': 'Rhaa'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
