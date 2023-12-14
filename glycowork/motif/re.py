@@ -396,7 +396,8 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
       all_match_nodes = unwrap(all_match_nodes)
     idx = [(current_trace[-1] - node[0] == -2 and not branch) or \
            ((current_trace[-1]+1, node[0]) in edges) or \
-           (current_trace[-1] - node[0] <= -2 and branch and not (current_trace[-1]+1, node[0]) in edges) and ((current_trace[-1]+1, node[-1]+2) in edges) \
+           (current_trace[-1] - node[0] <= -2 and branch and not (current_trace[-1]+1, node[0]) in edges) and ((current_trace[-1]+1, node[-1]+2) in edges) or \
+           (current_trace[-1] - node[0] == 2 and branch and (node[0]+1, current_trace[-1]+2) in edges)
            for node in all_match_nodes]
   matched_nodes = [node for i, node in enumerate(all_match_nodes) if (idx[i])]
   if branch and matched_nodes:
@@ -435,7 +436,7 @@ def do_trace(start_pattern, idx, pattern_matches, optional_components, edges):
     used_patterns = [start_pattern[0]]
     trace = trace[0] if isinstance(trace[0], list) else trace
     successful = True
-    for component, component_matches in pattern_matches[idx:]:
+    for component, component_matches in pattern_matches[idx+1:]:
       extended = False
       min_occur, max_occur = optional_components.get(component, (1, 1))
       branch = '(' in component and '(?' not in component
@@ -443,7 +444,10 @@ def do_trace(start_pattern, idx, pattern_matches, optional_components, edges):
       if to_extend:
         extend = to_extend[-1] if not isinstance(to_extend, bool) else []
         extend = list(extend) if isinstance(extend, tuple) else extend
-        trace.extend(extend)
+        if len(extend) == 1 and extend[0] < trace[-1]:
+          trace = trace[:-1] + extend + [trace[-1]]
+        else:
+          trace.extend(extend)
         if extend:
           used_patterns.append(component)
         extended = True
@@ -471,13 +475,13 @@ def trace_path(pattern_matches, ggraph):
   edges = list(ggraph.edges())
   optional_components = {p: parse_pattern(p) for p in patterns if any(x in p for x in ['{', '*', '+', '?'])}
   start_pattern = next(((p, m) for p, m in pattern_matches if (m and m[0] and not any([q in p for q in ['.?', '}?', '*?', '+?']])) or optional_components.get(p, (99,99))[0] > 0), patterns[0])
-  idx = patterns.index(start_pattern[0]) + 1
+  idx = patterns.index(start_pattern[0])
   all_traces, all_used_patterns = do_trace(start_pattern, idx, pattern_matches, optional_components, edges)
   if not all_traces and optional_components.get(start_pattern[0], (99,99))[0] == 0:
     for p in range(len(patterns)-idx-1):
       if not all_traces and optional_components.get(start_pattern[0], (99,99))[0] == 0:
-        start_pattern = pattern_matches[idx+1]
         idx += 1
+        start_pattern = pattern_matches[idx]
         all_traces, all_used_patterns = do_trace(start_pattern, idx, pattern_matches, optional_components, edges)
         if all_traces:
           break
@@ -512,6 +516,8 @@ def fill_missing_in_list(lists):
         filled_sublist.append(sublist[i-1] + 1)
       filled_sublist.append(sublist[i])
     filled_lists.append(filled_sublist)
+  unique_tuples = set(tuple(lst) for lst in filled_lists)
+  filled_lists = [list(tpl) for tpl in unique_tuples]
   return filled_lists
 
 
