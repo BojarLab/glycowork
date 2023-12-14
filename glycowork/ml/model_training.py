@@ -7,6 +7,7 @@ import pandas as pd
 import xgboost as xgb
 import seaborn as sns
 import matplotlib.pyplot as plt
+import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error, label_ranking_average_precision_score, ndcg_score
 from glycowork.motif.annotate import annotate_dataset
 
@@ -352,8 +353,51 @@ class SAM(torch.optim.Optimizer):
         self.base_optimizer.param_groups = self.param_groups
 
 
+class Poly1CrossEntropyLoss(torch.nn.Module):
+    def __init__(self,
+                 num_classes: int,
+                 epsilon: float = 1.0,
+                 reduction: str = "mean",
+                 weight: torch.Tensor = None):
+        """
+        Create instance of Poly1CrossEntropyLoss
+        :param num_classes:
+        :param epsilon:
+        :param reduction: one of none|sum|mean, apply reduction to final loss tensor
+        :param weight: manual rescaling weight for each class, passed to Cross-Entropy loss
+        """
+        super(Poly1CrossEntropyLoss, self).__init__()
+        self.num_classes = num_classes
+        self.epsilon = epsilon
+        self.reduction = reduction
+        self.weight = weight
+        return
+
+    def forward(self, logits, labels):
+        """
+        Forward pass
+        :param logits: tensor of shape [N, num_classes]
+        :param labels: tensor of shape [N]
+        :return: poly cross-entropy loss
+        """
+        labels_onehot = F.one_hot(labels, num_classes = self.num_classes).to(device = logits.device,
+                                                                           dtype=logits.dtype)
+        pt = torch.sum(labels_onehot * F.softmax(logits, dim = -1), dim = -1)
+        CE = F.cross_entropy(input = logits,
+                             target = labels,
+                             reduction = 'none',
+                             weight = self.weight,
+                             label_smoothing = 0.1)
+        poly1 = CE + self.epsilon * (1 - pt)
+        if self.reduction == "mean":
+            poly1 = poly1.mean()
+        elif self.reduction == "sum":
+            poly1 = poly1.sum()
+        return poly1
+
+
 def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.0001,
-                   mode = 'multiclass', gsam_alpha = 0.):
+                   mode = 'multiclass', num_classes = 2, gsam_alpha = 0.):
     """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
     | Arguments:
     | :-
@@ -363,6 +407,7 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
     | factor (float): factor by which learning rate is multiplied upon reduction
     | weight_decay (float): regularization parameter for the optimizer; default:0.001
     | mode (string): 'multiclass': classification with multiple classes, 'multilabel': predicting several labels at the same time, 'binary':binary classification, 'regression': regression; default:'multiclass'
+    | num_classes (int): number of classes; only used when mode == 'multiclass' or 'multilabel'
     | gsam_alpha (float): if higher than zero, uses GSAM instead of SAM for the optimizer\n
     | Returns:
     | :-
@@ -381,11 +426,13 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
                                                                factor = factor, verbose = True)
     # Choose loss function
     if mode == 'multiclass':
-        criterion = torch.nn.CrossEntropyLoss().to(device)
+        if num_classes == 2:
+            raise Exception("You have to set the number of classes via num_classes")
+        criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
     elif mode == 'multilabel':
-        criterion = torch.nn.BCEWithLogitsLoss().to(device)
+        criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
     elif mode == 'binary':
-        criterion = torch.nn.BCEWithLogitsLoss().to(device)
+        criterion = Poly1CrossEntropyLoss(num_classes = 2).to(device)
     elif mode == 'regression':
         criterion = torch.nn.MSELoss().to(device)
     else:

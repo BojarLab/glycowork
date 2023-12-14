@@ -394,7 +394,7 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
   else:
     if all_match_nodes[0] and isinstance(all_match_nodes[0][0], list):
       all_match_nodes = unwrap(all_match_nodes)
-    idx = [(current_trace[-1] - node[0] == -2 and not branch) or \
+    idx = [(current_trace[-1] - node[0] == -2 and not branch and (current_trace[-1]+1, node[0]) in edges) or \
            ((current_trace[-1]+1, node[0]) in edges) or \
            (current_trace[-1] - node[0] <= -2 and branch and not (current_trace[-1]+1, node[0]) in edges) and ((current_trace[-1]+1, node[-1]+2) in edges) or \
            (current_trace[-1] - node[0] == 2 and branch and (node[0]+1, current_trace[-1]+2) in edges)
@@ -559,6 +559,7 @@ def get_match(pattern, glycan, libr = None, return_matches = True):
   | :-
   | Returns either a boolean (return_matches = False) or a list of matches as strings (return_matches = True)
   """
+  pattern = pattern[1:] if pattern.startswith('r') else pattern
   global lookahead_snuck_in
   lookahead_snuck_in = False
   if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
