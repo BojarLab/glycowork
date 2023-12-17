@@ -30,7 +30,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | df (dataframe): dataframe containing glycan sequences and labels [alternative: filepath to .csv]
     | glycan_col_name (string): column name for glycan sequences; arbitrary if multiple_samples = True; default:'glycan'
     | label_col_name (string): column name for labels; arbitrary if multiple_samples = True; default:'target'
-    | zscores (bool): whether data is presented as z-scores or not, will be z-score transformed if False; default:True
+    | zscores (bool): whether data are presented as z-scores or not, will be z-score transformed if False; default:True
     | thresh (float): threshold value to separate positive/negative; default is 1.645 for Z-scores
     | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
@@ -70,7 +70,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     df_neg = df_motif[df_motif[label_col_name] <= thresh]
     # Test statistical enrichment for motifs in above vs below
     ttests = [ttest_ind(np.append(df_pos.iloc[:, k] * df_pos[label_col_name], [1]),
-                        np.append(df_neg.iloc[:, k]*df_neg[label_col_name], [1]),
+                        np.append(df_neg.iloc[:, k] * df_neg[label_col_name], [1]),
                         equal_var = False)[1] for k in range(df_motif.shape[1]-1)]
     ttests_corr = multipletests(ttests, method = 'fdr_bh')[1].tolist()
     effect_sizes, variances = zip(*[cohen_d(np.append(df_pos.iloc[:, k].values, [1, 0]),

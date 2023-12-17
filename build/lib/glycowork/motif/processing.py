@@ -645,12 +645,26 @@ def oxford_to_iupac(oxford):
   | :-
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
-  oxford = re.sub(r'\([^)]*\)', '', oxford)
+  oxford = re.sub(r'\([^)]*\)', '', oxford).strip()
   antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
   mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-?)", "S": "Neu5Ac(a2-?)",
                   "Sg": "Neu5Gc(a2-?)", "Ga": "Gal(a1-?)", "GalNAc": "GalNAc(?1-?)",
                   "Lac": "Gal(b1-?)GlcNAc(b1-?)", "F": "Fuc(a1-?)"}
+  hardcoded = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M4": "Man(a1-?)Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M9": "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M10": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M11": "Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M12": "Glc(a1-2)Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"}
+  if oxford in hardcoded:
+    return hardcoded[oxford]
+  if "Sulf" in oxford:
+    sulf = oxford[oxford.index("Sulf")+4]
+    sulf = int(sulf) if sulf.isdigit() else 1
+    oxford = oxford.replace("Sulf", '')
+  else:
+    sulf = 0
   if 'B' in oxford:
     split = iupac.index(']')
     iupac = iupac[:split+1] + "[GlcNAc(b1-4)]" + iupac[split+1:]
@@ -661,19 +675,23 @@ def oxford_to_iupac(oxford):
     split = iupac.rindex(')')
     fuc = "[Fuc(a1-3)]" if "X" in oxford else "[Fuc(a1-6)]"
     iupac = iupac[:split+1] + fuc + iupac[split+1:]
-  elif 'F' in oxford:
-    antennae["F"] = int(oxford[oxford.index("F")+1])
+  if 'F' in oxford[1:]:
+    nth = oxford.count('F')
+    antennae["F"] = int(oxford[find_nth(oxford, "F", nth)+1])
   if 'M' in oxford:
     M_count = int(oxford[oxford.index("M")+1]) - 3
     for m in range(M_count):
       iupac = "{Man(a1-?)}" + iupac
     return iupac
-  branches = {"A": int(oxford[oxford.index("A")+1]) if "A" in oxford else 0,
-              "G": int(oxford[oxford.index("G")+1]) if "G" in oxford and oxford[oxford.index("G")+1] != 'a' else 0,
-              "S": int(oxford[oxford.index("S")+1]) if "S" in oxford and oxford[oxford.index("S")+1] != 'g' else 0}
-  extras = {"Sg": int(oxford[oxford.index("Sg")+2]) if "Sg" in oxford else 0,
-            "Ga": int(oxford[oxford.index("Ga")+2]) if "Ga" in oxford else 0,
-            "Lac": int(oxford[oxford.index("Lac")+3]) if "Lac" in oxford else 0}
+  oxford_wo_branches = bracket_removal(oxford)
+  branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches else 0,
+              "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != 'a' else 0,
+              "S": int(oxford_wo_branches[oxford_wo_branches.index("S")+1]) if "S" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("S")+1] != 'g' else 0}
+  extras = {"Sg": int(oxford_wo_branches[oxford_wo_branches.index("Sg")+2]) if "Sg" in oxford_wo_branches else 0,
+            "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches else 0,
+            "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches else 0}
+  specified_linkages = {'Neu5Ac(a2-?)': oxford[oxford.index("S")+2:] if branches['S'] else []}
+  specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v}
   built_branches = []
   while sum(branches.values()) > 0:
     temp = ''
@@ -711,6 +729,22 @@ def oxford_to_iupac(oxford):
         split = iupac.index("Gal(b1-?)Glc")
         iupac = iupac[:split+len("Gal(b1-?)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-?)"):]
         v -= 1
+  iupac = iupac.replace("GlcNAc(b1-?)[Neu5Ac(a2-?)]Man", "[Neu5Ac(a2-?)]GlcNAc(b1-?)Man")
+  for k, v in specified_linkages.items():
+    if v:
+      for vv in v:
+        iupac = iupac.replace(k, k[:-2]+str(vv)+')', 1)
+  while "Neu5Ac(a2-8)G" in iupac:
+    iupac = iupac.replace("Neu5Ac(a2-8)G", "G", 1)
+    idx = [m.start() for m in re.finditer(r'(?<!8\))Neu5Ac\(a2-[3|6|\?]\)', iupac)][0]
+    iupac = iupac[:idx] + "Neu5Ac(a2-8)" + iupac[idx:]
+  while "[Neu5Ac(a2-8)]" in iupac:
+    iupac = iupac.replace("[Neu5Ac(a2-8)]", "", 1)
+    idx = [m.start() for m in re.finditer(r'(?<!8\))Neu5Ac\(a2-[3|6|\?]\)', iupac)][0]
+    iupac = iupac[:idx] + "Neu5Ac(a2-8)" + iupac[idx:]
+  while sulf > 0:
+    iupac = iupac.replace("Gal(", "GalOS(", 1)
+    sulf -= 1
   return iupac.strip('[]')
 
 
