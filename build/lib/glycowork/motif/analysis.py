@@ -22,7 +22,7 @@ from glycowork.motif.graph import subgraph_isomorphism
 
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
-                     thresh = 1.645, sorting = True, feature_set = ['exhaustive'],
+                     zscores = True, thresh = 1.645, sorting = True, feature_set = ['exhaustive'],
                      multiple_samples = False, motifs = None):
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
@@ -30,6 +30,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | df (dataframe): dataframe containing glycan sequences and labels [alternative: filepath to .csv]
     | glycan_col_name (string): column name for glycan sequences; arbitrary if multiple_samples = True; default:'glycan'
     | label_col_name (string): column name for labels; arbitrary if multiple_samples = True; default:'target'
+    | zscores (bool): whether data is presented as z-scores or not, will be z-score transformed if False; default:True
     | thresh (float): threshold value to separate positive/negative; default is 1.645 for Z-scores
     | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
@@ -39,7 +40,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None\n
     | Returns:
     | :-
-    | Returns dataframe with p-values and corrected p-values for every glycan motif
+    | Returns dataframe with p-values, corrected p-values, and Cohen's d as effect size for every glycan motif
     """
     if isinstance(df, str):
         df = pd.read_csv(df)
@@ -47,6 +48,10 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     if multiple_samples:
         df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
         df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
+    if not zscores:
+        means = df.iloc[:, 1:].mean()
+        std_devs = df.iloc[:, 1:].std()
+        df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / std_devs
     # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 motifs = motifs, feature_set = feature_set,
@@ -64,19 +69,23 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     df_pos = df_motif[df_motif[label_col_name] > thresh]
     df_neg = df_motif[df_motif[label_col_name] <= thresh]
     # Test statistical enrichment for motifs in above vs below
-    ttests = [ttest_ind(np.append(df_pos.iloc[:, k].values, 1),
-                        np.append(df_neg.iloc[:, k].values, 1),
-                        equal_var = False)[1]/2 if df_pos.iloc[:, k].mean() > df_neg.iloc[:, k].mean() else 1.0 for k in range(df_motif.shape[1]-1)]
+    ttests = [ttest_ind(np.append(df_pos.iloc[:, k] * df_pos[label_col_name], [1]),
+                        np.append(df_neg.iloc[:, k]*df_neg[label_col_name], [1]),
+                        equal_var = False)[1] for k in range(df_motif.shape[1]-1)]
     ttests_corr = multipletests(ttests, method = 'fdr_bh')[1].tolist()
+    effect_sizes, variances = zip(*[cohen_d(np.append(df_pos.iloc[:, k].values, [1, 0]),
+                                            np.append(df_neg.iloc[:, k].values, [1, 0]), paired = False) for k in range(df_motif.shape[1]-1)])
     out = pd.DataFrame({
         'motif': df_motif.columns.tolist()[:-1],
         'pval': ttests,
-        'corr_pval': ttests_corr
+        'corr_pval': ttests_corr,
+        'effect_size': effect_sizes
         })
     if sorting:
-        return out.sort_values(by = ['corr_pval', 'pval'])
-    else:
-        return out
+        out['abs_effect_size'] = out['effect_size'].abs()
+        out = out.sort_values(by = ['abs_effect_size', 'corr_pval', 'pval'], ascending = [False, True, True])
+        out.drop('abs_effect_size', axis = 1, inplace = True)
+    return out
 
 
 def get_representative_substructures(enrichment_df, libr = None):

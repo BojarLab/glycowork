@@ -404,7 +404,7 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
     matched_nodes = [nodes for nodes in matched_nodes if nodes and not (current_trace[-1]+1, nodes[0]) in edges]
   if not matched_nodes and min_occur == 0:
     return True
-  return matched_nodes
+  return sorted(matched_nodes, key = lambda x: (len(x), x[-1]))
 
 
 def parse_pattern(pattern):
