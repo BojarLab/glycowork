@@ -645,12 +645,12 @@ def oxford_to_iupac(oxford):
   | :-
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
-  oxford = re.sub(r'\([^)]*\)', '', oxford).strip()
+  oxford = re.sub(r'\([^)]*\)', '', oxford).strip().split('/')[0]
   antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
   mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-?)", "S": "Neu5Ac(a2-?)",
                   "Sg": "Neu5Gc(a2-?)", "Ga": "Gal(a1-?)", "GalNAc": "GalNAc(?1-?)",
-                  "Lac": "Gal(b1-?)GlcNAc(b1-?)", "F": "Fuc(a1-?)"}
+                  "Lac": "Gal(b1-?)GlcNAc(b1-?)", "F": "Fuc(a1-?)", "LacDiNAc": "GalNAc(b1-4)GlcNAc(b1-?)"}
   hardcoded = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M4": "Man(a1-?)Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M9": "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
@@ -682,14 +682,14 @@ def oxford_to_iupac(oxford):
     M_count = int(oxford[oxford.index("M")+1]) - 3
     for m in range(M_count):
       iupac = "{Man(a1-?)}" + iupac
-    return iupac
   oxford_wo_branches = bracket_removal(oxford)
   branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches else 0,
               "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != 'a' else 0,
               "S": int(oxford_wo_branches[oxford_wo_branches.index("S")+1]) if "S" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("S")+1] != 'g' else 0}
   extras = {"Sg": int(oxford_wo_branches[oxford_wo_branches.index("Sg")+2]) if "Sg" in oxford_wo_branches else 0,
             "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches else 0,
-            "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches else 0}
+            "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches else 0,
+            "LacDiNAc": 1 if "LacDiN" in oxford_wo_branches else 0}
   specified_linkages = {'Neu5Ac(a2-?)': oxford[oxford.index("S")+2:] if branches['S'] else []}
   specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v}
   built_branches = []
@@ -775,6 +775,7 @@ def canonicalize_iupac(glycan):
   | :-
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
+  glycan = glycan.strip()
   # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
@@ -787,7 +788,7 @@ def canonicalize_iupac(glycan):
   elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
     check_nomenclature(glycan)
     return
-  elif glycan[-1].isdigit() and 'e' not in glycan and '-' not in glycan:
+  elif (glycan[-1].isdigit() or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B')) and 'e' not in glycan and '-' not in glycan:
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
