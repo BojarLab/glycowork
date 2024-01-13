@@ -179,26 +179,14 @@ def find_diff(glycan_a, glycan_b, graph_dic, libr = None):
   # Check whether the glycans are equal
   if glycan_a == glycan_b:
     return ""
-  # Convert to graphs and get sorted node labels
+  # Convert to graphs and get difference
   glycans = [glycan_a, glycan_b]
-  graphs = [sorted(nx.get_node_attributes(safe_index(g, graph_dic, libr = libr), 'string_labels').values()) for g in glycans]
-  larger_graph, smaller_graph = sorted(graphs, key = len, reverse = True)
-  # Iteratively subtract the smaller graph from the larger graph --> what remains is the difference
-  for k in smaller_graph:
-    try:
-      larger_graph.remove(k)
-    except:
-      return 'disregard'
-  # Final check of whether the smaller glycan is a subgraph of the larger glycan
-  if len(larger_graph) > 2 or not subgraph_isomorphism(max(glycans, key = len), min(glycans, key = len), libr = libr):
-    return 'disregard'
-  linkage = next((k for k in larger_graph if k in linkages), None)
-  sugar = next((k for k in larger_graph if k not in linkages), None)
-  diff = f"{sugar}({linkage})"
-  if 'S(' in diff or 'P(' in diff or diff is None:
-    return 'disregard'
+  graphs = [safe_index(max(glycans, key = len), graph_dic, libr = libr), safe_index(min(glycans, key = len), graph_dic, libr = libr)]
+  matched = subgraph_isomorphism(graphs[0], graphs[1], libr = libr, return_matches = True)
+  if not isinstance(matched, bool) and matched[0]:
+    return graph_to_string(graphs[0].subgraph([k for k in graphs[0].nodes() if k not in matched[1][0]]))
   else:
-    return diff
+    return 'disregard'
 
 
 def find_shared_virtuals(glycan_a, glycan_b, graph_dic, libr = None, min_size = 1):
@@ -835,7 +823,7 @@ def network_alignment(network_a, network_b):
   | network_b (networkx object): biosynthetic network from construct_network\n
   | Returns:
   | :-
-  | Returns combined network as a networkx object
+  | Returns combined network as a networkx object (brown: shared, blue: only in a, orange: only in b)
   """
   U = nx.Graph()
   network_a_nodes = set(network_a.nodes)

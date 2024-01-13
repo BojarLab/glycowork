@@ -282,6 +282,7 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
     'free': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
     'lipid': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
     }
+  glycan = glycan[:-3] if glycan.endswith('-ol') else glycan
   pool = pools.get(glycan_class, [])
   truth = any([glycan.endswith(k) for k in pool])
   if truth and glycan_class in {'free', 'lipid', 'O'}:
@@ -440,7 +441,7 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
       parent_id, child_id = int(parts[0]), int(parts[3])
       link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
       if link_type.startswith('99') and parts[1] not in ['2', '5']:
-        residue_dic[parent_id] = re.sub(r'(O)(?=S|P|Ac)', parts[1], residue_dic[parent_id], count = 1)
+        residue_dic[parent_id] = re.sub(r'(O)(?=S|P|Ac|Me)', parts[1], residue_dic[parent_id], count = 1)
       if not link_type.startswith('99'):
         iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
         degrees[parent_id] += 1
@@ -497,7 +498,7 @@ def glycoct_to_iupac(glycoct):
   mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu',
                   'dxyl': 'Xyl', 'dara': 'D-Ara', 'lara': 'Ara', 'HEX': 'Hex', 'lman': 'Rha'}
   sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc',
-                 'acetyl': 'OAc'}
+                 'acetyl': 'OAc', 'methyl': 'OMe'}
   if len(glycoct.split("UND")) > 1:
       floating_bits = glycoct.split("UND")[2:]
       floating_bits = ["RES" + f.split('RES')[1] for f in floating_bits]
@@ -518,8 +519,8 @@ def glycoct_to_iupac(glycoct):
   iupac = floating_part + iupac[:-1]
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
-  iupac = re.sub(r'(\?)(?=S|P)', 'O', iupac)
-  iupac = re.sub(r'([1-9\?O](S|P|Ac))NAc', r'NAc\1', iupac)
+  iupac = re.sub(r'(\?)(?=S|P|Me)', 'O', iupac)
+  iupac = re.sub(r'([1-9\?O](S|P|Ac|Me))NAc', r'NAc\1', iupac)
   if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
   iupac = iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
@@ -560,7 +561,7 @@ def wurcs_to_iupac(wurcs):
     'axxxxh-1a_1-5_2*NCC/3=O': 'HexNAca', 'Aad21122h-2a_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Aca',
     'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4Sb', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3Sb',
     'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4Sb', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS?',
-    'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3Sb', 'a2211m-1x_1-5': 'Rha?', 'a2211m-1a_1-5': 'Rhaa'
+    'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3Sb', 'a2211m-1x_1-5': 'Rha?', 'a2211m-1a_1-5': 'Rhaa', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAcb'
     }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -678,17 +679,18 @@ def oxford_to_iupac(oxford):
   if 'F' in oxford[1:]:
     nth = oxford.count('F')
     antennae["F"] = int(oxford[find_nth(oxford, "F", nth)+1])
+  floaty = ''
   if 'M' in oxford:
     M_count = int(oxford[oxford.index("M")+1]) - 3
     for m in range(M_count):
-      iupac = "{Man(a1-?)}" + iupac
+      floaty += "{Man(a1-?)}"
   oxford_wo_branches = bracket_removal(oxford)
-  branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches else 0,
-              "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != 'a' else 0,
-              "S": int(oxford_wo_branches[oxford_wo_branches.index("S")+1]) if "S" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("S")+1] != 'g' else 0}
+  branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A")+1] != "c" else 0,
+              "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != "a" else 0,
+              "S": int(oxford_wo_branches[oxford_wo_branches.index("S")+1]) if "S" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("S")+1] != "g" else 0}
   extras = {"Sg": int(oxford_wo_branches[oxford_wo_branches.index("Sg")+2]) if "Sg" in oxford_wo_branches else 0,
             "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches else 0,
-            "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches else 0,
+            "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Lac")+3] != "D" else 0,
             "LacDiNAc": 1 if "LacDiN" in oxford_wo_branches else 0}
   specified_linkages = {'Neu5Ac(a2-?)': oxford[oxford.index("S")+2:] if branches['S'] else []}
   specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v}
@@ -722,12 +724,18 @@ def oxford_to_iupac(oxford):
       elif "[Gal(b" in iupac:
         split = iupac.index("[Gal(b")
         iupac = iupac[:split+1] + mapping_dict[e] + iupac[split+1:]
+      else:
+        iupac = mapping_dict[e] + iupac
       v -= 1
   if antennae:
     for k, v in antennae.items():
       while v > 0:
-        split = iupac.index("Gal(b1-?)Glc")
-        iupac = iupac[:split+len("Gal(b1-?)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-?)"):]
+        if "Gal(b1-?)Glc" in iupac:
+          split = iupac.index("Gal(b1-?)Glc")
+          iupac = iupac[:split+len("Gal(b1-?)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-?)"):]
+        else:
+          split =  iupac.index("GalNAc(b1-4)Glc")
+          iupac = iupac[:split+len("GalNAc(b1-4)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("GalNAc(b1-4)"):]
         v -= 1
   iupac = iupac.replace("GlcNAc(b1-?)[Neu5Ac(a2-?)]Man", "[Neu5Ac(a2-?)]GlcNAc(b1-?)Man")
   for k, v in specified_linkages.items():
@@ -745,7 +753,8 @@ def oxford_to_iupac(oxford):
   while sulf > 0:
     iupac = iupac.replace("Gal(", "GalOS(", 1)
     sulf -= 1
-  return iupac.strip('[]')
+  iupac = floaty + iupac.strip('[]')
+  return iupac
 
 
 def check_nomenclature(glycan):
@@ -788,7 +797,7 @@ def canonicalize_iupac(glycan):
   elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
     check_nomenclature(glycan)
     return
-  elif (glycan[-1].isdigit() or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B')) and 'e' not in glycan and '-' not in glycan:
+  elif (glycan[-1].isdigit() or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B') or glycan.endswith("LacDiNAc")) and 'e' not in glycan and '-' not in glycan:
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
