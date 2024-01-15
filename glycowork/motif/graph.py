@@ -165,17 +165,19 @@ def categorical_node_match_wildcard(attr, default, narrow_wildcard_list, attr2, 
       return termini1 == termini2 or 'flexible' in [termini1, termini2]
     
     def match(data1, data2):
-      data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
       data1_labels2, data2_labels2 = data1.get(attr2, default2), data2.get(attr2, default2)
       termini_check = check_termini(data1_labels2, data2_labels2)
-      if data1_labels in narrow_wildcard_list and data2_labels in narrow_wildcard_list[data1_labels] and termini_check:
-        return True
-      elif data2_labels in narrow_wildcard_list and data1_labels in narrow_wildcard_list[data2_labels] and termini_check:
-        return True
-      elif termini_check:
-        return data1_labels == data2_labels
-      else:
+      if not termini_check:
         return False
+      data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
+      if "Monosaccharide" in [data1_labels, data2_labels]:
+        return True
+      if data1_labels in narrow_wildcard_list and data2_labels in narrow_wildcard_list[data1_labels]:
+        return True
+      elif data2_labels in narrow_wildcard_list and data1_labels in narrow_wildcard_list[data2_labels]:
+        return True
+      else:
+        return data1_labels == data2_labels
   else:
     attrs = list(zip(attr, default))
     def match(data1, data2):
