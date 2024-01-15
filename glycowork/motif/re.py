@@ -84,6 +84,30 @@ def process_question_mark(s, p):
   return occurrence, pattern
 
 
+def expand_pattern(pattern_component):
+  """allows for specification of ambiguous (but not wildcarded) linkages by converting expressions such as Galb3/4 to the two specified versions\n
+  | Arguments:
+  | :-
+  | pattern_component (string): chunk of a glyco-regular expression\n
+  | Returns:
+  | :-
+  | Returns a list of specified pattern components, ready for specify_linkages etc.
+  """
+  # Find the window of ambiguity (a segment with characters separated by slashes)
+  match = re.findall(r'\d\/\d', pattern_component)
+  if not match:
+    return [pattern_component]  # Return the original pattern if no ambiguous window is found
+  # Extract the ambiguous characters
+  ambiguous_window = match[0]
+  ambiguous_chars = ambiguous_window.split('/')
+  # Duplicate the pattern for each ambiguous character and replace the window
+  expanded_patterns = []
+  for char in ambiguous_chars:
+    new_pattern = pattern_component.replace(ambiguous_window, char, 1)
+    expanded_patterns.append(new_pattern)
+  return expanded_patterns
+
+
 def convert_pattern_component(pattern_component):
   """processes a pattern component into either a string or dict of form string : occurrence\n
   | Arguments:
@@ -115,6 +139,16 @@ def convert_pattern_component(pattern_component):
     occurrence, pattern = process_question_mark(pattern_component, pattern)
   if pattern is None:
     pattern = replace_patterns(pattern_component)
+  if any(['/' in p for p in pattern]):
+    pattern2 = []
+    for p in pattern:
+      if '/' in p:
+        pattern2.extend(expand_pattern(p))
+      else:
+        pattern2.append(p)
+    pattern = pattern2
+  elif '/' in pattern:
+    pattern = expand_pattern(pattern)
   return {specify_linkages(p): occurrence for p in pattern}
 
 
