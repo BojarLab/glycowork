@@ -517,6 +517,8 @@ def get_differential_expression(df, group1, group2,
       group1 = [columns_list[k] for k in group1]
       group2 = [columns_list[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
+  # Drop rows with all zero, followed by imputation & normalization
+  df = df.loc[~(df == 0).all(axis = 1)]
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
