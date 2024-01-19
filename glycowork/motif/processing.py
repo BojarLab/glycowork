@@ -1375,3 +1375,21 @@ def get_alphaN(n, BF = 3, method = "robust", upper = 10):
   b = method_dict.get(method, lambda n: 1/n)(n)
   alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(b)), 1)
   return alpha
+
+
+def benjamini_hochberg_correction(p_values):
+  """Corrects p-values for multiple testing according to the Benjamini-Hochberg procedure\n
+  | Arguments:
+  | :-
+  | p_values (numpy array): uncorrected p-values as array\n
+  | Returns:
+  | :-
+  | Returns array of corrected p-values
+  """
+  n = len(p_values)
+  sorted_indices = np.argsort(p_values)
+  sorted_p_values = p_values[sorted_indices]
+  bh_values = (n / rankdata(sorted_p_values)) * sorted_p_values
+  corrected_p_values = np.minimum.accumulate(bh_values[::-1])[::-1]
+  corrected_p_values_sorted_indices = np.argsort(sorted_indices)
+  return corrected_p_values[corrected_p_values_sorted_indices]

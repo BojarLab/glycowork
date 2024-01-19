@@ -33,12 +33,11 @@ def specify_linkages(pattern_component):
   | Returns specified chunk to be used by downstream functions
   """
   if re.search(r"[\d|\?]\(|\d$", pattern_component):
-    pattern = r"([ab\?])([2-9\?])\(\?1-\?\)"
+    pattern = re.compile(r"([ab\?])([2-9\?])\(\?1-\?\)")
     def replacer(match):
-      letter = match.group(1)
-      number = match.group(2)
+      letter, number = match.groups()
       return f'({letter}1-{number})'
-    pattern_component = re.sub(pattern, replacer, pattern_component)
+    pattern_component = pattern.sub(replacer, pattern_component)
   return pattern_component.replace('5Ac(a1', '5Ac(a2').replace('5Gc(a1', '5Gc(a2').replace('Kdn(a1', 'Kdn(a2').replace('Sia(a1', 'Sia(a2')
 
 
@@ -78,7 +77,7 @@ def process_question_mark(s, p):
     occurrence = [1]
     part = s.replace('(?=', '').replace(')', '') if '=' in s else s.split('(')[0]
   else:
-    occurrence = list(range(0, 2))
+    occurrence = [0, 1]
     part = p if p else s
   pattern = [replace_patterns(part)] if isinstance(part, str) else [replace_patterns(ps) for ps in part]
   return occurrence, pattern
@@ -101,11 +100,7 @@ def expand_pattern(pattern_component):
   ambiguous_window = match[0]
   ambiguous_chars = ambiguous_window.split('/')
   # Duplicate the pattern for each ambiguous character and replace the window
-  expanded_patterns = []
-  for char in ambiguous_chars:
-    new_pattern = pattern_component.replace(ambiguous_window, char, 1)
-    expanded_patterns.append(new_pattern)
-  return expanded_patterns
+  return [pattern_component.replace(ambiguous_window, char, 1) for char in ambiguous_chars]
 
 
 def convert_pattern_component(pattern_component):
@@ -127,12 +122,8 @@ def convert_pattern_component(pattern_component):
     occurrence = process_occurrence(pattern_component.split('{')[1].split('}')[0])
     if '?' in pattern_component:
       occurrence = [occurrence[0], occurrence[0]]
-  elif '*' in pattern_component:
-    occurrence = list(range(0, 5))
-    if '?' in pattern_component:
-      occurrence = [occurrence[0], occurrence[0]]
-  elif '+' in pattern_component:
-    occurrence = list(range(1, 5))
+  elif '*' in pattern_component or '+' in pattern_component:
+    occurrence = list(range(0, 5)) if '*' in pattern_component else list(range(1, 5))
     if '?' in pattern_component:
       occurrence = [occurrence[0], occurrence[0]]
   elif '?' in pattern_component:
@@ -140,13 +131,10 @@ def convert_pattern_component(pattern_component):
   if pattern is None:
     pattern = replace_patterns(pattern_component)
   if any(['/' in p for p in pattern]):
-    pattern2 = []
+    expanded_pattern = []
     for p in pattern:
-      if '/' in p:
-        pattern2.extend(expand_pattern(p))
-      else:
-        pattern2.append(p)
-    pattern = pattern2
+      expanded_pattern.extend(expand_pattern(p) if '/' in p else [p])
+    pattern = expanded_pattern
   elif '/' in pattern:
     pattern = expand_pattern(pattern)
   return {specify_linkages(p): occurrence for p in pattern}
@@ -201,19 +189,13 @@ def check_negative_look(matches, pattern, glycan):
   def process_target_locs(starts, len_part, behind):
     target_locs = []
     for s in starts:
-      if behind:
-        segment = glycan_parts[s-len_part:s]
-        temp = glycan_parts_main[:s]
-      else:
-        segment = glycan_parts[s+1:s+len_part+1]
-        temp = glycan_parts_main[s+1:]
+      segment = glycan_parts[s-len_part:s] if behind else glycan_parts[s+1:s+len_part+1]
+      temp = glycan_parts_main[:s] if behind else glycan_parts_main[s+1:]
       segment_str = replace_every_second('('.join(segment), '(', ')')
       if segment_str not in glycan:
         temp_filtered = [k for k in temp if k]
-        if behind:
-          segment_str = replace_every_second('('.join(temp_filtered[-len_part:]), '(', ')')
-        else:
-          segment_str = replace_every_second('('+ '('.join(temp_filtered[:len_part]), '(', ')')
+        segment_slice = '('.join(temp_filtered[-len_part:]) if behind else '('+ '('.join(temp_filtered[:len_part])
+        segment_str = replace_every_second(segment_slice, '(', ')')
       target_locs.append(segment_str if behind else ')'.join(segment_str.split(')')[1:]))
     return target_locs
   target_locs = process_target_locs(starts, len_part, behind)
@@ -232,7 +214,8 @@ def filter_matches_by_location(matches, ggraph, match_location):
   | Returns a filtered list of matches
   """
   if match_location == 'start':
-    return [m for m in matches if ggraph.degree[m[0]] == 1]
+    degrees = {node: ggraph.degree[node] for node in ggraph}
+    return [m for m in matches if degrees[m[0]] == 1]
   elif match_location == 'end':
     location_idx = len(ggraph) - 1
     return [m for m in matches if location_idx in m]
@@ -255,10 +238,12 @@ def process_simple_pattern(p2, ggraph, libr, match_location):
   if not res:
     return False
   matched, matches = res
-  if match_location:
-    matches = filter_matches_by_location(matches, ggraph, match_location)
   if not matched or not matches:
     return False
+  if match_location:
+    matches = filter_matches_by_location(matches, ggraph, match_location)
+    if not matches:
+      return False
   return [m for m in matches if all(x < y for x, y in zip(m, m[1:]))]
 
 
@@ -271,14 +256,15 @@ def calculate_len_matches_comb(len_matches):
   | :-
   | Returns list of lengths of possible combinations of matches
   """
-  if len(len_matches) > 1:
-    cartesian_product = product(*len_matches)
-    if len(len_matches) > 2:
-      return list(set(unwrap(len_matches) + [sum(sum(sublist) for sublist in combination) for combination in cartesian_product]))
-    else:
-      return list(set(unwrap(len_matches) + [sum(combination) for combination in cartesian_product]))
-  else:
+  if not len_matches:
+    return [0]
+  if len(len_matches) == 1:
     return list(set(unwrap(len_matches))) + [0]
+  cartesian_product = product(*len_matches)
+  if len(len_matches) > 2:
+    return list(set(unwrap(len_matches) + [sum(sum(sublist) for sublist in combination) for combination in cartesian_product]))
+  else:
+    return list(set(unwrap(len_matches) + [sum(combination) for combination in cartesian_product]))
 
 
 def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
@@ -295,7 +281,8 @@ def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
   | :-
   | Returns list of matches as list of node indices
   """
-  counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key, libr = libr), libr = libr, count = True, return_matches = True) for p_key in p2.keys()]
+  counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key, libr = libr),
+                                         libr = libr, count = True, return_matches = True) for p_key in p2.keys()]
   if sum([k for k in counts_matches if isinstance(k, int)]) < 1 and isinstance(counts_matches[0], int):
     counts, matches = [], []
   else:
@@ -396,9 +383,7 @@ def all_combinations(nested_list, min_len = 1, max_len = 2):
           intra_list_combinations.update(combinations(flat_list, i))
   # Generate all combinations for inter-list combinations
   all_elements = sorted(chain.from_iterable(chain.from_iterable(nested_list)))
-  inter_list_combinations = set()
-  for i in range(min_len, max_len + 1):
-      inter_list_combinations.update(combinations(all_elements, i))
+  inter_list_combinations = set(combinations(all_elements, i) for i in range(min_len, max_len + 1))
   # Combine intra-list and inter-list combinations, remove duplicates and sort
   return sorted(intra_list_combinations | inter_list_combinations)
 
@@ -420,22 +405,24 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
   if max_occur == 0 and branch:
     return True
   if not all_match_nodes or max([len(k) for k in all_match_nodes]) < 1:
-    return True if min_occur == 0 else False
+    return min_occur == 0
+  last_trace_element = current_trace[-1]
   if max_occur > 1:
     all_match_nodes = all_combinations(all_match_nodes, min_len = min_occur, max_len = max_occur)
     #currently only working for branches of size 1
-    idx = [all(current_trace[-1] - node == -2*(i+1) for i, node in enumerate(groupy)) for groupy in all_match_nodes]
+    idx = [all(last_trace_element - node == -2*(i+1) for i, node in enumerate(groupy)) for groupy in all_match_nodes]
   else:
+    edges_set = set(edges)
     if all_match_nodes[0] and isinstance(all_match_nodes[0][0], list):
       all_match_nodes = unwrap(all_match_nodes)
-    idx = [(current_trace[-1] - node[0] == -2 and not branch and (current_trace[-1]+1, node[0]) in edges) or \
-           ((current_trace[-1]+1, node[0]) in edges) or \
-           (current_trace[-1] - node[0] <= -2 and branch and not (current_trace[-1]+1, node[0]) in edges) and ((current_trace[-1]+1, node[-1]+2) in edges) or \
-           (current_trace[-1] - node[0] == 2 and branch and (node[0]+1, current_trace[-1]+2) in edges)
+    idx = [(last_trace_element - node[0] == -2 and not branch and (last_trace_element+1, node[0]) in edges_set) or \
+     ((last_trace_element+1, node[0]) in edges_set) or \
+      (last_trace_element - node[0] <= -2 and branch and not (last_trace_element+1, node[0]) in edges_set) and ((last_trace_element+1, node[-1]+2) in edges_set) or \
+           (last_trace_element - node[0] == 2 and branch and (node[0]+1, last_trace_element+2) in edges_set)
            for node in all_match_nodes]
   matched_nodes = [node for i, node in enumerate(all_match_nodes) if (idx[i])]
   if branch and matched_nodes:
-    matched_nodes = [nodes for nodes in matched_nodes if nodes and not (current_trace[-1]+1, nodes[0]) in edges]
+    matched_nodes = [nodes for nodes in matched_nodes if nodes and not (last_trace_element+1, nodes[0]) in edges_set]
   if not matched_nodes and min_occur == 0:
     return True
   return sorted(matched_nodes, key = lambda x: (len(x), x[-1]))
@@ -465,7 +452,7 @@ def do_trace(start_pattern, idx, pattern_matches, optional_components, edges):
   all_traces, all_used_patterns = [], []
   for start_match in start_pattern[1]:
     if not start_match and optional_components.get(start_pattern[0], (99,99))[0] > 0:
-      return []
+      return [], []
     trace = copy.deepcopy(start_match)
     used_patterns = [start_pattern[0]]
     trace = trace[0] if isinstance(trace[0], list) else trace
@@ -551,8 +538,7 @@ def fill_missing_in_list(lists):
       filled_sublist.append(sublist[i])
     filled_lists.append(filled_sublist)
   unique_tuples = set(tuple(lst) for lst in filled_lists)
-  filled_lists = [list(tpl) for tpl in unique_tuples]
-  return filled_lists
+  return [list(tpl) for tpl in unique_tuples]
 
 
 def format_retrieved_matches(lists, ggraph):
