@@ -15,6 +15,28 @@ from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, find_nt
 rng = np.random.default_rng(42)
 
 
+# for WURCS mapping
+monosaccharide_mapping = {
+    'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1a_1-5_2*NCC/3=O': 'GalNAc',
+    'a1122h-1b_1-5': 'Man', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Ac',
+    'a1122h-1a_1-5': 'Man', 'a2112h-1b_1-5': 'Gal', 'Aad21122h-2a_2-6_5*NCCO/3=O': 'Neu5Gc',
+    'a2112h-1b_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS', 'a2112h-1b_1-5_2*NCC/3=O': 'GalNAc',
+    'a1221m-1a_1-5': 'Fuc', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6S', 'a212h-1b_1-5': 'Xyl',
+    'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAc', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1x_1-5': 'Gal',
+    'Aad21122h-2a_2-6': 'Kdn', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1a_1-5': 'Gal',
+    'a1122h-1x_1-5': 'Man', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gc', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Ac',
+    'a1221m-1x_1-5': 'Fuc', 'a212h-1x_1-5': 'Xyl', 'a122h-1x_1-5': 'Ara', 'a2122A-1b_1-5': 'GlcA',
+    'a2112h-1b_1-5_3*OC': 'Gal3Me', 'a1122h-1a_1-5_2*NCC/3=O': 'ManNAc', 'a2122h-1x_1-5': 'Glc',
+    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc', 'axxxxh-1x_1-5': 'Hex', 'a2112h-1b_1-4': 'Galf',
+    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6S', 'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc',
+    'axxxxh-1a_1-5_2*NCC/3=O': 'HexNAc', 'Aad21122h-2a_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Ac',
+    'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4S', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3S',
+    'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS',
+    'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3S', 'a2211m-1x_1-5': 'Rha', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAc',
+    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S'
+    }
+
+
 def min_process_glycans(glycan_list):
   """converts list of glycans into a nested lists of glycoletters\n
   | Arguments:
@@ -527,6 +549,31 @@ def glycoct_to_iupac(glycoct):
   return iupac
 
 
+def get_mono(token):
+  """maps WURCS token to monosaccharide with anomeric state; provides anomeric flexibility\n
+  | Arguments:
+  | :-
+  | token (string): token indicating monosaccharide in WURCS format\n
+  | Returns:
+  | :-
+  | Returns monosaccharide with anomeric state as string
+  """
+  anomer = token[token.index('_')-1]
+  if token in monosaccharide_mapping:
+    mono = monosaccharide_mapping[token]
+  else:
+    for a in ['a', 'b', 'x']:
+      if a != anomer:
+        token = token[:token.index('_')-1] + a + token[token.index('_'):]
+        try:
+          mono = monosaccharide_mapping[token]
+          break
+        except:
+          raise Exception("Token " + token + " not recognized.")
+  mono += anomer if anomer in ['a', 'b'] else '?'
+  return mono
+
+
 def wurcs_to_iupac(wurcs):
   """converts a glycan from WURCS into a barebones IUPAC-condensed version that is cleaned up by canonicalize_iupac\n
   | Arguments:
@@ -545,24 +592,6 @@ def wurcs_to_iupac(wurcs):
   wurcs = re.sub(additional_pattern, '?', wurcs)
   floating_part = ''
   floating_parts = []
-  monosaccharide_mapping = {
-    'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAcb', 'a2112h-1a_1-5_2*NCC/3=O': 'GalNAca',
-    'a1122h-1b_1-5': 'Manb', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Aca',
-    'a1122h-1a_1-5': 'Mana', 'a2112h-1b_1-5': 'Galb', 'Aad21122h-2a_2-6_5*NCCO/3=O': 'Neu5Gca',
-    'a2112h-1b_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOSb', 'a2112h-1b_1-5_2*NCC/3=O': 'GalNAcb',
-    'a1221m-1a_1-5': 'Fuca', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a212h-1b_1-5': 'Xylb',
-    'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAcb', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc?', 'a2112h-1x_1-5': 'Gal?',
-    'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala',
-    'a1122h-1x_1-5': 'Man?', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gca', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Aca',
-    'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?', 'a2122A-1b_1-5': 'GlcAb',
-    'a2112h-1b_1-5_3*OC': 'Gal3Meb', 'a1122h-1a_1-5_2*NCC/3=O': 'ManNAca', 'a2122h-1x_1-5': 'Glc?',
-    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc?', 'axxxxh-1x_1-5': 'Hex?', 'a2112h-1b_1-4': 'Galfb',
-    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc?',
-    'axxxxh-1a_1-5_2*NCC/3=O': 'HexNAca', 'Aad21122h-2a_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Aca',
-    'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4Sb', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3Sb',
-    'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4Sb', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS?',
-    'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3Sb', 'a2211m-1x_1-5': 'Rha?', 'a2211m-1a_1-5': 'Rhaa', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAcb'
-    }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
   monosaccharides = '/'.join(parts[1:-2]).strip('[]').split('][')
@@ -573,16 +602,16 @@ def wurcs_to_iupac(wurcs):
   iupac_parts = []
   for link in topology:
     if '-' not in link:
-      return monosaccharide_mapping[monosaccharides[0]]
+      return get_mono(monosaccharides[0])
     source, target = link.split('-')
     source_index, source_carbon = connectivity[source[:-1]], source[-1]
-    source_mono = monosaccharide_mapping[monosaccharides[int(source_index)-1]]
+    source_mono = get_mono(monosaccharides[int(source_index)-1])
     if target[0] == '?':
       floating_part += f"{'{'}{source_mono}(1-{target[1:]}){'}'}"
       floating_parts.append(source[0])
       continue
     target_index, target_carbon = connectivity[target[0]], target[1:]
-    target_mono = monosaccharide_mapping[monosaccharides[int(target_index)-1]]
+    target_mono = get_mono(monosaccharides[int(target_index)-1])
     if '?' in target:
       iupac_parts.append((f"{source_mono}({source_carbon}-{target_carbon}){target_mono}", source[0], target[0]))
     else:
