@@ -6,7 +6,7 @@ from collections import defaultdict
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, expand_lib, rescue_glycans
-from glycowork.motif.re import get_match
+from glycowork.motif.regex import get_match
 
 
 def link_find(glycan):

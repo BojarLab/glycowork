@@ -1,5 +1,5 @@
 from glycowork.glycan_data.loader import lib, unwrap, motif_list, multireplace
-from glycowork.motif.re import get_match
+from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import expand_lib, min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
