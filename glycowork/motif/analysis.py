@@ -9,13 +9,16 @@ plt.style.use('default')
 from collections import Counter
 from scipy.stats import ttest_ind, ttest_rel, f, norm, levene, f_oneway
 from statsmodels.formula.api import ols
+from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
-from glycowork.motif.processing import cohen_d, mahalanobis_distance, mahalanobis_variance, variance_stabilization, impute_and_normalize, variance_based_filtering, jtkdist, jtkinit, MissForest, jtkx, get_alphaN, benjamini_hochberg_correction
+from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
+                                         variance_stabilization, impute_and_normalize, variance_based_filtering,
+                                         jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg)
 from glycowork.motif.annotate import annotate_dataset, quantify_motifs, link_find, create_correlation_network
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -71,7 +74,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     ttests = [ttest_ind(np.append(df_pos.iloc[:, k] * df_pos[label_col_name], [1]),
                         np.append(df_neg.iloc[:, k] * df_neg[label_col_name], [1]),
                         equal_var = False)[1] for k in range(df_motif.shape[1]-1)]
-    ttests_corr = benjamini_hochberg_correction(np.array(ttests)).tolist()
+    ttests_corr = multipletests(ttests, method = 'fdr_bh')[1].tolist()
     effect_sizes, variances = zip(*[cohen_d(np.append(df_pos.iloc[:, k].values, [1, 0]),
                                             np.append(df_neg.iloc[:, k].values, [1, 0]), paired = False) for k in range(df_motif.shape[1]-1)])
     out = pd.DataFrame({
@@ -479,7 +482,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = None):
+                                min_samples = None, grouped_BH = False):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -495,7 +498,8 @@ def get_differential_expression(df, group1, group2,
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
   | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
   | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False
-  | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
+  | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
+  | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -568,8 +572,8 @@ def get_differential_expression(df, group1, group2,
       effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
   # Multiple testing correction
   if pvals:
-      corrpvals = benjamini_hochberg_correction(np.array(pvals))
-      levene_pvals = benjamini_hochberg_correction(np.array(levene_pvals))
+      corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
+      levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
   else:
       corrpvals = []
   significance = [p < alpha for p in corrpvals]
@@ -725,7 +729,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
             posthoc = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = alpha)
             posthoc_results[glycan] = pd.DataFrame(data = posthoc._results_table.data[1:], columns = posthoc._results_table.data[0])
     results_df = pd.DataFrame(results, columns = ["Glycan", "F statistic", "corr p-val"])
-    results_df['corr p-val'] = benjamini_hochberg_correction(results_df['corr p-val'].values)
+    results_df['corr p-val'] = multipletests(results_df['corr p-val'].values.tolist(), method = 'fdr_bh')[1]
     results_df['significant'] = [p < alpha for p in results_df['corr p-val']]
     return results_df.sort_values(by = 'corr p-val'), posthoc_results
 
@@ -879,7 +883,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     time = df.iloc[:, 0].to_numpy()  # Time points
     res = [(c, *get_glycan_change_over_time(np.column_stack((time, df[c].to_numpy())), degree = degree)) for c in df.columns[1:]]
     res = pd.DataFrame(res, columns = ['Glycan', 'Change', 'p-val'])
-    res['corr p-val'] = benjamini_hochberg_correction(np.array(res['p-val']))
+    res['corr p-val'] = multipletests(res['p-val'], method = 'fdr_bh')[1]
     res['significant'] = [p < alpha for p in res['corr p-val']]
     return res.sort_values(by = 'corr p-val')
 
@@ -916,7 +920,7 @@ def get_jtk(df, timepoints, periods, interval, motifs = False, feature_set = ['k
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set).T.reset_index()
     res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
-    JTK_BHQ = pd.DataFrame(benjamini_hochberg_correction(np.array(res[0])))
+    JTK_BHQ = pd.DataFrame(multipletests(res[0], method = 'fdr_bh')[1])
     Results = pd.concat([df.iloc[:, 0], JTK_BHQ, res], axis = 1)
     Results.columns = ['Molecule_Name', 'BH_Q_Value', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude']
     Results['significant'] = [p < alpha for p in Results['Adjusted_P_value']]

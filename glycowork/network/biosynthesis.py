@@ -12,6 +12,7 @@ from glycowork.glycan_data.loader import lib, unwrap, linkages
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
 from glycowork.motif.processing import choose_correct_isoform
 from glycowork.motif.tokenization import get_stem_lib
+from glycowork.motif.regex import get_match
 
 io = pkg_resources.resource_stream(__name__, "monolink_to_enzyme.csv")
 df_enzyme = pd.read_csv(io, sep = '\t')
@@ -1200,6 +1201,8 @@ def highlight_network(network, highlight, motif = None,
   if highlight == 'motif':
     if motif[-1] == ')':
       motif_presence = {k: ('limegreen' if motif in k else 'darkviolet') for k in network_out.nodes()}
+    elif motif[0] == 'r':
+      motif_presence = {k: ('limegreen' if get_match(motif[1:], k) else 'darkviolet') for k in network_out.nodes()}
     else:
       motif_presence = {k: ('limegreen' if subgraph_isomorphism(k, motif, libr = libr) else 'darkviolet') for k in network_out.nodes()}
     nx.set_node_attributes(network_out, motif_presence, name = 'origin')

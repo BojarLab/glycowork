@@ -1,6 +1,4 @@
-import numpy as np
 import pandas as pd
-import re
 import os
 import pickle
 import itertools
@@ -187,52 +185,6 @@ def multireplace(string, remove_dic):
   for k, v in remove_dic.items():
     string = string.replace(k, v)
   return string
-
-
-def fast_two_sum(a, b):
-  """Assume abs(a) >= abs(b)"""
-  x = int(a) + int(b)
-  y = b - (x - int(a))
-  return [x] if y == 0 else [x, y]
-
-
-def two_sum(a, b):
-  """For unknown order of a and b"""
-  x = int(a) + int(b)
-  y = (a - (x - int(b))) + (b - (x - int(a)))
-  return [x] if y == 0 else [x, y]
-
-
-def expansion_sum(*args):
-  """For the expansion sum of floating points"""
-  g = sorted(args, reverse = True)
-  q, *h = fast_two_sum(np.array(g[0]), np.array(g[1]))
-  for val in g[2:]:
-    z = two_sum(q, np.array(val))
-    q, *extra = z
-    if extra:
-      h += extra
-  return [h, q] if h else q
-
-
-def hlm(z):
-  """Hodges-Lehmann estimator of the median"""
-  z = np.array(z)
-  zz = np.add.outer(z, z)
-  zz = zz[np.tril_indices(len(z))]
-  return np.median(zz) / 2
-
-
-def update_cf_for_m_n(m, n, MM, cf):
-  """Constructs cumulative frequency table for experimental parameters defined in the function 'jtkinit'"""
-  P = min(m + n, MM)
-  for t in range(n + 1, P + 1):  # Zero-based offset t
-    for u in range(MM, t - 1, -1):  # One-based descending index u
-      cf[u] = expansion_sum(cf[u], -cf[u - t])  # Shewchuk algorithm
-  Q = min(m, MM)
-  for s in range(1, Q + 1): # Zero-based offset s
-    for u in range(s, MM + 1):  # One-based descending index u
-      cf[u] = expansion_sum(cf[u], cf[u - s])  # Shewchuk algorithm
 
 
 def build_custom_df(df, kind = 'df_species'):
