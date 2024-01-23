@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import math
+import warnings
 from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
@@ -8,6 +9,9 @@ from scipy.special import gammaln
 from scipy.stats import wilcoxon, rankdata, norm, chi2, t
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
+from statsmodels.tools.sm_exceptions import ConvergenceWarning
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
 rng = np.random.default_rng(42)
 
 
@@ -587,3 +591,46 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
       adjusted_p_values[identifier] = corrected_pval
       significance_dict[identifier] = corrected_pval < adjusted_alpha
   return adjusted_p_values, significance_dict
+
+
+def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans):
+  """estimates intra- and inter-group correlation of a given grouping of glycans via a mixed-effects model\n
+  | Arguments:
+  | :-
+  | cohort_b (dataframe): dataframe of glycans as rows and samples as columns of the case samples
+  | cohort_a (dataframe): dataframe of glycans as rows and samples as columns of the control samples
+  | glycans (list): list of glycans in IUPAC-condensed nomenclature
+  | grouped_glycans (dict): dictionary of type group : glycans\n
+  | Returns:
+  | :-
+  | Returns floats for the intra-group and inter-group correlation
+  """
+  reverse_lookup = {k: v for v, l in grouped_glycans.items() for k in l}
+  temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
+  temp.index = glycans
+  temp = temp.reset_index()
+  # Melt the dataframe to long format
+  temp = temp.melt(id_vars = 'index', var_name = 'glycan', value_name = 'measurement')
+  # Rename the columns appropriately
+  temp.columns= ["glycan", "sample_id", "diffs"]
+  temp["group_id"] = [reverse_lookup[g] for g in temp.glycan]
+  # Define the model
+  md = smf.mixedlm("diffs ~ C(group_id)", temp,
+                     groups = temp["sample_id"],
+                     re_formula = "~1",  # Random intercept for glycans
+                     vc_formula = {"glycan": "0 + C(glycan)"}) # Variance component for glycans
+  # Fit the model
+  with warnings.catch_warnings():
+    warnings.simplefilter("ignore", category = ConvergenceWarning)
+    mdf = md.fit()
+  # Extract variance components
+  var_samples = mdf.cov_re.iloc[0, 0]  # Variance due to differences among groups of glycans (inter-group)
+  var_glycans_within_group = mdf.vcomp[0] # Variance due to differences among glycans within the same group (intra-group)
+  residual_var = mdf.scale  # Residual variance
+  # Total variance
+  total_var = var_samples + var_glycans_within_group + residual_var
+  # Calculate Intra-group Correlation (ICC)
+  icc = var_glycans_within_group / total_var
+  # Calculate Inter-group Correlation
+  inter_group_corr = var_samples / total_var
+  return icc, inter_group_corr

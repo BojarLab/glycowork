@@ -368,3 +368,53 @@ def create_correlation_network(df, correlation_threshold):
   # Convert indices back to original labels
   clusters = [set(df.columns[list(cluster)]) for cluster in clusters]
   return clusters
+
+
+def group_glycans_core(glycans, p_values):
+  """group O-glycans based on core structure\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed nomenclature
+  | p_values (list): list of associated p-values\n
+  | Returns:
+  | :-
+  | Returns dictionaries of group : glycans and group : p-values
+  """
+  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  grouped_glycans, grouped_p_values = {}, {}
+  grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAc6S(b1-6)GalNAc"]])]
+  grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and not g in grouped_glycans["core2"]]
+  grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["core2"] and g not in grouped_glycans["core1"]]
+  grouped_p_values["core2"] = [temp[g] for g in grouped_glycans["core2"]]
+  grouped_p_values["core1"] = [temp[g] for g in grouped_glycans["core1"]]
+  if len(grouped_glycans["rest"]) > 0:
+    grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
+  else:
+    del grouped_glycans["rest"]
+  return grouped_glycans, grouped_p_values
+
+def group_glycans_sia_fuc(glycans, p_values):
+  """group glycans based on whether they contain sialic acid or fucose\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed nomenclature
+  | p_values (list): list of associated p-values\n
+  | Returns:
+  | :-
+  | Returns dictionaries of group : glycans and group : p-values
+  """
+  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  grouped_glycans, grouped_p_values = {}, {}
+  grouped_glycans["SiaFuc"] = [g for g in glycans if "Neu" in g and "Fuc" in g]
+  grouped_glycans["Sia"] = [g for g in glycans if "Neu" in g and g not in grouped_glycans["SiaFuc"]]
+  grouped_glycans["Fuc"] = [g for g in glycans if "Fuc" in g and g not in grouped_glycans["SiaFuc"]]
+  grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["SiaFuc"] and g not in grouped_glycans["Sia"] and g not in grouped_glycans["Fuc"]]
+  grouped_p_values["SiaFuc"] = [temp[g] for g in grouped_glycans["SiaFuc"]]
+  grouped_p_values["Sia"] = [temp[g] for g in grouped_glycans["Sia"]]
+  grouped_p_values["Fuc"] = [temp[g] for g in grouped_glycans["Fuc"]]
+  grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
+  for grp in ["SiaFuc", "Sia", "Fuc", "rest"]:
+    if not grouped_glycans[grp]:
+      del grouped_glycans[grp]
+      del grouped_p_values[grp]
+  return grouped_glycans, grouped_p_values

@@ -1199,10 +1199,10 @@ def highlight_network(network, highlight, motif = None,
   network_out = copy.deepcopy(network)
   # Color nodes as to whether they contain the motif (green) or not (violet)
   if highlight == 'motif':
-    if motif[-1] == ')':
-      motif_presence = {k: ('limegreen' if motif in k else 'darkviolet') for k in network_out.nodes()}
-    elif motif[0] == 'r':
+    if motif[0] == 'r':
       motif_presence = {k: ('limegreen' if get_match(motif[1:], k) else 'darkviolet') for k in network_out.nodes()}
+    elif motif[-1] == ')':
+      motif_presence = {k: ('limegreen' if motif in k else 'darkviolet') for k in network_out.nodes()}
     else:
       motif_presence = {k: ('limegreen' if subgraph_isomorphism(k, motif, libr = libr) else 'darkviolet') for k in network_out.nodes()}
     nx.set_node_attributes(network_out, motif_presence, name = 'origin')

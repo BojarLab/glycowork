@@ -1,4 +1,5 @@
 import os
+import copy
 import pickle
 import pandas as pd
 import numpy as np
@@ -18,8 +19,9 @@ from sklearn.decomposition import PCA
 from glycowork.glycan_data.loader import lib, df_species, unwrap, motif_list
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          variance_stabilization, impute_and_normalize, variance_based_filtering,
-                                         jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg)
-from glycowork.motif.annotate import annotate_dataset, quantify_motifs, link_find, create_correlation_network
+                                         jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
+                                         test_inter_vs_intra_group)
+from glycowork.motif.annotate import annotate_dataset, quantify_motifs, link_find, create_correlation_network, group_glycans_core, group_glycans_sia_fuc
 from glycowork.motif.graph import subgraph_isomorphism
 
 
@@ -479,6 +481,42 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   plt.show()
 
 
+def select_grouping(cohort_b, cohort_a, glycans, p_values, grouped_BH = False):
+  """test various means of grouping glycans by domain knowledge, to obtain high intra-group correlation\n
+  | Arguments:
+  | :-
+  | cohort_b (dataframe): dataframe of glycans as rows and samples as columns of the case samples
+  | cohort_a (dataframe): dataframe of glycans as rows and samples as columns of the control samples
+  | glycans (list): list of glycans in IUPAC-condensed nomenclature
+  | p_values (list): list of associated p-values
+  | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False\n 
+  | Returns:
+  | :-
+  | Returns dictionaries of group : glycans and group : p-values (just one big group if no grouping can be found)
+  """
+  if not grouped_BH:
+    return {"group1": glycans}, {"group1": p_values}
+  funcs = {"by_Sia/Fuc": group_glycans_sia_fuc}
+  if any([g.endswith("GalNAc") for g in glycans]):
+    funcs["by_core"]: group_glycans_core
+  out = {}
+  for desc, func in funcs.items():
+    grouped_glycans, grouped_p_values = func(glycans, p_values)
+    if any([len(g) < 2 for g in grouped_glycans.values()]):
+      continue
+    intra, inter = test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans)
+    out[desc] = ((intra, inter), (grouped_glycans, grouped_p_values))
+  desc = list(out.keys())[np.argmax([v[0][0] - v[0][1] for k, v in out.items()])]
+  intra, inter = out[desc][0]
+  grouped_glycans, grouped_p_values = out[desc][1]
+  if (intra > 3*inter) or (intra > inter and intra > .1):
+    print("Chosen grouping: " + desc)
+    print("ICC of grouping: " + str(intra))
+    print("Inter-group correlation of grouping: " + str(inter))
+    return grouped_glycans, grouped_p_values
+  return {"group1": glycans}, {"group1": p_values}
+
+
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
@@ -572,11 +610,18 @@ def get_differential_expression(df, group1, group2,
       effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
   # Multiple testing correction
   if pvals:
-      corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
+      if not motifs:
+          grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, grouped_BH = grouped_BH)
+          corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
+          corrpvals = [corrpvals[g] for g in glycans]
+          significance = [significance_dict[g] for g in glycans]
+      else:
+          corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
+          significance = [p < alpha for p in corrpvals]
       levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
   else:
       corrpvals = []
-  significance = [p < alpha for p in corrpvals]
+      significance = []
   out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes)),
                      columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size'])
   if effect_size_variance:
@@ -888,11 +933,11 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     return res.sort_values(by = 'corr p-val')
 
 
-def get_jtk(df, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal']):
+def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal']):
     """Detecting rhythmically expressed glycans via the Jonckheere–Terpstra–Kendall (JTK) algorithm\n
     | Arguments:
     | :-
-    | df (pd.DataFrame): A dataframe containing data for analysis.
+    | df_in (pd.DataFrame): A dataframe containing data for analysis.
     |   (column 0 = molecule IDs, then arranged in groups and by ascending timepoints)
     | timepoints (int): number of timepoints in the experiment (each timepoint must have the same number of replicates).
     | periods (list): number of timepoints (as int) per cycle.
@@ -906,6 +951,7 @@ def get_jtk(df, timepoints, periods, interval, motifs = False, feature_set = ['k
     | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
     | molecule in the analysis.
     """
+    df = copy.deepcopy(df_in)
     replicates = (df.shape[1] - 1) // timepoints
     alpha = get_alphaN(replicates)
     param_dic = {"GRP_SIZE": [], "NUM_GRPS": [], "MAX": [], "DIMS": [], "EXACT": bool(True),
