@@ -21,7 +21,8 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          variance_stabilization, impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
                                          test_inter_vs_intra_group)
-from glycowork.motif.annotate import annotate_dataset, quantify_motifs, link_find, create_correlation_network, group_glycans_core, group_glycans_sia_fuc
+from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
+                                      group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
 
 
@@ -499,6 +500,8 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, grouped_BH = False):
   funcs = {"by_Sia/Fuc": group_glycans_sia_fuc}
   if any([g.endswith("GalNAc") for g in glycans]):
     funcs["by_core"]: group_glycans_core
+  elif any([g.endswith("GlcNAc(b1-4)GlcNAc") for g in glycans]):
+    funcs["by_Ntype"]: group_glycans_N_glycan_type
   out = {}
   for desc, func in funcs.items():
     grouped_glycans, grouped_p_values = func(glycans, p_values)

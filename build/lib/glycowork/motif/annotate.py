@@ -308,8 +308,9 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False, just_motifs
   first_half_cols = cols[:org_len]
   second_half_cols = cols[org_len:]
   drop_columns = []
+  regex = re.compile(r"(\([ab])(\d)-(\d)\)")
   col_sums = {col: out_matrix[col].sum() for col in cols}
-  col_subs = {col: regex.sub(r"\1\2-?", col) for col in cols}
+  col_subs = {col: regex.sub(r"\1\2-?)", col) for col in cols}
   for col1 in first_half_cols:
     for col2 in second_half_cols:
       if col_sums[col1] == col_sums[col2] and col_subs[col1] == col2:
@@ -414,6 +415,33 @@ def group_glycans_sia_fuc(glycans, p_values):
   grouped_p_values["Fuc"] = [temp[g] for g in grouped_glycans["Fuc"]]
   grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
   for grp in ["SiaFuc", "Sia", "Fuc", "rest"]:
+    if not grouped_glycans[grp]:
+      del grouped_glycans[grp]
+      del grouped_p_values[grp]
+  return grouped_glycans, grouped_p_values
+
+
+def group_glycans_N_glycan_type(glycans, p_values):
+  """group glycans based on complex/hybrid/high-mannose/rest for N-glycans\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed nomenclature
+  | p_values (list): list of associated p-values\n
+  | Returns:
+  | :-
+  | Returns dictionaries of group : glycans and group : p-values
+  """
+  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  grouped_glycans, grouped_p_values = {}, {}
+  grouped_glycans["complex"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-6)", "GlcNAc(b1-2)Man(a1-?)[GlcNAc(b1-2)Man(a1-?)]Man"]])]
+  grouped_glycans["hybrid"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man"]]) and g not in grouped_glycans["complex"]]
+  grouped_glycans["high_man"] = [g for g in glycans if g.count("Man") > 3 and g not in grouped_glycans["hybrid"] and g not in grouped_glycans["complex"]]
+  grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["complex"] and g not in grouped_glycans["hybrid"] and g not in grouped_glycans["high_man"]]
+  grouped_p_values["complex"] = [temp[g] for g in grouped_glycans["complex"]]
+  grouped_p_values["hybrid"] = [temp[g] for g in grouped_glycans["hybrid"]]
+  grouped_p_values["high_man"] = [temp[g] for g in grouped_glycans["high_man"]]
+  grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
+  for grp in ["complex", "hybrid", "high_man", "rest"]:
     if not grouped_glycans[grp]:
       del grouped_glycans[grp]
       del grouped_p_values[grp]
