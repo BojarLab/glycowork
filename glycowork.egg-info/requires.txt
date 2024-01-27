@@ -18,6 +18,8 @@ drawSvg~=2.0
 glyles
 pubchempy
 requests
+Pillow
+openpyxl
 
 [chem]
 glyles
@@ -31,10 +33,14 @@ drawSvg~=2.0
 glyles
 pubchempy
 requests
+Pillow
+openpyxl
 
 [draw]
 CairoSVG
 drawSvg~=2.0
+Pillow
+openpyxl
 
 [ml]
 torch_geometric
