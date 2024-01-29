@@ -3,7 +3,7 @@ import copy
 import networkx as nx
 from itertools import product, combinations, chain
 from glycowork.glycan_data.loader import replace_every_second, lib, unwrap
-from glycowork.motif.processing import min_process_glycans, bracket_removal, canonicalize_iupac
+from glycowork.motif.processing import min_process_glycans, bracket_removal, canonicalize_iupac, expand_lib
 from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, compare_glycans, glycan_to_nxGraph
 
 
@@ -112,7 +112,7 @@ def convert_pattern_component(pattern_component):
   | :-
   | Returns a string for simple components and a dict of form string : occurrence for complex components
   """
-  if not any([k in pattern_component for k in ['[', '{', '*', '+', '=', '!']]):
+  if not any([k in pattern_component for k in ['[', '{', '*', '+', '=', '<!', '?!']]):
     return specify_linkages(replace_patterns(pattern_component))
   pattern, occurrence = None, None
   if '[' in pattern_component:
@@ -355,7 +355,7 @@ def match_it_up(pattern_components, glycan, ggraph, libr = None):
   for p in pattern_components:
     p2 = convert_pattern_component(p)
     match_location = 'start' if '^' in p2 else 'end' if '$' in p2 else None
-    p2 = glycan_to_nxGraph(p2.strip('^$'), libr = libr) if isinstance(p2, str) else p2
+    p2 = glycan_to_nxGraph(p2.strip('^$'), libr = expand_lib(libr, [p2])) if isinstance(p2, str) else p2
     res = process_pattern(p, p2, ggraph, glycan, libr, match_location)
     pattern_matches.append((p, res) if res else (p, []))
   return pattern_matches
@@ -383,7 +383,9 @@ def all_combinations(nested_list, min_len = 1, max_len = 2):
           intra_list_combinations.update(combinations(flat_list, i))
   # Generate all combinations for inter-list combinations
   all_elements = sorted(chain.from_iterable(chain.from_iterable(nested_list)))
-  inter_list_combinations = set(combinations(all_elements, i) for i in range(min_len, max_len + 1))
+  inter_list_combinations = set()
+  for i in range(min_len, max_len + 1):
+    inter_list_combinations.update(set(combinations(all_elements, i)))
   # Combine intra-list and inter-list combinations, remove duplicates and sort
   return sorted(intra_list_combinations | inter_list_combinations)
 
@@ -407,12 +409,12 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
   if not all_match_nodes or max([len(k) for k in all_match_nodes]) < 1:
     return min_occur == 0
   last_trace_element = current_trace[-1]
+  edges_set = set(edges)
   if max_occur > 1:
     all_match_nodes = all_combinations(all_match_nodes, min_len = min_occur, max_len = max_occur)
     #currently only working for branches of size 1
     idx = [all(last_trace_element - node == -2*(i+1) for i, node in enumerate(groupy)) for groupy in all_match_nodes]
   else:
-    edges_set = set(edges)
     if all_match_nodes[0] and isinstance(all_match_nodes[0][0], list):
       all_match_nodes = unwrap(all_match_nodes)
     idx = [(last_trace_element - node[0] == -2 and not branch and (last_trace_element+1, node[0]) in edges_set) or \

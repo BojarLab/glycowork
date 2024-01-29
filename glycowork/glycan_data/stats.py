@@ -524,6 +524,7 @@ def get_alphaN(n, BF = 3, method = "robust", upper = 10):
     method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
   b = method_dict.get(method, lambda n: 1/n)(n)
   alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(b)), 1)
+  print(f"You're working with an alpha of {alpha} that has been adjusted for your sample size of {n}.")
   return alpha
 
 
