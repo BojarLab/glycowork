@@ -22,11 +22,11 @@ glycowork/glycan_data/__init__.py
 glycowork/glycan_data/data_entry.py
 glycowork/glycan_data/glycan_binding.csv
 glycowork/glycan_data/glycan_motifs.csv
-glycowork/glycan_data/lib_v8.pkl
+glycowork/glycan_data/lib_v10.pkl
 glycowork/glycan_data/loader.py
 glycowork/glycan_data/stats.py
-glycowork/glycan_data/v9_df_species.csv
-glycowork/glycan_data/v9_sugarbase.pkl
+glycowork/glycan_data/v10_df_species.csv
+glycowork/glycan_data/v10_sugarbase.pkl
 glycowork/ml/NSequonPred_batch32.pt
 glycowork/ml/__init__.py
 glycowork/ml/glycowork_lectinoracle_600.pt

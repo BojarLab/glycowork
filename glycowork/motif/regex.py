@@ -295,13 +295,13 @@ def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
   if not any([l in len_motif for l in len_matches_comb]) and '{' in p:
     return False
   matches = list(matches) if not isinstance(matches, list) else matches
-  if '=' in p or '!' in p:
+  if '=' in p or '<!' in p or '?!' in p:
     matches = unwrap(matches)
   if match_location:
     matches = filter_matches_by_location(matches, ggraph, match_location)
   matches = matches if (matches and matches[0] and isinstance(matches[0][0], int)) else unwrap(matches)
   matches = [m for m in matches if all(x < y for x, y in zip(m, m[1:]))]
-  if '!' in p:
+  if '<!' in p or '?!' in p:
     matches = check_negative_look(matches, p, glycan)
   if '?<=' in p:
     len_look = p.split(')')[0].count('-') * 2

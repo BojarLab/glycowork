@@ -172,7 +172,7 @@ def categorical_node_match_wildcard(attr, default, narrow_wildcard_list, attr2, 
       data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
       if "Monosaccharide" in [data1_labels, data2_labels] or "?1-?" in [data1_labels, data2_labels]:
         return True
-      if data2_labels.startswith('!') and data1_labels != data2_labels[1:]:
+      if data2_labels.startswith('!') and data1_labels != data2_labels[1:] and '-' not in data1_labels:
         return True
       if data1_labels in narrow_wildcard_list and data2_labels in narrow_wildcard_list[data1_labels]:
         return True
@@ -221,7 +221,7 @@ def compare_glycans(glycan_a, glycan_b, libr = None,
     g2 = glycan_b
   if len(g1.nodes) == len(g2.nodes):
     narrow_wildcard_list = {k:[j  for j in get_possible_linkages(k, libr = libr)] for k in proc if '?' in k}
-    narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k, libr = libr)] for k in proc if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide']}
+    narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k, libr = libr)] for k in proc if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
     narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
     if narrow_wildcard_list:
       return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('string_labels', len(libr), narrow_wildcard_list,
@@ -291,7 +291,7 @@ def subgraph_isomorphism(glycan, motif, libr = None,
     g1 = copy.deepcopy(glycan)
     g2 = motif
   narrow_wildcard_list = {k:[j for j in get_possible_linkages(k, libr = libr)] for k in set(unwrap(motif_comp)) if '?' in k}
-  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k, libr = libr)] for k in set(unwrap(motif_comp)) if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide']}
+  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k, libr = libr)] for k in set(unwrap(motif_comp)) if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
   narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
 
   # Check whether length of glycan is larger or equal than the motif
