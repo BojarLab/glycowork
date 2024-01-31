@@ -283,7 +283,7 @@ def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
   | :-
   | Returns list of matches as list of node indices
   """
-  counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key.strip('^$%'), libr = libr),
+  counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key.strip('^$%'), libr = expand_lib(libr, [p_key.strip('^$%')])),
                                          libr = libr, count = True, return_matches = True) for p_key in p2.keys()]
   if sum([k for k in counts_matches if isinstance(k, int)]) < 1 and isinstance(counts_matches[0], int):
     counts, matches = [], []
