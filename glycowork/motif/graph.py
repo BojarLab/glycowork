@@ -170,7 +170,9 @@ def categorical_node_match_wildcard(attr, default, narrow_wildcard_list, attr2, 
       if not termini_check:
         return False
       data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
-      if "Monosaccharide" in [data1_labels, data2_labels] or "?1-?" in [data1_labels, data2_labels]:
+      if "Monosaccharide" in [data1_labels, data2_labels] and not any(['-' in lab for lab in [data1_labels, data2_labels]]):
+        return True
+      if "?1-?" in [data1_labels, data2_labels] and all(['-' in lab for lab in [data1_labels, data2_labels]]):
         return True
       if data2_labels.startswith('!') and data1_labels != data2_labels[1:] and '-' not in data1_labels:
         return True

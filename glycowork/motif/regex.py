@@ -208,7 +208,7 @@ def filter_matches_by_location(matches, ggraph, match_location):
   | :-
   | matches (list): list of lists of node indices for each match
   | ggraph (networkx): glycan graph as a networkx object
-  | match_location (string): whether the match should have been at the "start" or "end" of the sequence\n
+  | match_location (string): whether the match should have been at the "start", "end", or "internal" of the sequence\n
   | Returns:
   | :-
   | Returns a filtered list of matches
@@ -219,6 +219,8 @@ def filter_matches_by_location(matches, ggraph, match_location):
   elif match_location == 'end':
     location_idx = len(ggraph) - 1
     return [m for m in matches if location_idx in m]
+  elif match_location == 'internal':
+    return [m for m in matches if m[0] > 0 and m[-1] < len(ggraph) - 1]
   return matches
 
 
@@ -281,7 +283,7 @@ def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
   | :-
   | Returns list of matches as list of node indices
   """
-  counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key, libr = libr),
+  counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key.strip('^$%'), libr = libr),
                                          libr = libr, count = True, return_matches = True) for p_key in p2.keys()]
   if sum([k for k in counts_matches if isinstance(k, int)]) < 1 and isinstance(counts_matches[0], int):
     counts, matches = [], []
@@ -354,9 +356,14 @@ def match_it_up(pattern_components, glycan, ggraph, libr = None):
   pattern_matches = []
   for p in pattern_components:
     p2 = convert_pattern_component(p)
-    match_location = 'start' if '^' in p2 else 'end' if '$' in p2 else None
-    p2 = glycan_to_nxGraph(p2.strip('^$'), libr = expand_lib(libr, [p2])) if isinstance(p2, str) else p2
+    if isinstance(p2, dict):
+      first_key = list(p2.keys())[0]
+      match_location = 'start' if '^' in first_key else 'end' if '$' in first_key else 'internal' if '%' in first_key else None
+    else:
+      match_location = 'start' if '^' in p2 else 'end' if '$' in p2 else 'internal' if '%' in p2 else None
+      p2 = glycan_to_nxGraph(p2.strip('^$%'), libr = expand_lib(libr, [p2.strip('^$%')]))
     res = process_pattern(p, p2, ggraph, glycan, libr, match_location)
+    res = sorted(res) if isinstance(res, list) and all(len(inner) == 1 for inner in res) else res
     pattern_matches.append((p, res) if res else (p, []))
   return pattern_matches
 
@@ -422,7 +429,7 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
       (last_trace_element - node[0] <= -2 and branch and not (last_trace_element+1, node[0]) in edges_set) and ((last_trace_element+1, node[-1]+2) in edges_set) or \
            (last_trace_element - node[0] == 2 and branch and (node[0]+1, last_trace_element+2) in edges_set)
            for node in all_match_nodes]
-  matched_nodes = [node for i, node in enumerate(all_match_nodes) if (idx[i])]
+  matched_nodes = [node for i, node in enumerate(all_match_nodes) if (idx[i]) and node]
   if branch and matched_nodes:
     matched_nodes = [nodes for nodes in matched_nodes if nodes and not (last_trace_element+1, nodes[0]) in edges_set]
   if not matched_nodes and min_occur == 0:
@@ -441,9 +448,9 @@ def parse_pattern(pattern):
   """
   temp = pattern.split('{')[1].split('}')[0].split(',') if '{' in pattern else None
   min_occur, max_occur = (int(temp[0]), int(temp[0])) if temp and len(temp) == 1 else \
-                          (int(temp[0]) if temp[0] else 0, int(temp[1]) if temp[1] else 5) if temp else \
-                          (0, 5) if '*' in pattern else \
-                          (1, 5) if '+' in pattern else \
+                          (int(temp[0]) if temp[0] else 0, int(temp[1]) if temp[1] else 8) if temp else \
+                          (0, 8) if '*' in pattern else \
+                          (1, 8) if '+' in pattern else \
                           (0, 1) if '?' in pattern and '=' not in pattern and '!' not in pattern and '}' not in pattern else \
                           (1, 1)
   max_occur = min_occur if any([k in pattern for k in ['.?', '}?', '*?', '+?']]) else max_occur
