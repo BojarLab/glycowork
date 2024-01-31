@@ -67,7 +67,7 @@ def glytoucan_to_glycan(ids, revert = False):
             print('These glycans are not in our database: ' + str([k for k in ids if k not in df_glycan.glycan]))
         return ids
     else:
-        glycans = [df_glycan.glycan.values.tolist()[df_glycan.glytoucan_id.values.tolist().index(k)] if k in df_glycan.glytoucan_id else k for k in ids]
-        if any([k not in df_glycan.glytoucan_id for k in ids]):
+        glycans = [df_glycan.glycan.values.tolist()[df_glycan.glytoucan_id.values.tolist().index(k)] if k in df_glycan.glytoucan_id.values else k for k in ids]
+        if any([k not in df_glycan.glytoucan_id.values for k in ids]):
             print('These IDs are not in our database: ' + str([k for k in ids if k not in df_glycan.glytoucan_id]))
         return glycans

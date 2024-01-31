@@ -123,7 +123,7 @@ def convert_pattern_component(pattern_component):
     if '?' in pattern_component:
       occurrence = [occurrence[0], occurrence[0]]
   elif '*' in pattern_component or '+' in pattern_component:
-    occurrence = list(range(0, 5)) if '*' in pattern_component else list(range(1, 5))
+    occurrence = list(range(0, 8)) if '*' in pattern_component else list(range(1, 8))
     if '?' in pattern_component:
       occurrence = [occurrence[0], occurrence[0]]
   elif '?' in pattern_component:
@@ -231,7 +231,7 @@ def process_simple_pattern(p2, ggraph, libr, match_location):
   | p2 (networkx): glycomotif graph as a networkx object
   | ggraph (networkx): glycan graph as a networkx object
   | libr (dict): dictionary of form glycoletter:index
-  | match_location (string): whether the match should have been at the "start" or "end" of the sequence\n
+  | match_location (string): whether the match should have been at the "start", "end", or "internal" of the sequence\n
   | Returns:
   | :-
   | Returns list of matches as list of node indices
@@ -278,7 +278,7 @@ def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
   | ggraph (networkx): glycan graph as a networkx object
   | glycan (string): glycan sequence in IUPAC-condensed
   | libr (dict): dictionary of form glycoletter:index
-  | match_location (string): whether the match should have been at the "start" or "end" of the sequence\n
+  | match_location (string): whether the match should have been at the "start", "end", or "internal" of the sequence\n
   | Returns:
   | :-
   | Returns list of matches as list of node indices
@@ -329,7 +329,7 @@ def process_pattern(p, p2, ggraph, glycan, libr, match_location):
   | ggraph (networkx): glycan graph as a networkx object
   | glycan (string): glycan sequence in IUPAC-condensed
   | libr (dict): dictionary of form glycoletter:index
-  | match_location (string): whether the match should have been at the "start" or "end" of the sequence\n
+  | match_location (string): whether the match should have been at the "start", "end", or "internal" of the sequence\n
   | Returns:
   | :-
   | Returns list of matches as list of node indices

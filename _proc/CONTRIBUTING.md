@@ -36,12 +36,13 @@ nbdev_prepare
 * Docs are automatically created from the notebooks in the nbs folder.
 
 
-## Wishlist for future glycowork updates (last update: 2023-12-04)
+## Wishlist for future glycowork updates (last update: 2024-01-31)
 #### Urgent
 * more, and more informative, error messages
 
 
 #### At some point
+* any further expansion of our universal input pipeline, to cover more usecases etc.
 * split motif_list into ‘core’ motifs (occurring frequently) and ‘extended’ motifs (that are rare or niche) for performance reasons
 * characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context
 * allow users to specify their own deep learning architecture in ml.models
