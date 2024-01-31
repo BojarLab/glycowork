@@ -1,14 +1,34 @@
 import pandas as pd
 import numpy as np
 import copy
-import math
 import re
 from functools import wraps
 from collections import defaultdict
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.base import BaseEstimator
-from glycowork.glycan_data.loader import unwrap, multireplace, find_nth, find_nth_reverse, linkages, Hex, HexNAc, dHex, Sia, HexA, Pen, hlm, update_cf_for_m_n
-rng = np.random.default_rng(42)
+from glycowork.glycan_data.loader import (unwrap, multireplace,
+                                          find_nth, find_nth_reverse,
+                                          linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
+
+
+# for WURCS mapping
+monosaccharide_mapping = {
+    'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1a_1-5_2*NCC/3=O': 'GalNAc',
+    'a1122h-1b_1-5': 'Man', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Ac',
+    'a1122h-1a_1-5': 'Man', 'a2112h-1b_1-5': 'Gal', 'Aad21122h-2a_2-6_5*NCCO/3=O': 'Neu5Gc',
+    'a2112h-1b_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS', 'a2112h-1b_1-5_2*NCC/3=O': 'GalNAc',
+    'a1221m-1a_1-5': 'Fuc', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6S', 'a212h-1b_1-5': 'Xyl',
+    'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAc', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1x_1-5': 'Gal',
+    'Aad21122h-2a_2-6': 'Kdn', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1a_1-5': 'Gal',
+    'a1122h-1x_1-5': 'Man', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gc', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Ac',
+    'a1221m-1x_1-5': 'Fuc', 'a212h-1x_1-5': 'Xyl', 'a122h-1x_1-5': 'Ara', 'a2122A-1b_1-5': 'GlcA',
+    'a2112h-1b_1-5_3*OC': 'Gal3Me', 'a1122h-1a_1-5_2*NCC/3=O': 'ManNAc', 'a2122h-1x_1-5': 'Glc',
+    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc', 'axxxxh-1x_1-5': 'Hex', 'a2112h-1b_1-4': 'Galf',
+    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6S', 'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc',
+    'axxxxh-1a_1-5_2*NCC/3=O': 'HexNAc', 'Aad21122h-2a_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Ac',
+    'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4S', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3S',
+    'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS',
+    'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3S', 'a2211m-1x_1-5': 'Rha', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAc',
+    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S'
+    }
 
 
 def min_process_glycans(glycan_list):
@@ -168,8 +188,7 @@ def presence_to_matrix(df, glycan_col_name = 'glycan', label_col_name = 'Species
   # Create a grouped dataframe where we count the occurrences of each glycan in each species group
   grouped_df = df.groupby([label_col_name, glycan_col_name]).size().unstack(fill_value = 0)
   # Sort the index and columns
-  grouped_df = grouped_df.sort_index().sort_index(axis = 1)
-  return grouped_df
+  return grouped_df.sort_index().sort_index(axis = 1)
 
 
 def find_matching_brackets_indices(s):
@@ -279,6 +298,7 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
     'free': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
     'lipid': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
     }
+  glycan = glycan[:-3] if glycan.endswith('-ol') else glycan
   pool = pools.get(glycan_class, [])
   truth = any([glycan.endswith(k) for k in pool])
   if truth and glycan_class in {'free', 'lipid', 'O'}:
@@ -297,16 +317,23 @@ def canonicalize_composition(comp):
   | :-
   | Returns composition as a dictionary of style monosaccharide : count
   """
+  if '_' in comp:
+    values = comp.split('_')
+    temp = {"Hex": int(values[0]), "HexNAc": int(values[1]), "Neu5Ac": int(values[2]), "dHex": int(values[3])}
+    return {k: v for k, v in temp.items() if v}
+  elif comp.isdigit():
+    temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+    return {k: v for k, v in temp.items() if v}
   comp_dict = {}
   i = 0
-  replace_dic = {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", '(': '', ')': ''}
+  replace_dic = {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", '(': '', ')': '', ' ': '', '+': ''}
   comp = multireplace(comp, replace_dic)
   n = len(comp)
   # Dictionary to map letter codes to full names
   code_to_name = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Neu5Gc', 'NeuGc': 'Neu5Gc', 'Gc': 'Neu5Gc',
                   'Hex': 'Hex', 'HexNAc': 'HexNAc', 'HexAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex', 'deHex': 'dHex', 'HexA': 'HexA',
                   'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc', 'HexNc': 'HexNAc',
-                  'Su': 'S', 's': 'S', 'Sul': 'S', 'p': 'P', 'Pent': 'Pen', 'Xyl': 'Pen'}
+                  'Su': 'S', 's': 'S', 'Sul': 'S', 'p': 'P', 'Pent': 'Pen', 'Xyl': 'Pen', 'Man': 'Hex', 'GlcNAc': 'HexNAc', 'Deoxyhexose': 'dHex'}
   while i < n:
     # Code initialization
     code = ''
@@ -322,7 +349,10 @@ def canonicalize_composition(comp):
       i += 1
     # Map code to full name and store in dictionary
     name = code_to_name.get(code, code)
-    comp_dict[name] = num
+    if name in comp_dict:
+      comp_dict[name] += num
+    else:
+      comp_dict[name] = num
   return comp_dict
 
 
@@ -427,7 +457,7 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
       parent_id, child_id = int(parts[0]), int(parts[3])
       link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
       if link_type.startswith('99') and parts[1] not in ['2', '5']:
-        residue_dic[parent_id] = re.sub(r'(O)(?=S|P|Ac)', parts[1], residue_dic[parent_id], count = 1)
+        residue_dic[parent_id] = re.sub(r'(O)(?=S|P|Ac|Me)', parts[1], residue_dic[parent_id], count = 1)
       if not link_type.startswith('99'):
         iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
         degrees[parent_id] += 1
@@ -482,9 +512,9 @@ def glycoct_to_iupac(glycoct):
   floating_bits = []
   floating_part = ''
   mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu',
-                  'dxyl': 'Xyl', 'dara': 'Ara', 'HEX': 'Hex', 'lman': 'L-Man'}
+                  'dxyl': 'Xyl', 'dara': 'D-Ara', 'lara': 'Ara', 'HEX': 'Hex', 'lman': 'Rha'}
   sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc',
-                 'acetyl': 'OAc'}
+                 'acetyl': 'OAc', 'methyl': 'OMe'}
   if len(glycoct.split("UND")) > 1:
       floating_bits = glycoct.split("UND")[2:]
       floating_bits = ["RES" + f.split('RES')[1] for f in floating_bits]
@@ -505,12 +535,37 @@ def glycoct_to_iupac(glycoct):
   iupac = floating_part + iupac[:-1]
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
-  iupac = re.sub(r'(\?)(?=S|P)', 'O', iupac)
-  iupac = re.sub(r'([1-9\?O](S|P|Ac))NAc', r'NAc\1', iupac)
+  iupac = re.sub(r'(\?)(?=S|P|Me)', 'O', iupac)
+  iupac = re.sub(r'([1-9\?O](S|P|Ac|Me))NAc', r'NAc\1', iupac)
   if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
   iupac = iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
   return iupac
+
+
+def get_mono(token):
+  """maps WURCS token to monosaccharide with anomeric state; provides anomeric flexibility\n
+  | Arguments:
+  | :-
+  | token (string): token indicating monosaccharide in WURCS format\n
+  | Returns:
+  | :-
+  | Returns monosaccharide with anomeric state as string
+  """
+  anomer = token[token.index('_')-1]
+  if token in monosaccharide_mapping:
+    mono = monosaccharide_mapping[token]
+  else:
+    for a in ['a', 'b', 'x']:
+      if a != anomer:
+        token = token[:token.index('_')-1] + a + token[token.index('_'):]
+        try:
+          mono = monosaccharide_mapping[token]
+          break
+        except:
+          raise Exception("Token " + token + " not recognized.")
+  mono += anomer if anomer in ['a', 'b'] else '?'
+  return mono
 
 
 def wurcs_to_iupac(wurcs):
@@ -531,23 +586,6 @@ def wurcs_to_iupac(wurcs):
   wurcs = re.sub(additional_pattern, '?', wurcs)
   floating_part = ''
   floating_parts = []
-  monosaccharide_mapping = {
-    'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAcb', 'a2112h-1a_1-5_2*NCC/3=O': 'GalNAca',
-    'a1122h-1b_1-5': 'Manb', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Aca',
-    'a1122h-1a_1-5': 'Mana', 'a2112h-1b_1-5': 'Galb', 'Aad21122h-2a_2-6_5*NCCO/3=O': 'Neu5Gca',
-    'a2112h-1b_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOSb', 'a2112h-1b_1-5_2*NCC/3=O': 'GalNAcb',
-    'a1221m-1a_1-5': 'Fuca', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a212h-1b_1-5': 'Xylb',
-    'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAcb', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc?', 'a2112h-1x_1-5': 'Gal?',
-    'Aad21122h-2a_2-6': 'Kdna', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAca', 'a2112h-1a_1-5': 'Gala',
-    'a1122h-1x_1-5': 'Man?', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gca', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Aca',
-    'a1221m-1x_1-5': 'Fuca', 'a212h-1x_1-5': 'Xyl?', 'a122h-1x_1-5': 'Ara?', 'a2122A-1b_1-5': 'GlcAb',
-    'a2112h-1b_1-5_3*OC': 'Gal3Meb', 'a1122h-1a_1-5_2*NCC/3=O': 'ManNAca', 'a2122h-1x_1-5': 'Glc?',
-    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc?', 'axxxxh-1x_1-5': 'Hex?', 'a2112h-1b_1-4': 'Galfb',
-    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6Sb', 'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc?',
-    'axxxxh-1a_1-5_2*NCC/3=O': 'HexNAca', 'Aad21122h-2a_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Aca',
-    'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4Sb', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3Sb',
-    'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4Sb', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS?'
-    }
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
   monosaccharides = '/'.join(parts[1:-2]).strip('[]').split('][')
@@ -558,16 +596,16 @@ def wurcs_to_iupac(wurcs):
   iupac_parts = []
   for link in topology:
     if '-' not in link:
-      return monosaccharide_mapping[monosaccharides[0]]
+      return get_mono(monosaccharides[0])
     source, target = link.split('-')
     source_index, source_carbon = connectivity[source[:-1]], source[-1]
-    source_mono = monosaccharide_mapping[monosaccharides[int(source_index)-1]]
+    source_mono = get_mono(monosaccharides[int(source_index)-1])
     if target[0] == '?':
       floating_part += f"{'{'}{source_mono}(1-{target[1:]}){'}'}"
       floating_parts.append(source[0])
       continue
     target_index, target_carbon = connectivity[target[0]], target[1:]
-    target_mono = monosaccharide_mapping[monosaccharides[int(target_index)-1]]
+    target_mono = get_mono(monosaccharides[int(target_index)-1])
     if '?' in target:
       iupac_parts.append((f"{source_mono}({source_carbon}-{target_carbon}){target_mono}", source[0], target[0]))
     else:
@@ -631,12 +669,26 @@ def oxford_to_iupac(oxford):
   | :-
   | Returns glycan as a string in a barebones IUPAC-condensed form
   """
-  oxford = re.sub(r'\([^)]*\)', '', oxford)
+  oxford = re.sub(r'\([^)]*\)', '', oxford).strip().split('/')[0]
   antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
   mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-?)", "S": "Neu5Ac(a2-?)",
                   "Sg": "Neu5Gc(a2-?)", "Ga": "Gal(a1-?)", "GalNAc": "GalNAc(?1-?)",
-                  "Lac": "Gal(b1-?)GlcNAc(b1-?)", "F": "Fuc(a1-?)"}
+                  "Lac": "Gal(b1-?)GlcNAc(b1-?)", "F": "Fuc(a1-?)", "LacDiNAc": "GalNAc(b1-4)GlcNAc(b1-?)"}
+  hardcoded = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M4": "Man(a1-?)Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M9": "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M10": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M11": "Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M12": "Glc(a1-2)Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"}
+  if oxford in hardcoded:
+    return hardcoded[oxford]
+  if "Sulf" in oxford:
+    sulf = oxford[oxford.index("Sulf")+4]
+    sulf = int(sulf) if sulf.isdigit() else 1
+    oxford = oxford.replace("Sulf", '')
+  else:
+    sulf = 0
   if 'B' in oxford:
     split = iupac.index(']')
     iupac = iupac[:split+1] + "[GlcNAc(b1-4)]" + iupac[split+1:]
@@ -647,19 +699,24 @@ def oxford_to_iupac(oxford):
     split = iupac.rindex(')')
     fuc = "[Fuc(a1-3)]" if "X" in oxford else "[Fuc(a1-6)]"
     iupac = iupac[:split+1] + fuc + iupac[split+1:]
-  elif 'F' in oxford:
-    antennae["F"] = int(oxford[oxford.index("F")+1])
+  if 'F' in oxford[1:]:
+    nth = oxford.count('F')
+    antennae["F"] = int(oxford[find_nth(oxford, "F", nth)+1])
+  floaty = ''
   if 'M' in oxford:
     M_count = int(oxford[oxford.index("M")+1]) - 3
     for m in range(M_count):
-      iupac = "{Man(a1-?)}" + iupac
-    return iupac
-  branches = {"A": int(oxford[oxford.index("A")+1]) if "A" in oxford else 0,
-              "G": int(oxford[oxford.index("G")+1]) if "G" in oxford and oxford[oxford.index("G")+1] != 'a' else 0,
-              "S": int(oxford[oxford.index("S")+1]) if "S" in oxford and oxford[oxford.index("S")+1] != 'g' else 0}
-  extras = {"Sg": int(oxford[oxford.index("Sg")+2]) if "Sg" in oxford else 0,
-            "Ga": int(oxford[oxford.index("Ga")+2]) if "Ga" in oxford else 0,
-            "Lac": int(oxford[oxford.index("Lac")+3]) if "Lac" in oxford else 0}
+      floaty += "{Man(a1-?)}"
+  oxford_wo_branches = bracket_removal(oxford)
+  branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A")+1] != "c" else 0,
+              "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != "a" else 0,
+              "S": int(oxford_wo_branches[oxford_wo_branches.index("S")+1]) if "S" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("S")+1] != "g" else 0}
+  extras = {"Sg": int(oxford_wo_branches[oxford_wo_branches.index("Sg")+2]) if "Sg" in oxford_wo_branches else 0,
+            "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches else 0,
+            "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Lac")+3] != "D" else 0,
+            "LacDiNAc": 1 if "LacDiN" in oxford_wo_branches else 0}
+  specified_linkages = {'Neu5Ac(a2-?)': oxford[oxford.index("S")+2:] if branches['S'] else []}
+  specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v}
   built_branches = []
   while sum(branches.values()) > 0:
     temp = ''
@@ -690,14 +747,37 @@ def oxford_to_iupac(oxford):
       elif "[Gal(b" in iupac:
         split = iupac.index("[Gal(b")
         iupac = iupac[:split+1] + mapping_dict[e] + iupac[split+1:]
+      else:
+        iupac = mapping_dict[e] + iupac
       v -= 1
   if antennae:
     for k, v in antennae.items():
       while v > 0:
-        split = iupac.index("Gal(b1-?)Glc")
-        iupac = iupac[:split+len("Gal(b1-?)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-?)"):]
+        if "Gal(b1-?)Glc" in iupac:
+          split = iupac.index("Gal(b1-?)Glc")
+          iupac = iupac[:split+len("Gal(b1-?)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-?)"):]
+        else:
+          split =  iupac.index("GalNAc(b1-4)Glc")
+          iupac = iupac[:split+len("GalNAc(b1-4)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("GalNAc(b1-4)"):]
         v -= 1
-  return iupac.strip('[]')
+  iupac = iupac.replace("GlcNAc(b1-?)[Neu5Ac(a2-?)]Man", "[Neu5Ac(a2-?)]GlcNAc(b1-?)Man")
+  for k, v in specified_linkages.items():
+    if v:
+      for vv in v:
+        iupac = iupac.replace(k, k[:-2]+str(vv)+')', 1)
+  while "Neu5Ac(a2-8)G" in iupac:
+    iupac = iupac.replace("Neu5Ac(a2-8)G", "G", 1)
+    idx = [m.start() for m in re.finditer(r'(?<!8\))Neu5Ac\(a2-[3|6|\?]\)', iupac)][0]
+    iupac = iupac[:idx] + "Neu5Ac(a2-8)" + iupac[idx:]
+  while "[Neu5Ac(a2-8)]" in iupac:
+    iupac = iupac.replace("[Neu5Ac(a2-8)]", "", 1)
+    idx = [m.start() for m in re.finditer(r'(?<!8\))Neu5Ac\(a2-[3|6|\?]\)', iupac)][0]
+    iupac = iupac[:idx] + "Neu5Ac(a2-8)" + iupac[idx:]
+  while sulf > 0:
+    iupac = iupac.replace("Gal(", "GalOS(", 1)
+    sulf -= 1
+  iupac = floaty + iupac.strip('[]')
+  return iupac
 
 
 def check_nomenclature(glycan):
@@ -727,6 +807,7 @@ def canonicalize_iupac(glycan):
   | :-
   | Returns glycan as a string in canonicalized IUPAC-condensed
   """
+  glycan = glycan.strip()
   # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
@@ -739,7 +820,7 @@ def canonicalize_iupac(glycan):
   elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
     check_nomenclature(glycan)
     return
-  elif glycan[-1].isdigit() and 'e' not in glycan and '-' not in glycan:
+  elif (glycan[-1].isdigit() or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B') or glycan.endswith("LacDiNAc")) and 'e' not in glycan and '-' not in glycan:
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
@@ -852,430 +933,3 @@ def rescue_compositions(func):
       return func(*rescued_args, **kwargs)
   return wrapper
 
-
-def cohen_d(x, y, paired = False):
-  """calculates effect size between two groups\n
-  | Arguments:
-  | :-
-  | x (list or 1D-array): comparison group containing numerical data
-  | y (list or 1D-array): comparison group containing numerical data
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
-  | Returns:
-  | :-
-  | Returns Cohen's d (and its variance) as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)
-  """
-  if paired:
-    assert len(x) == len(y), "For paired samples, the size of x and y should be the same"
-    diff = np.array(x) - np.array(y)
-    n = len(diff)
-    d = np.mean(diff) / np.std(diff, ddof = 1)
-    var_d = 1 / n + d**2 / (2 * n)
-  else:
-    nx = len(x)
-    ny = len(y)
-    dof = nx + ny - 2
-    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
-    var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
-  return d, var_d
-
-
-def mahalanobis_distance(x, y, paired = False):
-  """calculates effect size between two groups in a multivariate comparison\n
-  | Arguments:
-  | :-
-  | x (list or 1D-array or dataframe): comparison group containing numerical data
-  | y (list or 1D-array or dataframe): comparison group containing numerical data
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
-  | Returns:
-  | :-
-  | Returns Mahalanobis distance as a measure of effect size
-  """
-  if paired:
-    assert x.shape == y.shape, "For paired samples, the size of x and y should be the same"
-    x = np.array(x) - np.array(y)
-    y = np.zeros_like(x)
-  if isinstance(x, pd.DataFrame):
-    x = x.values
-  if isinstance(y, pd.DataFrame):
-    y = y.values
-  pooled_cov_inv = np.linalg.pinv((np.cov(x) + np.cov(y)) / 2)
-  diff_means = (np.mean(y, axis = 1) - np.mean(x, axis = 1)).reshape(-1, 1)
-  mahalanobis_d = np.sqrt(np.clip(diff_means.T @ pooled_cov_inv @ diff_means, 0, None))
-  return mahalanobis_d[0][0]
-
-
-def mahalanobis_variance(x, y, paired = False):
-  """Estimates variance of Mahalanobis distance via bootstrapping\n
-  | Arguments:
-  | :-
-  | x (list or 1D-array or dataframe): comparison group containing numerical data
-  | y (list or 1D-array or dataframe): comparison group containing numerical data
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
-  | Returns:
-  | :-
-  | Returns Mahalanobis distance as a measure of effect size
-  """
-  # Combine gp1 and gp2 into a single matrix
-  data = np.concatenate((x.T, y.T), axis = 0)
-  # Perform bootstrap resampling
-  n_iterations = 1000
-  # Initialize an empty array to store the bootstrap samples
-  bootstrap_samples = np.empty(n_iterations)
-  size_x = x.shape[1]
-  for i in range(n_iterations):
-      # Generate a random bootstrap sample
-      sample = data[rng.choice(range(data.shape[0]), size = data.shape[0], replace = True)]
-      # Split the bootstrap sample into two groups
-      x_sample = sample[:size_x]
-      y_sample = sample[size_x:]
-      # Calculate the Mahalanobis distance for the bootstrap sample
-      bootstrap_samples[i] = mahalanobis_distance(x_sample.T, y_sample.T, paired = paired)
-  # Estimate the variance of the Mahalanobis distance
-  return np.var(bootstrap_samples)
-
-
-def variance_stabilization(data, groups = None):
-  """Variance stabilization normalization\n
-  | Arguments:
-  | :-
-  | data (dataframe): pandas dataframe with glycans/motifs as indices and samples as columns
-  | groups (nested list): list containing lists of column names of samples from same group for group-specific normalization; otherwise global; default:None\n
-  | Returns:
-  | :-
-  | Returns a dataframe in the same style as the input
-  """
-  # Apply log1p transformation
-  data = np.log1p(data)
-  # Scale data to have zero mean and unit variance
-  if groups is None:
-    data = (data - data.mean(axis = 0)) / data.std(axis = 0)
-  else:
-    for group in groups:
-      group_data = data.loc[:, group]
-      data.loc[:, group] = (group_data - group_data.mean(axis = 0)) / group_data.std(axis = 0)
-  return data
-
-
-class MissForest:
-  """Parameters
-  (adapted from https://github.com/yuenshingyan/MissForest)
-  ----------
-  regressor : estimator object.
-  A object of that type is instantiated for each imputation.
-  This object is assumed to implement the scikit-learn estimator API.
-
-  n_iter : int
-  Determines the number of iterations for the imputation process.
-  """
-
-  def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol=1e-6):
-    self.regressor = regressor
-    self.max_iter = max_iter
-    self.tol = tol
-
-  def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
-    # Step 1: Initialization 
-    # Keep track of where NaNs are in the original dataset
-    X_nan = X.isnull()
-
-    # Replace NaNs with median of the column in a new dataset that will be transformed
-    X_transform = X.copy()
-    X_transform.fillna(X_transform.median(), inplace = True)
-    # Sort columns by the number of NaNs (ascending)
-    sorted_columns = X_nan.sum().sort_values().index.tolist()
-
-    for _ in range(self.max_iter):
-      X_old = X_transform.copy()
-      # Step 2: Imputation
-      for column in sorted_columns:
-        if X_nan[column].any():  # if column has missing values in original dataset
-          # Split data into observed and missing for the current column
-          observed = X_transform.loc[~X_nan[column]]
-          missing = X_transform.loc[X_nan[column]]
-          
-          # Use other columns to predict the current column
-          X_other_columns = observed.drop(columns = column)
-          y_observed = observed[column]
-
-          self.regressor.fit(X_other_columns, y_observed)
-          
-          X_missing_other_columns = missing.drop(columns = column)
-          y_missing_pred = self.regressor.predict(X_missing_other_columns)
-
-          # Replace missing values in the current column with predictions
-          X_transform.loc[X_nan[column], column] = y_missing_pred
-      # Check for convergence
-      if np.all(np.abs(X_old - X_transform) < self.tol):
-        break  # Break out of the loop if converged
-    # Avoiding zeros
-    X_transform += 1e-6
-    return X_transform
-
-
-def impute_and_normalize(df, groups, impute = True, min_samples = None):
-    """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
-    | Arguments:
-    | :-
-    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
-    | groups (list): nested list of column name lists, one list per group
-    | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
-    | Returns:
-    | :-
-    | Returns a dataframe in the same style as the input 
-    """
-    if min_samples is None:
-      min_samples = [len(group_cols) // 2 for group_cols in groups]
-    else:
-      min_samples = [min_samples] * len(groups)
-    masks = [
-      df[group_cols].apply(lambda row: (row != 0).sum(), axis=1) >= thresh
-      for group_cols, thresh in zip(groups, min_samples)
-      ]
-    df = df[np.all(masks, axis = 0)].copy()
-    colname = df.columns[0]
-    glycans = df[colname].values
-    df = df.iloc[:, 1:]
-    old_cols = []
-    if isinstance(df.columns[0], int):
-      old_cols = df.columns
-      df.columns = df.columns.astype(str)
-    if impute:
-      mf = MissForest()
-      df.replace(0, np.nan, inplace = True)
-      df = mf.fit_transform(df)
-    df = (df / df.sum(axis = 0)) * 100
-    if len(old_cols) > 0:
-      df.columns = old_cols
-    df.insert(loc = 0, column = colname, value = glycans)
-    return df
-
-
-def variance_based_filtering(df, min_feature_variance = 0.01):
-    """Variance-based filtering of features\n
-    | Arguments:
-    | :-
-    | df (dataframe): dataframe containing glycan sequences in index and samples in columns
-    | min_feature_variance (float): Minimum variance to include a feature in the analysis\n
-    | Returns:
-    | :-
-    | Returns a pandas DataFrame with remaining glycans as indices and samples in columns
-    """
-    feature_variances = df.var(axis = 1)
-    variable_features = feature_variances[feature_variances > min_feature_variance].index
-    # Subsetting df to only include features with enough variance
-    return df.loc[variable_features]
-
-
-def jtkdist(timepoints, param_dic, reps = 1, normal = False):
-  """Precalculates all possible JT test statistic permutation probabilities for reference later, speeding up the
-  | analysis. Calculates the exact null distribution using thr Harding algorithm.\n
-  | Arguments:
-  | :-
-  | timepoints (int): number of timepoints within the experiment.
-  | param_dic (dict): dictionary carrying around the parameter values
-  | reps (int): number of replicates within each timepoint.
-  | normal (bool): a flag for normal approximation if maximum possible negative log p-value is too large.\n
-  | Returns:
-  | :-
-  | Returns statistical values, added to 'param_dic'.
-  """
-  timepoints = timepoints if isinstance(timepoints, int) else timepoints.sum()
-  tim = np.full(timepoints, reps) if reps != timepoints else reps  # Support for unbalanced replication (unequal replicates in all groups)
-  maxnlp = gammaln(np.sum(tim)) - np.sum(np.log(np.arange(1, np.max(tim)+1)))
-  limit = math.log(float('inf'))
-  normal = normal or (maxnlp > limit - 1)  # Switch to normal approximation if maxnlp is too large
-  lab = []
-  nn = sum(tim)  # Number of data values (Independent of period and lag)
-  M = (nn ** 2 - np.sum(np.square(tim))) / 2  # Max possible jtk statistic
-  param_dic.update({"GRP_SIZE": tim, "NUM_GRPS": len(tim), "NUM_VALS": nn,
-                    "MAX": M, "DIMS": [int(nn * (nn - 1) / 2), 1]})
-  if normal:
-    param_dic["VAR"] = (nn ** 2 * (2 * nn + 3) - np.sum(np.square(tim) * (2 * t + 3) for t in tim)) / 72  # Variance of JTK
-    param_dic["SDV"] = math.sqrt(param_dic["VAR"])  # Standard deviation of JTK
-    param_dic["EXV"] = M / 2  # Expected value of JTK
-    param_dic["EXACT"] = False
-  MM = int(M // 2)  # Mode of this possible alternative to JTK distribution
-  cf = [1] * (MM + 1)  # Initial lower half cumulative frequency (cf) distribution
-  size = sorted(tim)  # Sizes of each group of known replicate values, in ascending order for fastest calculation
-  k = len(tim)  # Number of groups of replicates
-  N = [size[k-1]]
-  if k > 2:
-    for i in range(k - 1, 1, -1):  # Count permutations using the Harding algorithm
-      N.insert(0, (size[i] + N[0]))
-  for m, n in zip(size[:-1], N):
-    update_cf_for_m_n(m, n, MM, cf)
-  cf = np.array(cf)
-  # cf now contains the lower half cumulative frequency distribution
-  # append the symmetric upper half cumulative frequency distribution to cf
-  if M % 2:   # jtkcf = upper-tail cumulative frequencies for all integer jtk
-    jtkcf = np.concatenate((cf, 2 * cf[MM] - cf[:MM][::-1], [2 * cf[MM]]))[::-1]
-  else:
-    jtkcf = np.concatenate((cf, cf[MM - 1] + cf[MM] - cf[:MM-1][::-1], [cf[MM - 1] + cf[MM]]))[::-1]
-  ajtkcf = list((jtkcf[i - 1] + jtkcf[i]) / 2 for i in range(1, len(jtkcf)))  # interpolated cumulative frequency values for all half-intgeger jtk
-  cf = [ajtkcf[(j - 1) // 2] if j % 2 == 0 else jtkcf[j // 2] for j in [i for i in range(1, 2 * int(M) + 2)]]
-  param_dic["CP"] = [c / jtkcf[0] for c in cf]  # all upper-tail p-values
-  return param_dic
-
-
-def jtkinit(periods, param_dic, interval = 1, replicates = 1):
-  """Defines the parameters of the simulated sine waves for reference later.\n
-  | Each molecular species within the analysis is matched to the optimal wave defined here, and the parameters
-  | describing that wave are attributed to the molecular species.\n
-  | Arguments:
-  | :-
-  | periods (list): the possible periods of rhytmicity in the biological data (valued as 'number of timepoints').
-  | (note: periods can accept multiple values (ie, you can define circadian rhythms as between 22, 24, 26 hours))
-  | param_dic (dict): dictionary carrying around the parameter values
-  | interval (int): the number of units of time (arbitrary) between each experimental timepoint.
-  | replicates (int): number of replicates within each group.\n
-  | Returns:
-  | :-
-  | Returns values describing waveforms, added to 'param_dic'.
-  """
-  param_dic["INTERVAL"] = interval
-  if len(periods) > 1:
-    param_dic["PERIODS"] = list(periods)
-  else:
-    param_dic["PERIODS"] = list(periods)
-  param_dic["PERFACTOR"] = np.concatenate([np.repeat(i, ti) for i, ti in enumerate(periods, start = 1)])
-  tim = np.array(param_dic["GRP_SIZE"])
-  timepoints = int(param_dic["NUM_GRPS"])
-  timerange = np.arange(timepoints)  # Zero-based time indices
-  param_dic["SIGNCOS"] = np.zeros((periods[0], ((math.floor(timepoints / (periods[0]))*int(periods[0]))* replicates)), dtype = int)
-  for i, period in enumerate(periods):
-    time2angle = np.array([(2*round(math.pi, 4))/period])  # convert time to angle using an ~pi value
-    theta = timerange*time2angle  # zero-based angular values across time indices
-    cos_v = np.cos(theta)  # unique cosine values at each time point
-    cos_r = np.repeat(rankdata(cos_v), np.max(tim))  # replicated ranks of unique cosine values
-    cgoos = np.sign(np.subtract.outer(cos_r, cos_r)).astype(int)
-    lower_tri = []
-    for col in range(len(cgoos)):
-      for row in range(col + 1, len(cgoos)):
-        lower_tri.append(cgoos[row, col])
-    cgoos = np.array(lower_tri)
-    cgoosv = np.array(cgoos).reshape(param_dic["DIMS"])
-    param_dic["CGOOSV"] = []
-    param_dic["CGOOSV"].append(np.zeros((cgoos.shape[0], period)))
-    param_dic["CGOOSV"][i][:, 0] = cgoosv[:, 0]
-    cycles = math.floor(timepoints / period)
-    jrange = np.arange(cycles * period)
-    cos_s = np.sign(cos_v)[jrange]
-    cos_s = np.repeat(cos_s, (tim[jrange]))
-    if reps == 1:
-      param_dic["SIGNCOS"][:, i] = cos_s
-    else:
-      param_dic["SIGNCOS"][i] = cos_s
-    for j in range(1, period):  # One-based half-integer lag index j
-      delta_theta = j * time2angle / 2  # Angles of half-integer lags
-      cos_v = np.cos(theta + delta_theta)  # Cycle left
-      cos_r = np.concatenate([np.repeat(val, num) for val, num in zip(rankdata(cos_v), tim)]) # Phase-shifted replicated ranks
-      cgoos = np.sign(np.subtract.outer(cos_r, cos_r)).T
-      mask = np.triu(np.ones(cgoos.shape), k = 1).astype(bool)
-      mask[np.diag_indices(mask.shape[0])] = False
-      cgoos = cgoos[mask]
-      cgoosv = cgoos.reshape(param_dic["DIMS"])
-      matrix_i = param_dic["CGOOSV"][i]
-      matrix_i[:, j] = cgoosv.flatten()
-      param_dic["CGOOSV[i]"] = matrix_i
-      cos_v = cos_v.flatten()
-      cos_s = np.sign(cos_v)[jrange]
-      cos_s = np.repeat(cos_s, (tim[jrange]))
-      if reps == 1:
-        param_dic["SIGNCOS"][:, j] = cos_s
-      else:
-        param_dic["SIGNCOS"][j] = cos_s
-  return param_dic
-
-
-def jtkstat(z, param_dic):
-  """Determines the JTK statistic and p-values for all model phases, compared to expression data.\n
-  | Arguments:
-  | :-
-  | z (pd.DataFrame): expression data for a molecule ordered in groups, by timepoint.
-  | param_dic (dict): a dictionary containing parameters defining model waveforms.\n
-  | Returns:
-  | :-
-  | Returns an updated parameter dictionary where the appropriate model waveform has been assigned to the
-  | molecules in the analysis.
-  """
-  param_dic["CJTK"] = []
-  M = param_dic["MAX"]
-  z = np.array(z)
-  foosv = np.sign(np.subtract.outer(z, z)).T  # Due to differences in the triangle indexing of R / Python we need to transpose and select upper triangle rather than the lower triangle
-  mask = np.triu(np.ones(foosv.shape), k = 1).astype(bool) # Additionally, we need to remove the middle diagonal from the tri index
-  mask[np.diag_indices(mask.shape[0])] = False
-  foosv = foosv[mask].reshape(param_dic["DIMS"])
-  for i in range(param_dic["PERIODS"][0]):
-    cgoosv = param_dic["CGOOSV"][0][:, i]
-    S = np.nansum(np.diag(foosv * cgoosv))
-    jtk = (abs(S) + M) / 2  # Two-tailed JTK statistic for this lag and distribution
-    if S == 0:
-      param_dic["CJTK"].append([1, 0, 0])
-    elif param_dic.get("EXACT", False):
-      jtki = 1 + 2 * int(jtk)  # index into the exact upper-tail distribution
-      p = 2 * param_dic["CP"][jtki-1]
-      param_dic["CJTK"].append([p, S, S / M])
-    else:
-      p = 2 * norm.cdf(-(jtk - 0.5), -param_dic["EXV"], param_dic["SDV"])
-      param_dic["CJTK"].append([p, S, S / M])  # include tau = s/M for this lag and distribution
-  return param_dic
-
-
-def jtkx(z, param_dic, ampci = False):
-  """Deployment of jtkstat for repeated use, and parameter extraction\n
-  | Arguments:
-  | :-
-  | z (pd.dataframe): expression data ordered in groups, by timepoint.
-  | param_dic (dict): a dictionary containing parameters defining model waveforms.
-  | ampci (bool): flag for calculating amplitude confidence interval (TRUE = compute); default=False.\n
-  | Returns:
-  | :-
-  | Returns an updated parameter dictionary containing the optimal waveform parameters for each molecular species.
-  """
-  param_dic = jtkstat(z, param_dic)  # Calculate p and S for all phases
-  pvals = [cjtk[0] for cjtk in param_dic["CJTK"]]  # Exact two-tailed p values for period/phase combos
-  padj = multipletests(pvals, method = 'fdr_bh')[1]
-  JTK_ADJP = min(padj)  # Global minimum adjusted p-value
-  def groupings(padj, param_dic):
-    d = defaultdict(list)
-    for i, value in enumerate(padj):
-      key = param_dic["PERFACTOR"][i]
-      d[key].append(value)
-    return dict(d)
-  dpadj = groupings(padj, param_dic)
-  padj = np.array(pd.DataFrame(dpadj.values()).T)
-  minpadj = [padj[i].min() for i in range(0, np.shape(padj)[1])]  # Minimum adjusted p-values for each period
-  if len(param_dic["PERIODS"]) > 1:
-    pers_index = np.where(JTK_ADJP == minpadj)[0]  # indices of all optimal periods
-  else:
-    pers_index = 0
-  pers = param_dic["PERIODS"][int(pers_index)]    # all optimal periods
-  padj_values = padj[pers_index]
-  lagis = np.where(padj == JTK_ADJP)[0]  # list of optimal lag indice for each optimal period
-  best_results = {'bestper': 0, 'bestlag': 0, 'besttau': 0, 'maxamp': 0, 'maxamp_ci': 2, 'maxamp_pval': 0}
-  sc = np.transpose(param_dic["SIGNCOS"])
-  w = (z[:len(sc)] - hlm(z[:len(sc)])) * math.sqrt(2)
-  for i in range(abs(pers)):
-    for lagi in lagis:
-      S = param_dic["CJTK"][lagi][1]
-      s = np.sign(S) if S != 0 else 1
-      lag = (pers + (1 - s) * pers / 4 - lagi / 2) % pers
-      signcos = sc[:, lagi]
-      tmp = s * w * sc[:, lagi]
-      amp = hlm(tmp)  # Allows missing values
-      if ampci:
-        jtkwt = pd.DataFrame(wilcoxon(tmp[np.isfinite(tmp)], zero_method = 'wilcox', correction = False,
-                                              alternatives = 'two-sided', mode = 'exact'))
-        amp = jtkwt['confidence_interval'].median()  # Extract estimate (median) from the conf. interval
-        best_results['maxamp_ci'] = jtkwt['confidence_interval'].values
-        best_results['maxamp_pval'] = jtkwt['pvalue'].values
-      if amp > best_results['maxamp']:
-        best_results.update({'bestper': pers, 'bestlag': lag, 'besttau': [abs(param_dic["CJTK"][lagi][2])], 'maxamp': amp})
-  JTK_PERIOD = param_dic["INTERVAL"] * best_results['bestper']
-  JTK_LAG = param_dic["INTERVAL"] * best_results['bestlag']
-  JTK_AMP = float(max(0, best_results['maxamp']))
-  JTK_TAU = best_results['besttau']
-  JTK_AMP_CI = best_results['maxamp_ci']
-  JTK_AMP_PVAL = best_results['maxamp_pval']
-  return pd.Series([JTK_ADJP, JTK_PERIOD, JTK_LAG, JTK_AMP])

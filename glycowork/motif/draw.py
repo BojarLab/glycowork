@@ -1,15 +1,21 @@
 from glycowork.glycan_data.loader import lib, unwrap, motif_list, multireplace
+from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import expand_lib, min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
+from io import BytesIO
 import networkx as nx
 import copy
 
 try:
   import drawsvg as draw
+  from openpyxl.drawing.image import Image as OpenpyxlImage
+  from openpyxl.utils import get_column_letter
+  from PIL import Image
 except ImportError:
   raise ImportError("<draw dependencies missing; did you do 'pip install glycowork[draw]'?>")
 import numpy as np
+import pandas as pd
 import sys
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
@@ -1331,14 +1337,14 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
 
   g1_node_labels = nx.get_node_attributes(g1, 'string_labels')
   relevant_labels = set(list(g1_node_labels.values()) + list(nx.get_node_attributes(g2, 'string_labels').values()))
-  narrow_wildcard_list = {libr[k]:[libr[j] for j in get_possible_linkages(k, libr = libr)] for k in relevant_labels if '?' in k}
-  narrow_wildcard_list2 = {libr[k]:[libr[j] for j in get_possible_monosaccharides(k, libr = libr)] for k in relevant_labels if k in ['Hex', 'HexNAc', 'dHex', 'Sia']}
+  narrow_wildcard_list = {k:[j for j in get_possible_linkages(k, libr = libr)] for k in relevant_labels if '?' in k}
+  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k, libr = libr)] for k in relevant_labels if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
   narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
 
   if termini_list or narrow_wildcard_list:
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
   else:
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', len_libr))
   graph_pair.subgraph_is_isomorphic()
   mapping = graph_pair.mapping
   mapping = {v: k for k, v in mapping.items()}
@@ -1347,9 +1353,9 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
   while list(graph_pair.mapping.keys()) != []:
     g_tmp.remove_nodes_from(graph_pair.mapping.keys())
     if termini_list or narrow_wildcard_list:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
     else:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('labels', len_libr))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', len_libr))
     graph_pair.subgraph_is_isomorphic()
     mapping = graph_pair.mapping
     mapping = {v: k for k, v in mapping.items()}
@@ -1382,6 +1388,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   | Arguments:
   | :-
   | draw_this (string): Glycan structure to be drawn.
+  | highlight_motif (string): Glycan as named motif or in IUPAC-condensed format.
   | show_linkage (bool, optional): Flag indicating whether to show linkages. Default: True.
   | draw_lib (dict): lib extended with non-standard glycoletters
   | extend_lib (bool): If True, further extend the library with given input. Default: False.
@@ -1924,6 +1931,9 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     draw_this += 'blank'
   if compact:
     show_linkage = False
+  if isinstance(highlight_motif, str) and highlight_motif[0] == 'r':
+    temp = get_match(highlight_motif[1:], draw_this)
+    highlight_motif = temp[0] if temp else None
 
   # Handle floaty bits if present
   floaty_bits = []
@@ -2258,3 +2268,64 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
       raise ImportError("You're missing some draw dependencies. Either don't use filepath or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   else:
     return svg_tmp
+
+
+def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
+                       scaling_factor = 0.2):
+  """plots SNFG images of glycans into new column in df and saves df as Excel file\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences [alternative: filepath to .csv]
+  | folder_filepath (string): full filepath to the folder you want to save the output to
+  | glycan_col_num (int): index of the column containing glycan sequences; default:0 (first column)
+  | scaling_factor (float): how large the glycans should be; default:0.2\n
+  | Returns:
+  | :-
+  | Saves the dataframe with glycan images as output.xlsx into folder_filepath
+  """
+  try:
+    from cairosvg import svg2png
+  except:
+    raise ImportError("You're missing some draw dependencies. If you want to use this function, head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
+  if isinstance(df, str):
+    df = pd.read_csv(df)
+  if not folder_filepath.endswith('/'):
+    folder_filepath += '/'
+  image_column_number = df.shape[1] + 2
+  df["SNFG"] = [np.nan for k in range(len(df))]
+  # Convert df_out to Excel
+  writer = pd.ExcelWriter(folder_filepath + "output.xlsx", engine = "openpyxl")
+  df.to_excel(writer)
+  # Load the workbook and get the active sheet
+  workbook = writer.book
+  sheet = writer.sheets["Sheet1"]
+  for i, glycan_structure in enumerate(df.iloc[:, glycan_col_num]):
+    if glycan_structure and glycan_structure[0]:
+      if not isinstance(glycan_structure[0], str):
+        glycan_structure = glycan_structure[0][0]
+      # Generate glycan image using GlycoDraw
+      svg_data = GlycoDraw(glycan_structure).as_svg()
+      # Convert SVG data to image
+      png_data = svg2png(bytestring = svg_data)
+      img_stream = BytesIO(png_data)
+      img = Image.open(img_stream)
+      # Set the size of the image
+      img_width, img_height = img.size
+      img = img.resize((int(img_width * scaling_factor), int(img_height * scaling_factor)), Image.LANCZOS)  
+      # Save the image to a BytesIO object
+      img_stream = BytesIO()
+      img.save(img_stream, format = 'PNG')
+      img_stream.seek(0)
+      # Create an image
+      img_for_excel = OpenpyxlImage(img_stream)
+      img_for_excel.width, img_for_excel.height = img.width, img.height  # Set width and height
+      # Find the cell to insert the image
+      cell = sheet.cell(row = i + 2, column = image_column_number)  # +2 because Excel is 1-indexed and there's a header row
+      # Insert the image into the cell
+      sheet.add_image(img_for_excel, cell.coordinate)
+      # Resize the cell to fit the image
+      column_letter = get_column_letter(image_column_number)
+      sheet.column_dimensions[column_letter].width = img.width*0.75*0.25
+      sheet.row_dimensions[cell.row].height = img.height*0.75
+  # Save the workbook
+  workbook.save(filename = folder_filepath + "output.xlsx")

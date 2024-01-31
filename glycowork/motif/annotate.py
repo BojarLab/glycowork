@@ -6,6 +6,7 @@ from collections import defaultdict
 from glycowork.glycan_data.loader import lib, linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, expand_lib, rescue_glycans
+from glycowork.motif.regex import get_match
 
 
 def link_find(glycan):
@@ -48,7 +49,7 @@ def annotate_glycan(glycan, motifs = None, libr = None,
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
-  | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
+  | motifs (dataframe): dataframe of glycan motifs (name + sequence), can be used with a list of glycans too; default:motif_list
   | libr (dict): dictionary of form glycoletter:index
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | gmotifs (networkx): precalculated motif graphs for speed-up; default:None\n
@@ -59,7 +60,7 @@ def annotate_glycan(glycan, motifs = None, libr = None,
   if motifs is None:
     motifs = motif_list
   # Check whether termini are specified
-  if not termini_list:
+  if not termini_list and isinstance(motifs, pd.DataFrame):
     termini_list = [eval(k) for k in motifs.termini_spec]
   if libr is None:
     libr = lib
@@ -78,7 +79,7 @@ def annotate_glycan(glycan, motifs = None, libr = None,
                                 termini_list = termini_list,
                                 count = True) for k in range(len(motifs))]*1
  
-  out = pd.DataFrame(columns = motifs.motif_name)
+  out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
   if isinstance(glycan, str):
@@ -89,7 +90,7 @@ def annotate_glycan(glycan, motifs = None, libr = None,
 
 
 def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
-  """given a list of SMILES glycans, uses pubchempy to return various molecular parameters retrieved from PubChem\n
+  """given a list of glycans, uses pubchempy to return various molecular parameters retrieved from PubChem\n
   | Arguments:
   | :-
   | glycan_list (list): list of glycans in IUPAC-condensed
@@ -137,16 +138,19 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
 
 
 @rescue_glycans
-def annotate_dataset(glycans, motifs = None,
-                     feature_set = ['known'], termini_list = [], condense = False):
+def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
+                     termini_list = [], condense = False, custom_motifs = []):
   """wrapper function to annotate motifs in list of glycans\n
   | Arguments:
   | :-
   | glycans (list): list of IUPAC-condensed glycan sequences as strings
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
+  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
+  |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
-  | condense (bool): if True, throws away columns with only zeroes; default:False\n
+  | condense (bool): if True, throws away columns with only zeroes; default:False
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
   | Returns:
   | :-                      
   | Returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
@@ -167,6 +171,13 @@ def annotate_dataset(glycans, motifs = None,
     # Counts literature-annotated motifs in each glycan
     shopping_cart.append(pd.concat([annotate_glycan(k, motifs = motifs, libr = libr,
                                                     gmotifs = gmotifs, termini_list = termini_list) for k in glycans], axis = 0))
+  if 'custom' in feature_set:
+    normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
+    gmotifs = [glycan_to_nxGraph(g, libr = libr) for g in normal_motifs]
+    shopping_cart.append(pd.concat([annotate_glycan(k, motifs = normal_motifs, libr = libr,
+                                                    gmotifs = gmotifs) for k in glycans], axis = 0))
+    regex_motifs = [m[1:] for m in custom_motifs if m.startswith('r')]
+    shopping_cart.append(pd.concat([pd.DataFrame([len(get_match(p, k)) for p in regex_motifs], columns = regex_motifs, index = [k]) for k in glycans], axis = 0))
   if 'graph' in feature_set:
     # Calculates graph features of each glycan
     shopping_cart.append(pd.concat([generate_graph_features(k, libr = libr) for k in glycans], axis = 0))
@@ -297,8 +308,9 @@ def get_k_saccharides(glycans, size = 2, libr = None, up_to = False, just_motifs
   first_half_cols = cols[:org_len]
   second_half_cols = cols[org_len:]
   drop_columns = []
+  regex = re.compile(r"(\([ab])(\d)-(\d)\)")
   col_sums = {col: out_matrix[col].sum() for col in cols}
-  col_subs = {col: regex.sub(r"\1\2-?", col) for col in cols}
+  col_subs = {col: regex.sub(r"\1\2-?)", col) for col in cols}
   for col1 in first_half_cols:
     for col2 in second_half_cols:
       if col_sums[col1] == col_sums[col2] and col_subs[col1] == col2:
@@ -357,3 +369,80 @@ def create_correlation_network(df, correlation_threshold):
   # Convert indices back to original labels
   clusters = [set(df.columns[list(cluster)]) for cluster in clusters]
   return clusters
+
+
+def group_glycans_core(glycans, p_values):
+  """group O-glycans based on core structure\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed nomenclature
+  | p_values (list): list of associated p-values\n
+  | Returns:
+  | :-
+  | Returns dictionaries of group : glycans and group : p-values
+  """
+  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  grouped_glycans, grouped_p_values = {}, {}
+  grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAc6S(b1-6)GalNAc"]])]
+  grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and not g in grouped_glycans["core2"]]
+  grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["core2"] and g not in grouped_glycans["core1"]]
+  grouped_p_values["core2"] = [temp[g] for g in grouped_glycans["core2"]]
+  grouped_p_values["core1"] = [temp[g] for g in grouped_glycans["core1"]]
+  if len(grouped_glycans["rest"]) > 0:
+    grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
+  else:
+    del grouped_glycans["rest"]
+  return grouped_glycans, grouped_p_values
+
+def group_glycans_sia_fuc(glycans, p_values):
+  """group glycans based on whether they contain sialic acid or fucose\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed nomenclature
+  | p_values (list): list of associated p-values\n
+  | Returns:
+  | :-
+  | Returns dictionaries of group : glycans and group : p-values
+  """
+  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  grouped_glycans, grouped_p_values = {}, {}
+  grouped_glycans["SiaFuc"] = [g for g in glycans if "Neu" in g and "Fuc" in g]
+  grouped_glycans["Sia"] = [g for g in glycans if "Neu" in g and g not in grouped_glycans["SiaFuc"]]
+  grouped_glycans["Fuc"] = [g for g in glycans if "Fuc" in g and g not in grouped_glycans["SiaFuc"]]
+  grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["SiaFuc"] and g not in grouped_glycans["Sia"] and g not in grouped_glycans["Fuc"]]
+  grouped_p_values["SiaFuc"] = [temp[g] for g in grouped_glycans["SiaFuc"]]
+  grouped_p_values["Sia"] = [temp[g] for g in grouped_glycans["Sia"]]
+  grouped_p_values["Fuc"] = [temp[g] for g in grouped_glycans["Fuc"]]
+  grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
+  for grp in ["SiaFuc", "Sia", "Fuc", "rest"]:
+    if not grouped_glycans[grp]:
+      del grouped_glycans[grp]
+      del grouped_p_values[grp]
+  return grouped_glycans, grouped_p_values
+
+
+def group_glycans_N_glycan_type(glycans, p_values):
+  """group glycans based on complex/hybrid/high-mannose/rest for N-glycans\n
+  | Arguments:
+  | :-
+  | glycans (list): list of glycans in IUPAC-condensed nomenclature
+  | p_values (list): list of associated p-values\n
+  | Returns:
+  | :-
+  | Returns dictionaries of group : glycans and group : p-values
+  """
+  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  grouped_glycans, grouped_p_values = {}, {}
+  grouped_glycans["complex"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-6)", "GlcNAc(b1-2)Man(a1-?)[GlcNAc(b1-2)Man(a1-?)]Man"]])]
+  grouped_glycans["hybrid"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man"]]) and g not in grouped_glycans["complex"]]
+  grouped_glycans["high_man"] = [g for g in glycans if g.count("Man") > 3 and g not in grouped_glycans["hybrid"] and g not in grouped_glycans["complex"]]
+  grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["complex"] and g not in grouped_glycans["hybrid"] and g not in grouped_glycans["high_man"]]
+  grouped_p_values["complex"] = [temp[g] for g in grouped_glycans["complex"]]
+  grouped_p_values["hybrid"] = [temp[g] for g in grouped_glycans["hybrid"]]
+  grouped_p_values["high_man"] = [temp[g] for g in grouped_glycans["high_man"]]
+  grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
+  for grp in ["complex", "hybrid", "high_man", "rest"]:
+    if not grouped_glycans[grp]:
+      del grouped_glycans[grp]
+      del grouped_p_values[grp]
+  return grouped_glycans, grouped_p_values
