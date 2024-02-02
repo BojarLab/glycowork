@@ -27,7 +27,7 @@ monosaccharide_mapping = {
     'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4S', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3S',
     'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS',
     'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3S', 'a2211m-1x_1-5': 'Rha', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAc',
-    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S'
+    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S', 'a2112h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS'
     }
 
 
@@ -438,12 +438,14 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
         residue_dic[res_id] = clean_mono
       #modification
       elif parts[0][-1] == 's':
-        tgt = '\n' + str(int(parts[0][:-1])-1)+':'
+        tgt = ')' + str(int(parts[0][:-1]))+'n'
         pattern = re.escape(tgt)
         matched = re.search(pattern, glycoct)
         if matched:
-          start_index = matched.end()
-          numerical_part = re.search(r'\d+', glycoct[start_index:])
+          start_index = matched.start()
+          stretch = glycoct[:start_index]
+          stretch = stretch[stretch.rindex(':'):]
+          numerical_part = re.search(r'\d+', stretch)
           res_id = int(numerical_part.group())
         else:
           res_id = max(residue_dic.keys())
@@ -827,7 +829,8 @@ def canonicalize_iupac(glycan):
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')', '→': '-',
-                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1'}
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
+                 '5Ac4Ac': '4Ac5Ac'}
   glycan = multireplace(glycan, replace_dic)
   # Trim linkers
   if '-' in glycan:
