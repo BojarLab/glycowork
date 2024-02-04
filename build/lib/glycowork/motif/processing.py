@@ -936,3 +936,16 @@ def rescue_compositions(func):
       return func(*rescued_args, **kwargs)
   return wrapper
 
+
+def equal_repeats(r1, r2):
+  """checks whether two repeat units could stem from the same repeating structure, just shifted\n
+  | Arguments:
+  | :-
+  | r1 (string): glycan sequence in IUPAC-condensed nomenclature
+  | r2 (string): glycan sequence in IUPAC-condensed nomenclature\n
+  | Returns:
+  | :-
+  | Returns True if repeat structures are shifted versions of each other, else False
+  """
+  r1_long = r1[:r1.rindex(')')+1] * 2
+  return any(r1_long[i:i + len(r2)] == r2 for i in range(len(r1)))
