@@ -1,20 +1,17 @@
 import numpy as np
 
-from glycowork.glycan_data.loader import lib, motif_list, df_glycan
+from glycowork.glycan_data.loader import motif_list, df_glycan
 from glycowork.motif.graph import compare_glycans
 from glycowork.motif.annotate import annotate_glycan
 
 
-def get_insight(glycan, libr = None, motifs = None):
+def get_insight(glycan, motifs = None):
     """prints out meta-information about a glycan\n
     | Arguments:
     | :-
     | glycan (string): glycan in IUPAC-condensed format
-    | libr (dict): dictionary of form glycoletter:index
     | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list\n
     """
-    if libr is None:
-        libr = lib
     if motifs is None:
         motifs = motif_list
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
@@ -22,14 +19,14 @@ def get_insight(glycan, libr = None, motifs = None):
     if glycan in df_glycan.glycan:
         idx = df_glycan.glycan.values.tolist().index(glycan)
     else:     
-        idx = np.where([compare_glycans(glycan, k, libr = libr) for k in df_glycan.glycan.values.tolist()])[0][0]
+        idx = np.where([compare_glycans(glycan, k) for k in df_glycan.glycan.values.tolist()])[0][0]
     species = df_glycan.Species.values.tolist()[idx]
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(sorted(species)))
     if len(species) > 5:
         phyla = sorted(set(df_glycan.Phylum.values.tolist()[idx]))
         print("\nPuh, that's quite a lot! Here are the phyla of those species: " + str(phyla))
-    found_motifs = annotate_glycan(glycan, motifs = motifs, libr = libr)
+    found_motifs = annotate_glycan(glycan, motifs = motifs)
     found_motifs = found_motifs.loc[:, (found_motifs != 0).any(axis = 0)].columns.values.tolist()
     if len(found_motifs) > 0:
         print("\nThis glycan contains the following motifs: " + str(found_motifs))

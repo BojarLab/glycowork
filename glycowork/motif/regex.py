@@ -2,8 +2,8 @@ import re
 import copy
 import networkx as nx
 from itertools import product, combinations, chain
-from glycowork.glycan_data.loader import replace_every_second, lib, unwrap
-from glycowork.motif.processing import min_process_glycans, bracket_removal, canonicalize_iupac, expand_lib
+from glycowork.glycan_data.loader import replace_every_second, unwrap
+from glycowork.motif.processing import min_process_glycans, bracket_removal, canonicalize_iupac
 from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, compare_glycans, glycan_to_nxGraph
 
 
@@ -224,19 +224,18 @@ def filter_matches_by_location(matches, ggraph, match_location):
   return matches
 
 
-def process_simple_pattern(p2, ggraph, libr, match_location):
+def process_simple_pattern(p2, ggraph, match_location):
   """for just a straight-up glycomotif, checks whether and where it can be found in glycan\n
   | Arguments:
   | :-
   | p2 (networkx): glycomotif graph as a networkx object
   | ggraph (networkx): glycan graph as a networkx object
-  | libr (dict): dictionary of form glycoletter:index
   | match_location (string): whether the match should have been at the "start", "end", or "internal" of the sequence\n
   | Returns:
   | :-
   | Returns list of matches as list of node indices
   """
-  res = subgraph_isomorphism(ggraph, p2, libr = libr, return_matches = True)
+  res = subgraph_isomorphism(ggraph, p2, return_matches = True)
   if not res:
     return False
   matched, matches = res
@@ -269,7 +268,7 @@ def calculate_len_matches_comb(len_matches):
     return list(set(unwrap(len_matches) + [sum(combination) for combination in cartesian_product]))
 
 
-def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
+def process_complex_pattern(p, p2, ggraph, glycan, match_location):
   """for a glycomotif with regular expression modifiers, checks whether and where it can be found in glycan\n
   | Arguments:
   | :-
@@ -277,14 +276,13 @@ def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
   | p2 (dict): dictionary of form glycomotif : occurrence
   | ggraph (networkx): glycan graph as a networkx object
   | glycan (string): glycan sequence in IUPAC-condensed
-  | libr (dict): dictionary of form glycoletter:index
   | match_location (string): whether the match should have been at the "start", "end", or "internal" of the sequence\n
   | Returns:
   | :-
   | Returns list of matches as list of node indices
   """
-  counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key.strip('^$%'), libr = expand_lib(libr, [p_key.strip('^$%')])),
-                                         libr = libr, count = True, return_matches = True) for p_key in p2.keys()]
+  counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key.strip('^$%')),
+                                         count = True, return_matches = True) for p_key in p2.keys()]
   if sum([k for k in counts_matches if isinstance(k, int)]) < 1 and isinstance(counts_matches[0], int):
     counts, matches = [], []
   else:
@@ -320,7 +318,7 @@ def process_complex_pattern(p, p2, ggraph, glycan, libr, match_location):
   return matches
 
 
-def process_pattern(p, p2, ggraph, glycan, libr, match_location):
+def process_pattern(p, p2, ggraph, glycan, match_location):
   """for a glycomotif, checks whether and where it can be found in glycan\n
   | Arguments:
   | :-
@@ -328,31 +326,28 @@ def process_pattern(p, p2, ggraph, glycan, libr, match_location):
   | p2 (dict): dictionary of form glycomotif : occurrence
   | ggraph (networkx): glycan graph as a networkx object
   | glycan (string): glycan sequence in IUPAC-condensed
-  | libr (dict): dictionary of form glycoletter:index
   | match_location (string): whether the match should have been at the "start", "end", or "internal" of the sequence\n
   | Returns:
   | :-
   | Returns list of matches as list of node indices
   """
   if isinstance(p2, dict):
-    return process_complex_pattern(p, p2, ggraph, glycan, libr, match_location)
+    return process_complex_pattern(p, p2, ggraph, glycan, match_location)
   else:
-    return process_simple_pattern(p2, ggraph, libr, match_location)
+    return process_simple_pattern(p2, ggraph, match_location)
 
 
-def match_it_up(pattern_components, glycan, ggraph, libr = None):
+def match_it_up(pattern_components, glycan, ggraph):
   """for a chunked glyco-regular expression, checks whether and where it can be found in glycan\n
   | Arguments:
   | :-
   | pattern_components (list): list of pattern components from glyco-regular expression
   | glycan (string): glycan sequence in IUPAC-condensed
-  | ggraph (networkx): glycan graph as a networkx object
-  | libr (dict): dictionary of form glycoletter:index; default:glycowork-internal libr\n
+  | ggraph (networkx): glycan graph as a networkx object\n
   | Returns:
   | :-
   | Returns list of tuples of form (pattern component, list of matches as node indices)
   """
-  libr = libr if libr is not None else lib
   pattern_matches = []
   for p in pattern_components:
     p2 = convert_pattern_component(p)
@@ -361,8 +356,8 @@ def match_it_up(pattern_components, glycan, ggraph, libr = None):
       match_location = 'start' if '^' in first_key else 'end' if '$' in first_key else 'internal' if '%' in first_key else None
     else:
       match_location = 'start' if '^' in p2 else 'end' if '$' in p2 else 'internal' if '%' in p2 else None
-      p2 = glycan_to_nxGraph(p2.strip('^$%'), libr = expand_lib(libr, [p2.strip('^$%')]))
-    res = process_pattern(p, p2, ggraph, glycan, libr, match_location)
+      p2 = glycan_to_nxGraph(p2.strip('^$%'))
+    res = process_pattern(p, p2, ggraph, glycan, match_location)
     res = sorted(res) if isinstance(res, list) and all(len(inner) == 1 for inner in res) else res
     pattern_matches.append((p, res) if res else (p, []))
   return pattern_matches
@@ -576,13 +571,12 @@ def compile(pattern):
   return preprocess_pattern(pattern)
 
 
-def get_match(pattern, glycan, libr = None, return_matches = True):
+def get_match(pattern, glycan, return_matches = True):
   """finds matches for a glyco-regular expression in a glycan\n
   | Arguments:
   | :-
   | pattern (string): glyco-regular expression in the form of "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"; accepts pre-compiled pattern
   | glycan (string): glycan sequence in IUPAC-condensed
-  | libr (dict): dictionary of form glycoletter:index; default:glycowork-internal libr
   | return_matches (bool): whether to return True/False or return the matches as a list of strings; default:True\n
   | Returns:
   | :-
@@ -593,10 +587,9 @@ def get_match(pattern, glycan, libr = None, return_matches = True):
   lookahead_snuck_in = False
   if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
     glycan = canonicalize_iupac(glycan)
-  libr = libr if libr is not None else lib
-  ggraph = glycan_to_nxGraph(glycan, libr = libr)
+  ggraph = glycan_to_nxGraph(glycan)
   pattern_components = preprocess_pattern(pattern) if isinstance(pattern, str) else pattern
-  pattern_matches = match_it_up(pattern_components, glycan, ggraph, libr = libr)
+  pattern_matches = match_it_up(pattern_components, glycan, ggraph)
   if pattern_matches:
     traces, used_patterns = trace_path(pattern_matches, ggraph)
     traces = fill_missing_in_list(traces)

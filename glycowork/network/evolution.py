@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from community import community_louvain
 from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
-from glycowork.glycan_data.loader import lib
 from glycowork.motif.graph import subgraph_isomorphism
 
 this_dir, this_filename = os.path.split(__file__)
@@ -148,15 +147,13 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
                 bbox_inches = 'tight')
 
 
-def check_conservation(glycan, df, network_dic = None, libr = None, rank = 'Order', threshold = 5,
-                       motif = False):
+def check_conservation(glycan, df, network_dic = None, rank = 'Order', threshold = 5, motif = False):
   """estimates evolutionary conservation of glycans and glycan motifs via biosynthetic networks\n
   | Arguments:
   | :-
   | glycan (string): full glycan or glycan motif in IUPAC-condensed nomenclature
   | df (dataframe): dataframe in the style of df_species, each row one glycan and columns are the taxonomic levels
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks
-  | libr (dict): dictionary of form glycoletter:index
   | rank (string): at which taxonomic level to assess conservation; default:Order
   | threshold (int): threshold of how many glycans a species needs to have to consider the species;default:5
   | motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False\n
@@ -164,8 +161,6 @@ def check_conservation(glycan, df, network_dic = None, libr = None, rank = 'Orde
   | :-
   | Returns a dictionary of taxonomic group : degree of conservation
   """
-  if libr is None:
-    libr = lib
   if network_dic is None:
     network_dic = net_dic
   # Subset species with at least the threshold-number of glycans
@@ -188,7 +183,7 @@ def check_conservation(glycan, df, network_dic = None, libr = None, rank = 'Orde
       if glycan[-1] == ')':
         conserved[r] = sum(glycan in "".join(nodes) for nodes in rank_nodes) / len(rank_nodes)
       else:
-        conserved[r] =  sum(any(subgraph_isomorphism(node, glycan, libr = libr) for node in nodes) for nodes in rank_nodes) / len(rank_nodes)
+        conserved[r] =  sum(any(subgraph_isomorphism(node, glycan) for node in nodes) for nodes in rank_nodes) / len(rank_nodes)
     else:
       conserved[r] = sum(glycan in nodes for nodes in rank_nodes) / len(rank_nodes)
   return conserved
