@@ -1322,29 +1322,26 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
   | :-
   | Returns networkx object of glycan, annotated with the node attribute 'highlight_labels', labeling nodes that constitute the motif ('show') or not ('hide').
   '''
-  libr = draw_lib
-  len_libr = len(libr)
-
   g1 = glycan_graph
   g_tmp = copy.deepcopy(g1)
   if not motif_string:
     g2 = copy.deepcopy(g1)
   else:
     try:
-      g2 = glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0], libr = libr, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0], libr = libr)
+      g2 = glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0], termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0])
     except:
-      g2 = glycan_to_nxGraph(motif_string, libr = libr, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_string, libr = libr)
+      g2 = glycan_to_nxGraph(motif_string, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_string)
 
   g1_node_labels = nx.get_node_attributes(g1, 'string_labels')
   relevant_labels = set(list(g1_node_labels.values()) + list(nx.get_node_attributes(g2, 'string_labels').values()))
-  narrow_wildcard_list = {k:[j for j in get_possible_linkages(k, libr = libr)] for k in relevant_labels if '?' in k}
-  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k, libr = libr)] for k in relevant_labels if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
+  narrow_wildcard_list = {k:[j for j in get_possible_linkages(k)] for k in relevant_labels if '?' in k}
+  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k)] for k in relevant_labels if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
   narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
 
   if termini_list or narrow_wildcard_list:
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
   else:
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', len_libr))
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
   graph_pair.subgraph_is_isomorphic()
   mapping = graph_pair.mapping
   mapping = {v: k for k, v in mapping.items()}
@@ -1353,9 +1350,9 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
   while list(graph_pair.mapping.keys()) != []:
     g_tmp.remove_nodes_from(graph_pair.mapping.keys())
     if termini_list or narrow_wildcard_list:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
     else:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', len_libr))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
     graph_pair.subgraph_is_isomorphic()
     mapping = graph_pair.mapping
     mapping = {v: k for k, v in mapping.items()}
@@ -1383,30 +1380,25 @@ def process_repeat(repeat):
   return 'blank(?1-' + repeat_connection[-1] + ')' + backbone + repeat_connection[:2] + '-?)'
 
 
-def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, draw_lib = draw_lib, extend_lib = False, termini_list = []):
+def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, termini_list = []):
   """Extract monosaccharide labels and calculate coordinates for drawing\n
   | Arguments:
   | :-
   | draw_this (string): Glycan structure to be drawn.
   | highlight_motif (string): Glycan as named motif or in IUPAC-condensed format.
   | show_linkage (bool, optional): Flag indicating whether to show linkages. Default: True.
-  | draw_lib (dict): lib extended with non-standard glycoletters
-  | extend_lib (bool): If True, further extend the library with given input. Default: False.
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
   | data_combined (list of lists)
   | contains lists with monosaccharide label, x position, y position, modification, bond, conformation
   """
-  if extend_lib:
-    draw_lib = expand_lib(draw_lib, [draw_this])
-
   if not draw_this.startswith('['):
     draw_this = multiple_branches(multiple_branch_branches(draw_this))
     draw_this = reorder_for_drawing(draw_this)
     draw_this = multiple_branch_branches(multiple_branches(draw_this))
 
-  graph = glycan_to_nxGraph(draw_this, libr = draw_lib, termini = 'calc') if termini_list else glycan_to_nxGraph(draw_this, libr = draw_lib)
+  graph = glycan_to_nxGraph(draw_this, termini = 'calc') if termini_list else glycan_to_nxGraph(draw_this)
   graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list)
   node_labels = nx.get_node_attributes(graph, 'string_labels')
   highlight_labels = nx.get_node_attributes(graph, 'highlight_labels')
@@ -1680,7 +1672,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   tmp_a = main_node + unwrap(branch_node_old) + unwrap(branch_branch_node) + unwrap(branch_branch_branch_node)
   tmp_b = main_label + unwrap(branch_label) + unwrap(branch_branch_label) + unwrap(bbb_label)
   for n in splits:
-    graph = glycan_to_nxGraph(draw_this, libr = draw_lib)
+    graph = glycan_to_nxGraph(draw_this)
     graph2 = split_node(graph, int(n))
     edges = graph.edges()
     split_node_connections = [e[0] for e in edges if f"{n}_"in str(e[1])]
@@ -1784,7 +1776,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   y_list = main_sugar_y_pos+unwrap(branch_y_pos)+unwrap(branch_branch_y_pos)+unwrap(bbb_y_pos)
   x_list = main_sugar_x_pos+unwrap(branch_x_pos)+unwrap(branch_branch_x_pos)+unwrap(bbb_x_pos)
   for n in splits:
-    graph = glycan_to_nxGraph(draw_this, libr = draw_lib)
+    graph = glycan_to_nxGraph(draw_this)
     graph2 = split_node(graph, int(n))
     edges = graph.edges()
     split_node_connections = [e[0] for e in edges if f"{n}_" in str(e[1])]
@@ -1949,11 +1941,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
       draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values.tolist()[0]
       data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list)
     except:
-        try:
-          data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, extend_lib = True, highlight_motif = highlight_motif, termini_list = highlight_termini_list)
-        except:
-          return print('Error: did you enter a real glycan or motif?')
-          sys.exit(1)
+      return print('Error: did you enter a real glycan or motif?')
+      ys.exit(1)
 
   main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label = data[0]
   branch_sugar, branch_x_pos, branch_y_pos, branch_sugar_modification, branch_bond, branch_connection, b_conf, branch_sugar_label, branch_bond_label = data[1]
