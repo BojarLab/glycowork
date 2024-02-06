@@ -737,7 +737,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '04A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -755,7 +755,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '15X':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -773,7 +773,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '02X':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
@@ -791,7 +791,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '13A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
                         x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
@@ -809,7 +809,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '24A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)),
                         x_base+half_dim*cos(radians(240)),                       y_base-half_dim*sin(radians(240)),
@@ -827,7 +827,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '35A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)),
                         x_base+half_dim*cos(radians(180)),                       y_base-half_dim*sin(radians(180)),
@@ -890,7 +890,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '25X':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                               y_base,
                         x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -905,7 +905,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '03X':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
@@ -920,7 +920,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '14A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
                         x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
