@@ -619,7 +619,7 @@ def infer_roots(glycans):
 
 
 def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
-                      edge_type = 'monolink', permitted_roots = None):
+                      edge_type = 'monolink', permitted_roots = None, abundances = []):
   """construct a glycan biosynthetic network\n
   | Arguments:
   | :-
@@ -627,7 +627,8 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   | libr (dict): dictionary of form glycoletter:index
   | allowed_ptms (set): list of PTMs to consider
   | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide'), monosaccharide(linkage) ('monolink'), or enzyme catalyzing the reaction ('enzyme'); default:'monolink'
-  | permitted_roots (set): which nodes should be considered as roots; default:will be inferred\n
+  | permitted_roots (set): which nodes should be considered as roots; default:will be inferred
+  | abundances (list): optional list of abundances, in the same order as glycans; default:empty list\n
   | Returns:
   | :-
   | Returns a networkx object of the network
@@ -636,6 +637,7 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
     libr = lib
   if permitted_roots is None:
     permitted_roots = infer_roots(glycans)
+  abundance_mapping = {glycans[k]: abundances[k] for k in range(len(glycans))} if abundances else {}
   # Generating graph from adjacency of observed glycans
   min_size = min([k.count('(') for k in permitted_roots]) + 1
   add_to_virtuals = [r for r in permitted_roots if r not in glycans and any(r in g for g in glycans)]
@@ -723,6 +725,9 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   for node in sorted(network.nodes(), key = len, reverse = True):
     if (network.out_degree[node] < 1) and (nodeDict[node]['virtual'] == 1):
       network.remove_node(node)
+  if abundances:
+    node_attributes = {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in network.nodes()}
+    nx.set_node_attributes(network, node_attributes)
   return filter_disregard(network)
 
 

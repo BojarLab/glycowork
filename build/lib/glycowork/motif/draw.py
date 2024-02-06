@@ -1,8 +1,8 @@
-from glycowork.glycan_data.loader import lib, unwrap, motif_list, multireplace
+from glycowork.glycan_data.loader import unwrap, motif_list, multireplace
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import expand_lib, min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
+from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
 from io import BytesIO
 import networkx as nx
 import copy
@@ -88,8 +88,6 @@ col_dict_transparent = {
     'black'          : '#D9D9D9',
     'grey'           : '#ECECEC'
 }
-
-# col_dict_base['snfg_white']
 
 # Extensions for draw_lib
 additions = ['-', 'blank', 'red_end', 'free',
@@ -185,10 +183,6 @@ sugar_dict = {
   "Z": ['Z', None, None], "Y": ['Y', None, None],
   "B": ['B', None, None], "C": ['C', None, None]
 }
-
-
-# Build draw_lib with glycoletter additions
-draw_lib = expand_lib(lib, ['-'] + list(sugar_dict.keys()))
 
 
 def hex_circumference(x_pos, y_pos, dim, col_dict):
