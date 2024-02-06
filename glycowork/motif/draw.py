@@ -1,8 +1,8 @@
-from glycowork.glycan_data.loader import unwrap, motif_list, multireplace
+from glycowork.glycan_data.loader import unwrap, motif_list, multireplace, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
+from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, in_lib
 from io import BytesIO
 import networkx as nx
 import copy
@@ -2209,14 +2209,15 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
     # Keep track of current label and position in figure
     current_label = label_pattern.findall(match)[0]
     # Check if label is glycan
-    try:
-      glycan_to_nxGraph(current_label)
+    if in_lib(current_label, lib):
       edit_svg = True
-    except:
+    else:
       pass
     try:
-      glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0])
-      edit_svg = True
+      if in_lib(motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0], lib):
+        edit_svg = True
+      else:
+        pass
     except:
       pass
     # Delete text label, append glycan figure
