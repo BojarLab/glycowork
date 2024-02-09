@@ -603,3 +603,28 @@ def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivat
     stem_libr = stem_lib
   comp = glycan_to_composition(glycan, stem_libr = stem_libr)
   return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep)
+
+
+@rescue_compositions
+def get_unique_topologies(composition, glycan_type, df_use = None, universal_replacers = {},
+                         taxonomy_rank = "Kingdom", taxonomy_value = "Animalia"):
+  """given a composition, retrieves all observed and unique base topologies\n
+  | Arguments:
+  | :-
+  | composition (dict): composition in form monosaccharide:count
+  | glycan_type (string): which glycan class to search, 'N', 'O', 'lipid', 'free', or 'repeat'
+  | df_use (dataframe): species-specific glycan dataframe to use for mapping; default: df_glycan
+  | universal_replacers (dictionary): dictionary of form base monosaccharide : specific monosaccharide
+  | taxonomy_rank (string): at which taxonomic rank to filter; default: Kingdom
+  | taxonomy_value (string): which value to filter at taxonomy_rank; default: Animalia\n
+  | Returns:
+  | :-
+  | Returns a list of observed base topologies for the given composition
+  """
+  if df_use is None:
+    df_use = df_glycan
+  df_use = df_use[df_use.Composition == composition]
+  df_use = df_use[df_use.glycan_type == glycan_type]
+  df_use = df_use[df_use[taxonomy_rank].apply(lambda x: taxonomy_value in x)].glycan.values
+  df_use = list(set([structure_to_basic(k) for k in df_use]))
+  return [[g.replace(k, v) for k,v in universal_replacers.items()][0] for g in df_use if '{' not in g]
