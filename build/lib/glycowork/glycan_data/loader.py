@@ -2,14 +2,14 @@ import pandas as pd
 import os
 import pickle
 import itertools
-import pkg_resources
+from importlib import resources
 
-io = pkg_resources.resource_stream(__name__, "v10_df_species.csv")
-df_species = pd.read_csv(io)
-io = pkg_resources.resource_stream(__name__, "glycan_motifs.csv")
-motif_list = pd.read_csv(io)
-io = pkg_resources.resource_stream(__name__, "glycan_binding.csv")
-glycan_binding = pd.read_csv(io)
+with resources.open_text("glycowork.glycan_data", "v10_df_species.csv") as f:
+  df_species = pd.read_csv(f)
+with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
+  motif_list = pd.read_csv(f)
+with resources.open_text("glycowork.glycan_data", "glycan_binding.csv") as f:
+  glycan_binding = pd.read_csv(f)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
 data_path = os.path.join(this_dir, 'lib_v10.pkl')
 lib = pickle.load(open(data_path, 'rb'))

@@ -3,7 +3,7 @@ import mpld3
 import pickle
 import copy
 import os
-import pkg_resources
+from importlib import resources
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -14,8 +14,8 @@ from glycowork.motif.processing import choose_correct_isoform
 from glycowork.motif.tokenization import get_stem_lib
 from glycowork.motif.regex import get_match
 
-io = pkg_resources.resource_stream(__name__, "monolink_to_enzyme.csv")
-df_enzyme = pd.read_csv(io, sep = '\t')
+with resources.open_text("glycowork.network", "monolink_to_enzyme.csv") as f:
+  df_enzyme = pd.read_csv(f, sep = '\t')
 
 this_dir, this_filename = os.path.split(__file__) 
 data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')

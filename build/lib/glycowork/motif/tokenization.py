@@ -4,7 +4,7 @@ import networkx as nx
 import re
 import copy
 import math
-import pkg_resources
+from importlib import resources
 from itertools import product
 from collections import Counter
 from sklearn.cluster import DBSCAN
@@ -17,8 +17,8 @@ chars = {'A':1, 'B':2, 'C':3, 'D':4, 'E':5, 'F':6, 'G':7, 'H':8, 'I':9, 'J':10, 
          'L':12, 'M':13, 'N':14, 'P':15, 'Q':16, 'R':17, 'S':18, 'T':19,
          'V':20, 'W':21, 'Y':22, 'X':23, 'Z':24, 'z':25}
 
-io = pkg_resources.resource_stream(__name__, "mz_to_composition.csv")
-mapping_file = pd.read_csv(io)
+with resources.open_text("glycowork.motif", "mz_to_composition.csv") as f:
+  mapping_file = pd.read_csv(f)
 mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
 
 
