@@ -4,6 +4,7 @@ import pickle
 import copy
 import os
 from importlib import resources
+from collections import defaultdict
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -646,7 +647,16 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   graph_dic = {k: glycan_to_nxGraph(k) for k in glycans}
   network, virtual_nodes = create_adjacency_matrix(glycans, graph_dic, min_size = min_size)
   # Connecting observed via virtual nodes
-  unconnected_nodes = set(network.nodes()) - set(sum(network.edges(), ()))
+  unconnected_nodes = set()
+  for node in network.nodes():
+    has_incoming = False
+    for neighbor in network.neighbors(node):
+      # Check whether the neighbor has a shorter string, indicating an "incoming" connection
+      if len(neighbor) < len(node):
+        has_incoming = True
+        break
+    if not has_incoming:
+      unconnected_nodes.add(node)
   new_nodes, new_edges, new_edge_labels = set(), [], []
   for k in sorted(unconnected_nodes):
     try:
@@ -1180,3 +1190,53 @@ def highlight_network(network, highlight, motif = None,
     node_conservation = {k: flat_spec_nodes.count(k) * 100 for k in network_out.nodes()}
     nx.set_node_attributes(network_out, node_conservation, name = 'abundance')
   return network_out
+
+
+def get_edge_weight_by_abundance(network, root = "Gal(b1-4)Glc-ol", root_default = 10.0):
+  """estimate reaction capacity by the relative abundance of source and sink\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | root (string): root node of network; default:"Gal(b1-4)Glc-ol"
+  | root_default (float): dummy abundance value of root; default:10.0\n
+  | Returns:
+  | :-
+  | Returns a network in which the edge attribute 'capacity' has been estimated
+  """
+  abundance_dict = nx.get_node_attributes(network, 'abundance')
+  if abundance_dict.get(root, 1) < 0.1:
+    abundance_dict[root] = root_default
+  for u, v in network.edges():
+    source_abundance = abundance_dict.get(u, 0.1)
+    sink_abundance = abundance_dict.get(v, 0.1)
+    edge_capacity = (source_abundance + sink_abundance) / 2
+    network[u][v]['capacity'] = edge_capacity
+  return network
+
+
+def estimate_weights(network, root = "Gal(b1-4)Glc-ol", root_default = 10):
+  """estimate reaction capacity of edges and missing relative abundances\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network
+  | root (string): root node of network; default:"Gal(b1-4)Glc-ol"
+  | root_default (float): dummy abundance value of root; default:10.0\n
+  | Returns:
+  | :-
+  | Returns a network in which the edge attribute 'capacity' and missing abundances have been estimated
+  """
+  net_estimated = get_edge_weight_by_abundance(network, root = root, root_default = root_default)
+  # Function to estimate weight based on neighboring edges
+  def estimate_weight(node):
+    in_weights = [network[u][node]['capacity'] for u in network.predecessors(node) if network[u][node]['capacity'] > 0]
+    out_weights = [network[node][v]['capacity'] for v in network.successors(node) if network[node][v]['capacity'] > 0]
+    if in_weights and out_weights:
+      return np.mean(in_weights + out_weights)  # Average of non-zero in and out weights
+    return 0.001  # A small default value if no non-zero neighboring weights
+  # Estimate weights for zero-weight intermediates
+  for node in network.nodes:
+    if all(network[node][v]['capacity'] == 0 for v in network.successors(node)):
+      estimated_weight = estimate_weight(node)
+      for v in network.successors(node):
+        net_estimated[node][v]['capacity'] = estimated_weight
+  return net_estimated
