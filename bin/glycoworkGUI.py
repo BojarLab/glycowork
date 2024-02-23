@@ -155,8 +155,8 @@ def openDifferentialExpressionDialog():
     if dialog_result.result:
         csv_file_path, treatment_indices, control_indices, motifs, output_folder = dialog_result.result
         df_out = get_differential_expression(df = csv_file_path,
-                               group1 = treatment_indices,
-                               group2 = control_indices,
+                               group1 = control_indices,
+                               group2 = treatment_indices,
                                motifs = motifs)
         plot_glycans_excel(df_out, output_folder)
 
