@@ -477,7 +477,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   plt.show()
 
 
-def select_grouping(cohort_b, cohort_a, glycans, p_values, grouped_BH = False):
+def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, grouped_BH = False):
   """test various means of grouping glycans by domain knowledge, to obtain high intra-group correlation\n
   | Arguments:
   | :-
@@ -485,6 +485,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, grouped_BH = False):
   | cohort_a (dataframe): dataframe of glycans as rows and samples as columns of the control samples
   | glycans (list): list of glycans in IUPAC-condensed nomenclature
   | p_values (list): list of associated p-values
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
   | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False\n 
   | Returns:
   | :-
@@ -502,7 +503,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, grouped_BH = False):
     grouped_glycans, grouped_p_values = func(glycans, p_values)
     if any([len(g) < 2 for g in grouped_glycans.values()]):
       continue
-    intra, inter = test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans)
+    intra, inter = test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = paired)
     out[desc] = ((intra, inter), (grouped_glycans, grouped_p_values))
   desc = list(out.keys())[np.argmax([v[0][0] - v[0][1] for k, v in out.items()])]
   intra, inter = out[desc][0]
@@ -609,7 +610,7 @@ def get_differential_expression(df, group1, group2,
   # Multiple testing correction
   if pvals:
       if not motifs:
-          grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, grouped_BH = grouped_BH)
+          grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, paired = paired, grouped_BH = grouped_BH)
           corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
           corrpvals = [corrpvals[g] for g in glycans]
           significance = [significance_dict[g] for g in glycans]

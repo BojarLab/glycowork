@@ -594,20 +594,25 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
   return adjusted_p_values, significance_dict
 
 
-def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans):
+def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = False):
   """estimates intra- and inter-group correlation of a given grouping of glycans via a mixed-effects model\n
   | Arguments:
   | :-
   | cohort_b (dataframe): dataframe of glycans as rows and samples as columns of the case samples
   | cohort_a (dataframe): dataframe of glycans as rows and samples as columns of the control samples
   | glycans (list): list of glycans in IUPAC-condensed nomenclature
-  | grouped_glycans (dict): dictionary of type group : glycans\n
+  | grouped_glycans (dict): dictionary of type group : glycans
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
   | Returns:
   | :-
   | Returns floats for the intra-group and inter-group correlation
   """
   reverse_lookup = {k: v for v, l in grouped_glycans.items() for k in l}
-  temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
+  if paired:
+    temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
+  else:
+    mean_cohort_a = (cohort_a.mean(axis = 1) + 1e-8).values[:, np.newaxis]
+    temp = pd.DataFrame(np.log2((cohort_b.values + 1e-8) / mean_cohort_a))
   temp.index = glycans
   temp = temp.reset_index()
   # Melt the dataframe to long format
