@@ -573,7 +573,10 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
     # Estimate π0 for the group within the Two-Stage method
     pi0_estimate = pi0_tst(group_p_values, alpha)
     if pi0_estimate == 1:
-      adjusted_p_values[group] = [1.0] * len(group_p_values)
+      group_adjusted_p_values = [1.0] * len(group_p_values)
+      for identifier, corrected_pval in zip(identifiers_grouped[group], group_adjusted_p_values):
+        adjusted_p_values[identifier] = corrected_pval
+        significance_dict[identifier] = False
       continue
     n = len(group_p_values)
     sorted_indices = np.argsort(group_p_values)
