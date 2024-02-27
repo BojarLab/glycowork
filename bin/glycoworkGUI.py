@@ -24,26 +24,41 @@ class GlycoDrawDialog(simpledialog.Dialog):
         tk.Label(master, text = "Glycan Sequence:").grid(row = 0)
         self.sequence_entry = tk.Entry(master)
         self.sequence_entry.grid(row = 0, column = 1)
+        self.compact_var = tk.BooleanVar()
+        self.compact_check = tk.Checkbutton(master, text = "Compact", variable = self.compact_var)
+        self.compact_check.grid(row = 1, columnspan = 2)
         return self.sequence_entry  # to put focus on the glycan sequence entry widget
 
     def apply(self):
         glycan_sequence = self.sequence_entry.get()
-        file_path = filedialog.asksaveasfilename(filetypes = [("PDF Image", "*.pdf")], defaultextension = ".pdf")
-        if file_path:  # ensuring the user didn't cancel the save dialog
-            self.result = glycan_sequence, file_path
+        compact = self.compact_var.get()
+        self.result = glycan_sequence, compact
 
 
 def openGlycoDrawDialog():
-    dialog_result = GlycoDrawDialog(app)
-    if dialog_result.result:
-        glycan_sequence, file_path = dialog_result.result
-        GlycoDraw(glycan_sequence, filepath = file_path)
+    # Ask for directory only once
+    folder_path = filedialog.askdirectory(title = "Select Folder to Save Glycans")
+    if not folder_path:
+        return  # User cancelled the folder selection
+
+    # Continuously allow user to enter sequences and save them
+    while True:
+        dialog_result = GlycoDrawDialog(app)
+        if dialog_result.result:
+            glycan_sequence, compact = dialog_result.result
+            file_path = os.path.join(folder_path, f"{glycan_sequence}.pdf")
+            GlycoDraw(glycan_sequence, filepath = file_path, compact = compact)
+            # Optionally, ask if the user wants to continue or not
+            if not messagebox.askyesno("Continue", "Do you want to draw another glycan?"):
+                break
+        else:
+            break  # Exit if user cancels the glycan entry dialog
 
 
 class GlycoDrawExcelDialog(simpledialog.Dialog):
     def body(self, master):
         self.title("GlycoDrawExcel Input")
-        tk.Label(master, text="Select CSV File:").grid(row = 0)
+        tk.Label(master, text = "Select CSV or Excel File:").grid(row = 0)
         
         self.csv_entry = tk.Entry(master)
         self.csv_entry.grid(row = 0, column = 1)
@@ -55,11 +70,15 @@ class GlycoDrawExcelDialog(simpledialog.Dialog):
         self.folder_entry.grid(row = 1, column = 1)
         self.folder_button = tk.Button(master, text = "Browse...", command = self.browse_folder)
         self.folder_button.grid(row = 1, column = 2)
+
+        self.compact_var = tk.BooleanVar()
+        self.compact_check = tk.Checkbutton(master, text = "Compact", variable = self.compact_var)
+        self.compact_check.grid(row = 2, columnspan = 3)
         
         return self.csv_entry  # to put focus on the csv file entry widget
     
     def browse_csv(self):
-        file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv")])
+        file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv"), ("Excel Files", "*.xlsx")])
         if file_path:
             self.csv_entry.delete(0, tk.END)
             self.csv_entry.insert(0, file_path)
@@ -73,14 +92,15 @@ class GlycoDrawExcelDialog(simpledialog.Dialog):
     def apply(self):
         csv_file_path = self.csv_entry.get()
         output_folder = self.folder_entry.get()
-        self.result = csv_file_path, output_folder
+        compact = self.compact_var.get()
+        self.result = csv_file_path, output_folder, compact
 
 
 def openGlycoDrawExcelDialog():
     dialog_result = GlycoDrawExcelDialog(app)
     if dialog_result.result:
-        csv_file_path, output_folder = dialog_result.result
-        plot_glycans_excel(csv_file_path, output_folder)
+        csv_file_path, output_folder, compact = dialog_result.result
+        plot_glycans_excel(csv_file_path, output_folder, compact = compact)
 
 
 
@@ -89,7 +109,7 @@ class DifferentialExpressionDialog(simpledialog.Dialog):
         self.title("Differential Expression Input")
         
         # CSV file selection
-        tk.Label(master, text="CSV File:").grid(row = 0, sticky = tk.W)
+        tk.Label(master, text="CSV or Excel File:").grid(row = 0, sticky = tk.W)
         self.csv_file_var = tk.StringVar(master)
         self.csv_entry = tk.Entry(master, textvariable = self.csv_file_var, state = 'readonly')
         self.csv_entry.grid(row = 0, column = 1)
@@ -140,7 +160,7 @@ class DifferentialExpressionDialog(simpledialog.Dialog):
             return []
 
     def browse_csv(self):
-        file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv")])
+        file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv"), ("Excel Files", "*.xlsx")])
         if file_path:
             self.csv_file_var.set(file_path)
 
@@ -169,7 +189,7 @@ btn_function1 = tk.Button(app, text = "Run GlycoDraw", command = openGlycoDrawDi
 btn_function1.pack(pady = 5)
 btn_function2 = tk.Button(app, text = "Run GlycoDrawExcel", command = openGlycoDrawExcelDialog)
 btn_function2.pack(pady = 5)
-btn_function3 = tk.Button(app, text="Run DifferentialExpression", command= openDifferentialExpressionDialog)
+btn_function3 = tk.Button(app, text = "Run DifferentialExpression", command = openDifferentialExpressionDialog)
 btn_function3.pack(pady = 5)
 
 icon_path = resource_path("glycowork.ico")

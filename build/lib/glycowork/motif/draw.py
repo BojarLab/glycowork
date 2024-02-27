@@ -2255,14 +2255,15 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
 
 
 def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
-                       scaling_factor = 0.2):
+                       scaling_factor = 0.2, compact = False):
   """plots SNFG images of glycans into new column in df and saves df as Excel file\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences [alternative: filepath to .csv]
+  | df (dataframe): dataframe containing glycan sequences [alternative: filepath to .csv or .xlsx]
   | folder_filepath (string): full filepath to the folder you want to save the output to
   | glycan_col_num (int): index of the column containing glycan sequences; default:0 (first column)
-  | scaling_factor (float): how large the glycans should be; default:0.2\n
+  | scaling_factor (float): how large the glycans should be; default:0.2
+  | compact (bool, optional): Set to True to draw the structures in a compact form. Default: False.\n
   | Returns:
   | :-
   | Saves the dataframe with glycan images as output.xlsx into folder_filepath
@@ -2272,7 +2273,7 @@ def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
   except:
     raise ImportError("You're missing some draw dependencies. If you want to use this function, head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   if isinstance(df, str):
-    df = pd.read_csv(df)
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if not folder_filepath.endswith('/'):
     folder_filepath += '/'
   image_column_number = df.shape[1] + 2
@@ -2288,7 +2289,7 @@ def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
       if not isinstance(glycan_structure[0], str):
         glycan_structure = glycan_structure[0][0]
       # Generate glycan image using GlycoDraw
-      svg_data = GlycoDraw(glycan_structure).as_svg()
+      svg_data = GlycoDraw(glycan_structure, compact = compact).as_svg()
       # Convert SVG data to image
       png_data = svg2png(bytestring = svg_data)
       img_stream = BytesIO(png_data)

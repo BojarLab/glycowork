@@ -32,7 +32,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
     | :-
-    | df (dataframe): dataframe containing glycan sequences and labels [alternative: filepath to .csv]
+    | df (dataframe): dataframe containing glycan sequences and labels [alternative: filepath to .csv or .xlsx]
     | glycan_col_name (string): column name for glycan sequences; arbitrary if multiple_samples = True; default:'glycan'
     | label_col_name (string): column name for labels; arbitrary if multiple_samples = True; default:'target'
     | zscores (bool): whether data are presented as z-scores or not, will be z-score transformed if False; default:True
@@ -48,7 +48,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | Returns dataframe with p-values, corrected p-values, and Cohen's d as effect size for every glycan motif
     """
     if isinstance(df, str):
-        df = pd.read_csv(df)
+        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     # Reformat to allow for proper annotation in all samples
     if multiple_samples:
         df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
@@ -152,7 +152,7 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans [alternative: filepath to .csv]
+  | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans [alternative: filepath to .csv or .xlsx]
   | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
@@ -167,7 +167,7 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   | Prints clustermap              
   """
   if isinstance(df, str):
-      df = pd.read_csv(df)
+      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if index_col in df.columns:
       df.set_index(index_col, inplace = True)
   df.fillna(0, inplace = True)
@@ -403,14 +403,14 @@ def get_coverage(df, filepath = ''):
   """ Plot glycan coverage across samples, ordered by average intensity\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv]
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
   | filepath (string): absolute path including full filename allows for saving the plot\n
   | Returns:
   | :-
   | Prints the heatmap
   """
   if isinstance(df, str):
-      df = pd.read_csv(df)
+      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   d = df.iloc[:,1:]
   # arrange by mean intensity across all samples
   order = d.mean(axis = 1).sort_values().index
@@ -429,7 +429,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   """ PCA plot from glycomics abundance dataframe\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv]
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
   | groups (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3]); default:None
   |                     alternatively: design dataframe with 'id' column of samples names and additional columns with meta information
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
@@ -446,7 +446,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   | Prints PCA plot
   """
   if isinstance(df, str):
-      df = pd.read_csv(df)
+      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   # get pca
   if motifs:
       # Motif extraction and quantification
@@ -523,7 +523,7 @@ def get_differential_expression(df, group1, group2,
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv]
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
   | group1 (list): list of column indices or names for the first group of samples, usually the control
   | group2 (list): list of column indices or names for the second group of samples
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
@@ -551,7 +551,7 @@ def get_differential_expression(df, group1, group2,
   | (xi) [only if effect_size_variance=True] Effect size variance
   """
   if isinstance(df, str):
-      df = pd.read_csv(df)
+      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if not isinstance(group1[0], str):
       columns_list = df.columns.tolist()
       group1 = [columns_list[k] for k in group1]
@@ -639,7 +639,7 @@ def get_pval_distribution(df_res, filepath = ''):
   | prints p-value distribution plot
   """
   if isinstance(df_res, str):
-      df_res = pd.read_csv(df_res)
+      df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   # make plot
   ax = sns.histplot(x = 'p-val', data = df_res, stat = 'frequency')
   ax.set(xlabel = 'p-values', 
@@ -655,7 +655,7 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   """ MA plot of glycan differential expression result\n
   | Arguments:
   | :-
-  | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv]
+  | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv or .xlsx]
   | log2fc_thresh (int): absolute Log2FC threshold for highlighting datapoints
   | sig_thresh (int): significance threshold for highlighting datapoints
   | filepath (string): absolute path including full filename allows for saving the plot\n
@@ -664,7 +664,7 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   | prints MA plot
   """
   if isinstance(df_res, str):
-      df_res = pd.read_csv(df_res)
+      df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   # Create masks for significant and non-significant points
   sig_mask = (abs(df_res['Log2FC']) > log2fc_thresh) & (df_res['corr p-val'] < sig_thresh)
   # Plot non-significant points first
@@ -685,7 +685,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   """Plots glycan differential expression results in a volcano plot\n
   | Arguments:
   | :-
-  | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv]
+  | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv or .xlsx]
   | y_thresh (float): corr p threshhold for labeling datapoints; default:0.05
   | x_thresh (float): absolute x metric threshold for labeling datapoints; default:1.0
   | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
@@ -696,7 +696,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   | Prints volcano plot
   """
   if isinstance(df_res, str):
-      df_res = pd.read_csv(df_res)
+      df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
   x = df_res[x_metric].values
   y = df_res['log_p'].values
@@ -723,7 +723,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
-    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv]
+    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
     | group_sizes (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3])
     | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
@@ -738,7 +738,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | (ii) a dictionary of type glycan : pandas DataFrame, with post-hoc results for each glycan with a significant ANOVA.
     """
     if isinstance(df, str):
-        df = pd.read_csv(df)
+        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     results, posthoc_results = [], {}
     df.fillna(0, inplace = True)
     groups_unq = sorted(set(groups))
@@ -886,7 +886,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     """Analyzes time series data of glycans using an OLS model\n
     | Arguments:
     | :-
-    | df (dataframe): dataframe containing sample IDs of style sampleID_UnitTimepoint_replicate (e.g., T1_h5_r1) in first column and glycan relative abundances in subsequent columns [alternative: filepath to .csv]
+    | df (dataframe): dataframe containing sample IDs of style sampleID_UnitTimepoint_replicate (e.g., T1_h5_r1) in first column and glycan relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
     | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
@@ -904,7 +904,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     | (v) Significance: True/False whether the corrected p-value lies below the sample size-appropriate significance threshold
     """
     if isinstance(df, str):
-        df = pd.read_csv(df)
+        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     df.fillna(0, inplace = True)
     df = df.set_index(df.columns[0]).T
     df = impute_and_normalize(df, [df.columns], impute = impute, min_samples = min_samples).reset_index()
@@ -936,7 +936,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     """Detecting rhythmically expressed glycans via the Jonckheere–Terpstra–Kendall (JTK) algorithm\n
     | Arguments:
     | :-
-    | df_in (pd.DataFrame): A dataframe containing data for analysis.
+    | df_in (pd.DataFrame): A dataframe containing data for analysis. [alternative: filepath to .csv or .xlsx]
     |   (column 0 = molecule IDs, then arranged in groups and by ascending timepoints)
     | timepoints (int): number of timepoints in the experiment (each timepoint must have the same number of replicates).
     | periods (list): number of timepoints (as int) per cycle.
@@ -950,7 +950,10 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
     | molecule in the analysis.
     """
-    df = copy.deepcopy(df_in)
+    if isinstance(df_in, str):
+        df = pd.read_csv(df_in) if df_in.endswith(".csv") else pd.read_excel(df_in)
+    else:
+        df = copy.deepcopy(df_in)
     replicates = (df.shape[1] - 1) // timepoints
     alpha = get_alphaN(replicates)
     param_dic = {"GRP_SIZE": [], "NUM_GRPS": [], "MAX": [], "DIMS": [], "EXACT": bool(True),
