@@ -493,11 +493,12 @@ def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkag
   return out
 
 
-def map_to_basic(glycoletter):
+def map_to_basic(glycoletter, obfuscate_ptm = True):
   """given a monosaccharide/linkage, try to map it to the corresponding base monosaccharide/linkage\n
   | Arguments:
   | :-
-  | glycoletter (string): monosaccharide or linkage\n
+  | glycoletter (string): monosaccharide or linkage
+  | obfuscate_ptm (bool): whether to remove position-specific information of PTM or not; default:True\n
   | Returns:
   | :-
   | Returns the base monosaccharide/linkage or the original glycoletter, if it cannot be mapped
@@ -507,10 +508,16 @@ def map_to_basic(glycoletter):
     if glycoletter in cond:
       return ret
   g2 = re.sub(r"\d", 'O', glycoletter)
-  if g2 in {k + 'OS' for k in Hex}:
-    return 'HexOS'
-  elif g2 in {k + 'OS' for k in HexNAc}:
-    return 'HexNAcOS'
+  if 'S' in glycoletter:
+    if g2 in {k + 'OS' for k in Hex}:
+      return 'HexOS' if obfuscate_ptm else 'Hex' + glycoletter[-2:]
+    elif g2 in {k + 'OS' for k in HexNAc}:
+      return 'HexNAcOS' if obfuscate_ptm else 'HexNAc' + glycoletter[-2:]
+  if 'P' in glycoletter:
+    if g2 in {k + 'OP' for k in Hex}:
+      return 'HexOP' if obfuscate_ptm else 'Hex' + glycoletter[-2:]
+    elif g2 in {k + 'OP' for k in HexNAc}:
+      return 'HexNAcOP' if obfuscate_ptm else 'HexNAc' + glycoletter[-2:]
   return glycoletter
 
 
