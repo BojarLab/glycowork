@@ -402,7 +402,7 @@ def iupac_extended_to_condensed(iupac_extended):
     # Move the α or β after the next opening parenthesis
     return f"{match.group('after')}{match.group('alpha_beta')}"
   # The regular expression looks for α-D- or β-D- followed by any characters until an open parenthesis
-  pattern = re.compile(r"(?P<alpha_beta>[αβab\?])-[DL]-(?P<after>[^\)]*\()")
+  pattern = re.compile(r"(?P<alpha_beta>[αβßab\?])-[DL]-(?P<after>[^\)]*\()")
   # Substitute the pattern in the string with our replace_pattern function
   adjusted_string = pattern.sub(replace_pattern, iupac_extended)
   adjusted_string = re.sub(r"-\(", "(", adjusted_string)
@@ -826,7 +826,7 @@ def canonicalize_iupac(glycan):
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
-                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')', '→': '-',
+                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '{': '(', '}': ')', '→': '-',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
                  '5Ac4Ac': '4Ac5Ac'}
   glycan = multireplace(glycan, replace_dic)
