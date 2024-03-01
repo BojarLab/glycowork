@@ -826,7 +826,7 @@ def canonicalize_iupac(glycan):
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
-                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '{': '(', '}': ')', '→': '-',
+                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
                  '5Ac4Ac': '4Ac5Ac'}
   glycan = multireplace(glycan, replace_dic)
