@@ -11,10 +11,10 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from glycowork.glycan_data.loader import lib, unwrap, linkages
+from glycowork.glycan_data.loader import unwrap, linkages
 from glycowork.glycan_data.stats import cohen_d
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
-from glycowork.motif.processing import choose_correct_isoform
+from glycowork.motif.processing import choose_correct_isoform, get_lib
 from glycowork.motif.tokenization import get_stem_lib
 from glycowork.motif.regex import get_match
 
@@ -371,61 +371,49 @@ def detect_ptm(glycans, allowed_ptms = allowed_ptms):
   return [glycan for glycan in glycans if any(ptm in glycan for ptm in allowed_ptms)]
 
 
-def stemify_glycan_fast(ggraph_in, stem_lib = None, libr = None):
+def stemify_glycan_fast(ggraph_in, stem_lib):
   """stemifies a glycan graph\n
   | Arguments:
   | :-
   | ggraph_in (networkx): glycan graph as a networkx object
-  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
-  | libr (dict): dictionary of form glycoletter:index\n
+  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide\n
   | Returns:
   | :-
   | (1) stemified glycan in IUPAC-condensed as a string
   | (2) stemified glycan graph as a networkx object
   """
-  if libr is None:
-    libr = lib
-  if stem_lib is None:
-    stem_lib = get_stem_lib(libr)
   ggraph = copy.deepcopy(ggraph_in)
   nx.set_node_attributes(ggraph, {k: {"string_labels": stem_lib[v]} for k, v in nx.get_node_attributes(ggraph, "string_labels").items()})
   return graph_to_string(ggraph), ggraph
 
 
-def find_ptm(glycan, glycans, graph_dic, allowed_ptms = allowed_ptms,
-             libr = None, ggraphs = None, suffix = '-ol', stem_lib = None):
+def find_ptm(glycan, glycans, graph_dic, stem_lib, allowed_ptms = allowed_ptms,
+             ggraphs = None, suffix = '-ol'):
   """identifies precursor glycans for a glycan with a PTM\n
   | Arguments:
   | :-
   | glycan (string): glycan with PTM in IUPAC-condensed format
   | glycans (list): list of glycans in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
+  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide
   | allowed_ptms (set): list of PTMs to consider
-  | libr (dict): dictionary of form glycoletter:index
   | ggraphs (list): list of precomputed graphs of the glycan list
-  | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'
-  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib\n
+  | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'\n
   | Returns:
   | :-
   | (1) an edge tuple between input glycan and its biosynthetic precusor without PTM
   | (2) the PTM that is contained in the input glycan
   """
-  if libr is None:
-    libr = lib
-  if stem_lib is None:
-    stem_lib = get_stem_lib(libr)
   # Checks which PTM(s) are present
   mod = next((ptm for ptm in allowed_ptms if ptm in glycan), None)
   if mod is None:
     return 0
   # Stemifying returns the unmodified glycan
-  glycan_stem, g_stem = stemify_glycan_fast(safe_index(glycan, graph_dic),
-                                            libr = libr, stem_lib = stem_lib)
+  glycan_stem, g_stem = stemify_glycan_fast(safe_index(glycan, graph_dic), stem_lib)
   glycan_stem += suffix
   if suffix == '-ol':
     last_node = len(g_stem) - 1
     g_stem.nodes[last_node]['string_labels'] += suffix
-    g_stem.nodes[last_node]['labels'] = libr[g_stem.nodes[last_node]['string_labels']]
   if ('Sug' in glycan_stem) or ('Neu(' in glycan_stem):
     return 0
   if ggraphs is None:
@@ -441,31 +429,26 @@ def find_ptm(glycan, glycans, graph_dic, allowed_ptms = allowed_ptms,
     return 0
 
 
-def process_ptm(glycans, graph_dic, allowed_ptms = allowed_ptms,
-                libr = None, suffix = '-ol'):
+def process_ptm(glycans, graph_dic, stem_lib, allowed_ptms = allowed_ptms, suffix = '-ol'):
   """identifies glycans that contain post-translational modifications and their biosynthetic precursor\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
+  | stem_lib (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide
   | allowed_ptms (set): list of PTMs to consider
-  | libr (dict): dictionary of form glycoletter:index
   | suffix (string): optional suffix to be added to the stemified glycan; default:'-ol'\n
   | Returns:
   | :-
   | (1) list of edge tuples between input glycans and their biosynthetic precusor without PTM
   | (2) list of the PTMs that are contained in the input glycans
   """
-  if libr is None:
-    libr = lib
-  stem_lib = get_stem_lib(libr)
   # Get glycans with PTMs and convert them to graphs
   ptm_glycans = detect_ptm(glycans, allowed_ptms = allowed_ptms)
   ggraphs = [safe_index(k, graph_dic) for k in glycans]
   # Connect modified glycans to their unmodified counterparts
-  edges = [find_ptm(k, glycans, graph_dic, allowed_ptms = allowed_ptms,
-                    libr = libr, ggraphs = ggraphs, suffix = suffix,
-                    stem_lib = stem_lib) for k in ptm_glycans]
+  edges = [find_ptm(k, glycans, graph_dic, stem_lib, allowed_ptms = allowed_ptms,
+                    ggraphs = ggraphs, suffix = suffix) for k in ptm_glycans]
   if m := [k for k in edges if k != 0]:
     edges, edge_labels = zip(*m)
     return list(edges), list(edge_labels)
@@ -622,13 +605,12 @@ def infer_roots(glycans):
     print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or Glc")
 
 
-def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
+def construct_network(glycans, allowed_ptms = allowed_ptms,
                       edge_type = 'monolink', permitted_roots = None, abundances = []):
   """construct a glycan biosynthetic network\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed format
-  | libr (dict): dictionary of form glycoletter:index
   | allowed_ptms (set): list of PTMs to consider
   | edge_type (string): indicates whether edges represent monosaccharides ('monosaccharide'), monosaccharide(linkage) ('monolink'), or enzyme catalyzing the reaction ('enzyme'); default:'monolink'
   | permitted_roots (set): which nodes should be considered as roots; default:will be inferred
@@ -637,14 +619,13 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   | :-
   | Returns a networkx object of the network
   """
-  if libr is None:
-    libr = lib
+  stem_lib = get_stem_lib(get_lib(glycans))
   if permitted_roots is None:
     permitted_roots = infer_roots(glycans)
   abundance_mapping = {glycans[k]: abundances[k] for k in range(len(glycans))} if abundances else {}
   # Generating graph from adjacency of observed glycans
   min_size = min([k.count('(') for k in permitted_roots]) + 1
-  add_to_virtuals = [r for r in permitted_roots if r not in glycans and any(r in g for g in glycans)]
+  add_to_virtuals = [r for r in permitted_roots if r not in glycans and any(g.endswith(r) for g in glycans)]
   glycans.extend(add_to_virtuals)
   glycans.sort(key = len, reverse = True)
   graph_dic = {k: glycan_to_nxGraph(k) for k in glycans}
@@ -684,7 +665,7 @@ def construct_network(glycans, libr = None, allowed_ptms = allowed_ptms,
   nx.set_node_attributes(network, virtual_labels, 'virtual')
   # Connect post-translational modifications
   suffix = '-ol' if '-ol' in ''.join(glycans) else '1Cer' if '1Cer' in ''.join(glycans) else ''
-  ptm_links = process_ptm(glycans, graph_dic, allowed_ptms = allowed_ptms, libr = libr, suffix = suffix)
+  ptm_links = process_ptm(glycans, graph_dic, stem_lib, allowed_ptms = allowed_ptms, suffix = suffix)
   if ptm_links:
     network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
   # Find any remaining orphan nodes and connect them to the root(s)
