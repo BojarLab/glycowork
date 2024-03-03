@@ -213,6 +213,8 @@ def filter_matches_by_location(matches, ggraph, match_location):
   | :-
   | Returns a filtered list of matches
   """
+  if matches and matches[0] and matches[0][0] and isinstance(matches[0][0], list):
+    matches = unwrap(matches)
   if match_location == 'start':
     degrees = {node: ggraph.degree[node] for node in ggraph}
     return [m for m in matches if degrees[m[0]] == 1]
@@ -558,6 +560,38 @@ def format_retrieved_matches(lists, ggraph):
   return sorted([graph_to_string(ggraph.subgraph(trace)) for trace in lists if nx.is_connected(ggraph.subgraph(trace))], key = len, reverse = True)
 
 
+def filter_dealbreakers(lists, ggraph, pattern):
+  """performs some checks to see whether traces come from sequences breaking the pattern negations\n
+  | Arguments:
+  | :-
+  | lists (list of list of int): A list of traces containing sublists of node indices
+  | ggraph (networkx): glycan graph as a networkx object
+  | pattern (string): glyco-regular expression in the form of "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"\n
+  | Returns:
+  | :-
+  | Returns a list of list of int; basically traces that survive the filtering
+  """
+  if '!' not in pattern:
+    return lists
+  else:
+    lists2 = []
+    node_dict = nx.get_node_attributes(ggraph, "string_labels")
+    for listy in lists:
+      last = pattern.split('-')[-1]
+      if '!' in last and node_dict.get(listy[-1]+2, 'default') != re.findall(r'[a-zA-Z0-9!]+', last)[0][1:]:
+        lists2.append(listy)
+        continue
+      first = pattern.split('-')[0]
+      if '!' in first and node_dict.get(listy[0]-2, 'default') != re.findall(r'[a-zA-Z0-9!]+', first)[0][1:]:
+        lists2.append(listy)
+        continue
+      second_to_last = pattern.split('-')[-2]
+      if '!' in second_to_last and node_dict.get(listy[-1]-2, 'default') != re.findall(r'[a-zA-Z0-9!]+', second_to_last)[0][1:]:
+        lists2.append(listy)
+        continue
+    return lists2
+
+
 def compile(pattern):
   """pre-compiles glyco-regular expression for faster processing\n
   | Arguments:
@@ -593,6 +627,7 @@ def get_match(pattern, glycan, return_matches = True):
   if pattern_matches:
     traces, used_patterns = trace_path(pattern_matches, ggraph)
     traces = fill_missing_in_list(traces)
+    traces = filter_dealbreakers(traces, ggraph, pattern)
     if traces:
       return True if not return_matches else format_retrieved_matches(traces, ggraph)
     else:
