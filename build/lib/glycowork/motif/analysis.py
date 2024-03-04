@@ -40,7 +40,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+    |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
     | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
     | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None\n
     | Returns:
@@ -156,7 +156,7 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+  |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
   | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
   | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
   | filepath (string): absolute path including full filename allows for saving the plot
@@ -435,7 +435,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+  |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
   | pc_x (int): principal component to plot on x axis; default:1
   | pc_y (int): principal component to plot on y axis; default:2
   | color (string): if design dataframe is provided: column name for color grouping; default:None
@@ -529,7 +529,7 @@ def get_differential_expression(df, group1, group2,
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+  |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
   | impute (bool): replaces zeroes with draws from left-shifted distribution or KNN-Imputer; default:True
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
@@ -729,7 +729,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+    |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
     | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
     | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True\n
     | Returns:
@@ -891,7 +891,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+    |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
     | degree (int): degree of the polynomial for regression, default:1 for linear regression
     | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
     | Returns:
@@ -944,7 +944,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     | motifs (bool): a flag for running structural of motif-based analysis (True = run motif analysis); default:False.
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)\n
+    |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)\n
     | Returns:
     | :-
     | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
