@@ -681,7 +681,8 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
 
 
 def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
-                 label_changed = True, x_metric = 'Log2FC', filepath = ''):
+                label_changed = True, x_metric = 'Log2FC', annotate_volcano = False,
+                filepath = ''):
   """Plots glycan differential expression results in a volcano plot\n
   | Arguments:
   | :-
@@ -690,6 +691,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   | x_thresh (float): absolute x metric threshold for labeling datapoints; default:1.0
   | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
   | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2FC', 'Effect size'
+  | annotate_volcano (bool): whether to annotate the dots in the plot with SNFG images; default: False
   | filepath (string): absolute path including full filename allows for saving the plot\n
   | Returns:
   | :-
@@ -716,6 +718,10 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   if filepath:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
+      if annotate_volcano:
+          from glycowork.motif.draw import annotate_figure
+          annotate_figure(filepath, filepath = filepath.split('.')[0]+'.pdf', scale_by_DE_res = df_res,
+                          y_thresh = y_thresh, x_thresh = x_thresh, x_metric = x_metric)
   plt.show()
 
 

@@ -2291,12 +2291,12 @@ def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
       # Generate glycan image using GlycoDraw
       svg_data = GlycoDraw(glycan_structure, compact = compact).as_svg()
       # Convert SVG data to image
-      png_data = svg2png(bytestring = svg_data)
+      png_data = svg2png(bytestring = svg_data, output_width = 3000, output_height = 3000)
       img_stream = BytesIO(png_data)
       img = Image.open(img_stream)
       # Set the size of the image
       img_width, img_height = img.size
-      img = img.resize((int(img_width * scaling_factor), int(img_height * scaling_factor)), Image.LANCZOS)  
+      img = img.resize((int(img_width * scaling_factor / 5), int(img_height * scaling_factor / 5)), Image.LANCZOS)
       # Save the image to a BytesIO object
       img_stream = BytesIO()
       img.save(img_stream, format = 'PNG')
