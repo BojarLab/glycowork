@@ -828,8 +828,10 @@ def canonicalize_iupac(glycan):
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
-                 '5Ac4Ac': '4Ac5Ac'}
+                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)'}
   glycan = multireplace(glycan, replace_dic)
+  if '{' in glycan and '(' not in glycan:
+    glycan = glycan.replace('{', '(').replace('}', ')')
   # Trim linkers
   if '-' in glycan:
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and 'ol' not in glycan:

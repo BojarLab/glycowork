@@ -140,8 +140,8 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   | glycans (list): list of IUPAC-condensed glycan sequences as strings
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs of size 1), \
+  |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
   | condense (bool): if True, throws away columns with only zeroes; default:False
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
@@ -180,8 +180,13 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     shopping_cart.append(temp)
   if 'chemical' in feature_set:
     shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
-  if 'terminal' in feature_set:
-    bag = [get_terminal_structures(glycan) for glycan in glycans]
+  if 'terminal' or 'terminal2' in feature_set:
+    bag1, bag2 = [], []
+    if 'terminal' in feature_set:
+      bag1 = [get_terminal_structures(glycan) for glycan in glycans]
+    if 'terminal2' in feature_set:
+      bag2 = [get_terminal_structures(glycan, size = 2) for glycan in glycans]
+    bag = bag1 + bag2
     repertoire = set(unwrap(bag))
     repertoire2 = [re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in repertoire]
     repertoire2 = set([k for k in repertoire2 if repertoire2.count(k) > 1 and k not in repertoire])
@@ -319,18 +324,23 @@ def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False):
       return out_matrix.fillna(0).astype(int)
 
 
-def get_terminal_structures(glycan):
+def get_terminal_structures(glycan, size = 1):
   """returns terminal structures from all non-reducing ends (monosaccharide+linkage)\n
   | Arguments:
   | :-
-  | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph\n
+  | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
+  | size (int): how large the extracted motif should be in terms of monosaccharides (for now 1 or 2 are supported); default:1\n
   | Returns:
   | :-
   | Returns a list of terminal structures (strings)
   """
   ggraph = ensure_graph(glycan)
   nodeDict = dict(ggraph.nodes(data = True))
-  return [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' for k in list(ggraph.nodes())[:-1] if ggraph.degree[k] == 1 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages]
+  temp =  [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' + \
+   ''.join([nodeDict.get(k+1+j+i, {'string_labels': ''})['string_labels']+'('+nodeDict.get(k+2+j+i, {'string_labels': ''})['string_labels']+')' \
+            for i, j in enumerate(range(1, size))]) for k in list(ggraph.nodes())[:-1] if \
+          ggraph.degree[k] == 1 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages]
+  return [g.replace('()', '') for g in temp]
 
 
 def create_correlation_network(df, correlation_threshold):
