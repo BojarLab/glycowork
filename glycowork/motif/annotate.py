@@ -209,15 +209,17 @@ def quantify_motifs(df, glycans, feature_set):
     """Extracts and quantifies motifs for a dataset\n
     | Arguments:
     | :-
-    | df (dataframe): dataframe containing relative abundances (each sample one column) [alternative: filepath to .csv]
+    | df (dataframe): dataframe containing relative abundances (each sample one column) [alternative: filepath to .csv or .xlsx]
     | glycans(list): glycans as IUPAC-condensed strings
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), and 'chemical' (molecular properties of glycan)
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), \
+    |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
+    |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
     | Returns:
     | :-
     | Returns a pandas DataFrame with motifs as columns and samples as rows
     """
     if isinstance(df, str):
-      df = pd.read_csv(df)
+      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     # Motif extraction
     df_motif = annotate_dataset(glycans,
                                 feature_set = feature_set,

@@ -1927,7 +1927,6 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
       floaty_bits.append(draw_this[openpos:closepos]+'blank')
       draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')
-
   
   if draw_this in motif_list.motif_name.values.tolist():
     draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values.tolist()[0]
@@ -1935,8 +1934,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   try:
     data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list)
   except:
-    return print('Error: did you enter a real glycan or motif?')
-    ys.exit(1)
+    print('Warning: did you enter a real glycan or motif?')
+    raise Exception
 
   main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label = data[0]
   branch_sugar, branch_x_pos, branch_y_pos, branch_sugar_modification, branch_bond, branch_connection, b_conf, branch_sugar_label, branch_bond_label = data[1]

@@ -643,3 +643,30 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, pair
   # Calculate Inter-group Correlation
   inter_group_corr = var_samples / total_var
   return icc, inter_group_corr
+
+
+def replace_outliers_with_median(full_row):
+  """replaces outlier values with row median\n
+  | Arguments:
+  | :-
+  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical\n
+  | Returns:
+  | :-
+  | Returns row with replaced outliers
+  """
+  row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
+  # Calculate Q1, Q3, and IQR for each row
+  Q1 = row.quantile(0.25)
+  Q3 = row.quantile(0.75)
+  IQR = Q3 - Q1
+  # Define outliers as values outside of Q1 - 1.5*IQR and Q3 + 1.5*IQR
+  outlier_condition = ~row.between(Q1 - 1.5*IQR, Q3 + 1.5*IQR)
+  # Calculate row median
+  row_median = row.median()
+  # Replace outliers with row median
+  if isinstance(full_row.iloc[0], str):
+    full_row.iloc[1:][outlier_condition] = row_median
+    return full_row
+  else:
+    row[outlier_condition] = row_median
+    return row

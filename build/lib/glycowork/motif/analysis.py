@@ -20,7 +20,7 @@ from glycowork.glycan_data.loader import df_species, unwrap, motif_list
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          variance_stabilization, impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
-                                         test_inter_vs_intra_group)
+                                         test_inter_vs_intra_group, replace_outliers_with_median)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -557,8 +557,9 @@ def get_differential_expression(df, group1, group2,
       group1 = [columns_list[k] for k in group1]
       group2 = [columns_list[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
-  # Drop rows with all zero, followed by imputation & normalization
+  # Drop rows with all zero, followed by outlier removal and imputation & normalization
   df = df.loc[~(df == 0).all(axis = 1)]
+  df = df.apply(replace_outliers_with_median, axis = 1)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
