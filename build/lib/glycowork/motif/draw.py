@@ -1918,7 +1918,8 @@ def display_svg_with_matplotlib(svg_data):
 
 
 @rescue_glycans
-def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [], repeat = None, repeat_range = None, filepath = None):
+def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [],
+              repeat = None, repeat_range = None, filepath = None, suppress = False):
   """Draws a glycan structure based on the provided input.\n
   | Arguments:
   | :-
@@ -1931,7 +1932,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   | highlight_termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | repeat (bool | int | str): If specified, indicate repeat unit by brackets (True: n units, int: # of units, str: range of units)
   | repeat_range (list of 2 int): List of index integers for the first and last main-chain monosaccharide in repeating unit. Monosaccharides are numbered starting from 0 (invisible placeholder = 0 in case of structure terminating in a linkage) at the reducing end. 
-  | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.\n
+  | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.
+  | suppress (bool, optional): Whether to suppress the visual display of drawings into the console; default:False\n
   """
   if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
     raise Exception
@@ -2170,7 +2172,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
           svg2pdf(bytestring = data, write_to = filepath)
         except:
           raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-  return d2 if is_jupyter() else display_svg_with_matplotlib(d2)
+  return d2 if is_jupyter() or suppress else display_svg_with_matplotlib(d2)
 
 
 def scale_in_range(listy, a, b):
@@ -2253,9 +2255,9 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
       current_pos = current_pos.replace('scale(0.1 -0.1)', glycan_size_dict[glycan_size])
       svg_tmp = svg_tmp.replace(match, '')
       if glycan_scale == '':
-        d = GlycoDraw(current_label, compact = compact)
+        d = GlycoDraw(current_label, compact = compact, suppress = True)
       else:
-        d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)])
+        d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)], suppress = True)
       data = d.as_svg().replace('<?xml version="1.0" encoding="UTF-8"?>\n', '')
       id_matches = re.findall(r'd\d+', data)
       # Reassign element ids to avoid duplicates
@@ -2316,7 +2318,7 @@ def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
       if not isinstance(glycan_structure[0], str):
         glycan_structure = glycan_structure[0][0]
       # Generate glycan image using GlycoDraw
-      svg_data = GlycoDraw(glycan_structure, compact = compact).as_svg()
+      svg_data = GlycoDraw(glycan_structure, compact = compact, suppress = True).as_svg()
       # Convert SVG data to image
       png_data = svg2png(bytestring = svg_data, output_width = 3000, output_height = 3000)
       img_stream = BytesIO(png_data)
