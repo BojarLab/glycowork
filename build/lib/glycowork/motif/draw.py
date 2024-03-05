@@ -3,6 +3,7 @@ from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, in_lib
+import matplotlib.pyplot as plt
 from io import BytesIO
 import networkx as nx
 import copy
@@ -1889,6 +1890,33 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50,  highlight = 'show
   d.append(g)
 
 
+def is_jupyter():
+  try:
+    from IPython import get_ipython
+    if 'IPKernelApp' not in get_ipython().config:  # Check if not in IPython kernel
+      return False
+  except:
+    return False
+  return True
+
+
+def display_svg_with_matplotlib(svg_data):
+  try:
+    from cairosvg import svg2png
+  except:
+    return svg_data
+  # Convert SVG data to PNG
+  png_output = svg2png(bytestring = svg_data.as_svg(), dpi = 600)
+  # Convert PNG output to a format that can be read by matplotlib (a BytesIO stream)
+  png_stream = BytesIO(png_output)
+  # Load the image from BytesIO stream
+  img = plt.imread(png_stream, format = 'png')
+  # Display the image using matplotlib
+  plt.imshow(img, interpolation = 'lanczos')
+  plt.axis('off')  # Turn off axis numbers and ticks
+  plt.show()
+
+
 @rescue_glycans
 def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [], repeat = None, repeat_range = None, filepath = None):
   """Draws a glycan structure based on the provided input.\n
@@ -2092,7 +2120,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     # process annotation
     repeat_annot = 'n'
     if isinstance(repeat, (str, int)):
-      if repeat!= True:
+      if repeat != True:
         repeat_annot += ' = ' + str(repeat)
     
     # repeat range code block
@@ -2142,7 +2170,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
           svg2pdf(bytestring = data, write_to = filepath)
         except:
           raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-  return d2
+  return d2 if is_jupyter() else display_svg_with_matplotlib(d2)
 
 
 def scale_in_range(listy, a, b):
