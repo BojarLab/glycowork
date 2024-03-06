@@ -141,7 +141,8 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs of size 1), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
+  |   and 'chemical' (molecular properties of glycan)
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
   | condense (bool): if True, throws away columns with only zeroes; default:False
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
@@ -197,6 +198,10 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     bag_out = pd.concat([bag_out, shadow_bag], axis = 1).reset_index(drop = True)
     bag_out.index = glycans
     shopping_cart.append(bag_out)
+  if 'terminal3' in feature_set:
+    temp = get_k_saccharides(glycans, size = 3, terminal = True)
+    temp.index = glycans
+    shopping_cart.append(temp)
   if condense:
     # Remove motifs that never occur
     temp = pd.concat(shopping_cart, axis = 1)
@@ -236,12 +241,13 @@ def quantify_motifs(df, glycans, feature_set):
     return df
 
 
-def count_unique_subgraphs_of_size_k(graph, size = 2):
+def count_unique_subgraphs_of_size_k(graph, size = 2, terminal = False):
   """function to count unique, connected subgraphs of size k (default:disaccharides) occurring in a glycan graph\n
   | Arguments:
   | :-
   | graph (networkx): glycan graph as returned by glycan_to_nxGraph
-  | size (int): number of monosaccharides per -saccharide, default:2 (for disaccharides)\n
+  | size (int): number of monosaccharides per -saccharide, default:2 (for disaccharides)
+  | terminal (bool): whether to only count terminal subgraphs; default:False\n
   | Returns:
   | :-                   
   | Returns dictionary of type k-saccharide:count
@@ -253,6 +259,9 @@ def count_unique_subgraphs_of_size_k(graph, size = 2):
   for _, path_dict in paths:
     for path in path_dict.values():
       if len(path) == size:
+        if terminal:
+          if graph.degree[min(path)] != 1:
+            continue
         if labels[path[0]][0] not in {'a', 'b', '?', '('}:
           path_sorted = sorted(path)
           path_str = ""
@@ -274,27 +283,30 @@ def count_unique_subgraphs_of_size_k(graph, size = 2):
 
 
 @rescue_glycans
-def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False):
+def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False, terminal = False):
   """function to retrieve k-saccharides (default:disaccharides) occurring in a list of glycans\n
   | Arguments:
   | :-
   | glycans (list): list of glycans in IUPAC-condensed nomenclature
   | size (int): number of monosaccharides per -saccharide, default:2 (for disaccharides)
   | up_to (bool): in theory: include -saccharides up to size k; in practice: include monosaccharides; default:False
-  | just_motifs (bool): if you only want the motifs as a nested list, no dataframe with counts; default:False\n
+  | just_motifs (bool): if you only want the motifs as a nested list, no dataframe with counts; default:False
+  | terminal (bool): whether to only count terminal subgraphs; default:False\n
   | Returns:
   | :-                 
   | Returns dataframe with k-saccharide counts (columns) for each glycan (rows)
   """
+  if not isinstance(glycans, list):
+    raise TypeError("The input has to be a list of glycans")
   if any([k in glycans[0] for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if up_to:
     wga_letter = pd.DataFrame([{i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(glycans) if i not in linkages} for g in glycans])
   regex = re.compile(r"\(([ab])(\d)-(\d)\)")
   shadow_glycans = [regex.sub(r"(\1\2-?)", g) for g in glycans]
-  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g), size = size) for g in glycans])
+  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g), size = size, terminal = terminal) for g in glycans])
   ggraphs = ggraphs.drop(columns = [col for col in ggraphs.columns if '?' in col])
-  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g), size = size) for g in shadow_glycans])
+  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g), size = size, terminal = terminal) for g in shadow_glycans])
   org_len = ggraphs.shape[1]
   out_matrix = pd.concat([ggraphs, shadow_glycans], axis = 1).reset_index(drop = True)
   out_matrix = out_matrix.loc[:, ~out_matrix.columns.duplicated()].copy()
@@ -331,7 +343,8 @@ def get_terminal_structures(glycan, size = 1):
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
-  | size (int): how large the extracted motif should be in terms of monosaccharides (for now 1 or 2 are supported); default:1\n
+  | size (int): how large the extracted motif should be in terms of monosaccharides (for now 1 or 2 are supported; \
+  |   if you want to go higher use get_k_saccharides with terminal = True); default:1\n
   | Returns:
   | :-
   | Returns a list of terminal structures (strings)

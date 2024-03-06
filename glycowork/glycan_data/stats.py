@@ -6,7 +6,7 @@ from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
@@ -645,7 +645,7 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, pair
   return icc, inter_group_corr
 
 
-def replace_outliers_with_median(full_row):
+def replace_outliers_with_IQR_bounds(full_row):
   """replaces outlier values with row median\n
   | Arguments:
   | :-
@@ -659,14 +659,49 @@ def replace_outliers_with_median(full_row):
   Q1 = row.quantile(0.25)
   Q3 = row.quantile(0.75)
   IQR = Q3 - Q1
+  lower_bound = Q1 - 1.5*IQR
+  upper_bound = Q3 + 1.5*IQR
   # Define outliers as values outside of Q1 - 1.5*IQR and Q3 + 1.5*IQR
-  outlier_condition = ~row.between(Q1 - 1.5*IQR, Q3 + 1.5*IQR)
-  # Calculate row median
-  row_median = row.median()
+  capped_values = row.apply(lambda x: lower_bound if (x < lower_bound and x != 0) else (upper_bound if (x > upper_bound and x != 0) else x))
   # Replace outliers with row median
   if isinstance(full_row.iloc[0], str):
-    full_row.iloc[1:][outlier_condition] = row_median
-    return full_row
+    full_row.iloc[1:] = capped_values
   else:
-    row[outlier_condition] = row_median
-    return row
+    full_row = capped_values
+  return full_row
+
+
+def hotellings_t2(group1, group2, paired = False):
+  """Hotelling's T^2 test (the t-test for multivariate comparisons)\n
+  """
+  if paired:
+    assert group1.shape == group2.shape, "For paired samples, the size of group1 and group2 should be the same"
+    group1 -= group2
+    group2 = None
+  # Calculate the means and covariances of each group
+  n1, p = group1.shape
+  mean1 = np.mean(group1, axis = 0)
+  cov1 = np.cov(group1, rowvar = False)
+  if group2 is not None:
+    n2, _ = group2.shape
+    mean2 = np.mean(group2, axis = 0)
+    cov2 = np.cov(group2, rowvar = False)
+  else:
+    n2 = 0
+    mean2 = np.zeros_like(mean1)
+    cov2 = np.zeros_like(cov1)
+  # Calculate the difference between the means
+  diff = mean1 - mean2
+  # Calculate the pooled covariance matrix
+  denom = (n1 + n2 - 2)
+  pooled_cov = cov1 if denom < 1 else ((n1 - 1) * cov1 + (n2 - 1) * cov2) / denom
+  pooled_cov += np.eye(p) * 1e-6
+  # Calculate the Hotelling's T^2 statistic
+  T2 = (n1 * n2) / (n1 + n2) * diff @ np.linalg.pinv(pooled_cov) @ diff.T
+  # Convert the T^2 statistic to an F statistic
+  F = 0 if denom < 1 else T2 * (denom + 1 - p) / (denom * p)
+  if F == 0:
+    return F, 1.0
+  # Calculate the p-value of the F statistic
+  p_value = f.sf(F, p, n1 + n2 - p - 1)
+  return F, p_value
