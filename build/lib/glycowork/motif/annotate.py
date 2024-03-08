@@ -210,7 +210,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     return pd.concat(shopping_cart, axis = 1)
 
 
-def quantify_motifs(df, glycans, feature_set):
+def quantify_motifs(df, glycans, feature_set, custom_motifs = []):
     """Extracts and quantifies motifs for a dataset\n
     | Arguments:
     | :-
@@ -218,7 +218,8 @@ def quantify_motifs(df, glycans, feature_set):
     | glycans(list): glycans as IUPAC-condensed strings
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'terminal2' (non-reducing end motifs of size 2), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+    |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
     | Returns:
     | :-
     | Returns a pandas DataFrame with motifs as columns and samples as rows
@@ -228,7 +229,7 @@ def quantify_motifs(df, glycans, feature_set):
     # Motif extraction
     df_motif = annotate_dataset(glycans,
                                 feature_set = feature_set,
-                                condense = True)
+                                condense = True, custom_motifs = custom_motifs)
     collect_dic = {}
     df = df.T
     # Motif quantification

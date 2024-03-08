@@ -28,7 +28,7 @@ from glycowork.motif.graph import subgraph_isomorphism
 
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      zscores = True, thresh = 1.645, sorting = True, feature_set = ['exhaustive'],
-                     multiple_samples = False, motifs = None):
+                     multiple_samples = False, motifs = None, custom_motifs = []):
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
     | :-
@@ -43,7 +43,8 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
     | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
-    | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None\n
+    | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
     | Returns:
     | :-
     | Returns dataframe with p-values, corrected p-values, and Cohen's d as effect size for every glycan motif
@@ -61,7 +62,8 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
         df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / std_devs
     # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
-                                motifs = motifs, feature_set = feature_set, condense = True)
+                                motifs = motifs, feature_set = feature_set, condense = True,
+                                custom_motifs = custom_motifs)
     # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
         df.set_index(glycan_col_name, inplace = True)
@@ -150,7 +152,8 @@ def clean_up_heatmap(df):
 
 
 def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
-                 datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan', **kwargs):
+                 datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan',
+                custom_motifs = [], **kwargs):
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
   | Arguments:
   | :-
@@ -164,6 +167,7 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
   | filepath (string): absolute path including full filename allows for saving the plot
   | index_col (string): default column to convert to dataframe index; default:'glycan'
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
   | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                      
   | Returns:
   | :-
@@ -176,7 +180,7 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   df.fillna(0, inplace = True)
   if mode == 'motif':
       # Count glycan motifs and remove rare motifs from the result
-      df_motif = annotate_dataset(df.columns.tolist(), feature_set = feature_set, condense = True)
+      df_motif = annotate_dataset(df.columns.tolist(), feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
       df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
       # Distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
       if datatype == 'response':
@@ -392,7 +396,7 @@ def get_coverage(df, filepath = ''):
   
 
 def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhaustive'],
-            pc_x = 1, pc_y = 2, color = None, shape = None, filepath = ''):
+            pc_x = 1, pc_y = 2, color = None, shape = None, filepath = '', custom_motifs = []):
   """ PCA plot from glycomics abundance dataframe\n
   | Arguments:
   | :-
@@ -408,7 +412,8 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   | pc_y (int): principal component to plot on y axis; default:2
   | color (string): if design dataframe is provided: column name for color grouping; default:None
   | shape (string): if design dataframe is provided: column name for shape grouping; default:None
-  | filepath (string): absolute path including full filename allows for saving the plot\n
+  | filepath (string): absolute path including full filename allows for saving the plot
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
   | Returns:
   | :-
   | Prints PCA plot
@@ -418,7 +423,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   # get pca
   if motifs:
       # Motif extraction and quantification
-      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set).T.reset_index()
+      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T.reset_index()
   X = np.array(df.iloc[:, 1:].T)
   scaler = StandardScaler()
   X_std = scaler.fit_transform(X)
@@ -487,7 +492,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = None, grouped_BH = False):
+                                min_samples = None, grouped_BH = False, custom_motifs = []):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -505,7 +510,8 @@ def get_differential_expression(df, group1, group2,
   | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
   | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False
   | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
-  | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False\n
+  | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -534,7 +540,7 @@ def get_differential_expression(df, group1, group2,
   alpha = get_alphaN(df.shape[1] - 1)
   if motifs:
       # Motif extraction and quantification
-      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set)
+      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
       # Deduplication
       df = clean_up_heatmap(df.T)
       # Re-normalization
@@ -695,7 +701,8 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   plt.show()
 
 
-def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'], min_samples = None, posthoc = True):
+def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'],
+                  min_samples = None, posthoc = True, custom_motifs = []):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
@@ -708,7 +715,8 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
     | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
-    | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True\n
+    | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
     | Returns:
     | :-
     | (i) a pandas DataFrame with an F statistic, corrected p-value, and indication of its significance for each glycan.
@@ -725,7 +733,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
     if motifs:
-        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:,0].values.tolist(), feature_set)
+        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:,0].values.tolist(), feature_set, custom_motifs = custom_motifs)
         # Deduplication
         df = clean_up_heatmap(df.T)
         # Re-normalization
@@ -860,7 +868,8 @@ def get_glycan_change_over_time(data, degree = 1):
     return coefficients, p_value
 
 
-def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1, min_samples = None):
+def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1,
+                    min_samples = None, custom_motifs = []):
     """Analyzes time series data of glycans using an OLS model\n
     | Arguments:
     | :-
@@ -872,7 +881,8 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
     | degree (int): degree of the polynomial for regression, default:1 for linear regression
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
     | Returns:
     | :-
     | Returns a dataframe with:
@@ -892,7 +902,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     alpha = get_alphaN(df.shape[1] - 1)
     glycans = [k.split('.')[0] for k in df.iloc[:, 0]]
     if motifs:
-        df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set)
+        df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set, custom_motifs = custom_motifs)
         # Deduplication
         df = clean_up_heatmap(df.T)
         # Re-normalization
@@ -912,7 +922,8 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     return res.sort_values(by = 'corr p-val')
 
 
-def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal']):
+def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal'],
+            custom_motifs = []):
     """Detecting rhythmically expressed glycans via the Jonckheere–Terpstra–Kendall (JTK) algorithm\n
     | Arguments:
     | :-
@@ -925,7 +936,8 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-    |   and 'chemical' (molecular properties of glycan)\n
+    |   and 'chemical' (molecular properties of glycan)
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
     | Returns:
     | :-
     | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
@@ -948,7 +960,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     df = mf.fit_transform(df)
     df.insert(0, 'Molecule_Name', annot)
     if motifs:
-        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set).T.reset_index()
+        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T.reset_index()
     res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
     JTK_BHQ = pd.DataFrame(multipletests(res[0], method = 'fdr_bh')[1])
     Results = pd.concat([df.iloc[:, 0], JTK_BHQ, res], axis = 1)
