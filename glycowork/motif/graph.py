@@ -51,9 +51,10 @@ def glycan_to_graph(glycan):
     # Integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
     adjustment = 2 if k >= 100 else 1 if k >= 10 else 0
     adjustment2 = 2+adjustment
+    cache_first_part = glycan_indexes[str(k)]+1
     for j in range(k+1, n):
       # Subset the part of the glycan that is bookended by k and j
-      glycan_part = glycan[glycan_indexes[str(k)]+1:glycan_indexes[str(j)]]
+      glycan_part = glycan[cache_first_part:glycan_indexes[str(j)]]
       # Immediately adjacent residues
       if evaluate_adjacency(glycan_part, adjustment):
         adj_matrix[k, j] = 1
@@ -73,7 +74,7 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   | glycan (string): glycan in IUPAC-condensed format
   | libr (dict): dictionary of form glycoletter:index
   | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal','internal', and 'flexible')\n
+  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
   | Returns networkx graph object of glycan
@@ -120,7 +121,7 @@ def glycan_to_nxGraph(glycan, libr = None,
   | glycan (string): glycan in IUPAC-condensed format
   | libr (dict): dictionary of form glycoletter:index
   | termini (string): whether to encode terminal/internal position of monosaccharides, 'ignore' for skipping, 'calc' for automatic annotation, or 'provided' if this information is provided in termini_list; default:'ignore'
-  | termini_list (list): list of monosaccharide positions (from 'terminal','internal', and 'flexible')\n
+  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
   | Returns networkx graph object of glycan
@@ -160,7 +161,7 @@ def categorical_node_match_wildcard(attr, default, narrow_wildcard_list, attr2, 
   if isinstance(attr, str):
 
     def check_termini(termini1, termini2):
-      return termini1 == termini2 or 'flexible' in [termini1, termini2]
+      return termini1 == termini2 or 'flexible' in {termini1, termini2}
     
     def match(data1, data2):
       data1_labels2, data2_labels2 = data1.get(attr2, default2), data2.get(attr2, default2)
@@ -168,9 +169,9 @@ def categorical_node_match_wildcard(attr, default, narrow_wildcard_list, attr2, 
       if not termini_check:
         return False
       data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
-      if "Monosaccharide" in [data1_labels, data2_labels] and not any(['-' in lab for lab in [data1_labels, data2_labels]]):
+      if "Monosaccharide" in {data1_labels, data2_labels} and not any('-' in lab for lab in {data1_labels, data2_labels}):
         return True
-      if "?1-?" in [data1_labels, data2_labels] and all(['-' in lab for lab in [data1_labels, data2_labels]]):
+      if "?1-?" in {data1_labels, data2_labels} and all('-' in lab for lab in {data1_labels, data2_labels}):
         return True
       if data2_labels.startswith('!') and data1_labels != data2_labels[1:] and '-' not in data1_labels:
         return True
@@ -178,12 +179,10 @@ def categorical_node_match_wildcard(attr, default, narrow_wildcard_list, attr2, 
         return True
       elif data2_labels in narrow_wildcard_list and data1_labels in narrow_wildcard_list[data2_labels]:
         return True
-      else:
-        return data1_labels == data2_labels
+      return data1_labels == data2_labels
   else:
-    attrs = list(zip(attr, default))
     def match(data1, data2):
-      return all(data1.get(attr, d) == data2.get(attr, d) for attr, d in attrs)
+      return all(data1.get(a, d) == data2.get(a, d) for a, d in zip(attr, default))
   return match
 
 
@@ -198,37 +197,32 @@ def compare_glycans(glycan_a, glycan_b, wildcards_ptm = False):
   | :-
   | Returns True if two glycans are the same and False if not
   """
-  if isinstance(glycan_a, str):
+  if isinstance(glycan_a, str) and isinstance(glycan_b, str):
     proc = min_process_glycans([glycan_a, glycan_b])
     # Check whether glycan_a and glycan_b have the same length // in theory the "Monosaccharide" wildcard can mess with this
     if len(set([len(k) for k in proc])) == 1:
       if wildcards_ptm:
-        glycan_a = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan_a).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
-        glycan_b = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan_b).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+        glycan_a, glycan_b = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in [glycan_a, glycan_b]]
       proc = set(unwrap(proc))
-      g1 = glycan_to_nxGraph(glycan_a)
-      g2 = glycan_to_nxGraph(glycan_b)
+      g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
     else:
       return False
   else:
     proc = set(list(nx.get_node_attributes(glycan_a, "string_labels").values()) + list(nx.get_node_attributes(glycan_b, "string_labels").values()))
-    g1 = glycan_a
-    g2 = glycan_b
-  if len(g1.nodes) == len(g2.nodes):
-    narrow_wildcard_list = {k:[j  for j in get_possible_linkages(k)] for k in proc if '?' in k}
-    narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k)] for k in proc if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
-    narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
-    if narrow_wildcard_list:
-      return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
-                                                                                   'termini', 'flexible'))
-    else:
-      # First check whether components of both glycan graphs are identical, then check graph isomorphism (costly)
-      if sorted(''.join(nx.get_node_attributes(g1, "string_labels").values())) == sorted(''.join(nx.get_node_attributes(g2, "string_labels").values())):
-        return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-      else:
-        return False
-  else:
+    g1, g2 = glycan_a, glycan_b
+  if len(g1.nodes) != len(g2.nodes):
     return False
+  narrow_wildcard_list = {k:[j  for j in get_possible_linkages(k)] for k in proc if '?' in k}
+  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k)] for k in proc if k in {'Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
+  narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
+  if narrow_wildcard_list:
+    return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
+  else:
+    # First check whether components of both glycan graphs are identical, then check graph isomorphism (costly)
+    if sorted(nx.get_node_attributes(g1, "string_labels").values()) == sorted(nx.get_node_attributes(g2, "string_labels").values()):
+      return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
+    else:
+      return False
 
 
 def expand_termini_list(motif, termini_list):
@@ -253,8 +247,7 @@ def expand_termini_list(motif, termini_list):
   return t_list
 
 
-def subgraph_isomorphism(glycan, motif, termini_list = [],
-                         count = False, wildcards_ptm = False,
+def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, wildcards_ptm = False,
                          return_matches = False):
   """returns True if motif is in glycan and False if not\n
   | Arguments:
@@ -269,64 +262,61 @@ def subgraph_isomorphism(glycan, motif, termini_list = [],
   | :-
   | Returns True if motif is in glycan and False if not
   """
-  if isinstance(glycan, str):
+  if isinstance(glycan, str) and isinstance(motif, str):
     motif_comp = min_process_glycans([motif, glycan])
     if wildcards_ptm:
-      glycan = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
-      motif = re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', motif).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+      glycan, motif = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in [glycan, motif]]
     g1 = glycan_to_nxGraph(glycan, termini = 'calc') if termini_list else glycan_to_nxGraph(glycan)
     g2 = glycan_to_nxGraph(motif, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif)
   else:
     motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
-    g1 = copy.deepcopy(glycan)
-    g2 = motif
+    g1, g2 = copy.deepcopy(glycan), motif
   narrow_wildcard_list = {k:[j for j in get_possible_linkages(k)] for k in set(unwrap(motif_comp)) if '?' in k}
-  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k)] for k in set(unwrap(motif_comp)) if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
+  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k)] for k in set(unwrap(motif_comp)) if k in {'Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
 
   # Check whether length of glycan is larger or equal than the motif
-  if len(g1.nodes) >= len(g2.nodes):
-    if termini_list or narrow_wildcard_list:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
-                                                                                                               'termini', 'flexible'))
-    else:
-      g1_node_attr = set(nx.get_node_attributes(g1, "string_labels").values())
-      if all(k in g1_node_attr for k in motif_comp[0]):
-        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-      else:
-        return 0 if count else False
-
-    if return_matches:
-      mappings = [list(isos.keys()) for isos in graph_pair.subgraph_isomorphisms_iter()]
-
-    # Count motif occurrence
-    if count:
-      counts = 0
-      while graph_pair.subgraph_is_isomorphic():
-        mapping = graph_pair.mapping
-        mapping = {v: k for k, v in mapping.items()}
-        if all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges()):
-          counts += 1
-        g1.remove_nodes_from(graph_pair.mapping.keys())
-        if termini_list or narrow_wildcard_list:
-          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
-                                                                                                               'termini', 'flexible'))
-        else:
-          g1_node_attr = set(nx.get_node_attributes(g1, "string_labels").values())
-          if all(k in g1_node_attr for k in motif_comp[0]):
-            graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-          else:
-            return counts if not return_matches else (counts, mappings)
-      return counts if not return_matches else (counts, mappings)
-    else:
-      if graph_pair.subgraph_is_isomorphic():
-        mapping = graph_pair.mapping
-        mapping = {v: k for k, v in mapping.items()}
-        res = all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges())
-        return res if not return_matches else (int(res), mappings)
-      return False if not return_matches else (0, [])
-  else:
+  if len(g1.nodes) < len(g2.nodes):
     return (0, []) if return_matches else 0 if count else False
+  if termini_list or narrow_wildcard_list:
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
+                                                                                                             'termini', 'flexible'))
+  else:
+    g1_node_attr = set(nx.get_node_attributes(g1, "string_labels").values())
+    if all(k in g1_node_attr for k in motif_comp[0]):
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
+    else:
+      return 0 if count else False
+
+  if return_matches:
+    mappings = [list(isos.keys()) for isos in graph_pair.subgraph_isomorphisms_iter()]
+
+  # Count motif occurrence
+  if count:
+    counts = 0
+    while graph_pair.subgraph_is_isomorphic():
+      mapping = graph_pair.mapping
+      mapping = {v: k for k, v in mapping.items()}
+      if all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges()):
+        counts += 1
+      g1.remove_nodes_from(graph_pair.mapping.keys())
+      if termini_list or narrow_wildcard_list:
+        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
+                                                                                                             'termini', 'flexible'))
+      else:
+        g1_node_attr = set(nx.get_node_attributes(g1, "string_labels").values())
+        if all(k in g1_node_attr for k in motif_comp[0]):
+          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
+        else:
+          return counts if not return_matches else (counts, mappings)
+    return counts if not return_matches else (counts, mappings)
+  else:
+    if graph_pair.subgraph_is_isomorphic():
+      mapping = graph_pair.mapping
+      mapping = {v: k for k, v in mapping.items()}
+      res = all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges())
+      return res if not return_matches else (int(res), mappings)
+    return False if not return_matches else (0, [])
 
 
 def generate_graph_features(glycan, glycan_graph = True, label = 'network'):
