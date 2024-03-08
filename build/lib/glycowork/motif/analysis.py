@@ -151,14 +151,14 @@ def clean_up_heatmap(df):
   return result
 
 
-def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
+def get_heatmap(df, motifs = False, feature_set = ['known'],
                  datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan',
                 custom_motifs = [], **kwargs):
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
   | Arguments:
   | :-
   | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans [alternative: filepath to .csv or .xlsx]
-  | mode (string): whether glycan 'sequence' or 'motif' should be used for clustering; default:sequence
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
   |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
@@ -178,7 +178,9 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   if index_col in df.columns:
       df.set_index(index_col, inplace = True)
   df.fillna(0, inplace = True)
-  if mode == 'motif':
+  if motifs:
+      if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
+          raise ValueError("A heatmap needs to have at least two motifs.")
       # Count glycan motifs and remove rare motifs from the result
       df_motif = annotate_dataset(df.columns.tolist(), feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
       df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
@@ -202,7 +204,7 @@ def get_heatmap(df, mode = 'sequence', feature_set = ['known'],
   # Cluster the motif abundances
   sns.clustermap(df, **kwargs)
   plt.xlabel('Samples')
-  plt.ylabel('Glycans' if mode == 'sequence' else 'Motifs')
+  plt.ylabel('Glycans' if not motifs else 'Motifs')
   plt.tight_layout()
   if filepath:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
@@ -960,7 +962,8 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     df = mf.fit_transform(df)
     df.insert(0, 'Molecule_Name', annot)
     if motifs:
-        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T.reset_index()
+        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T
+        df = clean_up_heatmap(df).reset_index()
     res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
     JTK_BHQ = pd.DataFrame(multipletests(res[0], method = 'fdr_bh')[1])
     Results = pd.concat([df.iloc[:, 0], JTK_BHQ, res], axis = 1)

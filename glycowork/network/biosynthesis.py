@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import unwrap, linkages
 from glycowork.glycan_data.stats import cohen_d
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
-from glycowork.motif.processing import choose_correct_isoform, get_lib
+from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans
 from glycowork.motif.tokenization import get_stem_lib
 from glycowork.motif.regex import get_match
 
@@ -605,6 +605,7 @@ def infer_roots(glycans):
     print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or Glc")
 
 
+@rescue_glycans
 def construct_network(glycans, allowed_ptms = allowed_ptms,
                       edge_type = 'monolink', permitted_roots = None, abundances = []):
   """construct a glycan biosynthetic network\n
