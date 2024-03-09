@@ -412,8 +412,9 @@ def graph_to_string_int(graph):
   if len(nodes) == 1:
     return nodes[0]
   edges = {k: v for k, v in graph.edges()}
-  nodes = [k+')' if graph.degree[edges.get(i, len(graph)-1)] > 2 or neighbor_is_branchpoint(graph, i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
-  if graph.degree[len(graph)-1] < 2:
+  cache_last_index = len(graph)-1
+  nodes = [k+')' if graph.degree[edges.get(i, cache_last_index)] > 2 or neighbor_is_branchpoint(graph, i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
+  if graph.degree[cache_last_index] < 2:
     nodes = ''.join(nodes)[1:][::-1].replace('(', '', 1)[::-1]
   else:
     nodes[-1] = ')'+nodes[-1]

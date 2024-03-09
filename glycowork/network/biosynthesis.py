@@ -194,11 +194,13 @@ def find_shared_virtuals(glycan_a, glycan_b, graph_dic, min_size = 1):
   | :-
   | Returns list of edges between glycan and virtual node (if virtual node connects the two glycans)
   """
+  if abs(glycan_a.count('(') - glycan_b.count('(')) != 2:
+    return []
   # Get virtual nodes of both glycans
-  ggraph_nb_a, glycans_a = get_virtual_nodes(glycan_a, graph_dic, min_size = min_size)                            
-  ggraph_nb_b, glycans_b = get_virtual_nodes(glycan_b, graph_dic, min_size = min_size)
+  ggraph_nb_a, glycans_a = get_virtual_nodes(glycan_a, graph_dic, min_size = min_size)
   if not ggraph_nb_a:
     return []
+  ggraph_nb_b, glycans_b = get_virtual_nodes(glycan_b, graph_dic, min_size = min_size)
   out = set()
   # Check whether any of the nodes of glycan_a and glycan_b are the same
   for k, graph_a in enumerate(ggraph_nb_a):
@@ -238,7 +240,7 @@ def create_adjacency_matrix(glycans, graph_dic, min_size = 1):
   # Connect glycans with biosynthetic precursors
   df_out = pd.DataFrame(0, index = glycans, columns = glycans)
   graphs = [safe_index(k, graph_dic) for k in glycans]
-  neighbors, idx = zip(*[get_neighbors(safe_index(k, graph_dic), glycans, graphs,
+  _, idx = zip(*[get_neighbors(safe_index(k, graph_dic), glycans, graphs,
                                        min_size = min_size) for k in glycans])
   # Fill adjacency matrix
   for j in range(len(glycans)):
