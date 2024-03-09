@@ -605,6 +605,24 @@ def infer_roots(glycans):
     print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or Glc")
 
 
+def add_high_man_removal(network):
+  """considers the process of cutting down high-mannose N-glycans for maturation\n
+  | Arguments:
+  | :-
+  | network (networkx object): biosynthetic network, returned from construct_network\n
+  | Returns:
+  | :-
+  | Returns a network with edges going upstream to indicate removal of Man
+  """
+  edges_to_add = []
+  for source, target in network.edges():
+    if target.count('Man') >= 5:
+      diff_attr = network[source][target]['diff']
+      edges_to_add.append((target, source, diff_attr))
+  for target, source, diff_attr in edges_to_add:
+    network.add_edge(target, source, diff = diff_attr)
+
+
 @rescue_glycans
 def construct_network(glycans, allowed_ptms = allowed_ptms,
                       edge_type = 'monolink', permitted_roots = None, abundances = []):
@@ -720,6 +738,8 @@ def construct_network(glycans, allowed_ptms = allowed_ptms,
   for node in sorted(network.nodes(), key = len, reverse = True):
     if (network.out_degree[node] < 1) and (nodeDict[node]['virtual'] == 1):
       network.remove_node(node)
+  if 'GlcNAc' in ''.join(permitted_roots) and any(g.count('Man') >= 5 for g in network.nodes()):
+    add_high_man_removal(network)
   if abundances:
     node_attributes = {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in network.nodes()}
     nx.set_node_attributes(network, node_attributes)

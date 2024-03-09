@@ -394,10 +394,7 @@ def neighbor_is_branchpoint(graph, node):
   edges = list(graph.edges(node))
   edges = unwrap([e for e in edges if sum(e) > 2*node])
   edges = [graph.degree[e] for e in set(edges) if e != node]
-  if len(edges) > 0 and max(edges) > 3:
-    return True
-  else:
-    return False
+  return True if max(edges, default = 0) > 3 else False
 
 
 def graph_to_string_int(graph):

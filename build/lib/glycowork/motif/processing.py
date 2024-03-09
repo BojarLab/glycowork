@@ -863,7 +863,7 @@ def canonicalize_iupac(glycan):
   # If still no '-' in glycan, assume 'a3' type of linkage denomination
   if '-' not in glycan:
     # Check whether linkages are recorded as b1 or as a3
-    if bool(re.search(r"^[^0-9]*1?[^0-9]*$", glycan)):
+    if bool(re.search(r"^[^2-6]*1?[^2-6]*$", glycan)):
       glycan = re.sub(r'(a|b)(\d)', r'\g<1>\g<2>-?', glycan)
     else:
       glycan = re.sub(r'(a|b)(\d)', r'\g<1>1-\g<2>', glycan)
