@@ -2,8 +2,8 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
+import networkx as nx
 import matplotlib.pyplot as plt
-from community import community_louvain
 from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
 from glycowork.motif.graph import subgraph_isomorphism
@@ -189,26 +189,23 @@ def check_conservation(glycan, df, network_dic = None, rank = 'Order', threshold
   return conserved
 
 
-def get_communities(graph_list, label_list = None):
+def get_communities(network_list, label_list = None):
   """Find communities for each graph in a list of graphs\n
   | Arguments:
   | :-
-  | graph_list (list): list of undirected biosynthetic networks, in the form of networkx objects
+  | network_list (list): list of undirected biosynthetic networks, in the form of networkx objects
   | label_list (list): labels to create the community names, which are running_number + _ + label[k]  for graph_list[k]; default:range(len(graph_list))\n
   | Returns:
   | :-
   | Returns a merged dictionary of community : glycans in that community
   """
-  # Perform community detection on each network graph
-  comm_list = [community_louvain.best_partition(g) for g in graph_list]
   if label_list is None:
-    label_list = list(range(len(comm_list)))
+    label_list = list(range(len(network_list)))
   final_comm_dict = {}
   # Label the communities by species name and running number to distinguish them afterwards
-  for comm_dict, label in zip(comm_list, label_list):
-    updated_dict = {
-            f"{value}_{label}": [k for k, v in comm_dict.items() if v == value]
-            for value in set(comm_dict.values())
-        }
-    final_comm_dict.update(updated_dict)
+  for i, network in enumerate(network_list):
+    communities = nx.algorithms.community.louvain.louvain_communities(network)
+    for comm_index, community in enumerate(communities):
+      comm_name = f"{comm_index}_{label_list[i]}"
+      final_comm_dict[comm_name] = list(community)
   return final_comm_dict

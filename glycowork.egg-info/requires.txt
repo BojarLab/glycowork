@@ -9,7 +9,6 @@ xgboost
 mpld3
 pandas>=1.3
 matplotlib-inline
-python-louvain
 
 [all]
 torch_geometric
