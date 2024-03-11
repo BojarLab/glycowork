@@ -633,3 +633,18 @@ def get_match(pattern, glycan, return_matches = True):
     else:
       return False if not return_matches else []
   return False if not return_matches else []
+
+
+def get_match_batch(pattern, glycan_list, return_matches = True):
+  """finds matches for a glyco-regular expression in a list of glycans\n
+  | Arguments:
+  | :-
+  | pattern (string): glyco-regular expression in the form of "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"; accepts pre-compiled pattern
+  | glycan_list (list of strings): list of glycan sequence in IUPAC-condensed
+  | return_matches (bool): whether to return True/False or return the matches as a list of strings; default:True\n
+  | Returns:
+  | :-
+  | Returns either a list of booleans (return_matches = False) or a list of list of matches as strings (return_matches = True)
+  """
+  pattern = compile_pattern(pattern)
+  return [get_match(pattern, g, return_matches = return_matches) for g in glycan_list]
