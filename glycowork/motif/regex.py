@@ -621,7 +621,11 @@ def get_match(pattern, glycan, return_matches = True):
   lookahead_snuck_in = False
   if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
     glycan = canonicalize_iupac(glycan)
-  ggraph = glycan_to_nxGraph(glycan)
+  if isinstance(glycan, str):
+    ggraph = glycan_to_nxGraph(glycan)
+  else:
+    ggraph = glycan
+    glycan = graph_to_string(ggraph)
   pattern_components = preprocess_pattern(pattern) if isinstance(pattern, str) else pattern
   pattern_matches = match_it_up(pattern_components, glycan, ggraph)
   if pattern_matches:

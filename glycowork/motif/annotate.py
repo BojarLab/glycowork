@@ -76,10 +76,7 @@ def annotate_glycan(glycan, motifs = None, termini_list = [], gmotifs = None):
   out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
-  if isinstance(glycan, str):
-    out.index = [glycan]
-  else:
-    out.index = [graph_to_string(glycan)]
+  out.index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)]
   return out
 
 
