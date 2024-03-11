@@ -274,7 +274,7 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, wildca
       return (0, []) if return_matches else 0 if count else False
     motif_comp = min_process_glycans([motif, glycan])
     if wildcards_ptm:
-      glycan, motif = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in [glycan, motif]]
+      glycan, motif = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', g).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for g in [glycan, motif]]
     g1 = glycan_to_nxGraph(glycan, termini = 'calc') if termini_list else glycan_to_nxGraph(glycan)
     g2 = glycan_to_nxGraph(motif, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif)
   else:
@@ -322,11 +322,11 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, wildca
     return counts if not return_matches else (counts, mappings)
   else:
     if graph_pair.subgraph_is_isomorphic():
-      mapping = graph_pair.mapping
-      mapping = {v: k for k, v in mapping.items()}
-      res = all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges())
-      return res if not return_matches else (int(res), mappings)
-    return False if not return_matches else (0, [])
+      for mapping in graph_pair.subgraph_isomorphisms_iter():
+        mapping = {v: k for k, v in mapping.items()}
+        if all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges()):
+          return True if not return_matches else (1, mappings)
+  return False if not return_matches else (0, [])
 
 
 def generate_graph_features(glycan, glycan_graph = True, label = 'network'):

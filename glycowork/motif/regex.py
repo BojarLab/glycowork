@@ -113,6 +113,8 @@ def convert_pattern_component(pattern_component):
   | Returns a string for simple components and a dict of form string : occurrence for complex components
   """
   if not any([k in pattern_component for k in ['[', '{', '*', '+', '=', '<!', '?!']]):
+    if pattern_component[-1].isdigit() or pattern_component[-1] == '?':
+      pattern_component += '-'
     return specify_linkages(replace_patterns(pattern_component))
   pattern, occurrence = None, None
   if '[' in pattern_component:
@@ -592,7 +594,7 @@ def filter_dealbreakers(lists, ggraph, pattern):
     return lists2
 
 
-def compile(pattern):
+def compile_pattern(pattern):
   """pre-compiles glyco-regular expression for faster processing\n
   | Arguments:
   | :-
@@ -610,7 +612,7 @@ def get_match(pattern, glycan, return_matches = True):
   | Arguments:
   | :-
   | pattern (string): glyco-regular expression in the form of "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"; accepts pre-compiled pattern
-  | glycan (string): glycan sequence in IUPAC-condensed
+  | glycan (string or networkx): glycan sequence in IUPAC-condensed or as networkx graph
   | return_matches (bool): whether to return True/False or return the matches as a list of strings; default:True\n
   | Returns:
   | :-
@@ -644,7 +646,7 @@ def get_match_batch(pattern, glycan_list, return_matches = True):
   | Arguments:
   | :-
   | pattern (string): glyco-regular expression in the form of "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"; accepts pre-compiled pattern
-  | glycan_list (list of strings): list of glycan sequence in IUPAC-condensed
+  | glycan_list (list of strings or networkx): list of glycan sequence in IUPAC-condensed or as networkx graph
   | return_matches (bool): whether to return True/False or return the matches as a list of strings; default:True\n
   | Returns:
   | :-
