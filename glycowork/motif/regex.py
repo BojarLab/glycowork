@@ -285,8 +285,12 @@ def process_complex_pattern(p, p2, ggraph, glycan, match_location):
   | :-
   | Returns list of matches as list of node indices
   """
+  if not any('-' in p_key for p_key in p2.keys()):
+    p2_keys = [specify_linkages(replace_patterns(p_key + '-' if p_key[-1].isdigit() or p_key[-1] == '?' else p_key)) for p_key in p2.keys()]
+  else:
+    p2_keys = p2.keys()
   counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key.strip('^$%')),
-                                         count = True, return_matches = True) for p_key in p2.keys()]
+                                         count = True, return_matches = True) for p_key in p2_keys]
   if sum([k for k in counts_matches if isinstance(k, int)]) < 1 and isinstance(counts_matches[0], int):
     counts, matches = [], []
   else:
@@ -294,7 +298,7 @@ def process_complex_pattern(p, p2, ggraph, glycan, match_location):
   len_matches = [list(set([len(j) for j in k])) for k in matches]
   len_matches_comb = calculate_len_matches_comb(len_matches)
   len_motif = list(p2.keys())[0]
-  len_motif = (len([l for l in len_motif.split('-') if l]) + len_motif.count('-'))
+  len_motif = (len([l for l in len_motif.split('-') if l]) + len_motif.count('-')) + len_motif[-1].isdigit()
   len_motif = [v*len_motif for v in list(p2.values())[0]]
   if not any([l in len_motif for l in len_matches_comb]) and '{' in p:
     return False
@@ -426,7 +430,9 @@ def try_matching(current_trace, all_match_nodes, edges, min_occur = 1, max_occur
     idx = [(last_trace_element - node[0] == -2 and not branch and (last_trace_element+1, node[0]) in edges_set) or \
      ((last_trace_element+1, node[0]) in edges_set) or \
       (last_trace_element - node[0] <= -2 and branch and not (last_trace_element+1, node[0]) in edges_set) and ((last_trace_element+1, node[-1]+2) in edges_set) or \
-           (last_trace_element - node[0] == 2 and branch and (node[0]+1, last_trace_element+2) in edges_set)
+           (last_trace_element - node[0] == 2 and branch and (node[0]+1, last_trace_element+2) in edges_set) or \
+           (last_trace_element - node[0] == -1 and not branch and (last_trace_element, node[0]) in edges_set) or \
+           (last_trace_element - node[0] == -1 and branch and not (last_trace_element, node[0]) in edges_set) and ((last_trace_element, node[-1]+1) in edges_set)
            for node in all_match_nodes]
   matched_nodes = [node for i, node in enumerate(all_match_nodes) if (idx[i]) and node]
   if branch and matched_nodes:
