@@ -660,3 +660,29 @@ def get_match_batch(pattern, glycan_list, return_matches = True):
   """
   pattern = compile_pattern(pattern)
   return [get_match(pattern, g, return_matches = return_matches) for g in glycan_list]
+
+
+def reformat_glycan_string(glycan):
+  # Contract linkages
+  glycan = re.sub(r"\((\w)(\d+)-(\d+)\)", r"\1\3-", glycan)
+  glycan = re.sub(r"\((\w)(\d+)-(\?)\)", r"\1?-", glycan)  # Handle cases with '?'
+  # Format branches
+  glycan = re.sub(r"\[", "([", glycan)
+  glycan = re.sub(r"-\]", "]){1}-", glycan)
+  return glycan.strip('-')
+
+
+def motif_to_regex(motif):
+  """tries to convert motif into a regular expression\n
+  | Arguments:
+  | :-
+  | motif (string): glycan in IUPAC-condensed nomenclature\n
+  | Returns:
+  | :-
+  | Returns regular expression if successful
+  """
+  motif = canonicalize_iupac(motif)
+  pattern = reformat_glycan_string(motif)
+  if not get_match(pattern, motif, return_matches = False):
+    raise ValueError("Failed to make effective regular expression.")
+  return pattern
