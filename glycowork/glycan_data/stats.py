@@ -6,7 +6,7 @@ from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
@@ -705,3 +705,17 @@ def hotellings_t2(group1, group2, paired = False):
   # Calculate the p-value of the F statistic
   p_value = f.sf(F, p, n1 + n2 - p - 1)
   return F, p_value
+
+
+def sequence_richness(counts):
+  return (counts != 0).sum()
+
+
+def shannon_diversity_index(counts):
+  proportions = counts / counts.sum()
+  return entropy(proportions)
+
+
+def simpson_diversity_index(counts):
+  proportions = counts / counts.sum()
+  return 1 - np.sum(proportions**2)
