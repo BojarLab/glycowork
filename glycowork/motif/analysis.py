@@ -583,8 +583,8 @@ def get_differential_expression(df, group1, group2,
       df_a, df_b = variance_stabilization(df_a), variance_stabilization(df_b)
       if paired:
           assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
-      pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-      levene_pvals = [levene(row_a, row_b)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+      pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+      levene_pvals = [levene(row_b, row_a)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
       effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
   # Multiple testing correction
   if pvals:
@@ -992,9 +992,12 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
   | :-
   | Returns a dataframe with:
   | (i) Diversity indices/metrics
-  | (ii) Uncorrected p-values (Welch's t-test) for difference in mean
-  | (iii) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
-  | (iv) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  | (ii) Mean value of diversity metrics in group 1
+  | (iii) Mean value of diversity metrics in group 2
+  | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
+  | (v) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
+  | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  | (vii) Effect size as Cohen's d
   """
   if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
@@ -1003,7 +1006,7 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
       group1 = [columns_list[k] for k in group1]
       group2 = [columns_list[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
-  # Drop rows with all zero, followed by outlier removal and imputation & normalization
+  # Drop rows with all zero, followed by outlier removal
   df = df.loc[~(df == 0).all(axis = 1)]
   df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
@@ -1018,15 +1021,17 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
   unique_counts = df.iloc[:, 1:].apply(sequence_richness)
   shannon_diversity = df.iloc[:, 1:].apply(shannon_diversity_index)
   simpson_diversity = df.iloc[:, 1:].apply(simpson_diversity_index)
-  df_out = pd.DataFrame({'alpha_diversity': unique_counts,
+  df_out = pd.DataFrame({'richness': unique_counts,
                          'shannon_diversity': shannon_diversity, 'simpson_diversity': simpson_diversity}).T
   df_a, df_b = df_out[group1], df_out[group2]
+  mean_a, mean_b = [np.mean(row_a) for row_a in df_a.values], [np.mean(row_b) for row_b in df_b.values]
   if paired:
     assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
   pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
   pvals = [p if p > 0 and p < 1 else 1.0 for p in pvals]
   corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
   significance = [p < alpha for p in corrpvals]
-  out = pd.DataFrame(list(zip(df_out.index.tolist(), pvals, corrpvals, significance)),
-                     columns = ["Metric", "p-val", "corr p-val", "significant"])
+  effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
+  out = pd.DataFrame(list(zip(df_out.index.tolist(), mean_a, mean_b, pvals, corrpvals, significance, effect_sizes)),
+                     columns = ["Metric", "Group1 mean", "Group2 mean", "p-val", "corr p-val", "significant", "Effect size"])
   return out.sort_values(by = 'p-val').sort_values(by = 'corr p-val')
