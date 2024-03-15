@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+    width="700" height="510" viewBox="-650.0 -305.0 700 510">
+<defs>
+<path d="M-100,-100.0 L0,-100.0" stroke-width="4.0" stroke="#D9D9D9" id="iEPrgOCE0" />
+<path d="M-200,-100.0 L-100,-100.0" stroke-width="4.0" stroke="#D9D9D9" id="iEPrgOCE1" />
+<path d="M-300,0 L-200,-100.0" stroke-width="4.0" stroke="#D9D9D9" id="iEPrgOCE2" />
+<path d="M-400,0 L-300,0" stroke-width="4.0" stroke="#D9D9D9" id="iEPrgOCE3" />
+<path d="M-500,0 L-400,0" stroke-width="4.0" stroke="#000000" id="iEPrgOCE4" />
+<path d="M-600,0 L-500,0" stroke-width="4.0" stroke="#D9D9D9" id="iEPrgOCE5" />
+<path d="M-400,-200 L-300,-200" stroke-width="4.0" stroke="#D9D9D9" id="iEPrgOCE6" />
+<path d="M-500,-200 L-400,-200" stroke-width="4.0" stroke="#000000" id="iEPrgOCE7" />
+<path d="M-400,100 L-400,0" stroke-width="4.0" stroke="#000000" id="iEPrgOCE8" />
+<path d="M-300,-200 L-200,-100.0" stroke-width="4.0" stroke="#D9D9D9" id="iEPrgOCE9" />
+<path d="M0,-200.0 L0,-100.0" stroke-width="4.0" stroke="#D9D9D9" id="iEPrgOCE10" />
+<path d="M-400,-100 L-400,-200" stroke-width="4.0" stroke="#000000" id="iEPrgOCE11" />
+<path d="M-50,-75.0 L50,-75.0" stroke-width="0" id="iEPrgOCE12" />
+<path d="M-50,-100.0 L50,-100.0" stroke-width="0" id="iEPrgOCE13" />
+<path d="M-150,-75.0 L-50,-75.0" stroke-width="0" id="iEPrgOCE14" />
+<path d="M-150,-100.0 L-50,-100.0" stroke-width="0" id="iEPrgOCE15" />
+<path d="M-250,-75.0 L-150,-75.0" stroke-width="0" id="iEPrgOCE16" />
+<path d="M-250,-100.0 L-150,-100.0" stroke-width="0" id="iEPrgOCE17" />
+<path d="M-350,25.0 L-250,25.0" stroke-width="0" id="iEPrgOCE18" />
+<path d="M-350,0 L-250,0" stroke-width="0" id="iEPrgOCE19" />
+<path d="M-450,25.0 L-350,25.0" stroke-width="0" id="iEPrgOCE20" />
+<path d="M-450,0 L-350,0" stroke-width="0" id="iEPrgOCE21" />
+<path d="M-550,25.0 L-450,25.0" stroke-width="0" id="iEPrgOCE22" />
+<path d="M-550,0 L-450,0" stroke-width="0" id="iEPrgOCE23" />
+<path d="M-650,25.0 L-550,25.0" stroke-width="0" id="iEPrgOCE24" />
+<path d="M-650,0 L-550,0" stroke-width="0" id="iEPrgOCE25" />
+<path d="M-450,125.0 L-350,125.0" stroke-width="0" id="iEPrgOCE26" />
+<path d="M-450,100 L-350,100" stroke-width="0" id="iEPrgOCE27" />
+<path d="M-350,-175.0 L-250,-175.0" stroke-width="0" id="iEPrgOCE28" />
+<path d="M-350,-200 L-250,-200" stroke-width="0" id="iEPrgOCE29" />
+<path d="M-450,-175.0 L-350,-175.0" stroke-width="0" id="iEPrgOCE30" />
+<path d="M-450,-200 L-350,-200" stroke-width="0" id="iEPrgOCE31" />
+<path d="M-550,-175.0 L-450,-175.0" stroke-width="0" id="iEPrgOCE32" />
+<path d="M-550,-200 L-450,-200" stroke-width="0" id="iEPrgOCE33" />
+<path d="M-50,-175.0 L50,-175.0" stroke-width="0" id="iEPrgOCE34" />
+<path d="M-50,-200.0 L50,-200.0" stroke-width="0" id="iEPrgOCE35" />
+<path d="M-450,-75.0 L-350,-75.0" stroke-width="0" id="iEPrgOCE36" />
+<path d="M-450,-100 L-350,-100" stroke-width="0" id="iEPrgOCE37" />
+</defs>
+<g transform="rotate(0 350.0 255.0)">
+<use xlink:href="#iEPrgOCE0" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#iEPrgOCE0" startOffset="50%">
+<tspan dy="-0.5em">β 4</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE1" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#iEPrgOCE1" startOffset="50%">
+<tspan dy="-0.5em">β 4</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE2" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#iEPrgOCE2" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE3" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#iEPrgOCE3" startOffset="50%">
+<tspan dy="-0.5em">β 2</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE4" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#iEPrgOCE4" startOffset="50%">
+<tspan dy="-0.5em">β 4</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE5" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#iEPrgOCE5" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE6" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#iEPrgOCE6" startOffset="50%">
+<tspan dy="-0.5em">β 2</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE7" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#iEPrgOCE7" startOffset="50%">
+<tspan dy="-0.5em">β 3</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE8" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#iEPrgOCE8" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE9" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#iEPrgOCE9" startOffset="50%">
+<tspan dy="-0.5em">α 6</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE10" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#iEPrgOCE10" startOffset="50%">
+<tspan dy="-0.5em">α 6</tspan>
+</textPath></text>
+<use xlink:href="#iEPrgOCE11" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#iEPrgOCE11" startOffset="50%">
+<tspan dy="-0.5em">α 4</tspan>
+</textPath></text>
+<rect x="-25.0" y="-125.0" width="50" height="50" fill="#CDE7EF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#iEPrgOCE12" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE12" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE13" />
+<text font-size="15.0" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE13" startOffset="50%"></textPath></text>
+<rect x="-125.0" y="-125.0" width="50" height="50" fill="#CDE7EF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#iEPrgOCE14" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE14" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE15" />
+<text font-size="15.0" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE15" startOffset="50%"></textPath></text>
+<circle cx="-200" cy="-100.0" r="25.0" fill="#CDE9DF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#iEPrgOCE16" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE16" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE17" />
+<text font-size="15.0" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE17" startOffset="50%"></textPath></text>
+<circle cx="-300" cy="0" r="25.0" fill="#CDE9DF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#iEPrgOCE18" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE18" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE19" />
+<text font-size="15.0" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE19" startOffset="50%"></textPath></text>
+<rect x="-425.0" y="-25.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#iEPrgOCE20" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE20" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE21" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE21" startOffset="50%"></textPath></text>
+<circle cx="-500" cy="0" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#iEPrgOCE22" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE22" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE23" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE23" startOffset="50%"></textPath></text>
+<path d="M-600,25.0 L-575.0,0 L-600,-25.0 L-625.0,0 Z" fill="#F1E6ED" stroke="#D9D9D9" stroke-width="2.0" />
+<use xlink:href="#iEPrgOCE24" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE24" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE25" />
+<text font-size="15.0" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE25" startOffset="50%"></textPath></text>
+<path d="M-425.0,121.65063509461096 L-400,78.34936490538904 L-375.0,121.65063509461096 Z" fill="#C23537" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#iEPrgOCE26" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#iEPrgOCE26" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE27" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE27" startOffset="50%"></textPath></text>
+<circle cx="-300" cy="-200" r="25.0" fill="#CDE9DF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#iEPrgOCE28" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE28" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE29" />
+<text font-size="15.0" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE29" startOffset="50%"></textPath></text>
+<rect x="-425.0" y="-225.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#iEPrgOCE30" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE30" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE31" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE31" startOffset="50%"></textPath></text>
+<circle cx="-500" cy="-200" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#iEPrgOCE32" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE32" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE33" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE33" startOffset="50%"></textPath></text>
+<path d="M-25.0,-178.34936490538902 L0,-221.65063509461098 L25.0,-178.34936490538902 Z" fill="#F7E0E0" stroke="#D9D9D9" stroke-width="2.0" />
+<use xlink:href="#iEPrgOCE34" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#iEPrgOCE34" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE35" />
+<text font-size="15.0" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#iEPrgOCE35" startOffset="50%"></textPath></text>
+<path d="M-425.0,-78.34936490538904 L-400,-121.65063509461096 L-375.0,-78.34936490538904 Z" fill="#C23537" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#iEPrgOCE36" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#iEPrgOCE36" startOffset="50%"></textPath></text>
+<use xlink:href="#iEPrgOCE37" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#iEPrgOCE37" startOffset="50%"></textPath></text>
+</g>
+</svg>
