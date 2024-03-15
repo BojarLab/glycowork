@@ -147,7 +147,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   | :-                      
   | Returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
   """
-  if any([k in glycans[0] for k in [';', '-D-', 'RES', '=']]):
+  if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if motifs is None:
     motifs = motif_list
@@ -296,7 +296,7 @@ def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False, ter
   """
   if not isinstance(glycans, list):
     raise TypeError("The input has to be a list of glycans")
-  if any([k in glycans[0] for k in [';', '-D-', 'RES', '=']]):
+  if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if up_to:
     wga_letter = pd.DataFrame([{i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(glycans) if i not in linkages} for g in glycans])
