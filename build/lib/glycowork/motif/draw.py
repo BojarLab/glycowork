@@ -1,8 +1,9 @@
-from glycowork.glycan_data.loader import lib, unwrap, motif_list, multireplace
+from glycowork.glycan_data.loader import unwrap, motif_list, multireplace, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import expand_lib, min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
+from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, in_lib
+import matplotlib.pyplot as plt
 from io import BytesIO
 import networkx as nx
 import copy
@@ -88,8 +89,6 @@ col_dict_transparent = {
     'black'          : '#D9D9D9',
     'grey'           : '#ECECEC'
 }
-
-# col_dict_base['snfg_white']
 
 # Extensions for draw_lib
 additions = ['-', 'blank', 'red_end', 'free',
@@ -185,10 +184,6 @@ sugar_dict = {
   "Z": ['Z', None, None], "Y": ['Y', None, None],
   "B": ['B', None, None], "C": ['C', None, None]
 }
-
-
-# Build draw_lib with glycoletter additions
-draw_lib = expand_lib(lib, ['-'] + list(sugar_dict.keys()))
 
 
 def hex_circumference(x_pos, y_pos, dim, col_dict):
@@ -743,7 +738,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '04A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -761,7 +756,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '15X':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -779,7 +774,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '02X':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
@@ -797,7 +792,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '13A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
                         x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
@@ -815,7 +810,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '24A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)),
                         x_base+half_dim*cos(radians(240)),                       y_base-half_dim*sin(radians(240)),
@@ -833,7 +828,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '35A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)),
                         x_base+half_dim*cos(radians(180)),                       y_base-half_dim*sin(radians(180)),
@@ -896,7 +891,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '25X':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                               y_base,
                         x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -911,7 +906,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '03X':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
@@ -926,7 +921,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '14A':
-    hex(x_pos, y_pos, dim, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
                         x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
@@ -1322,29 +1317,26 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
   | :-
   | Returns networkx object of glycan, annotated with the node attribute 'highlight_labels', labeling nodes that constitute the motif ('show') or not ('hide').
   '''
-  libr = draw_lib
-  len_libr = len(libr)
-
   g1 = glycan_graph
   g_tmp = copy.deepcopy(g1)
   if not motif_string:
     g2 = copy.deepcopy(g1)
   else:
     try:
-      g2 = glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0], libr = libr, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0], libr = libr)
+      g2 = glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0], termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0])
     except:
-      g2 = glycan_to_nxGraph(motif_string, libr = libr, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_string, libr = libr)
+      g2 = glycan_to_nxGraph(motif_string, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_string)
 
   g1_node_labels = nx.get_node_attributes(g1, 'string_labels')
   relevant_labels = set(list(g1_node_labels.values()) + list(nx.get_node_attributes(g2, 'string_labels').values()))
-  narrow_wildcard_list = {k:[j for j in get_possible_linkages(k, libr = libr)] for k in relevant_labels if '?' in k}
-  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k, libr = libr)] for k in relevant_labels if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
+  narrow_wildcard_list = {k:[j for j in get_possible_linkages(k)] for k in relevant_labels if '?' in k}
+  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k)] for k in relevant_labels if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
   narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
 
   if termini_list or narrow_wildcard_list:
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
   else:
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', len_libr))
+    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
   graph_pair.subgraph_is_isomorphic()
   mapping = graph_pair.mapping
   mapping = {v: k for k, v in mapping.items()}
@@ -1353,9 +1345,9 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
   while list(graph_pair.mapping.keys()) != []:
     g_tmp.remove_nodes_from(graph_pair.mapping.keys())
     if termini_list or narrow_wildcard_list:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', len_libr, narrow_wildcard_list, 'termini', 'flexible'))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
     else:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', len_libr))
+      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
     graph_pair.subgraph_is_isomorphic()
     mapping = graph_pair.mapping
     mapping = {v: k for k, v in mapping.items()}
@@ -1383,30 +1375,25 @@ def process_repeat(repeat):
   return 'blank(?1-' + repeat_connection[-1] + ')' + backbone + repeat_connection[:2] + '-?)'
 
 
-def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, draw_lib = draw_lib, extend_lib = False, termini_list = []):
+def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, termini_list = []):
   """Extract monosaccharide labels and calculate coordinates for drawing\n
   | Arguments:
   | :-
   | draw_this (string): Glycan structure to be drawn.
   | highlight_motif (string): Glycan as named motif or in IUPAC-condensed format.
   | show_linkage (bool, optional): Flag indicating whether to show linkages. Default: True.
-  | draw_lib (dict): lib extended with non-standard glycoletters
-  | extend_lib (bool): If True, further extend the library with given input. Default: False.
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
   | data_combined (list of lists)
   | contains lists with monosaccharide label, x position, y position, modification, bond, conformation
   """
-  if extend_lib:
-    draw_lib = expand_lib(draw_lib, [draw_this])
-
   if not draw_this.startswith('['):
     draw_this = multiple_branches(multiple_branch_branches(draw_this))
     draw_this = reorder_for_drawing(draw_this)
     draw_this = multiple_branch_branches(multiple_branches(draw_this))
 
-  graph = glycan_to_nxGraph(draw_this, libr = draw_lib, termini = 'calc') if termini_list else glycan_to_nxGraph(draw_this, libr = draw_lib)
+  graph = glycan_to_nxGraph(draw_this, termini = 'calc') if termini_list else glycan_to_nxGraph(draw_this)
   graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list)
   node_labels = nx.get_node_attributes(graph, 'string_labels')
   highlight_labels = nx.get_node_attributes(graph, 'highlight_labels')
@@ -1680,7 +1667,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   tmp_a = main_node + unwrap(branch_node_old) + unwrap(branch_branch_node) + unwrap(branch_branch_branch_node)
   tmp_b = main_label + unwrap(branch_label) + unwrap(branch_branch_label) + unwrap(bbb_label)
   for n in splits:
-    graph = glycan_to_nxGraph(draw_this, libr = draw_lib)
+    graph = glycan_to_nxGraph(draw_this)
     graph2 = split_node(graph, int(n))
     edges = graph.edges()
     split_node_connections = [e[0] for e in edges if f"{n}_"in str(e[1])]
@@ -1784,7 +1771,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   y_list = main_sugar_y_pos+unwrap(branch_y_pos)+unwrap(branch_branch_y_pos)+unwrap(bbb_y_pos)
   x_list = main_sugar_x_pos+unwrap(branch_x_pos)+unwrap(branch_branch_x_pos)+unwrap(bbb_x_pos)
   for n in splits:
-    graph = glycan_to_nxGraph(draw_this, libr = draw_lib)
+    graph = glycan_to_nxGraph(draw_this)
     graph2 = split_node(graph, int(n))
     edges = graph.edges()
     split_node_connections = [e[0] for e in edges if f"{n}_" in str(e[1])]
@@ -1903,8 +1890,36 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50,  highlight = 'show
   d.append(g)
 
 
+def is_jupyter():
+  try:
+    from IPython import get_ipython
+    if 'IPKernelApp' not in get_ipython().config:  # Check if not in IPython kernel
+      return False
+  except:
+    return False
+  return True
+
+
+def display_svg_with_matplotlib(svg_data):
+  try:
+    from cairosvg import svg2png
+  except:
+    return svg_data
+  # Convert SVG data to PNG
+  png_output = svg2png(bytestring = svg_data.as_svg(), dpi = 600)
+  # Convert PNG output to a format that can be read by matplotlib (a BytesIO stream)
+  png_stream = BytesIO(png_output)
+  # Load the image from BytesIO stream
+  img = plt.imread(png_stream, format = 'png')
+  # Display the image using matplotlib
+  plt.imshow(img, interpolation = 'lanczos')
+  plt.axis('off')  # Turn off axis numbers and ticks
+  plt.show()
+
+
 @rescue_glycans
-def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [], repeat = None, repeat_range = None, filepath = None):
+def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [],
+              repeat = None, repeat_range = None, filepath = None, suppress = False):
   """Draws a glycan structure based on the provided input.\n
   | Arguments:
   | :-
@@ -1917,7 +1932,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   | highlight_termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | repeat (bool | int | str): If specified, indicate repeat unit by brackets (True: n units, int: # of units, str: range of units)
   | repeat_range (list of 2 int): List of index integers for the first and last main-chain monosaccharide in repeating unit. Monosaccharides are numbered starting from 0 (invisible placeholder = 0 in case of structure terminating in a linkage) at the reducing end. 
-  | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.\n
+  | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.
+  | suppress (bool, optional): Whether to suppress the visual display of drawings into the console; default:False\n
   """
   if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
     raise Exception
@@ -1941,19 +1957,15 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
       floaty_bits.append(draw_this[openpos:closepos]+'blank')
       draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')
+  
+  if draw_this in motif_list.motif_name.values.tolist():
+    draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values.tolist()[0]
 
   try:
     data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list)
   except:
-    try:
-      draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values.tolist()[0]
-      data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list)
-    except:
-        try:
-          data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, extend_lib = True, highlight_motif = highlight_motif, termini_list = highlight_termini_list)
-        except:
-          return print('Error: did you enter a real glycan or motif?')
-          sys.exit(1)
+    print('Warning: did you enter a real glycan or motif?')
+    raise Exception
 
   main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label = data[0]
   branch_sugar, branch_x_pos, branch_y_pos, branch_sugar_modification, branch_bond, branch_connection, b_conf, branch_sugar_label, branch_bond_label = data[1]
@@ -2110,7 +2122,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     # process annotation
     repeat_annot = 'n'
     if isinstance(repeat, (str, int)):
-      if repeat!= True:
+      if repeat != True:
         repeat_annot += ' = ' + str(repeat)
     
     # repeat range code block
@@ -2160,7 +2172,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
           svg2pdf(bytestring = data, write_to = filepath)
         except:
           raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-  return d2
+  return d2 if is_jupyter() or suppress else display_svg_with_matplotlib(d2)
 
 
 def scale_in_range(listy, a, b):
@@ -2226,14 +2238,15 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
     # Keep track of current label and position in figure
     current_label = label_pattern.findall(match)[0]
     # Check if label is glycan
-    try:
-      glycan_to_nxGraph(current_label)
+    if in_lib(current_label, lib):
       edit_svg = True
-    except:
+    else:
       pass
     try:
-      glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0])
-      edit_svg = True
+      if in_lib(motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0], lib):
+        edit_svg = True
+      else:
+        pass
     except:
       pass
     # Delete text label, append glycan figure
@@ -2242,9 +2255,9 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
       current_pos = current_pos.replace('scale(0.1 -0.1)', glycan_size_dict[glycan_size])
       svg_tmp = svg_tmp.replace(match, '')
       if glycan_scale == '':
-        d = GlycoDraw(current_label, compact = compact)
+        d = GlycoDraw(current_label, compact = compact, suppress = True)
       else:
-        d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)])
+        d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)], suppress = True)
       data = d.as_svg().replace('<?xml version="1.0" encoding="UTF-8"?>\n', '')
       id_matches = re.findall(r'd\d+', data)
       # Reassign element ids to avoid duplicates
@@ -2271,14 +2284,15 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
 
 
 def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
-                       scaling_factor = 0.2):
+                       scaling_factor = 0.2, compact = False):
   """plots SNFG images of glycans into new column in df and saves df as Excel file\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences [alternative: filepath to .csv]
+  | df (dataframe): dataframe containing glycan sequences [alternative: filepath to .csv or .xlsx]
   | folder_filepath (string): full filepath to the folder you want to save the output to
   | glycan_col_num (int): index of the column containing glycan sequences; default:0 (first column)
-  | scaling_factor (float): how large the glycans should be; default:0.2\n
+  | scaling_factor (float): how large the glycans should be; default:0.2
+  | compact (bool, optional): Set to True to draw the structures in a compact form. Default: False.\n
   | Returns:
   | :-
   | Saves the dataframe with glycan images as output.xlsx into folder_filepath
@@ -2288,7 +2302,7 @@ def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
   except:
     raise ImportError("You're missing some draw dependencies. If you want to use this function, head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   if isinstance(df, str):
-    df = pd.read_csv(df)
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if not folder_filepath.endswith('/'):
     folder_filepath += '/'
   image_column_number = df.shape[1] + 2
@@ -2304,14 +2318,14 @@ def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
       if not isinstance(glycan_structure[0], str):
         glycan_structure = glycan_structure[0][0]
       # Generate glycan image using GlycoDraw
-      svg_data = GlycoDraw(glycan_structure).as_svg()
+      svg_data = GlycoDraw(glycan_structure, compact = compact, suppress = True).as_svg()
       # Convert SVG data to image
-      png_data = svg2png(bytestring = svg_data)
+      png_data = svg2png(bytestring = svg_data, output_width = 3000, output_height = 3000)
       img_stream = BytesIO(png_data)
       img = Image.open(img_stream)
       # Set the size of the image
       img_width, img_height = img.size
-      img = img.resize((int(img_width * scaling_factor), int(img_height * scaling_factor)), Image.LANCZOS)  
+      img = img.resize((int(img_width * scaling_factor / 5), int(img_height * scaling_factor / 5)), Image.LANCZOS)
       # Save the image to a BytesIO object
       img_stream = BytesIO()
       img.save(img_stream, format = 'PNG')

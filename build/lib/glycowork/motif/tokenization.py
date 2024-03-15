@@ -4,7 +4,7 @@ import networkx as nx
 import re
 import copy
 import math
-import pkg_resources
+from importlib import resources
 from itertools import product
 from collections import Counter
 from sklearn.cluster import DBSCAN
@@ -17,8 +17,8 @@ chars = {'A':1, 'B':2, 'C':3, 'D':4, 'E':5, 'F':6, 'G':7, 'H':8, 'I':9, 'J':10, 
          'L':12, 'M':13, 'N':14, 'P':15, 'Q':16, 'R':17, 'S':18, 'T':19,
          'V':20, 'W':21, 'Y':22, 'X':23, 'Z':24, 'z':25}
 
-io = pkg_resources.resource_stream(__name__, "mz_to_composition.csv")
-mapping_file = pd.read_csv(io)
+with resources.open_text("glycowork.motif", "mz_to_composition.csv") as f:
+  mapping_file = pd.read_csv(f)
 mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
 
 
@@ -74,7 +74,7 @@ def string_to_labels(character_string, libr = None):
   | Returns indexes of characters in library
   """
   if libr is None:
-    libr = lib
+    libr = chars
   return list(map(libr.get, character_string))
 
 
@@ -91,7 +91,7 @@ def pad_sequence(seq, max_length, pad_label = None, libr = None):
   | Returns padded sequence
   """
   if libr is None:
-    libr = lib
+    libr = chars
   if pad_label is None:
     pad_label = len(libr)
   padding_needed = max_length - len(seq)
@@ -328,21 +328,18 @@ def match_composition_relaxed(composition, glycan_class = 'N', kingdom = 'Animal
   return [glycan for glycan, glycan_comp in zip(output_list, output_compositions) if glycan_comp == composition]
 
 
-def condense_composition_matching(matched_composition, libr = None):
+def condense_composition_matching(matched_composition):
   """Given a list of glycans matching a composition, find the minimum number of glycans characterizing this set\n
   | Arguments:
   | :-
-  | matched_composition (list): list of glycans matching to a composition
-  | libr (dict): dictionary of form glycoletter:index; default:lib\n
+  | matched_composition (list): list of glycans matching to a composition\n
   | Returns:
   | :-
   | Returns minimal list of glycans that match a composition
   """
-  if libr is None:
-    libr = lib
   # Establish glycan equality given the wildcards
   match_matrix = pd.DataFrame(
-    [[compare_glycans(k, j, libr = libr, wildcards_ptm = True)
+    [[compare_glycans(k, j, wildcards_ptm = True)
       for j in matched_composition] for k in matched_composition],
     columns = matched_composition
     )
@@ -364,7 +361,7 @@ def condense_composition_matching(matched_composition, libr = None):
 
 @rescue_compositions
 def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = 'Animalia', abundances = None,
-                               df_use = None, libr = None, verbose = False):
+                               df_use = None, verbose = False):
   """wrapper function to map compositions to structures, condense them, and match them with relative intensities\n
   | Arguments:
   | :-
@@ -373,14 +370,11 @@ def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = '
   | kingdom (string): taxonomic kingdom for choosing a subset of glycans to consider; default:'Animalia'
   | abundances (dataframe): every row one composition (matching composition_list in order), every column one sample;default:pd.DataFrame([range(len(composition_list))]*2).T
   | df_use (dataframe): glycan dataframe for searching glycan structures; default:df_glycan
-  | libr (dict): dictionary of form glycoletter:index; default:lib
   | verbose (bool): whether to print any non-matching compositions; default:False\n
   | Returns:
   | :-
   | Returns dataframe of (matched structures) x (relative intensities)
   """
-  if libr is None:
-    libr = lib
   if df_use is None:
     df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
   if abundances is None:
@@ -395,7 +389,7 @@ def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = '
                                         kingdom = kingdom, df_use = df_use)
     # If multiple structure matches, try to condense them by wildcard clustering
     if matched:
-      condensed = condense_composition_matching(matched, libr = libr)
+      condensed = condense_composition_matching(matched)
       matched_data = [abundances_values[k]]*len(condensed)
       df_out.extend([[condensed[ele]] + matched_data[ele] for ele in range(len(condensed))])
     else:
@@ -412,7 +406,7 @@ def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = '
 
 def mz_to_structures(mz_list, glycan_class, kingdom = 'Animalia', abundances = None, mode = 'negative',
                      mass_value = 'monoisotopic', sample_prep = 'underivatized', mass_tolerance = 0.5,
-                     reduced = False, df_use = None, filter_out = set(), libr = None, verbose = False):
+                     reduced = False, df_use = None, filter_out = set(), verbose = False):
   """wrapper function to map precursor masses to structures, condense them, and match them with relative intensities\n
   | Arguments:
   | :-
@@ -427,14 +421,11 @@ def mz_to_structures(mz_list, glycan_class, kingdom = 'Animalia', abundances = N
   | reduced (bool): whether glycans are reduced at reducing end; default:False
   | df_use (dataframe): species-specific glycan dataframe to use for mapping; default: df_glycan
   | filter_out (set): set of monosaccharide types to ignore during composition finding; default:None
-  | libr (dict): dictionary of form glycoletter:index; default:lib
   | verbose (bool): whether to print any non-matching compositions; default:False\n
   | Returns:
   | :-
   | Returns dataframe of (matched structures) x (relative intensities)
   """
-  if libr is None:
-    libr = lib
   if df_use is None:
     df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
   if abundances is None:
@@ -450,7 +441,7 @@ def mz_to_structures(mz_list, glycan_class, kingdom = 'Animalia', abundances = N
   out_structures = []
   for m, comp in enumerate(compositions):
     out_structures.append(compositions_to_structures(comp, glycan_class = glycan_class,
-                                              abundances = abundances.iloc[[m]], kingdom = kingdom, df_use = df_use, libr = libr, verbose = verbose))
+                                              abundances = abundances.iloc[[m]], kingdom = kingdom, df_use = df_use, verbose = verbose))
   if out_structures:
     return pd.concat(out_structures, axis = 0)
   else:
@@ -502,11 +493,12 @@ def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkag
   return out
 
 
-def map_to_basic(glycoletter):
+def map_to_basic(glycoletter, obfuscate_ptm = True):
   """given a monosaccharide/linkage, try to map it to the corresponding base monosaccharide/linkage\n
   | Arguments:
   | :-
-  | glycoletter (string): monosaccharide or linkage\n
+  | glycoletter (string): monosaccharide or linkage
+  | obfuscate_ptm (bool): whether to remove position-specific information of PTM or not; default:True\n
   | Returns:
   | :-
   | Returns the base monosaccharide/linkage or the original glycoletter, if it cannot be mapped
@@ -516,30 +508,33 @@ def map_to_basic(glycoletter):
     if glycoletter in cond:
       return ret
   g2 = re.sub(r"\d", 'O', glycoletter)
-  if g2 in {k + 'OS' for k in Hex}:
-    return 'HexOS'
-  elif g2 in {k + 'OS' for k in HexNAc}:
-    return 'HexNAcOS'
+  if 'S' in glycoletter:
+    if g2 in {k + 'OS' for k in Hex}:
+      return 'HexOS' if obfuscate_ptm else 'Hex' + glycoletter[-2:]
+    elif g2 in {k + 'OS' for k in HexNAc}:
+      return 'HexNAcOS' if obfuscate_ptm else 'HexNAc' + glycoletter[-2:]
+  if 'P' in glycoletter:
+    if g2 in {k + 'OP' for k in Hex}:
+      return 'HexOP' if obfuscate_ptm else 'Hex' + glycoletter[-2:]
+    elif g2 in {k + 'OP' for k in HexNAc}:
+      return 'HexNAcOP' if obfuscate_ptm else 'HexNAc' + glycoletter[-2:]
   return glycoletter
 
 
-def structure_to_basic(glycan, libr = None):
+def structure_to_basic(glycan):
   """converts a monosaccharide- and linkage-defined glycan structure to the base topology\n
   | Arguments:
   | :-
-  | glycan (string): glycan in IUPAC-condensed nomenclature
-  | libr (dict): dictionary of form glycoletter:index\n
+  | glycan (string): glycan in IUPAC-condensed nomenclature\n
   | Returns:
   | :-
   | Returns the glycan topology as a string
   """
-  if libr is None:
-    libr = lib
   if glycan.endswith('-ol'):
     glycan = glycan[:-3]
   if '(' not in glycan:
     return map_to_basic(glycan)
-  ggraph = glycan_to_nxGraph(glycan, libr = libr)
+  ggraph = glycan_to_nxGraph(glycan)
   nodeDict = dict(ggraph.nodes(data = True))
   nx.set_node_attributes(ggraph, {k: map_to_basic(nodeDict[k]['string_labels']) for k in ggraph.nodes}, 'string_labels')
   return graph_to_string(ggraph)
@@ -615,3 +610,28 @@ def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivat
     stem_libr = stem_lib
   comp = glycan_to_composition(glycan, stem_libr = stem_libr)
   return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep)
+
+
+@rescue_compositions
+def get_unique_topologies(composition, glycan_type, df_use = None, universal_replacers = {},
+                         taxonomy_rank = "Kingdom", taxonomy_value = "Animalia"):
+  """given a composition, retrieves all observed and unique base topologies\n
+  | Arguments:
+  | :-
+  | composition (dict): composition in form monosaccharide:count
+  | glycan_type (string): which glycan class to search, 'N', 'O', 'lipid', 'free', or 'repeat'
+  | df_use (dataframe): species-specific glycan dataframe to use for mapping; default: df_glycan
+  | universal_replacers (dictionary): dictionary of form base monosaccharide : specific monosaccharide
+  | taxonomy_rank (string): at which taxonomic rank to filter; default: Kingdom
+  | taxonomy_value (string): which value to filter at taxonomy_rank; default: Animalia\n
+  | Returns:
+  | :-
+  | Returns a list of observed base topologies for the given composition
+  """
+  if df_use is None:
+    df_use = df_glycan
+  df_use = df_use[df_use.Composition == composition]
+  df_use = df_use[df_use.glycan_type == glycan_type]
+  df_use = df_use[df_use[taxonomy_rank].apply(lambda x: taxonomy_value in x)].glycan.values
+  df_use = list(set([structure_to_basic(k) for k in df_use]))
+  return [[g.replace(k, v) for k,v in universal_replacers.items()][0] for g in df_use if '{' not in g]

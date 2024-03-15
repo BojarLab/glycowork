@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import pkg_resources
+from importlib import resources
 import math
 import torch
 from torch.utils.data import Dataset
@@ -8,10 +8,9 @@ from glycowork.glycan_data.loader import lib, unwrap
 from glycowork.motif.tokenization import prot_to_coded
 from glycowork.ml.processing import dataset_to_dataloader
 
-io = pkg_resources.resource_stream(__name__,
-                                   "glycowork_lectinoracle_background_correction.csv")
 # Background correction values for LectinOracle predictions
-df_corr = pd.read_csv(io)
+with resources.open_text("glycowork.ml", "glycowork_lectinoracle_background_correction.csv") as f:
+  df_corr = pd.read_csv(f)
 
 # Choosing the right computing architecture
 device = "cpu"

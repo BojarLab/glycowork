@@ -27,7 +27,7 @@ monosaccharide_mapping = {
     'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4S', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3S',
     'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS',
     'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3S', 'a2211m-1x_1-5': 'Rha', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAc',
-    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S'
+    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S', 'a2112h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS'
     }
 
 
@@ -90,36 +90,34 @@ def in_lib(glycan, libr):
   return set(glycan).issubset(libr.keys())
 
 
-def get_possible_linkages(wildcard, linkage_list = linkages, libr = None):
+def get_possible_linkages(wildcard, linkage_list = linkages):
   """Retrieves all linkages that match a given wildcard pattern from a list of linkages\n
   | Arguments:
   | :-
   | wildcard (string): The pattern to match, where '?' can be used as a wildcard for any single character.
-  | linkage_list (list): List of linkages as strings to search within; default:linkages
-  | libr (dict): dictionary of form glycoletter:index\n
+  | linkage_list (list): List of linkages as strings to search within; default:linkages\n
   | Returns:
   | :-
   | Returns a list of linkages that match the wildcard pattern.
   """
   pattern = wildcard.replace("?", "[a-zA-Z0-9\?]")
-  possible_linkages = [linkage for linkage in linkage_list if re.fullmatch(pattern, linkage)]
-  return possible_linkages if libr is None else list(possible_linkages & libr.keys())
+  return [linkage for linkage in linkage_list if re.fullmatch(pattern, linkage)]
+  #return possible_linkages if libr is None else list(possible_linkages & libr.keys())
 
 
-def get_possible_monosaccharides(wildcard, libr = None):
+def get_possible_monosaccharides(wildcard):
   """Retrieves all matching common monosaccharides of a type, given the type\n
   | Arguments:
   | :-
-  | wildcard (string): Monosaccharide type, from "HexNAc", "Hex", "dHex", "Sia", "HexA", "Pen"
-  | libr (dict): dictionary of form glycoletter:index\n
+  | wildcard (string): Monosaccharide type, from "HexNAc", "Hex", "dHex", "Sia", "HexA", "Pen"\n
   | Returns:
   | :-
   | Returns a list of specified monosaccharides of that type
   """
   wildcard_dict = {'Hex': Hex, 'HexNAc': HexNAc, 'dHex': dHex, 'Sia': Sia, 'HexA': HexA, 'Pen': Pen,
                    'Monosaccharide': set().union(*[Hex, HexNAc, dHex, Sia, HexA, Pen])}
-  possible_monosaccharides = wildcard_dict.get(wildcard, [])
-  return list(possible_monosaccharides) if libr is None else list(possible_monosaccharides & libr.keys())
+  return wildcard_dict.get(wildcard, [])
+  #return list(possible_monosaccharides) if libr is None else list(possible_monosaccharides & libr.keys())
 
 
 def bracket_removal(glycan_part):
@@ -404,7 +402,7 @@ def iupac_extended_to_condensed(iupac_extended):
     # Move the α or β after the next opening parenthesis
     return f"{match.group('after')}{match.group('alpha_beta')}"
   # The regular expression looks for α-D- or β-D- followed by any characters until an open parenthesis
-  pattern = re.compile(r"(?P<alpha_beta>[αβab\?])-[DL]-(?P<after>[^\)]*\()")
+  pattern = re.compile(r"(?P<alpha_beta>[αβßab\?])-[DL]-(?P<after>[^\)]*\()")
   # Substitute the pattern in the string with our replace_pattern function
   adjusted_string = pattern.sub(replace_pattern, iupac_extended)
   adjusted_string = re.sub(r"-\(", "(", adjusted_string)
@@ -438,12 +436,14 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
         residue_dic[res_id] = clean_mono
       #modification
       elif parts[0][-1] == 's':
-        tgt = '\n' + str(int(parts[0][:-1])-1)+':'
+        tgt = ')' + str(int(parts[0][:-1]))+'n'
         pattern = re.escape(tgt)
         matched = re.search(pattern, glycoct)
         if matched:
-          start_index = matched.end()
-          numerical_part = re.search(r'\d+', glycoct[start_index:])
+          start_index = matched.start()
+          stretch = glycoct[:start_index]
+          stretch = stretch[stretch.rindex(':'):]
+          numerical_part = re.search(r'\d+', stretch)
           res_id = int(numerical_part.group())
         else:
           res_id = max(residue_dic.keys())
@@ -820,15 +820,20 @@ def canonicalize_iupac(glycan):
   elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
     check_nomenclature(glycan)
     return
-  elif (glycan[-1].isdigit() or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B') or glycan.endswith("LacDiNAc")) and 'e' not in glycan and '-' not in glycan:
+  elif ((glycan[-1].isdigit() and bool(re.search("[A-Z]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B') or glycan.endswith("LacDiNAc")) and 'e' not in glycan and '-' not in glycan:
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac',
-                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'H2PO3': 'P', '(P)': 'P',
-                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', '.': '', '((': '(', '))': ')', '→': '-',
-                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1'}
+                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P',
+                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-',
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
+                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)'}
   glycan = multireplace(glycan, replace_dic)
+  if '{' in glycan and '}' not in glycan:
+    glycan = '{' + glycan[:glycan.index('{')] + '?1-?' + '}' + glycan[glycan.index('{')+1:]
+  if '{' in glycan and '(' not in glycan:
+    glycan = glycan.replace('{', '(').replace('}', ')')
   # Trim linkers
   if '-' in glycan:
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and 'ol' not in glycan:
@@ -857,6 +862,10 @@ def canonicalize_iupac(glycan):
   glycan = re.sub(r'(a|b|\?)-(\d)', r'\g<1>1-\2', glycan)
   # If still no '-' in glycan, assume 'a3' type of linkage denomination
   if '-' not in glycan:
+    # Check whether linkages are recorded as b1 or as a3
+    if bool(re.search(r"^[^2-6]*1?[^2-6]*$", glycan)):
+      glycan = re.sub(r'(a|b)(\d)', r'\g<1>\g<2>-?', glycan)
+    else:
       glycan = re.sub(r'(a|b)(\d)', r'\g<1>1-\g<2>', glycan)
   # Smudge uncertainty
   while '/' in glycan:
@@ -933,3 +942,16 @@ def rescue_compositions(func):
       return func(*rescued_args, **kwargs)
   return wrapper
 
+
+def equal_repeats(r1, r2):
+  """checks whether two repeat units could stem from the same repeating structure, just shifted\n
+  | Arguments:
+  | :-
+  | r1 (string): glycan sequence in IUPAC-condensed nomenclature
+  | r2 (string): glycan sequence in IUPAC-condensed nomenclature\n
+  | Returns:
+  | :-
+  | Returns True if repeat structures are shifted versions of each other, else False
+  """
+  r1_long = r1[:r1.rindex(')')+1] * 2
+  return any(r1_long[i:i + len(r2)] == r2 for i in range(len(r1)))

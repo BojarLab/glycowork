@@ -6,7 +6,7 @@ from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
@@ -573,7 +573,10 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
     # Estimate π0 for the group within the Two-Stage method
     pi0_estimate = pi0_tst(group_p_values, alpha)
     if pi0_estimate == 1:
-      adjusted_p_values[identifier] = [1.0] * len(group_p_values)
+      group_adjusted_p_values = [1.0] * len(group_p_values)
+      for identifier, corrected_pval in zip(identifiers_grouped[group], group_adjusted_p_values):
+        adjusted_p_values[identifier] = corrected_pval
+        significance_dict[identifier] = False
       continue
     n = len(group_p_values)
     sorted_indices = np.argsort(group_p_values)
@@ -594,20 +597,25 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
   return adjusted_p_values, significance_dict
 
 
-def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans):
+def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = False):
   """estimates intra- and inter-group correlation of a given grouping of glycans via a mixed-effects model\n
   | Arguments:
   | :-
   | cohort_b (dataframe): dataframe of glycans as rows and samples as columns of the case samples
   | cohort_a (dataframe): dataframe of glycans as rows and samples as columns of the control samples
   | glycans (list): list of glycans in IUPAC-condensed nomenclature
-  | grouped_glycans (dict): dictionary of type group : glycans\n
+  | grouped_glycans (dict): dictionary of type group : glycans
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
   | Returns:
   | :-
   | Returns floats for the intra-group and inter-group correlation
   """
   reverse_lookup = {k: v for v, l in grouped_glycans.items() for k in l}
-  temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
+  if paired:
+    temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
+  else:
+    mean_cohort_a = (cohort_a.mean(axis = 1) + 1e-8).values[:, np.newaxis]
+    temp = pd.DataFrame(np.log2((cohort_b.values + 1e-8) / mean_cohort_a))
   temp.index = glycans
   temp = temp.reset_index()
   # Melt the dataframe to long format
@@ -635,3 +643,79 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans):
   # Calculate Inter-group Correlation
   inter_group_corr = var_samples / total_var
   return icc, inter_group_corr
+
+
+def replace_outliers_with_IQR_bounds(full_row):
+  """replaces outlier values with row median\n
+  | Arguments:
+  | :-
+  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical\n
+  | Returns:
+  | :-
+  | Returns row with replaced outliers
+  """
+  row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
+  # Calculate Q1, Q3, and IQR for each row
+  Q1 = row.quantile(0.25)
+  Q3 = row.quantile(0.75)
+  IQR = Q3 - Q1
+  lower_bound = Q1 - 1.5*IQR
+  upper_bound = Q3 + 1.5*IQR
+  # Define outliers as values outside of Q1 - 1.5*IQR and Q3 + 1.5*IQR
+  capped_values = row.apply(lambda x: lower_bound if (x < lower_bound and x != 0) else (upper_bound if (x > upper_bound and x != 0) else x))
+  # Replace outliers with row median
+  if isinstance(full_row.iloc[0], str):
+    full_row.iloc[1:] = capped_values
+  else:
+    full_row = capped_values
+  return full_row
+
+
+def hotellings_t2(group1, group2, paired = False):
+  """Hotelling's T^2 test (the t-test for multivariate comparisons)\n
+  """
+  if paired:
+    assert group1.shape == group2.shape, "For paired samples, the size of group1 and group2 should be the same"
+    group1 -= group2
+    group2 = None
+  # Calculate the means and covariances of each group
+  n1, p = group1.shape
+  mean1 = np.mean(group1, axis = 0)
+  cov1 = np.cov(group1, rowvar = False)
+  if group2 is not None:
+    n2, _ = group2.shape
+    mean2 = np.mean(group2, axis = 0)
+    cov2 = np.cov(group2, rowvar = False)
+  else:
+    n2 = 0
+    mean2 = np.zeros_like(mean1)
+    cov2 = np.zeros_like(cov1)
+  # Calculate the difference between the means
+  diff = mean1 - mean2
+  # Calculate the pooled covariance matrix
+  denom = (n1 + n2 - 2)
+  pooled_cov = cov1 if denom < 1 else ((n1 - 1) * cov1 + (n2 - 1) * cov2) / denom
+  pooled_cov += np.eye(p) * 1e-6
+  # Calculate the Hotelling's T^2 statistic
+  T2 = (n1 * n2) / (n1 + n2) * diff @ np.linalg.pinv(pooled_cov) @ diff.T
+  # Convert the T^2 statistic to an F statistic
+  F = 0 if denom < 1 else T2 * (denom + 1 - p) / (denom * p)
+  if F == 0:
+    return F, 1.0
+  # Calculate the p-value of the F statistic
+  p_value = f.sf(F, p, n1 + n2 - p - 1)
+  return F, p_value
+
+
+def sequence_richness(counts):
+  return (counts != 0).sum()
+
+
+def shannon_diversity_index(counts):
+  proportions = counts / counts.sum()
+  return entropy(proportions)
+
+
+def simpson_diversity_index(counts):
+  proportions = counts / counts.sum()
+  return 1 - np.sum(proportions**2)
