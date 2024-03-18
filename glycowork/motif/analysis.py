@@ -588,7 +588,7 @@ def get_differential_expression(df, group1, group2,
       effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
   # Multiple testing correction
   if pvals:
-      if not motifs and not grouped_BH:
+      if not motifs and grouped_BH:
           grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, paired = paired, grouped_BH = grouped_BH)
           corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
           corrpvals = [corrpvals[g] for g in glycans]

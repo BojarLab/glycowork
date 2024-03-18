@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import unwrap, linkages
-from glycowork.glycan_data.stats import cohen_d
+from glycowork.glycan_data.stats import cohen_d, get_alphaN
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
 from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans
 from glycowork.motif.tokenization import get_stem_lib
