@@ -4,5 +4,6 @@
 __all__ = []
 
 # %% ../04_network.ipynb 2
+from .glycan_data.loader import human_skin_PMC5871710_BCC
 from .network.biosynthesis import *
 from .network.evolution import *

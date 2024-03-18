@@ -1390,8 +1390,11 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
   df_a, df_b = res2.loc[group1, :].T, res2.loc[group2, :].T
   log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
   pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-  corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
-  significance = [p < alpha for p in corrpvals]
+  if pvals:
+    corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
+    significance = [p < alpha for p in corrpvals]
+  else:
+    corrpvals, significance = [], []
   effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
   out = pd.DataFrame(list(zip(features, mean_abundance, log2fc, pvals, corrpvals, significance, effect_sizes)),
                      columns = ['Feature', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'Effect size'])

@@ -10,6 +10,8 @@ with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
 with resources.open_text("glycowork.glycan_data", "glycan_binding.csv") as f:
   glycan_binding = pd.read_csv(f)
+with resources.open_text("glycowork.glycan_data", "human_skin_PMC5871710_BCC.csv") as f:
+  human_skin_PMC5871710_BCC = pd.read_csv(f)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
 data_path = os.path.join(this_dir, 'lib_v10.pkl')
 lib = pickle.load(open(data_path, 'rb'))

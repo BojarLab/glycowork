@@ -598,8 +598,7 @@ def get_differential_expression(df, group1, group2,
           significance = [p < alpha for p in corrpvals]
       levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
   else:
-      corrpvals = []
-      significance = []
+      corrpvals, significance = [], []
   out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes)),
                      columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size'])
   if effect_size_variance:
