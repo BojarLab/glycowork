@@ -615,7 +615,7 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, pair
   if paired:
     temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
   else:
-    mean_cohort_a = np.mean(cohort_a, axis = 1, keepdims = True) + 1e-8
+    mean_cohort_a = np.mean(cohort_a, axis = 1)[:, np.newaxis] + 1e-8
     temp = pd.DataFrame(np.log2((cohort_b.values + 1e-8) / mean_cohort_a))
   temp.index = glycans
   temp = temp.reset_index()

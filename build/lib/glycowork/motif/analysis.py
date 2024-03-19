@@ -482,6 +482,8 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
       continue
     intra, inter = test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = paired)
     out[desc] = ((intra, inter), (grouped_glycans, grouped_p_values))
+  if not out:
+    return {"group1": glycans}, {"group1": p_values}
   desc = list(out.keys())[np.argmax([v[0][0] - v[0][1] for k, v in out.items()])]
   intra, inter = out[desc][0]
   grouped_glycans, grouped_p_values = out[desc][1]
@@ -588,8 +590,9 @@ def get_differential_expression(df, group1, group2,
       pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
       equivalence_pvals = np.array([get_equivalence_test(row_a, row_b, paired = paired) if pvals[i] > 0.05 else np.nan for i, (row_a, row_b) in enumerate(zip(df_a.values, df_b.values))])
       valid_equivalence_pvals = equivalence_pvals[~np.isnan(equivalence_pvals)]
-      corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_bh')[1] if valid_equivalence_pvals else []
+      corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_bh')[1] if len(valid_equivalence_pvals) else []
       equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
+      equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
       levene_pvals = [levene(row_b, row_a)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
       effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
   # Multiple testing correction
@@ -609,7 +612,7 @@ def get_differential_expression(df, group1, group2,
                      columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size', 'Equivalence p-val'])
   if effect_size_variance:
       out['Effect size variance'] = variances
-  return out.dropna(subset = [k for k in out.columns if k != 'Equivalence p-val']).sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+  return out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
 
 def get_pval_distribution(df_res, filepath = ''):
