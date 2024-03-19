@@ -8,8 +8,6 @@ with resources.open_text("glycowork.glycan_data", "v10_df_species.csv") as f:
   df_species = pd.read_csv(f)
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
-with resources.open_text("glycowork.glycan_data", "human_skin_PMC5871710_BCC.csv") as f:
-  human_skin_PMC5871710_BCC = pd.read_csv(f)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
 data_path = os.path.join(this_dir, 'lib_v10.pkl')
 lib = pickle.load(open(data_path, 'rb'))
@@ -24,6 +22,32 @@ def __getattr__(name):
     globals()[name] = glycan_binding  # Cache it to avoid reloading
     return glycan_binding
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+class LazyLoader:
+  def __init__(self, package, directory, prefix = 'glycomics_'):
+    self.package = package
+    self.directory = directory
+    self.prefix = prefix
+    self._datasets = {}
+    
+  def __getattr__(self, name):
+    if name not in self._datasets:
+      filename = f"{self.prefix}{name}.csv"
+      try:
+        with resources.open_text(self.package + '.' + self.directory, filename) as f:
+          self._datasets[name] = pd.read_csv(f)
+      except FileNotFoundError:
+        raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
+    return self._datasets[name]
+
+  def __dir__(self):
+    files = resources.contents(self.package + '.' + self.directory)
+    dataset_names = [file[len(self.prefix):-4] for file in files if file.startswith(self.prefix) and file.endswith('.csv')]
+    return dataset_names
+
+
+glycan_data_loader = LazyLoader("glycowork", "glycan_data")
 
 
 linkages = {

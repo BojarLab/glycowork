@@ -583,7 +583,7 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
     sorted_indices = np.argsort(group_p_values)
     sorted_p_values = group_p_values[sorted_indices]
     # Weight the alpha value by π0 estimate
-    adjusted_alpha = alpha / pi0_estimate
+    adjusted_alpha = alpha / max(pi0_estimate, 0.01)
     # Calculate the BH adjusted p-values
     ecdffactor = (np.arange(1, n + 1) / n)
     pvals_corrected_raw = sorted_p_values / (ecdffactor)

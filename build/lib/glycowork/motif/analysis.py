@@ -472,9 +472,9 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
     return {"group1": glycans}, {"group1": p_values}
   funcs = {"by_Sia/Fuc": group_glycans_sia_fuc}
   if any([g.endswith("GalNAc") for g in glycans]):
-    funcs["by_core"]: group_glycans_core
+    funcs["by_core"] = group_glycans_core
   elif any([g.endswith("GlcNAc(b1-4)GlcNAc") for g in glycans]):
-    funcs["by_Ntype"]: group_glycans_N_glycan_type
+    funcs["by_Ntype"] = group_glycans_N_glycan_type
   out = {}
   for desc, func in funcs.items():
     grouped_glycans, grouped_p_values = func(glycans, p_values)
