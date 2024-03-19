@@ -8,8 +8,6 @@ with resources.open_text("glycowork.glycan_data", "v10_df_species.csv") as f:
   df_species = pd.read_csv(f)
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
-with resources.open_text("glycowork.glycan_data", "glycan_binding.csv") as f:
-  glycan_binding = pd.read_csv(f)
 with resources.open_text("glycowork.glycan_data", "human_skin_PMC5871710_BCC.csv") as f:
   human_skin_PMC5871710_BCC = pd.read_csv(f)
 this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
@@ -17,6 +15,16 @@ data_path = os.path.join(this_dir, 'lib_v10.pkl')
 lib = pickle.load(open(data_path, 'rb'))
 data_path = os.path.join(this_dir, 'v10_sugarbase.pkl')
 df_glycan = pickle.load(open(data_path, 'rb'))
+
+
+def __getattr__(name):
+  if name == "glycan_binding":
+    with resources.open_text("glycowork.glycan_data", "glycan_binding.csv") as f:
+      glycan_binding = pd.read_csv(f)
+    globals()[name] = glycan_binding  # Cache it to avoid reloading
+    return glycan_binding
+  raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 linkages = {
   '1-4', '1-6', 'a1-1', 'a1-2', 'a1-3', 'a1-4', 'a1-5', 'a1-6', 'a1-7', 'a1-8', 'a1-9', 'a1-11', 'a1-?', 'a2-1', 'a2-2', 'a2-3', 'a2-4', 'a2-5', 'a2-6', 'a2-7', 'a2-8', 'a2-9',

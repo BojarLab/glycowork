@@ -5,5 +5,6 @@ __all__ = []
 
 # %% ../01_glycan_data.ipynb 2
 from .glycan_data.loader import *
+from .glycan_data.loader import glycan_binding
 from .glycan_data.stats import *
 from .glycan_data.data_entry import *
