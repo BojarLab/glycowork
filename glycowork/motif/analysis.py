@@ -21,7 +21,8 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          variance_stabilization, impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
                                          test_inter_vs_intra_group, replace_outliers_with_IQR_bounds, hotellings_t2,
-                                         sequence_richness, shannon_diversity_index, simpson_diversity_index)
+                                         sequence_richness, shannon_diversity_index, simpson_diversity_index,
+                                         get_equivalence_test)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -526,7 +527,8 @@ def get_differential_expression(df, group1, group2,
   | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
   | (vii) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
   | (viii) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
-  | (xi) [only if effect_size_variance=True] Effect size variance
+  | (xi) Corrected p-values of equivalence test to test whether means are significantly equivalent; only done for p-values > 0.05 from (iv)
+  | (x) [only if effect_size_variance=True] Effect size variance
   """
   if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
@@ -560,7 +562,7 @@ def get_differential_expression(df, group1, group2,
       # Motif/sequence set enrichment
       df2 = variance_stabilization(df, groups = [group1, group2])
       clusters = create_correlation_network(df2.T, set_thresh)
-      glycans, mean_abundance_c, pvals, log2fc, levene_pvals, effect_sizes, variances = [], [], [], [], [], [], []
+      glycans, mean_abundance_c, pvals, log2fc, levene_pvals, effect_sizes, variances, equivalence_pvals = [], [], [], [], [], [], [], []
       # Testing differential expression of each set/cluster
       for cluster in clusters:
           if len(cluster) > 1:
@@ -584,6 +586,10 @@ def get_differential_expression(df, group1, group2,
       if paired:
           assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
       pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+      equivalence_pvals = np.array([get_equivalence_test(row_a, row_b, paired = paired) if pvals[i] > 0.05 else np.nan for i, (row_a, row_b) in enumerate(zip(df_a.values, df_b.values))])
+      valid_equivalence_pvals = equivalence_pvals[~np.isnan(equivalence_pvals)]
+      corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_bh')[1] if valid_equivalence_pvals else []
+      equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
       levene_pvals = [levene(row_b, row_a)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
       effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
   # Multiple testing correction
@@ -599,11 +605,11 @@ def get_differential_expression(df, group1, group2,
       levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
   else:
       corrpvals, significance = [], []
-  out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes)),
-                     columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size'])
+  out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes, equivalence_pvals)),
+                     columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size', 'Equivalence p-val'])
   if effect_size_variance:
       out['Effect size variance'] = variances
-  return out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+  return out.dropna(subset = [k for k in out.columns if k != 'Equivalence p-val']).sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
 
 def get_pval_distribution(df_res, filepath = ''):

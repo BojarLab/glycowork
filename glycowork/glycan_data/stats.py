@@ -9,6 +9,7 @@ from scipy.special import gammaln
 from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
+from statsmodels.stats.weightstats import ttost_ind, ttost_paired
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
@@ -719,3 +720,20 @@ def shannon_diversity_index(counts):
 def simpson_diversity_index(counts):
   proportions = counts / counts.sum()
   return 1 - np.sum(proportions**2)
+
+
+def get_equivalence_test(row_a, row_b, paired = False):
+  """performs an equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent\n
+  | Arguments:
+  | :-
+  | row_a (array-like): basically a row of the control samples for one glycan/motif
+  | row_b (array-like): basically a row of the case samples for one glycan/motif
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | Returns a p-value of whether the two group means can be considered equivalent
+  """
+  pooled_std = np.sqrt(((len(row_a) - 1) * np.var(row_a, ddof = 1) + (len(row_b) - 1) * np.var(row_b, ddof = 1)) / (len(row_a) + len(row_b) - 2))
+  delta = 0.2 * pooled_std
+  low, up = -delta, delta
+  return ttost_paired(row_a, row_b, low, up)[0] if paired else ttost_ind(row_a, row_b, low, up)[0]
