@@ -22,7 +22,10 @@ glycowork/glycan_data/__init__.py
 glycowork/glycan_data/data_entry.py
 glycowork/glycan_data/glycan_binding.csv
 glycowork/glycan_data/glycan_motifs.csv
-glycowork/glycan_data/glycomics_human_skin_PMC5871710_BCC.csv
+glycowork/glycan_data/glycomics_human_colorectal_N_PMID26085185.csv
+glycowork/glycan_data/glycomics_human_colorectal_O_PMC9254241.csv
+glycowork/glycan_data/glycomics_human_skin_O_PMC5871710_BCC.csv
+glycowork/glycan_data/glycomics_human_skin_O_PMC5871710_SCC.csv
 glycowork/glycan_data/lib_v10.pkl
 glycowork/glycan_data/loader.py
 glycowork/glycan_data/stats.py

@@ -391,8 +391,8 @@ def group_glycans_core(glycans, p_values):
   """
   temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
-  grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g, wildcards_ptm = True) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAc6S(b1-6)GalNAc"]])]
-  grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g, wildcards_ptm = True) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and not g in grouped_glycans["core2"]]
+  grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAcOS(b1-6)GalNAc"]])]
+  grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and not g in grouped_glycans["core2"]]
   grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["core2"] and g not in grouped_glycans["core1"]]
   grouped_p_values["core2"] = [temp[g] for g in grouped_glycans["core2"]]
   grouped_p_values["core1"] = [temp[g] for g in grouped_glycans["core1"]]

@@ -1380,7 +1380,7 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
     regex = re.compile(r"\(([ab])(\d)-(\d)\)")
     shadow_reactions = [regex.sub(r"(\1\2-?)", g) for g in res2[all_groups[0]]]
     shadow_reactions = {r for r in shadow_reactions if shadow_reactions.count(r) > 1}
-    res2 = {k: {**v, **{r: np.mean([v2 for k2, v2 in v.items() if compare_glycans(k2, r, wildcards_ptm = True)]) for r in shadow_reactions}} for k, v in res2.items()}
+    res2 = {k: {**v, **{r: np.mean([v2 for k2, v2 in v.items() if compare_glycans(k2, r)]) for r in shadow_reactions}} for k, v in res2.items()}
   elif analysis == "flow":
     res2 = {col: [res[col][sink]['flow_value'] for sink in res[col].keys()] for col in all_groups}
   res2 = pd.DataFrame.from_dict(res2, orient = 'index')

@@ -47,7 +47,7 @@ class LazyLoader:
     return dataset_names
 
 
-glycan_data_loader = LazyLoader("glycowork", "glycan_data")
+glycomics_data_loader = LazyLoader("glycowork", "glycan_data")
 
 
 linkages = {

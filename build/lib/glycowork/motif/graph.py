@@ -192,13 +192,12 @@ def ptm_wildcard_for_graph(graph):
   return graph
 
 
-def compare_glycans(glycan_a, glycan_b, wildcards_ptm = False):
+def compare_glycans(glycan_a, glycan_b):
   """returns True if glycans are the same and False if not\n
   | Arguments:
   | :-
   | glycan_a (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
-  | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
-  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'):False\n
+  | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object\n
   | Returns:
   | :-
   | Returns True if two glycans are the same and False if not
@@ -207,15 +206,15 @@ def compare_glycans(glycan_a, glycan_b, wildcards_ptm = False):
     if glycan_a.count('(') != glycan_b.count('('):
       return False
     proc = min_process_glycans([glycan_a, glycan_b])
-    if wildcards_ptm:
-      glycan_a, glycan_b = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in [glycan_a, glycan_b]]
     proc = set(unwrap(proc))
+    if re.search(r'O[A-Z]', ''.join(proc)):
+      glycan_a, glycan_b = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in [glycan_a, glycan_b]]
     g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
   else:
     if len(glycan_a.nodes) != len(glycan_b.nodes):
       return False
     proc = set(list(nx.get_node_attributes(glycan_a, "string_labels").values()) + list(nx.get_node_attributes(glycan_b, "string_labels").values()))
-    if wildcards_ptm:
+    if re.search(r'O[A-Z]', ''.join(proc)):
       g1, g2 = ptm_wildcard_for_graph(copy.deepcopy(glycan_a)), ptm_wildcard_for_graph(copy.deepcopy(glycan_b))
     else:
       g1, g2 = glycan_a, glycan_b
@@ -254,8 +253,7 @@ def expand_termini_list(motif, termini_list):
   return t_list
 
 
-def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, wildcards_ptm = False,
-                         return_matches = False):
+def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return_matches = False):
   """returns True if motif is in glycan and False if not\n
   | Arguments:
   | :-
@@ -263,7 +261,6 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, wildca
   | motif (string or networkx): glycan motif in IUPAC-condensed format or as graph in NetworkX format
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | count (bool): whether to return the number or absence/presence of motifs; default:False
-  | wildcards_ptm (bool): set to True to allow modification wildcards (e.g., 'OS' matching with '6S'); default:False
   | return_matches (bool): whether the matched subgraphs in input glycan should be returned as node lists as an additional output; default:False\n
   | Returns:
   | :-
@@ -273,15 +270,15 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, wildca
     if motif.count('(') > glycan.count('('):
       return (0, []) if return_matches else 0 if count else False
     motif_comp = min_process_glycans([motif, glycan])
-    if wildcards_ptm:
+    if re.search(r'O[A-Z]', ''.join(unwrap(motif_comp))):
       glycan, motif = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', g).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for g in [glycan, motif]]
     g1 = glycan_to_nxGraph(glycan, termini = 'calc') if termini_list else glycan_to_nxGraph(glycan)
     g2 = glycan_to_nxGraph(motif, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif)
   else:
     if len(glycan.nodes) < len(motif.nodes):
       return (0, []) if return_matches else 0 if count else False
-    motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
-    if wildcards_ptm:
+    motif_comp = [list(nx.get_node_attributes(motif, "string_labels").values()), list(nx.get_node_attributes(glycan, "string_labels").values())]
+    if re.search(r'O[A-Z]', ''.join(unwrap(motif_comp))):
       g1, g2 = ptm_wildcard_for_graph(copy.deepcopy(glycan)), ptm_wildcard_for_graph(copy.deepcopy(motif))
     else:
       g1, g2 = copy.deepcopy(glycan), motif
