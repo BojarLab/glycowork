@@ -1,3 +1,4 @@
+import math
 import os
 import copy
 import pickle
@@ -21,7 +22,8 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          variance_stabilization, impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
                                          test_inter_vs_intra_group, replace_outliers_with_IQR_bounds, hotellings_t2,
-                                         sequence_richness, shannon_diversity_index, simpson_diversity_index)
+                                         sequence_richness, shannon_diversity_index, simpson_diversity_index,
+                                         bray_curtis_diversity_index, anosim)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -973,7 +975,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     return Results.sort_values("Adjusted_P_value")
 
 
-def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaustive', 'known'],
+def get_alpha_diversity(df, group1, group2, motifs = False, feature_set = ['exhaustive', 'known'],
                      paired = False, custom_motifs = []):
   """Calculates diversity indices from glycomics data, similar to alpha diversity etc in microbiome data\n
   | Arguments:
@@ -1030,3 +1032,65 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
   out = pd.DataFrame(list(zip(df_out.index.tolist(), pvals, corrpvals, significance)),
                      columns = ["Metric", "p-val", "corr p-val", "significant"])
   return out.sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+
+
+def get_beta_diversity(df, reps, motifs = False, feature_set = ['exhaustive', 'known'],
+                     custom_motifs = [], permutations = 999):
+    """Calculates diversity indices from glycomics data, similar to alpha diversity etc in microbiome data\n
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+    | reps (int): number of replicates per group
+    | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
+    |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
+    |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
+    |   and 'chemical' (molecular properties of glycan)
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | permutations (int): number of permutations to perform in ANOSIM statistical test
+    | Returns:
+    | :-
+    | (i) The Bray-Curtis distance matrix of the inputted samples
+    | (ii) (If reps >1) ANOSIM test statistics, indicating differences between groups.
+    """
+    if isinstance(df, str):
+        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    annot = df.pop(df.columns.tolist()[0])
+    df = df.fillna(0)
+    # Drop rows with all zero, followed by outlier removal and imputation & normalization
+    df = df.loc[~(df == 0).all(axis = 1)]
+    df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+    # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+    alpha = get_alphaN(df.shape[1] - 1)
+    if motifs:
+      # Reinsert labels
+      df.insert(0, 'Molecule_Name', annot)
+      # Motif extraction and quantification
+      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+      # Deduplication
+      df = clean_up_heatmap(df.T)
+      # Re-normalization
+      df = df.apply(lambda col: col / col.sum() * 100, axis = 0).reset_index()
+      df = df.iloc[:, 1:]
+    # Calculating pair-wise indexes
+    bc_diversity = {}
+    for index_1 in range(0, len(df.columns)):
+        for index_2 in range(0, len(df.columns)):
+            bc_pair = bray_curtis_diversity_index(df.iloc[:, index_1], df.iloc[:, index_2])
+            bc_diversity[index_1, index_2] = bc_pair
+    df_out = pd.DataFrame.from_dict(bc_diversity, orient = 'index')
+    out_len = int(np.sqrt(len(df_out)))
+    df_out_values = df_out.values.reshape(out_len, out_len)
+    df_out = pd.DataFrame(data=df_out_values, index=range(out_len), columns=range(out_len))
+    if reps != 1:
+        r = anosim(df_out, reps, permutations)
+        p = [r[1]]
+        significance = [p < alpha]
+        test_stats = pd.DataFrame({'Anosim_R_value':[r[0]], 'p_value': p, 'significance': significance})
+        return df_out, test_stats
+    else:
+        return df_out
+
+data = pd.read_csv(r'C:\Users\Alex Bennett\Desktop\test2.csv')
+data2 = copy.deepcopy(data)
+bd = get_beta_diversity(data2, 4, motifs = True)

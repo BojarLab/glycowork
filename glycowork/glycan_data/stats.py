@@ -719,3 +719,55 @@ def shannon_diversity_index(counts):
 def simpson_diversity_index(counts):
   proportions = counts / counts.sum()
   return 1 - np.sum(proportions**2)
+
+def bray_curtis_diversity_index(countss1, countss2):
+  lessercounts = 0
+  for index in countss1.index:
+    lessercounts = lessercounts + np.minimum(countss1.loc[index], countss2.loc[index])
+  s1 = countss1.sum().sum()
+  s2 = countss2.sum().sum()
+  return 1 - ((2*lessercounts)/(s1 + s2))
+
+def anosim(df, reps, permutations = 999):
+  """Performs analysis of similarity statistical test
+  Inputs:
+  :-
+  df (dataframe) = distance matrix
+  reps (int) = the number of replicates per group (requires all groups to have the same number of replicates)
+  Reutrns:
+  :-
+  ANOSIM R statistic - ranges between -1 to 1.
+  p-value of the R statistic
+  """
+  n = len(df)
+  groups = [i for i in range(int(n / reps)) for _ in range(reps)]
+  def anosim_r(df, reps):
+    rank_matrix_index = np.tril_indices(n=len(df), k=-1)
+    rank_matrix = np.argsort(df.values[rank_matrix_index])
+    dfranks = np.zeros_like(df)
+    ranks = np.array(sorted(rank_matrix))
+    row_indices, col_indices = rank_matrix_index
+    for i in rank_matrix:
+      dfranks[row_indices[rank_matrix[i]], col_indices[rank_matrix[i]]] = ranks[i] + 1
+  # Calculate average rank within groups and average rank between groups:
+    w_groups = np.zeros(dfranks.shape)  # within groups
+    b_groups = np.zeros(dfranks.shape)  # between groups
+    for i in range(n):
+      for j in range(n):
+        if groups[i] == groups[j]:
+          w_groups[i, j] = dfranks[i, j]
+        else:
+          b_groups[i, j] = dfranks[i, j]
+    w_groups_av = np.mean(w_groups[w_groups != 0].flatten())
+    b_groups_av = np.mean(b_groups[b_groups != 0].flatten())
+    # Calculate ANOSIM statistic
+    r = (b_groups_av-w_groups_av) / (n*(n-1)/4)
+    return r
+  r_obs = anosim_r(df, reps)  # ANOSIM test statistic for observed data
+  r_permutations = np.zeros(permutations)  # Generate permuted test statistics to determine significance
+  for i in range(permutations):
+    permuted_groups = np.random.permutation(groups)
+    r_permutations[i] = anosim_r(df.loc[permuted_groups], reps)
+  # Compute p-value
+  p_value = (np.sum(r_permutations >= r_obs) + 1) / (permutations + 1)
+  return r_obs, p_value
