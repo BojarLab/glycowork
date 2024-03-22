@@ -740,7 +740,7 @@ def get_equivalence_test(row_a, row_b, paired = False):
 
 
 def clr_transformation(df):
-  """performs the Centered Log-Ratio (CLR) Transformation\n
+  """performs the Center Log-Ratio (CLR) Transformation\n
   | Arguments:
   | :-
   | df (dataframe): dataframe containing features in rows and samples in columns\n

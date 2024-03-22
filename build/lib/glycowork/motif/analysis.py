@@ -1,5 +1,3 @@
-import os
-import copy
 import pickle
 import pandas as pd
 import numpy as np
@@ -7,6 +5,7 @@ import seaborn as sns
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 plt.style.use('default')
+from os import path
 from collections import Counter
 from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway
 from statsmodels.formula.api import ols
@@ -234,8 +233,8 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
-        this_dir, this_filename = os.path.split(__file__)
-        data_path = os.path.join(this_dir, 'glycan_representations.pkl')
+        this_dir, this_filename = path.split(__file__)
+        data_path = path.join(this_dir, 'glycan_representations.pkl')
         emb = pickle.load(open(data_path, 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
     if isinstance(emb, pd.DataFrame):
@@ -957,7 +956,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     if isinstance(df_in, str):
         df = pd.read_csv(df_in) if df_in.endswith(".csv") else pd.read_excel(df_in)
     else:
-        df = copy.deepcopy(df_in)
+        df = df_in.copy(deep = True)
     replicates = (df.shape[1] - 1) // timepoints
     alpha = get_alphaN(replicates)
     param_dic = {"GRP_SIZE": [], "NUM_GRPS": [], "MAX": [], "DIMS": [], "EXACT": bool(True),

@@ -1,18 +1,14 @@
 import pandas as pd
-import os
-import pickle
-import itertools
+from pickle import load
+from os import path
+from itertools import chain
 from importlib import resources
 
-with resources.open_text("glycowork.glycan_data", "v10_df_species.csv") as f:
-  df_species = pd.read_csv(f)
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
-this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
-data_path = os.path.join(this_dir, 'lib_v10.pkl')
-lib = pickle.load(open(data_path, 'rb'))
-data_path = os.path.join(this_dir, 'v10_sugarbase.pkl')
-df_glycan = pickle.load(open(data_path, 'rb'))
+this_dir, this_filename = path.split(__file__)  # Get path of data.pkl
+data_path = path.join(this_dir, 'lib_v10.pkl')
+lib = load(open(data_path, 'rb'))
 
 
 def __getattr__(name):
@@ -21,6 +17,16 @@ def __getattr__(name):
       glycan_binding = pd.read_csv(f)
     globals()[name] = glycan_binding  # Cache it to avoid reloading
     return glycan_binding
+  elif name == "df_species":
+    with resources.open_text("glycowork.glycan_data", "v10_df_species.csv") as f:
+      df_species = pd.read_csv(f)
+    globals()[name] = df_species  # Cache it to avoid reloading
+    return df_species
+  elif name == "df_glycan":
+    data_path = path.join(this_dir, 'v10_sugarbase.pkl')
+    df_glycan = load(open(data_path, 'rb'))
+    globals()[name] = df_glycan  # Cache it to avoid reloading
+    return df_glycan
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -66,7 +72,7 @@ Sia = {'Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia'}
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""
-  return list(itertools.chain(*nested_list))
+  return list(chain(*nested_list))
 
 
 def find_nth(haystack, needle, n):
