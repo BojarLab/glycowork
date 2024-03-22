@@ -197,7 +197,7 @@ def compare_glycans(glycan_a, glycan_b):
   | Arguments:
   | :-
   | glycan_a (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object
-  | glycan_b (stringor networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object\n
+  | glycan_b (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object\n
   | Returns:
   | :-
   | Returns True if two glycans are the same and False if not

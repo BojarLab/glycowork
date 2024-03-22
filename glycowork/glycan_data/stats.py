@@ -6,7 +6,7 @@ from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.weightstats import ttost_ind, ttost_paired
@@ -583,7 +583,7 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
     sorted_indices = np.argsort(group_p_values)
     sorted_p_values = group_p_values[sorted_indices]
     # Weight the alpha value by π0 estimate
-    adjusted_alpha = alpha / max(pi0_estimate, 0.01)
+    adjusted_alpha = alpha / max(pi0_estimate, 0.3)
     # Calculate the BH adjusted p-values
     ecdffactor = (np.arange(1, n + 1) / n)
     pvals_corrected_raw = sorted_p_values / (ecdffactor)
@@ -737,3 +737,16 @@ def get_equivalence_test(row_a, row_b, paired = False):
   delta = 0.2 * pooled_std
   low, up = -delta, delta
   return ttost_paired(row_a, row_b, low, up)[0] if paired else ttost_ind(row_a, row_b, low, up)[0]
+
+
+def clr_transformation(df):
+  """performs the Centered Log-Ratio (CLR) Transformation\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing features in rows and samples in columns\n
+  | Returns:
+  | :-
+  | Returns a dataframe that is CLR-transformed
+  """
+  geometric_mean = gmean(df, axis = 0)
+  return (np.log(df) - np.log(geometric_mean))
