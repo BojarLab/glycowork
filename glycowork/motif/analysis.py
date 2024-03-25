@@ -67,7 +67,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                                 custom_motifs = custom_motifs)
     # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
-        df.set_index(glycan_col_name, inplace = True)
+        df = df.set_index(glycan_col_name)
         df_motif = pd.concat([pd.concat([df.iloc[:, k],
                                    df_motif], axis = 1).dropna() for k in range(len(df.columns))], axis = 0)
         cols = df_motif.columns.values.tolist()[1:] + [df_motif.columns.values.tolist()[0]]
@@ -93,7 +93,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     if sorting:
         out['abs_effect_size'] = out['effect_size'].abs()
         out = out.sort_values(by = ['abs_effect_size', 'corr_pval', 'pval'], ascending = [False, True, True])
-        out.drop('abs_effect_size', axis = 1, inplace = True)
+        out = out.drop('abs_effect_size', axis = 1)
     return out
 
 
@@ -125,7 +125,7 @@ def get_representative_substructures(enrichment_df):
 
     combined_scores = np.divide(motif_scores, length_scores)
     df_score = pd.DataFrame({'glycan': glycans, 'motif_score': motif_scores, 'length_score': length_scores, 'combined_score': combined_scores})
-    df_score.sort_values(by = 'combined_score', ascending = False, inplace = True)
+    df_score = df_score.sort_values(by = 'combined_score', ascending = False)
     # Take the 10 glycans with the highest score
     rep_motifs = df_score.glycan.values.tolist()[:10]
     rep_motifs.sort(key = len)
@@ -177,8 +177,10 @@ def get_heatmap(df, motifs = False, feature_set = ['known'],
   if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if index_col in df.columns:
-      df.set_index(index_col, inplace = True)
-  df.fillna(0, inplace = True)
+      df = df.set_index(index_col)
+  if isinstance(df.index.tolist()[0], str) and '('  in df.index.tolist()[0] and '-' in df.index.tolist()[0]:
+      df = df.T
+  df = df.fillna(0)
   if motifs:
       if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
           raise ValueError("A heatmap needs to have at least two motifs.")
@@ -197,7 +199,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'],
       elif datatype == 'presence':
           collecty = df.apply(lambda row: [row.loc[df_motif[col].dropna().index].sum() / row.sum() for col in df_motif.columns], axis = 1)
           df = pd.DataFrame(collecty.tolist(), columns = df_motif.columns, index = df.index)
-  df.dropna(axis = 1, inplace = True)
+  df = df.dropna(axis = 1)
   df = clean_up_heatmap(df.T)
   if not (df < 0).any().any():
       df /= df.sum()
@@ -552,7 +554,7 @@ def get_differential_expression(df, group1, group2,
       # Re-normalization
       df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
   else:
-      df.set_index(df.columns.tolist()[0], inplace = True)
+      df = df.set_index(df.columns.tolist()[0])
       df = df.groupby(df.index).mean()
   # Variance-based filtering of features
   df = variance_based_filtering(df)
@@ -735,7 +737,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     if isinstance(df, str):
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     results, posthoc_results = [], {}
-    df.fillna(0, inplace = True)
+    df = df.fillna(0)
     df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
     groups_unq = sorted(set(groups))
     df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
@@ -749,7 +751,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
         # Re-normalization
         df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
     else:
-        df.set_index(df.columns.tolist()[0], inplace = True)
+        df = df.set_index(df.columns.tolist()[0])
         df = df.groupby(df.index).mean()
     # Variance-based filtering of features
     df = variance_based_filtering(df)
@@ -816,7 +818,7 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
     if filepath:
         df_temp = pd.DataFrame({'Study': study_names, 'EffectSize': effect_sizes, 'EffectSizeVariance': variances})
         # sort studies by effect size
-        df_temp.sort_values(by = 'EffectSize', key = abs, ascending = False, inplace = True)
+        df_temp = df_temp.sort_values(by = 'EffectSize', key = abs, ascending = False)
         # calculate standard error
         standard_error = np.sqrt(df_temp['EffectSizeVariance'])
         # calculate the confidence interval
@@ -904,7 +906,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     """
     if isinstance(df, str):
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-    df.fillna(0, inplace = True)
+    df = df.fillna(0)
     df = df.set_index(df.columns[0]).T
     df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
     df = impute_and_normalize(df, [df.columns], impute = impute, min_samples = min_samples).reset_index()
@@ -919,11 +921,11 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
         df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
     else:
         df.index = glycans
-        df.drop([df.columns[0]], axis = 1, inplace = True)
+        df = df.drop([df.columns[0]], axis = 1)
         df = df.groupby(df.index).mean()
     df = df.T.reset_index()
     df[df.columns[0]] = df.iloc[:, 0].apply(lambda x: float(x.split('_')[1][1:]))
-    df.sort_values(by = df.columns[0], inplace = True)
+    df = df.sort_values(by = df.columns[0])
     time = df.iloc[:, 0].to_numpy()  # Time points
     res = [(c, *get_glycan_change_over_time(np.column_stack((time, df[c].to_numpy())), degree = degree)) for c in df.columns[1:]]
     res = pd.DataFrame(res, columns = ['Glycan', 'Change', 'p-val'])
@@ -965,7 +967,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     param_dic = jtkinit(periods, param_dic, interval, replicates)
     df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
     mf = MissForest()
-    df.replace(0, np.nan, inplace = True)
+    df = df.replace(0, np.nan)
     annot = df.pop(df.columns.tolist()[0])
     df = mf.fit_transform(df)
     df.insert(0, 'Molecule_Name', annot)

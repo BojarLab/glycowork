@@ -3,7 +3,7 @@ import sys
 import tkinter as tk
 from tkinter import simpledialog, filedialog, messagebox
 from glycowork.motif.draw import GlycoDraw, plot_glycans_excel
-from glycowork.motif.analysis import get_differential_expression
+from glycowork.motif.analysis import get_differential_expression, get_heatmap
 
 
 # Function to get the resource path within the executable environment
@@ -181,6 +181,67 @@ def openDifferentialExpressionDialog():
         plot_glycans_excel(df_out, output_folder)
 
 
+class GetHeatmapDialog(simpledialog.Dialog):
+    def body(self, master):
+        self.title("Get Heatmap Input")
+        
+        # Input file selection
+        tk.Label(master, text = "Select Input CSV or Excel File:").grid(row = 0, sticky = tk.W)
+        self.input_file_entry = tk.Entry(master)
+        self.input_file_entry.grid(row = 0, column = 1)
+        self.input_file_browse = tk.Button(master, text = "Browse...", command = self.browse_input_file)
+        self.input_file_browse.grid(row = 0, column = 2)
+        
+        # Motif analysis option
+        self.motif_analysis_var = tk.BooleanVar()
+        self.motif_analysis_check = tk.Checkbutton(master, text = "Motif Analysis", variable = self.motif_analysis_var)
+        self.motif_analysis_check.grid(row = 1, columnspan = 3, sticky = tk.W)
+        
+        # Output PDF file selection
+        tk.Label(master, text="Select Output for PDF File:").grid(row = 2, sticky = tk.W)
+        self.output_file_entry = tk.Entry(master)
+        self.output_file_entry.grid(row = 2, column = 1)
+        self.output_file_browse = tk.Button(master, text = "Browse...", command = self.browse_output_file)
+        self.output_file_browse.grid(row = 2, column = 2)
+
+        return self.input_file_entry  # to put focus on the input file entry widget
+
+    def browse_input_file(self):
+        file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv"), ("Excel Files", "*.xlsx")])
+        if file_path:
+            self.input_file_entry.delete(0, tk.END)
+            self.input_file_entry.insert(0, file_path)
+
+    def browse_output_file(self):
+        file_path = filedialog.asksaveasfilename(filetypes = [("PDF Files", "*.pdf")], defaultextension = ".pdf")
+        if file_path:
+            self.output_file_entry.delete(0, tk.END)
+            self.output_file_entry.insert(0, file_path)
+
+    def apply(self):
+        input_file_path = self.input_file_entry.get()
+        motif_analysis = self.motif_analysis_var.get()
+        output_file_path = self.output_file_entry.get()
+        self.result = input_file_path, motif_analysis, output_file_path
+
+
+def openGetHeatmapDialog():
+    dialog_result = GetHeatmapDialog(app)
+    if dialog_result.result:
+        input_file_path, motif_analysis, output_file_path = dialog_result.result
+        get_heatmap(input_file_path, motifs = motif_analysis, feature_set = ["known", "exhaustive"], filepath = output_file_path)
+
+
+def show_about_info():
+    about_message = "glycowork v1.3\n\n" \
+                    "For more information and citation, please refer to:\n" \
+                    "Thomès, L., et al. (2021). Glycowork: A Python package for glycan data science and machine learning. Glycobiology, 31(10), 1240-1244.\n" \
+                    "DOI: 10.1093/glycob/cwab067\n" \
+                    "Or our documentation at:\n" \
+                    "https://bojarlab.github.io/glycowork/"
+    messagebox.showinfo("About glycowork", about_message)
+
+
 app = tk.Tk()
 app.title("glycowork GUI")
 app.geometry("300x150")
@@ -191,7 +252,15 @@ btn_function2 = tk.Button(app, text = "Run GlycoDrawExcel", command = openGlycoD
 btn_function2.pack(pady = 5)
 btn_function3 = tk.Button(app, text = "Run DifferentialExpression", command = openDifferentialExpressionDialog)
 btn_function3.pack(pady = 5)
+btn_function4 = tk.Button(app, text = "Run Get Heatmap", command = openGetHeatmapDialog)
+btn_function4.pack(pady = 5)
 
+menu_bar = tk.Menu(app)
+app.config(menu = menu_bar)
+help_menu = tk.Menu(menu_bar, tearoff = 0)
+menu_bar.add_cascade(label = "Help", menu = help_menu)
+help_menu.add_command(label = "About", command = show_about_info)
 icon_path = resource_path("glycowork.ico")
 app.iconbitmap(icon_path)
+
 app.mainloop()
