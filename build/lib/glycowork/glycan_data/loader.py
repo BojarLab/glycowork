@@ -248,8 +248,8 @@ def build_custom_df(df, kind = 'df_species'):
   if cols is None:
     raise ValueError("Invalid value for 'kind' argument, only df_species, df_tissue, and df_disease are supported.")
   df = df.loc[df[cols[1]].str.len() > 0, cols]
-  df.set_index('glycan', inplace = True)
+  df = df.set_index('glycan')
   df = df.explode(cols[1:]).reset_index()
-  df.sort_values([cols[1], 'glycan'], ascending = [True, True], inplace = True)
-  df.reset_index(drop = True, inplace = True)
+  df = df.sort_values([cols[1], 'glycan'], ascending = [True, True])
+  df = df.reset_index(drop = True)
   return df

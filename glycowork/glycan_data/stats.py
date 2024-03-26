@@ -83,7 +83,7 @@ def cohen_d(x, y, paired = False):
     nx = len(x)
     ny = len(y)
     dof = nx + ny - 2
-    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
+    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1) * np.std(x, ddof = 1) ** 2 + (ny-1) * np.std(y, ddof = 1) ** 2) / dof)
     var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
   return d, var_d
 
@@ -240,7 +240,7 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
       df.columns = df.columns.astype(str)
     if impute:
       mf = MissForest()
-      df.replace(0, np.nan, inplace = True)
+      df = df.replace(0, np.nan)
       df = mf.fit_transform(df)
     df = (df / df.sum(axis = 0)) * 100
     if len(old_cols) > 0:
@@ -748,5 +748,5 @@ def clr_transformation(df):
   | :-
   | Returns a dataframe that is CLR-transformed
   """
-  geometric_mean = gmean(df, axis = 0)
+  geometric_mean = gmean(df.replace(0, np.nan), axis = 0)
   return (np.log(df) - np.log(geometric_mean))

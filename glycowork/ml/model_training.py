@@ -1,20 +1,22 @@
 import copy
 import time
 import math
-import torch
 import numpy as np
 import pandas as pd
 import xgboost as xgb
 import seaborn as sns
 import matplotlib.pyplot as plt
-import torch.nn.functional as F
+try:
+    import torch
+    import torch.nn.functional as F
+    # Choose the correct computing architecture
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda:0"
+except ImportError:
+    raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error, label_ranking_average_precision_score, ndcg_score
 from glycowork.motif.annotate import annotate_dataset
-
-# Choose the correct computing architecture
-device = "cpu"
-if torch.cuda.is_available():
-    device = "cuda:0"
 
 
 class EarlyStopping:

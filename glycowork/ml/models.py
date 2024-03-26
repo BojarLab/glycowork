@@ -1,17 +1,17 @@
 import os
-import torch
 import numpy as np
 try:
+    import torch
+    import torch.nn.functional as F
     from torch_geometric.nn import GraphConv
     from torch_geometric.nn import global_mean_pool as gap
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda:0"
 except ImportError:
-  raise ImportError("<torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
-import torch.nn.functional as F
+  raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 from glycowork.glycan_data.loader import lib
 
-device = "cpu"
-if torch.cuda.is_available():
-    device = "cuda:0"
 
 this_dir, this_filename = os.path.split(__file__)  # Get path
 trained_SweetNet = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')

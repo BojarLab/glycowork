@@ -1369,7 +1369,7 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
   df = df.loc[:, [df.columns.tolist()[0]]+all_groups].fillna(0)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
-  df.set_index(df.columns.tolist()[0], inplace = True)
+  df = df.set_index(df.columns.tolist()[0])
   df = df[~(df == 0).all(axis = 1)]
   root = list(infer_roots(df.index.tolist()))
   root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
@@ -1391,7 +1391,7 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
   log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
   pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
   if pvals:
-    corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
+    corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
     significance = [p < alpha for p in corrpvals]
   else:
     corrpvals, significance = [], []
