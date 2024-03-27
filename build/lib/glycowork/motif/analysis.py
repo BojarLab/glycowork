@@ -19,7 +19,7 @@ from glycowork.glycan_data.loader import df_species, unwrap, motif_list
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          variance_stabilization, impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
-                                         test_inter_vs_intra_group, replace_outliers_with_IQR_bounds, hotellings_t2,
+                                         test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
@@ -56,7 +56,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     if multiple_samples:
         df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
         df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
-        df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+        df = df.apply(replace_outliers_winsorization, axis = 1)
     if not zscores:
         means = df.iloc[:, 1:].mean()
         std_devs = df.iloc[:, 1:].std()
@@ -200,7 +200,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'],
           collecty = df.apply(lambda row: [row.loc[df_motif[col].dropna().index].sum() / row.sum() for col in df_motif.columns], axis = 1)
           df = pd.DataFrame(collecty.tolist(), columns = df_motif.columns, index = df.index)
   df = df.dropna(axis = 1)
-  df = clean_up_heatmap(df.T)
+  df = clean_up_heatmap(df.T) if motifs else df.set_index(df.columns.tolist()[0])
   if not (df < 0).any().any():
       df /= df.sum()
       df *= 100
@@ -499,7 +499,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = None, grouped_BH = False, custom_motifs = []):
+                                min_samples = 0, grouped_BH = False, custom_motifs = []):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -516,7 +516,7 @@ def get_differential_expression(df, group1, group2,
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
   | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
   | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False
-  | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
+  | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
   | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
   | Returns:
@@ -542,7 +542,7 @@ def get_differential_expression(df, group1, group2,
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
   df = df.loc[~(df == 0).all(axis = 1)]
-  df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+  df = df.apply(replace_outliers_winsorization, axis = 1)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
@@ -715,7 +715,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
 
 
 def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'],
-                  min_samples = None, posthoc = True, custom_motifs = []):
+                  min_samples = 0, posthoc = True, custom_motifs = []):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
@@ -727,7 +727,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
     | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True
     | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
     | Returns:
@@ -739,7 +739,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     results, posthoc_results = [], {}
     df = df.fillna(0)
-    df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+    df = df.apply(replace_outliers_winsorization, axis = 1)
     groups_unq = sorted(set(groups))
     df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
                               min_samples = min_samples)
@@ -882,7 +882,7 @@ def get_glycan_change_over_time(data, degree = 1):
 
 
 def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1,
-                    min_samples = None, custom_motifs = []):
+                    min_samples = 0, custom_motifs = []):
     """Analyzes time series data of glycans using an OLS model\n
     | Arguments:
     | :-
@@ -894,7 +894,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
     | degree (int): degree of the polynomial for regression, default:1 for linear regression
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
     | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
     | Returns:
     | :-
@@ -909,8 +909,8 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     df = df.fillna(0)
     df = df.set_index(df.columns[0]).T
-    df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
-    df = impute_and_normalize(df, [df.columns], impute = impute, min_samples = min_samples).reset_index()
+    df = df.apply(replace_outliers_winsorization, axis = 0)
+    df = impute_and_normalize(df, [df.columns.tolist()[1:]], impute = impute, min_samples = min_samples).reset_index()
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
     glycans = [k.split('.')[0] for k in df.iloc[:, 0]]
@@ -966,7 +966,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
                  "VAR": [], "EXV": [], "SDV": [], "CGOOSV": []}
     param_dic = jtkdist(timepoints, param_dic, replicates)
     param_dic = jtkinit(periods, param_dic, interval, replicates)
-    df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+    df = df.apply(replace_outliers_winsorization, axis = 1)
     mf = MissForest()
     df = df.replace(0, np.nan)
     annot = df.pop(df.columns.tolist()[0])
@@ -1018,7 +1018,7 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
   # Drop rows with all zero, followed by outlier removal
   df = df.loc[~(df == 0).all(axis = 1)]
-  df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+  df = df.apply(replace_outliers_winsorization, axis = 1)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
   if motifs:

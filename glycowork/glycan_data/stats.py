@@ -7,6 +7,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from scipy.special import gammaln
 from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean
+from scipy.stats.mstats import winsorize
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.weightstats import ttost_ind, ttost_paired
@@ -213,27 +214,28 @@ class MissForest:
     return X_transform
 
 
-def impute_and_normalize(df, groups, impute = True, min_samples = None):
+def impute_and_normalize(df, groups, impute = True, min_samples = 0):
     """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
     | groups (list): nested list of column name lists, one list per group
     | impute (bool): replaces zeroes with predictions from MissForest; default:True
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero\n
     | Returns:
     | :-
     | Returns a dataframe in the same style as the input 
     """
-    if min_samples is None:
-      min_samples = [len(group_cols) // 2 for group_cols in groups]
-    else:
-      min_samples = [min_samples] * len(groups)
+    min_samples = [min_samples] * len(groups)
     masks = [(df[group_cols] != 0).sum(axis = 1) >= thresh for group_cols, thresh in zip(groups, min_samples)]
     df = df[np.all(masks, axis = 0)]
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
+    for group in groups:
+      group_data = df[group]
+      all_zero_mask = (group_data == 0).all(axis = 1)
+      df.loc[all_zero_mask, group] = 1e-6
     old_cols = []
     if isinstance(colname, int):
       old_cols = df.columns
@@ -249,12 +251,12 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
     return df
 
 
-def variance_based_filtering(df, min_feature_variance = 0.01):
+def variance_based_filtering(df, min_feature_variance = 0.02):
     """Variance-based filtering of features\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in index and samples in columns
-    | min_feature_variance (float): Minimum variance to include a feature in the analysis\n
+    | min_feature_variance (float): Minimum variance to include a feature in the analysis; default: 2%\n
     | Returns:
     | :-
     | Returns a pandas DataFrame with remaining glycans as indices and samples in columns
@@ -669,6 +671,29 @@ def replace_outliers_with_IQR_bounds(full_row):
     full_row.iloc[1:] = capped_values
   else:
     full_row = capped_values
+  return full_row
+
+
+def replace_outliers_winsorization(full_row):
+  """Replaces outlier values using Winsorization.\n
+  | Arguments:
+  | :-
+  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical\n
+  | Returns:
+  | :-
+  | Returns row with outliers replaced by Winsorization.
+  """
+  row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
+  # Apply Winsorization - limits set to match typical IQR outlier detection
+  nan_placeholder = row.min() - 1
+  row = row.fillna(nan_placeholder)
+  winsorized_values = winsorize(row, limits = [0.05, 0.05])
+  winsorized_values = pd.Series(winsorized_values, index = row.index)
+  winsorized_values = winsorized_values.replace(nan_placeholder, np.nan)
+  if isinstance(full_row.iloc[0], str):
+    full_row.iloc[1:] = winsorized_values
+  else:
+    full_row = winsorized_values
   return full_row
 
 

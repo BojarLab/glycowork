@@ -923,7 +923,7 @@ def rescue_glycans(func):
       return func(*args, **kwargs)
     except Exception as e:
       # If an error occurs, attempt to rescue the glycan sequences
-      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and isinstance(arg[0], str) else arg for arg in args]
+      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
       # After rescuing, attempt to run the function again
       return func(*rescued_args, **kwargs)
   return wrapper
