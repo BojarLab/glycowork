@@ -202,25 +202,24 @@ def compare_glycans(glycan_a, glycan_b):
   | :-
   | Returns True if two glycans are the same and False if not
   """
+  if glycan_a == glycan_b:
+    return True
   if isinstance(glycan_a, str) and isinstance(glycan_b, str):
     if glycan_a.count('(') != glycan_b.count('('):
       return False
-    proc = min_process_glycans([glycan_a, glycan_b])
-    proc = set(unwrap(proc))
-    if re.search(r'O[A-Z]', ''.join(proc)):
+    proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
+    if 'O' in ''.join(proc):
       glycan_a, glycan_b = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in [glycan_a, glycan_b]]
     g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
   else:
     if len(glycan_a.nodes) != len(glycan_b.nodes):
       return False
-    proc = set(list(nx.get_node_attributes(glycan_a, "string_labels").values()) + list(nx.get_node_attributes(glycan_b, "string_labels").values()))
-    if re.search(r'O[A-Z]', ''.join(proc)):
-      g1, g2 = ptm_wildcard_for_graph(copy.deepcopy(glycan_a)), ptm_wildcard_for_graph(copy.deepcopy(glycan_b))
-    else:
-      g1, g2 = glycan_a, glycan_b
-  narrow_wildcard_list = {k:[j  for j in get_possible_linkages(k)] for k in proc if '?' in k}
-  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k)] for k in proc if k in {'Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
-  narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
+    attrs_a = set(nx.get_node_attributes(glycan_a, "string_labels").values())
+    attrs_b = set(nx.get_node_attributes(glycan_b, "string_labels").values())
+    proc = attrs_a.union(attrs_b)
+    g1, g2 = (ptm_wildcard_for_graph(copy.deepcopy(glycan_a)), ptm_wildcard_for_graph(copy.deepcopy(glycan_b))) if 'O' in ''.join(proc) else (glycan_a, glycan_b)
+  narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in proc
+                          if '?' in k or k in {'Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   if narrow_wildcard_list:
     return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
   else:
@@ -270,21 +269,20 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
     if motif.count('(') > glycan.count('('):
       return (0, []) if return_matches else 0 if count else False
     motif_comp = min_process_glycans([motif, glycan])
-    if re.search(r'O[A-Z]', ''.join(unwrap(motif_comp))):
+    if 'O' in ''.join(unwrap(motif_comp)):
       glycan, motif = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', g).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for g in [glycan, motif]]
-    g1 = glycan_to_nxGraph(glycan, termini = 'calc') if termini_list else glycan_to_nxGraph(glycan)
-    g2 = glycan_to_nxGraph(motif, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif)
+    g1 = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else None)
+    g2 = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else None, termini_list = termini_list)
   else:
     if len(glycan.nodes) < len(motif.nodes):
       return (0, []) if return_matches else 0 if count else False
     motif_comp = [list(nx.get_node_attributes(motif, "string_labels").values()), list(nx.get_node_attributes(glycan, "string_labels").values())]
-    if re.search(r'O[A-Z]', ''.join(unwrap(motif_comp))):
+    if 'O' in ''.join(unwrap(motif_comp)):
       g1, g2 = ptm_wildcard_for_graph(copy.deepcopy(glycan)), ptm_wildcard_for_graph(copy.deepcopy(motif))
     else:
       g1, g2 = copy.deepcopy(glycan), motif
-  narrow_wildcard_list = {k:[j for j in get_possible_linkages(k)] for k in set(unwrap(motif_comp)) if '?' in k}
-  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k)] for k in set(unwrap(motif_comp)) if k in {'Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
-  narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
+  narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in set(unwrap(motif_comp))
+                          if '?' in k or k in {'Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   if termini_list or narrow_wildcard_list:
     graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
                                                                                                              'termini', 'flexible'))
