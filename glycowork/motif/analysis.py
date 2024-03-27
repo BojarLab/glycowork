@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 plt.style.use('default')
 from os import path
 from collections import Counter
-from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway
+from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway, spearmanr
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
@@ -15,13 +15,13 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-from glycowork.glycan_data.loader import df_species, unwrap, motif_list
+from glycowork.glycan_data.loader import df_species, unwrap, motif_list, strip_suffixes
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          variance_stabilization, impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
                                          test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
-                                         get_equivalence_test)
+                                         get_equivalence_test, clr_transformation)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -1045,3 +1045,49 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
   out = pd.DataFrame(list(zip(df_out.index.tolist(), mean_a, mean_b, pvals, corrpvals, significance, effect_sizes)),
                      columns = ["Metric", "Group1 mean", "Group2 mean", "p-val", "corr p-val", "significant", "Effect size"])
   return out.sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+
+
+def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], custom_motifs = []):
+  """Performs SparCC (Sparse Correlations for Compositional Data) on two (glycomics) datasets. Samples should be in the same order.\n
+  | Arguments:
+  | :-
+  | df1 (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | df2 (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
+  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
+  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
+  |   and 'chemical' (molecular properties of glycan)
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+  | Returns:
+  | :-
+  | Returns (i) a dataframe of pairwise correlations (Spearman's rho)
+  | and (ii) a dataframe with corrected p-values (two-stage Benjamini-Hochberg)
+  """
+  if isinstance(df1, str):
+    df1 = pd.read_csv(df1) if df1.endswith(".csv") else pd.read_excel(df1)
+    df2 = pd.read_csv(df2) if df2.endswith(".csv") else pd.read_excel(df2)
+  df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
+  df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
+  if motifs:
+    df1 = quantify_motifs(df1.iloc[:, 1:], df1.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+    df1 = clean_up_heatmap(df1.T)
+    df2 = quantify_motifs(df2.iloc[:, 1:], df2.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+    df2 = clean_up_heatmap(df2.T)
+  else:
+    df1 = df1.set_index(df1.columns.tolist()[0])
+    df2 = df2.set_index(df2.columns.tolist()[0])
+  df1 = clr_transformation(df1).T
+  df2 = clr_transformation(df2).T
+  correlation_matrix = np.zeros((df1.shape[1], df2.shape[1]))
+  p_value_matrix = np.zeros((df1.shape[1], df2.shape[1]))
+  # Compute Spearman correlation for each pair of columns between transformed df1 and df2
+  for i in range(df1.shape[1]):
+    for j in range(df2.shape[1]):
+      corr, p_val = spearmanr(df1.iloc[:, i], df2.iloc[:, j])
+      correlation_matrix[i, j] = corr
+      p_value_matrix[i, j] = p_val
+  p_value_matrix = multipletests(p_value_matrix.flatten(), method = 'fdr_tsbh')[1].reshape(p_value_matrix.shape)
+  correlation_df = pd.DataFrame(correlation_matrix, index = df1.columns, columns = df2.columns)
+  p_value_df = pd.DataFrame(p_value_matrix, index = df1.columns, columns = df2.columns)
+  return correlation_df, p_value_df

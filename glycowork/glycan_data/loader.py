@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 from pickle import load
 from os import path
@@ -212,8 +213,7 @@ def replace_every_second(string, old_char, new_char):
 
 
 def multireplace(string, remove_dic):
-  """
-  Replaces all occurences of items in a set with a given string\n
+  """Replaces all occurences of items in a set with a given string\n
   | Arguments:
   | :-
   | string (str): string to perform replacements on
@@ -225,6 +225,11 @@ def multireplace(string, remove_dic):
   for k, v in remove_dic.items():
     string = string.replace(k, v)
   return string
+
+
+def strip_suffixes(column):
+  """Strip numerical suffixes like .1, .2, etc., from column names."""
+  return [re.sub(r"\.\d+$", "", str(name)) for name in column]
 
 
 def build_custom_df(df, kind = 'df_species'):

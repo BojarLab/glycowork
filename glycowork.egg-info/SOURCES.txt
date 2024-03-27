@@ -26,6 +26,8 @@ glycowork/glycan_data/glycomics_human_colorectal_N_PMID26085185.csv
 glycowork/glycan_data/glycomics_human_colorectal_O_PMC9254241.csv
 glycowork/glycan_data/glycomics_human_skin_O_PMC5871710_BCC.csv
 glycowork/glycan_data/glycomics_human_skin_O_PMC5871710_SCC.csv
+glycowork/glycan_data/glycomics_time_series_N_PMID32149347.csv
+glycowork/glycan_data/glycomics_time_series_O_PMID32149347.csv
 glycowork/glycan_data/lib_v10.pkl
 glycowork/glycan_data/loader.py
 glycowork/glycan_data/stats.py
