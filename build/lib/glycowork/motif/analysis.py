@@ -152,7 +152,7 @@ def clean_up_heatmap(df):
   return result
 
 
-def get_heatmap(df, motifs = False, feature_set = ['known'],
+def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
                  datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan',
                 custom_motifs = [], **kwargs):
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
@@ -164,6 +164,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'],
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
   |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
   |   and 'chemical' (molecular properties of glycan)
+  | transform (string): whether to transform the data before plotting, currently the only option is "CLR"; default: no transformation
   | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
   | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
   | filepath (string): absolute path including full filename allows for saving the plot
@@ -178,9 +179,14 @@ def get_heatmap(df, motifs = False, feature_set = ['known'],
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if index_col in df.columns:
       df = df.set_index(index_col)
+  elif isinstance(df.iloc[0,0], str):
+      df = df.set_index(df.columns.tolist()[0])
   if isinstance(df.index.tolist()[0], str) and '('  in df.index.tolist()[0] and '-' in df.index.tolist()[0]:
       df = df.T
   df = df.fillna(0)
+  if transform == "CLR":
+      df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
+      df = clr_transformation(df)
   if motifs:
       if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
           raise ValueError("A heatmap needs to have at least two motifs.")
@@ -544,27 +550,32 @@ def get_differential_expression(df, group1, group2,
   df = df.loc[~(df == 0).all(axis = 1)]
   df = df.apply(replace_outliers_winsorization, axis = 1)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
+  df_org = df.copy(deep = True)
+  df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:])
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
   if motifs:
       # Motif extraction and quantification
       df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+      df_org = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
       # Deduplication
       df = clean_up_heatmap(df.T)
+      df_org = clean_up_heatmap(df_org.T)
       # Re-normalization
-      df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
+      df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
   else:
       df = df.set_index(df.columns.tolist()[0])
       df = df.groupby(df.index).mean()
+      df_org = df_org.set_index(df_org.columns.tolist()[0])
+      df_org = df_org.groupby(df_org.index).mean()
   # Variance-based filtering of features
   df = variance_based_filtering(df)
   glycans = df.index.tolist()
-  mean_abundance = df.mean(axis = 1)
+  mean_abundance = df_org.mean(axis = 1)
   df_a, df_b = df[group1], df[group2]
   if sets:
       # Motif/sequence set enrichment
-      df2 = variance_stabilization(df, groups = [group1, group2])
-      clusters = create_correlation_network(df2.T, set_thresh)
+      clusters = create_correlation_network(df.T, set_thresh)
       glycans, mean_abundance_c, pvals, log2fc, levene_pvals, effect_sizes, variances, equivalence_pvals = [], [], [], [], [], [], [], []
       # Testing differential expression of each set/cluster
       for cluster in clusters:
@@ -584,8 +595,8 @@ def get_differential_expression(df, group1, group2,
               variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
       mean_abundance = mean_abundance_c
   else:
-      log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
-      df_a, df_b = variance_stabilization(df_a), variance_stabilization(df_b)
+      org_a, org_b = df_org[group1], df_org[group2]
+      log2fc = np.log2((org_b.values + 1e-8) / (org_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(org_b.mean(axis = 1) / org_a.mean(axis = 1))
       if paired:
           assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
       pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
@@ -743,22 +754,18 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     groups_unq = sorted(set(groups))
     df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
                               min_samples = min_samples)
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:])
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], df.iloc[:,0].values.tolist(), feature_set, custom_motifs = custom_motifs)
         # Deduplication
         df = clean_up_heatmap(df.T)
-        # Re-normalization
-        df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
     else:
         df = df.set_index(df.columns.tolist()[0])
         df = df.groupby(df.index).mean()
     # Variance-based filtering of features
     df = variance_based_filtering(df)
-    col_names = [[col for group, col in zip(groups, df.columns) if group == unique_group]
-                 for unique_group in groups_unq]
-    df = variance_stabilization(df, groups = col_names)
     for glycan in df.index:
         # Create a DataFrame with the glycan abundance and group identifier for each sample
         data = pd.DataFrame({"Abundance": df.loc[glycan], "Group": groups})
@@ -971,6 +978,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     df = df.replace(0, np.nan)
     annot = df.pop(df.columns.tolist()[0])
     df = mf.fit_transform(df)
+    df = clr_transformation(df)
     df.insert(0, 'Molecule_Name', annot)
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T
