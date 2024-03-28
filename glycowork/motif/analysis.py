@@ -1069,11 +1069,23 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
     df2 = pd.read_csv(df2) if df2.endswith(".csv") else pd.read_excel(df2)
   df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
   df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
+  # Drop rows with all zero, followed by outlier removal and imputation & normalization
+  df1 = df1.loc[~(df1 == 0).all(axis = 1)]
+  df1 = df1.apply(replace_outliers_winsorization, axis = 1)
+  df1 = impute_and_normalize(df1, [df1.columns.tolist()[1:]])
+  df2 = df2.loc[~(df2 == 0).all(axis = 1)]
+  df2 = df2.apply(replace_outliers_winsorization, axis = 1)
+  df2 = impute_and_normalize(df2, [df2.columns.tolist()[1:]])
+  # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+  alpha = get_alphaN(df1.shape[1] - 1)
   if motifs:
     df1 = quantify_motifs(df1.iloc[:, 1:], df1.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
     df1 = clean_up_heatmap(df1.T)
-    df2 = quantify_motifs(df2.iloc[:, 1:], df2.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-    df2 = clean_up_heatmap(df2.T)
+    if '(' in df2.iloc[:, 0].values.tolist()[0]:
+      df2 = quantify_motifs(df2.iloc[:, 1:], df2.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+      df2 = clean_up_heatmap(df2.T)
+    else:
+      df2 = df2.set_index(df2.columns.tolist()[0])
   else:
     df1 = df1.set_index(df1.columns.tolist()[0])
     df2 = df2.set_index(df2.columns.tolist()[0])

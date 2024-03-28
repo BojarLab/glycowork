@@ -159,19 +159,15 @@ def ensure_graph(glycan, **kwargs):
 
 def categorical_node_match_wildcard(attr, default, narrow_wildcard_list, attr2, default2):
   if isinstance(attr, str):
-
-    def check_termini(termini1, termini2):
-      return termini1 == termini2 or 'flexible' in {termini1, termini2}
-    
     def match(data1, data2):
       data1_labels2, data2_labels2 = data1.get(attr2, default2), data2.get(attr2, default2)
-      termini_check = check_termini(data1_labels2, data2_labels2)
-      if not termini_check:
+      if data1_labels2 != data2_labels2 and 'flexible' not in {data1_labels2, data2_labels2}:
         return False
       data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
-      if "Monosaccharide" in {data1_labels, data2_labels} and not any('-' in lab for lab in {data1_labels, data2_labels}):
+      comb_labels = data1_labels + data2_labels
+      if "Monosaccharide" in comb_labels and not '-' in comb_labels:
         return True
-      if "?1-?" in {data1_labels, data2_labels} and all('-' in lab for lab in {data1_labels, data2_labels}):
+      if "?1-?" in comb_labels and comb_labels.count('-') == 2:
         return True
       if data2_labels.startswith('!') and data1_labels != data2_labels[1:] and '-' not in data1_labels:
         return True
