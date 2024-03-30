@@ -226,9 +226,10 @@ def impute_and_normalize(df, groups, impute = True, min_samples = 0):
     | :-
     | Returns a dataframe in the same style as the input 
     """
-    min_samples = [min_samples] * len(groups)
-    masks = [(df[group_cols] != 0).sum(axis = 1) >= thresh for group_cols, thresh in zip(groups, min_samples)]
-    df = df[np.all(masks, axis = 0)]
+    if min_samples:
+      min_samples = [min_samples] * len(groups)
+      masks = [(df[group_cols] != 0).sum(axis = 1) >= thresh for group_cols, thresh in zip(groups, min_samples)]
+      df = df[np.all(masks, axis = 0)]
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
@@ -764,14 +765,29 @@ def get_equivalence_test(row_a, row_b, paired = False):
   return ttost_paired(row_a, row_b, low, up)[0] if paired else ttost_ind(row_a, row_b, low, up)[0]
 
 
-def clr_transformation(df):
-  """performs the Center Log-Ratio (CLR) Transformation\n
+def clr_transformation(df, group1, group2, gamma = 0.1):
+  """performs the Center Log-Ratio (CLR) Transformation with scale model adjustment\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing features in rows and samples in columns\n
+  | df (dataframe): dataframe containing features in rows and samples in columns
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; default: 0.1\n
   | Returns:
   | :-
-  | Returns a dataframe that is CLR-transformed
+  | Returns a dataframe that is CLR-transformed with scale model adjustment
   """
   geometric_mean = gmean(df.replace(0, np.nan), axis = 0)
-  return (np.log(df) - np.log(geometric_mean))
+  if gamma and group2:
+    col_list = df.columns.tolist()
+    group1i = [col_list.index(k) for k in group1]
+    group2i = [col_list.index(k) for k in group2]
+    case_control = [0]*len(group1) + [1]*len(group2)
+    clr_adjusted = np.zeros_like(df.values)
+    geometric_mean = -np.log(geometric_mean)
+    clr_adjusted[:, group1i] = np.log(df[group1]) + geometric_mean[group1i]
+    observed = norm.rvs(loc = geometric_mean[group2i], scale = gamma, size = (df.shape[0], len(group2)))
+    clr_adjusted[:, group2i] = np.log(df[group2]) + observed
+    return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
+  else:
+    return (np.log(df) - np.log(geometric_mean))

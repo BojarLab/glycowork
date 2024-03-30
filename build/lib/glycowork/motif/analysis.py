@@ -56,7 +56,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     if multiple_samples:
         df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
         df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
-        df = df.apply(replace_outliers_winsorization, axis = 1)
+        #df = df.apply(replace_outliers_winsorization, axis = 1)
     if not zscores:
         means = df.iloc[:, 1:].mean()
         std_devs = df.iloc[:, 1:].std()
@@ -164,7 +164,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
   |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
   |   and 'chemical' (molecular properties of glycan)
-  | transform (string): whether to transform the data before plotting, currently the only option is "CLR"; default: no transformation
+  | transform (string): whether to transform the data before plotting, currently the only option is "CLR", recommended for glycomics data; default: no transformation
   | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
   | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
   | filepath (string): absolute path including full filename allows for saving the plot
@@ -186,7 +186,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
   df = df.fillna(0)
   if transform == "CLR":
       df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
-      df = clr_transformation(df)
+      df = clr_transformation(df, [], [], gamma = 0)
   if motifs:
       if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
           raise ValueError("A heatmap needs to have at least two motifs.")
@@ -505,7 +505,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = 0, grouped_BH = False, custom_motifs = []):
+                                min_samples = 0, grouped_BH = False, custom_motifs = [], gamma = 0.1):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -524,7 +524,8 @@ def get_differential_expression(df, group1, group2,
   | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False
   | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
   | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -551,7 +552,7 @@ def get_differential_expression(df, group1, group2,
   df = df.apply(replace_outliers_winsorization, axis = 1)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   df_org = df.copy(deep = True)
-  df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:])
+  df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
   if motifs:
@@ -726,7 +727,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
 
 
 def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'],
-                  min_samples = 0, posthoc = True, custom_motifs = []):
+                  min_samples = 0, posthoc = True, custom_motifs = [], gamma = 0.1):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
@@ -740,7 +741,8 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     |   and 'chemical' (molecular properties of glycan)
     | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
     | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
     | Returns:
     | :-
     | (i) a pandas DataFrame with an F statistic, corrected p-value, and indication of its significance for each glycan.
@@ -754,11 +756,11 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     groups_unq = sorted(set(groups))
     df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
                               min_samples = min_samples)
-    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:])
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
     if motifs:
-        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:,0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
         # Deduplication
         df = clean_up_heatmap(df.T)
     else:
@@ -889,7 +891,7 @@ def get_glycan_change_over_time(data, degree = 1):
 
 
 def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1,
-                    min_samples = 0, custom_motifs = []):
+                    min_samples = 0, custom_motifs = [], gamma = 0.1):
     """Analyzes time series data of glycans using an OLS model\n
     | Arguments:
     | :-
@@ -902,7 +904,8 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     |   and 'chemical' (molecular properties of glycan)
     | degree (int): degree of the polynomial for regression, default:1 for linear regression
     | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
     | Returns:
     | :-
     | Returns a dataframe with:
@@ -916,8 +919,9 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     df = df.fillna(0)
     df = df.set_index(df.columns[0]).T
-    df = df.apply(replace_outliers_winsorization, axis = 0)
-    df = impute_and_normalize(df, [df.columns.tolist()[1:]], impute = impute, min_samples = min_samples).reset_index()
+    df = df.apply(replace_outliers_winsorization, axis = 0).reset_index(names = 'glycan')
+    df = impute_and_normalize(df, [df.columns[1:].tolist()], impute = impute, min_samples = min_samples)
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
     glycans = [k.split('.')[0] for k in df.iloc[:, 0]]
@@ -925,8 +929,6 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
         df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set, custom_motifs = custom_motifs)
         # Deduplication
         df = clean_up_heatmap(df.T)
-        # Re-normalization
-        df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
     else:
         df.index = glycans
         df = df.drop([df.columns[0]], axis = 1)
@@ -943,7 +945,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
 
 
 def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal'],
-            custom_motifs = []):
+            custom_motifs = [], gamma = 0.1):
     """Detecting rhythmically expressed glycans via the Jonckheere–Terpstra–Kendall (JTK) algorithm\n
     | Arguments:
     | :-
@@ -957,7 +959,8 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
     | Returns:
     | :-
     | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
@@ -978,7 +981,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     df = df.replace(0, np.nan)
     annot = df.pop(df.columns.tolist()[0])
     df = mf.fit_transform(df)
-    df = clr_transformation(df)
+    df = clr_transformation(df, [], df.columns.tolist(), gamma = gamma)
     df.insert(0, 'Molecule_Name', annot)
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T
@@ -1055,7 +1058,7 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
   return out.sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
 
-def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], custom_motifs = []):
+def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], custom_motifs = [], gamma = 0.1):
   """Performs SparCC (Sparse Correlations for Compositional Data) on two (glycomics) datasets. Samples should be in the same order.\n
   | Arguments:
   | :-
@@ -1066,7 +1069,8 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
   |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
   |   and 'chemical' (molecular properties of glycan)
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
   | Returns:
   | :-
   | Returns (i) a dataframe of pairwise correlations (Spearman's rho)
@@ -1097,8 +1101,8 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   else:
     df1 = df1.set_index(df1.columns.tolist()[0])
     df2 = df2.set_index(df2.columns.tolist()[0])
-  df1 = clr_transformation(df1).T
-  df2 = clr_transformation(df2).T
+  df1 = clr_transformation(df1, [], df1.columns.tolist(), gamma = gamma).T
+  df2 = clr_transformation(df2, [], df2.columns.tolist(), gamma = gamma).T
   correlation_matrix = np.zeros((df1.shape[1], df2.shape[1]))
   p_value_matrix = np.zeros((df1.shape[1], df2.shape[1]))
   # Compute Spearman correlation for each pair of columns between transformed df1 and df2
