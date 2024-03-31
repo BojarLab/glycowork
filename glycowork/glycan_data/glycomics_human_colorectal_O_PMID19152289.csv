@@ -1,0 +1,10 @@
+﻿glycan,C1,T1,C2,T2,C3,T3
+Neu5Ac(a2-6)GalNAc,2.5,6,2,15,0.5,11
+Gal(b1-3)[Neu5Ac(a2-6)]GalNAc,3,4,1.5,4,0.5,1.5
+HexNAc(?1-3)[Neu5Ac(a2-6)]GalNAc,53,18,26,18,52,41
+Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-6)]GalNAc,0.5,2,1,0.5,1,0
+Fuc(a1-3)[Gal3S(b1-4)]GlcNAc(b1-3)[Neu5Ac(a2-6)]GalNAc,12,6,15,3,18,6
+Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-6)]GalNAc,8,8,4,4,1,1
+Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-3)[Neu5Ac(a2-6)]GalNAc,11,15,14,37,7,31
+Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-6)]GalNAc,11,8,27,8,18,9
+Fuc(a1-3)[Gal3S(b1-4)]GlcNAc(b1-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-3)[Neu5Ac(a2-6)]GalNAc,0.2,1.5,0.7,0.8,1,0.2
