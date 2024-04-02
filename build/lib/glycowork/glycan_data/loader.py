@@ -1,20 +1,61 @@
+import re
 import pandas as pd
-import os
-import pickle
-import itertools
+from pickle import load
+from os import path
+from itertools import chain
 from importlib import resources
 
-with resources.open_text("glycowork.glycan_data", "v10_df_species.csv") as f:
-  df_species = pd.read_csv(f)
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
-with resources.open_text("glycowork.glycan_data", "glycan_binding.csv") as f:
-  glycan_binding = pd.read_csv(f)
-this_dir, this_filename = os.path.split(__file__)  # Get path of data.pkl
-data_path = os.path.join(this_dir, 'lib_v10.pkl')
-lib = pickle.load(open(data_path, 'rb'))
-data_path = os.path.join(this_dir, 'v10_sugarbase.pkl')
-df_glycan = pickle.load(open(data_path, 'rb'))
+this_dir, this_filename = path.split(__file__)  # Get path of data.pkl
+data_path = path.join(this_dir, 'lib_v10.pkl')
+lib = load(open(data_path, 'rb'))
+
+
+def __getattr__(name):
+  if name == "glycan_binding":
+    with resources.open_text("glycowork.glycan_data", "glycan_binding.csv") as f:
+      glycan_binding = pd.read_csv(f)
+    globals()[name] = glycan_binding  # Cache it to avoid reloading
+    return glycan_binding
+  elif name == "df_species":
+    with resources.open_text("glycowork.glycan_data", "v10_df_species.csv") as f:
+      df_species = pd.read_csv(f)
+    globals()[name] = df_species  # Cache it to avoid reloading
+    return df_species
+  elif name == "df_glycan":
+    data_path = path.join(this_dir, 'v10_sugarbase.pkl')
+    df_glycan = load(open(data_path, 'rb'))
+    globals()[name] = df_glycan  # Cache it to avoid reloading
+    return df_glycan
+  raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+class LazyLoader:
+  def __init__(self, package, directory, prefix = 'glycomics_'):
+    self.package = package
+    self.directory = directory
+    self.prefix = prefix
+    self._datasets = {}
+    
+  def __getattr__(self, name):
+    if name not in self._datasets:
+      filename = f"{self.prefix}{name}.csv"
+      try:
+        with resources.open_text(self.package + '.' + self.directory, filename) as f:
+          self._datasets[name] = pd.read_csv(f)
+      except FileNotFoundError:
+        raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
+    return self._datasets[name]
+
+  def __dir__(self):
+    files = resources.contents(self.package + '.' + self.directory)
+    dataset_names = [file[len(self.prefix):-4] for file in files if file.startswith(self.prefix) and file.endswith('.csv')]
+    return dataset_names
+
+
+glycomics_data_loader = LazyLoader("glycowork", "glycan_data")
+
 
 linkages = {
   '1-4', '1-6', 'a1-1', 'a1-2', 'a1-3', 'a1-4', 'a1-5', 'a1-6', 'a1-7', 'a1-8', 'a1-9', 'a1-11', 'a1-?', 'a2-1', 'a2-2', 'a2-3', 'a2-4', 'a2-5', 'a2-6', 'a2-7', 'a2-8', 'a2-9',
@@ -32,7 +73,7 @@ Sia = {'Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia'}
 
 def unwrap(nested_list):
   """converts a nested list into a flat list"""
-  return list(itertools.chain(*nested_list))
+  return list(chain(*nested_list))
 
 
 def find_nth(haystack, needle, n):
@@ -172,8 +213,7 @@ def replace_every_second(string, old_char, new_char):
 
 
 def multireplace(string, remove_dic):
-  """
-  Replaces all occurences of items in a set with a given string\n
+  """Replaces all occurences of items in a set with a given string\n
   | Arguments:
   | :-
   | string (str): string to perform replacements on
@@ -185,6 +225,11 @@ def multireplace(string, remove_dic):
   for k, v in remove_dic.items():
     string = string.replace(k, v)
   return string
+
+
+def strip_suffixes(column):
+  """Strip numerical suffixes like .1, .2, etc., from column names."""
+  return [re.sub(r"\.\d+$", "", str(name)) for name in column]
 
 
 def build_custom_df(df, kind = 'df_species'):
@@ -208,8 +253,8 @@ def build_custom_df(df, kind = 'df_species'):
   if cols is None:
     raise ValueError("Invalid value for 'kind' argument, only df_species, df_tissue, and df_disease are supported.")
   df = df.loc[df[cols[1]].str.len() > 0, cols]
-  df.set_index('glycan', inplace = True)
+  df = df.set_index('glycan')
   df = df.explode(cols[1:]).reset_index()
-  df.sort_values([cols[1], 'glycan'], ascending = [True, True], inplace = True)
-  df.reset_index(drop = True, inplace = True)
+  df = df.sort_values([cols[1], 'glycan'], ascending = [True, True])
+  df = df.reset_index(drop = True)
   return df

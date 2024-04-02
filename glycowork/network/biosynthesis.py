@@ -7,12 +7,13 @@ import re
 from importlib import resources
 from collections import defaultdict
 from scipy.stats import ttest_rel, ttest_ind
+from statsmodels.stats.multitest import multipletests
 import networkx as nx
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import unwrap, linkages
-from glycowork.glycan_data.stats import cohen_d
+from glycowork.glycan_data.stats import cohen_d, get_alphaN
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
 from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans
 from glycowork.motif.tokenization import get_stem_lib
@@ -1352,7 +1353,9 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
   | (ii) Their mean abundance across all samples in group1 + group2
   | (iii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
   | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
-  | (v) Effect size as Cohen's d
+  | (v) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
+  | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  | (vii) Effect size as Cohen's d
   """
   if paired:
     assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
@@ -1364,7 +1367,9 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
     group2 = [columns_list[k] for k in group2]
   all_groups = group1+group2
   df = df.loc[:, [df.columns.tolist()[0]]+all_groups].fillna(0)
-  df.set_index("glycan", inplace = True)
+  # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+  alpha = get_alphaN(df.shape[1] - 1)
+  df = df.set_index(df.columns.tolist()[0])
   df = df[~(df == 0).all(axis = 1)]
   root = list(infer_roots(df.index.tolist()))
   root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
@@ -1375,7 +1380,7 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
     regex = re.compile(r"\(([ab])(\d)-(\d)\)")
     shadow_reactions = [regex.sub(r"(\1\2-?)", g) for g in res2[all_groups[0]]]
     shadow_reactions = {r for r in shadow_reactions if shadow_reactions.count(r) > 1}
-    res2 = {k: {**v, **{r: np.mean([v2 for k2, v2 in v.items() if compare_glycans(k2, r, wildcards_ptm = True)]) for r in shadow_reactions}} for k, v in res2.items()}
+    res2 = {k: {**v, **{r: np.mean([v2 for k2, v2 in v.items() if compare_glycans(k2, r)]) for r in shadow_reactions}} for k, v in res2.items()}
   elif analysis == "flow":
     res2 = {col: [res[col][sink]['flow_value'] for sink in res[col].keys()] for col in all_groups}
   res2 = pd.DataFrame.from_dict(res2, orient = 'index')
@@ -1385,7 +1390,12 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
   df_a, df_b = res2.loc[group1, :].T, res2.loc[group2, :].T
   log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
   pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+  if pvals:
+    corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
+    significance = [p < alpha for p in corrpvals]
+  else:
+    corrpvals, significance = [], []
   effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
-  out = pd.DataFrame(list(zip(features, mean_abundance, log2fc, pvals, effect_sizes)),
-                     columns = ['Feature', 'Mean abundance', 'Log2FC', 'p-val', 'Effect size'])
-  return out.dropna().sort_values(by = 'p-val')
+  out = pd.DataFrame(list(zip(features, mean_abundance, log2fc, pvals, corrpvals, significance, effect_sizes)),
+                     columns = ['Feature', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'Effect size'])
+  return out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')

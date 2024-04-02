@@ -6,9 +6,11 @@ from collections import defaultdict
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean
+from scipy.stats.mstats import winsorize
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
+from statsmodels.stats.weightstats import ttost_ind, ttost_paired
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
@@ -82,7 +84,7 @@ def cohen_d(x, y, paired = False):
     nx = len(x)
     ny = len(y)
     dof = nx + ny - 2
-    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
+    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1) * np.std(x, ddof = 1) ** 2 + (ny-1) * np.std(y, ddof = 1) ** 2) / dof)
     var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
   return d, var_d
 
@@ -212,34 +214,36 @@ class MissForest:
     return X_transform
 
 
-def impute_and_normalize(df, groups, impute = True, min_samples = None):
+def impute_and_normalize(df, groups, impute = True, min_samples = 0):
     """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
     | groups (list): nested list of column name lists, one list per group
     | impute (bool): replaces zeroes with predictions from MissForest; default:True
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero\n
     | Returns:
     | :-
     | Returns a dataframe in the same style as the input 
     """
-    if min_samples is None:
-      min_samples = [len(group_cols) // 2 for group_cols in groups]
-    else:
+    if min_samples:
       min_samples = [min_samples] * len(groups)
-    masks = [(df[group_cols] != 0).sum(axis = 1) >= thresh for group_cols, thresh in zip(groups, min_samples)]
-    df = df[np.all(masks, axis = 0)]
+      masks = [(df[group_cols] != 0).sum(axis = 1) >= thresh for group_cols, thresh in zip(groups, min_samples)]
+      df = df[np.all(masks, axis = 0)]
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
+    for group in groups:
+      group_data = df[group]
+      all_zero_mask = (group_data == 0).all(axis = 1)
+      df.loc[all_zero_mask, group] = 1e-6
     old_cols = []
     if isinstance(colname, int):
       old_cols = df.columns
       df.columns = df.columns.astype(str)
     if impute:
       mf = MissForest()
-      df.replace(0, np.nan, inplace = True)
+      df = df.replace(0, np.nan)
       df = mf.fit_transform(df)
     df = (df / df.sum(axis = 0)) * 100
     if len(old_cols) > 0:
@@ -248,12 +252,12 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
     return df
 
 
-def variance_based_filtering(df, min_feature_variance = 0.01):
+def variance_based_filtering(df, min_feature_variance = 0.02):
     """Variance-based filtering of features\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in index and samples in columns
-    | min_feature_variance (float): Minimum variance to include a feature in the analysis\n
+    | min_feature_variance (float): Minimum variance to include a feature in the analysis; default: 2%\n
     | Returns:
     | :-
     | Returns a pandas DataFrame with remaining glycans as indices and samples in columns
@@ -582,7 +586,7 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
     sorted_indices = np.argsort(group_p_values)
     sorted_p_values = group_p_values[sorted_indices]
     # Weight the alpha value by π0 estimate
-    adjusted_alpha = alpha / pi0_estimate
+    adjusted_alpha = alpha / max(pi0_estimate, 0.3)
     # Calculate the BH adjusted p-values
     ecdffactor = (np.arange(1, n + 1) / n)
     pvals_corrected_raw = sorted_p_values / (ecdffactor)
@@ -614,7 +618,7 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, pair
   if paired:
     temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
   else:
-    mean_cohort_a = (cohort_a.mean(axis = 1) + 1e-8).values[:, np.newaxis]
+    mean_cohort_a = np.mean(cohort_a, axis = 1).values[:, np.newaxis] + 1e-8
     temp = pd.DataFrame(np.log2((cohort_b.values + 1e-8) / mean_cohort_a))
   temp.index = glycans
   temp = temp.reset_index()
@@ -671,6 +675,29 @@ def replace_outliers_with_IQR_bounds(full_row):
   return full_row
 
 
+def replace_outliers_winsorization(full_row):
+  """Replaces outlier values using Winsorization.\n
+  | Arguments:
+  | :-
+  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical\n
+  | Returns:
+  | :-
+  | Returns row with outliers replaced by Winsorization.
+  """
+  row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
+  # Apply Winsorization - limits set to match typical IQR outlier detection
+  nan_placeholder = row.min() - 1
+  row = row.fillna(nan_placeholder)
+  winsorized_values = winsorize(row, limits = [0.05, 0.05])
+  winsorized_values = pd.Series(winsorized_values, index = row.index)
+  winsorized_values = winsorized_values.replace(nan_placeholder, np.nan)
+  if isinstance(full_row.iloc[0], str):
+    full_row.iloc[1:] = winsorized_values
+  else:
+    full_row = winsorized_values
+  return full_row
+
+
 def hotellings_t2(group1, group2, paired = False):
   """Hotelling's T^2 test (the t-test for multivariate comparisons)\n
   """
@@ -720,54 +747,47 @@ def simpson_diversity_index(counts):
   proportions = counts / counts.sum()
   return 1 - np.sum(proportions**2)
 
-def bray_curtis_diversity_index(countss1, countss2):
-  lessercounts = 0
-  for index in countss1.index:
-    lessercounts = lessercounts + np.minimum(countss1.loc[index], countss2.loc[index])
-  s1 = countss1.sum().sum()
-  s2 = countss2.sum().sum()
-  return 1 - ((2*lessercounts)/(s1 + s2))
 
-def anosim(df, reps, permutations = 999):
-  """Performs analysis of similarity statistical test
-  Inputs:
-  :-
-  df (dataframe) = distance matrix
-  reps (int) = the number of replicates per group (requires all groups to have the same number of replicates)
-  Reutrns:
-  :-
-  ANOSIM R statistic - ranges between -1 to 1.
-  p-value of the R statistic
+def get_equivalence_test(row_a, row_b, paired = False):
+  """performs an equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent\n
+  | Arguments:
+  | :-
+  | row_a (array-like): basically a row of the control samples for one glycan/motif
+  | row_b (array-like): basically a row of the case samples for one glycan/motif
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | Returns a p-value of whether the two group means can be considered equivalent
   """
-  n = len(df)
-  groups = [i for i in range(int(n / reps)) for _ in range(reps)]
-  def anosim_r(df, reps):
-    rank_matrix_index = np.tril_indices(n=len(df), k=-1)
-    rank_matrix = np.argsort(df.values[rank_matrix_index])
-    dfranks = np.zeros_like(df)
-    ranks = np.array(sorted(rank_matrix))
-    row_indices, col_indices = rank_matrix_index
-    for i in rank_matrix:
-      dfranks[row_indices[rank_matrix[i]], col_indices[rank_matrix[i]]] = ranks[i] + 1
-  # Calculate average rank within groups and average rank between groups:
-    w_groups = np.zeros(dfranks.shape)  # within groups
-    b_groups = np.zeros(dfranks.shape)  # between groups
-    for i in range(n):
-      for j in range(n):
-        if groups[i] == groups[j]:
-          w_groups[i, j] = dfranks[i, j]
-        else:
-          b_groups[i, j] = dfranks[i, j]
-    w_groups_av = np.mean(w_groups[w_groups != 0].flatten())
-    b_groups_av = np.mean(b_groups[b_groups != 0].flatten())
-    # Calculate ANOSIM statistic
-    r = (b_groups_av-w_groups_av) / (n*(n-1)/4)
-    return r
-  r_obs = anosim_r(df, reps)  # ANOSIM test statistic for observed data
-  r_permutations = np.zeros(permutations)  # Generate permuted test statistics to determine significance
-  for i in range(permutations):
-    permuted_groups = np.random.permutation(groups)
-    r_permutations[i] = anosim_r(df.loc[permuted_groups], reps)
-  # Compute p-value
-  p_value = (np.sum(r_permutations >= r_obs) + 1) / (permutations + 1)
-  return r_obs, p_value
+  pooled_std = np.sqrt(((len(row_a) - 1) * np.var(row_a, ddof = 1) + (len(row_b) - 1) * np.var(row_b, ddof = 1)) / (len(row_a) + len(row_b) - 2))
+  delta = 0.2 * pooled_std
+  low, up = -delta, delta
+  return ttost_paired(row_a, row_b, low, up)[0] if paired else ttost_ind(row_a, row_b, low, up)[0]
+
+
+def clr_transformation(df, group1, group2, gamma = 0.1):
+  """performs the Center Log-Ratio (CLR) Transformation with scale model adjustment\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing features in rows and samples in columns
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; default: 0.1\n
+  | Returns:
+  | :-
+  | Returns a dataframe that is CLR-transformed with scale model adjustment
+  """
+  geometric_mean = gmean(df.replace(0, np.nan), axis = 0)
+  if gamma and group2:
+    col_list = df.columns.tolist()
+    group1i = [col_list.index(k) for k in group1]
+    group2i = [col_list.index(k) for k in group2]
+    case_control = [0]*len(group1) + [1]*len(group2)
+    clr_adjusted = np.zeros_like(df.values)
+    geometric_mean = -np.log(geometric_mean)
+    clr_adjusted[:, group1i] = np.log(df[group1]) + geometric_mean[group1i]
+    observed = norm.rvs(loc = geometric_mean[group2i], scale = gamma, size = (df.shape[0], len(group2)))
+    clr_adjusted[:, group2i] = np.log(df[group2]) + observed
+    return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
+  else:
+    return (np.log(df) - np.log(geometric_mean))

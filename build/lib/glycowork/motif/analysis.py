@@ -1,5 +1,3 @@
-import os
-import copy
 import pickle
 import pandas as pd
 import numpy as np
@@ -7,8 +5,9 @@ import seaborn as sns
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 plt.style.use('default')
+from os import path
 from collections import Counter
-from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway
+from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway, spearmanr
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
@@ -16,12 +15,13 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
-from glycowork.glycan_data.loader import df_species, unwrap, motif_list
+from glycowork.glycan_data.loader import df_species, unwrap, motif_list, strip_suffixes
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          variance_stabilization, impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
-                                         test_inter_vs_intra_group, replace_outliers_with_IQR_bounds, hotellings_t2,
-                                         sequence_richness, shannon_diversity_index, simpson_diversity_index)
+                                         test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
+                                         sequence_richness, shannon_diversity_index, simpson_diversity_index,
+                                         get_equivalence_test, clr_transformation)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -56,7 +56,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     if multiple_samples:
         df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
         df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
-        df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+        #df = df.apply(replace_outliers_winsorization, axis = 1)
     if not zscores:
         means = df.iloc[:, 1:].mean()
         std_devs = df.iloc[:, 1:].std()
@@ -67,7 +67,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                                 custom_motifs = custom_motifs)
     # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
-        df.set_index(glycan_col_name, inplace = True)
+        df = df.set_index(glycan_col_name)
         df_motif = pd.concat([pd.concat([df.iloc[:, k],
                                    df_motif], axis = 1).dropna() for k in range(len(df.columns))], axis = 0)
         cols = df_motif.columns.values.tolist()[1:] + [df_motif.columns.values.tolist()[0]]
@@ -81,7 +81,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     ttests = [ttest_ind(np.append(df_pos.iloc[:, k] * df_pos[label_col_name], [1]),
                         np.append(df_neg.iloc[:, k] * df_neg[label_col_name], [1]),
                         equal_var = False)[1] for k in range(df_motif.shape[1]-1)]
-    ttests_corr = multipletests(ttests, method = 'fdr_bh')[1].tolist()
+    ttests_corr = multipletests(ttests, method = 'fdr_tsbh')[1].tolist()
     effect_sizes, variances = zip(*[cohen_d(np.append(df_pos.iloc[:, k].values, [1, 0]),
                                             np.append(df_neg.iloc[:, k].values, [1, 0]), paired = False) for k in range(df_motif.shape[1]-1)])
     out = pd.DataFrame({
@@ -93,7 +93,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     if sorting:
         out['abs_effect_size'] = out['effect_size'].abs()
         out = out.sort_values(by = ['abs_effect_size', 'corr_pval', 'pval'], ascending = [False, True, True])
-        out.drop('abs_effect_size', axis = 1, inplace = True)
+        out = out.drop('abs_effect_size', axis = 1)
     return out
 
 
@@ -125,7 +125,7 @@ def get_representative_substructures(enrichment_df):
 
     combined_scores = np.divide(motif_scores, length_scores)
     df_score = pd.DataFrame({'glycan': glycans, 'motif_score': motif_scores, 'length_score': length_scores, 'combined_score': combined_scores})
-    df_score.sort_values(by = 'combined_score', ascending = False, inplace = True)
+    df_score = df_score.sort_values(by = 'combined_score', ascending = False)
     # Take the 10 glycans with the highest score
     rep_motifs = df_score.glycan.values.tolist()[:10]
     rep_motifs.sort(key = len)
@@ -152,7 +152,7 @@ def clean_up_heatmap(df):
   return result
 
 
-def get_heatmap(df, motifs = False, feature_set = ['known'],
+def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
                  datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan',
                 custom_motifs = [], **kwargs):
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
@@ -164,6 +164,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'],
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
   |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
   |   and 'chemical' (molecular properties of glycan)
+  | transform (string): whether to transform the data before plotting, currently the only option is "CLR", recommended for glycomics data; default: no transformation
   | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
   | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
   | filepath (string): absolute path including full filename allows for saving the plot
@@ -177,8 +178,15 @@ def get_heatmap(df, motifs = False, feature_set = ['known'],
   if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if index_col in df.columns:
-      df.set_index(index_col, inplace = True)
-  df.fillna(0, inplace = True)
+      df = df.set_index(index_col)
+  elif isinstance(df.iloc[0,0], str):
+      df = df.set_index(df.columns.tolist()[0])
+  if isinstance(df.index.tolist()[0], str) and '('  in df.index.tolist()[0] and '-' in df.index.tolist()[0]:
+      df = df.T
+  df = df.fillna(0)
+  if transform == "CLR":
+      df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
+      df = clr_transformation(df, [], [], gamma = 0)
   if motifs:
       if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
           raise ValueError("A heatmap needs to have at least two motifs.")
@@ -197,8 +205,8 @@ def get_heatmap(df, motifs = False, feature_set = ['known'],
       elif datatype == 'presence':
           collecty = df.apply(lambda row: [row.loc[df_motif[col].dropna().index].sum() / row.sum() for col in df_motif.columns], axis = 1)
           df = pd.DataFrame(collecty.tolist(), columns = df_motif.columns, index = df.index)
-  df.dropna(axis = 1, inplace = True)
-  df = clean_up_heatmap(df.T)
+  df = df.dropna(axis = 1)
+  df = clean_up_heatmap(df.T) if motifs else df.set_index(df.columns.tolist()[0])
   if not (df < 0).any().any():
       df /= df.sum()
       df *= 100
@@ -233,8 +241,8 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
-        this_dir, this_filename = os.path.split(__file__)
-        data_path = os.path.join(this_dir, 'glycan_representations.pkl')
+        this_dir, this_filename = path.split(__file__)
+        data_path = path.join(this_dir, 'glycan_representations.pkl')
         emb = pickle.load(open(data_path, 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
     if isinstance(emb, pd.DataFrame):
@@ -471,9 +479,9 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
     return {"group1": glycans}, {"group1": p_values}
   funcs = {"by_Sia/Fuc": group_glycans_sia_fuc}
   if any([g.endswith("GalNAc") for g in glycans]):
-    funcs["by_core"]: group_glycans_core
+    funcs["by_core"] = group_glycans_core
   elif any([g.endswith("GlcNAc(b1-4)GlcNAc") for g in glycans]):
-    funcs["by_Ntype"]: group_glycans_N_glycan_type
+    funcs["by_Ntype"] = group_glycans_N_glycan_type
   out = {}
   for desc, func in funcs.items():
     grouped_glycans, grouped_p_values = func(glycans, p_values)
@@ -481,6 +489,8 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
       continue
     intra, inter = test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = paired)
     out[desc] = ((intra, inter), (grouped_glycans, grouped_p_values))
+  if not out:
+    return {"group1": glycans}, {"group1": p_values}
   desc = list(out.keys())[np.argmax([v[0][0] - v[0][1] for k, v in out.items()])]
   intra, inter = out[desc][0]
   grouped_glycans, grouped_p_values = out[desc][1]
@@ -495,7 +505,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = None, grouped_BH = False, custom_motifs = []):
+                                min_samples = 0, grouped_BH = False, custom_motifs = [], gamma = 0.1):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -512,9 +522,10 @@ def get_differential_expression(df, group1, group2,
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
   | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
   | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False
-  | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
+  | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
   | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -526,7 +537,8 @@ def get_differential_expression(df, group1, group2,
   | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
   | (vii) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
   | (viii) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
-  | (xi) [only if effect_size_variance=True] Effect size variance
+  | (xi) Corrected p-values of equivalence test to test whether means are significantly equivalent; only done for p-values > 0.05 from (iv)
+  | (x) [only if effect_size_variance=True] Effect size variance
   """
   if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
@@ -537,30 +549,35 @@ def get_differential_expression(df, group1, group2,
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
   df = df.loc[~(df == 0).all(axis = 1)]
-  df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+  df = df.apply(replace_outliers_winsorization, axis = 1)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
+  df_org = df.copy(deep = True)
+  df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
   if motifs:
       # Motif extraction and quantification
       df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+      df_org = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
       # Deduplication
       df = clean_up_heatmap(df.T)
+      df_org = clean_up_heatmap(df_org.T)
       # Re-normalization
-      df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
+      df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
   else:
-      df.set_index(df.columns.tolist()[0], inplace = True)
+      df = df.set_index(df.columns.tolist()[0])
       df = df.groupby(df.index).mean()
+      df_org = df_org.set_index(df_org.columns.tolist()[0])
+      df_org = df_org.groupby(df_org.index).mean()
   # Variance-based filtering of features
   df = variance_based_filtering(df)
   glycans = df.index.tolist()
-  mean_abundance = df.mean(axis = 1)
+  mean_abundance = df_org.mean(axis = 1)
   df_a, df_b = df[group1], df[group2]
   if sets:
       # Motif/sequence set enrichment
-      df2 = variance_stabilization(df, groups = [group1, group2])
-      clusters = create_correlation_network(df2.T, set_thresh)
-      glycans, mean_abundance_c, pvals, log2fc, levene_pvals, effect_sizes, variances = [], [], [], [], [], [], []
+      clusters = create_correlation_network(df.T, set_thresh)
+      glycans, mean_abundance_c, pvals, log2fc, levene_pvals, effect_sizes, variances, equivalence_pvals = [], [], [], [], [], [], [], []
       # Testing differential expression of each set/cluster
       for cluster in clusters:
           if len(cluster) > 1:
@@ -579,32 +596,37 @@ def get_differential_expression(df, group1, group2,
               variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
       mean_abundance = mean_abundance_c
   else:
-      log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
-      df_a, df_b = variance_stabilization(df_a), variance_stabilization(df_b)
+      org_a, org_b = df_org[group1], df_org[group2]
+      log2fc = np.log2((org_b.values + 1e-8) / (org_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(org_b.mean(axis = 1) / org_a.mean(axis = 1))
       if paired:
           assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
-      pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-      levene_pvals = [levene(row_a, row_b)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-      effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
+      pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+      equivalence_pvals = np.array([get_equivalence_test(row_a, row_b, paired = paired) if pvals[i] > 0.05 else np.nan for i, (row_a, row_b) in enumerate(zip(df_a.values, df_b.values))])
+      valid_equivalence_pvals = equivalence_pvals[~np.isnan(equivalence_pvals)]
+      corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_tsbh')[1] if len(valid_equivalence_pvals) else []
+      equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
+      equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
+      levene_pvals = [levene(row_b, row_a)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+      effects = [cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)]
+      effect_sizes, variances = list(zip(*effects)) if effects else [[0]*len(glycans), [0]*len(glycans)]
   # Multiple testing correction
   if pvals:
-      if not motifs:
+      if not motifs and grouped_BH:
           grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, paired = paired, grouped_BH = grouped_BH)
           corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
           corrpvals = [corrpvals[g] for g in glycans]
           significance = [significance_dict[g] for g in glycans]
       else:
-          corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
+          corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
           significance = [p < alpha for p in corrpvals]
-      levene_pvals = multipletests(levene_pvals, method = 'fdr_bh')[1]
+      levene_pvals = multipletests(levene_pvals, method = 'fdr_tsbh')[1]
   else:
-      corrpvals = []
-      significance = []
-  out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes)),
-                     columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size'])
+      corrpvals, significance = [1]*len(glycans), [False]*len(glycans)
+  out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes, equivalence_pvals)),
+                     columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size', 'Equivalence p-val'])
   if effect_size_variance:
       out['Effect size variance'] = variances
-  return out.dropna().sort_values(by = 'corr p-val')
+  return out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
 
 def get_pval_distribution(df_res, filepath = ''):
@@ -705,21 +727,22 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
 
 
 def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'],
-                  min_samples = None, posthoc = True, custom_motifs = []):
+                  min_samples = 0, posthoc = True, custom_motifs = [], gamma = 0.1):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-    | group_sizes (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3])
+    | groups (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3])
     | impute (bool): replaces zeroes with with a Random Forest based model; default:True
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
     | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
     | Returns:
     | :-
     | (i) a pandas DataFrame with an F statistic, corrected p-value, and indication of its significance for each glycan.
@@ -728,27 +751,23 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     if isinstance(df, str):
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     results, posthoc_results = [], {}
-    df.fillna(0, inplace = True)
-    df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+    df = df.fillna(0)
+    df = df.apply(replace_outliers_winsorization, axis = 1)
     groups_unq = sorted(set(groups))
     df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
                               min_samples = min_samples)
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
     if motifs:
-        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:,0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
         # Deduplication
         df = clean_up_heatmap(df.T)
-        # Re-normalization
-        df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
     else:
-        df.set_index(df.columns.tolist()[0], inplace = True)
+        df = df.set_index(df.columns.tolist()[0])
         df = df.groupby(df.index).mean()
     # Variance-based filtering of features
     df = variance_based_filtering(df)
-    col_names = [[col for group, col in zip(groups, df.columns) if group == unique_group]
-                 for unique_group in groups_unq]
-    df = variance_stabilization(df, groups = col_names)
     for glycan in df.index:
         # Create a DataFrame with the glycan abundance and group identifier for each sample
         data = pd.DataFrame({"Abundance": df.loc[glycan], "Group": groups})
@@ -762,7 +781,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
             posthoc = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = alpha)
             posthoc_results[glycan] = pd.DataFrame(data = posthoc._results_table.data[1:], columns = posthoc._results_table.data[0])
     results_df = pd.DataFrame(results, columns = ["Glycan", "F statistic", "corr p-val"])
-    results_df['corr p-val'] = multipletests(results_df['corr p-val'].values.tolist(), method = 'fdr_bh')[1]
+    results_df['corr p-val'] = multipletests(results_df['corr p-val'].values.tolist(), method = 'fdr_tsbh')[1]
     results_df['significant'] = [p < alpha for p in results_df['corr p-val']]
     return results_df.sort_values(by = 'corr p-val'), posthoc_results
 
@@ -809,7 +828,7 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
     if filepath:
         df_temp = pd.DataFrame({'Study': study_names, 'EffectSize': effect_sizes, 'EffectSizeVariance': variances})
         # sort studies by effect size
-        df_temp.sort_values(by = 'EffectSize', key = abs, ascending = False, inplace = True)
+        df_temp = df_temp.sort_values(by = 'EffectSize', key = abs, ascending = False)
         # calculate standard error
         standard_error = np.sqrt(df_temp['EffectSizeVariance'])
         # calculate the confidence interval
@@ -872,7 +891,7 @@ def get_glycan_change_over_time(data, degree = 1):
 
 
 def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1,
-                    min_samples = None, custom_motifs = []):
+                    min_samples = 0, custom_motifs = [], gamma = 0.1):
     """Analyzes time series data of glycans using an OLS model\n
     | Arguments:
     | :-
@@ -884,8 +903,9 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
     | degree (int): degree of the polynomial for regression, default:1 for linear regression
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
     | Returns:
     | :-
     | Returns a dataframe with:
@@ -897,10 +917,11 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     """
     if isinstance(df, str):
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-    df.fillna(0, inplace = True)
+    df = df.fillna(0)
     df = df.set_index(df.columns[0]).T
-    df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
-    df = impute_and_normalize(df, [df.columns], impute = impute, min_samples = min_samples).reset_index()
+    df = df.apply(replace_outliers_winsorization, axis = 0).reset_index(names = 'glycan')
+    df = impute_and_normalize(df, [df.columns[1:].tolist()], impute = impute, min_samples = min_samples)
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
     glycans = [k.split('.')[0] for k in df.iloc[:, 0]]
@@ -908,25 +929,23 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
         df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set, custom_motifs = custom_motifs)
         # Deduplication
         df = clean_up_heatmap(df.T)
-        # Re-normalization
-        df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
     else:
         df.index = glycans
-        df.drop([df.columns[0]], axis = 1, inplace = True)
+        df = df.drop([df.columns[0]], axis = 1)
         df = df.groupby(df.index).mean()
     df = df.T.reset_index()
     df[df.columns[0]] = df.iloc[:, 0].apply(lambda x: float(x.split('_')[1][1:]))
-    df.sort_values(by = df.columns[0], inplace = True)
+    df = df.sort_values(by = df.columns[0])
     time = df.iloc[:, 0].to_numpy()  # Time points
     res = [(c, *get_glycan_change_over_time(np.column_stack((time, df[c].to_numpy())), degree = degree)) for c in df.columns[1:]]
     res = pd.DataFrame(res, columns = ['Glycan', 'Change', 'p-val'])
-    res['corr p-val'] = multipletests(res['p-val'], method = 'fdr_bh')[1]
+    res['corr p-val'] = multipletests(res['p-val'], method = 'fdr_tsbh')[1]
     res['significant'] = [p < alpha for p in res['corr p-val']]
     return res.sort_values(by = 'corr p-val')
 
 
 def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal'],
-            custom_motifs = []):
+            custom_motifs = [], gamma = 0.1):
     """Detecting rhythmically expressed glycans via the Jonckheere–Terpstra–Kendall (JTK) algorithm\n
     | Arguments:
     | :-
@@ -940,7 +959,8 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
     | Returns:
     | :-
     | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
@@ -949,24 +969,25 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     if isinstance(df_in, str):
         df = pd.read_csv(df_in) if df_in.endswith(".csv") else pd.read_excel(df_in)
     else:
-        df = copy.deepcopy(df_in)
+        df = df_in.copy(deep = True)
     replicates = (df.shape[1] - 1) // timepoints
     alpha = get_alphaN(replicates)
     param_dic = {"GRP_SIZE": [], "NUM_GRPS": [], "MAX": [], "DIMS": [], "EXACT": bool(True),
                  "VAR": [], "EXV": [], "SDV": [], "CGOOSV": []}
     param_dic = jtkdist(timepoints, param_dic, replicates)
     param_dic = jtkinit(periods, param_dic, interval, replicates)
-    df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+    df = df.apply(replace_outliers_winsorization, axis = 1)
     mf = MissForest()
-    df.replace(0, np.nan, inplace = True)
+    df = df.replace(0, np.nan)
     annot = df.pop(df.columns.tolist()[0])
     df = mf.fit_transform(df)
+    df = clr_transformation(df, [], df.columns.tolist(), gamma = gamma)
     df.insert(0, 'Molecule_Name', annot)
     if motifs:
         df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T
         df = clean_up_heatmap(df).reset_index()
     res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
-    JTK_BHQ = pd.DataFrame(multipletests(res[0], method = 'fdr_bh')[1])
+    JTK_BHQ = pd.DataFrame(multipletests(res[0], method = 'fdr_tsbh')[1])
     Results = pd.concat([df.iloc[:, 0], JTK_BHQ, res], axis = 1)
     Results.columns = ['Molecule_Name', 'BH_Q_Value', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude']
     Results['significant'] = [p < alpha for p in Results['Adjusted_P_value']]
@@ -992,9 +1013,12 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
   | :-
   | Returns a dataframe with:
   | (i) Diversity indices/metrics
-  | (ii) Uncorrected p-values (Welch's t-test) for difference in mean
-  | (iii) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
-  | (iv) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  | (ii) Mean value of diversity metrics in group 1
+  | (iii) Mean value of diversity metrics in group 2
+  | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
+  | (v) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
+  | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  | (vii) Effect size as Cohen's d
   """
   if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
@@ -1003,9 +1027,9 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
       group1 = [columns_list[k] for k in group1]
       group2 = [columns_list[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
-  # Drop rows with all zero, followed by outlier removal and imputation & normalization
+  # Drop rows with all zero, followed by outlier removal
   df = df.loc[~(df == 0).all(axis = 1)]
-  df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+  df = df.apply(replace_outliers_winsorization, axis = 1)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
   if motifs:
@@ -1018,15 +1042,76 @@ def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaust
   unique_counts = df.iloc[:, 1:].apply(sequence_richness)
   shannon_diversity = df.iloc[:, 1:].apply(shannon_diversity_index)
   simpson_diversity = df.iloc[:, 1:].apply(simpson_diversity_index)
-  df_out = pd.DataFrame({'alpha_diversity': unique_counts,
+  df_out = pd.DataFrame({'richness': unique_counts,
                          'shannon_diversity': shannon_diversity, 'simpson_diversity': simpson_diversity}).T
   df_a, df_b = df_out[group1], df_out[group2]
+  mean_a, mean_b = [np.mean(row_a) for row_a in df_a.values], [np.mean(row_b) for row_b in df_b.values]
   if paired:
     assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
   pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
   pvals = [p if p > 0 and p < 1 else 1.0 for p in pvals]
-  corrpvals = multipletests(pvals, method = 'fdr_bh')[1]
+  corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
   significance = [p < alpha for p in corrpvals]
-  out = pd.DataFrame(list(zip(df_out.index.tolist(), pvals, corrpvals, significance)),
-                     columns = ["Metric", "p-val", "corr p-val", "significant"])
+  effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
+  out = pd.DataFrame(list(zip(df_out.index.tolist(), mean_a, mean_b, pvals, corrpvals, significance, effect_sizes)),
+                     columns = ["Metric", "Group1 mean", "Group2 mean", "p-val", "corr p-val", "significant", "Effect size"])
   return out.sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+
+
+def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], custom_motifs = [], gamma = 0.1):
+  """Performs SparCC (Sparse Correlations for Compositional Data) on two (glycomics) datasets. Samples should be in the same order.\n
+  | Arguments:
+  | :-
+  | df1 (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | df2 (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
+  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
+  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
+  |   and 'chemical' (molecular properties of glycan)
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
+  | Returns:
+  | :-
+  | Returns (i) a dataframe of pairwise correlations (Spearman's rho)
+  | and (ii) a dataframe with corrected p-values (two-stage Benjamini-Hochberg)
+  """
+  if isinstance(df1, str):
+    df1 = pd.read_csv(df1) if df1.endswith(".csv") else pd.read_excel(df1)
+    df2 = pd.read_csv(df2) if df2.endswith(".csv") else pd.read_excel(df2)
+  df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
+  df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
+  # Drop rows with all zero, followed by outlier removal and imputation & normalization
+  df1 = df1.loc[~(df1 == 0).all(axis = 1)]
+  df1 = df1.apply(replace_outliers_winsorization, axis = 1)
+  df1 = impute_and_normalize(df1, [df1.columns.tolist()[1:]])
+  df2 = df2.loc[~(df2 == 0).all(axis = 1)]
+  df2 = df2.apply(replace_outliers_winsorization, axis = 1)
+  df2 = impute_and_normalize(df2, [df2.columns.tolist()[1:]])
+  # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+  alpha = get_alphaN(df1.shape[1] - 1)
+  if motifs:
+    df1 = quantify_motifs(df1.iloc[:, 1:], df1.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+    df1 = clean_up_heatmap(df1.T)
+    if '(' in df2.iloc[:, 0].values.tolist()[0]:
+      df2 = quantify_motifs(df2.iloc[:, 1:], df2.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+      df2 = clean_up_heatmap(df2.T)
+    else:
+      df2 = df2.set_index(df2.columns.tolist()[0])
+  else:
+    df1 = df1.set_index(df1.columns.tolist()[0])
+    df2 = df2.set_index(df2.columns.tolist()[0])
+  df1 = clr_transformation(df1, [], df1.columns.tolist(), gamma = gamma).T
+  df2 = clr_transformation(df2, [], df2.columns.tolist(), gamma = gamma).T
+  correlation_matrix = np.zeros((df1.shape[1], df2.shape[1]))
+  p_value_matrix = np.zeros((df1.shape[1], df2.shape[1]))
+  # Compute Spearman correlation for each pair of columns between transformed df1 and df2
+  for i in range(df1.shape[1]):
+    for j in range(df2.shape[1]):
+      corr, p_val = spearmanr(df1.iloc[:, i], df2.iloc[:, j])
+      correlation_matrix[i, j] = corr
+      p_value_matrix[i, j] = p_val
+  p_value_matrix = multipletests(p_value_matrix.flatten(), method = 'fdr_tsbh')[1].reshape(p_value_matrix.shape)
+  correlation_df = pd.DataFrame(correlation_matrix, index = df1.columns, columns = df2.columns)
+  p_value_df = pd.DataFrame(p_value_matrix, index = df1.columns, columns = df2.columns)
+  return correlation_df, p_value_df

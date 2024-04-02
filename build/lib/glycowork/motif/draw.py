@@ -2172,7 +2172,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
           svg2pdf(bytestring = data, write_to = filepath)
         except:
           raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-  return d2 if is_jupyter() or suppress else display_svg_with_matplotlib(d2)
+  return d2 if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
 
 
 def scale_in_range(listy, a, b):

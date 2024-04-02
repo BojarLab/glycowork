@@ -147,7 +147,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   | :-                      
   | Returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
   """
-  if any([k in glycans[0] for k in [';', '-D-', 'RES', '=']]):
+  if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if motifs is None:
     motifs = motif_list
@@ -296,7 +296,7 @@ def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False, ter
   """
   if not isinstance(glycans, list):
     raise TypeError("The input has to be a list of glycans")
-  if any([k in glycans[0] for k in [';', '-D-', 'RES', '=']]):
+  if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if up_to:
     wga_letter = pd.DataFrame([{i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(glycans) if i not in linkages} for g in glycans])
@@ -389,9 +389,9 @@ def group_glycans_core(glycans, p_values):
   | :-
   | Returns dictionaries of group : glycans and group : p-values
   """
-  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
-  grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAc6S(b1-6)GalNAc"]])]
+  grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAcOS(b1-6)GalNAc"]])]
   grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and not g in grouped_glycans["core2"]]
   grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["core2"] and g not in grouped_glycans["core1"]]
   grouped_p_values["core2"] = [temp[g] for g in grouped_glycans["core2"]]
@@ -413,7 +413,7 @@ def group_glycans_sia_fuc(glycans, p_values):
   | :-
   | Returns dictionaries of group : glycans and group : p-values
   """
-  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
   grouped_glycans["SiaFuc"] = [g for g in glycans if "Neu" in g and "Fuc" in g]
   grouped_glycans["Sia"] = [g for g in glycans if "Neu" in g and g not in grouped_glycans["SiaFuc"]]
@@ -440,7 +440,7 @@ def group_glycans_N_glycan_type(glycans, p_values):
   | :-
   | Returns dictionaries of group : glycans and group : p-values
   """
-  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
   grouped_glycans["complex"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-6)", "GlcNAc(b1-2)Man(a1-?)[GlcNAc(b1-2)Man(a1-?)]Man"]])]
   grouped_glycans["hybrid"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man"]]) and g not in grouped_glycans["complex"]]
