@@ -1152,9 +1152,3 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   correlation_df = pd.DataFrame(correlation_matrix, index = df1.columns, columns = df2.columns)
   p_value_df = pd.DataFrame(p_value_matrix, index = df1.columns, columns = df2.columns)
   return correlation_df, p_value_df
-
-import copy
-data = pd.read_csv(r'C:\Users\Alex Bennett\Desktop\test2.csv')
-data2 = copy.deepcopy(data)
-bd = get_biodiversity(data2, [1,2,3,4], [9,10,11,12], beta = True, motifs = False, paired = True)
-#bd = get_biodiversity(data2, [1,1,1,2,2,2], [], beta = False, motifs = False, paired = True)
