@@ -14,7 +14,6 @@ from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-import copy
 
 from glycowork.glycan_data.loader import df_species, unwrap, motif_list, strip_suffixes
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
@@ -996,13 +995,14 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     return Results.sort_values("Adjusted_P_value")
 
 
-def get_biodiversity(df, group_sizes, beta = False, motifs = False, feature_set = ['exhaustive', 'known'],
+def get_biodiversity(df, group1, group2, beta = False, motifs = False, feature_set = ['exhaustive', 'known'],
                      custom_motifs = [], paired = False, permutations = 999, gamma = 0.1):
     """Calculates diversity indices from glycomics data, similar to alpha diversity etc in microbiome data\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-    | group_sizes (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3]), leave empty if there are no replicates
+    | group1 (list): a list of column identifiers corresponding to samples in group 1
+    | group2 (list): a list of column identifiers corresponding to samples in group 2 (note, if an empty list is provided,group 1 can be used a list of group identifiers for each column - e.g., [1,1,1,2,2,2,3,3,3])
     | beta (bool): flag indicating whether to perform alpha diversity or beta diversity analyses; default:False
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
@@ -1026,10 +1026,14 @@ def get_biodiversity(df, group_sizes, beta = False, motifs = False, feature_set 
     df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
-    groups_unq = sorted(set(group_sizes))
+    if not group2:
+        group_sizes = group1
+    else:
+        group1 = [i-1 for i in group1]
+        group2 = [i-1 for i in group2]
+        df = pd.concat([df.iloc[:, group1], df.iloc[:, group2]], axis=1)
+        group_sizes = list(len(group1)*[1]+len(group2)*[2])
     group_counts = Counter(group_sizes)
-    col_names = [[col for group, col in zip(group_sizes, df.columns) if group == unique_group]
-                 for unique_group in groups_unq]
     if motifs:
         # Reinsert labels
         df.insert(0, 'Molecule_Name', annot)
@@ -1051,7 +1055,6 @@ def get_biodiversity(df, group_sizes, beta = False, motifs = False, feature_set 
         out_len = int(np.sqrt(len(df_out)))
         df_out_values = df_out.values.reshape(out_len, out_len)
         df_out = pd.DataFrame(data=df_out_values, index=range(out_len), columns=range(out_len))
-        group_counts = Counter(group_sizes)
         if all(count > 1 for count in group_counts.values()):
             r = anosim(df_out, group_sizes, permutations)
             p = [r[1]]
@@ -1061,9 +1064,9 @@ def get_biodiversity(df, group_sizes, beta = False, motifs = False, feature_set 
         else:
             return df_out
     else:
-        unique_counts = df.iloc[:, 0:].apply(sequence_richness)
-        shan_div = df.iloc[:, 0:].apply(shannon_diversity_index)
-        simp_div = df.iloc[:, 0:].apply(simpson_diversity_index)
+        unique_counts = df.apply(sequence_richness)
+        shan_div = df.apply(shannon_diversity_index)
+        simp_div = df.apply(simpson_diversity_index)
         df_out = pd.DataFrame({'alpha_diversity': unique_counts,
                                'shannon_diversity': shan_div, 'simpson_diversity': simp_div}).T
         if len(group_counts) == 2:
@@ -1076,16 +1079,14 @@ def get_biodiversity(df, group_sizes, beta = False, motifs = False, feature_set 
             pvals = [p if p > 0 and p < 1 else 1.0 for p in pvals]
             corrpvals = multipletests(pvals, method='fdr_bh')[1]
             significance = [p < alpha for p in corrpvals]
-            out = pd.DataFrame(list(zip(df_out.index.tolist(), pvals, corrpvals, significance)),
+            df_out = pd.DataFrame(list(zip(df_out.index.tolist(), pvals, corrpvals, significance)),
                                columns=["Metric", "p-val", "corr p-val", "significant"])
-            return out.sort_values(by='p-val').sort_values(by='corr p-val')
+            return df_out.sort_values(by='p-val').sort_values(by='corr p-val')
         if all(count > 1 for count in group_counts.values()):
             sh_stats = alpha_biodiversity_stats(shan_div, group_sizes)
             si_stats = alpha_biodiversity_stats(simp_div, group_sizes)
-            sh_pvals = [p if p > 0 and p < 1 else 1.0 for p in [sh_stats[1]]]
-            si_pvals = [p if p > 0 and p < 1 else 1.0 for p in [si_stats[1]]]
-            sh_pvals = [sh_pvals < alpha]
-            si_pvals = [si_pvals < alpha]
+            sh_pvals = [[p if p > 0 and p < 1 else 1.0 for p in [sh_stats[1]]] < alpha]
+            si_pvals = [[p if p > 0 and p < 1 else 1.0 for p in [si_stats[1]]] < alpha]
             test_stats = pd.DataFrame({'shannon_diversity': [sh_stats[0]], 'Shannon_p_value': [sh_stats[1]],
                                        'Shannon_significance': sh_pvals, 'Simpson_diversity': [si_stats[0]],
                                        'Simpson_p_value': [si_stats[1]], 'Simpson_significance': si_pvals})
@@ -1151,3 +1152,9 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   correlation_df = pd.DataFrame(correlation_matrix, index = df1.columns, columns = df2.columns)
   p_value_df = pd.DataFrame(p_value_matrix, index = df1.columns, columns = df2.columns)
   return correlation_df, p_value_df
+
+import copy
+data = pd.read_csv(r'C:\Users\Alex Bennett\Desktop\test2.csv')
+data2 = copy.deepcopy(data)
+bd = get_biodiversity(data2, [1,2,3,4], [9,10,11,12], beta = True, motifs = False, paired = True)
+#bd = get_biodiversity(data2, [1,1,1,2,2,2], [], beta = False, motifs = False, paired = True)
