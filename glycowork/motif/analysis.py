@@ -1002,7 +1002,7 @@ def get_biodiversity(df, group1, group2, beta = False, motifs = False, feature_s
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
     | group1 (list): a list of column identifiers corresponding to samples in group 1
-    | group2 (list): a list of column identifiers corresponding to samples in group 2 (note, if an empty list is provided,group 1 can be used a list of group identifiers for each column - e.g., [1,1,1,2,2,2,3,3,3])
+    | group2 (list): a list of column identifiers corresponding to samples in group 2 (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
     | beta (bool): flag indicating whether to perform alpha diversity or beta diversity analyses; default:False
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
