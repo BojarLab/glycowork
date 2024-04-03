@@ -22,7 +22,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, aitchison_diversity_index, anosim,
-                                         alpha_biodiversity_stats, replace_outliers_with_IQR_bounds)
+                                         alpha_biodiversity_stats)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -1023,7 +1023,7 @@ def get_biodiversity(df, group1, group2, beta = False, motifs = False, feature_s
     df = df.fillna(0)
     # Drop rows with all zero, followed by outlier removal and imputation & normalization
     df = df.loc[~(df == 0).all(axis = 1)]
-    df = df.apply(replace_outliers_with_IQR_bounds, axis = 1)
+    df = df.apply(replace_outliers_winsorization, axis = 1)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
     if not group2:
@@ -1077,7 +1077,7 @@ def get_biodiversity(df, group1, group2, beta = False, motifs = False, feature_s
             pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var=False)[1] for
                      row_a, row_b in zip(dfo_group1.values, dfo_group2.values)]
             pvals = [p if p > 0 and p < 1 else 1.0 for p in pvals]
-            corrpvals = multipletests(pvals, method='fdr_bh')[1]
+            corrpvals = multipletests(pvals, method='fdr_tsbh')[1]
             significance = [p < alpha for p in corrpvals]
             df_out = pd.DataFrame(list(zip(df_out.index.tolist(), pvals, corrpvals, significance)),
                                columns=["Metric", "p-val", "corr p-val", "significant"])
