@@ -1020,7 +1020,6 @@ def get_biodiversity(df_in, group1, group2, metrics = ['alpha','beta'], motifs =
     df = df_in.copy(deep = True)
     if isinstance(df, str):
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-    #annot = df.pop(df.columns.tolist()[0])
     df.iloc[:, 1:].fillna(0)
     # Drop rows with all zero, followed by outlier removal and imputation & normalization
     df.iloc[:, 1:] = df.iloc[:, 1:].loc[~(df == 0).all(axis = 1)]
@@ -1045,11 +1044,13 @@ def get_biodiversity(df_in, group1, group2, metrics = ['alpha','beta'], motifs =
         # Deduplication
         df = clean_up_heatmap(df.T)
         # Re-normalization
-        df = df.iloc[:, 1:].apply(lambda col: col / col.sum() * 100, axis = 0).reset_index()
+        df.iloc[:, 1:].apply(lambda col: col / col.sum() * 100, axis = 0).reset_index()
+    else:
+        df.set_index(df.columns[0], inplace = True)
     if 'alpha' in metrics:
-        unique_counts = df.iloc[:, 1:].apply(sequence_richness)
-        shan_div = df.iloc[:, 1:].apply(shannon_diversity_index)
-        simp_div = df.iloc[:, 1:].apply(simpson_diversity_index)
+        unique_counts = df.iloc[:, 0:].apply(sequence_richness)
+        shan_div = df.iloc[:, 0:].apply(shannon_diversity_index)
+        simp_div = df.iloc[:, 0:].apply(simpson_diversity_index)
         a_df_out = pd.DataFrame({'species_richness': unique_counts,
                                'shannon_diversity': shan_div, 'simpson_diversity': simp_div}).T
         shopping_cart['Alpha_diversity_indexes'] = a_df_out
@@ -1078,7 +1079,7 @@ def get_biodiversity(df_in, group1, group2, metrics = ['alpha','beta'], motifs =
             shopping_cart['Alpha_diversity_anova_statistics'] = a_test_stats
     if 'beta' in metrics:
         b_df = df.copy(deep = True)
-        b_df.iloc[:, 1:] = clr_transformation(b_df.iloc[:, 1:], group1, group2, gamma = gamma)
+        b_df.iloc[:, 0:] = clr_transformation(b_df.iloc[:, 0:], group1, group2, gamma = gamma)
         bc_diversity = {}  # Calculating pair-wise indexes
         for index_1 in range(1, len(b_df.columns)):
             for index_2 in range(1, len(b_df.columns)):
