@@ -22,6 +22,8 @@ glycowork/glycan_data/__init__.py
 glycowork/glycan_data/data_entry.py
 glycowork/glycan_data/glycan_binding.csv
 glycowork/glycan_data/glycan_motifs.csv
+glycowork/glycan_data/glycomics_HIV_gagtransfection_N_PMID35112714.csv
+glycowork/glycan_data/glycomics_HIV_gagtransfection_O_PMID35112714.csv
 glycowork/glycan_data/glycomics_human_brain_GSL_PMID38343116.csv
 glycowork/glycan_data/glycomics_human_brain_N_PMID38343116.csv
 glycowork/glycan_data/glycomics_human_brain_O_PMID38343116.csv

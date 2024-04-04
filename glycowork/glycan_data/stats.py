@@ -16,6 +16,7 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import copy
 rng = np.random.default_rng(42)
+np.random.seed(0)
 
 
 def fast_two_sum(a, b):
@@ -78,8 +79,11 @@ def cohen_d(x, y, paired = False):
   if paired:
     assert len(x) == len(y), "For paired samples, the size of x and y should be the same"
     diff = np.array(x) - np.array(y)
+    diff_std = np.std(diff, ddof = 1)
+    if diff_std == 0:
+      return 0, 0
     n = len(diff)
-    d = np.mean(diff) / np.std(diff, ddof = 1)
+    d = np.mean(diff) / diff_std
     var_d = 1 / n + d**2 / (2 * n)
   else:
     nx = len(x)
@@ -794,66 +798,57 @@ def clr_transformation(df, group1, group2, gamma = 0.1):
     return (np.log(df) - np.log(geometric_mean))
 
 
-def aitchison_diversity_index(countss1, countss2):
-  diff_squared = 0
-  for index in countss1.index:
-    diff_squared = diff_squared + ((countss1.loc[index]-countss2.loc[index])**2)
-  return math.sqrt(diff_squared)
-
-
-def anosim(df, group_sizes, permutations = 999):
-  """Performs analysis of similarity statistical test
-  Inputs:
-  :-
-  df (dataframe) = distance matrix
-  reps (int) = the number of replicates per group (requires all groups to have the same number of replicates)
-  Reutrns:
-  :-
-  ANOSIM R statistic - ranges between -1 to 1.
-  p-value of the R statistic
+def anosim(df, group_labels, permutations = 999):
+  """Performs analysis of similarity statistical test\n
+  | Arguments:
+  | :-
+  | df (dataframe): square distance matrix
+  | group_labels (list): list of group membership for each sample
+  | permutations (int): number of permutations to perform in ANOSIM statistical test; default:999\n
+  | Returns:
+  | :-
+  | (i) ANOSIM R statistic - ranges between -1 to 1.
+  | (ii) p-value of the R statistic
   """
-  n = len(df)
-  groups = copy.deepcopy(group_sizes)
-  def anosim_r(df):
-    rank_matrix_index = np.tril_indices(n=len(df), k=-1)
-    rank_matrix = np.argsort(df.values[rank_matrix_index])
-    dfranks = np.zeros_like(df)
-    ranks = np.array(sorted(rank_matrix))
-    row_indices, col_indices = rank_matrix_index
-    for i in rank_matrix:
-      dfranks[row_indices[rank_matrix[i]], col_indices[rank_matrix[i]]] = ranks[i] + 1
-  # Calculate average rank within groups and average rank between groups:
-    w_groups = np.zeros(dfranks.shape)  # within groups
-    b_groups = np.zeros(dfranks.shape)  # between groups
-    for i in range(n):
-      for j in range(n):
-        if groups[i] == groups[j]:
-          w_groups[i, j] = dfranks[i, j]
-        else:
-          b_groups[i, j] = dfranks[i, j]
-    w_groups_av = np.mean(w_groups[w_groups != 0].flatten())
-    b_groups_av = np.mean(b_groups[b_groups != 0].flatten())
-    # Calculate ANOSIM statistic
-    r = (b_groups_av-w_groups_av) / (n*(n-1)/4)
-    return r
-  r_obs = anosim_r(df)  # ANOSIM test statistic for observed data
-  r_permutations = np.zeros(permutations)  # Generate permuted test statistics to determine significance
+  n = df.shape[0]
+  condensed_dist = df.values[np.tril_indices(n, k = -1)]
+  ranks = rankdata(condensed_dist, method = 'average')
+  # Boolean array for within and between group comparisons
+  group_matrix = np.equal.outer(group_labels, group_labels)
+  within_group_indices = group_matrix[np.tril_indices(n, k = -1)]
+  # Mean ranks for within and between groups
+  mean_rank_within = np.mean(ranks[within_group_indices])
+  mean_rank_between = np.mean(ranks[~within_group_indices])
+  # R statistic
+  divisor = n * (n - 1) / 4
+  R = (mean_rank_between - mean_rank_within) / divisor
+  # Permutation test
+  permuted_Rs = np.zeros(permutations)
   for i in range(permutations):
-    permuted_groups = np.random.permutation(groups)
-    r_permutations[i] = anosim_r(df.loc[permuted_groups])
-  # Compute p-value
-  p_value = (np.sum(r_permutations >= r_obs) + 1) / (permutations + 1)
-  return r_obs, p_value
+    np.random.shuffle(group_labels)
+    permuted_group_matrix = np.equal.outer(group_labels, group_labels)
+    permuted_within_group_indices = permuted_group_matrix[np.tril_indices(n, k = -1)]
+    perm_mean_rank_within = np.mean(ranks[permuted_within_group_indices])
+    perm_mean_rank_between = np.mean(ranks[~permuted_within_group_indices])
+    permuted_Rs[i] = (perm_mean_rank_between - perm_mean_rank_within) / divisor
+  # Calculate the p-value
+  p_value = np.sum(permuted_Rs >= R) / permutations
+  return R, p_value
 
 
-def alpha_biodiversity_stats(df, group_sizes):
-  group_counts = Counter(group_sizes)
+def alpha_biodiversity_stats(df, group_labels):
+  """Performs an ANOVA on the respective alpha diversity distance\n
+  | Arguments:
+  | :-
+  | df (dataframe): square distance matrix
+  | group_labels (list): list of group membership for each sample\n
+  | Returns:
+  | :-
+  | F statistic and p-value
+  """
+  group_counts = Counter(group_labels)
   if all(count > 1 for count in group_counts.values()):
-    stat_outputs = pd.concat([pd.DataFrame(group_sizes), df.reset_index(drop=True)], axis=1)
-    stat_outputs.columns = ['group', 'diversity']
-    df_grouped = pd.DataFrame()
-    for group in stat_outputs['group'].unique():
-      filtered_df = stat_outputs[stat_outputs['group'] == group]
-      df_grouped[group] = filtered_df['diversity'].tolist()
-    stats = f_oneway(*[df_grouped.iloc[:, i] for i in range(len(df_grouped.columns))])
+    stat_outputs = pd.DataFrame({'group': group_labels, 'diversity': df.squeeze()})
+    grouped_diversity = stat_outputs.groupby('group')['diversity'].apply(list).tolist()
+    stats = f_oneway(*grouped_diversity)
     return stats
