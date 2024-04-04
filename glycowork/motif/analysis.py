@@ -995,7 +995,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     return Results.sort_values("Adjusted_P_value")
 
 
-def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = False, feature_set = ['exhaustive', 'known'],
+def get_biodiversity(df_in, group1, group2, metrics = ['alpha','beta'], motifs = False, feature_set = ['exhaustive', 'known'],
                      custom_motifs = [], paired = False, permutations = 999, gamma = 0.1):
     """Calculates diversity indices from glycomics data, similar to alpha diversity etc in microbiome data\n
     | Arguments:
@@ -1017,6 +1017,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
     | (i) The Bray-Curtis distance matrix of the inputted samples
     | (ii) (If reps >1) ANOSIM test statistics, indicating differences between groups.
     """
+    df = df_in.copy(deep = True)
     if isinstance(df, str):
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     #annot = df.pop(df.columns.tolist()[0])
