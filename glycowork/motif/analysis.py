@@ -995,7 +995,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     return Results.sort_values("Adjusted_P_value")
 
 
-def get_biodiversity(df, group1, group2, beta = False, motifs = False, feature_set = ['exhaustive', 'known'],
+def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = False, feature_set = ['exhaustive', 'known'],
                      custom_motifs = [], paired = False, permutations = 999, gamma = 0.1):
     """Calculates diversity indices from glycomics data, similar to alpha diversity etc in microbiome data\n
     | Arguments:
@@ -1003,7 +1003,7 @@ def get_biodiversity(df, group1, group2, beta = False, motifs = False, feature_s
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
     | group1 (list): a list of column identifiers corresponding to samples in group 1
     | group2 (list): a list of column identifiers corresponding to samples in group 2 (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
-    | beta (bool): flag indicating whether to perform alpha diversity or beta diversity analyses; default:False
+    | metrics (list): which diversity metrics to calculate (alpha, beta)
     | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
@@ -1019,80 +1019,84 @@ def get_biodiversity(df, group1, group2, beta = False, motifs = False, feature_s
     """
     if isinstance(df, str):
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-    annot = df.pop(df.columns.tolist()[0])
-    df = df.fillna(0)
+    #annot = df.pop(df.columns.tolist()[0])
+    df.iloc[:, 1:].fillna(0)
     # Drop rows with all zero, followed by outlier removal and imputation & normalization
-    df = df.loc[~(df == 0).all(axis = 1)]
-    df = df.apply(replace_outliers_winsorization, axis = 1)
+    df.iloc[:, 1:] = df.iloc[:, 1:].loc[~(df == 0).all(axis = 1)]
+    df.iloc[:, 1:].apply(replace_outliers_winsorization, axis = 1)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
+    shopping_cart = {}
     if not group2:
         group_sizes = group1
     else:
-        group1 = [i-1 for i in group1]
-        group2 = [i-1 for i in group2]
-        df = pd.concat([df.iloc[:, group1], df.iloc[:, group2]], axis=1)
+        columns_list = df.columns.tolist()
+        group1 = [i for i in group1]
+        group2 = [i for i in group2]
+        df = pd.concat([df.iloc[:,0],df.iloc[:, [i for i in group1]], df.iloc[:, [i for i in group2]]], axis=1)
         group_sizes = list(len(group1)*[1]+len(group2)*[2])
+        group1 = [columns_list[k] for k in group1]
+        group2 = [columns_list[k] for k in group2]
     group_counts = Counter(group_sizes)
     if motifs:
-        # Reinsert labels
-        df.insert(0, 'Molecule_Name', annot)
         # Motif extraction and quantification
         df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
         # Deduplication
         df = clean_up_heatmap(df.T)
         # Re-normalization
-        df = df.apply(lambda col: col / col.sum() * 100, axis = 0).reset_index()
-        df = df.iloc[:, 1:]
-    if beta:
-        df = clr_transformation(df, [], df.columns.tolist(), gamma=gamma)
-        bc_diversity = {}  # Calculating pair-wise indexes
-        for index_1 in range(0, len(df.columns)):
-            for index_2 in range(0, len(df.columns)):
-                bc_pair = aitchison_diversity_index(df.iloc[:, index_1], df.iloc[:, index_2])
-                bc_diversity[index_1, index_2] = bc_pair
-        df_out = pd.DataFrame.from_dict(bc_diversity, orient = 'index')
-        out_len = int(np.sqrt(len(df_out)))
-        df_out_values = df_out.values.reshape(out_len, out_len)
-        df_out = pd.DataFrame(data=df_out_values, index=range(out_len), columns=range(out_len))
-        if all(count > 1 for count in group_counts.values()):
-            r = anosim(df_out, group_sizes, permutations)
-            p = [r[1]]
-            significance = [p < alpha]
-            test_stats = pd.DataFrame({'Anosim_R_value': [r[0]], 'p_value': p, 'significance': significance})
-            return df_out, test_stats
-        else:
-            return df_out
-    else:
-        unique_counts = df.apply(sequence_richness)
-        shan_div = df.apply(shannon_diversity_index)
-        simp_div = df.apply(simpson_diversity_index)
-        df_out = pd.DataFrame({'alpha_diversity': unique_counts,
+        df = df.iloc[:, 1:].apply(lambda col: col / col.sum() * 100, axis = 0).reset_index()
+    if 'alpha' in metrics:
+        unique_counts = df.iloc[:, 1:].apply(sequence_richness)
+        shan_div = df.iloc[:, 1:].apply(shannon_diversity_index)
+        simp_div = df.iloc[:, 1:].apply(simpson_diversity_index)
+        a_df_out = pd.DataFrame({'species_richness': unique_counts,
                                'shannon_diversity': shan_div, 'simpson_diversity': simp_div}).T
+        shopping_cart['Alpha_diversity_indexes'] = a_df_out
         if len(group_counts) == 2:
-            dfo_group1 = df_out.iloc[:, 0:int(group_sizes.count(1))]
-            dfo_group2 = df_out.iloc[:, int(group_sizes.count(1)):int(group_sizes.count(1))+int(group_sizes.count(2))]
+            a_dfo_group1 = a_df_out.iloc[:, 0:int(group_sizes.count(1))]
+            a_dfo_group2 = a_df_out.iloc[:, int(group_sizes.count(1)):int(group_sizes.count(1))+int(group_sizes.count(2))]
             if paired:
-                assert len(dfo_group1) == len(dfo_group2), "For paired samples, the size of group1 and group2 should be the same"
+                assert len(a_dfo_group1) == len(a_dfo_group2), "For paired samples, the size of group1 and group2 should be the same"
             pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var=False)[1] for
-                     row_a, row_b in zip(dfo_group1.values, dfo_group2.values)]
+                     row_a, row_b in zip(a_dfo_group1.values, a_dfo_group2.values)]
             pvals = [p if p > 0 and p < 1 else 1.0 for p in pvals]
             corrpvals = multipletests(pvals, method='fdr_tsbh')[1]
             significance = [p < alpha for p in corrpvals]
-            df_out = pd.DataFrame(list(zip(df_out.index.tolist(), pvals, corrpvals, significance)),
+            a_df_stats = pd.DataFrame(list(zip(a_df_out.index.tolist(), pvals, corrpvals, significance)),
                                columns=["Metric", "p-val", "corr p-val", "significant"])
-            return df_out.sort_values(by='p-val').sort_values(by='corr p-val')
-        if all(count > 1 for count in group_counts.values()):
+            shopping_cart['Alpha_diversity_t_test_statistics'] = \
+                (a_df_stats.sort_values(by='p-val').sort_values(by='corr p-val'))
+        if all(count > 2 for count in group_counts.values()) and len(group_counts) > 2:
             sh_stats = alpha_biodiversity_stats(shan_div, group_sizes)
             si_stats = alpha_biodiversity_stats(simp_div, group_sizes)
             sh_pvals = [[p if p > 0 and p < 1 else 1.0 for p in [sh_stats[1]]] < alpha]
             si_pvals = [[p if p > 0 and p < 1 else 1.0 for p in [si_stats[1]]] < alpha]
-            test_stats = pd.DataFrame({'shannon_diversity': [sh_stats[0]], 'Shannon_p_value': [sh_stats[1]],
-                                       'Shannon_significance': sh_pvals, 'Simpson_diversity': [si_stats[0]],
+            a_test_stats = pd.DataFrame({'shannon_anova_test_statistic': [sh_stats[0]], 'Shannon_p_value': [sh_stats[1]],
+                                       'Shannon_significance': sh_pvals, 'Simpson_anova_test_statistic': [si_stats[0]],
                                        'Simpson_p_value': [si_stats[1]], 'Simpson_significance': si_pvals})
-            return df_out, test_stats
+            shopping_cart['Alpha_diversity_anova_statistics'] = a_test_stats
+    if 'beta' in metrics:
+        b_df = df.copy(deep = True)
+        b_df.iloc[:, 1:] = clr_transformation(b_df.iloc[:, 1:], group1, group2, gamma = gamma)
+        bc_diversity = {}  # Calculating pair-wise indexes
+        for index_1 in range(1, len(b_df.columns)):
+            for index_2 in range(1, len(b_df.columns)):
+                bc_pair = aitchison_diversity_index(b_df.iloc[:, index_1], b_df.iloc[:, index_2])
+                bc_diversity[index_1, index_2] = bc_pair
+        b_df_out = pd.DataFrame.from_dict(bc_diversity, orient = 'index')
+        out_len = int(np.sqrt(len(b_df_out)))
+        b_df_out_values = b_df_out.values.reshape(out_len, out_len)
+        beta_df_out = pd.DataFrame(data=b_df_out_values, index=range(out_len), columns=range(out_len))
+        if all(count > 1 for count in group_counts.values()):
+            r = anosim(beta_df_out, group_sizes, permutations)
+            p = [r[1]]
+            significance = [p < alpha]
+            b_test_stats = pd.DataFrame({'Anosim_R_value': [r[0]], 'p_value': p, 'significance': significance})
+            shopping_cart['Beta_diversity_matrix'] = beta_df_out
+            shopping_cart['Beta_diversity_statistics'] = b_test_stats
         else:
-            return df_out
+            shopping_cart['Beta_diversity_matrix'] = beta_df_out
+    return shopping_cart
 
 
 def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], custom_motifs = [], gamma = 0.1):
