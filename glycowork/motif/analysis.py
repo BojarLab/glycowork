@@ -21,7 +21,8 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
                                          test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
-                                         get_equivalence_test, clr_transformation)
+                                         get_equivalence_test, clr_transformation, aitchison_diversity_index, anosim,
+                                         alpha_biodiversity_stats)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -994,68 +995,110 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     return Results.sort_values("Adjusted_P_value")
 
 
-def get_biodiversity(df, group1, group2, motifs = False, feature_set = ['exhaustive', 'known'],
-                     paired = False, custom_motifs = []):
-  """Calculates diversity indices from glycomics data, similar to alpha diversity etc in microbiome data\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | group1 (list): list of column indices or names for the first group of samples, usually the control
-  | group2 (list): list of column indices or names for the second group of samples
-  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-  |   and 'chemical' (molecular properties of glycan)
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
-  | Returns:
-  | :-
-  | Returns a dataframe with:
-  | (i) Diversity indices/metrics
-  | (ii) Mean value of diversity metrics in group 1
-  | (iii) Mean value of diversity metrics in group 2
-  | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
-  | (v) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
-  | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
-  | (vii) Effect size as Cohen's d
-  """
-  if isinstance(df, str):
-      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-  if not isinstance(group1[0], str):
-      columns_list = df.columns.tolist()
-      group1 = [columns_list[k] for k in group1]
-      group2 = [columns_list[k] for k in group2]
-  df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
-  # Drop rows with all zero, followed by outlier removal
-  df = df.loc[~(df == 0).all(axis = 1)]
-  df = df.apply(replace_outliers_winsorization, axis = 1)
-  # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
-  alpha = get_alphaN(df.shape[1] - 1)
-  if motifs:
-    # Motif extraction and quantification
-    df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-    # Deduplication
-    df = clean_up_heatmap(df.T)
-    # Re-normalization
-    df = df.apply(lambda col: col / col.sum() * 100, axis = 0).reset_index()
-  unique_counts = df.iloc[:, 1:].apply(sequence_richness)
-  shannon_diversity = df.iloc[:, 1:].apply(shannon_diversity_index)
-  simpson_diversity = df.iloc[:, 1:].apply(simpson_diversity_index)
-  df_out = pd.DataFrame({'richness': unique_counts,
-                         'shannon_diversity': shannon_diversity, 'simpson_diversity': simpson_diversity}).T
-  df_a, df_b = df_out[group1], df_out[group2]
-  mean_a, mean_b = [np.mean(row_a) for row_a in df_a.values], [np.mean(row_b) for row_b in df_b.values]
-  if paired:
-    assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
-  pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-  pvals = [p if p > 0 and p < 1 else 1.0 for p in pvals]
-  corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
-  significance = [p < alpha for p in corrpvals]
-  effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
-  out = pd.DataFrame(list(zip(df_out.index.tolist(), mean_a, mean_b, pvals, corrpvals, significance, effect_sizes)),
-                     columns = ["Metric", "Group1 mean", "Group2 mean", "p-val", "corr p-val", "significant", "Effect size"])
-  return out.sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+def get_biodiversity(df_in, group1, group2, metrics = ['alpha','beta'], motifs = False, feature_set = ['exhaustive', 'known'],
+                     custom_motifs = [], paired = False, permutations = 999, gamma = 0.1):
+    """Calculates diversity indices from glycomics data, similar to alpha diversity etc in microbiome data\n
+    | Arguments:
+    | :-
+    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+    | group1 (list): a list of column identifiers corresponding to samples in group 1
+    | group2 (list): a list of column identifiers corresponding to samples in group 2 (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
+    | metrics (list): which diversity metrics to calculate (alpha, beta)
+    | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
+    |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
+    |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
+    |   and 'chemical' (molecular properties of glycan)
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
+    | permutations (int): number of permutations to perform in ANOSIM statistical test
+    | Returns:
+    | :-
+    | (i) The Bray-Curtis distance matrix of the inputted samples
+    | (ii) (If reps >1) ANOSIM test statistics, indicating differences between groups.
+    """
+    df = df_in.copy(deep = True)
+    if isinstance(df, str):
+        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    df.iloc[:, 1:].fillna(0)
+    # Drop rows with all zero, followed by outlier removal and imputation & normalization
+    df.iloc[:, 1:] = df.iloc[:, 1:].loc[~(df == 0).all(axis = 1)]
+    df.iloc[:, 1:].apply(replace_outliers_winsorization, axis = 1)
+    # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+    alpha = get_alphaN(df.shape[1] - 1)
+    shopping_cart = {}
+    if not group2:
+        group_sizes = group1
+    else:
+        columns_list = df.columns.tolist()
+        group1 = [i for i in group1]
+        group2 = [i for i in group2]
+        df = pd.concat([df.iloc[:,0],df.iloc[:, [i for i in group1]], df.iloc[:, [i for i in group2]]], axis=1)
+        group_sizes = list(len(group1)*[1]+len(group2)*[2])
+        group1 = [columns_list[k] for k in group1]
+        group2 = [columns_list[k] for k in group2]
+    group_counts = Counter(group_sizes)
+    if motifs:
+        # Motif extraction and quantification
+        df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+        # Deduplication
+        df = clean_up_heatmap(df.T)
+        # Re-normalization
+        df.iloc[:, 1:].apply(lambda col: col / col.sum() * 100, axis = 0).reset_index()
+    else:
+        df.set_index(df.columns[0], inplace = True)
+    if 'alpha' in metrics:
+        unique_counts = df.iloc[:, 0:].apply(sequence_richness)
+        shan_div = df.iloc[:, 0:].apply(shannon_diversity_index)
+        simp_div = df.iloc[:, 0:].apply(simpson_diversity_index)
+        a_df_out = pd.DataFrame({'species_richness': unique_counts,
+                               'shannon_diversity': shan_div, 'simpson_diversity': simp_div}).T
+        shopping_cart['Alpha_diversity_indexes'] = a_df_out
+        if len(group_counts) == 2:
+            a_dfo_group1 = a_df_out.iloc[:, 0:int(group_sizes.count(1))]
+            a_dfo_group2 = a_df_out.iloc[:, int(group_sizes.count(1)):int(group_sizes.count(1))+int(group_sizes.count(2))]
+            if paired:
+                assert len(a_dfo_group1) == len(a_dfo_group2), "For paired samples, the size of group1 and group2 should be the same"
+            pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var=False)[1] for
+                     row_a, row_b in zip(a_dfo_group1.values, a_dfo_group2.values)]
+            pvals = [p if p > 0 and p < 1 else 1.0 for p in pvals]
+            corrpvals = multipletests(pvals, method='fdr_tsbh')[1]
+            significance = [p < alpha for p in corrpvals]
+            a_df_stats = pd.DataFrame(list(zip(a_df_out.index.tolist(), pvals, corrpvals, significance)),
+                               columns=["Metric", "p-val", "corr p-val", "significant"])
+            shopping_cart['Alpha_diversity_t_test_statistics'] = \
+                (a_df_stats.sort_values(by='p-val').sort_values(by='corr p-val'))
+        if all(count > 2 for count in group_counts.values()) and len(group_counts) > 2:
+            sh_stats = alpha_biodiversity_stats(shan_div, group_sizes)
+            si_stats = alpha_biodiversity_stats(simp_div, group_sizes)
+            sh_pvals = [[p if p > 0 and p < 1 else 1.0 for p in [sh_stats[1]]] < alpha]
+            si_pvals = [[p if p > 0 and p < 1 else 1.0 for p in [si_stats[1]]] < alpha]
+            a_test_stats = pd.DataFrame({'shannon_anova_test_statistic': [sh_stats[0]], 'Shannon_p_value': [sh_stats[1]],
+                                       'Shannon_significance': sh_pvals, 'Simpson_anova_test_statistic': [si_stats[0]],
+                                       'Simpson_p_value': [si_stats[1]], 'Simpson_significance': si_pvals})
+            shopping_cart['Alpha_diversity_anova_statistics'] = a_test_stats
+    if 'beta' in metrics:
+        b_df = df.copy(deep = True)
+        b_df.iloc[:, 0:] = clr_transformation(b_df.iloc[:, 0:], group1, group2, gamma = gamma)
+        bc_diversity = {}  # Calculating pair-wise indexes
+        for index_1 in range(1, len(b_df.columns)):
+            for index_2 in range(1, len(b_df.columns)):
+                bc_pair = aitchison_diversity_index(b_df.iloc[:, index_1], b_df.iloc[:, index_2])
+                bc_diversity[index_1, index_2] = bc_pair
+        b_df_out = pd.DataFrame.from_dict(bc_diversity, orient = 'index')
+        out_len = int(np.sqrt(len(b_df_out)))
+        b_df_out_values = b_df_out.values.reshape(out_len, out_len)
+        beta_df_out = pd.DataFrame(data=b_df_out_values, index=range(out_len), columns=range(out_len))
+        if all(count > 1 for count in group_counts.values()):
+            r = anosim(beta_df_out, group_sizes, permutations)
+            p = [r[1]]
+            significance = [p < alpha]
+            b_test_stats = pd.DataFrame({'Anosim_R_value': [r[0]], 'p_value': p, 'significance': significance})
+            shopping_cart['Beta_diversity_matrix'] = beta_df_out
+            shopping_cart['Beta_diversity_statistics'] = b_test_stats
+        else:
+            shopping_cart['Beta_diversity_matrix'] = beta_df_out
+    return shopping_cart
 
 
 def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], custom_motifs = [], gamma = 0.1):

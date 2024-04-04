@@ -2,11 +2,11 @@ import pandas as pd
 import numpy as np
 import math
 import warnings
-from collections import defaultdict
+from collections import defaultdict, Counter
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import BaseEstimator
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway
 from scipy.stats.mstats import winsorize
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
@@ -14,6 +14,7 @@ from statsmodels.stats.weightstats import ttost_ind, ttost_paired
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+import copy
 rng = np.random.default_rng(42)
 
 
@@ -791,3 +792,68 @@ def clr_transformation(df, group1, group2, gamma = 0.1):
     return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
   else:
     return (np.log(df) - np.log(geometric_mean))
+
+
+def aitchison_diversity_index(countss1, countss2):
+  diff_squared = 0
+  for index in countss1.index:
+    diff_squared = diff_squared + ((countss1.loc[index]-countss2.loc[index])**2)
+  return math.sqrt(diff_squared)
+
+
+def anosim(df, group_sizes, permutations = 999):
+  """Performs analysis of similarity statistical test
+  Inputs:
+  :-
+  df (dataframe) = distance matrix
+  reps (int) = the number of replicates per group (requires all groups to have the same number of replicates)
+  Reutrns:
+  :-
+  ANOSIM R statistic - ranges between -1 to 1.
+  p-value of the R statistic
+  """
+  n = len(df)
+  groups = copy.deepcopy(group_sizes)
+  def anosim_r(df):
+    rank_matrix_index = np.tril_indices(n=len(df), k=-1)
+    rank_matrix = np.argsort(df.values[rank_matrix_index])
+    dfranks = np.zeros_like(df)
+    ranks = np.array(sorted(rank_matrix))
+    row_indices, col_indices = rank_matrix_index
+    for i in rank_matrix:
+      dfranks[row_indices[rank_matrix[i]], col_indices[rank_matrix[i]]] = ranks[i] + 1
+  # Calculate average rank within groups and average rank between groups:
+    w_groups = np.zeros(dfranks.shape)  # within groups
+    b_groups = np.zeros(dfranks.shape)  # between groups
+    for i in range(n):
+      for j in range(n):
+        if groups[i] == groups[j]:
+          w_groups[i, j] = dfranks[i, j]
+        else:
+          b_groups[i, j] = dfranks[i, j]
+    w_groups_av = np.mean(w_groups[w_groups != 0].flatten())
+    b_groups_av = np.mean(b_groups[b_groups != 0].flatten())
+    # Calculate ANOSIM statistic
+    r = (b_groups_av-w_groups_av) / (n*(n-1)/4)
+    return r
+  r_obs = anosim_r(df)  # ANOSIM test statistic for observed data
+  r_permutations = np.zeros(permutations)  # Generate permuted test statistics to determine significance
+  for i in range(permutations):
+    permuted_groups = np.random.permutation(groups)
+    r_permutations[i] = anosim_r(df.loc[permuted_groups])
+  # Compute p-value
+  p_value = (np.sum(r_permutations >= r_obs) + 1) / (permutations + 1)
+  return r_obs, p_value
+
+
+def alpha_biodiversity_stats(df, group_sizes):
+  group_counts = Counter(group_sizes)
+  if all(count > 1 for count in group_counts.values()):
+    stat_outputs = pd.concat([pd.DataFrame(group_sizes), df.reset_index(drop=True)], axis=1)
+    stat_outputs.columns = ['group', 'diversity']
+    df_grouped = pd.DataFrame()
+    for group in stat_outputs['group'].unique():
+      filtered_df = stat_outputs[stat_outputs['group'] == group]
+      df_grouped[group] = filtered_df['diversity'].tolist()
+    stats = f_oneway(*[df_grouped.iloc[:, i] for i in range(len(df_grouped.columns))])
+    return stats
