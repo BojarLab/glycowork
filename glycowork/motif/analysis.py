@@ -1138,6 +1138,8 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   df2 = impute_and_normalize(df2, [df2.columns.tolist()[1:]])
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df1.shape[1] - 1)
+  df1.iloc[:, 1:] = clr_transformation(df1.iloc[:, 1:], [], df1.columns.tolist()[1:], gamma = gamma)
+  df2.iloc[:, 1:] = clr_transformation(df2.iloc[:, 1:], [], df2.columns.tolist()[1:], gamma = gamma)
   if motifs:
     df1 = quantify_motifs(df1.iloc[:, 1:], df1.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
     df1 = clean_up_heatmap(df1.T)
@@ -1149,8 +1151,7 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   else:
     df1 = df1.set_index(df1.columns.tolist()[0])
     df2 = df2.set_index(df2.columns.tolist()[0])
-  df1 = clr_transformation(df1, [], df1.columns.tolist(), gamma = gamma).T
-  df2 = clr_transformation(df2, [], df2.columns.tolist(), gamma = gamma).T
+  df1, df2 = df1.T, df2.T
   correlation_matrix = np.zeros((df1.shape[1], df2.shape[1]))
   p_value_matrix = np.zeros((df1.shape[1], df2.shape[1]))
   # Compute Spearman correlation for each pair of columns between transformed df1 and df2
