@@ -1031,11 +1031,11 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
   df.iloc[:, 1:] = df.iloc[:, 1:].loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
   df = df.apply(replace_outliers_winsorization, axis = 1)
-  # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
-  alpha = get_alphaN(df.shape[1] - 1)
   shopping_cart = []
   if not group2:
     group_sizes = group1
+    # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+    alpha = get_alphaN(df.shape[1] - 1)
   else:
     group_sizes = list(len(group1)*[1]+len(group2)*[2])
     if not isinstance(group1[0], str):
@@ -1043,6 +1043,8 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
       group1 = [columns_list[k] for k in group1]
       group2 = [columns_list[k] for k in group2]
     df = df.loc[:, [df.columns.tolist()[0]] + group1 + group2]
+    # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+    alpha = get_alphaN(df.shape[1] - 1)
   group_counts = Counter(group_sizes)
   if motifs:
     if 'beta' in metrics:
@@ -1077,7 +1079,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
       sh_stats = alpha_biodiversity_stats(shan_div, group_sizes)
       shopping_cart.append(pd.DataFrame({'Metric': 'Shannon diversity (ANOVA)', 'p-val': sh_stats[1], 'Effect size': sh_stats[0]}, index = [0]))
       si_stats = alpha_biodiversity_stats(simp_div, group_sizes)
-      shopping_cart.append(pd.DataFrame({'Metric': 'Simpson diversity (ANOVA)', 'p-val': sh_stats[1], 'Effect size': sh_stats[0]}, index = [0]))
+      shopping_cart.append(pd.DataFrame({'Metric': 'Simpson diversity (ANOVA)', 'p-val': si_stats[1], 'Effect size': sh_stats[0]}, index = [0]))
   if 'beta' in metrics:
     if motifs:
       df_org.iloc[:, 1:] = clr_transformation(df_org.iloc[:, 1:], group1, group2, gamma = gamma)
@@ -1086,8 +1088,8 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
     else:
       b_df = clr_transformation(df, group1, group2, gamma = gamma)
     bc_diversity = {}  # Calculating pair-wise indexes
-    for index_1 in range(1, len(b_df.columns)):
-      for index_2 in range(1, len(b_df.columns)):
+    for index_1 in range(0, len(b_df.columns)):
+      for index_2 in range(0, len(b_df.columns)):
         bc_pair = np.sqrt(np.sum((b_df.iloc[:, index_1] - b_df.iloc[:, index_2]) ** 2))
         bc_diversity[index_1, index_2] = bc_pair
     b_df_out = pd.DataFrame.from_dict(bc_diversity, orient = 'index')
