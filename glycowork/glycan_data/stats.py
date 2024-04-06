@@ -8,6 +8,7 @@ from sklearn.base import BaseEstimator
 from scipy.special import gammaln
 from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway
 from scipy.stats.mstats import winsorize
+from scipy.spatial.distance import squareform
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.weightstats import ttost_ind, ttost_paired
@@ -852,3 +853,51 @@ def alpha_biodiversity_stats(df, group_labels):
     grouped_diversity = stat_outputs.groupby('group')['diversity'].apply(list).tolist()
     stats = f_oneway(*grouped_diversity)
     return stats
+
+
+def calculate_permanova_stat(df, group_labels):
+  """Performs multivariate analysis of variance\n
+  | Arguments:
+  | :-
+  | df (dataframe): square distance matrix
+  | group_labels (list): list of group membership for each sample\n
+  | Returns:
+  | :-
+  | F statistic - higher means effect more likely.
+  """
+  unique_groups = np.unique(group_labels)
+  n = len(group_labels)
+  # Between-group and within-group sums of squares
+  ss_total = np.sum(squareform(df)) / 2
+  ss_within = 0
+  for group in unique_groups:
+    group_indices = np.where(group_labels == group)[0]
+    group_matrix = df.values[np.ix_(group_indices, group_indices)]
+    ss_within += np.sum(squareform(group_matrix)) / 2
+  ss_between = ss_total - ss_within
+  # Calculate the PERMANOVA test statistic: pseudo-F
+  ms_between = ss_between / (len(unique_groups) - 1)
+  ms_within = ss_within / (n - len(unique_groups))
+  f_stat = ms_between / ms_within
+  return f_stat
+
+
+def permanova_with_permutation(df, group_labels, permutations = 999):
+  """Performs permutational multivariate analysis of variance\n
+  | Arguments:
+  | :-
+  | df (dataframe): square distance matrix
+  | group_labels (list): list of group membership for each sample
+  | permutations (int): number of permutations to perform in PERMANOVA statistical test; default:999\n
+  | Returns:
+  | :-
+  | (i) F statistic - higher means effect more likely.
+  | (ii) p-value of the F statistic
+  """
+  observed_f = calculate_permanova_stat(df, group_labels)
+  permuted_fs = np.zeros(permutations)
+  for i in range(permutations):
+    permuted_labels = np.random.permutation(group_labels)
+    permuted_fs[i] = calculate_permanova_stat(df, permuted_labels)
+  p_value = np.sum(permuted_fs >= observed_f) / permutations
+  return observed_f, p_value

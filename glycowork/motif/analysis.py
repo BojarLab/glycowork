@@ -21,7 +21,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
                                          test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
-                                         get_equivalence_test, clr_transformation, anosim,
+                                         get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
@@ -1012,7 +1012,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
   |   and 'chemical' (molecular properties of glycan)
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | permutations (int): number of permutations to perform in ANOSIM statistical test; default:999
+  | permutations (int): number of permutations to perform in ANOSIM and PERMANOVA statistical test; default:999
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
   | Returns:
   | :-
@@ -1023,7 +1023,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
   | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
   | (v) Corrected p-values (Welch's t-test with two-stage Benjamini-Hochberg correction) for difference in mean
   | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
-  | (vii) Effect size as Cohen's d (ANOSIM R for beta; F statistics for Shannon/Simpson (ANOVA))
+  | (vii) Effect size as Cohen's d (ANOSIM R for beta; F statistics for PERMANOVA and Shannon/Simpson (ANOVA))
   """
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
@@ -1079,7 +1079,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
       sh_stats = alpha_biodiversity_stats(shan_div, group_sizes)
       shopping_cart.append(pd.DataFrame({'Metric': 'Shannon diversity (ANOVA)', 'p-val': sh_stats[1], 'Effect size': sh_stats[0]}, index = [0]))
       si_stats = alpha_biodiversity_stats(simp_div, group_sizes)
-      shopping_cart.append(pd.DataFrame({'Metric': 'Simpson diversity (ANOVA)', 'p-val': si_stats[1], 'Effect size': sh_stats[0]}, index = [0]))
+      shopping_cart.append(pd.DataFrame({'Metric': 'Simpson diversity (ANOVA)', 'p-val': si_stats[1], 'Effect size': si_stats[0]}, index = [0]))
   if 'beta' in metrics:
     if motifs:
       df_org.iloc[:, 1:] = clr_transformation(df_org.iloc[:, 1:], group1, group2, gamma = gamma)
@@ -1098,7 +1098,10 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
     beta_df_out = pd.DataFrame(data = b_df_out_values, index = range(out_len), columns = range(out_len))
     if all(count > 1 for count in group_counts.values()):
       r, p = anosim(beta_df_out, group_sizes, permutations)
-      b_test_stats = pd.DataFrame({'Metric': 'Beta diversity', 'p-val': p, 'Effect size': r}, index = [0])
+      b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (ANOSIM)', 'p-val': p, 'Effect size': r}, index = [0])
+      shopping_cart.append(b_test_stats)
+      f, p = permanova_with_permutation(beta_df_out, group_sizes, permutations)
+      b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (PERMANOVA)', 'p-val': p, 'Effect size': f}, index = [0])
       shopping_cart.append(b_test_stats)
   df_out = pd.concat(shopping_cart, axis = 0)
   df_out["corr p-val"] = multipletests(df_out['p-val'].values.tolist(), method = 'fdr_tsbh')[1]
