@@ -573,6 +573,7 @@ def get_differential_expression(df, group1, group2,
       df_org = df_org.groupby(df_org.index).mean()
   # Variance-based filtering of features
   df = variance_based_filtering(df)
+  df_org = df_org.loc[df.index]
   glycans = df.index.tolist()
   mean_abundance = df_org.mean(axis = 1)
   df_a, df_b = df[group1], df[group2]
