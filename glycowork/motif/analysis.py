@@ -553,7 +553,7 @@ def get_differential_expression(df, group1, group2,
       group2 = [columns_list[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
-  df.iloc[:, 1:] = df.iloc[:, 1:].loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
+  df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
   df = df.apply(replace_outliers_winsorization, axis = 1)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   df_org = df.copy(deep = True)
@@ -647,7 +647,7 @@ def get_pval_distribution(df_res, filepath = ''):
   | prints p-value distribution plot
   """
   if isinstance(df_res, str):
-      df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
+    df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   # make plot
   ax = sns.histplot(x = 'p-val', data = df_res, stat = 'frequency')
   ax.set(xlabel = 'p-values', 
@@ -672,7 +672,7 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   | prints MA plot
   """
   if isinstance(df_res, str):
-      df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
+    df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   # Create masks for significant and non-significant points
   sig_mask = (abs(df_res['Log2FC']) > log2fc_thresh) & (df_res['corr p-val'] < sig_thresh)
   # Plot non-significant points first
@@ -684,7 +684,7 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   ax.set(xlabel = 'Mean Abundance', ylabel = 'Log2FC', title = '')
   # save to file
   if filepath:
-      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
   plt.show()  
 
 
@@ -759,7 +759,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     results, posthoc_results = [], {}
     df = df.fillna(0)
-    df.iloc[:, 1:] = df.iloc[:, 1:].loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
+    df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
     df = df.apply(replace_outliers_winsorization, axis = 1)
     groups_unq = sorted(set(groups))
     df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
@@ -1035,7 +1035,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   df = df.fillna(0)
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
-  df.iloc[:, 1:] = df.iloc[:, 1:].loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
+  df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
   df = df.apply(replace_outliers_winsorization, axis = 1)
   shopping_cart = []
   if not group2:
@@ -1139,10 +1139,10 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
   df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
-  df1.iloc[:, 1:] = df1.iloc[:, 1:].loc[~(df1.iloc[:, 1:] == 0).all(axis = 1)]
+  df1 = df1.loc[~(df1.iloc[:, 1:] == 0).all(axis = 1)]
   df1 = df1.apply(replace_outliers_winsorization, axis = 1)
   df1 = impute_and_normalize(df1, [df1.columns.tolist()[1:]])
-  df2.iloc[:, 1:] = df2.iloc[:, 1:].loc[~(df2.iloc[:, 1:] == 0).all(axis = 1)]
+  df2 = df2.loc[~(df2.iloc[:, 1:] == 0).all(axis = 1)]
   df2 = df2.apply(replace_outliers_winsorization, axis = 1)
   df2 = impute_and_normalize(df2, [df2.columns.tolist()[1:]])
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
