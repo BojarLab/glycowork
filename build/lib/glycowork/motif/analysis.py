@@ -177,49 +177,52 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
   | Prints clustermap              
   """
   if isinstance(df, str):
-      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if index_col in df.columns:
-      df = df.set_index(index_col)
+    df = df.set_index(index_col)
   elif isinstance(df.iloc[0,0], str):
-      df = df.set_index(df.columns.tolist()[0])
+    df = df.set_index(df.columns.tolist()[0])
   if isinstance(df.index.tolist()[0], str) and '(' not in df.index.tolist()[0] and '-' not in df.index.tolist()[0]:
-      df = df.T
+    df = df.T
   df = df.fillna(0)
   if transform == "CLR":
-      df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
-      df = clr_transformation(df, [], [], gamma = 0)
+    df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
+    df = clr_transformation(df, [], [], gamma = 0)
   if motifs:
-      if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
-          raise ValueError("A heatmap needs to have at least two motifs.")
-      # Count glycan motifs and remove rare motifs from the result
-      df_motif = annotate_dataset(df.columns.tolist(), feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
-      df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
-      # Distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
-      if datatype == 'response':
-          collect_dic = {}
-          for c, col in enumerate(df_motif.columns):
-              indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
-              temp = df.iloc[:, indices]
-              temp.columns = range(temp.columns.size)
-              collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
-          df = pd.DataFrame(collect_dic)
-      elif datatype == 'presence':
-          collecty = df.apply(lambda row: [row.loc[df_motif[col].dropna().index].sum() / row.sum() for col in df_motif.columns], axis = 1)
-          df = pd.DataFrame(collecty.tolist(), columns = df_motif.columns, index = df.index)
+    if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
+      raise ValueError("A heatmap needs to have at least two motifs.")
+    # Count glycan motifs and remove rare motifs from the result
+    df_motif = annotate_dataset(df.columns.tolist(), feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
+    df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
+    # Distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
+    if datatype == 'response':
+      collect_dic = {}
+      for c, col in enumerate(df_motif.columns):
+        indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
+        temp = df.iloc[:, indices]
+        temp.columns = range(temp.columns.size)
+        collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
+      df = pd.DataFrame(collect_dic)
+    elif datatype == 'presence':
+      collecty = df.apply(lambda row: [row.loc[df_motif[col].dropna().index].sum() / row.sum() for col in df_motif.columns], axis = 1)
+      df = pd.DataFrame(collecty.tolist(), columns = df_motif.columns, index = df.index)
   df = df.dropna(axis = 1)
   if motifs:
-      df = clean_up_heatmap(df.T)
+    df = clean_up_heatmap(df.T)
   if not (df < 0).any().any():
-      df /= df.sum()
-      df *= 100
+    df /= df.sum()
+    df *= 100
+    center = None
+  else:
+    center = 0
   # Cluster the motif abundances
-  sns.clustermap(df, **kwargs)
+  sns.clustermap(df, center = center, **kwargs)
   plt.xlabel('Samples')
   plt.ylabel('Glycans' if not motifs else 'Motifs')
   plt.tight_layout()
   if filepath:
-      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
-                  bbox_inches = 'tight')
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+                bbox_inches = 'tight')
   plt.show()
 
 
@@ -550,7 +553,7 @@ def get_differential_expression(df, group1, group2,
       group2 = [columns_list[k] for k in group2]
   df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
-  df = df.loc[~(df == 0).all(axis = 1)]
+  df.iloc[:, 1:] = df.iloc[:, 1:].loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
   df = df.apply(replace_outliers_winsorization, axis = 1)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   df_org = df.copy(deep = True)
@@ -621,6 +624,7 @@ def get_differential_expression(df, group1, group2,
           significance = [significance_dict[g] for g in glycans]
       else:
           corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
+          corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
           significance = [p < alpha for p in corrpvals]
       levene_pvals = multipletests(levene_pvals, method = 'fdr_tsbh')[1]
   else:
@@ -755,6 +759,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     results, posthoc_results = [], {}
     df = df.fillna(0)
+    df.iloc[:, 1:] = df.iloc[:, 1:].loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
     df = df.apply(replace_outliers_winsorization, axis = 1)
     groups_unq = sorted(set(groups))
     df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
@@ -1134,10 +1139,10 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
   df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
-  df1 = df1.loc[~(df1 == 0).all(axis = 1)]
+  df1.iloc[:, 1:] = df1.iloc[:, 1:].loc[~(df1.iloc[:, 1:] == 0).all(axis = 1)]
   df1 = df1.apply(replace_outliers_winsorization, axis = 1)
   df1 = impute_and_normalize(df1, [df1.columns.tolist()[1:]])
-  df2 = df2.loc[~(df2 == 0).all(axis = 1)]
+  df2.iloc[:, 1:] = df2.iloc[:, 1:].loc[~(df2.iloc[:, 1:] == 0).all(axis = 1)]
   df2 = df2.apply(replace_outliers_winsorization, axis = 1)
   df2 = impute_and_normalize(df2, [df2.columns.tolist()[1:]])
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
