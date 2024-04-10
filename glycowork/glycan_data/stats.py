@@ -8,6 +8,7 @@ from sklearn.base import BaseEstimator
 from scipy.special import gammaln
 from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway
 from scipy.stats.mstats import winsorize
+from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
@@ -901,3 +902,71 @@ def permanova_with_permutation(df, group_labels, permutations = 999):
     permuted_fs[i] = calculate_permanova_stat(df, permuted_labels)
   p_value = np.sum(permuted_fs >= observed_f) / permutations
   return observed_f, p_value
+
+
+def alr_transformation(df, reference_component_index):
+  """Given a reference feature, performs additive log-ratio transformation (ALR) on the data\n
+  | Arguments:
+  | :-
+  | df (dataframe): log2-transformed dataframe with features as rows and samples as columns
+  | reference_component_index (int): row index of feature to be used as reference\n
+  | Returns:
+  | :-
+  | ALR-transformed dataframe
+  """
+  reference_values = df.iloc[reference_component_index, :]
+  alr_transformed = df.subtract(reference_values, axis = 'columns')
+  alr_transformed = alr_transformed.drop(index = reference_values.name)
+  return alr_transformed
+
+
+def get_procrustes_scores(df, group1, group2, paired = False):
+  """For each feature, estimates it value as ALR reference component\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with features as rows and samples as columns
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | List of Procrustes scores (Procrustes correlation * inverse of feature variance)
+  """
+  if isinstance(group1[0], int):
+    group1 = [df.columns.tolist()[k] for k in group1]
+    group2 = [df.columns.tolist()[k] for k in group2]
+  df = df.iloc[:, 1:]
+  ref_matrix = clr_transformation(df, [], [], gamma = 0)
+  df = np.log2(df)
+  if paired:
+    differences = df[group1].values - df[group2].values
+    variances = np.var(differences, axis = 1, ddof = 1)
+  else:
+    var_group1 = df[group1].var(axis = 1)
+    var_group2 = df[group2].var(axis = 1)
+    variances = abs(var_group1 - var_group2)
+  procrustes_disparities = [procrustes(ref_matrix.drop(ref_matrix.index[i]), alr_transformation(df, i))[2] for i in range(df.shape[0])]
+  return [(1-a) * (1/b) for a, b in zip(procrustes_disparities, variances)]
+
+
+def get_additive_logratio_transformation(df, group1, group2, paired = False):
+  """Identifies ALR reference component and transforms data according to ALR\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with features as rows and samples as columns
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | ALR-transformed dataframe
+  """
+  scores = get_procrustes_scores(df, group1, group2, paired = paired)
+  ref_component = np.argmax(scores)
+  ref_component_string = df.iloc[:, 0].values[ref_component]
+  print(f"Reference component for ALR is {ref_component_string}")
+  glycans = df.iloc[:, 0].values.tolist()
+  glycans = [g for g in glycans if g != ref_component_string]
+  alr = alr_transformation(np.log2(df.iloc[:, 1:]), ref_component)
+  alr.insert(loc = 0, column = 'glycan', value = glycans)
+  return alr

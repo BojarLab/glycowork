@@ -22,7 +22,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
-                                         alpha_biodiversity_stats)
+                                         alpha_biodiversity_stats, get_additive_logratio_transformation)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -510,7 +510,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = 0, grouped_BH = False, custom_motifs = [], gamma = 0.1):
+                                min_samples = 0, grouped_BH = False, custom_motifs = [], transform = "CLR", gamma = 0.1):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -530,6 +530,7 @@ def get_differential_expression(df, group1, group2,
   | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
   | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:CLR
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
   | Returns:
   | :-
@@ -557,7 +558,12 @@ def get_differential_expression(df, group1, group2,
   df = df.apply(replace_outliers_winsorization, axis = 1)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   df_org = df.copy(deep = True)
-  df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma)
+  if transform == "ALR":
+    df = get_additive_logratio_transformation(df, group1, group2, paired = paired)
+  elif transform == "CLR":
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma)
+  else:
+    raise ValueError("Only ALR and CLR are valid transforms for now.")
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
   if motifs:
@@ -591,7 +597,7 @@ def get_differential_expression(df, group1, group2,
               cluster = list(cluster)
               gp1, gp2 = df_a.loc[cluster, :], df_b.loc[cluster, :]
               mean_abundance_c.append(mean_abundance.loc[cluster].mean())
-              log2fc.append(np.log2(((gp2.values + 1e-8) / (gp1.values + 1e-8)).mean(axis = 1)).mean() if paired else np.log2((gp2.mean(axis = 1) + 1e-8) / (gp1.mean(axis = 1) + 1e-8)).mean())
+              log2fc.append(((gp2.values - gp1.values).mean(axis = 1)).mean() if paired else (gp2.mean(axis = 1) - gp1.mean(axis = 1)).mean())
           gp1, gp2 = df2.loc[cluster, group1], df2.loc[cluster, group2]
           # Hotelling's T^2 test for multivariate comparisons
           pvals.append(hotellings_t2(gp1.T.values, gp2.T.values, paired = paired)[1])
@@ -602,7 +608,7 @@ def get_differential_expression(df, group1, group2,
               variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
       mean_abundance = mean_abundance_c
   else:
-      log2fc = (df_b.values - df_a.values).mean(axis = 1) if paired else (df_b.mean(axis = 1) / df_a.mean(axis = 1))
+      log2fc = (df_b.values - df_a.values).mean(axis = 1) if paired else (df_b.mean(axis = 1) - df_a.mean(axis = 1))
       if paired:
           assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
       pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
