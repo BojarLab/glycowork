@@ -602,8 +602,7 @@ def get_differential_expression(df, group1, group2,
               variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
       mean_abundance = mean_abundance_c
   else:
-      org_a, org_b = df_org[group1], df_org[group2]
-      log2fc = np.log2((org_b.values + 1e-8) / (org_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(org_b.mean(axis = 1) / org_a.mean(axis = 1))
+      log2fc = (df_b.values - df_a.values).mean(axis = 1) if paired else (df_b.mean(axis = 1) / df_a.mean(axis = 1))
       if paired:
           assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
       pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
@@ -621,6 +620,7 @@ def get_differential_expression(df, group1, group2,
           grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, paired = paired, grouped_BH = grouped_BH)
           corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
           corrpvals = [corrpvals[g] for g in glycans]
+          corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
           significance = [significance_dict[g] for g in glycans]
       else:
           corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]

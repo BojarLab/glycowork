@@ -790,13 +790,13 @@ def clr_transformation(df, group1, group2, gamma = 0.1):
     group2i = [col_list.index(k) for k in group2]
     case_control = [0]*len(group1) + [1]*len(group2)
     clr_adjusted = np.zeros_like(df.values)
-    geometric_mean = -np.log(geometric_mean)
-    clr_adjusted[:, group1i] = np.log(df[group1]) + geometric_mean[group1i]
+    geometric_mean = -np.log2(geometric_mean)
+    clr_adjusted[:, group1i] = np.log2(df[group1]) + geometric_mean[group1i]
     observed = norm.rvs(loc = geometric_mean[group2i], scale = gamma, size = (df.shape[0], len(group2)))
-    clr_adjusted[:, group2i] = np.log(df[group2]) + observed
+    clr_adjusted[:, group2i] = np.log2(df[group2]) + observed
     return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
   else:
-    return (np.log(df) - np.log(geometric_mean))
+    return (np.log2(df) - np.log2(geometric_mean))
 
 
 def anosim(df, group_labels, permutations = 999):
