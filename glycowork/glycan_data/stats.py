@@ -946,7 +946,8 @@ def get_procrustes_scores(df, group1, group2, paired = False):
     var_group2 = df[group2].var(axis = 1)
     variances = abs(var_group1 - var_group2)
   procrustes_disparities = [procrustes(ref_matrix.drop(ref_matrix.index[i]), alr_transformation(df, i))[2] for i in range(df.shape[0])]
-  return [(1-a) * (1/b) for a, b in zip(procrustes_disparities, variances)]
+  procrustes_corr = [1 - a for a in procrustes_disparities]
+  return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
 
 def get_additive_logratio_transformation(df, group1, group2, paired = False):
@@ -961,10 +962,10 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False):
   | :-
   | ALR-transformed dataframe
   """
-  scores = get_procrustes_scores(df, group1, group2, paired = paired)
+  scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired)
   ref_component = np.argmax(scores)
   ref_component_string = df.iloc[:, 0].values[ref_component]
-  print(f"Reference component for ALR is {ref_component_string}")
+  print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
   glycans = df.iloc[:, 0].values.tolist()
   glycans = [g for g in glycans if g != ref_component_string]
   alr = alr_transformation(np.log2(df.iloc[:, 1:]), ref_component)
