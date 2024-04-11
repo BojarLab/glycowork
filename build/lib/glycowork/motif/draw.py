@@ -2309,7 +2309,7 @@ def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
   df["SNFG"] = [np.nan for k in range(len(df))]
   # Convert df_out to Excel
   writer = pd.ExcelWriter(folder_filepath + "output.xlsx", engine = "openpyxl")
-  df.to_excel(writer)
+  df.to_excel(writer, index = False)
   # Load the workbook and get the active sheet
   workbook = writer.book
   sheet = writer.sheets["Sheet1"]

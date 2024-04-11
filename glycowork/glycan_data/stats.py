@@ -967,7 +967,7 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False):
   ref_component_string = df.iloc[:, 0].values[ref_component]
   print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
   glycans = df.iloc[:, 0].values.tolist()
-  glycans = [g for g in glycans if g != ref_component_string]
+  glycans = glycans[:ref_component] + glycans[ref_component+1:]
   alr = alr_transformation(np.log2(df.iloc[:, 1:]), ref_component)
   alr.insert(loc = 0, column = 'glycan', value = glycans)
   return alr
