@@ -57,7 +57,6 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     if multiple_samples:
         df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
         df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
-        #df = df.apply(replace_outliers_winsorization, axis = 1)
     if not zscores:
         means = df.iloc[:, 1:].mean()
         std_devs = df.iloc[:, 1:].std()
@@ -1144,6 +1143,10 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
     df2 = pd.read_csv(df2) if df2.endswith(".csv") else pd.read_excel(df2)
   df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
   df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
+  if df1.columns.tolist()[0] != df2.columns.tolist()[0] and df1.columns.tolist()[0] in df2.columns.tolist():
+      common_columns = df1.columns.intersection(df2.columns)
+      df1 = df1[common_columns]
+      df2 = df2[common_columns]
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
   df1 = df1.loc[~(df1.iloc[:, 1:] == 0).all(axis = 1)]
   df1 = df1.apply(replace_outliers_winsorization, axis = 1)

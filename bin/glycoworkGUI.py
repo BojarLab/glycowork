@@ -1,7 +1,8 @@
 import os
 import sys
+import threading
 import tkinter as tk
-from tkinter import simpledialog, filedialog, messagebox
+from tkinter import simpledialog, filedialog, messagebox, ttk
 from glycowork.motif.draw import GlycoDraw, plot_glycans_excel
 from glycowork.motif.analysis import get_differential_expression, get_heatmap
 
@@ -16,6 +17,26 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     
     return os.path.join(base_path, relative_path)
+
+
+class ProgressDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Processing")
+        self.progress = ttk.Progressbar(self, orient = "horizontal", length = 300, mode = 'indeterminate')
+        self.progress.pack(pady = 20)
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.begin()
+
+    def begin(self):
+        self.progress.start(10)
+
+    def end(self):
+        self.progress.stop()
+        self.destroy()
+
+    def on_close(self):
+        messagebox.showwarning("Warning", "Process is running. Please wait...")
 
 
 class GlycoDrawDialog(simpledialog.Dialog):
@@ -170,15 +191,23 @@ class DifferentialExpressionDialog(simpledialog.Dialog):
             self.output_folder_var.set(folder_path)
 
 
-def openDifferentialExpressionDialog():
-    dialog_result = DifferentialExpressionDialog(app)
-    if dialog_result.result:
-        csv_file_path, treatment_indices, control_indices, motifs, output_folder = dialog_result.result
+def run_differential_expression(csv_file_path, treatment_indices, control_indices, motifs, output_folder, progress_dialog):
+    try:
         df_out = get_differential_expression(df = csv_file_path,
                                group1 = control_indices,
                                group2 = treatment_indices,
                                motifs = motifs)
         plot_glycans_excel(df_out, output_folder)
+    finally:
+        progress_dialog.end()
+
+
+def openDifferentialExpressionDialog():
+    dialog_result = DifferentialExpressionDialog(app)
+    if dialog_result.result:
+        csv_file_path, treatment_indices, control_indices, motifs, output_folder = dialog_result.result
+        progress_dialog = ProgressDialog(app)
+        threading.Thread(target = run_differential_expression, args = (csv_file_path, treatment_indices, control_indices, motifs, output_folder, progress_dialog), daemon = True).start()
 
 
 class GetHeatmapDialog(simpledialog.Dialog):
@@ -198,7 +227,7 @@ class GetHeatmapDialog(simpledialog.Dialog):
         self.motif_analysis_check.grid(row = 1, columnspan = 3, sticky = tk.W)
         
         # Output PDF file selection
-        tk.Label(master, text="Select Output for PDF File:").grid(row = 2, sticky = tk.W)
+        tk.Label(master, text = "Select Output for PDF File:").grid(row = 2, sticky = tk.W)
         self.output_file_entry = tk.Entry(master)
         self.output_file_entry.grid(row = 2, column = 1)
         self.output_file_browse = tk.Button(master, text = "Browse...", command = self.browse_output_file)

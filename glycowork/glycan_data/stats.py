@@ -945,8 +945,7 @@ def get_procrustes_scores(df, group1, group2, paired = False):
     var_group1 = df[group1].var(axis = 1)
     var_group2 = df[group2].var(axis = 1)
     variances = abs(var_group1 - var_group2)
-  procrustes_disparities = [procrustes(ref_matrix.drop(ref_matrix.index[i]), alr_transformation(df, i))[2] for i in range(df.shape[0])]
-  procrustes_corr = [1 - a for a in procrustes_disparities]
+  procrustes_corr = [1 - procrustes(ref_matrix.drop(ref_matrix.index[i]), alr_transformation(df, i))[2] for i in range(df.shape[0])]
   return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
 

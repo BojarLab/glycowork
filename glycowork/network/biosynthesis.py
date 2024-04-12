@@ -19,12 +19,15 @@ from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_g
 from glycowork.motif.tokenization import get_stem_lib
 from glycowork.motif.regex import get_match
 
-with resources.open_text("glycowork.network", "monolink_to_enzyme.csv") as f:
-  df_enzyme = pd.read_csv(f, sep = '\t')
-
 this_dir, this_filename = os.path.split(__file__) 
 data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
-net_dic = pickle.load(open(data_path, 'rb'))
+
+def __getattr__(name):
+  if name == "net_dic":
+    net_dic = pickle.load(open(data_path, 'rb'))
+    globals()[name] = net_dic  # Cache it to avoid reloading
+    return net_dic
+  raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 permitted_roots = {"Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"}
 allowed_ptms = {'OS', '3S', '6S', 'OP', '1P', '3P', '6P', 'OAc', '4Ac', '9Ac'}
@@ -715,6 +718,8 @@ def construct_network(glycans, allowed_ptms = allowed_ptms,
           if edge_type == 'monosaccharide':
             elem['diffs'] = edge.split('(')[0]
           elif edge_type == 'enzyme':
+            with resources.open_text("glycowork.network", "monolink_to_enzyme.csv") as f:
+              df_enzyme = pd.read_csv(f, sep = '\t')
             elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme)
           else:
             pass
@@ -1119,7 +1124,7 @@ def evoprune_network(network, network_dic = None, species_list = None,
   | Returns pruned network (with virtual node probability as a new node attribute)
   """
   if network_dic is None:
-    network_dic = net_dic
+    network_dic = pickle.load(open(data_path, 'rb'))
   if species_list is None:
     species_list = list(network_dic.keys())
   # Calculate path probabilities of diamonds
@@ -1153,7 +1158,7 @@ def highlight_network(network, highlight, motif = None,
   | Returns a network with the additional 'origin' (motif/species) or 'abundance' (abundance/conservation) node attribute storing the highlight
   """
   if network_dic is None:
-    network_dic = net_dic
+    network_dic = pickle.load(open(data_path, 'rb'))
   # Determine highlight validity
   if highlight not in ['motif', 'species', 'abundance', 'conservation']:
     print(f"Invalid highlight argument: {highlight}")
