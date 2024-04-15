@@ -772,14 +772,15 @@ def get_equivalence_test(row_a, row_b, paired = False):
   return ttost_paired(row_a, row_b, low, up)[0] if paired else ttost_ind(row_a, row_b, low, up)[0]
 
 
-def clr_transformation(df, group1, group2, gamma = 0.1):
+def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
   """performs the Center Log-Ratio (CLR) Transformation with scale model adjustment\n
   | Arguments:
   | :-
   | df (dataframe): dataframe containing features in rows and samples in columns
   | group1 (list): list of column indices or names for the first group of samples, usually the control
   | group2 (list): list of column indices or names for the second group of samples
-  | gamma (float): the degree of uncertainty that the CLR assumption holds; default: 0.1\n
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; default: 0.1
+  | custom_scale (float): if you *know* the difference in scale between groups, provide the ratio of group2/group1 for an informed scale model\n
   | Returns:
   | :-
   | Returns a dataframe that is CLR-transformed with scale model adjustment
@@ -791,6 +792,12 @@ def clr_transformation(df, group1, group2, gamma = 0.1):
     group2i = [col_list.index(k) for k in group2]
     case_control = [0]*len(group1) + [1]*len(group2)
     clr_adjusted = np.zeros_like(df.values)
+    if custom_scale:
+      control = norm.rvs(loc = np.log2(1), scale = gamma, size = (df.shape[0], len(group1)))
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + control
+      condition = norm.rvs(loc = np.log2(custom_scale), scale = gamma, size = (df.shape[0], len(group2)))
+      clr_adjusted[:, group2i] = np.log2(df[group2]) + condition
+      return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
     geometric_mean = -np.log2(geometric_mean)
     clr_adjusted[:, group1i] = np.log2(df[group1]) + geometric_mean[group1i]
     observed = norm.rvs(loc = geometric_mean[group2i], scale = gamma, size = (df.shape[0], len(group2)))
@@ -991,8 +998,8 @@ def correct_multiple_testing(pvals, alpha):
   corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
   significance = [p < alpha for p in corrpvals]
   if sum(significance) > 0.9*len(significance):
-    print("Significance inflation detected. The CLR/ALR transformation cannot seem to handle this dataset. \
-             Proceed with caution; for now switching to Bonferroni correction for being conservative about this.")
+    print("Significance inflation detected. The CLR/ALR transformation cannot seem to handle this dataset.\
+             Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
     corrpvals = multipletests(pvals, method = 'bonferroni')[1]
     significance = [p < alpha for p in corrpvals]
   return corrpvals, significance
