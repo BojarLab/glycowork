@@ -185,7 +185,7 @@ class MissForest:
   Determines the number of iterations for the imputation process.
   """
 
-  def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol = 1e-6):
+  def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol = 1e-5):
     self.regressor = regressor
     self.max_iter = max_iter
     self.tol = tol
@@ -221,29 +221,29 @@ class MissForest:
     return X_transform
 
 
-def impute_and_normalize(df, groups, impute = True, min_samples = 0):
+def impute_and_normalize(df, groups, impute = True, min_samples = 0.1):
     """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
     | groups (list): nested list of column name lists, one list per group
     | impute (bool): replaces zeroes with predictions from MissForest; default:True
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero\n
+    | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%\n
     | Returns:
     | :-
     | Returns a dataframe in the same style as the input 
     """
     if min_samples:
-      min_samples = [min_samples] * len(groups)
-      masks = [(df[group_cols] != 0).sum(axis = 1) >= thresh for group_cols, thresh in zip(groups, min_samples)]
-      df = df[np.all(masks, axis = 0)]
+      min_count = np.floor(df.shape[1] * min_samples)
+      mask = (df != 0).sum(axis = 1) >= min_count
+      df = df[mask]
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
     for group in groups:
       group_data = df[group]
       all_zero_mask = (group_data == 0).all(axis = 1)
-      df.loc[all_zero_mask, group] = 1e-6
+      df.loc[all_zero_mask, group] = 1e-5
     old_cols = []
     if isinstance(colname, int):
       old_cols = df.columns
@@ -965,8 +965,34 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False):
   ref_component = np.argmax(scores)
   ref_component_string = df.iloc[:, 0].values[ref_component]
   print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
+  if procrustes_corr[ref_component] < 0.9 or variances[ref_component] > 0.1:
+    print("Metrics of chosen reference component not good enough for ALR; switching to CLR instead.")
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = 0.1)
+    return df
   glycans = df.iloc[:, 0].values.tolist()
   glycans = glycans[:ref_component] + glycans[ref_component+1:]
   alr = alr_transformation(np.log2(df.iloc[:, 1:]), ref_component)
   alr.insert(loc = 0, column = 'glycan', value = glycans)
   return alr
+
+
+def correct_multiple_testing(pvals, alpha):
+  """Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure\n
+  | Arguments:
+  | :-
+  | pvals (list): list of raw p-values
+  | alpha (float): p-value threshold for statistical significance\n
+  | Returns:
+  | :-
+  | (i) list of corrected p-values
+  | (ii) list of True/False of whether corrected p-value reaches statistical significance
+  """
+  corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
+  corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
+  significance = [p < alpha for p in corrpvals]
+  if sum(significance) > 0.9*len(significance):
+    print("Significance inflation detected. The CLR/ALR transformation cannot seem to handle this dataset. \
+             Proceed with caution; for now switching to Bonferroni correction for being conservative about this.")
+    corrpvals = multipletests(pvals, method = 'bonferroni')[1]
+    significance = [p < alpha for p in corrpvals]
+  return corrpvals, significance

@@ -22,7 +22,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
-                                         alpha_biodiversity_stats, get_additive_logratio_transformation)
+                                         alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing)
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -509,7 +509,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = 0, grouped_BH = False, custom_motifs = [], transform = "CLR", gamma = 0.1):
+                                min_samples = 0.1, grouped_BH = False, custom_motifs = [], transform = "CLR", gamma = 0.1):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -526,7 +526,7 @@ def get_differential_expression(df, group1, group2,
   | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
   | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
   | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False
-  | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
+  | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
   | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
   | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:CLR
@@ -628,9 +628,7 @@ def get_differential_expression(df, group1, group2,
           corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
           significance = [significance_dict[g] for g in glycans]
       else:
-          corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
-          corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
-          significance = [p < alpha for p in corrpvals]
+          corrpvals, significance = correct_multiple_testing(pvals, alpha)
       levene_pvals = multipletests(levene_pvals, method = 'fdr_tsbh')[1]
   else:
       corrpvals, significance = [1]*len(glycans), [False]*len(glycans)
@@ -739,7 +737,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
 
 
 def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'],
-                  min_samples = 0, posthoc = True, custom_motifs = [], gamma = 0.1):
+                  min_samples = 0.1, posthoc = True, custom_motifs = [], gamma = 0.1):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
@@ -751,7 +749,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
+    | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
     | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True
     | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
     | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
@@ -793,10 +791,11 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
         if p_value < alpha and posthoc:
             posthoc = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = alpha)
             posthoc_results[glycan] = pd.DataFrame(data = posthoc._results_table.data[1:], columns = posthoc._results_table.data[0])
-    results_df = pd.DataFrame(results, columns = ["Glycan", "F statistic", "corr p-val"])
-    results_df['corr p-val'] = multipletests(results_df['corr p-val'].values.tolist(), method = 'fdr_tsbh')[1]
-    results_df['significant'] = [p < alpha for p in results_df['corr p-val']]
-    return results_df.sort_values(by = 'corr p-val'), posthoc_results
+    df_out = pd.DataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
+    corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
+    df_out['corr p-val'] = corrpvals
+    df_out['significant'] = significance
+    return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
 
 def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
@@ -904,7 +903,7 @@ def get_glycan_change_over_time(data, degree = 1):
 
 
 def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1,
-                    min_samples = 0, custom_motifs = [], gamma = 0.1):
+                    min_samples = 0.1, custom_motifs = [], gamma = 0.1):
     """Analyzes time series data of glycans using an OLS model\n
     | Arguments:
     | :-
@@ -916,7 +915,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
     |   and 'chemical' (molecular properties of glycan)
     | degree (int): degree of the polynomial for regression, default:1 for linear regression
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: zero
+    | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
     | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
     | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
     | Returns:
@@ -950,11 +949,12 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     df[df.columns[0]] = df.iloc[:, 0].apply(lambda x: float(x.split('_')[1][1:]))
     df = df.sort_values(by = df.columns[0])
     time = df.iloc[:, 0].to_numpy()  # Time points
-    res = [(c, *get_glycan_change_over_time(np.column_stack((time, df[c].to_numpy())), degree = degree)) for c in df.columns[1:]]
-    res = pd.DataFrame(res, columns = ['Glycan', 'Change', 'p-val'])
-    res['corr p-val'] = multipletests(res['p-val'], method = 'fdr_tsbh')[1]
-    res['significant'] = [p < alpha for p in res['corr p-val']]
-    return res.sort_values(by = 'corr p-val')
+    df_out = [(c, *get_glycan_change_over_time(np.column_stack((time, df[c].to_numpy())), degree = degree)) for c in df.columns[1:]]
+    df_out = pd.DataFrame(df_out, columns = ['Glycan', 'Change', 'p-val'])
+    corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
+    df_out['corr p-val'] = corrpvals
+    df_out['significant'] = significance
+    return df_out.sort_values(by = 'corr p-val')
 
 
 def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal'],
@@ -1000,11 +1000,11 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
         df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T
         df = clean_up_heatmap(df).reset_index()
     res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
-    JTK_BHQ = pd.DataFrame(multipletests(res[0], method = 'fdr_tsbh')[1])
-    Results = pd.concat([df.iloc[:, 0], JTK_BHQ, res], axis = 1)
-    Results.columns = ['Molecule_Name', 'BH_Q_Value', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude']
-    Results['significant'] = [p < alpha for p in Results['Adjusted_P_value']]
-    return Results.sort_values("Adjusted_P_value")
+    corrpvals, significance = correct_multiple_testing(res[0], alpha)
+    df_out = pd.concat([df.iloc[:, 0], pd.DataFrame(corrpvals), res], axis = 1)
+    df_out.columns = ['Molecule_Name', 'BH_Q_Value', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude']
+    df_out['significant'] = significance
+    return df_out.sort_values("Adjusted_P_value")
 
 
 def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = False, feature_set = ['exhaustive', 'known'],
@@ -1114,9 +1114,10 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
       f, p = permanova_with_permutation(beta_df_out, group_sizes, permutations)
       b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (PERMANOVA)', 'p-val': p, 'Effect size': f}, index = [0])
       shopping_cart.append(b_test_stats)
-  df_out = pd.concat(shopping_cart, axis = 0)
-  df_out["corr p-val"] = multipletests(df_out['p-val'].values.tolist(), method = 'fdr_tsbh')[1]
-  df_out["significant"] = [p < alpha for p in df_out["corr p-val"]]
+  df_out = pd.concat(shopping_cart, axis = 0).reset_index(drop = True)
+  corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
+  df_out["corr p-val"] = corrpvals
+  df_out["significant"] = significance
   return df_out.sort_values(by = 'p-val').sort_values(by = 'corr p-val').reset_index(drop = True)
 
 
