@@ -693,7 +693,7 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   plt.show()  
 
 
-def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
+def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None,
                 label_changed = True, x_metric = 'Log2FC', annotate_volcano = False,
                 filepath = ''):
   """Plots glycan differential expression results in a volcano plot\n
@@ -701,7 +701,8 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   | :-
   | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv or .xlsx]
   | y_thresh (float): corr p threshhold for labeling datapoints; default:0.05
-  | x_thresh (float): absolute x metric threshold for labeling datapoints; default:1.0
+  | x_thresh (float): absolute x metric threshold for labeling datapoints; default:0
+  | n (float): sample size for Bayesian-Adaptive Alpha Adjustment; default = None
   | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
   | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2FC', 'Effect size'
   | annotate_volcano (bool): whether to annotate the dots in the plot with SNFG images; default: False
@@ -716,6 +717,11 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 1.0,
   x = df_res[x_metric].values
   y = df_res['log_p'].values
   labels = df_res['Glycan'].values
+  # set y_thresh based on sample size via Bayesian-Adaptive Alpha Adjustment
+  if n:
+    y_thresh = get_alphaN(n)
+  else:
+    print(f"You're working with a default alpha of 0.05. Set sample size (n = ...) for Bayesian-Adaptive Alpha Adjustment")
   # Make plot
   ax = sns.scatterplot(x = x_metric, y = 'log_p', data = df_res, color = '#3E3E3E', alpha = 0.8)
   ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)', title = '')
