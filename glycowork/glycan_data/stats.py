@@ -1000,6 +1000,7 @@ def correct_multiple_testing(pvals, alpha):
   if sum(significance) > 0.9*len(significance):
     print("Significance inflation detected. The CLR/ALR transformation cannot seem to handle this dataset.\
              Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
-    corrpvals = multipletests(pvals, method = 'bonferroni')[1]
+    res = multipletests(pvals, method = 'bonferroni')
+    corrpvals, alpha = res[1], res[3]
     significance = [p < alpha for p in corrpvals]
   return corrpvals, significance

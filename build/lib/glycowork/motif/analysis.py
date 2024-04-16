@@ -23,6 +23,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing)
+from glycowork.motif.processing import enforce_class
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -509,7 +510,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
 def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = 0.1, grouped_BH = False, custom_motifs = [], transform = "CLR",
+                                min_samples = 0.1, grouped_BH = False, custom_motifs = [], transform = None,
                                 gamma = 0.1, custom_scale = 0):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
@@ -530,7 +531,7 @@ def get_differential_expression(df, group1, group2,
   | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
   | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:CLR
+  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
   | custom_scale (float): if you *know* the difference in scale between groups, provide the ratio of group2/group1 for an informed scale model\n
   | Returns:
@@ -559,6 +560,8 @@ def get_differential_expression(df, group1, group2,
   df = df.apply(replace_outliers_winsorization, axis = 1)
   df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   df_org = df.copy(deep = True)
+  if transform is None:
+    transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
   if transform == "ALR":
     df = get_additive_logratio_transformation(df, group1, group2, paired = paired)
   elif transform == "CLR":
