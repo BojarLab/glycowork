@@ -234,9 +234,9 @@ def impute_and_normalize(df, groups, impute = True, min_samples = 0.1):
     | Returns a dataframe in the same style as the input 
     """
     if min_samples:
-      min_count = np.floor(df.shape[1] * min_samples)
+      min_count = max(np.floor(df.shape[1] * min_samples), 2) + 1
       mask = (df != 0).sum(axis = 1) >= min_count
-      df = df[mask]
+      df = df[mask].reset_index(drop = True)
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
@@ -998,7 +998,7 @@ def correct_multiple_testing(pvals, alpha):
   corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
   significance = [p < alpha for p in corrpvals]
   if sum(significance) > 0.9*len(significance):
-    print("Significance inflation detected. The CLR/ALR transformation cannot seem to handle this dataset.\
+    print("Significance inflation detected. The CLR/ALR transformation cannot seem to handle this dataset. Consider running again with a higher gamma value.\
              Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
     res = multipletests(pvals, method = 'bonferroni')
     corrpvals, alpha = res[1], res[3]

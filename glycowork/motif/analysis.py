@@ -566,6 +566,8 @@ def get_differential_expression(df, group1, group2,
     df = get_additive_logratio_transformation(df, group1, group2, paired = paired)
   elif transform == "CLR":
     df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
+  elif transform == "Nothing":
+    pass
   else:
     raise ValueError("Only ALR and CLR are valid transforms for now.")
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
