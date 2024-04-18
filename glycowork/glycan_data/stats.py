@@ -959,14 +959,15 @@ def get_procrustes_scores(df, group1, group2, paired = False):
   return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
 
-def get_additive_logratio_transformation(df, group1, group2, paired = False):
+def get_additive_logratio_transformation(df, group1, group2, paired = False, gamma = 0.1):
   """Identifies ALR reference component and transforms data according to ALR\n
   | Arguments:
   | :-
   | df (dataframe): dataframe with features as rows and samples as columns
   | group1 (list): list of column indices or names for the first group of samples, usually the control
   | group2 (list): list of column indices or names for the second group of samples
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; in case of CLR; default: 0.1\n
   | Returns:
   | :-
   | ALR-transformed dataframe
@@ -977,7 +978,7 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False):
   print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
   if procrustes_corr[ref_component] < 0.9 or variances[ref_component] > 0.1:
     print("Metrics of chosen reference component not good enough for ALR; switching to CLR instead.")
-    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = 0.1)
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma)
     return df
   glycans = df.iloc[:, 0].values.tolist()
   glycans = glycans[:ref_component] + glycans[ref_component+1:]

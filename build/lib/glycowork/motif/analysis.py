@@ -182,7 +182,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
     df = df.set_index(index_col)
   elif isinstance(df.iloc[0,0], str):
     df = df.set_index(df.columns.tolist()[0])
-  if isinstance(df.index.tolist()[0], str) and '(' not in df.index.tolist()[0] and '-' not in df.index.tolist()[0]:
+  if not isinstance(df.index.tolist()[0], str) or (isinstance(df.index.tolist()[0], str) and '(' not in df.index.tolist()[0] and '-' not in df.index.tolist()[0]):
     df = df.T
   df = df.fillna(0)
   if transform == "CLR":
@@ -190,25 +190,19 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
     df = clr_transformation(df, [], [], gamma = 0)
   elif transform == "ALR":
     df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
-    df = get_additive_logratio_transformation(df, [], df.columns.tolist(), paired = False)
+    df = get_additive_logratio_transformation(df.reset_index(), [], df.columns.tolist(), paired = False)
+    df = df.set_index(df.columns[0])
   if motifs:
     if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
       raise ValueError("A heatmap needs to have at least two motifs.")
-    # Count glycan motifs and remove rare motifs from the result
-    df_motif = annotate_dataset(df.columns.tolist(), feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
-    df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
-    # Distinguish the case where the motif abundance is paired to a quantitative value or a qualitative variable
     if datatype == 'response':
-      collect_dic = {}
-      for c, col in enumerate(df_motif.columns):
-        indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
-        temp = df.iloc[:, indices]
-        temp.columns = range(temp.columns.size)
-        collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
-      df = pd.DataFrame(collect_dic)
+      df = quantify_motifs(df, df.index.tolist(), feature_set, custom_motifs = custom_motifs)
     elif datatype == 'presence':
-      collecty = df.apply(lambda row: [row.loc[df_motif[col].dropna().index].sum() / row.sum() for col in df_motif.columns], axis = 1)
-      df = pd.DataFrame(collecty.tolist(), columns = df_motif.columns, index = df.index)
+      # Count glycan motifs and remove rare motifs from the result
+      df_motif = annotate_dataset(df.index.tolist(), feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
+      df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
+      df = df_motif.T.fillna(0) @ df
+      df = df.apply(lambda col: col / col.sum()).T
   df = df.dropna(axis = 1)
   if motifs:
     df = clean_up_heatmap(df.T)
@@ -218,7 +212,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
     center = None
   else:
     center = 0
-  # Cluster the motif abundances
+  # Cluster the abundances
   sns.clustermap(df, center = center, **kwargs)
   plt.xlabel('Samples')
   plt.ylabel('Glycans' if not motifs else 'Motifs')

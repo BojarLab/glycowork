@@ -321,8 +321,8 @@ def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False, ter
       if col_sums[col1] == col_sums[col2] and col_subs[col1] == col2:
         drop_columns.append(col2)
   out_matrix = out_matrix.drop(drop_columns, axis = 1)
-  if size > 3:
-    out_matrix.columns = [remove_unmatched_brackets(g) for g in out_matrix.columns]
+  out_matrix.columns = [remove_unmatched_brackets(g) for g in out_matrix.columns]
+  out_matrix = out_matrix.groupby(by = out_matrix.columns, axis = 1).sum()
   if up_to:
     combined_df= pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
     if just_motifs:
