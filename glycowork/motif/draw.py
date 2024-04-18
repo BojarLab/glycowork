@@ -23,8 +23,7 @@ from math import sin, cos, radians, sqrt, atan, degrees
 
 
 def matches(line, opendelim = '(', closedelim = ')'):
-  """
-  Find matching pairs of delimiters in a given string.\n
+  """Find matching pairs of delimiters in a given string.\n
   | Arguments:
   | :-
   | line (str): The string to search for delimiter pairs.
@@ -61,8 +60,8 @@ def matches(line, opendelim = '(', closedelim = ')'):
 
 # Adjusted SNFG color palette
 col_dict_base = {
-    'snfg_white'     : '#FFFFFF', 
-    'snfg_alt_blue'  : '#0385AE', 
+    'snfg_white'     : '#FFFFFF',
+    'snfg_alt_blue'  : '#0385AE',
     'snfg_green'     : '#058F60',
     'snfg_yellow'    : '#FCC326',
     'snfg_light_blue': '#91D3E3',
@@ -76,8 +75,8 @@ col_dict_base = {
 }
 
 col_dict_transparent = {
-    'snfg_white'     : '#FFFFFF', 
-    'snfg_alt_blue'  : '#CDE7EF', 
+    'snfg_white'     : '#FFFFFF',
+    'snfg_alt_blue'  : '#CDE7EF',
     'snfg_green'     : '#CDE9DF',
     'snfg_yellow'    : '#FFF6DE',
     'snfg_light_blue': '#EEF8FB',
@@ -199,7 +198,7 @@ def hex_circumference(x_pos, y_pos, dim, col_dict):
   """
   for i in range(6):
     angle1 = radians(60 * i)
-    angle2 = radians(60 * (i + 1))    
+    angle2 = radians(60 * (i + 1))
     x1 = (0 - x_pos * dim) + (0.5 * dim) * cos(angle1)
     y1 = (0 + y_pos * dim) + (0.5 * dim) * sin(angle1)
     x2 = (0 - x_pos * dim) + (0.5 * dim) * cos(angle2)
@@ -221,7 +220,7 @@ def hex(x_pos, y_pos, dim, col_dict, color = 'white'):
   | Returns:
   | :-
   | None
-  """  
+  """
   x_base = 0 - x_pos * dim
   y_base = 0 + y_pos * dim
   half_dim = 0.5 * dim
@@ -233,7 +232,8 @@ def hex(x_pos, y_pos, dim, col_dict, color = 'white'):
   d.append(draw.Lines(*points, close = True, fill = color, stroke = col_dict['black'], stroke_width = 0.04 * dim))
 
 
-def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50, furanose = False, conf = '', deg = 0, text_anchor = 'middle'):
+def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50, furanose = False, conf = '', deg = 0, text_anchor = 'middle',
+               scalar = 0):
   """draw individual monosaccharides in shapes & colors according to the SNFG nomenclature\n
   | Arguments:
   | :-
@@ -252,6 +252,12 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
   stroke_w = 0.04 * dim
   half_dim = dim / 2
   inside_hex_dim = ((sqrt(3))/2)*half_dim
+  if scalar:
+    gradient = draw.RadialGradient(x_base, y_base, half_dim*2.2)
+    opacity = max(0, min(1, scalar))  # Normalize opacity to [0, 1]
+    gradient.add_stop(0, 'purple', opacity = opacity)
+    gradient.add_stop(1, 'white', opacity = 0)
+    d.append(draw.Circle(x_base, y_base, half_dim*2, fill = gradient))
 
   if shape == 'Hex':
     # Hexose - circle
@@ -287,7 +293,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     if furanose:
       p = draw.Path(stroke_width = 0)
       p.M(x_base-dim, y_base)
-      p.L(x_base+dim, y_base) 
+      p.L(x_base+dim, y_base)
       d.append(p)
       d.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
     # Ring configuration
@@ -366,7 +372,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))  
+    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
 
   if shape == 'HexA':
     # Hexuronate - divided diamond (col_dict[color]s flipped)
@@ -403,7 +409,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))  
+    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
 
   if shape == 'dHex':
     # Deoxyhexose - triangle
@@ -463,7 +469,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))   
+    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
 
   if shape == 'ddHex':
     # Dideoxyhexose - flat rectangle
@@ -483,7 +489,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))  
+    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
 
   if shape == 'Pen':
     # Pentose - star
@@ -515,7 +521,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True)) 
+    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
 
   if shape == 'dNon':
     # Deoxynonulosonate - diamond
@@ -555,7 +561,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))   
+    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
 
   if shape == 'Unknown':
     # Unknown - flat hexagon
@@ -577,8 +583,8 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))   
-  
+    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
+
   if shape == 'Assigned':
     # Assigned - pentagon
     d.append(draw.Lines(x_base,         y_base-half_dim/cos(radians(18)),
@@ -598,7 +604,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True)) 
+    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
 
   if shape == 'empty':
     d.append(draw.Circle(x_base, y_base, dim/2, fill = 'none', stroke_width = stroke_w, stroke = 'none'))
@@ -843,8 +849,8 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
     p.M(x_base,                                                y_base)
     p.L(x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)))
-    d.append(p) 
-  
+    d.append(p)
+
   if shape == '25A':
     hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
@@ -1020,7 +1026,8 @@ def add_bond(x_start, x_stop, y_start, y_stop, label = '', dim = 50, compact = F
   d.append(draw.Text(label, dim*0.4, path = p, text_anchor = 'middle', fill = col_dict['black'], valign = 'middle', line_offset = -0.5))
 
 
-def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50, compact = False, conf = '', deg = 0, text_anchor = 'middle', highlight = 'show'):
+def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50, compact = False, conf = '', deg = 0, text_anchor = 'middle', highlight = 'show',
+              scalar = 0):
   """wrapper function for drawing monosaccharide at specified position\n
   | Arguments:
   | :-
@@ -1038,12 +1045,13 @@ def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50,
     col_dict = col_dict_transparent
   else:
     col_dict = col_dict_base
-  
+
   x_pos = x_pos * (1.2 if compact else 2)
   y_pos = y_pos * (0.6 if compact else 1)
   if monosaccharide in sugar_dict:
     draw_shape(shape = sugar_dict[monosaccharide][0], color = sugar_dict[monosaccharide][1], x_pos = x_pos, y_pos = y_pos,
-               modification = modification, conf = conf, furanose = sugar_dict[monosaccharide][2], dim = dim, deg = deg, text_anchor = text_anchor, col_dict = col_dict)
+               modification = modification, conf = conf, furanose = sugar_dict[monosaccharide][2], dim = dim, deg = deg, text_anchor = text_anchor, col_dict = col_dict,
+               scalar = scalar)
   else:
     x_base = 0 - x_pos * dim
     y_base = 0 + y_pos * dim
@@ -1311,7 +1319,7 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
   | Arguments:
   | :-
   | glycan_graph (networkx object): Glycan as networkx object.
-  | motif_string (string): Glycan as named motif or in IUPAC-condensed format. 
+  | motif_string (string): Glycan as named motif or in IUPAC-condensed format.
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
@@ -1355,7 +1363,7 @@ def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
 
   mapping_hide = {v: 'hide' for v in list(set(list(g1_node_labels.keys())) - set(list(mapping_show.keys())))}
   mapping_show.update(mapping_hide)
-  
+
   nx.set_node_attributes(g1, dict(sorted(mapping_show.items())), 'highlight_labels')
 
   return g1
@@ -1494,7 +1502,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
       new_order.extend(idx)
     else:
       new_order.extend([idx[i] for i in np.argsort([k[0][-1] for k in [j for j in [branch_bond[k] for k in idx]]])])
-  
+
   branch_sugar = [branch_sugar[i] for i in new_order]
   branch_sugar_label = [branch_sugar_label[i] for i in new_order]
   branch_sugar_modification = [branch_sugar_modification[i] for i in new_order]
@@ -1658,7 +1666,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
     if sugar in [['Fuc'], ['Xyl']]:
       filtery.append(main_node[::2][::-1][branch_connection[k]])
     if sugar[-1] == 'Fuc' and len(sugar) > 1:
-      filtery.append(branch_node[k][::2][::-1][-2]) 
+      filtery.append(branch_node[k][::2][::-1][-2])
   for k, sugar in enumerate(branch_branch_sugar):
     if sugar in [['Fuc'], ['Xyl']]:
       filtery.append([j[::2][::-1] for j in branch_node][branch_branch_connection[k][0]][branch_branch_connection[k][1]])
@@ -1700,7 +1708,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
           for j in range(len(branch_y_pos[k])):
             if [k[::2][::-1] for k in branch_node][k][j] in [str(k) for k in upper] and branch_sugar[k] not in [['Fuc'], ['Xyl']]:
               branch_y_pos[k][j] = branch_y_pos[k][j] + to_add
-              
+
       for k in range(len(branch_branch_y_pos)):
         for j in range(len(branch_branch_y_pos[k])):
           if [k[::2][::-1] for k in branch_branch_node][k][j] in [str(k) for k in upper]:
@@ -1865,7 +1873,7 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50,  highlight = 'show
     col_dict = col_dict_transparent
   else:
     col_dict = col_dict_base
-  
+
   stroke_opts = {'stroke_width': 0.04 * dim, 'stroke': col_dict['black']}
   x_common = 0 - (x * dim)
   y_min = 0 + (y_min_max[0] * dim) - 0.75 * dim
@@ -1917,9 +1925,48 @@ def display_svg_with_matplotlib(svg_data):
   plt.show()
 
 
+def process_per_residue(glycan, per_residue):
+  """Given a glycan and per-residue scalars, will output separate scalar mappings for main, side, and branched side chains\n
+  | Arguments:
+  | :-
+  | glycan (string): Glycan in IUPAC-condensed format.
+  | per_residue (list): list of floats (order should be the same as the monosaccharides in glycan string).\n
+  | Returns:
+  | :-
+  | (i) list of per_residue values for main chain monosaccharides
+  | (ii) nested list of per_residue values for each side chain monosaccharides
+  | (iii) nested list of per_residue values for each branched side chain monosaccharides
+  """
+  temp = re.sub(r'\([^)]*\)', 'x', glycan) + 'x'
+  temp = re.sub(r'[^x\[\]]', '', temp)
+  main_chain_indices = []
+  side_chain_indices = []
+  branched_side_chain_indices = []
+  side_chain_stack = []
+  idx = 0
+  for index, char in enumerate(temp):
+    if char == '[':
+      side_chain_stack.append([])
+    elif char == ']':
+      if len(side_chain_stack) == 1:
+        side_chain_indices.append(side_chain_stack.pop())
+      else:
+        nested_chain = side_chain_stack.pop()
+        branched_side_chain_indices.append(nested_chain)
+    elif char == 'x':
+      if side_chain_stack:
+        side_chain_stack[-1].append(per_residue[idx])
+      else:
+        main_chain_indices.append(per_residue[idx])
+      idx += 1
+  side_chain_indices = [k[::-1] for k in side_chain_indices if k]
+  branched_side_chain_indices = [k[::-1] for k in branched_side_chain_indices if k]
+  return main_chain_indices[::-1], side_chain_indices, branched_side_chain_indices
+
+
 @rescue_glycans
 def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [],
-              repeat = None, repeat_range = None, filepath = None, suppress = False):
+              repeat = None, repeat_range = None, filepath = None, suppress = False, per_residue = []):
   """Draws a glycan structure based on the provided input.\n
   | Arguments:
   | :-
@@ -1931,12 +1978,15 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   | highlight_motif (string, optional): Glycan motif to highlight within the parent structure.
   | highlight_termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | repeat (bool | int | str): If specified, indicate repeat unit by brackets (True: n units, int: # of units, str: range of units)
-  | repeat_range (list of 2 int): List of index integers for the first and last main-chain monosaccharide in repeating unit. Monosaccharides are numbered starting from 0 (invisible placeholder = 0 in case of structure terminating in a linkage) at the reducing end. 
+  | repeat_range (list of 2 int): List of index integers for the first and last main-chain monosaccharide in repeating unit. Monosaccharides are numbered starting from 0 (invisible placeholder = 0 in case of structure terminating in a linkage) at the reducing end.
   | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.
-  | suppress (bool, optional): Whether to suppress the visual display of drawings into the console; default:False\n
+  | suppress (bool, optional): Whether to suppress the visual display of drawings into the console; default:False
+  | per_residue (list, optional): list of floats (order should be the same as the monosaccharides in glycan string) to quantitatively highlight monosaccharides.\n
   """
   if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
     raise Exception
+  if per_residue:
+    main_per_residue, side_per_residue, branched_side_per_residue = process_per_residue(draw_this, per_residue)
   bond_hack = False
   if 'Man(a1-?)' in draw_this and 'Man(a1-3)' not in draw_this and 'Man(a1-6)' not in draw_this:
     draw_this = 'Man(a1-6)'.join(draw_this.rsplit('Man(a1-?)', 1))
@@ -1957,7 +2007,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
       floaty_bits.append(draw_this[openpos:closepos]+'blank')
       draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')
-  
+
   if draw_this in motif_list.motif_name.values.tolist():
     draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values.tolist()[0]
 
@@ -2001,7 +2051,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   def calculate_degree(y1, y2, x1, x2):
     slope = -1 * (y2 - y1) / ((x2 * 2) - (x1 * 2))
     return degrees(atan(slope))
-  
+
   main_deg = [calculate_degree(main_sugar_y_pos[k], main_sugar_y_pos[k-1], main_sugar_x_pos[k], main_sugar_x_pos[k-1])
               if sugar in {'Z', 'Y'} else 0 for k, sugar in enumerate(main_sugar)]
 
@@ -2063,13 +2113,13 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   [add_bond(branch_branch_x_pos[k][0], branch_x_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]], branch_branch_y_pos[k][0], branch_y_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]], branch_branch_bond[k][0], dim = dim, compact = compact, highlight = branch_branch_bond_label[k][0]) for k in range(len(branch_branch_sugar))]
   # Bond branch_branch_branch to branch_branch
   [add_bond(bbb_x_pos[k][0], branch_branch_x_pos[bbb_connection[k][0]][bbb_connection[k][1]], bbb_y_pos[k][0], branch_branch_y_pos[bbb_connection[k][0]][bbb_connection[k][1]], bbb_bond[k][0], dim = dim, compact = compact, highlight = bbb_bond_label[k][0]) for k in range(len(bbb_sugar))]
-  
+
   # Sugar main chain
-  [add_sugar(main_sugar[k], main_sugar_x_pos[k], main_sugar_y_pos[k], modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim, deg = main_deg[k], highlight = main_sugar_label[k]) for k in range(len(main_sugar))]
+  [add_sugar(main_sugar[k], main_sugar_x_pos[k], main_sugar_y_pos[k], modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim, deg = main_deg[k], highlight = main_sugar_label[k], scalar = main_per_residue[k] if per_residue else 0) for k in range(len(main_sugar))]
   # Sugar branch
-  [add_sugar(branch_sugar[b_idx][s_idx], branch_x_pos[b_idx][s_idx], branch_y_pos[b_idx][s_idx], modification = branch_sugar_modification[b_idx][s_idx], conf = b_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_deg[b_idx][s_idx], highlight = branch_sugar_label[b_idx][s_idx]) for b_idx in range(len(branch_sugar)) for s_idx in range(len(branch_sugar[b_idx]))]
+  [add_sugar(branch_sugar[b_idx][s_idx], branch_x_pos[b_idx][s_idx], branch_y_pos[b_idx][s_idx], modification = branch_sugar_modification[b_idx][s_idx], conf = b_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_deg[b_idx][s_idx], highlight = branch_sugar_label[b_idx][s_idx], scalar = side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(branch_sugar)) for s_idx in range(len(branch_sugar[b_idx]))]
   # Sugar branch_branch
-  [add_sugar(branch_branch_sugar[b_idx][s_idx], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx], modification = branch_branch_sugar_modification[b_idx][s_idx], conf = bb_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_branch_deg[b_idx][s_idx], highlight = branch_branch_sugar_label[b_idx][s_idx]) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx]))]
+  [add_sugar(branch_branch_sugar[b_idx][s_idx], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx], modification = branch_branch_sugar_modification[b_idx][s_idx], conf = bb_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_branch_deg[b_idx][s_idx], highlight = branch_branch_sugar_label[b_idx][s_idx], scalar = branched_side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx]))]
   # Sugar branch branch branch
   [add_sugar(bbb_sugar[b_idx][s_idx], bbb_x_pos[b_idx][s_idx], bbb_y_pos[b_idx][s_idx], modification = bbb_sugar_modification[b_idx][s_idx], conf = bbb_conf[b_idx][s_idx], compact = compact, dim = dim, highlight = bbb_sugar_label[b_idx][s_idx]) for b_idx in range(len(bbb_sugar)) for s_idx in range(len(bbb_sugar[b_idx]))]
 
@@ -2077,7 +2127,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     highlight = 'show'
   else:
     highlight = 'hide'
-  
+
   if floaty_bits != []:
     fb_count = {i: floaty_bits.count(i) for i in floaty_bits}
     floaty_bits = list(set(floaty_bits))
@@ -2124,14 +2174,14 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     if isinstance(repeat, (str, int)):
       if repeat != True:
         repeat_annot += ' = ' + str(repeat)
-    
+
     # repeat range code block
     if repeat_range:
       bracket_open = (main_sugar_x_pos[repeat_range[1]]*2)+1 if not compact else (main_sugar_x_pos[repeat_range[1]]*1.2)+0.6
       bracket_close = (main_sugar_x_pos[repeat_range[0]]*2)-1 if not compact else (main_sugar_x_pos[repeat_range[0]]*1.2)-0.6
       bracket_y_open =  (main_sugar_y_pos[repeat_range[1]], main_sugar_y_pos[repeat_range[1]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2)-0.0)
       bracket_y_close = (main_sugar_y_pos[repeat_range[0]], main_sugar_y_pos[repeat_range[0]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2)-0.0)
-      text_x = main_sugar_x_pos[repeat_range[0]]-0.5 
+      text_x = main_sugar_x_pos[repeat_range[0]]-0.5
       text_y = main_sugar_y_pos[0]+1.05 if not compact else (main_sugar_y_pos[0]+1.03)/0.6
       draw_bracket(bracket_close, bracket_y_close, direction = 'left', dim = dim, highlight = highlight, deg = 0)
       draw_bracket(bracket_open, bracket_y_open, direction = 'right', dim = dim, highlight = highlight, deg = 0)
