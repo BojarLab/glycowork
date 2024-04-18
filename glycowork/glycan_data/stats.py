@@ -939,19 +939,22 @@ def get_procrustes_scores(df, group1, group2, paired = False):
   | :-
   | List of Procrustes scores (Procrustes correlation * inverse of feature variance)
   """
-  if isinstance(group1[0], int):
+  if isinstance(group2[0], int):
     group1 = [df.columns.tolist()[k] for k in group1]
     group2 = [df.columns.tolist()[k] for k in group2]
   df = df.iloc[:, 1:]
   ref_matrix = clr_transformation(df, [], [], gamma = 0)
   df = np.log2(df)
-  if paired:
-    differences = df[group1].values - df[group2].values
-    variances = np.var(differences, axis = 1, ddof = 1)
+  if group1:
+    if paired:
+      differences = df[group1].values - df[group2].values
+      variances = np.var(differences, axis = 1, ddof = 1)
+    else:
+      var_group1 = df[group1].var(axis = 1)
+      var_group2 = df[group2].var(axis = 1)
+      variances = abs(var_group1 - var_group2)
   else:
-    var_group1 = df[group1].var(axis = 1)
-    var_group2 = df[group2].var(axis = 1)
-    variances = abs(var_group1 - var_group2)
+    variances = abs(df[group2].var(axis = 1))
   procrustes_corr = [1 - procrustes(ref_matrix.drop(ref_matrix.index[i]), alr_transformation(df, i))[2] for i in range(df.shape[0])]
   return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
