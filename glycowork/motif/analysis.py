@@ -12,6 +12,7 @@ from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from sklearn.manifold import TSNE
+from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
@@ -53,28 +54,28 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | Returns dataframe with p-values, corrected p-values, and Cohen's d as effect size for every glycan motif
     """
     if isinstance(df, str):
-        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     # Reformat to allow for proper annotation in all samples
     if multiple_samples:
-        df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
-        df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
+      df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
+      df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
     if not zscores:
-        means = df.iloc[:, 1:].mean()
-        std_devs = df.iloc[:, 1:].std()
-        df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / std_devs
+      means = df.iloc[:, 1:].mean()
+      std_devs = df.iloc[:, 1:].std()
+      df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / std_devs
     # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 motifs = motifs, feature_set = feature_set, condense = True,
                                 custom_motifs = custom_motifs)
     # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
-        df = df.set_index(glycan_col_name)
-        df_motif = pd.concat([pd.concat([df.iloc[:, k],
+      df = df.set_index(glycan_col_name)
+      df_motif = pd.concat([pd.concat([df.iloc[:, k],
                                    df_motif], axis = 1).dropna() for k in range(len(df.columns))], axis = 0)
-        cols = df_motif.columns.values.tolist()[1:] + [df_motif.columns.values.tolist()[0]]
-        df_motif = df_motif[cols]
+      cols = df_motif.columns.values.tolist()[1:] + [df_motif.columns.values.tolist()[0]]
+      df_motif = df_motif[cols]
     else:
-        df_motif[label_col_name] = df[label_col_name].values.tolist()
+      df_motif[label_col_name] = df[label_col_name].values.tolist()
     # Divide into motifs with expression above threshold & below
     df_pos = df_motif[df_motif[label_col_name] > thresh]
     df_neg = df_motif[df_motif[label_col_name] <= thresh]
@@ -92,9 +93,9 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
         'effect_size': effect_sizes
         })
     if sorting:
-        out['abs_effect_size'] = out['effect_size'].abs()
-        out = out.sort_values(by = ['abs_effect_size', 'corr_pval', 'pval'], ascending = [False, True, True])
-        out = out.drop('abs_effect_size', axis = 1)
+      out['abs_effect_size'] = out['effect_size'].abs()
+      out = out.sort_values(by = ['abs_effect_size', 'corr_pval', 'pval'], ascending = [False, True, True])
+      out = out.drop('abs_effect_size', axis = 1)
     return out
 
 
@@ -114,7 +115,6 @@ def get_representative_substructures(enrichment_df):
     max_log_pval = np.max(log_pvals)
     weights = log_pvals / max_log_pval
     motifs = filtered_df.motif.values.tolist()
-
     # Pair glycoletters & disaccharides with their pvalue-based weight
     mono, mono_weights = list(zip(*[(motifs[k], weights[k]) for k in range(len(motifs)) if '(' not in motifs[k]]))
     di, di_weights = list(zip(*[(motifs[k], weights[k]) for k in range(len(motifs)) if '(' in motifs[k]]))
@@ -123,7 +123,6 @@ def get_representative_substructures(enrichment_df):
     # For each glycan, get their glycoletter & disaccharide scores, normalized by glycan length
     motif_scores = np.add(mono_scores, di_scores)
     length_scores = [len(g) for g in glycans]
-
     combined_scores = np.divide(motif_scores, length_scores)
     df_score = pd.DataFrame({'glycan': glycans, 'motif_score': motif_scores, 'length_score': length_scores, 'combined_score': combined_scores})
     df_score = df_score.sort_values(by = 'combined_score', ascending = False)
@@ -190,7 +189,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
     df = clr_transformation(df, [], [], gamma = 0)
   elif transform == "ALR":
     df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
-    df = get_additive_logratio_transformation(df.reset_index(), [], df.columns.tolist(), paired = False)
+    df = get_additive_logratio_transformation(df.reset_index(), [], df.columns.tolist(), paired = False, gamma = 0)
     df = df.set_index(df.columns[0])
   if motifs:
     if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
@@ -243,12 +242,12 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
-        this_dir, this_filename = path.split(__file__)
-        data_path = path.join(this_dir, 'glycan_representations.pkl')
-        emb = pickle.load(open(data_path, 'rb'))
+      this_dir, this_filename = path.split(__file__)
+      data_path = path.join(this_dir, 'glycan_representations.pkl')
+      emb = pickle.load(open(data_path, 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
     if isinstance(emb, pd.DataFrame):
-        emb = {g: emb.iloc[i, :] for i, g in enumerate(glycans)}
+      emb = {g: emb.iloc[i, :] for i, g in enumerate(glycans)}
     embs = np.vstack([emb[g] for g in glycans])
     # Calculate t-SNE of embeddings
     embs = TSNE(random_state = 42,
@@ -256,8 +255,8 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     # Plot the t-SNE
     markers = None
     if shape_feature is not None:
-        markers = {shape_feature: "X", "Absent": "o"}
-        shape_feature = [shape_feature if shape_feature in g else 'Absent' for g in glycans]
+      markers = {shape_feature: "X", "Absent": "o"}
+      shape_feature = [shape_feature if shape_feature in g else 'Absent' for g in glycans]
     sns.scatterplot(x = embs[:, 0], y = embs[:, 1], hue = label_list,
                     palette = palette, style = shape_feature, markers = markers,
                     alpha = alpha, **kwargs)
@@ -298,87 +297,82 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   pool_in = unwrap([link_find(k) for k in df[glycan_col_name]])
   pool_in = [k.replace('(', '*').replace(')', '*') for k in pool_in]
   pool_in_split = [k.split('*') for k in pool_in]
-
   pool, lab, sugars = [], '', []
   if mode == 'bond':
-      # Get upstream monosaccharides for a specific linkage
-      pool = [k[0] for k in pool_in_split if k[1] == sugar]
-      lab = f'Observed Monosaccharides Making Linkage {sugar}'
+    # Get upstream monosaccharides for a specific linkage
+    pool = [k[0] for k in pool_in_split if k[1] == sugar]
+    lab = f'Observed Monosaccharides Making Linkage {sugar}'
   elif mode in ['sugar', 'sugarbond']:
-      for k in pool_in_split:
-          # Get downstream monosaccharides or downstream linkages for a specific monosaccharide
-          k0, k2 = k[0], k[2] if len(k) > 2 else None
-          if modifications and sugar in k0:
-              sugars.append(k0)
-              pool.append(k2 if mode == 'sugar' else k[1])
-          elif k0 == sugar:
-              pool.append(k2 if mode == 'sugar' else k[1])
-      lab = f'Observed Monosaccharides Paired with {sugar}' if mode == 'sugar' else f'Observed Linkages Made by {sugar}'
-
+    for k in pool_in_split:
+      # Get downstream monosaccharides or downstream linkages for a specific monosaccharide
+      k0, k2 = k[0], k[2] if len(k) > 2 else None
+      if modifications and sugar in k0:
+        sugars.append(k0)
+        pool.append(k2 if mode == 'sugar' else k[1])
+      elif k0 == sugar:
+        pool.append(k2 if mode == 'sugar' else k[1])
+    lab = f'Observed Monosaccharides Paired with {sugar}' if mode == 'sugar' else f'Observed Linkages Made by {sugar}'
   # Count objects in pool, filter by rarity, and calculate proportion
   cou = Counter(pool).most_common()
   filtered_items = [(item, count) for item, count in cou if count > thresh]
   cou_k, cou_v = zip(*filtered_items)
   cou_v = [v / len(pool) for v in cou_v]
-
   # Start plotting
   fig, (a0, a1) = plt.subplots(1, 2, figsize = (8, 4), gridspec_kw = {'width_ratios': [1, 1]})
   if modifications:
-      if mode == 'bond':
-          print("Modifications currently only work in mode == 'sugar' and mode == 'sugarbond'.")
-      # Get counts and proportions for the input monosaccharide + its modifications
-      cou2 = Counter(sugars).most_common()
-      filtered_items = [(item, count) for item, count in cou2 if count > thresh]
-      cou_k2, cou_v2 = zip(*filtered_items)
-      cou_v2 = [v / len(sugars) for v in cou_v2]
-      # Map the input monosaccharide + its modifications to colors
-      color_list = plt.cm.get_cmap('tab20')
-      color_map = {key: color_list(idx / len(cou_k2)) for idx, key in enumerate(cou_k2)}
-      palette = [color_map[k] for k in cou_k2]
-      # Start linking downstream monosaccharides / linkages to the input monosaccharide + its modifications
-      pool_in2 = [k for k in pool_in if k.split('*')[2 if mode == 'sugar' else 1] in cou_k]
-      cou_for_df = []
-      for key in cou_k2:
-          idx = [item.split('*')[2 if mode == 'sugar' else 1] for item in pool_in2 if item.split('*')[0] == key]
-          cou_t = Counter(idx).most_common()
-          cou_v_t = {item[0]: item[1] for item in cou_t}
-          cou_v_t = [cou_v_t.get(item, 0) for item in cou_k]
-          if len(cou_k2) > 1:
-              cou_for_df.append(pd.DataFrame({'monosaccharides': cou_k, 'counts': cou_v_t, 'colors': [key] * len(cou_k)}))
-          else:
-              sns.barplot(x = cou_k, y = cou_v_t, ax = a1, color = "cornflowerblue")
+    if mode == 'bond':
+      print("Modifications currently only work in mode == 'sugar' and mode == 'sugarbond'.")
+    # Get counts and proportions for the input monosaccharide + its modifications
+    cou2 = Counter(sugars).most_common()
+    filtered_items = [(item, count) for item, count in cou2 if count > thresh]
+    cou_k2, cou_v2 = zip(*filtered_items)
+    cou_v2 = [v / len(sugars) for v in cou_v2]
+    # Map the input monosaccharide + its modifications to colors
+    color_list = plt.cm.get_cmap('tab20')
+    color_map = {key: color_list(idx / len(cou_k2)) for idx, key in enumerate(cou_k2)}
+    palette = [color_map[k] for k in cou_k2]
+    # Start linking downstream monosaccharides / linkages to the input monosaccharide + its modifications
+    pool_in2 = [k for k in pool_in if k.split('*')[2 if mode == 'sugar' else 1] in cou_k]
+    cou_for_df = []
+    for key in cou_k2:
+      idx = [item.split('*')[2 if mode == 'sugar' else 1] for item in pool_in2 if item.split('*')[0] == key]
+      cou_t = Counter(idx).most_common()
+      cou_v_t = {item[0]: item[1] for item in cou_t}
+      cou_v_t = [cou_v_t.get(item, 0) for item in cou_k]
       if len(cou_k2) > 1:
-          cou_df = pd.concat(cou_for_df).reset_index(drop = True)
-          sns.histplot(data = cou_df, x = 'monosaccharides', hue = 'colors', weights = 'counts',
+        cou_for_df.append(pd.DataFrame({'monosaccharides': cou_k, 'counts': cou_v_t, 'colors': [key] * len(cou_k)}))
+      else:
+        sns.barplot(x = cou_k, y = cou_v_t, ax = a1, color = "cornflowerblue")
+    if len(cou_k2) > 1:
+      cou_df = pd.concat(cou_for_df).reset_index(drop = True)
+      sns.histplot(data = cou_df, x = 'monosaccharides', hue = 'colors', weights = 'counts',
                        multiple = 'stack', palette = palette, ax = a1, legend = False, shrink = 0.8)
-      a1.set_ylabel('Absolute Occurrence')
+    a1.set_ylabel('Absolute Occurrence')
   else:
-      sns.barplot(x = cou_k, y = cou_v, ax = a1, color = "cornflowerblue")
-      a1.set_ylabel('Relative Proportion')
+    sns.barplot(x = cou_k, y = cou_v, ax = a1, color = "cornflowerblue")
+    a1.set_ylabel('Relative Proportion')
   sns.despine(left = True, bottom = True)
   a1.set_xlabel('')
   a1.set_title(f'{sugar} and variants are connected to')
   plt.setp(a0.get_xticklabels(), rotation = 'vertical')
-
   # Confusingly, this second plot block refers to the *first* plot, depicting the input monosaccharide + its modifications
   if modifications:
     if len(cou_k2) > 1:
-        cou_df2 = pd.DataFrame({'monosaccharides': cou_k2, 'counts': cou_v2})
-        sns.histplot(data = cou_df2, x = 'monosaccharides', weights = 'counts',
+      cou_df2 = pd.DataFrame({'monosaccharides': cou_k2, 'counts': cou_v2})
+      sns.histplot(data = cou_df2, x = 'monosaccharides', weights = 'counts',
                      hue = 'monosaccharides', shrink = 0.8, legend = False,
                      ax = a0, palette = palette, alpha = 0.75)
     else:
-        sns.barplot(x = cou_k2, y = cou_v2, ax = a0, color = "cornflowerblue")
+      sns.barplot(x = cou_k2, y = cou_v2, ax = a0, color = "cornflowerblue")
     sns.despine(left = True, bottom = True)
     a0.set_ylabel('Relative Proportion')
     a0.set_xlabel('')
     a0.set_title(f'Observed Modifications of {sugar}')
     plt.setp(a1.get_xticklabels(), rotation = 'vertical')
-
   fig.suptitle(f'Characterizing {sugar}')
   fig.tight_layout()
   if filepath:
-      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                   bbox_inches = 'tight')
   plt.show()
 
@@ -394,7 +388,7 @@ def get_coverage(df, filepath = ''):
   | Prints the heatmap
   """
   if isinstance(df, str):
-      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   d = df.iloc[:,1:]
   # arrange by mean intensity across all samples
   order = d.mean(axis = 1).sort_values().index
@@ -437,7 +431,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   if motifs:
     # Motif extraction and quantification
     df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T.reset_index()
-  X = np.array(df.iloc[:, 1:].T)
+  X = np.array(df.iloc[:, 1:len(groups)+1].T) if groups and isinstance(groups, list) else np.array(df.iloc[:, 1:].T)
   scaler = StandardScaler()
   X_std = scaler.fit_transform(X)
   pca = PCA()
@@ -560,7 +554,7 @@ def get_differential_expression(df, group1, group2,
   if transform is None:
     transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
   if transform == "ALR":
-    df = get_additive_logratio_transformation(df, group1, group2, paired = paired)
+    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma)
   elif transform == "CLR":
     df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
   elif transform == "Nothing":
@@ -711,7 +705,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed =
   | Prints volcano plot
   """
   if isinstance(df_res, str):
-      df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
+    df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
   x = df_res[x_metric].values
   y = df_res['log_p'].values
@@ -778,7 +772,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     if transform is None:
       transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
     if transform == "ALR":
-      df = get_additive_logratio_transformation(df, [], df.columns[1:].tolist(), paired = False)
+      df = get_additive_logratio_transformation(df, [], df.columns[1:].tolist(), paired = False, gamma = gamma)
     elif transform == "CLR":
       df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
     elif transform == "Nothing":
@@ -947,7 +941,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     if transform is None:
       transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
     if transform == "ALR":
-      df = get_additive_logratio_transformation(df, [], df.columns[1:].tolist(), paired = False)
+      df = get_additive_logratio_transformation(df, [], df.columns[1:].tolist(), paired = False, gamma = gamma)
     elif transform == "CLR":
       df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
     elif transform == "Nothing":
@@ -1019,7 +1013,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     if transform is None:
       transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
     if transform == "ALR":
-      df = get_additive_logratio_transformation(df, [], df.columns[1:].tolist(), paired = False)
+      df = get_additive_logratio_transformation(df, [], df.columns[1:].tolist(), paired = False, gamma = gamma)
     elif transform == "CLR":
       df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
     elif transform == "Nothing":
@@ -1079,7 +1073,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
   else:
-    group_sizes = list(len(group1)*[1]+len(group2)*[2])
+    group_sizes = len(group1)*[1]+len(group2)*[2]
     if not isinstance(group1[0], str):
       columns_list = df.columns.tolist()
       group1 = [columns_list[k] for k in group1]
@@ -1128,7 +1122,9 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
     if transform is None:
       transform = "ALR" if enforce_class(df_org.iloc[0, 0], "N") and len(df_org) > 50 else "CLR"
     if transform == "ALR":
-      df_org = get_additive_logratio_transformation(df_org, group1, group2, paired = paired)
+      if not group2:
+        group1, group2 = group2, group1
+      df_org = get_additive_logratio_transformation(df_org, group1, group2, paired = paired, gamma = gamma)
     elif transform == "CLR":
       df_org.iloc[:, 1:] = clr_transformation(df_org.iloc[:, 1:], group1, group2, gamma = gamma)
     elif transform == "Nothing":
@@ -1140,7 +1136,9 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = Fa
       b_df = clean_up_heatmap(b_df.T)
     else:
       b_df = df_org
-    bc_diversity = {}  # Calculating pair-wise indexes
+    if not isinstance(b_df.index[0], str):
+      b_df = b_df.set_index(b_df.columns[0])
+    bc_diversity = {}  # Calculating pair-wise indices
     for index_1 in range(0, len(b_df.columns)):
       for index_2 in range(0, len(b_df.columns)):
         bc_pair = np.sqrt(np.sum((b_df.iloc[:, index_1] - b_df.iloc[:, index_2]) ** 2))
@@ -1202,10 +1200,10 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df1.shape[1] - 1)
   if transform is None:
-    transform = "ALR" if (enforce_class(df1.iloc[0, 0], "N") and len(df1) > 50) or (enforce_class(df2.iloc[0, 0], "N") and len(df2) > 50) else "CLR"
+    transform = "ALR" if (enforce_class(df1.iloc[0, 0], "N") and len(df1) > 50) and (enforce_class(df2.iloc[0, 0], "N") and len(df2) > 50) else "CLR"
   if transform == "ALR":
-    df1 = get_additive_logratio_transformation(df1, [], df1.columns[1:].tolist(), paired = False)
-    df2 = get_additive_logratio_transformation(df2, [], df2.columns[1:].tolist(), paired = False)
+    df1 = get_additive_logratio_transformation(df1, [], df1.columns[1:].tolist(), paired = False, gamma = gamma)
+    df2 = get_additive_logratio_transformation(df2, [], df2.columns[1:].tolist(), paired = False, gamma = gamma)
   elif transform == "CLR":
     df1.iloc[:, 1:] = clr_transformation(df1.iloc[:, 1:], [], df1.columns.tolist()[1:], gamma = gamma)
     df2.iloc[:, 1:] = clr_transformation(df2.iloc[:, 1:], [], df2.columns.tolist()[1:], gamma = gamma)
@@ -1237,3 +1235,79 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   correlation_df = pd.DataFrame(correlation_matrix, index = df1.columns, columns = df2.columns)
   p_value_df = pd.DataFrame(p_value_matrix, index = df1.columns, columns = df2.columns)
   return correlation_df, p_value_df
+
+
+def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["known", "exhaustive"], paired = False, impute = True,
+            min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0):
+  """Calculates ROC AUC for every feature and, optionally, plots the best\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | plot (bool): whether to plot the ROC curve for the best feature; default: False
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
+  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
+  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
+  |   and 'chemical' (molecular properties of glycan)
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
+  | impute (bool): replaces zeroes with a Random Forest based model; default:True
+  | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+  | custom_scale (float): if you *know* the difference in scale between groups, provide the ratio of group2/group1 for an informed scale model\n
+  | Returns:
+  | :-
+  | Returns a sorted list of tuples of type (glycan, AUC score) and, optionally, ROC curve for best feature
+  """
+  if isinstance(df, str):
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  if not isinstance(group1[0], str):
+    columns_list = df.columns.tolist()
+    group1 = [columns_list[k] for k in group1]
+    group2 = [columns_list[k] for k in group2]
+  df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
+  df = df.apply(replace_outliers_winsorization, axis = 1)
+  df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
+  if transform is None:
+    transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
+  if transform == "ALR":
+    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma)
+  elif transform == "CLR":
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
+  elif transform == "Nothing":
+    pass
+  else:
+    raise ValueError("Only ALR and CLR are valid transforms for now.")
+  if not isinstance(df.index[0], str):
+    df = df.set_index(df.columns[0])
+  if motifs:
+    df = quantify_motifs(df, df.index.tolist(), feature_set, custom_motifs = custom_motifs)
+    df = clean_up_heatmap(df.T)
+  auc_scores = {}
+  for feature, values in df.iterrows():
+    values_group1 = values[group1]
+    values_group2 = values[group2]
+    y_true = [0] * len(values_group1) + [1] * len(values_group2)
+    y_scores = np.concatenate([values_group1, values_group2])
+    auc_scores[feature] = roc_auc_score(y_true, y_scores)
+  sorted_auc_scores = sorted(auc_scores.items(), key = lambda item: item[1], reverse = True)
+  if plot:
+    best, res = sorted_auc_scores[0]
+    values = df.loc[best, :]
+    values_group1 = values[group1]
+    values_group2 = values[group2]
+    y_true = [0] * len(values_group1) + [1] * len(values_group2)
+    y_scores = np.concatenate([values_group1, values_group2])
+    fpr, tpr, _ = roc_curve(y_true, y_scores)
+    plt.figure()
+    plt.plot(fpr, tpr, label=f'ROC Curve (area = {res:.2f})')
+    plt.plot([0, 1], [0, 1], 'r--')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(f'ROC Curve for {best}')
+    plt.legend(loc = 'lower right')
+    plt.show()
+  return sorted_auc_scores

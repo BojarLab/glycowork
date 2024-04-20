@@ -90,8 +90,10 @@ def cohen_d(x, y, paired = False):
   else:
     nx = len(x)
     ny = len(y)
+    sx = max(np.std(x, ddof = 1), 1e-6)
+    sy = max(np.std(y, ddof = 1), 1e-6)
     dof = nx + ny - 2
-    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1) * np.std(x, ddof = 1) ** 2 + (ny-1) * np.std(y, ddof = 1) ** 2) / dof)
+    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1) * sx ** 2 + (ny-1) * sy ** 2) / dof)
     var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
   return d, var_d
 
@@ -807,18 +809,19 @@ def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
     return (np.log2(df) - np.log2(geometric_mean))
 
 
-def anosim(df, group_labels, permutations = 999):
+def anosim(df, group_labels_in, permutations = 999):
   """Performs analysis of similarity statistical test\n
   | Arguments:
   | :-
   | df (dataframe): square distance matrix
-  | group_labels (list): list of group membership for each sample
+  | group_labels_in (list): list of group membership for each sample
   | permutations (int): number of permutations to perform in ANOSIM statistical test; default:999\n
   | Returns:
   | :-
   | (i) ANOSIM R statistic - ranges between -1 to 1.
   | (ii) p-value of the R statistic
   """
+  group_labels = copy.deepcopy(group_labels_in)
   n = df.shape[0]
   condensed_dist = df.values[np.tril_indices(n, k = -1)]
   ranks = rankdata(condensed_dist, method = 'average')
@@ -1002,7 +1005,7 @@ def correct_multiple_testing(pvals, alpha):
   corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
   significance = [p < alpha for p in corrpvals]
   if sum(significance) > 0.9*len(significance):
-    print("Significance inflation detected. The CLR/ALR transformation cannot seem to handle this dataset. Consider running again with a higher gamma value.\
+    print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value.\
              Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
     res = multipletests(pvals, method = 'bonferroni')
     corrpvals, alpha = res[1], res[3]
