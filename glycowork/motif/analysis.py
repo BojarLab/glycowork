@@ -12,9 +12,12 @@ from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from sklearn.manifold import TSNE
-from sklearn.metrics import roc_auc_score, roc_curve
-from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import roc_auc_score, roc_curve, auc
+from sklearn.preprocessing import StandardScaler, label_binarize
 from sklearn.decomposition import PCA
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
 
 from glycowork.glycan_data.loader import df_species, unwrap, motif_list, strip_suffixes
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
@@ -763,6 +766,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     results, posthoc_results = [], {}
+    df = df.iloc[:, :len(groups)+1]
     df = df.fillna(0)
     df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
     df = df.apply(replace_outliers_winsorization, axis = 1)
@@ -780,7 +784,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     else:
       raise ValueError("Only ALR and CLR are valid transforms for now.")
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
-    alpha = get_alphaN(df.shape[1] - 1)
+    alpha = get_alphaN(len(groups))
     if motifs:
       df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
       # Deduplication
@@ -1244,7 +1248,7 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
   | :-
   | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
   | group1 (list): list of column indices or names for the first group of samples, usually the control
-  | group2 (list): list of column indices or names for the second group of samples
+  | group2 (list): list of column indices or names for the second group of samples (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
   | plot (bool): whether to plot the ROC curve for the best feature; default: False
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
@@ -1270,7 +1274,11 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
     group2 = [columns_list[k] for k in group2]
   df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
   df = df.apply(replace_outliers_winsorization, axis = 1)
-  df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
+  if group2:
+    df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
+  else:
+    classes = set(group1)
+    df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(group1) if x == g] for g in classes], impute = impute, min_samples = min_samples)
   if transform is None:
     transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
   if transform == "ALR":
@@ -1287,27 +1295,63 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
     df = quantify_motifs(df, df.index.tolist(), feature_set, custom_motifs = custom_motifs)
     df = clean_up_heatmap(df.T)
   auc_scores = {}
-  for feature, values in df.iterrows():
-    values_group1 = values[group1]
-    values_group2 = values[group2]
-    y_true = [0] * len(values_group1) + [1] * len(values_group2)
-    y_scores = np.concatenate([values_group1, values_group2])
-    auc_scores[feature] = roc_auc_score(y_true, y_scores)
-  sorted_auc_scores = sorted(auc_scores.items(), key = lambda item: item[1], reverse = True)
-  if plot:
-    best, res = sorted_auc_scores[0]
-    values = df.loc[best, :]
-    values_group1 = values[group1]
-    values_group2 = values[group2]
-    y_true = [0] * len(values_group1) + [1] * len(values_group2)
-    y_scores = np.concatenate([values_group1, values_group2])
-    fpr, tpr, _ = roc_curve(y_true, y_scores)
-    plt.figure()
-    plt.plot(fpr, tpr, label=f'ROC Curve (area = {res:.2f})')
-    plt.plot([0, 1], [0, 1], 'r--')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title(f'ROC Curve for {best}')
-    plt.legend(loc = 'lower right')
-    plt.show()
+  if group2: # binary comparison
+    for feature, values in df.iterrows():
+      values_group1 = values[group1]
+      values_group2 = values[group2]
+      y_true = [0] * len(values_group1) + [1] * len(values_group2)
+      y_scores = np.concatenate([values_group1, values_group2])
+      auc_scores[feature] = roc_auc_score(y_true, y_scores)
+    sorted_auc_scores = sorted(auc_scores.items(), key = lambda item: item[1], reverse = True)
+    if plot:
+      best, res = sorted_auc_scores[0]
+      values = df.loc[best, :]
+      values_group1 = values[group1]
+      values_group2 = values[group2]
+      y_true = [0] * len(values_group1) + [1] * len(values_group2)
+      y_scores = np.concatenate([values_group1, values_group2])
+      fpr, tpr, _ = roc_curve(y_true, y_scores)
+      plt.figure()
+      plt.plot(fpr, tpr, label=f'ROC Curve (area = {res:.2f})')
+      plt.plot([0, 1], [0, 1], 'r--')
+      plt.xlabel('False Positive Rate')
+      plt.ylabel('True Positive Rate')
+      plt.title(f'ROC Curve for {best}')
+      plt.legend(loc = 'lower right')
+      plt.show()
+  else: # multi-group comparison
+    df = df.groupby(df.index).mean()
+    df = df.T  # Ensure features are columns
+    df['group'] = group1
+    y = label_binarize(df['group'], classes = classes)
+    n_classes = y.shape[1]
+    sorted_auc_scores, best_fpr, best_tpr = {}, {}, {}
+    for feature in df.columns[:-1]:  # exclude the 'group' label column
+      X = df[feature].values.reshape(-1, 1)  # Feature matrix needs to be column-wise
+      X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3, random_state = 42)
+      classifier = OneVsRestClassifier(LogisticRegression(solver = 'lbfgs'))
+      classifier.fit(X_train, y_train)
+      for i in range(n_classes):
+        if len(np.unique(y_test[:, i])) < 2:  # Check if the test set is not degenerate
+          continue
+        y_score = classifier.predict_proba(X_test)[:, i]
+        fpr, tpr, _ = roc_curve(y_test[:, i], y_score)
+        roc_auc = auc(fpr, tpr)
+        # Store the best feature for each class based on AUC
+        if classes[i] not in sorted_auc_scores or roc_auc > sorted_auc_scores[classes[i]][1]:
+          sorted_auc_scores[classes[i]] = (feature, roc_auc)
+          best_fpr[classes[i]] = fpr
+          best_tpr[classes[i]] = tpr
+    if plot:
+      # Plot average ROC curves for the best features
+      for classy, (best_feature, best_auc) in sorted_auc_scores.items():
+        plt.figure()
+        plt.plot(best_fpr[classy], best_tpr[classy], label = f'ROC curve (area = {best_auc:.2f})')
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title(f'Best Feature ROC for {classy}: {best_feature}')
+        plt.legend(loc = "lower right")
   return sorted_auc_scores
