@@ -939,7 +939,8 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     df = df.fillna(0)
-    df = df.set_index(df.columns[0]).T
+    if isinstance(df.iloc[0, 0], str):
+      df = df.set_index(df.columns[0])
     df = df.apply(replace_outliers_winsorization, axis = 0).reset_index(names = 'glycan')
     df = impute_and_normalize(df, [df.columns[1:].tolist()], impute = impute, min_samples = min_samples)
     if transform is None:
