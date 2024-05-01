@@ -51,6 +51,8 @@ glycowork/glycan_data/glycomics_human_skin_O_PMC5871710_SCC.csv
 glycowork/glycan_data/glycomics_time_series_HMO_PMID22649065.csv
 glycowork/glycan_data/glycomics_time_series_N_PMID32149347.csv
 glycowork/glycan_data/glycomics_time_series_O_PMID32149347.csv
+glycowork/glycan_data/lectin_array_A549_influenza_PMID33046650.csv
+glycowork/glycan_data/lectin_specificity.pkl
 glycowork/glycan_data/lib_v10.pkl
 glycowork/glycan_data/loader.py
 glycowork/glycan_data/stats.py

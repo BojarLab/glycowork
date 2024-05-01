@@ -13,6 +13,8 @@ from scipy.spatial.distance import squareform
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.weightstats import ttost_ind, ttost_paired
+from statsmodels.formula.api import ols
+from statsmodels.stats.anova import anova_lm
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
@@ -1011,3 +1013,21 @@ def correct_multiple_testing(pvals, alpha):
     corrpvals, alpha = res[1], res[3]
     significance = [p < alpha for p in corrpvals]
   return corrpvals, significance
+
+
+def omega_squared(row, groups):
+  """Calculates Omega squared, as an effect size in an ANOVA setting\n
+  | Arguments:
+  | :-
+  | row (pd.Series or array-like): values for one feature
+  | groups (list): list indicating group membership with indices per column\n
+  | Returns:
+  | :-
+  | Returns effect size as omega squared (float)
+  """
+  long_df = pd.DataFrame({'value': row, 'group': groups})
+  model = ols('value ~ C(group)', data=long_df).fit()
+  anova_results = anova_lm(model, typ = 2)
+  ss_total = sum(model.resid ** 2) + anova_results['sum_sq'].sum()
+  omega_squared = (anova_results.at['C(group)', 'sum_sq'] - (anova_results.at['C(group)', 'df'] * model.mse_resid)) / (ss_total + model.mse_resid)
+  return omega_squared

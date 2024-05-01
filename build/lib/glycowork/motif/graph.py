@@ -45,16 +45,16 @@ def glycan_to_graph(glycan):
   # Initialize adjacency matrix
   adj_matrix = np.zeros((n, n), dtype = int)
   # Caching index positions
-  glycan_indexes = {str(i): glycan.index(str(i)) for i in range(n)}
+  glycan_indices = {str(i): glycan.index(str(i)) for i in range(n)}
   # Loop through each pair of glycoletters
   for k in range(n):
     # Integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
     adjustment = 2 if k >= 100 else 1 if k >= 10 else 0
     adjustment2 = 2+adjustment
-    cache_first_part = glycan_indexes[str(k)]+1
+    cache_first_part = glycan_indices[str(k)]+1
     for j in range(k+1, n):
       # Subset the part of the glycan that is bookended by k and j
-      glycan_part = glycan[cache_first_part:glycan_indexes[str(j)]]
+      glycan_part = glycan[cache_first_part:glycan_indices[str(j)]]
       # Immediately adjacent residues
       if evaluate_adjacency(glycan_part, adjustment):
         adj_matrix[k, j] = 1

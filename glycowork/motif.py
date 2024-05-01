@@ -12,4 +12,4 @@ from .motif.processing import *
 from .motif.regex import *
 from .motif.query import *
 from .motif.tokenization import *
-from .glycan_data.loader import df_species, glycomics_data_loader
+from .glycan_data.loader import df_species, glycomics_data_loader, lectin_array_data_loader

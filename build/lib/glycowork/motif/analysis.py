@@ -12,6 +12,7 @@ from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
 from sklearn.metrics import roc_auc_score, roc_curve, auc
 from sklearn.preprocessing import StandardScaler, label_binarize
 from sklearn.decomposition import PCA
@@ -26,10 +27,12 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
-                                         alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing)
+                                         alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing,
+                                         omega_squared)
 from glycowork.motif.processing import enforce_class
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
-                                      group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type)
+                                      group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
+                                      create_lectin_and_motif_mappings, lectin_motif_scoring)
 from glycowork.motif.graph import subgraph_isomorphism
 
 
@@ -855,7 +858,7 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
       # sort studies by effect size
       df_temp = df_temp.sort_values(by = 'EffectSize', key = abs, ascending = False)
       # calculate standard error
-      standard_error = np.sqrt(df_temp['EffectSizeVariance'])
+      standard_error = df_temp['EffectSizeVariance'].pow(.5)
       # calculate the confidence interval
       df_temp['lower'] = df_temp['EffectSize'] - 1.96 * standard_error
       df_temp['upper'] = df_temp['EffectSize'] + 1.96 * standard_error
@@ -941,6 +944,8 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     df = df.fillna(0)
     if isinstance(df.iloc[0, 0], str):
       df = df.set_index(df.columns[0])
+    if '-' not in df.index[0]:
+      df = df.T
     df = df.apply(replace_outliers_winsorization, axis = 0).reset_index(names = 'glycan')
     df = impute_and_normalize(df, [df.columns[1:].tolist()], impute = impute, min_samples = min_samples)
     if transform is None:
@@ -1356,3 +1361,65 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
         plt.title(f'Best Feature ROC for {classy}: {best_feature}')
         plt.legend(loc = "lower right")
   return sorted_auc_scores
+
+
+def get_lectin_array(df, group1, group2, paired = False):
+  """Function for analyzing lectin array data for two or more groups.\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing samples as rows and lectins as columns [alternative: filepath to .csv or .xlsx]
+  | group1 (list): list of indices or names for the first group of samples, usually the control
+  | group2 (list): list of indices or names for the second group of samples (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | Returns an output dataframe with:
+  | (i) Deduced glycan motifs altered between groups
+  | (ii) Lectins supporting the change in (i)
+  | (iii) Direction of the change (e.g., "up" means higher in group2; IGNORE THIS if you have more than two groups)
+  | (iv) Score/Magnitude of the change (remember, if you have more than two groups this reports on any pairwise combination, like an ANOVA)
+  | (v) Clustering of the scores into highly/moderate/low significance findings
+  """
+  if isinstance(df, str):
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  df = df.set_index(df.columns[0])
+  duplicated_cols = set(df.columns[df.columns.duplicated()])
+  if duplicated_cols:
+    raise ValueError(f'Analysis aborted due to:\nDuplicates found for the following lectin(s): {", ".join(duplicated_cols)}.\nIf you have multiple copies of the same lectin, rename them by adding a suffix in the form of "_<identifier>" (underscore + an identifier).\nFor example, "SNA" may be renamed "SNA_1", "SNA_batch1", etc. ')
+  lectin_list = df.columns.tolist()
+  df = df.T
+  if not isinstance(group1[0], str):
+    if group1[0] == 1 or group2[0] == 1:
+      group1 = [k-1 for k in group1]
+      group2 = [k-1 for k in group2]
+    columns_list = df.columns.tolist()
+    group1 = [columns_list[k] for k in group1]
+    group2 = [columns_list[k] for k in group2]
+  df = df.apply(replace_outliers_winsorization, axis = 1)
+  lectin_lib = load_lectin_lib()
+  useable_lectin_mapping, motif_mapping = create_lectin_and_motif_mappings(lectin_list, lectin_lib)
+  if group2:
+    mean_scores_per_condition = df[group1 + group2].groupby([0] * len(group1) + [1] * len(group2), axis = 1).mean()
+  else:
+    mean_scores_per_condition = df.groupby(group1, axis = 1).mean()
+  lectin_variance = mean_scores_per_condition.var(axis = 1)
+  idf = np.sqrt(lectin_variance)
+  if group2:
+    df_a, df_b = df[group1], df[group2]
+    effects = [cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)]
+    effect_sizes, variances = list(zip(*effects)) if effects else [[0]*len(df), [0]*len(df)]
+  else:
+    effect_sizes = df.apply(omega_squared, axis = 1, args = (group1,))
+  lectin_score_dict = {lec: effect_sizes[i] for i, lec in enumerate(lectin_list)}
+  df_out = lectin_motif_scoring(useable_lectin_mapping, motif_mapping, lectin_score_dict, lectin_lib, idf)
+  df_out = df_out.sort_values(by = "score", ascending = False)
+  scores = df_out['score'].values.reshape(-1, 1)
+  kmeans = KMeans(n_clusters = 3, random_state = 0, n_init = 'auto').fit(scores)
+  df_out['significance'] = kmeans.labels_
+  centroids = kmeans.cluster_centers_.flatten()
+  sorted_centroid_indices = centroids.argsort()
+  significance_mapping = {sorted_centroid_indices[0]: 'low significance',
+                        sorted_centroid_indices[1]: 'moderately significant',
+                        sorted_centroid_indices[2]: 'highly significant'}
+  df_out['significance'] = df_out['significance'].apply(lambda x: significance_mapping[x])
+  return df_out

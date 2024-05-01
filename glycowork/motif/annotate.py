@@ -59,7 +59,7 @@ def annotate_glycan(glycan, motifs = None, termini_list = [], gmotifs = None):
     motifs = motif_list
   # Check whether termini are specified
   if not termini_list and isinstance(motifs, pd.DataFrame):
-    termini_list = [eval(k) for k in motifs.termini_spec]
+    termini_list = list(map(eval, motifs.termini_spec))
   if gmotifs is None:
     termini = 'provided' if termini_list else 'ignore'
     gmotifs = [glycan_to_nxGraph(g, termini = termini, termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
@@ -153,7 +153,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     motifs = motif_list
   # Checks whether termini information is provided
   if not termini_list:
-    termini_list = [eval(k) for k in motifs.termini_spec]
+    termini_list = list(map(eval, motifs.termini_spec))
   shopping_cart = []
   if 'known' in feature_set:
     termini = 'provided' if termini_list else 'ignore'
@@ -164,7 +164,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
                                                     gmotifs = gmotifs, termini_list = termini_list) for k in glycans], axis = 0))
   if 'custom' in feature_set:
     normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
-    gmotifs = [glycan_to_nxGraph(g) for g in normal_motifs]
+    gmotifs = list(map(glycan_to_nxGraph, normal_motifs))
     shopping_cart.append(pd.concat([annotate_glycan(k, motifs = normal_motifs, gmotifs = gmotifs) for k in glycans], axis = 0))
     regex_motifs = [m[1:] for m in custom_motifs if m.startswith('r')]
     shopping_cart.append(pd.concat([pd.DataFrame([len(get_match(p, k)) for p in regex_motifs], columns = regex_motifs, index = [k]) for k in glycans], axis = 0))
@@ -181,7 +181,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   if 'terminal' or 'terminal2' in feature_set:
     bag1, bag2 = [], []
     if 'terminal' in feature_set:
-      bag1 = [get_terminal_structures(glycan) for glycan in glycans]
+      bag1 = list(map(get_terminal_structures, glycans))
     if 'terminal2' in feature_set:
       bag2 = [get_terminal_structures(glycan, size = 2) for glycan in glycans]
     bag = bag1 + bag2
@@ -455,3 +455,147 @@ def group_glycans_N_glycan_type(glycans, p_values):
       del grouped_glycans[grp]
       del grouped_p_values[grp]
   return grouped_glycans, grouped_p_values
+
+
+def load_lectin_lib():
+  """create dictionary of lectin specificities for get_lectin_array\n
+  | Returns:
+  | :-
+  | Returns a dictionary of index: Lectin object, with its specificities
+  """
+  from glycowork.glycan_data.loader import lectin_specificity
+  lectin_lib = {}
+  for i, row in enumerate(lectin_specificity.itertuples()):
+    specificity_dict = {"primary": row.specificity_primary, "secondary": row.specificity_secondary, "negative": row.specificity_negative}
+    lectin_lib[i] = Lectin(abbr = row.abbreviation.split(","), name = row.name.split(","), specificity = specificity_dict,
+                           species = row.species, reference = row.reference, notes = row.notes)
+  return lectin_lib
+
+
+class Lectin():
+  def __init__(self, abbr: list, name: list, # A lectin may have multiple names and abbreviations
+                 specificity: dict = {"primary": None, "secondary": None, "negative": None}, 
+                 species: str = "", reference: str = "", notes: str = ""):
+    self.abbr = abbr
+    self.name = name
+    self.species = species
+    self.reference = reference
+    self.notes = notes
+    self.specificity = specificity
+
+  def get_all_binding_motifs_count(self):
+      return len(self.specificity["primary"]) + \
+               (len(self.specificity["secondary"]) if self.specificity["secondary"] else 0)
+
+  def get_all_binding_motifs(self):
+      return list(self.specificity["primary"].keys()) + list(self.specificity["secondary"].keys())
+
+  def show_info(self):
+      print(f"Name(s): {'; '.join(self.name)}\n"+\
+      f"Abbreviation(s): {'; '.join(self.abbr)}\n"+\
+      f"Species: {self.species}\n" + \
+                       ''.join(f"Specificity ({key}): {'; '.join(value) if value else 'no information'}\n" 
+                               for key, value in self.specificity.items()) + \
+                       f"Reference: {self.reference}\nnotes: {self.notes}\n")
+    
+  def check_binding(self, glycan: str):
+    """Check whether a glycan binds to this lectin. 
+    Returns an integer. 
+    0: no binding; 
+    1: binds to lectin's primary recognition motif;
+    2: binds to lectin's seconary recognition motif;
+    """
+    for key in ["negative", "primary", "secondary"]:
+      motifs = self.specificity.get(key, [])
+      if motifs:
+        for motif, termini in motifs.items():
+          if subgraph_isomorphism(glycan, motif, termini_list = termini):
+            return 0 if key == "negative" else (1 if key == "primary" else 2)
+    return 0
+
+
+def create_lectin_and_motif_mappings(lectin_list, lectin_lib):
+  """Create a collection of lectins that can be used for motif scoring and all possible binding motifs.\n
+  | Arguments:
+  | :-
+  | lectin_list (list): list of lectins used in this experiment
+  | lectin_lib (dict): dictionary of type index : Lectin object\n
+  | Returns:
+  | :-
+  | 1. A useable lectin mapping dictionary that maps a user input lectin (string) to the index of a lectin in library --- {lectin: index}.
+  | 2. A motif mapping dictionary that maps a glycan motif to a dictionary of its corresponding lectins, each of which is assigned a weight class that indicates the level of evidence this lectin provides when scoring for this motif --- {motif: {lectin: weight_class}}.
+  | The weight class depends on the match between the motif and the specificity profile of the lectin.
+  | class 0: exact match between motif and primary specificity
+  | class 1: exact match between motif and secondary specificity
+  | class 2: motif encompasses primary specificity but not negative specificity
+  | class 3: motif encompasses secondary specificity but not negative specificity
+  """
+  useable_lectin_mapping = {}
+  motif_mapping = {}
+  lib_lectin_lookup = {i: set(abbr.lower() for abbr in lib_lectin.abbr) for i, lib_lectin in lectin_lib.items()}
+  # Match user's lectin list (of abbreviations) to the library lectins.
+  for lectin in lectin_list:
+    lectin_low = lectin.split("_")[0].lower()
+    for i, abbr_set in lib_lectin_lookup.items():
+      if lectin_low in abbr_set:
+        useable_lectin_mapping[lectin] = i
+        # When an input lectin is matched to a library lectin, assign weight class 0 and 1 to its primary and secondary motif
+        for motif in lectin_lib[i].specificity["primary"]:
+          if motif not in motif_mapping:
+            motif_mapping[motif] = {lectin: 0}
+          else:
+            motif_mapping[motif][lectin] = 0
+        if lectin_lib[i].specificity["secondary"] is not None:
+          for motif in lectin_lib[i].specificity["secondary"]:
+            if motif not in motif_mapping:
+              motif_mapping[motif] = {lectin: 1}
+            else:
+              motif_mapping[motif][lectin] = 1
+        break
+    if lectin not in useable_lectin_mapping:
+      print(f'Lectin "{lectin}" is not found in our annotated lectin library and is excluded from analysis.')
+  # Now add lectins of weight class 2 and 3
+  for motif, mapping in motif_mapping.items():
+    for lectin, i in useable_lectin_mapping.items():
+      if lectin not in mapping:
+        binder = lectin_lib[i].check_binding(motif)
+        if binder:
+          motif_mapping[motif][lectin] = 2 if binder == 1 else 3
+    # sort lectins by weight class
+    motif_mapping[motif] = dict(sorted(mapping.items(), key=lambda x:x[1]))
+  return useable_lectin_mapping, motif_mapping
+
+
+def lectin_motif_scoring(useable_lectin_mapping, motif_mapping, lectin_score_dict, lectin_lib, idf,
+                  class_weight_dict = {0: 1, 1: 0.5, 2: 0.5, 3: 0.25}, specificity_weight_dict = {"<3": 1, "3-4": 0.75, ">4": 0.5},
+                  duplicate_lectin_penalty_factor = 0.8):
+  """Scores motifs based on observed lectin binding\n
+  | Arguments:
+  | :-
+  | useable_lectin_mapping (dict): returned from create_lectin_and_motif_mappings()
+  | motif_mapping (dict): returned from create_lectin_and_motif_mappings()
+  | lectin_score_dict (dict): dictionary of type lectin : effect_size
+  | lectin_lib (dict): dictionary of type index : lectin
+  | idf (float): variance of each lectin across groups
+  | class_weight_dict (dict, optional): dictionary of type lectin class : score weighting factor
+  | specificity_weight_dict (dict, optional): dictionary of type binding specificities : penalty weighting factor
+  | duplicate_lectin_penalty_factor (float, optional): penalty for having several of the same lectin; default:0.8\n
+  | Returns:
+  | :-
+  | Returns a dataframe with motifs, supporting lectins, observed change direction, and score
+  """
+  output = []
+  useable_lectin_count = {k: list(useable_lectin_mapping.values()).count(v) for k, v in useable_lectin_mapping.items()}
+  max_motifs = max([lectin_lib[k].get_all_binding_motifs_count() for k in useable_lectin_mapping.values()]) + 1
+  for motif, lectins in motif_mapping.items():
+    score = 0
+    for lectin, weight_class in lectins.items():
+      same_lectin_count = useable_lectin_count[lectin]
+      specificity_count = lectin_lib[useable_lectin_mapping[lectin]].get_all_binding_motifs_count()
+      tf = 1/specificity_count
+      weight_final = class_weight_dict[weight_class] * (tf * idf[lectin])
+      weight_final *= (duplicate_lectin_penalty_factor ** same_lectin_count) if same_lectin_count > 1 else 1
+      score += lectin_score_dict[lectin] * weight_final
+    output.append({"motif": motif, "lectin(s)": ", ".join(lectins),
+                       "change": "down" if score < 0 else "up", "score": round(abs(score), ndigits = 2)})
+  return pd.DataFrame(output)

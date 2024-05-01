@@ -28,6 +28,11 @@ def __getattr__(name):
     df_glycan = load(open(data_path, 'rb'))
     globals()[name] = df_glycan  # Cache it to avoid reloading
     return df_glycan
+  elif name == "lectin_specificity":
+    data_path = path.join(this_dir, 'lectin_specificity.pkl')
+    lectin_specificity = load(open(data_path, 'rb'))
+    globals()[name] = lectin_specificity  # Cache it to avoid reloading
+    return lectin_specificity
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -55,6 +60,7 @@ class LazyLoader:
 
 
 glycomics_data_loader = LazyLoader("glycowork", "glycan_data")
+lectin_array_data_loader = LazyLoader("glycowork", "glycan_data", prefix = 'lectin_array_')
 
 
 linkages = {
