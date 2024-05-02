@@ -2355,8 +2355,8 @@ def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if not folder_filepath.endswith('/'):
     folder_filepath += '/'
-  image_column_number = df.shape[1] + 2
   df["SNFG"] = [np.nan for k in range(len(df))]
+  image_column_number = df.columns.tolist().index("SNFG") + 1
   # Convert df_out to Excel
   writer = pd.ExcelWriter(folder_filepath + "output.xlsx", engine = "openpyxl")
   df.to_excel(writer, index = False)

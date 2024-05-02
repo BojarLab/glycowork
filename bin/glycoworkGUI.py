@@ -4,7 +4,7 @@ import threading
 import tkinter as tk
 from tkinter import simpledialog, filedialog, messagebox, ttk
 from glycowork.motif.draw import GlycoDraw, plot_glycans_excel
-from glycowork.motif.analysis import get_differential_expression, get_heatmap
+from glycowork.motif.analysis import get_differential_expression, get_heatmap, get_lectin_array
 
 
 # Function to get the resource path within the executable environment
@@ -261,6 +261,83 @@ def openGetHeatmapDialog():
         get_heatmap(input_file_path, motifs = motif_analysis, feature_set = ["known", "exhaustive"], filepath = output_file_path)
 
 
+class LectinArrayAnalysisDialog(simpledialog.Dialog):
+    def body(self, master):
+        self.title("Lectin Array Analysis Input")
+        
+        # CSV or Excel file selection
+        tk.Label(master, text="Select CSV or Excel File:").grid(row = 0, sticky = tk.W)
+        self.file_entry = tk.Entry(master)
+        self.file_entry.grid(row = 0, column = 1)
+        self.file_browse = tk.Button(master, text = "Browse...", command = self.browse_file)
+        self.file_browse.grid(row = 0, column = 2)
+        
+        # Treatment group indices
+        tk.Label(master, text = "Treatment Group Columns (comma-separated):").grid(row = 1, sticky = tk.W)
+        self.treatment_entry = tk.Entry(master)
+        self.treatment_entry.grid(row = 1, column = 1, columnspan = 2, sticky = tk.W+tk.E)
+        
+        # Control group indices
+        tk.Label(master, text = "Control Group Columns (comma-separated):").grid(row = 2, sticky = tk.W)
+        self.control_entry = tk.Entry(master)
+        self.control_entry.grid(row = 2, column = 1, columnspan = 2, sticky = tk.W+tk.E)
+        
+        # Paired analysis option
+        tk.Label(master, text = "Paired Analysis:").grid(row = 3, sticky = tk.W)
+        self.paired_var = tk.BooleanVar()
+        self.paired_check = tk.Checkbutton(master, variable = self.paired_var)
+        self.paired_check.grid(row = 3, column = 1, sticky = tk.W)
+
+        # Output directory selection
+        tk.Label(master, text = "Output Directory:").grid(row = 4, sticky = tk.W)
+        self.output_dir_entry = tk.Entry(master)
+        self.output_dir_entry.grid(row = 4, column = 1)
+        self.output_dir_browse = tk.Button(master, text = "Browse...", command = self.browse_output_directory)
+        self.output_dir_browse.grid(row = 4, column = 2)
+
+        return self.file_entry  # Set focus to the file entry
+
+    def apply(self):
+        # This method processes the input when the user presses OK
+        file_path = self.file_entry.get()
+        treatment_indices = self.parse_indices(self.treatment_entry.get())
+        control_indices = self.parse_indices(self.control_entry.get())
+        paired = self.paired_var.get()
+        output_directory = self.output_dir_entry.get()
+        if file_path and treatment_indices and control_indices and output_directory:
+            self.result = file_path, treatment_indices, control_indices, paired, output_directory
+        else:
+            messagebox.showerror("Error", "Please complete all fields correctly.")
+            self.result = None  # Prevent dialog from closing
+
+    def browse_file(self):
+        file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv"), ("Excel Files", "*.xlsx")])
+        if file_path:
+            self.file_entry.delete(0, tk.END)
+            self.file_entry.insert(0, file_path)
+
+    def browse_output_directory(self):
+        directory = filedialog.askdirectory()
+        if directory:
+            self.output_dir_entry.delete(0, tk.END)
+            self.output_dir_entry.insert(0, directory)
+
+    def parse_indices(self, indices_str):
+        try:
+            return [int(index.strip()) for index in indices_str.split(',')]
+        except ValueError:
+            messagebox.showerror("Error", "Invalid indices. Please enter valid, comma-separated numerical indices.")
+            return None
+
+
+def openLectinArrayAnalysisDialog():
+    dialog_result = LectinArrayAnalysisDialog(app)
+    if dialog_result.result:
+        file_path, treatment_indices, control_indices, paired, output_directory = dialog_result.result
+        df_out = get_lectin_array(df = file_path, group1 = control_indices, group2 = treatment_indices, paired = paired)
+        plot_glycans_excel(df_out, output_directory)
+
+
 def show_about_info():
     about_message = "glycowork v1.3\n\n" \
                     "For more information and citation, please refer to:\n" \
@@ -283,6 +360,8 @@ btn_function3 = tk.Button(app, text = "Run DifferentialExpression", command = op
 btn_function3.pack(pady = 5)
 btn_function4 = tk.Button(app, text = "Run Get Heatmap", command = openGetHeatmapDialog)
 btn_function4.pack(pady = 5)
+btn_function5 = tk.Button(app, text = "Run Lectin Array Analysis", command = openLectinArrayAnalysisDialog)
+btn_function5.pack(pady = 5)
 
 menu_bar = tk.Menu(app)
 app.config(menu = menu_bar)

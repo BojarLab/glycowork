@@ -1375,10 +1375,11 @@ def get_lectin_array(df, group1, group2, paired = False):
   | :-
   | Returns an output dataframe with:
   | (i) Deduced glycan motifs altered between groups
-  | (ii) Lectins supporting the change in (i)
-  | (iii) Direction of the change (e.g., "up" means higher in group2; IGNORE THIS if you have more than two groups)
-  | (iv) Score/Magnitude of the change (remember, if you have more than two groups this reports on any pairwise combination, like an ANOVA)
-  | (v) Clustering of the scores into highly/moderate/low significance findings
+  | (ii) human names for features identified in the motifs from (i)
+  | (iii) Lectins supporting the change in (i)
+  | (iv) Direction of the change (e.g., "up" means higher in group2; IGNORE THIS if you have more than two groups)
+  | (v) Score/Magnitude of the change (remember, if you have more than two groups this reports on any pairwise combination, like an ANOVA)
+  | (vi) Clustering of the scores into highly/moderate/low significance findings
   """
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
@@ -1422,4 +1423,7 @@ def get_lectin_array(df, group1, group2, paired = False):
                         sorted_centroid_indices[1]: 'moderately significant',
                         sorted_centroid_indices[2]: 'highly significant'}
   df_out['significance'] = df_out['significance'].apply(lambda x: significance_mapping[x])
+  temp = annotate_dataset(df_out.iloc[:, 0], condense = True)
+  occurring_motifs = [temp.columns[temp.iloc[idx].astype(bool)].tolist() for idx in range(len(temp))]
+  df_out.insert(1, "named_motifs", occurring_motifs)
   return df_out
