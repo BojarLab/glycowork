@@ -195,7 +195,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
     df = clr_transformation(df, [], [], gamma = 0)
   elif transform == "ALR":
     df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
-    df = get_additive_logratio_transformation(df.reset_index(), [], df.columns.tolist(), paired = False, gamma = 0)
+    df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False, gamma = 0)
     df = df.set_index(df.columns[0])
   if motifs:
     if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
@@ -530,7 +530,7 @@ def get_differential_expression(df, group1, group2,
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
   | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float): if you *know* the difference in scale between groups, provide the ratio of group2/group1 for an informed scale model\n
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -769,8 +769,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     results, posthoc_results = [], {}
-    df = df.iloc[:, :len(groups)+1]
-    df = df.fillna(0)
+    df = df.iloc[:, :len(groups)+1].fillna(0)
     df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
     df = df.apply(replace_outliers_winsorization, axis = 1)
     groups_unq = sorted(set(groups))
@@ -779,9 +778,9 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     if transform is None:
       transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
     if transform == "ALR":
-      df = get_additive_logratio_transformation(df, [], df.columns[1:].tolist(), paired = False, gamma = gamma)
+      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma)
     elif transform == "CLR":
-      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
+      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma)
     elif transform == "Nothing":
       pass
     else:
@@ -951,9 +950,9 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     if transform is None:
       transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
     if transform == "ALR":
-      df = get_additive_logratio_transformation(df, [], df.columns[1:].tolist(), paired = False, gamma = gamma)
+      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma)
     elif transform == "CLR":
-      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
+      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma)
     elif transform == "Nothing":
       pass
     else:
@@ -1023,9 +1022,9 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     if transform is None:
       transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
     if transform == "ALR":
-      df = get_additive_logratio_transformation(df, [], df.columns[1:].tolist(), paired = False, gamma = gamma)
+      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma)
     elif transform == "CLR":
-      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], df.columns[1:].tolist(), gamma = gamma)
+      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma)
     elif transform == "Nothing":
       pass
     else:
@@ -1132,8 +1131,6 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
     if transform is None:
       transform = "ALR" if enforce_class(df_org.iloc[0, 0], "N") and len(df_org) > 50 else "CLR"
     if transform == "ALR":
-      if not group2:
-        group1, group2 = group2, group1
       df_org = get_additive_logratio_transformation(df_org, group1, group2, paired = paired, gamma = gamma)
     elif transform == "CLR":
       df_org.iloc[:, 1:] = clr_transformation(df_org.iloc[:, 1:], group1, group2, gamma = gamma)
@@ -1212,11 +1209,11 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   if transform is None:
     transform = "ALR" if (enforce_class(df1.iloc[0, 0], "N") and len(df1) > 50) and (enforce_class(df2.iloc[0, 0], "N") and len(df2) > 50) else "CLR"
   if transform == "ALR":
-    df1 = get_additive_logratio_transformation(df1, [], df1.columns[1:].tolist(), paired = False, gamma = gamma)
-    df2 = get_additive_logratio_transformation(df2, [], df2.columns[1:].tolist(), paired = False, gamma = gamma)
+    df1 = get_additive_logratio_transformation(df1, df1.columns[1:].tolist(), [], paired = False, gamma = gamma)
+    df2 = get_additive_logratio_transformation(df2, df2.columns[1:].tolist(), [], paired = False, gamma = gamma)
   elif transform == "CLR":
-    df1.iloc[:, 1:] = clr_transformation(df1.iloc[:, 1:], [], df1.columns.tolist()[1:], gamma = gamma)
-    df2.iloc[:, 1:] = clr_transformation(df2.iloc[:, 1:], [], df2.columns.tolist()[1:], gamma = gamma)
+    df1.iloc[:, 1:] = clr_transformation(df1.iloc[:, 1:], df1.columns.tolist()[1:], [], gamma = gamma)
+    df2.iloc[:, 1:] = clr_transformation(df2.iloc[:, 1:], df2.columns.tolist()[1:], [], gamma = gamma)
   elif transform == "Nothing":
     pass
   else:
@@ -1267,7 +1264,7 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
   | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float): if you *know* the difference in scale between groups, provide the ratio of group2/group1 for an informed scale model\n
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
   | Returns:
   | :-
   | Returns a sorted list of tuples of type (glycan, AUC score) and, optionally, ROC curve for best feature
@@ -1288,7 +1285,10 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
   if transform is None:
     transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
   if transform == "ALR":
-    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
+    if group2:
+      df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
+    else:
+      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = paired, gamma = gamma, custom_scale = custom_scale)
   elif transform == "CLR":
     df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
   elif transform == "Nothing":
@@ -1377,7 +1377,7 @@ def get_lectin_array(df, group1, group2, paired = False):
   | (i) Deduced glycan motifs altered between groups
   | (ii) human names for features identified in the motifs from (i)
   | (iii) Lectins supporting the change in (i)
-  | (iv) Direction of the change (e.g., "up" means higher in group2; IGNORE THIS if you have more than two groups)
+  | (iv) Direction of the change (e.g., "up" means higher in group2)
   | (v) Score/Magnitude of the change (remember, if you have more than two groups this reports on any pairwise combination, like an ANOVA)
   | (vi) Clustering of the scores into highly/moderate/low significance findings
   """
@@ -1426,4 +1426,6 @@ def get_lectin_array(df, group1, group2, paired = False):
   temp = annotate_dataset(df_out.iloc[:, 0], condense = True)
   occurring_motifs = [temp.columns[temp.iloc[idx].astype(bool)].tolist() for idx in range(len(temp))]
   df_out.insert(1, "named_motifs", occurring_motifs)
+  if not group2:
+    df_out["change"] = ["different"] * len(df_out)
   return df_out
