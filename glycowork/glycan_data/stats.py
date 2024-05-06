@@ -932,14 +932,15 @@ def alr_transformation(df, reference_component_index):
   return alr_transformed
 
 
-def get_procrustes_scores(df, group1, group2, paired = False):
+def get_procrustes_scores(df, group1, group2, paired = False, custom_scale = 0):
   """For each feature, estimates it value as ALR reference component\n
   | Arguments:
   | :-
   | df (dataframe): dataframe with features as rows and samples as columns
   | group1 (list): list of column indices or names for the first group of samples, usually the control
   | group2 (list): list of column indices or names for the second group of samples
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
+  | custom_scale (float): if you *know* the difference in scale between groups, provide the ratio of group2/group1 for an informed scale model\n
   | Returns:
   | :-
   | List of Procrustes scores (Procrustes correlation * inverse of feature variance)
@@ -948,7 +949,7 @@ def get_procrustes_scores(df, group1, group2, paired = False):
     group1 = [df.columns.tolist()[k] for k in group1]
     group2 = [df.columns.tolist()[k] for k in group2]
   df = df.iloc[:, 1:]
-  ref_matrix = clr_transformation(df, [], [], gamma = 0)
+  ref_matrix = clr_transformation(df, [], [], gamma = 0, custom_scale = custom_scale)
   df = np.log2(df)
   if group1:
     if paired:
@@ -964,7 +965,7 @@ def get_procrustes_scores(df, group1, group2, paired = False):
   return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
 
-def get_additive_logratio_transformation(df, group1, group2, paired = False, gamma = 0.1):
+def get_additive_logratio_transformation(df, group1, group2, paired = False, gamma = 0.1, custom_scale = 0):
   """Identifies ALR reference component and transforms data according to ALR\n
   | Arguments:
   | :-
@@ -972,18 +973,19 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False, gam
   | group1 (list): list of column indices or names for the first group of samples, usually the control
   | group2 (list): list of column indices or names for the second group of samples
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | gamma (float): the degree of uncertainty that the CLR assumption holds; in case of CLR; default: 0.1\n
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; in case of CLR; default: 0.1
+  | custom_scale (float): if you *know* the difference in scale between groups, provide the ratio of group2/group1 for an informed scale model\n
   | Returns:
   | :-
   | ALR-transformed dataframe
   """
-  scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired)
+  scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired, custom_scale = custom_scale)
   ref_component = np.argmax(scores)
   ref_component_string = df.iloc[:, 0].values[ref_component]
   print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
   if procrustes_corr[ref_component] < 0.9 or variances[ref_component] > 0.1:
     print("Metrics of chosen reference component not good enough for ALR; switching to CLR instead.")
-    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma)
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
     return df
   glycans = df.iloc[:, 0].values.tolist()
   glycans = glycans[:ref_component] + glycans[ref_component+1:]

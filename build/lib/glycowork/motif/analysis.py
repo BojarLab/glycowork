@@ -560,7 +560,7 @@ def get_differential_expression(df, group1, group2,
   if transform is None:
     transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
   if transform == "ALR":
-    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma)
+    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
   elif transform == "CLR":
     df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
   elif transform == "Nothing":
@@ -1041,7 +1041,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     return df_out.sort_values("Adjusted_P_value")
 
 
-def get_biodiversity(df, group1, group2, metrics = ['alpha','beta'], motifs = False, feature_set = ['exhaustive', 'known'],
+def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = False, feature_set = ['exhaustive', 'known'],
                      custom_motifs = [], paired = False, permutations = 999, transform = None, gamma = 0.1):
   """Calculates diversity indices from glycomics data, similar to alpha/beta diversity etc in microbiome data\n
   | Arguments:
@@ -1274,7 +1274,7 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
   """
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-  if not isinstance(group1[0], str):
+  if not isinstance(group1[0], str) and group2:
     columns_list = df.columns.tolist()
     group1 = [columns_list[k] for k in group1]
     group2 = [columns_list[k] for k in group2]
@@ -1283,12 +1283,12 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
   if group2:
     df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
   else:
-    classes = set(group1)
+    classes = list(set(group1))
     df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(group1) if x == g] for g in classes], impute = impute, min_samples = min_samples)
   if transform is None:
     transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
   if transform == "ALR":
-    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma)
+    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
   elif transform == "CLR":
     df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
   elif transform == "Nothing":
