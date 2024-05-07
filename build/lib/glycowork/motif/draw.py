@@ -1964,9 +1964,194 @@ def process_per_residue(glycan, per_residue):
   return main_chain_indices[::-1], side_chain_indices, branched_side_chain_indices
 
 
+mono_list = ['Glc', 'GlcNAc', 'GlcA',
+                 'Man', 'ManNAc',
+                 'Gal', 'GalNAc',
+                 'Gul', 'GulNAc',
+                 'Alt', 'AltNAc',
+                 'All', 'AllNAc', 'Neu5Ac',
+                 'Tal', 'TalNAc', 'Neu5Gc',
+                 'Ido', 'IdoNAc', 'IdoA',
+                 'Fuc'
+                 ]
+
+
+chem_cols = ['#CDE7EF', '#CDE7EF', '#CDE7EF',     # blue
+        '#CDE9DF', '#CDE9DF',                # green
+        '#FFF6DE', '#FFF6DE',                # yellow
+        '#FDE7E0', '#FDE7E0',                # orange
+        '#FDF0F1', '#FDF0F1',                # pink
+        '#F1E6ED', '#F1E6ED', '#F1E6ED',     # purple
+        '#EEF8FB', '#EEF8FB', '#EEF8FB',     # light blue
+        '#F1E9E5', '#F1E9E5', '#F1E9E5',     # brown
+        '#F7E0E0', '#F7E0E0']                # red
+
+
+chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
+        '#058F60', '#058F60',                # green
+        '#FCC326', '#FCC326',                # yellow
+        '#EF6130', '#EF6130',                # orange
+        '#F39EA0', '#F39EA0',                # pink
+        '#A15989', '#A15989', '#A15989',     # purple
+        '#91D3E3', '#91D3E3', '#91D3E3',     # light blue
+        '#9F6D55', '#9F6D55', '#9F6D55',     # brown
+        '#C23537']                           # red
+
+
+def get_hit_atoms_and_bonds(mol, smt):
+  # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
+  try:
+    from rdkit.Chem import MolFromSmarts
+  except ImportError:
+    raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
+
+  alist = []
+  blist = []
+  q = MolFromSmarts(smt)
+  for match in mol.GetSubstructMatches(q, useChirality=True):
+    alist.extend(match)
+
+  for ha1 in alist:
+    for ha2 in alist:
+      if ha1 > ha2:
+        b = mol.GetBondBetweenAtoms(ha1, ha2)
+        if b:
+          blist.append(b.GetIdx())
+
+  return alist, blist
+
+
+def add_colours_to_map(els, cols, col_num, alpha = True, hex = True):
+  # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
+  from matplotlib.colors import ColorConverter
+
+  if alpha:
+    COLS = chem_cols
+  else:
+    COLS = chem_cols_alpha
+  for el in els:
+    if el not in cols:
+      cols[el] = []
+    if COLS[col_num] not in cols[el]:
+      if hex:
+        cols[el].append(COLS[col_num])
+      else:
+        cols[el].append(ColorConverter().to_rgb(COLS[col_num]))
+
+
+def draw_chem2d(draw_this, mono_list, filepath = None):
+  # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
+  try:
+    from glycowork.motif.processing import IUPAC_to_SMILES
+    from rdkit.Chem import MolFromSmiles
+    from rdkit.Chem.Draw import PrepareMolForDrawing
+    from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
+    from IPython.display import SVG
+  except ImportError:
+    raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
+
+  smarts_list = IUPAC_to_SMILES(mono_list)
+
+  mol = IUPAC_to_SMILES([draw_this])[0]
+  mol = MolFromSmiles(mol)
+  mol = PrepareMolForDrawing(mol)
+
+  acols = {}
+  bcols = {}
+  h_rads = {}
+  h_lw_mult = {}
+
+  for i, smt in enumerate(smarts_list):
+    alist, blist = get_hit_atoms_and_bonds(mol, smt)
+    col = i
+    add_colours_to_map(alist, acols, col, hex = False, alpha = True)
+    add_colours_to_map(blist, bcols, col, hex = False, alpha = True)
+
+  for k in list(acols.keys()):
+    if len(acols[k]) > 1:
+      del acols[k]
+
+  for k in bcols.keys():
+    if len(bcols[k]) > 1:
+      bcols[k] = [bcols[k][0]]
+
+  d = MolDraw2DSVG(250, 250)
+
+  d.drawOptions().fillHighlights = True
+  d.drawOptions().useBWAtomPalette()
+  d.drawOptions().rotate = 180
+  d.DrawMoleculeWithHighlights(mol, '', acols, bcols, h_rads, h_lw_mult, -1)
+  d.FinishDrawing()
+
+  if filepath:
+    filepath = filepath.replace('?', '_')
+    data = d.GetDrawingText()
+    if 'svg' in filepath:
+        with open(filepath, 'w') as f:
+          f.write(data)
+    elif 'pdf' in filepath:
+      try:
+        from cairosvg import svg2pdf
+        svg2pdf(bytestring = data, write_to = filepath)
+      except:
+        raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
+  
+  return SVG(d.GetDrawingText())
+
+def draw_chem3d(draw_this, mono_list, filepath = None):
+  # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py and https://github.com/rdkit/rdkit/blob/master/Docs/Book/GettingStartedInPython.rst
+  try:
+    from glycowork.motif.processing import IUPAC_to_SMILES
+    from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile
+    from rdkit.Chem.Draw import IPythonConsole
+    from rdkit.Chem.AllChem import EmbedMolecule, MMFFOptimizeMolecule
+    import py3Dmol
+  except ImportError:
+    raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
+
+  smarts_list = IUPAC_to_SMILES(mono_list)
+  mol = IUPAC_to_SMILES([draw_this])[0]
+  mol = MolFromSmiles(mol)
+
+  acols = {}
+  bcols = {}
+
+  for i, smt in enumerate(smarts_list):
+      alist, blist = get_hit_atoms_and_bonds(mol, smt)
+      col = i
+      add_colours_to_map(alist, acols, col, alpha = False, hex = True)
+      add_colours_to_map(blist, bcols, col, alpha = False, hex = True)
+
+  for k in acols.keys():
+    if len(acols[k]) > 1:
+      acols[k] = ['#ECECEC']
+
+  mol = AddHs(mol)
+  EmbedMolecule(mol)
+  MMFFOptimizeMolecule(mol)
+  mol = RemoveHs(mol)
+
+  v = py3Dmol.view(width=500,height=300)
+  v.removeAllModels()
+  IPythonConsole.addMolToView(mol, v)
+
+  for d in acols.keys():
+    v.setStyle({'serial':d},{'stick':{'color': acols[d][0]}})
+
+  if filepath:
+    if 'pdb' in filepath:
+      MolToPDBFile(mol, filepath)
+    else:
+      print("3D structure can only be saved as .pdb file.")
+  
+  print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
+  v.zoomTo()
+  v.show()
+
+
 @rescue_glycans
 def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [],
-              repeat = None, repeat_range = None, filepath = None, suppress = False, per_residue = []):
+              repeat = None, repeat_range = None, draw_method = None, filepath = None, suppress = False, per_residue = []):
   """Draws a glycan structure based on the provided input.\n
   | Arguments:
   | :-
@@ -1979,7 +2164,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   | highlight_termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
   | repeat (bool | int | str): If specified, indicate repeat unit by brackets (True: n units, int: # of units, str: range of units)
   | repeat_range (list of 2 int): List of index integers for the first and last main-chain monosaccharide in repeating unit. Monosaccharides are numbered starting from 0 (invisible placeholder = 0 in case of structure terminating in a linkage) at the reducing end.
-  | filepath (string, optional): The path to the output file to save as SVG or PDF. Default: None.
+  | draw_method (string, optional): Specify 'chem2d' or 'chem3d' to draw chemical structures; default:None (SNFG figure)
+  | filepath (string, optional): The path to the output file to save as SVG or PDF when drawing SNFG/chem2d figures or PDB when generating 3D conformers. Default: None.
   | suppress (bool, optional): Whether to suppress the visual display of drawings into the console; default:False
   | per_residue (list, optional): list of floats (order should be the same as the monosaccharides in glycan string) to quantitatively highlight monosaccharides.\n
   """
@@ -2000,6 +2186,16 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   if isinstance(highlight_motif, str) and highlight_motif[0] == 'r':
     temp = get_match(highlight_motif[1:], draw_this)
     highlight_motif = temp[0] if temp else None
+
+  # toggle SNFG vs 2D/3D chem
+  if draw_method:
+    if draw_method == 'chem2d':
+      return draw_chem2d(draw_this = draw_this, mono_list = mono_list, filepath = filepath)
+    elif draw_method == 'chem3d':
+      return draw_chem3d(draw_this = draw_this, mono_list = mono_list, filepath = filepath)
+    else:
+      print('Method not supported. Please choose between "chem2d" and "chem3d".')
+      return
 
   # Handle floaty bits if present
   floaty_bits = []

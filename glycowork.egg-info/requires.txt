@@ -19,11 +19,13 @@ pubchempy
 requests
 Pillow
 openpyxl
+py3Dmol
 
 [chem]
 glyles
 pubchempy
 requests
+py3Dmol
 
 [dev]
 torch_geometric
