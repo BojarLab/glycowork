@@ -64,15 +64,9 @@ def annotate_glycan(glycan, motifs = None, termini_list = [], gmotifs = None):
     termini = 'provided' if termini_list else 'ignore'
     gmotifs = [glycan_to_nxGraph(g, termini = termini, termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
   # Count the number of times each motif occurs in a glycan
-  if termini_list:
-    ggraph = ensure_graph(glycan, termini = 'calc')
-    res = [subgraph_isomorphism(ggraph, gmotifs[k], termini_list = termini_list[k],
+  ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
+  res = [subgraph_isomorphism(ggraph, gmotifs[k], termini_list = termini_list[k] if termini_list else termini_list,
                                 count = True) for k in range(len(motifs))]*1
-  else:
-    ggraph = ensure_graph(glycan, termini = 'ignore')
-    res = [subgraph_isomorphism(ggraph, gmotifs[k], termini_list = termini_list,
-                                count = True) for k in range(len(motifs))]*1
- 
   out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')

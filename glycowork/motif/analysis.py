@@ -601,7 +601,7 @@ def get_differential_expression(df, group1, group2,
         gp1, gp2 = df_a.loc[cluster, :], df_b.loc[cluster, :]
         mean_abundance_c.append(mean_abundance.loc[cluster].mean())
         log2fc.append(((gp2.values - gp1.values).mean(axis = 1)).mean() if paired else (gp2.mean(axis = 1) - gp1.mean(axis = 1)).mean())
-      gp1, gp2 = df2.loc[cluster, group1], df2.loc[cluster, group2]
+      gp1, gp2 = df.loc[cluster, group1], df.loc[cluster, group2]
       # Hotelling's T^2 test for multivariate comparisons
       pvals.append(hotellings_t2(gp1.T.values, gp2.T.values, paired = paired)[1])
       levene_pvals.append(np.mean([levene(gp1.loc[variable, :], gp2.loc[variable, :])[1] for variable in cluster]))
@@ -694,7 +694,7 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
 
 
 def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed = True,
-                x_metric = 'Log2FC', annotate_volcano = False, filepath = ''):
+                x_metric = 'Log2FC', annotate_volcano = False, filepath = '', **kwargs):
   """Plots glycan differential expression results in a volcano plot\n
   | Arguments:
   | :-
@@ -705,7 +705,8 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed =
   | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
   | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2FC', 'Effect size'
   | annotate_volcano (bool): whether to annotate the dots in the plot with SNFG images; default: False
-  | filepath (string): absolute path including full filename allows for saving the plot\n
+  | filepath (string): absolute path including full filename allows for saving the plot
+  | **kwargs: keyword arguments that are directly passed on to seaborn scatterplot\n
   | Returns:
   | :-
   | Prints volcano plot
@@ -722,7 +723,8 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed =
   else:
     print(f"You're working with a default alpha of 0.05. Set sample size (n = ...) for Bayesian-Adaptive Alpha Adjustment")
   # Make plot
-  ax = sns.scatterplot(x = x_metric, y = 'log_p', data = df_res, color = '#3E3E3E', alpha = 0.8)
+  color = kwargs.pop('color', '#3E3E3E')
+  ax = sns.scatterplot(x = x_metric, y = 'log_p', data = df_res, color = color, alpha = 0.8, **kwargs)
   ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)', title = '')
   plt.axhline(y = -np.log10(y_thresh), c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
   plt.axvline(x = x_thresh, c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
@@ -1245,7 +1247,7 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
 
 
 def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["known", "exhaustive"], paired = False, impute = True,
-            min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0):
+            min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0, filepath = ''):
   """Calculates ROC AUC for every feature and, optionally, plots the best\n
   | Arguments:
   | :-
@@ -1264,7 +1266,8 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
   | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+  | filepath (string): absolute path including full filename allows for saving the plot, if plot=True\n
   | Returns:
   | :-
   | Returns a sorted list of tuples of type (glycan, AUC score) and, optionally, ROC curve for best feature
@@ -1324,6 +1327,8 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
       plt.ylabel('True Positive Rate')
       plt.title(f'ROC Curve for {best}')
       plt.legend(loc = 'lower right')
+      if filepath:
+        plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
       plt.show()
   else: # multi-group comparison
     df = df.groupby(df.index).mean()
@@ -1360,6 +1365,8 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
         plt.ylabel('True Positive Rate')
         plt.title(f'Best Feature ROC for {classy}: {best_feature}')
         plt.legend(loc = "lower right")
+        if filepath:
+          plt.savefig(filepath.split('.')[0] + "_" + str(classy) + filepath.split('.')[-1], format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
   return sorted_auc_scores
 
 

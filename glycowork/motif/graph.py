@@ -89,7 +89,7 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   g1 = nx.from_numpy_array(adj_matrix) if len(node_dict) > 1 else nx.Graph()
   if len(node_dict) > 1:
     # Needed for compatibility with monosaccharide-only graphs (size = 1)
-    for n1, n2, d in g1.edges(data = True):
+    for _, _, d in g1.edges(data = True):
       del d['weight']
   else:
     g1.add_node(0)
@@ -539,9 +539,5 @@ def possible_topology_check(glycan, glycans, exhaustive = False, **kwargs):
   | Returns list of glycans that could match input glycan
   """
   topologies = get_possible_topologies(glycan, exhaustive = exhaustive)
-  out_glycs = []
-  for g in glycans:
-    ggraph = ensure_graph(g)
-    if any([compare_glycans(t, ggraph, **kwargs) for t in topologies]):
-      out_glycs.append(g)
-  return out_glycs
+  ggraphs = map(ensure_graph, glycans)
+  return [g for g, ggraph in zip(glycans, ggraphs) if any(compare_glycans(t, ggraph, **kwargs) for t in topologies)]
