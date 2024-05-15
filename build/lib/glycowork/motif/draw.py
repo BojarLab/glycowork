@@ -2329,9 +2329,9 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     floaty_bits = list(set(floaty_bits))
     floaty_data = []
     for k in range(len(floaty_bits)):
-      try:
+      if in_lib(min_process_glycans([floaty_bits[k]])[0][0], lib):
         floaty_data.append(get_coordinates_and_labels(floaty_bits[k], show_linkage = show_linkage, highlight_motif = None))
-      except:
+      else:
         floaty_data.append(get_coordinates_and_labels('blank(-)blank', show_linkage = show_linkage, highlight_motif = None))
     y_span = max_y-min_y
     n_floats = len(floaty_bits)
@@ -2350,7 +2350,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
         [add_bond(floaty_sugar_x_pos[k+1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k+1], floaty_sugar_y_pos[k], floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar)-1)]
         [add_sugar(floaty_sugar[k], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf, compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
       else:
-        add_sugar('text', min(floaty_sugar_x_pos), floaty_sugar_y_pos[-1], modification = floaty_bits[j].replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
+        add_sugar('text', min(floaty_sugar_x_pos)-0.3, floaty_sugar_y_pos[-1], modification = floaty_bits[j].translate(str.maketrans("123456789", "\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089")).replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
 
       if fb_count[floaty_bits[j]] > 1:
         if not compact:
