@@ -30,7 +30,7 @@ setuptools.setup(
                            "Pillow", "openpyxl", "py3Dmol"],
                     'dev':["torch_geometric", "torch", "CairoSVG",
                            "drawSvg~=2.0", "glyles", "pubchempy", "requests",
-                           "Pillow", "openpyxl"],
+                           "Pillow", "openpyxl", "py3Dmol"],
                     'ml':["torch_geometric", "torch"],
                     'draw':["CairoSVG", "drawSvg~=2.0", "Pillow",
                             "openpyxl"],

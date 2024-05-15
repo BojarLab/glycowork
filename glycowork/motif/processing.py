@@ -826,7 +826,7 @@ def canonicalize_iupac(glycan):
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P',
-                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-',
+                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)'}
   glycan = multireplace(glycan, replace_dic)
@@ -897,6 +897,16 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'([1-9]?[SP])(?!en)([A-Za-z]+)', r'\2\1', glycan)
   if bool(re.search(r'[1-9]?[SP]-[A-Za-z]+', glycan)):
     glycan = re.sub(r'([1-9]?[SP])-([A-Za-z]+)', r'\2\1', glycan)
+  # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
+  glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
+  glycan = re.sub(r'([c-z])([1-2])-', r'\1(?\2-', glycan)
+  glycan = re.sub(r'-([\?2-9])([A-Z])', r'-\1)\2', glycan)
+  glycan = re.sub(r'([\?2-9])([\[\]])', r'\1)\2', glycan)
+  # Floating bits
+  if '+' in glycan:
+    if '-' not in glycan[:glycan.index('+')]:
+      glycan = glycan.replace('+', '(?1-?)+')
+    glycan = '{'+glycan.replace('+', '}')
   post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?1': 'Kdn(a2',
                   'Kdn(a1': 'Kdn(a2'}
@@ -905,9 +915,6 @@ def canonicalize_iupac(glycan):
   if '[' in glycan:
     isos = find_isomorphs(glycan)
     glycan = choose_correct_isoform(isos)
-  # Floating bits
-  if '+' in glycan:
-    glycan = '{'+glycan.replace('+', '}')
   if '{' in glycan:
     floating_bits = re.findall(r'\{.*?\}', glycan)
     sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))

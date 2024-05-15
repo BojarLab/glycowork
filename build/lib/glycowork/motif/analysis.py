@@ -1370,14 +1370,15 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
   return sorted_auc_scores
 
 
-def get_lectin_array(df, group1, group2, paired = False):
+def get_lectin_array(df, group1, group2, paired = False, transform = ''):
   """Function for analyzing lectin array data for two or more groups.\n
   | Arguments:
   | :-
   | df (dataframe): dataframe containing samples as rows and lectins as columns [alternative: filepath to .csv or .xlsx]
   | group1 (list): list of indices or names for the first group of samples, usually the control
   | group2 (list): list of indices or names for the second group of samples (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
+  | transform (string): optional data-processing, "log2" transforms the with np.log2; default:nothing\n
   | Returns:
   | :-
   | Returns an output dataframe with:
@@ -1395,6 +1396,7 @@ def get_lectin_array(df, group1, group2, paired = False):
   if duplicated_cols:
     raise ValueError(f'Analysis aborted due to:\nDuplicates found for the following lectin(s): {", ".join(duplicated_cols)}.\nIf you have multiple copies of the same lectin, rename them by adding a suffix in the form of "_<identifier>" (underscore + an identifier).\nFor example, "SNA" may be renamed "SNA_1", "SNA_batch1", etc. ')
   lectin_list = df.columns.tolist()
+  df = np.log2(df) if transform == "log2" else df
   df = df.T
   if not isinstance(group1[0], str):
     if group1[0] == 1 or group2[0] == 1:

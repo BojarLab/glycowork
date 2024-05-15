@@ -37,6 +37,7 @@ pubchempy
 requests
 Pillow
 openpyxl
+py3Dmol
 
 [draw]
 CairoSVG
