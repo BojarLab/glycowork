@@ -334,7 +334,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
     cou_k2, cou_v2 = zip(*filtered_items)
     cou_v2 = [v / len(sugars) for v in cou_v2]
     # Map the input monosaccharide + its modifications to colors
-    color_list = plt.cm.get_cmap('tab20')
+    color_list = plt.get_cmap('tab20')
     color_map = {key: color_list(idx / len(cou_k2)) for idx, key in enumerate(cou_k2)}
     palette = [color_map[k] for k in cou_k2]
     # Start linking downstream monosaccharides / linkages to the input monosaccharide + its modifications
