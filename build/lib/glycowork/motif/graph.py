@@ -272,7 +272,7 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
   else:
     if len(glycan.nodes) < len(motif.nodes):
       return (0, []) if return_matches else 0 if count else False
-    motif_comp = [list(nx.get_node_attributes(motif, "string_labels").values()), list(nx.get_node_attributes(glycan, "string_labels").values())]
+    motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
     if 'O' in ''.join(unwrap(motif_comp)):
       g1, g2 = ptm_wildcard_for_graph(copy.deepcopy(glycan)), ptm_wildcard_for_graph(copy.deepcopy(motif))
     else:
@@ -297,10 +297,10 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
     counts = 0
     while graph_pair.subgraph_is_isomorphic():
       mapping = graph_pair.mapping
-      mapping = {v: k for k, v in mapping.items()}
-      if all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges()):
+      inverse_mapping  = {v: k for k, v in mapping.items()}
+      if all(inverse_mapping[node] < inverse_mapping[neighbor] for node, neighbor in g2.edges()):
         counts += 1
-      g1.remove_nodes_from(graph_pair.mapping.keys())
+      g1.remove_nodes_from(mapping.keys())
       if termini_list or narrow_wildcard_list:
         graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
                                                                                                              'termini', 'flexible'))
@@ -315,8 +315,10 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
     if graph_pair.subgraph_is_isomorphic():
       for mapping in graph_pair.subgraph_isomorphisms_iter():
         mapping = {v: k for k, v in mapping.items()}
-        if all(mapping[node] < mapping[neighbor] for node, neighbor in g2.edges()):
-          return True if not return_matches else (1, mappings)
+        for node, neighbor in g2.edges():
+          if mapping[node] >= mapping[neighbor]:
+             return False if not return_matches else (0, [])
+        return True if not return_matches else (1, mappings)
   return False if not return_matches else (0, [])
 
 

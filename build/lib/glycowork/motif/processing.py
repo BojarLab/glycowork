@@ -5,7 +5,7 @@ import re
 from functools import wraps
 from collections import defaultdict
 from glycowork.glycan_data.loader import (unwrap, multireplace,
-                                          find_nth, find_nth_reverse,
+                                          find_nth, find_nth_reverse, lib,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
 
@@ -831,13 +831,14 @@ def canonicalize_iupac(glycan):
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)'}
   glycan = multireplace(glycan, replace_dic)
   if '{' in glycan and '}' not in glycan:
-    glycan = '{' + glycan[:glycan.index('{')] + '?1-?' + '}' + glycan[glycan.index('{')+1:]
+    glycan = f'{{{glycan[:glycan.index("{")]}?1-?}}{glycan[glycan.index("{")+1:]}'
   if '{' in glycan and '(' not in glycan:
     glycan = glycan.replace('{', '(').replace('}', ')')
   # Trim linkers
   if '-' in glycan:
-    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and 'ol' not in glycan:
-      glycan = glycan[:glycan.rindex('-')]
+    last_dash = glycan.rindex('-')
+    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash-1:])) and 'ol' not in glycan and glycan[last_dash+1:] not in lib:
+      glycan = glycan[:last_dash]
   # Canonicalize usage of brackets and parentheses
   if bool(re.search(r'\([A-Zd3-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
@@ -869,21 +870,18 @@ def canonicalize_iupac(glycan):
       glycan = re.sub(r'(a|b)(\d)', r'\g<1>1-\g<2>', glycan)
   # Smudge uncertainty
   while '/' in glycan:
-    glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+2:]
+    glycan = f'{glycan[:glycan.index("/")-1]}?{glycan[glycan.index("/")+2:]}'
   # Introduce parentheses for linkages
   if '(' not in glycan and len(glycan) > 6:
     for k in range(1, glycan.count('-')+1):
       idx = find_nth(glycan, '-', k)
       if (glycan[idx-1].isnumeric()) and (glycan[idx+1].isnumeric() or glycan[idx+1] == '?'):
-        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+2] + ')' + glycan[idx+2:]
+        glycan = f'{glycan[:idx-2]}({glycan[idx-2:idx+2]}){glycan[idx+2:]}'
       elif (glycan[idx-1].isnumeric()) and bool(re.search(r'[A-Z]', glycan[idx+1])):
-        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+1] + '?)' + glycan[idx+1:]
+        glycan = f'{glycan[:idx-2]}({glycan[idx-2:idx+1]}?){glycan[idx+1:]}'
   # Canonicalize reducing end
   if bool(re.search(r'[a-z]ol', glycan)):
-    if 'Glcol' not in glycan:
-      glycan = glycan[:-2]
-    else:
-      glycan = glycan[:-2] + '-ol'
+    glycan = glycan[:-2] if 'Glcol' not in glycan else f'{glycan[:-2]}-ol'
   if glycan[-1] in 'ab' and glycan[-3:] not in ['Rha', 'Ara']:
     glycan = glycan[:-1]
   # Handle modifications
