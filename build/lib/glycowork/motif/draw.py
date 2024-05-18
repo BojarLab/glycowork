@@ -2409,10 +2409,10 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
       data = re.sub(r'<text font-size="17.5" ', r'<text font-size="17.5" font-family="century gothic" font-weight="bold" ', data)
       data = re.sub(r'<text font-size="20.0" ', r'<text font-size="20" font-family="century gothic" ', data)
       data = re.sub(r'<text font-size="15.0" ', r'<text font-size="17.5" font-family="century gothic" font-style="italic" ', data)
-      if 'svg' in filepath:
+      if filepath.endswith('.svg'):
         with open(filepath, 'w') as f:
           f.write(data)
-      elif 'pdf' in filepath:
+      elif filepath.endswith('.pdf'):
         try:
           from cairosvg import svg2pdf
           svg2pdf(bytestring = data, write_to = filepath)

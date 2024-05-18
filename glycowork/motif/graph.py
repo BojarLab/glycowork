@@ -394,7 +394,7 @@ def neighbor_is_branchpoint(graph, node):
   | :-
   | Returns True if node is connected to downstream multi-branch node and False if not
   """
-  edges = list(graph.edges(node))
+  edges = graph.edges(node)
   edges = unwrap([e for e in edges if sum(e) > 2*node])
   edges = [graph.degree[e] for e in set(edges) if e != node]
   return True if max(edges, default = 0) > 3 else False
@@ -422,8 +422,9 @@ def graph_to_string_int(graph):
   else:
     nodes[-1] = ')'+nodes[-1]
     nodes = ''.join(nodes)[1:]
-  if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')') == nodes[:nodes.index(')(')].count('('))):
-    nodes = nodes.replace(')(', '(', 1)
+  #if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')') == nodes[:nodes.index(')(')].count('('))):
+  #  nodes = nodes.replace(')(', '(', 1)
+  nodes = nodes.replace(')(', '(')
   return canonicalize_iupac(nodes.strip('()'))
 
 
