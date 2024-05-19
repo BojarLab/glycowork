@@ -791,13 +791,16 @@ def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
   """
   geometric_mean = gmean(df.replace(0, np.nan), axis = 0)
   clr_adjusted = np.zeros_like(df.values)
-  if gamma and isinstance(custom_scale, float):
+  if gamma and not isinstance(custom_scale, dict):
     group1i = [df.columns.get_loc(c) for c in group1]
     group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
     geometric_mean = -np.log2(geometric_mean)
-    clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, size = (df.shape[0], len(group1))))
-    condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, size = (df.shape[0], len(group2))) if not custom_scale else norm.rvs(loc = np.log2(custom_scale), scale = gamma, size = (df.shape[0], len(group2)))
-    clr_adjusted[:, group2i] = np.log2(df[group2]) + condition
+    if group2:
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, size = (df.shape[0], len(group1))))
+      condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, size = (df.shape[0], len(group2))) if not custom_scale else norm.rvs(loc = np.log2(custom_scale), scale = gamma, size = (df.shape[0], len(group2)))
+      clr_adjusted[:, group2i] = np.log2(df[group2]) + condition
+    else:
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, size = (df.shape[0], len(group1)))
   elif not group2 and isinstance(custom_scale, dict):
     gamma = max(gamma, 0.1)
     for idx, col in enumerate(df.columns):
