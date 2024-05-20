@@ -917,18 +917,39 @@ def permanova_with_permutation(df, group_labels, permutations = 999):
   return observed_f, p_value
 
 
-def alr_transformation(df, reference_component_index):
+def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.1, custom_scale = 0):
   """Given a reference feature, performs additive log-ratio transformation (ALR) on the data\n
   | Arguments:
   | :-
   | df (dataframe): log2-transformed dataframe with features as rows and samples as columns
-  | reference_component_index (int): row index of feature to be used as reference\n
+  | reference_component_index (int): row index of feature to be used as reference
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; default: 0.1
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
   | Returns:
   | :-
   | ALR-transformed dataframe
   """
   reference_values = df.iloc[reference_component_index, :]
-  alr_transformed = df.subtract(reference_values, axis = 'columns')
+  alr_transformed = np.zeros_like(df.values)
+  group1i = [df.columns.get_loc(c) for c in group1]
+  group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
+  if not isinstance(custom_scale, dict):
+    if custom_scale:
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, size = len(group1i)), axis = 1)
+    else:
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values[group1i])
+    scale_adjustment = np.log2(custom_scale) if custom_scale else 0
+    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, size = len(group2i)), axis = 1)
+  else:
+    gamma = max(gamma, 0.1)
+    for idx, col in enumerate(df.columns):
+      group_id = group1[idx]
+      scale_factor = custom_scale.get(group_id, 1)
+      reference_adjusted = reference_values - norm.rvs(loc = np.log2(scale_factor), scale = gamma)
+      alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted
+  alr_transformed = pd.DataFrame(alr_transformed, index = df.index, columns = df.columns)
   alr_transformed = alr_transformed.drop(index = reference_values.name)
   return alr_transformed
 
@@ -962,7 +983,8 @@ def get_procrustes_scores(df, group1, group2, paired = False, custom_scale = 0):
       variances = abs(var_group1 - var_group2)
   else:
     variances = abs(df[group1].var(axis = 1))
-  procrustes_corr = [1 - procrustes(ref_matrix.drop(ref_matrix.index[i]), alr_transformation(df, i))[2] for i in range(df.shape[0])]
+  procrustes_corr = [1 - procrustes(ref_matrix.drop(ref_matrix.index[i]),
+                                    alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale))[2] for i in range(df.shape[0])]
   return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
 
@@ -974,7 +996,7 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False, gam
   | group1 (list): list of column indices or names for the first group of samples, usually the control
   | group2 (list): list of column indices or names for the second group of samples
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | gamma (float): the degree of uncertainty that the CLR assumption holds; in case of CLR; default: 0.1
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; default: 0.1
   | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
   | Returns:
   | :-
@@ -990,7 +1012,7 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False, gam
     return df
   glycans = df.iloc[:, 0].values.tolist()
   glycans = glycans[:ref_component] + glycans[ref_component+1:]
-  alr = alr_transformation(np.log2(df.iloc[:, 1:]), ref_component)
+  alr = alr_transformation(np.log2(df.iloc[:, 1:]), ref_component, group1, group2, gamma = gamma, custom_scale = custom_scale)
   alr.insert(loc = 0, column = 'glycan', value = glycans)
   return alr
 
