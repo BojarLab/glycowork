@@ -1,6 +1,6 @@
 import setuptools
 
-with open("README.md", "r", encoding="utf-8") as fh:
+with open("README.md", "r", encoding = "utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
@@ -22,15 +22,15 @@ setuptools.setup(
     ],
     python_requires='>=3.8',
     install_requires=["scikit-learn", "regex", "networkx>=3.0",
-                      "statsmodels", "scipy",
+                      "statsmodels", "scipy", "gdown",
                       "seaborn", "xgboost", "mpld3",
                       "pandas>=1.3", "matplotlib-inline"],
     extras_require={'all':["torch_geometric", "torch", "CairoSVG",
                            "drawSvg~=2.0", "glyles", "pubchempy", "requests",
-                           "Pillow", "openpyxl", "py3Dmol"],
+                           "Pillow", "openpyxl", "py3Dmol", "gdown"],
                     'dev':["torch_geometric", "torch", "CairoSVG",
                            "drawSvg~=2.0", "glyles", "pubchempy", "requests",
-                           "Pillow", "openpyxl", "py3Dmol"],
+                           "Pillow", "openpyxl", "py3Dmol", "gdown"],
                     'ml':["torch_geometric", "torch"],
                     'draw':["CairoSVG", "drawSvg~=2.0", "Pillow",
                             "openpyxl"],

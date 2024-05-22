@@ -1,5 +1,6 @@
 import networkx as nx
 import pandas as pd
+import numpy as np
 import re
 from collections import defaultdict
 from functools import partial
@@ -221,17 +222,22 @@ def quantify_motifs(df, glycans, feature_set, custom_motifs = []):
     if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     # Motif extraction
-    df_motif = annotate_dataset(glycans,
-                                feature_set = feature_set,
+    df_motif = annotate_dataset(glycans, feature_set = feature_set,
                                 condense = True, custom_motifs = custom_motifs)
     collect_dic = {}
     df = df.T
+    log2 = (df.values < 0).any()
     # Motif quantification
     for c, col in enumerate(df_motif.columns):
       indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
       temp = df.iloc[:, indices]
       temp.columns = range(temp.columns.size)
-      collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
+      if log2:
+        linear_values = np.power(2, temp)
+        weighted_values = (linear_values * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
+        collect_dic[col] = np.log2(weighted_values)
+      else:
+        collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
     df = pd.DataFrame(collect_dic)
     return df
 

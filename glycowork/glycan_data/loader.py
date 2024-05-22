@@ -1,4 +1,5 @@
 import re
+import gdown
 import pandas as pd
 from pickle import load
 from os import path
@@ -264,3 +265,11 @@ def build_custom_df(df, kind = 'df_species'):
   df = df.sort_values([cols[1], 'glycan'], ascending = [True, True])
   df = df.reset_index(drop = True)
   return df
+
+
+def download_model(file_id, local_path = 'model_weights.pt'):
+  """Download the model weights file from Google Drive."""
+  file_id = file_id.split('/d/')[1].split('/view')[0]
+  url = f'https://drive.google.com/uc?id={file_id}'
+  gdown.download(url, local_path, quiet = False)
+  print("Download completed.")

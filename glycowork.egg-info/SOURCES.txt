@@ -62,7 +62,6 @@ glycowork/glycan_data/v10_sugarbase.pkl
 glycowork/ml/NSequonPred_batch32.pt
 glycowork/ml/__init__.py
 glycowork/ml/glycowork_lectinoracle_600.pt
-glycowork/ml/glycowork_lectinoracle_600_flex.pt
 glycowork/ml/glycowork_lectinoracle_background_correction.csv
 glycowork/ml/glycowork_sweetnet_species.pt
 glycowork/ml/inference.py

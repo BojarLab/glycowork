@@ -10,13 +10,13 @@ try:
         device = "cuda:0"
 except ImportError:
   raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
-from glycowork.glycan_data.loader import lib
+from glycowork.glycan_data.loader import lib, download_model
 
 
 this_dir, this_filename = os.path.split(__file__)  # Get path
 trained_SweetNet = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
 trained_LectinOracle = os.path.join(this_dir, 'glycowork_lectinoracle_600.pt')
-trained_LectinOracle_flex = os.path.join(this_dir, 'glycowork_lectinoracle_600_flex.pt')
+#trained_LectinOracle_flex = os.path.join(this_dir, 'glycowork_lectinoracle_600_flex.pt')
 trained_NSequonPred = os.path.join(this_dir, 'NSequonPred_batch32.pt')
 
 
@@ -340,31 +340,32 @@ def prep_model(model_type, num_classes, libr = None,
     | Returns PyTorch model object
     """
     if libr is None:
-        libr = lib
+      libr = lib
     if model_type == 'SweetNet':
-        model = SweetNet(len(libr), num_classes = num_classes)
-        model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
-        if trained:
-            model.load_state_dict(torch.load(trained_SweetNet, map_location = device))
-        model = model.to(device)
+      model = SweetNet(len(libr), num_classes = num_classes)
+      model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
+      if trained:
+        model.load_state_dict(torch.load(trained_SweetNet, map_location = device))
+      model = model.to(device)
     elif model_type == 'LectinOracle':
-        model = LectinOracle(len(libr), num_classes = num_classes)
-        model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
-        if trained:
-            model.load_state_dict(torch.load(trained_LectinOracle, map_location = device))
-        model = model.to(device)
+      model = LectinOracle(len(libr), num_classes = num_classes)
+      model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
+      if trained:
+        model.load_state_dict(torch.load(trained_LectinOracle, map_location = device))
+      model = model.to(device)
     elif model_type == 'LectinOracle_flex':
-        model = LectinOracle_flex(len(libr), num_classes = num_classes)
-        model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
-        if trained:
-            model.load_state_dict(torch.load(trained_LectinOracle_flex, map_location = device))
-        model = model.to(device)
+      model = LectinOracle_flex(len(libr), num_classes = num_classes)
+      model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
+      if trained:
+        download_model("https://drive.google.com/file/d/1Z7by3RtGkYnujQ4ypsOir6ss8c5dxQA_/view?usp=sharing", local_path = "LectinOracle_flex.pt")
+        model.load_state_dict(torch.load("LectinOracle_flex.pt", map_location = device))
+      model = model.to(device)
     elif model_type == 'NSequonPred':
-        model = NSequonPred()
-        model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
-        if trained:
-            model.load_state_dict(torch.load(trained_NSequonPred, map_location = device))
-        model = model.to(device)
+      model = NSequonPred()
+      model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
+      if trained:
+        model.load_state_dict(torch.load(trained_NSequonPred, map_location = device))
+      model = model.to(device)
     else:
-        print("Invalid Model Type")
+      print("Invalid Model Type")
     return model

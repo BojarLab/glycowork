@@ -3,6 +3,7 @@ regex
 networkx>=3.0
 statsmodels
 scipy
+gdown
 seaborn
 xgboost
 mpld3
@@ -20,6 +21,7 @@ requests
 Pillow
 openpyxl
 py3Dmol
+gdown
 
 [chem]
 glyles
@@ -38,6 +40,7 @@ requests
 Pillow
 openpyxl
 py3Dmol
+gdown
 
 [draw]
 CairoSVG
