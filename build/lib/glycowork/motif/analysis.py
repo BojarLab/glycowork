@@ -409,7 +409,8 @@ def get_coverage(df, filepath = ''):
   
 
 def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhaustive'],
-            pc_x = 1, pc_y = 2, color = None, shape = None, filepath = '', custom_motifs = []):
+            pc_x = 1, pc_y = 2, color = None, shape = None, filepath = '', custom_motifs = [],
+            transform = None, rarity_filter = 0.05):
   """ PCA plot from glycomics abundance dataframe\n
   | Arguments:
   | :-
@@ -426,13 +427,21 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   | color (string): if design dataframe is provided: column name for color grouping; default:None
   | shape (string): if design dataframe is provided: column name for shape grouping; default:None
   | filepath (string): absolute path including full filename allows for saving the plot
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+  | transform (string): whether to transform the data before plotting, options are "CLR" and "ALR", recommended for glycomics data; default: no transformation
+  | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05\n
   | Returns:
   | :-
   | Prints PCA plot
   """
   if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)  
+  if transform == "ALR":
+    df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
+    df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
+  elif transform == "CLR":
+    df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], [], gamma = 0)
   # get pca
   if motifs:
     # Motif extraction and quantification
