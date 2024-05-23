@@ -20,7 +20,7 @@ from sklearn.multiclass import OneVsRestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-from glycowork.glycan_data.loader import df_species, unwrap, motif_list, strip_suffixes
+from glycowork.glycan_data.loader import df_species, unwrap, motif_list, strip_suffixes, download_model
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          variance_stabilization, impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
@@ -248,9 +248,8 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
-      this_dir, this_filename = path.split(__file__)
-      data_path = path.join(this_dir, 'glycan_representations.pkl')
-      emb = pickle.load(open(data_path, 'rb'))
+      download_model("https://drive.google.com/file/d/1DPeaj9steysrwOJ_v5y5fjd-9snI0BES/view?usp=sharing", local_path = 'glycan_representations.pkl')
+      emb = pickle.load(open('glycan_representations.pkl', 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
     if isinstance(emb, pd.DataFrame):
       emb = {g: emb.iloc[i, :] for i, g in enumerate(glycans)}

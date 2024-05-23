@@ -1,4 +1,3 @@
-import os
 import numpy as np
 try:
     import torch
@@ -11,13 +10,6 @@ try:
 except ImportError:
   raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 from glycowork.glycan_data.loader import lib, download_model
-
-
-this_dir, this_filename = os.path.split(__file__)  # Get path
-trained_SweetNet = os.path.join(this_dir, 'glycowork_sweetnet_species.pt')
-trained_LectinOracle = os.path.join(this_dir, 'glycowork_lectinoracle_600.pt')
-#trained_LectinOracle_flex = os.path.join(this_dir, 'glycowork_lectinoracle_600_flex.pt')
-trained_NSequonPred = os.path.join(this_dir, 'NSequonPred_batch32.pt')
 
 
 class SweetNet(torch.nn.Module):
@@ -345,13 +337,15 @@ def prep_model(model_type, num_classes, libr = None,
       model = SweetNet(len(libr), num_classes = num_classes)
       model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
       if trained:
-        model.load_state_dict(torch.load(trained_SweetNet, map_location = device))
+        download_model("https://drive.google.com/file/d/1V4mMywfFW8tSmjLGbmKH_D8XbLoJnqqs/view?usp=sharing", local_path = "SweetNet.pt")
+        model.load_state_dict(torch.load("SweetNet.pt", map_location = device))
       model = model.to(device)
     elif model_type == 'LectinOracle':
       model = LectinOracle(len(libr), num_classes = num_classes)
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
-        model.load_state_dict(torch.load(trained_LectinOracle, map_location = device))
+        download_model("https://drive.google.com/file/d/1kBKtO7BZCpHuIvF_rNiG7FYfi-eGnWO6/view?usp=sharing", local_path = "LectinOracle.pt")
+        model.load_state_dict(torch.load("LectinOracle.pt", map_location = device))
       model = model.to(device)
     elif model_type == 'LectinOracle_flex':
       model = LectinOracle_flex(len(libr), num_classes = num_classes)
@@ -364,7 +358,8 @@ def prep_model(model_type, num_classes, libr = None,
       model = NSequonPred()
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
-        model.load_state_dict(torch.load(trained_NSequonPred, map_location = device))
+        download_model("https://drive.google.com/file/d/1hb0f0zZfTfaAscyvtiEU9hZHfyE2_NtD/view?usp=sharing", local_path = "NSequonPred.pt")
+        model.load_state_dict(torch.load("NSequonPred.pt", map_location = device))
       model = model.to(device)
     else:
       print("Invalid Model Type")
