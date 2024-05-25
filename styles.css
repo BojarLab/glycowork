@@ -1,8 +1,12 @@
+body {
+  font-family: 'Century Gothic', 'CenturyGothic', 'AppleGothic', sans-serif;
+}
+
 .cell {
   margin-bottom: 1rem;
 }
 
-.cell > .sourceCode {
+.cell > .source-code {
   margin-bottom: 0;
 }
 
@@ -10,7 +14,7 @@
   margin-bottom: 0;
 }
 
-.cell-output > pre, .cell-output > .sourceCode > pre, .cell-output-stdout > pre {
+.cell-output > pre, .cell-output > .source-code > pre, .cell-output-stdout > pre {
   margin-left: 0.8rem;
   margin-top: 0;
   background: none;
@@ -19,11 +23,11 @@
   border-top-right-radius: 0;
 }
 
-.cell-output > .sourceCode {
+.cell-output > .source-code {
   border: none;
 }
 
-.cell-output > .sourceCode {
+.cell-output > .source-code {
   background: none;
   margin-top: 0;
 }

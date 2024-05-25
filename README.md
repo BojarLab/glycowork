@@ -5,7 +5,8 @@
 ![CI](https://github.com/BojarLab/glycowork/actions/workflows/test.yaml/badge.svg)
 [![HitCount](https://hits.dwyl.com/BojarLab/glycowork.svg?style=flat-square)](http://hits.dwyl.com/BojarLab/glycowork)![PyPI -
 Downloads](https://img.shields.io/pypi/dm/glycowork?color=brightgreen.png)[![contributions
-welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/BojarLab/glycowork/issues)[![DOI](https://zenodo.org/badge/327716604.svg)](https://zenodo.org/doi/10.5281/zenodo.10039202)
+welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/BojarLab/glycowork/issues)[![DOI](https://zenodo.org/badge/327716604.svg)](https://zenodo.org/doi/10.5281/zenodo.10039202)[![Codacy
+Badge](https://app.codacy.com/project/badge/Grade/477e739945e747fa94ec9618b4c5eb1b.png)](https://app.codacy.com/gh/BojarLab/glycowork/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 
 <img src="./glycowork_badge_wo_bg.jpg" width="200" alt="glycowork logo" />
 

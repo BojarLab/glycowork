@@ -238,7 +238,7 @@ def train_model(model, dataloaders, criterion, optimizer,
   model.load_state_dict(best_model_wts)
 
   # Plot loss & score over the course of training
-  _, ax = plt.subplots(nrows = 2, ncols = 1)
+  _, _ = plt.subplots(nrows = 2, ncols = 1)
   plt.subplot(2, 1, 1)
   plt.plot(range(epoch+1), val_losses)
   plt.title('Model Training')

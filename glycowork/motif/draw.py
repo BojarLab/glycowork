@@ -1793,7 +1793,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
     for pair in pairwise_node_crawl:
       idx_A = [k for k in get_indices(node_list, [str(k) for k in pair[0]]) if k != [None]]
       idx_B = [k for k in get_indices(node_list, [str(k) for k in pair[1]]) if k != [None]]
-      upper, lower = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
+      upper, _ = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
       upper_min = min(y_list[k[0]] for k in (idx_A if upper == pair[0] else idx_B))
       lower_max = max(y_list[k[0]] for k in (idx_B if upper == pair[0] else idx_A))
 
@@ -2016,7 +2016,7 @@ def get_hit_atoms_and_bonds(mol, smt):
   return alist, blist
 
 
-def add_colours_to_map(els, cols, col_num, alpha = True, hex = True):
+def add_colours_to_map(els, cols, col_num, alpha = True, hex_colors = True):
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
   from matplotlib.colors import ColorConverter
 
@@ -2028,7 +2028,7 @@ def add_colours_to_map(els, cols, col_num, alpha = True, hex = True):
     if el not in cols:
       cols[el] = []
     if COLS[col_num] not in cols[el]:
-      if hex:
+      if hex_colors:
         cols[el].append(COLS[col_num])
       else:
         cols[el].append(ColorConverter().to_rgb(COLS[col_num]))
@@ -2059,8 +2059,8 @@ def draw_chem2d(draw_this, mono_list, filepath = None):
   for i, smt in enumerate(smarts_list):
     alist, blist = get_hit_atoms_and_bonds(mol, smt)
     col = i
-    add_colours_to_map(alist, acols, col, hex = False, alpha = True)
-    add_colours_to_map(blist, bcols, col, hex = False, alpha = True)
+    add_colours_to_map(alist, acols, col, hex_colors = False, alpha = True)
+    add_colours_to_map(blist, bcols, col, hex_colors = False, alpha = True)
 
   for k in list(acols.keys()):
     if len(acols[k]) > 1:
@@ -2114,8 +2114,8 @@ def draw_chem3d(draw_this, mono_list, filepath = None):
   for i, smt in enumerate(smarts_list):
       alist, blist = get_hit_atoms_and_bonds(mol, smt)
       col = i
-      add_colours_to_map(alist, acols, col, alpha = False, hex = True)
-      add_colours_to_map(blist, bcols, col, alpha = False, hex = True)
+      add_colours_to_map(alist, acols, col, alpha = False, hex_colors = True)
+      add_colours_to_map(blist, bcols, col, alpha = False, hex_colors = True)
 
   for k in acols.keys():
     if len(acols[k]) > 1:
@@ -2138,7 +2138,7 @@ def draw_chem3d(draw_this, mono_list, filepath = None):
       MolToPDBFile(mol, filepath)
     else:
       print("3D structure can only be saved as .pdb file.")
-  
+
   print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
   v.zoomTo()
   v.show()
@@ -2220,9 +2220,9 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
         bond_hack = False
 
     for i_branch, branch in enumerate(branch_bond):
-      for bond in range(len(branch)):
-        if branch_sugar[i_branch][bond] + '--' + branch[bond] == 'Man--α 6':
-          branch[bond] = 'α'
+      for i_bond, bond in enumerate(branch):
+        if branch_sugar[i_branch][i_bond] + '--' + bond == 'Man--α 6':
+          bond = 'α'
           bond_hack = False
     bond_hack = False
 

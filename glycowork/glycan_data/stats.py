@@ -192,7 +192,7 @@ class MissForest:
     self.tol = tol
 
   def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
-    # Step 1: Initialization 
+    # Step 1: Initialization
     # Keep track of where NaNs are in the original dataset
     X_nan = X.isnull()
     # Replace NaNs with median of the column in a new dataset that will be transformed

@@ -23,7 +23,7 @@ class SimpleDataset(Dataset):
 
   def __len__(self):
     return len(self.x)
-  
+
   def __getitem__(self, index):
     inp = self.x[index]
     out = self.y[index]
@@ -187,7 +187,7 @@ def get_esm1b_representations(prots, model, alphabet):
         ('protein' + str(idx), prot[:min(len(prot), 1000)])
         for idx, prot in enumerate(unique_prots)
     ]
-  _, batch_strs, batch_tokens = batch_converter(data_list)
+  _, _, batch_tokens = batch_converter(data_list)
   with torch.no_grad():
       results = model(batch_tokens, repr_layers = [33], return_contacts = False)
   token_representations = results["representations"][33]
@@ -196,8 +196,8 @@ def get_esm1b_representations(prots, model, alphabet):
         for i, (_, seq) in enumerate(data_list)
     ]
   prot_dic = {
-        unique_prots[k]: sequence_representations[k].tolist()
-        for k in range(len(sequence_representations))
+        unique_prots[k]: s_rep.tolist()
+        for k, s_rep in enumerate(sequence_representations)
     }
   return prot_dic
 

@@ -43,7 +43,7 @@ class LazyLoader:
     self.directory = directory
     self.prefix = prefix
     self._datasets = {}
-    
+
   def __getattr__(self, name):
     if name not in self._datasets:
       filename = f"{self.prefix}{name}.csv"
@@ -234,9 +234,9 @@ def multireplace(string, remove_dic):
   return string
 
 
-def strip_suffixes(column):
+def strip_suffixes(columns):
   """Strip numerical suffixes like .1, .2, etc., from column names."""
-  return [re.sub(r"\.\d+$", "", str(name)) for name in column]
+  return [re.sub(r"\.\d+$", "", str(name)) for name in columns]
 
 
 def build_custom_df(df, kind = 'df_species'):

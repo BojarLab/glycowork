@@ -79,7 +79,7 @@ class GlycoDrawExcelDialog(simpledialog.Dialog):
     def body(self, master):
         self.title("GlycoDrawExcel Input")
         tk.Label(master, text = "Select CSV or Excel File:").grid(row = 0)
-        
+
         self.csv_entry = tk.Entry(master)
         self.csv_entry.grid(row = 0, column = 1)
         self.csv_button = tk.Button(master, text = "Browse...", command = self.browse_csv)
