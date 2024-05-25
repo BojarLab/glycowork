@@ -5,7 +5,6 @@ import seaborn as sns
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 plt.style.use('default')
-from os import path
 from collections import Counter
 from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway, spearmanr
 from statsmodels.formula.api import ols
@@ -22,7 +21,7 @@ from sklearn.linear_model import LogisticRegression
 
 from glycowork.glycan_data.loader import df_species, unwrap, motif_list, strip_suffixes, download_model
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
-                                         variance_stabilization, impute_and_normalize, variance_based_filtering,
+                                         impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
                                          test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
@@ -90,7 +89,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                         np.append(df_neg.iloc[:, k] * df_neg[label_col_name], [1]),
                         equal_var = False)[1] for k in range(df_motif.shape[1]-1)]
     ttests_corr = multipletests(ttests, method = 'fdr_tsbh')[1].tolist()
-    effect_sizes, variances = zip(*[cohen_d(np.append(df_pos.iloc[:, k].values, [1, 0]),
+    effect_sizes, _ = zip(*[cohen_d(np.append(df_pos.iloc[:, k].values, [1, 0]),
                                             np.append(df_neg.iloc[:, k].values, [1, 0]), paired = False) for k in range(df_motif.shape[1]-1)])
     out = pd.DataFrame({
         'motif': df_motif.columns.tolist()[:-1],
@@ -302,11 +301,10 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   pool_in = unwrap([link_find(k) for k in df[glycan_col_name]])
   pool_in = [k.replace('(', '*').replace(')', '*') for k in pool_in]
   pool_in_split = [k.split('*') for k in pool_in]
-  pool, lab, sugars = [], '', []
+  pool, sugars = [], []
   if mode == 'bond':
     # Get upstream monosaccharides for a specific linkage
     pool = [k[0] for k in pool_in_split if k[1] == sugar]
-    lab = f'Observed Monosaccharides Making Linkage {sugar}'
   elif mode in ['sugar', 'sugarbond']:
     for k in pool_in_split:
       # Get downstream monosaccharides or downstream linkages for a specific monosaccharide
@@ -316,7 +314,6 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
         pool.append(k2 if mode == 'sugar' else k[1])
       elif k0 == sugar:
         pool.append(k2 if mode == 'sugar' else k[1])
-    lab = f'Observed Monosaccharides Paired with {sugar}' if mode == 'sugar' else f'Observed Linkages Made by {sugar}'
   # Count objects in pool, filter by rarity, and calculate proportion
   cou = Counter(pool).most_common()
   filtered_items = [(item, count) for item, count in cou if count > thresh]
@@ -405,7 +402,7 @@ def get_coverage(df, filepath = ''):
   if filepath:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
   plt.show()
-  
+
 
 def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhaustive'],
             pc_x = 1, pc_y = 2, color = None, shape = None, filepath = '', custom_motifs = [],
@@ -434,7 +431,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   | Prints PCA plot
   """
   if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)  
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if transform == "ALR":
     df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
     df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
@@ -669,7 +666,7 @@ def get_pval_distribution(df_res, filepath = ''):
   # save to file
   if filepath:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
-  plt.show()  
+  plt.show()
 
 
 def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
@@ -692,13 +689,13 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   ax = sns.scatterplot(x = 'Mean abundance', y = 'Log2FC',
                        data = df_res[~sig_mask], color = 'grey', alpha = 0.5)
   # Overlay significant points
-  sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', 
+  sns.scatterplot(x = 'Mean abundance', y = 'Log2FC',
                     data = df_res[sig_mask], color = '#CC4446', alpha = 0.95, ax = ax)
   ax.set(xlabel = 'Mean Abundance', ylabel = 'Log2FC', title = '')
   # save to file
   if filepath:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
-  plt.show()  
+  plt.show()
 
 
 def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed = True,
@@ -729,7 +726,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed =
   if n:
     y_thresh = get_alphaN(n)
   else:
-    print(f"You're working with a default alpha of 0.05. Set sample size (n = ...) for Bayesian-Adaptive Alpha Adjustment")
+    print("You're working with a default alpha of 0.05. Set sample size (n = ...) for Bayesian-Adaptive Alpha Adjustment")
   # Make plot
   color = kwargs.pop('color', '#3E3E3E')
   ax = sns.scatterplot(x = x_metric, y = 'log_p', data = df_res, color = color, alpha = 0.8, **kwargs)
@@ -872,7 +869,7 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
       df_temp['lower'] = df_temp['EffectSize'] - 1.96 * standard_error
       df_temp['upper'] = df_temp['EffectSize'] + 1.96 * standard_error
       # Create a new figure and a axes to plot on
-      fig, ax = plt.subplots(figsize = (8, len(df_temp)*0.6))  # adjust the size as needed
+      _, ax = plt.subplots(figsize = (8, len(df_temp)*0.6))  # adjust the size as needed
       y_pos = np.arange(len(df_temp))
       # Draw a horizontal line for each study, with x-values between the lower and upper confidence bounds
       ax.hlines(y_pos, df_temp['lower'], df_temp['upper'], color = 'skyblue')
@@ -1126,7 +1123,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
       pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for
                      row_a, row_b in zip(df_a.values, df_b.values)]
       pvals = [p if p > 0 and p < 1 else 1.0 for p in pvals]
-      effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
+      effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
       a_df_stats = pd.DataFrame(list(zip(a_df.index.tolist(), mean_a, mean_b, pvals, effect_sizes)),
                                columns = ["Metric", "Group1 mean", "Group2 mean", "p-val", "Effect size"])
       shopping_cart.append(a_df_stats)
@@ -1215,7 +1212,7 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   df2 = df2.apply(replace_outliers_winsorization, axis = 1)
   df2 = impute_and_normalize(df2, [df2.columns.tolist()[1:]])
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
-  alpha = get_alphaN(df1.shape[1] - 1)
+  _ = get_alphaN(df1.shape[1] - 1)
   if transform is None:
     transform = "ALR" if (enforce_class(df1.iloc[0, 0], "N") and len(df1) > 50) and (enforce_class(df2.iloc[0, 0], "N") and len(df2) > 50) else "CLR"
   if transform == "ALR":
@@ -1425,7 +1422,7 @@ def get_lectin_array(df, group1, group2, paired = False, transform = ''):
   if group2:
     df_a, df_b = df[group1], df[group2]
     effects = [cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)]
-    effect_sizes, variances = list(zip(*effects)) if effects else [[0]*len(df), [0]*len(df)]
+    effect_sizes, _ = list(zip(*effects)) if effects else [[0]*len(df), [0]*len(df)]
   else:
     effect_sizes = df.apply(omega_squared, axis = 1, args = (group1,))
   lectin_score_dict = {lec: effect_sizes[i] for i, lec in enumerate(lectin_list)}

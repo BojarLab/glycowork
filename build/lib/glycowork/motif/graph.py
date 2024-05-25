@@ -21,7 +21,7 @@ def evaluate_adjacency(glycan_part, adjustment):
   last_char = glycan_part[-1]
   len_glycan_part = len(glycan_part)
   # Check whether (i) glycoletters are adjacent in the main chain or (ii) whether glycoletters are connected but separated by a branch delimiter
-  return ((last_char in {'(', ')'} and len_glycan_part < 2+adjustment) or 
+  return ((last_char in {'(', ')'} and len_glycan_part < 2+adjustment) or
           (last_char == ']' and glycan_part[-2] in {'(', ')'} and len_glycan_part-1 < 2+adjustment))
 
 
@@ -165,7 +165,7 @@ def categorical_node_match_wildcard(attr, default, narrow_wildcard_list, attr2, 
         return False
       data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
       comb_labels = data1_labels + data2_labels
-      if "Monosaccharide" in comb_labels and not '-' in comb_labels:
+      if "Monosaccharide" in comb_labels and  '-' not in comb_labels:
         return True
       if "?1-?" in comb_labels and comb_labels.count('-') == 2:
         return True

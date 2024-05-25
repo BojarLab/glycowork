@@ -395,7 +395,7 @@ def group_glycans_core(glycans, p_values):
   temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
   grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAcOS(b1-6)GalNAc"]])]
-  grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and not g in grouped_glycans["core2"]]
+  grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and g not in grouped_glycans["core2"]]
   grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["core2"] and g not in grouped_glycans["core1"]]
   grouped_p_values["core2"] = [temp[g] for g in grouped_glycans["core2"]]
   grouped_p_values["core1"] = [temp[g] for g in grouped_glycans["core1"]]
@@ -477,7 +477,7 @@ def load_lectin_lib():
 
 class Lectin():
   def __init__(self, abbr: list, name: list, # A lectin may have multiple names and abbreviations
-                 specificity: dict = {"primary": None, "secondary": None, "negative": None}, 
+                 specificity: dict = {"primary": None, "secondary": None, "negative": None},
                  species: str = "", reference: str = "", notes: str = ""):
     self.abbr = abbr
     self.name = name
@@ -500,7 +500,7 @@ class Lectin():
                        ''.join(f"Specificity ({key}): {'; '.join(value) if value else 'no information'}\n" 
                                for key, value in self.specificity.items()) + \
                        f"Reference: {self.reference}\nnotes: {self.notes}\n")
-    
+
   def check_binding(self, glycan: str):
     """Check whether a glycan binds to this lectin. 
     Returns an integer. 
@@ -589,7 +589,7 @@ def lectin_motif_scoring(useable_lectin_mapping, motif_mapping, lectin_score_dic
   """
   output = []
   useable_lectin_count = {k: list(useable_lectin_mapping.values()).count(v) for k, v in useable_lectin_mapping.items()}
-  max_motifs = max([lectin_lib[k].get_all_binding_motifs_count() for k in useable_lectin_mapping.values()]) + 1
+  #max_motifs = max([lectin_lib[k].get_all_binding_motifs_count() for k in useable_lectin_mapping.values()]) + 1
   for motif, lectins in motif_mapping.items():
     score = 0
     for lectin, weight_class in lectins.items():

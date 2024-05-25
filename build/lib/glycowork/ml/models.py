@@ -40,7 +40,7 @@ class SweetNet(torch.nn.Module):
         self.bn1 = torch.nn.BatchNorm1d(1024)
         self.bn2 = torch.nn.BatchNorm1d(128)
         self.act1 = torch.nn.LeakyReLU()
-        self.act2 = torch.nn.LeakyReLU()   
+        self.act2 = torch.nn.LeakyReLU()
 
     def forward(self, x, edge_index, batch, inference = False):
 
@@ -104,7 +104,7 @@ class SigmoidRange(torch.nn.Module):
     def __init__(self, low, high):
       super(SigmoidRange, self).__init__()
       self.low, self.high = low, high
- 
+
     def forward(self, x):
         return sigmoid_range(x, self.low, self.high)
 
@@ -156,7 +156,7 @@ class LectinOracle(torch.nn.Module):
     self.fc2 = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
     self.bn1 = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
     self.dp1 = torch.nn.Dropout(0.5)
-    self.act1 = torch.nn.LeakyReLU() 
+    self.act1 = torch.nn.LeakyReLU()
     self.sigmoid = SigmoidRange(self.data_min, self.data_max)
 
   def forward(self, prot, nodes, edge_index, batch, inference = False):
@@ -308,7 +308,7 @@ def init_weights(model, mode = 'sparse', sparsity = 0.1):
     | mode (string): which initialization algorithm; choices are 'sparse','kaiming','xavier';default:'sparse'
     | sparsity (float): proportion of sparsity after initialization; default:0.1 / 10%
     """
-    if type(model) == torch.nn.Linear:
+    if isinstance(model, torch.nn.Linear):
         if mode == 'sparse':
             torch.nn.init.sparse_(model.weight, sparsity = sparsity)
         elif mode == 'kaiming':

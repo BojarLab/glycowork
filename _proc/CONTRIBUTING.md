@@ -13,7 +13,7 @@ nbdev_install_hooks
 * If you're unable to find an open issue addressing the problem, open a new one. Be sure to include a title and clear description, as much relevant information as possible, and a code sample or an executable test case demonstrating the expected behavior that is not occurring.
 * Be sure to add the complete error messages.
 
-#### Did you write a patch that fixes a bug?
+### Did you write a patch that fixes a bug?
 
 * Open a new GitHub pull request with the patch.
 * Ensure that your PR includes a test that fails without your patch, and pass with it.
@@ -35,13 +35,14 @@ nbdev_prepare
 
 * Docs are automatically created from the notebooks in the nbs folder.
 
-
 ## Wishlist for future glycowork updates (last update: 2024-01-31)
-#### Urgent
+
+### Urgent
+
 * more, and more informative, error messages
 
+### At some point
 
-#### At some point
 * any further expansion of our universal input pipeline, to cover more usecases etc.
 * split motif_list into ‘core’ motifs (occurring frequently) and ‘extended’ motifs (that are rare or niche) for performance reasons
 * characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context

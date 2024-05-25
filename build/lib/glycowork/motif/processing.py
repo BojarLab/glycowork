@@ -1,4 +1,3 @@
-import pandas as pd
 import numpy as np
 import copy
 import re
@@ -100,7 +99,7 @@ def get_possible_linkages(wildcard, linkage_list = linkages):
   | :-
   | Returns a list of linkages that match the wildcard pattern.
   """
-  pattern = wildcard.replace("?", "[a-zA-Z0-9\?]")
+  pattern = wildcard.replace("?", r"[a-zA-Z0-9\?]")
   return [linkage for linkage in linkage_list if re.fullmatch(pattern, linkage)]
   #return possible_linkages if libr is None else list(possible_linkages & libr.keys())
 
@@ -452,7 +451,7 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
     #linkage
     elif len(line) > 0:
       line = line.replace('-1', '?')
-      line = re.sub("\d\|\d", "?", line)
+      line = re.sub(r"\d\|\d", "?", line)
       parts = re.findall(r'(\d+)[do]\(([\d\?]+)\+(\d+)\)(\d+)', line)[0]
       parent_id, child_id = int(parts[0]), int(parts[3])
       link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
@@ -926,7 +925,7 @@ def rescue_glycans(func):
     try:
       # Try running the original function
       return func(*args, **kwargs)
-    except Exception as e:
+    except Exception:
       # If an error occurs, attempt to rescue the glycan sequences
       rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
       # After rescuing, attempt to run the function again

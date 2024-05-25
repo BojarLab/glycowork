@@ -4,7 +4,6 @@ import math
 import warnings
 from collections import defaultdict, Counter
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.base import BaseEstimator
 from scipy.special import gammaln
 from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway
 from scipy.stats.mstats import winsorize
@@ -16,7 +15,6 @@ from statsmodels.stats.weightstats import ttost_ind, ttost_paired
 from statsmodels.formula.api import ols
 from statsmodels.stats.anova import anova_lm
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
-import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import copy
 rng = np.random.default_rng(42)
@@ -60,9 +58,9 @@ def hlm(z):
 def update_cf_for_m_n(m, n, MM, cf):
   """Constructs cumulative frequency table for experimental parameters defined in the function 'jtkinit'"""
   P = min(m + n, MM)
-  for t in range(n + 1, P + 1):  # Zero-based offset t
-    for u in range(MM, t - 1, -1):  # One-based descending index u
-      cf[u] = expansion_sum(cf[u], -cf[u - t])  # Shewchuk algorithm
+  for t_temp in range(n + 1, P + 1):  # Zero-based offset t_temp
+    for u in range(MM, t_temp - 1, -1):  # One-based descending index u
+      cf[u] = expansion_sum(cf[u], -cf[u - t_temp])  # Shewchuk algorithm
   Q = min(m, MM)
   for s in range(1, Q + 1): # Zero-based offset s
     for u in range(s, MM + 1):  # One-based descending index u
@@ -188,7 +186,6 @@ class MissForest:
   n_iter : int
   Determines the number of iterations for the imputation process.
   """
-
   def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol = 1e-5):
     self.regressor = regressor
     self.max_iter = max_iter
@@ -294,7 +291,6 @@ def jtkdist(timepoints, param_dic, reps = 1, normal = False):
   maxnlp = gammaln(np.sum(tim)) - np.sum(np.log(np.arange(1, np.max(tim)+1)))
   limit = math.log(float('inf'))
   normal = normal or (maxnlp > limit - 1)  # Switch to normal approximation if maxnlp is too large
-  lab = []
   nn = sum(tim)  # Number of data values (Independent of period and lag)
   M = (nn ** 2 - np.sum(np.square(tim))) / 2  # Max possible jtk statistic
   param_dic.update({"GRP_SIZE": tim, "NUM_GRPS": len(tim), "NUM_VALS": nn,
@@ -460,7 +456,6 @@ def jtkx(z, param_dic, ampci = False):
   else:
     pers_index = 0
   pers = param_dic["PERIODS"][int(pers_index)]    # all optimal periods
-  padj_values = padj[pers_index]
   lagis = np.where(padj == JTK_ADJP)[0]  # list of optimal lag indice for each optimal period
   best_results = {'bestper': 0, 'bestlag': 0, 'besttau': 0, 'maxamp': 0, 'maxamp_ci': 2, 'maxamp_pval': 0}
   sc = np.transpose(param_dic["SIGNCOS"])
@@ -470,7 +465,6 @@ def jtkx(z, param_dic, ampci = False):
       S = param_dic["CJTK"][lagi][1]
       s = np.sign(S) if S != 0 else 1
       lag = (pers + (1 - s) * pers / 4 - lagi / 2) % pers
-      signcos = sc[:, lagi]
       tmp = s * w * sc[:, lagi]
       amp = hlm(tmp)  # Allows missing values
       if ampci:
@@ -484,9 +478,6 @@ def jtkx(z, param_dic, ampci = False):
   JTK_PERIOD = param_dic["INTERVAL"] * best_results['bestper']
   JTK_LAG = param_dic["INTERVAL"] * best_results['bestlag']
   JTK_AMP = float(max(0, best_results['maxamp']))
-  JTK_TAU = best_results['besttau']
-  JTK_AMP_CI = best_results['maxamp_ci']
-  JTK_AMP_PVAL = best_results['maxamp_pval']
   return pd.Series([JTK_ADJP, JTK_PERIOD, JTK_LAG, JTK_AMP])
 
 
@@ -557,7 +548,7 @@ def pi0_tst(p_values, alpha = 0.05):
   n = len(p_values)
   # Apply the BH procedure at level α'
   sorted_indices = np.argsort(p_values)
-  sorted_p_values = p_values[sorted_indices] 
+  sorted_p_values = p_values[sorted_indices]
   bh_values = (n / rankdata(sorted_p_values)) * sorted_p_values
   corrected_p_values = np.minimum.accumulate(bh_values[::-1])[::-1]
   corrected_p_values_sorted_indices = np.argsort(sorted_indices)
@@ -803,7 +794,7 @@ def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
       clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, size = (df.shape[0], len(group1)))
   elif not group2 and isinstance(custom_scale, dict):
     gamma = max(gamma, 0.1)
-    for idx, col in enumerate(df.columns):
+    for idx in range(df.shape[1]):
       group_id = group1[idx]
       scale_factor = custom_scale.get(group_id, 1)
       clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma)
@@ -944,7 +935,7 @@ def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.
     alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, size = len(group2i)), axis = 1)
   else:
     gamma = max(gamma, 0.1)
-    for idx, col in enumerate(df.columns):
+    for idx in range(df.shape[1]):
       group_id = group1[idx]
       scale_factor = custom_scale.get(group_id, 1)
       reference_adjusted = reference_values - norm.rvs(loc = np.log2(scale_factor), scale = gamma)

@@ -7,24 +7,24 @@
 Downloads](https://img.shields.io/pypi/dm/glycowork?color=brightgreen.png)[![contributions
 welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/BojarLab/glycowork/issues)[![DOI](https://zenodo.org/badge/327716604.svg)](https://zenodo.org/doi/10.5281/zenodo.10039202)
 
-<img src="./glycowork_badge_wo_bg.jpg" width="200" />
+<img src="./glycowork_badge_wo_bg.jpg" width="200" alt="glycowork logo" />
 
 Glycans are fundamental biological sequences that are as crucial as DNA,
 RNA, and proteins. As complex carbohydrates forming branched structures,
 glycans are ubiquitous yet often overlooked in biological research.
 
-### Why Glycans are Important
+## Why Glycans are Important
 
 - Ubiquitous in biology
 - Integral to protein and lipid function
 - Relevant to human diseases
 
-### Challenges in Glycan Analysis
+## Challenges in Glycan Analysis
 
 Analyzing glycans is complicated due to their non-linear structures and
 enormous diversity. But that’s where `glycowork` comes in.
 
-### Introducing glycowork: Your Solution for Glycan-Focused Data Science
+## Introducing glycowork: Your Solution for Glycan-Focused Data Science
 
 Glycowork is a Python package specifically designed to simplify glycan
 sequence processing and analysis. It offers:
@@ -35,7 +35,7 @@ sequence processing and analysis. It offers:
   for IUPAC-extended, LinearCode, Oxford, GlycoCT, and WURCS.
 - Powerful graph-based architecture for in-depth analysis
 
-**Documentation:** https://bojarlab.github.io/glycowork/
+**Documentation:** <https://bojarlab.github.io/glycowork/>
 
 **Contribute:** Interested in contributing? Read our [Contribution
 Guidelines](https://github.com/BojarLab/glycowork/blob/master/CONTRIBUTING.md)

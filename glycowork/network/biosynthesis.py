@@ -19,7 +19,7 @@ from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_g
 from glycowork.motif.tokenization import get_stem_lib
 from glycowork.motif.regex import get_match
 
-this_dir, this_filename = os.path.split(__file__) 
+this_dir, this_filename = os.path.split(__file__)
 data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
 
 def __getattr__(name):
@@ -204,7 +204,7 @@ def find_shared_virtuals(glycan_a, glycan_b, graph_dic, min_size = 1):
   ggraph_nb_a, glycans_a = get_virtual_nodes(glycan_a, graph_dic, min_size = min_size)
   if not ggraph_nb_a:
     return []
-  ggraph_nb_b, glycans_b = get_virtual_nodes(glycan_b, graph_dic, min_size = min_size)
+  ggraph_nb_b, _ = get_virtual_nodes(glycan_b, graph_dic, min_size = min_size)
   out = set()
   # Check whether any of the nodes of glycan_a and glycan_b are the same
   for k, graph_a in enumerate(ggraph_nb_a):
@@ -481,7 +481,6 @@ def update_network(network_in, edge_list, edge_labels = None, node_labels = None
   if node_labels:
     nx.set_node_attributes(network, node_labels, 'virtual')
   else:
-    default_virtual = {'virtual': 1}
     for node in network.nodes:
       network.nodes[node].setdefault('virtual', 1)
   return network
@@ -914,7 +913,7 @@ def retrieve_inferred_nodes(network, species = None):
   return {species: inferred_nodes} if species is not None else inferred_nodes
 
 
-def export_network(network, filepath, other_node_attributes = []):
+def export_network(network, filepath, other_node_attributes = None):
   """converts NetworkX network into files usable, e.g., by Cytoscape or Gephi\n
   | Arguments:
   | :-
@@ -936,7 +935,7 @@ def export_network(network, filepath, other_node_attributes = []):
 
   # Generate node_labels
   node_labels_dict = {'Id': list(network.nodes()), 'Virtual': list(nx.get_node_attributes(network, 'virtual').values())}
-  if other_node_attributes:
+  if other_node_attributes is not None:
     for att in other_node_attributes:
       node_labels_dict[att] = list(nx.get_node_attributes(network, att).values())
   node_labels_df = pd.DataFrame(node_labels_dict)
@@ -1051,7 +1050,7 @@ def find_diamonds(network, nb_intermediates = 2):
         # Filter out non-diamond shapes with any cross-connections
         if nb_intermediates > 2:
           graph_dic = {k: glycan_to_nxGraph(k) for k in d.values()}
-          _, virtual_nodes = create_adjacency_matrix(list(d.values()), graph_dic)
+          adj_matrix, _ = create_adjacency_matrix(list(d.values()), graph_dic)
           if all(deg == 2 for _, deg in adj_matrix.degree()):
             final_matchings.append(d)
         else:
@@ -1255,7 +1254,7 @@ def estimate_weights(network, root = "Gal(b1-4)Glc-ol", root_default = 10):
   return net_estimated
 
 
-def get_maximum_flow(network, source = "Gal(b1-4)Glc-ol", sinks = []):
+def get_maximum_flow(network, source = "Gal(b1-4)Glc-ol", sinks = None):
   """estimate maximum flow and flow paths between source and sinks\n
   | Arguments:
   | :-
@@ -1266,7 +1265,7 @@ def get_maximum_flow(network, source = "Gal(b1-4)Glc-ol", sinks = []):
   | :-
   | Returns a dictionary of type sink : {maximum flow value, flow path dictionary}
   """
-  if not sinks:
+  if sinks is None:
     sinks = [node for node, out_degree in network.out_degree() if out_degree == 0]
     sinks = [node for node in sinks if node in network.nodes() and nx.has_path(network, source, node)]
   # Dictionary to store flow values and paths for each sink
@@ -1400,7 +1399,7 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
     significance = [p < alpha for p in corrpvals]
   else:
     corrpvals, significance = [], []
-  effect_sizes, variances = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
+  effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
   out = pd.DataFrame(list(zip(features, mean_abundance, log2fc, pvals, corrpvals, significance, effect_sizes)),
                      columns = ['Feature', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'Effect size'])
   return out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
