@@ -1,3 +1,4 @@
+import os
 import numpy as np
 try:
     import torch
@@ -266,23 +267,18 @@ class LectinOracle_flex(torch.nn.Module):
     # Fully connected part for the protein
     embedded_prot = self.dp_prot1(self.act_prot1(self.bn_prot1(self.prot_encoder1(prot))))
     embedded_prot = self.dp_prot2(self.act_prot2(self.bn_prot2(self.prot_encoder2(embedded_prot))))
-
     # Getting glycan node features
     x = self.item_embedding(nodes)
     x = x.squeeze(1)
-
     # Glycan graph convolution operations
     x = F.leaky_relu(self.conv1(x, edge_index))
     x = F.leaky_relu(self.conv2(x, edge_index))
     x = F.leaky_relu(self.conv3(x, edge_index))
     x = gap(x, batch)
-
     # Combining results from protein and glycan
     h_n = torch.cat((embedded_prot, x), 1)
-
     # Fully connected part
     h_n = self.act1_n(self.bn1_n(self.fc1_n(h_n)))
-
     x1 = self.fc2_n(self.dp1(h_n))
     x2 = self.fc2_n(self.dp1(h_n))
     x3 = self.fc2_n(self.dp1(h_n))
@@ -291,9 +287,7 @@ class LectinOracle_flex(torch.nn.Module):
     x6 = self.fc2_n(self.dp1(h_n))
     x7 = self.fc2_n(self.dp1(h_n))
     x8 = self.fc2_n(self.dp1(h_n))
-
     out = self.sigmoid(torch.mean(torch.stack([x1, x2, x3, x4, x5, x6, x7, x8]), dim = 0))
-
     if inference:
       return out, embedded_prot, x
     else:
@@ -337,28 +331,32 @@ def prep_model(model_type, num_classes, libr = None,
       model = SweetNet(len(libr), num_classes = num_classes)
       model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
       if trained:
-        download_model("https://drive.google.com/file/d/1V4mMywfFW8tSmjLGbmKH_D8XbLoJnqqs/view?usp=sharing", local_path = "SweetNet.pt")
+        if not os.path.exists("SweetNet.pt"):
+          download_model("https://drive.google.com/file/d/1V4mMywfFW8tSmjLGbmKH_D8XbLoJnqqs/view?usp=sharing", local_path = "SweetNet.pt")
         model.load_state_dict(torch.load("SweetNet.pt", map_location = device))
       model = model.to(device)
     elif model_type == 'LectinOracle':
       model = LectinOracle(len(libr), num_classes = num_classes)
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
-        download_model("https://drive.google.com/file/d/1kBKtO7BZCpHuIvF_rNiG7FYfi-eGnWO6/view?usp=sharing", local_path = "LectinOracle.pt")
+        if not os.path.exists("LectinOracle.pt"):
+          download_model("https://drive.google.com/file/d/1kBKtO7BZCpHuIvF_rNiG7FYfi-eGnWO6/view?usp=sharing", local_path = "LectinOracle.pt")
         model.load_state_dict(torch.load("LectinOracle.pt", map_location = device))
       model = model.to(device)
     elif model_type == 'LectinOracle_flex':
       model = LectinOracle_flex(len(libr), num_classes = num_classes)
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
-        download_model("https://drive.google.com/file/d/1Z7by3RtGkYnujQ4ypsOir6ss8c5dxQA_/view?usp=sharing", local_path = "LectinOracle_flex.pt")
+        if not os.path.exists("LectinOracle_flex.pt"):
+          download_model("https://drive.google.com/file/d/1Z7by3RtGkYnujQ4ypsOir6ss8c5dxQA_/view?usp=sharing", local_path = "LectinOracle_flex.pt")
         model.load_state_dict(torch.load("LectinOracle_flex.pt", map_location = device))
       model = model.to(device)
     elif model_type == 'NSequonPred':
       model = NSequonPred()
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
-        download_model("https://drive.google.com/file/d/1hb0f0zZfTfaAscyvtiEU9hZHfyE2_NtD/view?usp=sharing", local_path = "NSequonPred.pt")
+        if not os.path.exists("NSequonPred.pt"):
+          download_model("https://drive.google.com/file/d/1hb0f0zZfTfaAscyvtiEU9hZHfyE2_NtD/view?usp=sharing", local_path = "NSequonPred.pt")
         model.load_state_dict(torch.load("NSequonPred.pt", map_location = device))
       model = model.to(device)
     else:

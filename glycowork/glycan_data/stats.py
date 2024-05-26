@@ -942,7 +942,7 @@ def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.
     for idx in range(df.shape[1]):
       group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
-      reference_adjusted = reference_values - norm.rvs(loc = np.log2(scale_factor), scale = gamma)
+      reference_adjusted = reference_values[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma)
       alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted
   alr_transformed = pd.DataFrame(alr_transformed, index = df.index, columns = df.columns)
   alr_transformed = alr_transformed.drop(index = reference_values.name)

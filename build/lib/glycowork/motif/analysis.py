@@ -1,3 +1,4 @@
+import os
 import pickle
 import pandas as pd
 import numpy as np
@@ -247,7 +248,8 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
-      download_model("https://drive.google.com/file/d/1DPeaj9steysrwOJ_v5y5fjd-9snI0BES/view?usp=sharing", local_path = 'glycan_representations.pkl')
+      if not os.path.exists('glycan_representations.pkl'):
+          download_model("https://drive.google.com/file/d/1DPeaj9steysrwOJ_v5y5fjd-9snI0BES/view?usp=sharing", local_path = 'glycan_representations.pkl')
       emb = pickle.load(open('glycan_representations.pkl', 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
     if isinstance(emb, pd.DataFrame):
@@ -762,7 +764,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed =
 
 
 def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'],
-                  min_samples = 0.1, posthoc = True, custom_motifs = [], transform = None, gamma = 0.1):
+                  min_samples = 0.1, posthoc = True, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0):
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
@@ -778,7 +780,8 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True
     | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
     | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
+    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+    | custom_scale (dict): dictionary of type group_idx : mean(group)/min(mean(groups)) for an informed scale model\n
     | Returns:
     | :-
     | (i) a pandas DataFrame with an F statistic, corrected p-value, and indication of its significance for each glycan.
@@ -796,9 +799,9 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     if transform is None:
       transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
     if transform == "ALR":
-      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma)
+      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma, custom_scale = custom_scale)
     elif transform == "CLR":
-      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma)
+      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma, custom_scale = custom_scale)
     elif transform == "Nothing":
       pass
     else:
@@ -954,7 +957,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
     | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
     | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-    | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+    | custom_scale (dict): dictionary of type timepoint : mean(timepoint)/min(mean(timepoints)) for an informed scale model\n
     | Returns:
     | :-
     | Returns a dataframe with:
@@ -1067,7 +1070,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
 
 
 def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = False, feature_set = ['exhaustive', 'known'],
-                     custom_motifs = [], paired = False, permutations = 999, transform = None, gamma = 0.1):
+                     custom_motifs = [], paired = False, permutations = 999, transform = None, gamma = 0.1, custom_scale = 0):
   """Calculates diversity indices from glycomics data, similar to alpha/beta diversity etc in microbiome data\n
   | Arguments:
   | :-
@@ -1084,7 +1087,8 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
   | permutations (int): number of permutations to perform in ANOSIM and PERMANOVA statistical test; default:999
   | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -1157,9 +1161,9 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
     if transform is None:
       transform = "ALR" if enforce_class(df_org.iloc[0, 0], "N") and len(df_org) > 50 else "CLR"
     if transform == "ALR":
-      df_org = get_additive_logratio_transformation(df_org, group1, group2, paired = paired, gamma = gamma)
+      df_org = get_additive_logratio_transformation(df_org, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
     elif transform == "CLR":
-      df_org.iloc[:, 1:] = clr_transformation(df_org.iloc[:, 1:], group1, group2, gamma = gamma)
+      df_org.iloc[:, 1:] = clr_transformation(df_org.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
     elif transform == "Nothing":
       pass
     else:

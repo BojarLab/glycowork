@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.361">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>glycowork - network</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 20,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" integrity="sha512-c3Nl8+7g4LMSTdrm621y7kf9v3SDPnhxLNhcjFJbKECVnmZHTdo+IRO05sNLTH/D3vA6u1X32ehoLC7WFVdheg==" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="glycowork - network">
+<meta property="og:description" content="">
+<meta property="og:image" content="https://BojarLab.github.io/glycowork/04_network_files/figure-html/cell-5-output-1.png">
+<meta property="og:site-name" content="glycowork">
+<meta property="og:image:height" content="1252">
+<meta property="og:image:width" content="1260">
+<meta name="twitter:title" content="glycowork - network">
+<meta name="twitter:description" content="">
+<meta name="twitter:image" content="https://BojarLab.github.io/glycowork/04_network_files/figure-html/cell-5-output-1.png">
+<meta name="twitter:image-height" content="1252">
+<meta name="twitter:image-width" content="1260">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="nav-sidebar floating nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark ">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">glycowork</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools ms-auto">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./network.html">network</a></li></ol></nav>
+      <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+      </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">glycowork</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Overview</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./glycan_data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">glycan_data</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./ml.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ml</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./motif.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">motif</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./network.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">network</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./examples.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Examples</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#biosynthesis" id="toc-biosynthesis" class="nav-link active" data-scroll-target="#biosynthesis">biosynthesis</a>
+  <ul class="collapse">
+  <li><a href="#construct_network" id="toc-construct_network" class="nav-link" data-scroll-target="#construct_network">construct_network</a></li>
+  <li><a href="#plot_network" id="toc-plot_network" class="nav-link" data-scroll-target="#plot_network">plot_network</a></li>
+  <li><a href="#infer_network" id="toc-infer_network" class="nav-link" data-scroll-target="#infer_network">infer_network</a></li>
+  <li><a href="#retrieve_inferred_nodes" id="toc-retrieve_inferred_nodes" class="nav-link" data-scroll-target="#retrieve_inferred_nodes">retrieve_inferred_nodes</a></li>
+  <li><a href="#update_network" id="toc-update_network" class="nav-link" data-scroll-target="#update_network">update_network</a></li>
+  <li><a href="#trace_diamonds" id="toc-trace_diamonds" class="nav-link" data-scroll-target="#trace_diamonds">trace_diamonds</a></li>
+  <li><a href="#evoprune_network" id="toc-evoprune_network" class="nav-link" data-scroll-target="#evoprune_network">evoprune_network</a></li>
+  <li><a href="#highlight_network" id="toc-highlight_network" class="nav-link" data-scroll-target="#highlight_network">highlight_network</a></li>
+  <li><a href="#export_network" id="toc-export_network" class="nav-link" data-scroll-target="#export_network">export_network</a></li>
+  <li><a href="#get_maximum_flow" id="toc-get_maximum_flow" class="nav-link" data-scroll-target="#get_maximum_flow">get_maximum_flow</a></li>
+  <li><a href="#get_max_flow_path" id="toc-get_max_flow_path" class="nav-link" data-scroll-target="#get_max_flow_path">get_max_flow_path</a></li>
+  <li><a href="#get_reaction_flow" id="toc-get_reaction_flow" class="nav-link" data-scroll-target="#get_reaction_flow">get_reaction_flow</a></li>
+  <li><a href="#get_differential_biosynthesis" id="toc-get_differential_biosynthesis" class="nav-link" data-scroll-target="#get_differential_biosynthesis">get_differential_biosynthesis</a></li>
+  </ul></li>
+  <li><a href="#evolution" id="toc-evolution" class="nav-link" data-scroll-target="#evolution">evolution</a>
+  <ul class="collapse">
+  <li><a href="#distance_from_embeddings" id="toc-distance_from_embeddings" class="nav-link" data-scroll-target="#distance_from_embeddings">distance_from_embeddings</a></li>
+  <li><a href="#distance_from_metric" id="toc-distance_from_metric" class="nav-link" data-scroll-target="#distance_from_metric">distance_from_metric</a></li>
+  <li><a href="#dendrogram_from_distance" id="toc-dendrogram_from_distance" class="nav-link" data-scroll-target="#dendrogram_from_distance">dendrogram_from_distance</a></li>
+  <li><a href="#check_conservation" id="toc-check_conservation" class="nav-link" data-scroll-target="#check_conservation">check_conservation</a></li>
+  <li><a href="#get_communities" id="toc-get_communities" class="nav-link" data-scroll-target="#get_communities">get_communities</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><div><i class="bi bi-github"></i></div><div class="action-links"><p><a href="https://github.com/BojarLab/glycowork/tree/master/issues/new" class="toc-action">Report an issue</a></p></div></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">network</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<p><code>network</code> contains functions to arrange and analyze glycans in the context of networks. In such a network, each node represents a glycan and edges represent, for instance, their connection via a biosynthetic step. It should be noted, since <code>glycowork</code> treats glycans as molecular graphs, that these networks represent hierarchical graphs, with the network being one graph and each node within the network also a graph. <code>network</code> contains the following modules:</p>
+<ul>
+<li><code>biosynthesis</code> contains functions to construct and analyze biosynthetic glycan networks</li>
+<li><code>evolution</code> contains functions to compare (taxonomic) groups as to their glycan repertoires</li>
+</ul>
+<section id="biosynthesis" class="level2">
+<h2 class="anchored" data-anchor-id="biosynthesis">biosynthesis</h2>
+<blockquote class="blockquote">
+<p>constructing and analyzing biosynthetic glycan networks</p>
+</blockquote>
+<hr>
+<section id="construct_network" class="level3">
+<h3 class="anchored" data-anchor-id="construct_network">construct_network</h3>
+<blockquote class="blockquote">
+<pre><code> construct_network (glycans, allowed_ptms={'9Ac', 'OAc', '1P', '4Ac',
+                    '6S', 'OS', '3P', 'OP', '6P', '3S'},
+                    edge_type='monolink', permitted_roots=None,
+                    abundances=[])</code></pre>
+</blockquote>
+<p>construct a glycan biosynthetic network</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">glycans (list): list of glycans in IUPAC-condensed format</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">allowed_ptms (set): list of PTMs to consider</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">edge_type (string): indicates whether edges represent monosaccharides (‘monosaccharide’), monosaccharide(linkage) (‘monolink’), or enzyme catalyzing the reaction (‘enzyme’); default:‘monolink’</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">permitted_roots (set): which nodes should be considered as roots; default:will be inferred</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">abundances (list): optional list of abundances, in the same order as glycans; default:empty list</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a networkx object of the network</td>
+</tr>
+</tbody>
+</table>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>glycans <span class="op">=</span> [<span class="st">"Gal(b1-4)Glc-ol"</span>, <span class="st">"GlcNAc(b1-3)Gal(b1-4)Glc-ol"</span>,</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>           <span class="st">"GlcNAc6S(b1-3)Gal(b1-4)Glc-ol"</span>,</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"</span>, <span class="st">"Fuc(a1-2)Gal(b1-4)Glc-ol"</span>,</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>          <span class="st">"Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol"</span>]</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>network <span class="op">=</span> construct_network(glycans)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>network.nodes()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<pre><code>NodeView(('Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol', 'GlcNAc6S(b1-3)Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol', 'Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol', 'Gal(b1-3)GlcNAc(b1-6)[GlcNAc(b1-3)]Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol', 'Gal(b1-3)GlcNAc(b1-6)Gal(b1-4)Glc-ol', 'GlcNAc(b1-6)Gal(b1-4)Glc-ol'))</code></pre>
+</div>
+</div>
+<hr>
+</section>
+<section id="plot_network" class="level3">
+<h3 class="anchored" data-anchor-id="plot_network">plot_network</h3>
+<blockquote class="blockquote">
+<pre><code> plot_network (network, plot_format='pydot2', edge_label_draw=True,
+               lfc_dict=None)</code></pre>
+</blockquote>
+<p>visualizes biosynthetic network</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">plot_format (string): how to layout network, either ‘pydot2’, ‘kamada_kawai’, or ‘spring’; default:‘pydot2’</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">edge_label_draw (bool): draws edge labels if True; default:True</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">lfc_dict (dict): dictionary of enzyme:log2-fold-change to scale edge width; default:None</td>
+</tr>
+</tbody>
+</table>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>plot_network(network, plot_format <span class="op">=</span> <span class="st">'kamada_kawai'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+<p><img src="04_network_files/figure-html/cell-5-output-1.png" class="img-fluid"></p>
+</div>
+</div>
+<hr>
+</section>
+<section id="infer_network" class="level3">
+<h3 class="anchored" data-anchor-id="infer_network">infer_network</h3>
+<blockquote class="blockquote">
+<pre><code> infer_network (network, network_species, species_list, network_dic)</code></pre>
+</blockquote>
+<p>replaces virtual nodes if they are observed in other species</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network that should be inferred</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">network_species (string): species from which the network stems</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">species_list (list): list of species to compare network to</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns network with filled in virtual nodes</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="retrieve_inferred_nodes" class="level3">
+<h3 class="anchored" data-anchor-id="retrieve_inferred_nodes">retrieve_inferred_nodes</h3>
+<blockquote class="blockquote">
+<pre><code> retrieve_inferred_nodes (network, species=None)</code></pre>
+</blockquote>
+<p>returns the inferred virtual nodes of a network that has been used with infer_network</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network with inferred virtual nodes</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">species (string): species from which the network stems (only relevant if multiple species in network); default:None</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns inferred nodes as list or dictionary (if species argument is used)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="update_network" class="level3">
+<h3 class="anchored" data-anchor-id="update_network">update_network</h3>
+<blockquote class="blockquote">
+<pre><code> update_network (network_in, edge_list, edge_labels=None,
+                 node_labels=None)</code></pre>
+</blockquote>
+<p>updates a network with new edges and their labels</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): network that should be modified</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">edge_list (list): list of edges as node tuples</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">edge_labels (list): list of edge labels as strings</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">node_labels (dict): dictionary of form node:0 or 1 depending on whether the node is observed or virtual</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns network with added edges</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="trace_diamonds" class="level3">
+<h3 class="anchored" data-anchor-id="trace_diamonds">trace_diamonds</h3>
+<blockquote class="blockquote">
+<pre><code> trace_diamonds (network, species_list, network_dic, threshold=0.0,
+                 nb_intermediates=2)</code></pre>
+</blockquote>
+<p>extracts diamond-shape motifs from biosynthetic networks (A-&gt;B,A-&gt;C,B-&gt;D,C-&gt;D) and uses evolutionary information to determine which path is taken from A to D</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">species_list (list): list of species to compare network to</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">threshold (float): everything below or equal to that threshold will be cut; default:0.</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,…)</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns dataframe of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="evoprune_network" class="level3">
+<h3 class="anchored" data-anchor-id="evoprune_network">evoprune_network</h3>
+<blockquote class="blockquote">
+<pre><code> evoprune_network (network, network_dic=None, species_list=None,
+                   node_attr='abundance', threshold=0.01,
+                   nb_intermediates=2)</code></pre>
+</blockquote>
+<p>given a biosynthetic network, this function uses evolutionary relationships to prune impossible paths</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">species_list (list): list of species to compare network to; default:species from pre-computed milk networks</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">node_attr (string): which (numerical) node attribute to use for pruning; default:‘abundance’</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">threshold (float): everything below or equal to that threshold will be cut; default:0.01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,…)</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns pruned network (with virtual node probability as a new node attribute)</td>
+</tr>
+</tbody>
+</table>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>plot_network(evoprune_network(network), plot_format <span class="op">=</span> <span class="st">'kamada_kawai'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-display">
+
+
+<style>
+
+</style>
+
+<div id="fig_el530014343552286247751210606"></div>
+<script>
+function mpld3_load_lib(url, callback){
+  var s = document.createElement('script');
+  s.src = url;
+  s.async = true;
+  s.onreadystatechange = s.onload = callback;
+  s.onerror = function(){console.warn("failed to load library " + url);};
+  document.getElementsByTagName("head")[0].appendChild(s);
+}
+
+if(typeof(mpld3) !== "undefined" && mpld3._mpld3IsLoaded){
+   // already loaded: just create the figure
+   !function(mpld3){
+       
+       mpld3.draw_figure("fig_el530014343552286247751210606", {"width": 1600.0, "height": 1600.0, "axes": [{"bbox": [0.125, 0.10999999999999999, 0.775, 0.77], "xlim": [-1.1931907571826452, 1.0331027303506957], "ylim": [-1.0124121476063672, 1.1427502562118468], "xdomain": [-1.1931907571826452, 1.0331027303506957], "ydomain": [-1.0124121476063672, 1.1427502562118468], "xscale": "linear", "yscale": "linear", "axes": [{"position": "top", "nticks": 11, "tickvalues": null, "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}, {"position": "right", "nticks": 11, "tickvalues": null, "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}], "axesbg": "#FFFFFF", "axesbgalpha": null, "zoomable": true, "id": "el53001434356096912", "lines": [], "paths": [{"data": "data01", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434440400720", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data02", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434377324432", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data03", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434440394064", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data04", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356094416", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data05", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434355556176", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data06", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434228266320", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data07", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356102288", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data08", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356104592", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data09", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356096656", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data10", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434355037136", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data11", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356096080", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data12", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356030544", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data13", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356101264", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data14", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356099984", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data15", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434440439056", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data16", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434199176272", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}], "markers": [], "texts": [{"text": "GlcNAc(b1-6)", "position": [-0.12264713209579958, -0.11915996899427836], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -35.477118434306696, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434438922192"}, {"text": "Neu5Ac(a2-3)", "position": [-0.11537284861286162, -0.1284186383581243], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -38.49078901091788, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434439641808"}, {"text": "Gal(b1-4)", "position": [0.2343759038256394, 0.15570884306347793], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -41.14720318571136, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440594320"}, {"text": "6S", "position": [0.6229884527525555, 0.2409476905600418], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -343.91772216670006, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440616848"}, {"text": "GlcNAc(b1-6)", "position": [0.22411078856702424, 0.16872897741197754], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -36.909065957899564, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440621456"}, {"text": "GlcNAc6S(b1-3)", "position": [0.7846770994736905, 0.39840432759655997], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -283.8433920266238, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440625552"}, {"text": "GlcNAc(b1-3)", "position": [0.5677535790581957, 0.4593383756186099], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -44.98501831782082, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440629456"}, {"text": "Fuc(a1-2)", "position": [0.5810184856576415, 0.7862635218711269], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -310.4755061216944, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440666640"}, {"text": "GlcNAc(b1-6)", "position": [0.5635515761441496, 0.4645277265821707], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -43.29096753744571, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440669968"}, {"text": "Neu5Ac(a2-3)", "position": [-0.828023139462515, -0.6798279300187624], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.98159900000477, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440674192"}, {"text": "Gal(b1-3)", "position": [-0.8265291662348899, -0.681651990903933], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.379479623908544, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440677712"}, {"text": "Gal(b1-3)", "position": [-0.48201370921542364, -0.3910589115446498], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.18196632307013, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434439413840"}, {"text": "Neu5Ac(a2-3)", "position": [-0.4805197359877985, -0.3928829724298203], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.78398128530301, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440675920"}, {"text": "GlcNAc(b1-6)", "position": [-0.4732454525048605, -0.4021416417936663], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -37.773620613903255, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440281296"}, {"text": "Gal(b1-4)", "position": [-0.13291224735441473, -0.10613983464577875], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -39.72012706703725, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440279312"}, {"text": "GlcNAc(b1-3)", "position": [0.2199087856529781, 0.17391832837553828], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -38.617405891301196, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440274896"}], "collections": [{"offsets": "data17", "xindex": 0, "yindex": 1, "paths": [[[[0.0, -0.5], [0.13260155, -0.5], [0.25978993539242673, -0.44731684579412084], [0.3535533905932738, -0.3535533905932738], [0.44731684579412084, -0.25978993539242673], [0.5, -0.13260155], [0.5, 0.0], [0.5, 0.13260155], [0.44731684579412084, 0.25978993539242673], [0.3535533905932738, 0.3535533905932738], [0.25978993539242673, 0.44731684579412084], [0.13260155, 0.5], [0.0, 0.5], [-0.13260155, 0.5], [-0.25978993539242673, 0.44731684579412084], [-0.3535533905932738, 0.3535533905932738], [-0.44731684579412084, 0.25978993539242673], [-0.5, 0.13260155], [-0.5, 0.0], [-0.5, -0.13260155], [-0.44731684579412084, -0.25978993539242673], [-0.3535533905932738, -0.3535533905932738], [-0.25978993539242673, -0.44731684579412084], [-0.13260155, -0.5], [0.0, -0.5]], ["M", "C", "C", "C", "C", "C", "C", "C", "C", "Z"]]], "pathtransforms": [[9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [1.9641855032959654, 0.0, 0.0, 1.9641855032959654, 0.0, 0.0], [1.9641855032959654, 0.0, 0.0, 1.9641855032959654, 0.0, 0.0], [11.620278146306605, 0.0, 0.0, 11.620278146306605, 0.0, 0.0], [10.75828707279838, 0.0, 0.0, 10.75828707279838, 0.0, 0.0], [1.9641855032959654, 0.0, 0.0, 1.9641855032959654, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0]], "alphas": [0.7], "edgecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "facecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "edgewidths": [1.0], "offsetcoordinates": "data", "pathcoordinates": "display", "zorder": 2, "id": "el53001434192422096"}], "images": [], "sharex": [], "sharey": []}], "data": {"data01": [[0.045102542152665626, -0.002674611675112404], [-0.12264399364869072, -0.11915778965691404], [-0.2881201788173997, -0.23406443638243446], [-0.27710305573984173, -0.2323811617898115], [-0.2881201788173997, -0.23406443638243446], [-0.28289199518340635, -0.2244669715904215]], "data02": [[0.045781852086155705, -0.003561486437807737], [-0.1153755380192194, -0.12842072201821386], [-0.27435078547527736, -0.25158930808547697], [-0.2634397267690689, -0.24934400998763118], [-0.27435078547527736, -0.25158930808547697], [-0.26964770241996905, -0.24173730302327345]], "data03": [[0.38980666038055056, 0.2880397435017008], [0.23437534710123709, 0.15570836907851482], [0.08104341186205866, 0.025164366682390193], [0.09183594288000552, 0.027899963884555623], [0.08104341186205866, 0.025164366682390193], [0.08527280727038655, 0.03521816261171451]], "data04": [[0.4268185711463439, 0.29605201932705283], [0.6229931836405544, 0.2409463616485623], [0.8164889636124455, 0.18659319087995319], [0.80828642709979, 0.193954426246141], [0.8164889636124455, 0.18659319087995319], [0.8055233349403288, 0.1846163135383183]], "data05": [[0.38880127776610607, 0.28924831773010573], [0.22411386977950354, 0.1687312322215735], [0.06165566880858564, 0.04984546471002704], [0.07262617901517476, 0.05179646134503435], [0.06165566880858564, 0.04984546471002704], [0.06663606555556512, 0.059567229464392524]], "data06": [[0.7346086957461644, 0.5963675392144385], [0.7846774026569419, 0.39840312885392826], [0.8340790426168008, 0.20307620453524255], [0.8365348260093315, 0.21367502212097378], [0.8340790426168008, 0.20307620453524255], [0.8268501166713254, 0.21134970080303628]], "data07": [[0.714170425193335, 0.6019229334428475], [0.567754967784134, 0.45933972799628475], [0.42331139623352443, 0.31867679662096804], [0.4338918019969924, 0.3221100904252565], [0.42331139623352443, 0.31867679662096804], [0.4268406571058274, 0.32898386556463777]], "data08": [[0.715423320881972, 0.6328016360689319], [0.5810197604527612, 0.7862620663248086], [0.4484259150078733, 0.9376561849498928], [0.45110685462221634, 0.9271092909794603], [0.4484259150078733, 0.9376561849498928], [0.45869424171303796, 0.9334177564590487]], "data09": [[0.7137229122076376, 0.6023666092354345], [0.563550546764553, 0.464526781737854], [0.41540746864993006, 0.3285495913138321], [0.4260874201507088, 0.33167662915138485], [0.41540746864993006, 0.3285495913138321], [0.4192479152685782, 0.3387504994407222]], "data10": [[-0.6723528007051195, -0.5480642306034303], [-0.8280247164162455, -0.679829264796209], [-0.981591960676444, -0.8098128466028642], [-0.970791359680629, -0.8071076542730763], [-0.981591960676444, -0.8098128466028642], [-0.9773327586816143, -0.7997710033036882]], "data11": [[-0.6695065099755233, -0.5515393983585668], [-0.8265257139572605, -0.6816491302671095], [-0.9814211487120609, -0.8099990580386723], [-0.9705919670489495, -0.8074046032028201], [-0.9814211487120609, -0.8099990580386723], [-0.9770538748233242, -0.8000013795069332]], "data12": [[-0.324482579755077, -0.26143412655566456], [-0.4820153050191214, -0.3910602246547117], [-0.6374180473955385, -0.5189336623444497], [-0.6265797507593248, -0.5163755957512851], [-0.6374180473955385, -0.5189336623444497], [-0.633015427143284, -0.508950711924212]], "data13": [[-0.3243303931092274, -0.26159822881995987], [-0.4805208066190323, -0.39288387234747424], [-0.6346002549923956, -0.5223951469481497], [-0.6237901420668037, -0.519726266717142], [-0.6346002549923956, -0.5223951469481497], [-0.6303055309796995, -0.5123676766589201]], "data14": [[-0.3105040407275288, -0.2792631030130588], [-0.47324816839081096, -0.40214369243396364], [-0.6337886057268574, -0.523360376863641], [-0.622849557939945, -0.5212483192824988], [-0.6337886057268574, -0.523360376863641], [-0.6289593291199841, -0.5135664995056294]], "data15": [[0.025546257049834598, 0.022130317736929417], [-0.1329143719610153, -0.10614155448791252], [-0.2892305877902308, -0.232677551401967], [-0.27837148076196794, -0.23020468820415085], [-0.2892305877902308, -0.232677551401967], [-0.28474552315135404, -0.22272950197454966]], "data16": [[0.38078510527474685, 0.2991262147142959], [0.21990610089234197, 0.17391623886226903], [0.061205399287657114, 0.05040160690700346], [0.07211133881585652, 0.052670392825258094], [0.061205399287657114, 0.05040160690700346], [0.06588612563644092, 0.06026371442361733]], "data17": [[-1.0, -0.8253939224816462], [0.06268687531421795, 0.009535947544864079], [0.8399119731680503, 0.18001364253799185], [0.4060649323370608, 0.3018817385820918], [0.43259474553595223, 0.9557320310871258], [0.7294422257793306, 0.616795012655128], [-0.6560462789250301, -0.5342619375558787], [-0.6530583324697798, -0.5379100593262198], [-0.3079811395058171, -0.2478558855334208], [-0.2934325725399412, -0.2663732242611127], [0.04215664479698767, 0.03557621624186329], [0.39766092650896856, 0.31226044050921326]]}, "id": "el53001434355228624", "plugins": [{"type": "reset"}, {"type": "zoom", "button": true, "enabled": false}, {"type": "boxzoom", "button": true, "enabled": false}, {"type": "tooltip", "id": "el53001434192422096", "labels": ["Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc6S(b1-3)Gal(b1-4)Glc-ol", "GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "GlcNAc(b1-6)Gal(b1-4)Glc-ol"], "hoffset": 0, "voffset": 10, "location": "mouse"}]});
+   }(mpld3);
+}else if(typeof define === "function" && define.amd){
+   // require.js is available: use it to load d3/mpld3
+   require.config({paths: {d3: "https://d3js.org/d3.v5"}});
+   require(["d3"], function(d3){
+      window.d3 = d3;
+      mpld3_load_lib("https://mpld3.github.io/js/mpld3.v0.5.9.js", function(){
+         
+         mpld3.draw_figure("fig_el530014343552286247751210606", {"width": 1600.0, "height": 1600.0, "axes": [{"bbox": [0.125, 0.10999999999999999, 0.775, 0.77], "xlim": [-1.1931907571826452, 1.0331027303506957], "ylim": [-1.0124121476063672, 1.1427502562118468], "xdomain": [-1.1931907571826452, 1.0331027303506957], "ydomain": [-1.0124121476063672, 1.1427502562118468], "xscale": "linear", "yscale": "linear", "axes": [{"position": "top", "nticks": 11, "tickvalues": null, "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}, {"position": "right", "nticks": 11, "tickvalues": null, "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}], "axesbg": "#FFFFFF", "axesbgalpha": null, "zoomable": true, "id": "el53001434356096912", "lines": [], "paths": [{"data": "data01", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434440400720", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data02", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434377324432", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data03", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434440394064", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data04", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356094416", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data05", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434355556176", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data06", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434228266320", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data07", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356102288", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data08", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356104592", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data09", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356096656", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data10", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434355037136", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data11", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356096080", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data12", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356030544", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data13", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356101264", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data14", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356099984", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data15", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434440439056", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data16", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434199176272", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}], "markers": [], "texts": [{"text": "GlcNAc(b1-6)", "position": [-0.12264713209579958, -0.11915996899427836], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -35.477118434306696, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434438922192"}, {"text": "Neu5Ac(a2-3)", "position": [-0.11537284861286162, -0.1284186383581243], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -38.49078901091788, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434439641808"}, {"text": "Gal(b1-4)", "position": [0.2343759038256394, 0.15570884306347793], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -41.14720318571136, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440594320"}, {"text": "6S", "position": [0.6229884527525555, 0.2409476905600418], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -343.91772216670006, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440616848"}, {"text": "GlcNAc(b1-6)", "position": [0.22411078856702424, 0.16872897741197754], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -36.909065957899564, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440621456"}, {"text": "GlcNAc6S(b1-3)", "position": [0.7846770994736905, 0.39840432759655997], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -283.8433920266238, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440625552"}, {"text": "GlcNAc(b1-3)", "position": [0.5677535790581957, 0.4593383756186099], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -44.98501831782082, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440629456"}, {"text": "Fuc(a1-2)", "position": [0.5810184856576415, 0.7862635218711269], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -310.4755061216944, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440666640"}, {"text": "GlcNAc(b1-6)", "position": [0.5635515761441496, 0.4645277265821707], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -43.29096753744571, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440669968"}, {"text": "Neu5Ac(a2-3)", "position": [-0.828023139462515, -0.6798279300187624], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.98159900000477, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440674192"}, {"text": "Gal(b1-3)", "position": [-0.8265291662348899, -0.681651990903933], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.379479623908544, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440677712"}, {"text": "Gal(b1-3)", "position": [-0.48201370921542364, -0.3910589115446498], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.18196632307013, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434439413840"}, {"text": "Neu5Ac(a2-3)", "position": [-0.4805197359877985, -0.3928829724298203], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.78398128530301, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440675920"}, {"text": "GlcNAc(b1-6)", "position": [-0.4732454525048605, -0.4021416417936663], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -37.773620613903255, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440281296"}, {"text": "Gal(b1-4)", "position": [-0.13291224735441473, -0.10613983464577875], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -39.72012706703725, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440279312"}, {"text": "GlcNAc(b1-3)", "position": [0.2199087856529781, 0.17391832837553828], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -38.617405891301196, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440274896"}], "collections": [{"offsets": "data17", "xindex": 0, "yindex": 1, "paths": [[[[0.0, -0.5], [0.13260155, -0.5], [0.25978993539242673, -0.44731684579412084], [0.3535533905932738, -0.3535533905932738], [0.44731684579412084, -0.25978993539242673], [0.5, -0.13260155], [0.5, 0.0], [0.5, 0.13260155], [0.44731684579412084, 0.25978993539242673], [0.3535533905932738, 0.3535533905932738], [0.25978993539242673, 0.44731684579412084], [0.13260155, 0.5], [0.0, 0.5], [-0.13260155, 0.5], [-0.25978993539242673, 0.44731684579412084], [-0.3535533905932738, 0.3535533905932738], [-0.44731684579412084, 0.25978993539242673], [-0.5, 0.13260155], [-0.5, 0.0], [-0.5, -0.13260155], [-0.44731684579412084, -0.25978993539242673], [-0.3535533905932738, -0.3535533905932738], [-0.25978993539242673, -0.44731684579412084], [-0.13260155, -0.5], [0.0, -0.5]], ["M", "C", "C", "C", "C", "C", "C", "C", "C", "Z"]]], "pathtransforms": [[9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [1.9641855032959654, 0.0, 0.0, 1.9641855032959654, 0.0, 0.0], [1.9641855032959654, 0.0, 0.0, 1.9641855032959654, 0.0, 0.0], [11.620278146306605, 0.0, 0.0, 11.620278146306605, 0.0, 0.0], [10.75828707279838, 0.0, 0.0, 10.75828707279838, 0.0, 0.0], [1.9641855032959654, 0.0, 0.0, 1.9641855032959654, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0]], "alphas": [0.7], "edgecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "facecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "edgewidths": [1.0], "offsetcoordinates": "data", "pathcoordinates": "display", "zorder": 2, "id": "el53001434192422096"}], "images": [], "sharex": [], "sharey": []}], "data": {"data01": [[0.045102542152665626, -0.002674611675112404], [-0.12264399364869072, -0.11915778965691404], [-0.2881201788173997, -0.23406443638243446], [-0.27710305573984173, -0.2323811617898115], [-0.2881201788173997, -0.23406443638243446], [-0.28289199518340635, -0.2244669715904215]], "data02": [[0.045781852086155705, -0.003561486437807737], [-0.1153755380192194, -0.12842072201821386], [-0.27435078547527736, -0.25158930808547697], [-0.2634397267690689, -0.24934400998763118], [-0.27435078547527736, -0.25158930808547697], [-0.26964770241996905, -0.24173730302327345]], "data03": [[0.38980666038055056, 0.2880397435017008], [0.23437534710123709, 0.15570836907851482], [0.08104341186205866, 0.025164366682390193], [0.09183594288000552, 0.027899963884555623], [0.08104341186205866, 0.025164366682390193], [0.08527280727038655, 0.03521816261171451]], "data04": [[0.4268185711463439, 0.29605201932705283], [0.6229931836405544, 0.2409463616485623], [0.8164889636124455, 0.18659319087995319], [0.80828642709979, 0.193954426246141], [0.8164889636124455, 0.18659319087995319], [0.8055233349403288, 0.1846163135383183]], "data05": [[0.38880127776610607, 0.28924831773010573], [0.22411386977950354, 0.1687312322215735], [0.06165566880858564, 0.04984546471002704], [0.07262617901517476, 0.05179646134503435], [0.06165566880858564, 0.04984546471002704], [0.06663606555556512, 0.059567229464392524]], "data06": [[0.7346086957461644, 0.5963675392144385], [0.7846774026569419, 0.39840312885392826], [0.8340790426168008, 0.20307620453524255], [0.8365348260093315, 0.21367502212097378], [0.8340790426168008, 0.20307620453524255], [0.8268501166713254, 0.21134970080303628]], "data07": [[0.714170425193335, 0.6019229334428475], [0.567754967784134, 0.45933972799628475], [0.42331139623352443, 0.31867679662096804], [0.4338918019969924, 0.3221100904252565], [0.42331139623352443, 0.31867679662096804], [0.4268406571058274, 0.32898386556463777]], "data08": [[0.715423320881972, 0.6328016360689319], [0.5810197604527612, 0.7862620663248086], [0.4484259150078733, 0.9376561849498928], [0.45110685462221634, 0.9271092909794603], [0.4484259150078733, 0.9376561849498928], [0.45869424171303796, 0.9334177564590487]], "data09": [[0.7137229122076376, 0.6023666092354345], [0.563550546764553, 0.464526781737854], [0.41540746864993006, 0.3285495913138321], [0.4260874201507088, 0.33167662915138485], [0.41540746864993006, 0.3285495913138321], [0.4192479152685782, 0.3387504994407222]], "data10": [[-0.6723528007051195, -0.5480642306034303], [-0.8280247164162455, -0.679829264796209], [-0.981591960676444, -0.8098128466028642], [-0.970791359680629, -0.8071076542730763], [-0.981591960676444, -0.8098128466028642], [-0.9773327586816143, -0.7997710033036882]], "data11": [[-0.6695065099755233, -0.5515393983585668], [-0.8265257139572605, -0.6816491302671095], [-0.9814211487120609, -0.8099990580386723], [-0.9705919670489495, -0.8074046032028201], [-0.9814211487120609, -0.8099990580386723], [-0.9770538748233242, -0.8000013795069332]], "data12": [[-0.324482579755077, -0.26143412655566456], [-0.4820153050191214, -0.3910602246547117], [-0.6374180473955385, -0.5189336623444497], [-0.6265797507593248, -0.5163755957512851], [-0.6374180473955385, -0.5189336623444497], [-0.633015427143284, -0.508950711924212]], "data13": [[-0.3243303931092274, -0.26159822881995987], [-0.4805208066190323, -0.39288387234747424], [-0.6346002549923956, -0.5223951469481497], [-0.6237901420668037, -0.519726266717142], [-0.6346002549923956, -0.5223951469481497], [-0.6303055309796995, -0.5123676766589201]], "data14": [[-0.3105040407275288, -0.2792631030130588], [-0.47324816839081096, -0.40214369243396364], [-0.6337886057268574, -0.523360376863641], [-0.622849557939945, -0.5212483192824988], [-0.6337886057268574, -0.523360376863641], [-0.6289593291199841, -0.5135664995056294]], "data15": [[0.025546257049834598, 0.022130317736929417], [-0.1329143719610153, -0.10614155448791252], [-0.2892305877902308, -0.232677551401967], [-0.27837148076196794, -0.23020468820415085], [-0.2892305877902308, -0.232677551401967], [-0.28474552315135404, -0.22272950197454966]], "data16": [[0.38078510527474685, 0.2991262147142959], [0.21990610089234197, 0.17391623886226903], [0.061205399287657114, 0.05040160690700346], [0.07211133881585652, 0.052670392825258094], [0.061205399287657114, 0.05040160690700346], [0.06588612563644092, 0.06026371442361733]], "data17": [[-1.0, -0.8253939224816462], [0.06268687531421795, 0.009535947544864079], [0.8399119731680503, 0.18001364253799185], [0.4060649323370608, 0.3018817385820918], [0.43259474553595223, 0.9557320310871258], [0.7294422257793306, 0.616795012655128], [-0.6560462789250301, -0.5342619375558787], [-0.6530583324697798, -0.5379100593262198], [-0.3079811395058171, -0.2478558855334208], [-0.2934325725399412, -0.2663732242611127], [0.04215664479698767, 0.03557621624186329], [0.39766092650896856, 0.31226044050921326]]}, "id": "el53001434355228624", "plugins": [{"type": "reset"}, {"type": "zoom", "button": true, "enabled": false}, {"type": "boxzoom", "button": true, "enabled": false}, {"type": "tooltip", "id": "el53001434192422096", "labels": ["Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc6S(b1-3)Gal(b1-4)Glc-ol", "GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "GlcNAc(b1-6)Gal(b1-4)Glc-ol"], "hoffset": 0, "voffset": 10, "location": "mouse"}]});
+      });
+    });
+}else{
+    // require.js not available: dynamically load d3 & mpld3
+    mpld3_load_lib("https://d3js.org/d3.v5.js", function(){
+         mpld3_load_lib("https://mpld3.github.io/js/mpld3.v0.5.9.js", function(){
+                 
+                 mpld3.draw_figure("fig_el530014343552286247751210606", {"width": 1600.0, "height": 1600.0, "axes": [{"bbox": [0.125, 0.10999999999999999, 0.775, 0.77], "xlim": [-1.1931907571826452, 1.0331027303506957], "ylim": [-1.0124121476063672, 1.1427502562118468], "xdomain": [-1.1931907571826452, 1.0331027303506957], "ydomain": [-1.0124121476063672, 1.1427502562118468], "xscale": "linear", "yscale": "linear", "axes": [{"position": "top", "nticks": 11, "tickvalues": null, "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}, {"position": "right", "nticks": 11, "tickvalues": null, "tickformat_formatter": "", "tickformat": "", "scale": "linear", "fontsize": null, "grid": {"gridOn": false}, "visible": true}], "axesbg": "#FFFFFF", "axesbgalpha": null, "zoomable": true, "id": "el53001434356096912", "lines": [], "paths": [{"data": "data01", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434440400720", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data02", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434377324432", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data03", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434440394064", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data04", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356094416", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data05", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434355556176", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data06", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434228266320", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data07", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356102288", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data08", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356104592", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data09", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356096656", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data10", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434355037136", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data11", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356096080", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data12", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356030544", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data13", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356101264", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data14", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434356099984", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data15", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434440439056", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}, {"data": "data16", "xindex": 0, "yindex": 1, "coordinates": "data", "pathcodes": ["M", "S", "M", "L", "L", "Z"], "id": "el53001434199176272", "dasharray": "none", "alpha": 1, "facecolor": "#6495ED", "edgecolor": "#6495ED", "edgewidth": 1.0, "zorder": 1}], "markers": [], "texts": [{"text": "GlcNAc(b1-6)", "position": [-0.12264713209579958, -0.11915996899427836], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -35.477118434306696, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434438922192"}, {"text": "Neu5Ac(a2-3)", "position": [-0.11537284861286162, -0.1284186383581243], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -38.49078901091788, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434439641808"}, {"text": "Gal(b1-4)", "position": [0.2343759038256394, 0.15570884306347793], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -41.14720318571136, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440594320"}, {"text": "6S", "position": [0.6229884527525555, 0.2409476905600418], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -343.91772216670006, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440616848"}, {"text": "GlcNAc(b1-6)", "position": [0.22411078856702424, 0.16872897741197754], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -36.909065957899564, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440621456"}, {"text": "GlcNAc6S(b1-3)", "position": [0.7846770994736905, 0.39840432759655997], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -283.8433920266238, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440625552"}, {"text": "GlcNAc(b1-3)", "position": [0.5677535790581957, 0.4593383756186099], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -44.98501831782082, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440629456"}, {"text": "Fuc(a1-2)", "position": [0.5810184856576415, 0.7862635218711269], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -310.4755061216944, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440666640"}, {"text": "GlcNAc(b1-6)", "position": [0.5635515761441496, 0.4645277265821707], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -43.29096753744571, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440669968"}, {"text": "Neu5Ac(a2-3)", "position": [-0.828023139462515, -0.6798279300187624], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.98159900000477, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440674192"}, {"text": "Gal(b1-3)", "position": [-0.8265291662348899, -0.681651990903933], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.379479623908544, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440677712"}, {"text": "Gal(b1-3)", "position": [-0.48201370921542364, -0.3910589115446498], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.18196632307013, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434439413840"}, {"text": "Neu5Ac(a2-3)", "position": [-0.4805197359877985, -0.3928829724298203], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -40.78398128530301, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440675920"}, {"text": "GlcNAc(b1-6)", "position": [-0.4732454525048605, -0.4021416417936663], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -37.773620613903255, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440281296"}, {"text": "Gal(b1-4)", "position": [-0.13291224735441473, -0.10613983464577875], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -39.72012706703725, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440279312"}, {"text": "GlcNAc(b1-3)", "position": [0.2199087856529781, 0.17391832837553828], "coordinates": "data", "h_anchor": "middle", "v_baseline": "auto", "rotation": -38.617405891301196, "fontsize": 10.0, "color": "#000000", "alpha": 1, "zorder": 1, "id": "el53001434440274896"}], "collections": [{"offsets": "data17", "xindex": 0, "yindex": 1, "paths": [[[[0.0, -0.5], [0.13260155, -0.5], [0.25978993539242673, -0.44731684579412084], [0.3535533905932738, -0.3535533905932738], [0.44731684579412084, -0.25978993539242673], [0.5, -0.13260155], [0.5, 0.0], [0.5, 0.13260155], [0.44731684579412084, 0.25978993539242673], [0.3535533905932738, 0.3535533905932738], [0.25978993539242673, 0.44731684579412084], [0.13260155, 0.5], [0.0, 0.5], [-0.13260155, 0.5], [-0.25978993539242673, 0.44731684579412084], [-0.3535533905932738, 0.3535533905932738], [-0.44731684579412084, 0.25978993539242673], [-0.5, 0.13260155], [-0.5, 0.0], [-0.5, -0.13260155], [-0.44731684579412084, -0.25978993539242673], [-0.3535533905932738, -0.3535533905932738], [-0.25978993539242673, -0.44731684579412084], [-0.13260155, -0.5], [0.0, -0.5]], ["M", "C", "C", "C", "C", "C", "C", "C", "C", "Z"]]], "pathtransforms": [[9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0], [1.9641855032959654, 0.0, 0.0, 1.9641855032959654, 0.0, 0.0], [1.9641855032959654, 0.0, 0.0, 1.9641855032959654, 0.0, 0.0], [11.620278146306605, 0.0, 0.0, 11.620278146306605, 0.0, 0.0], [10.75828707279838, 0.0, 0.0, 10.75828707279838, 0.0, 0.0], [1.9641855032959654, 0.0, 0.0, 1.9641855032959654, 0.0, 0.0], [9.820927516479827, 0.0, 0.0, 9.820927516479827, 0.0, 0.0]], "alphas": [0.7], "edgecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "facecolors": ["rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(100, 149, 237, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)", "rgba(255, 140, 0, 0.7)"], "edgewidths": [1.0], "offsetcoordinates": "data", "pathcoordinates": "display", "zorder": 2, "id": "el53001434192422096"}], "images": [], "sharex": [], "sharey": []}], "data": {"data01": [[0.045102542152665626, -0.002674611675112404], [-0.12264399364869072, -0.11915778965691404], [-0.2881201788173997, -0.23406443638243446], [-0.27710305573984173, -0.2323811617898115], [-0.2881201788173997, -0.23406443638243446], [-0.28289199518340635, -0.2244669715904215]], "data02": [[0.045781852086155705, -0.003561486437807737], [-0.1153755380192194, -0.12842072201821386], [-0.27435078547527736, -0.25158930808547697], [-0.2634397267690689, -0.24934400998763118], [-0.27435078547527736, -0.25158930808547697], [-0.26964770241996905, -0.24173730302327345]], "data03": [[0.38980666038055056, 0.2880397435017008], [0.23437534710123709, 0.15570836907851482], [0.08104341186205866, 0.025164366682390193], [0.09183594288000552, 0.027899963884555623], [0.08104341186205866, 0.025164366682390193], [0.08527280727038655, 0.03521816261171451]], "data04": [[0.4268185711463439, 0.29605201932705283], [0.6229931836405544, 0.2409463616485623], [0.8164889636124455, 0.18659319087995319], [0.80828642709979, 0.193954426246141], [0.8164889636124455, 0.18659319087995319], [0.8055233349403288, 0.1846163135383183]], "data05": [[0.38880127776610607, 0.28924831773010573], [0.22411386977950354, 0.1687312322215735], [0.06165566880858564, 0.04984546471002704], [0.07262617901517476, 0.05179646134503435], [0.06165566880858564, 0.04984546471002704], [0.06663606555556512, 0.059567229464392524]], "data06": [[0.7346086957461644, 0.5963675392144385], [0.7846774026569419, 0.39840312885392826], [0.8340790426168008, 0.20307620453524255], [0.8365348260093315, 0.21367502212097378], [0.8340790426168008, 0.20307620453524255], [0.8268501166713254, 0.21134970080303628]], "data07": [[0.714170425193335, 0.6019229334428475], [0.567754967784134, 0.45933972799628475], [0.42331139623352443, 0.31867679662096804], [0.4338918019969924, 0.3221100904252565], [0.42331139623352443, 0.31867679662096804], [0.4268406571058274, 0.32898386556463777]], "data08": [[0.715423320881972, 0.6328016360689319], [0.5810197604527612, 0.7862620663248086], [0.4484259150078733, 0.9376561849498928], [0.45110685462221634, 0.9271092909794603], [0.4484259150078733, 0.9376561849498928], [0.45869424171303796, 0.9334177564590487]], "data09": [[0.7137229122076376, 0.6023666092354345], [0.563550546764553, 0.464526781737854], [0.41540746864993006, 0.3285495913138321], [0.4260874201507088, 0.33167662915138485], [0.41540746864993006, 0.3285495913138321], [0.4192479152685782, 0.3387504994407222]], "data10": [[-0.6723528007051195, -0.5480642306034303], [-0.8280247164162455, -0.679829264796209], [-0.981591960676444, -0.8098128466028642], [-0.970791359680629, -0.8071076542730763], [-0.981591960676444, -0.8098128466028642], [-0.9773327586816143, -0.7997710033036882]], "data11": [[-0.6695065099755233, -0.5515393983585668], [-0.8265257139572605, -0.6816491302671095], [-0.9814211487120609, -0.8099990580386723], [-0.9705919670489495, -0.8074046032028201], [-0.9814211487120609, -0.8099990580386723], [-0.9770538748233242, -0.8000013795069332]], "data12": [[-0.324482579755077, -0.26143412655566456], [-0.4820153050191214, -0.3910602246547117], [-0.6374180473955385, -0.5189336623444497], [-0.6265797507593248, -0.5163755957512851], [-0.6374180473955385, -0.5189336623444497], [-0.633015427143284, -0.508950711924212]], "data13": [[-0.3243303931092274, -0.26159822881995987], [-0.4805208066190323, -0.39288387234747424], [-0.6346002549923956, -0.5223951469481497], [-0.6237901420668037, -0.519726266717142], [-0.6346002549923956, -0.5223951469481497], [-0.6303055309796995, -0.5123676766589201]], "data14": [[-0.3105040407275288, -0.2792631030130588], [-0.47324816839081096, -0.40214369243396364], [-0.6337886057268574, -0.523360376863641], [-0.622849557939945, -0.5212483192824988], [-0.6337886057268574, -0.523360376863641], [-0.6289593291199841, -0.5135664995056294]], "data15": [[0.025546257049834598, 0.022130317736929417], [-0.1329143719610153, -0.10614155448791252], [-0.2892305877902308, -0.232677551401967], [-0.27837148076196794, -0.23020468820415085], [-0.2892305877902308, -0.232677551401967], [-0.28474552315135404, -0.22272950197454966]], "data16": [[0.38078510527474685, 0.2991262147142959], [0.21990610089234197, 0.17391623886226903], [0.061205399287657114, 0.05040160690700346], [0.07211133881585652, 0.052670392825258094], [0.061205399287657114, 0.05040160690700346], [0.06588612563644092, 0.06026371442361733]], "data17": [[-1.0, -0.8253939224816462], [0.06268687531421795, 0.009535947544864079], [0.8399119731680503, 0.18001364253799185], [0.4060649323370608, 0.3018817385820918], [0.43259474553595223, 0.9557320310871258], [0.7294422257793306, 0.616795012655128], [-0.6560462789250301, -0.5342619375558787], [-0.6530583324697798, -0.5379100593262198], [-0.3079811395058171, -0.2478558855334208], [-0.2934325725399412, -0.2663732242611127], [0.04215664479698767, 0.03557621624186329], [0.39766092650896856, 0.31226044050921326]]}, "id": "el53001434355228624", "plugins": [{"type": "reset"}, {"type": "zoom", "button": true, "enabled": false}, {"type": "boxzoom", "button": true, "enabled": false}, {"type": "tooltip", "id": "el53001434192422096", "labels": ["Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc6S(b1-3)Gal(b1-4)Glc-ol", "GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", "GlcNAc(b1-6)Gal(b1-4)Glc-ol"], "hoffset": 0, "voffset": 10, "location": "mouse"}]});
+            })
+         });
+}
+</script>
+</div>
+</div>
+<hr>
+</section>
+<section id="highlight_network" class="level3">
+<h3 class="anchored" data-anchor-id="highlight_network">highlight_network</h3>
+<blockquote class="blockquote">
+<pre><code> highlight_network (network, highlight, motif=None, abundance_df=None,
+                    glycan_col='glycan', intensity_col='rel_intensity',
+                    conservation_df=None, network_dic=None, species=None)</code></pre>
+</blockquote>
+<p>highlights a certain attribute in the network that will be visible when using plot_network</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">highlight (string): which attribute to highlight (choices are ‘motif’ for glycan motifs, ‘abundance’ for glycan abundances, ‘conservation’ for glycan conservation, ‘species’ for highlighting 1 species in multi-network)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">motif (string): highlight=motif; which motif to highlight (absence/presence, in violet/green); default:None</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">abundance_df (dataframe): highlight=abundance; dataframe containing glycans and their relative intensity</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">glycan_col (string): highlight=abundance; column name of the glycans in abundance_df</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">intensity_col (string): highlight=abundance; column name of the relative intensities in abundance_df</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">conservation_df (dataframe): highlight=conservation; dataframe containing glycans from different species</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">network_dic (dict): highlight=conservation/species; dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">species (string): highlight=species; which species to highlight in a multi-species network</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a network with the additional ‘origin’ (motif/species) or ‘abundance’ (abundance/conservation) node attribute storing the highlight</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="export_network" class="level3">
+<h3 class="anchored" data-anchor-id="export_network">export_network</h3>
+<blockquote class="blockquote">
+<pre><code> export_network (network, filepath, other_node_attributes=None)</code></pre>
+</blockquote>
+<p>converts NetworkX network into files usable, e.g., by Cytoscape or Gephi</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">filepath (string): should describe a valid path + file name prefix, will be appended by file description and type</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">other_node_attributes (list): string names of node attributes that should also be extracted; default:[]</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">(1) saves a .csv dataframe containing the edge list and edge labels</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">(2) saves a .csv dataframe containing node IDs and labels</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="get_maximum_flow" class="level3">
+<h3 class="anchored" data-anchor-id="get_maximum_flow">get_maximum_flow</h3>
+<blockquote class="blockquote">
+<pre><code> get_maximum_flow (network, source='Gal(b1-4)Glc-ol', sinks=None)</code></pre>
+</blockquote>
+<p>estimate maximum flow and flow paths between source and sinks</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">source (string): usually the root node of network; default:“Gal(b1-4)Glc-ol”</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">sinks (list of strings): specified sinks to estimate flow for; default:all terminal nodes</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a dictionary of type sink : {maximum flow value, flow path dictionary}</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="get_max_flow_path" class="level3">
+<h3 class="anchored" data-anchor-id="get_max_flow_path">get_max_flow_path</h3>
+<blockquote class="blockquote">
+<pre><code> get_max_flow_path (network, flow_dict, sink, source='Gal(b1-4)Glc-ol')</code></pre>
+</blockquote>
+<p>get the actual path between source and sink that gave rise to the maximum flow value</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">flow_dict (dict): dictionary of type source : {sink : flow} as returned by get_maximum_flow</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">sink (string): specified sink to retrieve maximum flow path</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">source (string): usually the root node of network; default:“Gal(b1-4)Glc-ol”</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a list of (source, sink) tuples describing the maximum flow path</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="get_reaction_flow" class="level3">
+<h3 class="anchored" data-anchor-id="get_reaction_flow">get_reaction_flow</h3>
+<blockquote class="blockquote">
+<pre><code> get_reaction_flow (network, res, aggregate=None)</code></pre>
+</blockquote>
+<p>get the aggregated flows for a type of reaction across entire network</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network (networkx object): biosynthetic network, returned from construct_network</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">res (dict): dictionary of type sink : {maximum flow value, flow path dictionary} as returned by get_maximum_flow</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">aggregate (string): if reaction flow values should be aggregated, options are “sum” and “mean”; default:None</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a dictionary of form reaction : flow(s)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="get_differential_biosynthesis" class="level3">
+<h3 class="anchored" data-anchor-id="get_differential_biosynthesis">get_differential_biosynthesis</h3>
+<blockquote class="blockquote">
+<pre><code> get_differential_biosynthesis (df, group1, group2, analysis='reaction',
+                                paired=False)</code></pre>
+</blockquote>
+<p>compares biosynthetic patterns between glycomes of two conditions</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv]</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">group1 (list): list of column indices or names for the first group of samples, usually the control</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">group2 (list): list of column indices or names for the second group of samples</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">analysis (string): what type of analysis to perform on networks, options are “reaction” for reaction type fluxes and “flow” for comparing flow to sinks; default:“reaction”</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">paired (bool): whether samples are paired or not (e.g., tumor &amp; tumor-adjacent tissue from same patient); default:False</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a dataframe with:</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">(i) Differential flow features</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">(ii) Their mean abundance across all samples in group1 + group2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">(iii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">(iv) Uncorrected p-values (Welch’s t-test) for difference in mean</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">(v) Corrected p-values (Welch’s t-test with Benjamini-Hochberg correction) for difference in mean</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">(vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">(vii) Effect size as Cohen’s d</td>
+</tr>
+</tbody>
+</table>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>get_differential_biosynthesis(human_skin_O_PMC5871710_BCC, [<span class="dv">1</span>,<span class="dv">3</span>,<span class="dv">5</span>,<span class="dv">7</span>,<span class="dv">9</span>,<span class="dv">11</span>,<span class="dv">13</span>,<span class="dv">15</span>,<span class="dv">17</span>,<span class="dv">19</span>,<span class="dv">21</span>,<span class="dv">23</span>,<span class="dv">25</span>,<span class="dv">27</span>,<span class="dv">29</span>,<span class="dv">31</span>,<span class="dv">33</span>,<span class="dv">35</span>,<span class="dv">37</span>,<span class="dv">39</span>],</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>                              [<span class="dv">2</span>,<span class="dv">4</span>,<span class="dv">6</span>,<span class="dv">8</span>,<span class="dv">10</span>,<span class="dv">12</span>,<span class="dv">14</span>,<span class="dv">16</span>,<span class="dv">18</span>,<span class="dv">20</span>,<span class="dv">22</span>,<span class="dv">24</span>,<span class="dv">26</span>,<span class="dv">28</span>,<span class="dv">30</span>,<span class="dv">32</span>,<span class="dv">34</span>,<span class="dv">36</span>,<span class="dv">38</span>,<span class="dv">40</span>], paired <span class="op">=</span> <span class="va">True</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>You're working with an alpha of 0.044390023979542614 that has been adjusted for your sample size of 40.</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<div>
+
+
+<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">Feature</th>
+<th data-quarto-table-cell-role="th">Mean abundance</th>
+<th data-quarto-table-cell-role="th">Log2FC</th>
+<th data-quarto-table-cell-role="th">p-val</th>
+<th data-quarto-table-cell-role="th">corr p-val</th>
+<th data-quarto-table-cell-role="th">significant</th>
+<th data-quarto-table-cell-role="th">Effect size</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">6</td>
+<td>GalOS(b1-3)</td>
+<td>1.229213</td>
+<td>-0.899928</td>
+<td>0.001900</td>
+<td>0.005659</td>
+<td>True</td>
+<td>-0.805401</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">3</td>
+<td>Neu5Ac(a2-6)</td>
+<td>8.403553</td>
+<td>-0.318922</td>
+<td>0.002264</td>
+<td>0.005659</td>
+<td>True</td>
+<td>-0.788190</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">2</td>
+<td>OS</td>
+<td>1.410635</td>
+<td>-0.566106</td>
+<td>0.014786</td>
+<td>0.024450</td>
+<td>True</td>
+<td>-0.599466</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">4</td>
+<td>GlcNAc6S(b1-6)</td>
+<td>0.753030</td>
+<td>0.979967</td>
+<td>0.024450</td>
+<td>0.024450</td>
+<td>True</td>
+<td>0.546513</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">7</td>
+<td>Gal(b1-4)</td>
+<td>0.757030</td>
+<td>0.971116</td>
+<td>0.024450</td>
+<td>0.024450</td>
+<td>True</td>
+<td>0.546513</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">1</td>
+<td>Neu5Ac(a2-8)</td>
+<td>5.763705</td>
+<td>-0.146984</td>
+<td>0.084157</td>
+<td>0.070131</td>
+<td>False</td>
+<td>-0.407524</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">0</td>
+<td>Neu5Ac(a2-3)</td>
+<td>7.273766</td>
+<td>0.090834</td>
+<td>0.114961</td>
+<td>0.082115</td>
+<td>False</td>
+<td>0.369403</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">9</td>
+<td>Neu5Ac(a2-?)</td>
+<td>7.147008</td>
+<td>-0.122704</td>
+<td>0.285502</td>
+<td>0.178439</td>
+<td>False</td>
+<td>-0.245743</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">8</td>
+<td>Gal(b1-?)</td>
+<td>4.344201</td>
+<td>0.002093</td>
+<td>0.368276</td>
+<td>0.204598</td>
+<td>False</td>
+<td>0.206083</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">5</td>
+<td>Gal(b1-3)</td>
+<td>7.931371</td>
+<td>-0.091103</td>
+<td>0.671134</td>
+<td>0.335567</td>
+<td>False</td>
+<td>-0.096432</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="evolution" class="level2">
+<h2 class="anchored" data-anchor-id="evolution">evolution</h2>
+<blockquote class="blockquote">
+<p>investigating evolutionary relationships of glycans</p>
+</blockquote>
+<hr>
+<section id="distance_from_embeddings" class="level3">
+<h3 class="anchored" data-anchor-id="distance_from_embeddings">distance_from_embeddings</h3>
+<blockquote class="blockquote">
+<pre><code> distance_from_embeddings (df, embeddings, cut_off=10, rank='Species',
+                           averaging='median')</code></pre>
+</blockquote>
+<p>calculates a cosine distance matrix from learned embeddings</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">df (dataframe): dataframe with glycans as rows and taxonomic information as columns</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">embeddings (dataframe): dataframe with glycans as rows and learned embeddings as columns (e.g., from glycans_to_emb)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">cut_off (int): how many glycans a rank (e.g., species) needs to have at least to be included; default:10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">rank (string): which taxonomic rank to use for grouping organisms; default:‘Species’</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">averaging (string): how to average embeddings, by ‘median’ or ‘mean’; default:‘median’</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a rank x rank distance matrix</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="distance_from_metric" class="level3">
+<h3 class="anchored" data-anchor-id="distance_from_metric">distance_from_metric</h3>
+<blockquote class="blockquote">
+<pre><code> distance_from_metric (df, networks, metric='Jaccard', cut_off=10,
+                       rank='Species')</code></pre>
+</blockquote>
+<p>calculates a distance matrix of generated networks based on provided metric</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">df (dataframe): dataframe with glycans as rows and taxonomic information as columns</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">networks (list): list of networks in networkx format</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">metric (string): which metric to use, available: ‘Jaccard’; default:‘Jaccard’</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">cut_off (int): how many glycans a rank (e.g., species) needs to have at least to be included; default:10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">rank (string): which taxonomic rank to use for grouping organisms; default:‘Species’</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a rank x rank distance matrix</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="dendrogram_from_distance" class="level3">
+<h3 class="anchored" data-anchor-id="dendrogram_from_distance">dendrogram_from_distance</h3>
+<blockquote class="blockquote">
+<pre><code> dendrogram_from_distance (dm, ylabel='Mammalia', filepath='')</code></pre>
+</blockquote>
+<p>plots a dendrogram from distance matrix</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">dm (dataframe): a rank x rank distance matrix (e.g., from distance_from_embeddings)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ylabel (string): how to label the y-axis of the dendrogram; default:‘Mammalia’</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">filepath (string): absolute path including full filename allows for saving the plot</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="check_conservation" class="level3">
+<h3 class="anchored" data-anchor-id="check_conservation">check_conservation</h3>
+<blockquote class="blockquote">
+<pre><code> check_conservation (glycan, df, network_dic=None, rank='Order',
+                     threshold=5, motif=False)</code></pre>
+</blockquote>
+<p>estimates evolutionary conservation of glycans and glycan motifs via biosynthetic networks</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">glycan (string): full glycan or glycan motif in IUPAC-condensed nomenclature</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">df (dataframe): dataframe in the style of df_species, each row one glycan and columns are the taxonomic levels</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network); default:pre-computed milk networks</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">rank (string): at which taxonomic level to assess conservation; default:Order</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">threshold (int): threshold of how many glycans a species needs to have to consider the species;default:5</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a dictionary of taxonomic group : degree of conservation</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="get_communities" class="level3">
+<h3 class="anchored" data-anchor-id="get_communities">get_communities</h3>
+<blockquote class="blockquote">
+<pre><code> get_communities (network_list, label_list=None)</code></pre>
+</blockquote>
+<p>Find communities for each graph in a list of graphs</p>
+<table class="table">
+<colgroup>
+<col style="width: 100%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Arguments:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">network_list (list): list of undirected biosynthetic networks, in the form of networkx objects</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">label_list (list): labels to create the community names, which are running_number + _ + label[k] for graph_list[k]; default:range(len(graph_list))</td>
+</tr>
+</tbody>
+</table>
+<table class="table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Returns:</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Returns a merged dictionary of community : glycans in that community</td>
+</tr>
+</tbody>
+</table>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>
