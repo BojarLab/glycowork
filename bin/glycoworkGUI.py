@@ -84,7 +84,7 @@ class GlycoDrawExcelDialog(simpledialog.Dialog):
         self.csv_entry.grid(row = 0, column = 1)
         self.csv_button = tk.Button(master, text = "Browse...", command = self.browse_csv)
         self.csv_button.grid(row = 0, column = 2)
-        
+
         tk.Label(master, text = "Output Folder:").grid(row = 1)
         self.folder_entry = tk.Entry(master)
         self.folder_entry.grid(row = 1, column = 1)

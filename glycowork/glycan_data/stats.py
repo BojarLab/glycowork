@@ -268,9 +268,13 @@ def variance_based_filtering(df, min_feature_variance = 0.02):
     | min_feature_variance (float): Minimum variance to include a feature in the analysis; default: 2%\n
     | Returns:
     | :-
-    | Returns a pandas DataFrame with remaining glycans as indices and samples in columns
+    | filtered_df (DataFrame): DataFrame with remaining glycans (variance > min_feature_variance) as indices and samples in columns.
+    | discarded_df (DataFrame): DataFrame with discarded glycans (variance <= min_feature_variance) as indices and samples in columns.
     """
-    return df[df.var(axis = 1) > min_feature_variance]
+    variances = df.var(axis = 1)
+    filtered_df = df.loc[variances > min_feature_variance]
+    discarded_df = df.loc[variances <= min_feature_variance]
+    return filtered_df, discarded_df
 
 
 def jtkdist(timepoints, param_dic, reps = 1, normal = False):
@@ -795,7 +799,7 @@ def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
   elif not group2 and isinstance(custom_scale, dict):
     gamma = max(gamma, 0.1)
     for idx in range(df.shape[1]):
-      group_id = group1[idx]
+      group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
       clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma)
   else:
@@ -936,7 +940,7 @@ def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.
   else:
     gamma = max(gamma, 0.1)
     for idx in range(df.shape[1]):
-      group_id = group1[idx]
+      group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
       reference_adjusted = reference_values - norm.rvs(loc = np.log2(scale_factor), scale = gamma)
       alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted

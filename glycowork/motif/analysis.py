@@ -589,7 +589,7 @@ def get_differential_expression(df, group1, group2,
     df_org = df_org.set_index(df_org.columns.tolist()[0])
     df_org = df_org.groupby(df_org.index).mean()
   # Variance-based filtering of features
-  df = variance_based_filtering(df)
+  df, df_prison = variance_based_filtering(df)
   df_org = df_org.loc[df.index]
   glycans = df.index.tolist()
   mean_abundance = df_org.mean(axis = 1)
@@ -641,11 +641,22 @@ def get_differential_expression(df, group1, group2,
     levene_pvals = multipletests(levene_pvals, method = 'fdr_tsbh')[1]
   else:
     corrpvals, significance = [1]*len(glycans), [False]*len(glycans)
-  out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes, equivalence_pvals)),
+  df_out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes, equivalence_pvals)),
                      columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size', 'Equivalence p-val'])
+  prison_rows = pd.DataFrame({
+      'Glycan': df_prison.index,
+      'Mean abundance': [0] * len(df_prison),
+      'Log2FC': [0] * len(df_prison),
+      'p-val': [1.0] * len(df_prison),
+      'corr p-val': [1.0] * len(df_prison),
+      'significant': [False] * len(df_prison),
+      'corr Levene p-val': [1.0] * len(df_prison),
+      'Effect size': [0] * len(df_prison),
+      'Equivalence p-val': [1.0] * len(df_prison)})
+  df_out = pd.concat([df_out, prison_rows], ignore_index = True)
   if effect_size_variance:
-    out['Effect size variance'] = variances
-  return out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+    df_out['Effect size variance'] = variances + [0]*len(df_prison)
+  return df_out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
 
 def get_pval_distribution(df_res, filepath = ''):
@@ -802,7 +813,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
       df = df.set_index(df.columns.tolist()[0])
       df = df.groupby(df.index).mean()
     # Variance-based filtering of features
-    df = variance_based_filtering(df)
+    df, df_prison = variance_based_filtering(df)
     for glycan in df.index:
       # Create a DataFrame with the glycan abundance and group identifier for each sample
       data = pd.DataFrame({"Abundance": df.loc[glycan], "Group": groups})
@@ -819,6 +830,13 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
     df_out['corr p-val'] = corrpvals
     df_out['significant'] = significance
+    prison_rows = pd.DataFrame({
+      'Glycan': df_prison.index,
+      'F statistic': [0] * len(df_prison),
+      'p-val': [1.0] * len(df_prison),
+      'corr p-val': [1.0] * len(df_prison),
+      'significant': [False] * len(df_prison)})
+    df_out = pd.concat([df_out, prison_rows], ignore_index = True)
     return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
 
@@ -920,7 +938,7 @@ def get_glycan_change_over_time(data, degree = 1):
 
 
 def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1,
-                    min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1):
+                    min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0):
     """Analyzes time series data of glycans using an OLS model\n
     | Arguments:
     | :-
@@ -935,7 +953,8 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
     | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
     | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
+    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+    | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
     | Returns:
     | :-
     | Returns a dataframe with:
@@ -957,9 +976,9 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     if transform is None:
       transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
     if transform == "ALR":
-      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma)
+      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma, custom_scale = custom_scale)
     elif transform == "CLR":
-      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma)
+      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma, custom_scale = custom_scale)
     elif transform == "Nothing":
       pass
     else:

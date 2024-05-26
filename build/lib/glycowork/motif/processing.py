@@ -939,7 +939,7 @@ def rescue_compositions(func):
     try:
       # Try running the original function
       return func(*args, **kwargs)
-    except Exception as e:
+    except Exception:
       # If an error occurs, attempt to rescue the glycan compositions
       rescued_args = [canonicalize_composition(arg) if isinstance(arg, str) else arg for arg in args]
       # After rescuing, attempt to run the function again
