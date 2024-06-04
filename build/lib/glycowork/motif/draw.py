@@ -17,6 +17,7 @@ except ImportError:
   raise ImportError("<draw dependencies missing; did you do 'pip install glycowork[draw]'?>")
 import numpy as np
 import pandas as pd
+import sys
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
 
@@ -50,6 +51,7 @@ def matches(line, opendelim = '(', closedelim = ')'):
           else:
               # Error
               print(f"Encountered extraneous closing quote at pos {pos}: '{line[pos:]}'")
+              pass
 
   if stack:
       for pos in stack:
@@ -207,7 +209,7 @@ def hex_circumference(x_pos, y_pos, dim, col_dict):
     d.append(p)
 
 
-def hexose(x_pos, y_pos, dim, col_dict, color = 'white'):
+def hex(x_pos, y_pos, dim, col_dict, color = 'white'):
   """Draw a hexagon shape at the specified position and dimensions.\n
   | Arguments:
   | :-
@@ -634,7 +636,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '04X':
-    hexose(x_pos, y_pos, dim, col_dict)
+    hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -652,7 +654,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '15A':
-    hexose(x_pos, y_pos, dim, col_dict)
+    hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -670,7 +672,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '02A':
-    hexose(x_pos, y_pos, dim, col_dict)
+    hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(0)),                      y_base-half_dim*sin(radians(0)),
@@ -688,7 +690,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '13X':
-    hexose(x_pos, y_pos, dim, col_dict)
+    hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
                         x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
@@ -706,7 +708,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '24X':
-    hexose(x_pos, y_pos, dim, col_dict)
+    hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)),
                         x_base+half_dim*cos(radians(240)),                       y_base-half_dim*sin(radians(240)),
@@ -724,7 +726,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '35X':
-    hexose(x_pos, y_pos, dim, col_dict)
+    hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)),
                         x_base+half_dim*cos(radians(180)),                       y_base-half_dim*sin(radians(180)),
@@ -742,7 +744,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '04A':
-    hexose(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -760,7 +762,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '15X':
-    hexose(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -778,7 +780,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '02X':
-    hexose(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
@@ -796,7 +798,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '13A':
-    hexose(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
                         x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
@@ -814,7 +816,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '24A':
-    hexose(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)),
                         x_base+half_dim*cos(radians(240)),                       y_base-half_dim*sin(radians(240)),
@@ -832,7 +834,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '35A':
-    hexose(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)),
                         x_base+half_dim*cos(radians(180)),                       y_base-half_dim*sin(radians(180)),
@@ -850,7 +852,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '25A':
-    hexose(x_pos, y_pos, dim, col_dict)
+    hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -865,7 +867,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '03A':
-    hexose(x_pos, y_pos, dim, col_dict)
+    hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
@@ -880,7 +882,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '14X':
-    hexose(x_pos, y_pos, dim, col_dict)
+    hex(x_pos, y_pos, dim, col_dict)
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
                         x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
@@ -895,7 +897,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '25X':
-    hexose(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                               y_base,
                         x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
                         x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
@@ -910,7 +912,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '03X':
-    hexose(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
                         x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
@@ -925,7 +927,7 @@ def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50
     d.append(p)
 
   if shape == '14A':
-    hexose(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
+    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
     d.append(draw.Lines(x_base,                                                y_base,
                         x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
                         x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
@@ -1197,7 +1199,7 @@ def split_node(G, node):
   new_nodes = []
   H = G.__class__()
   H.add_nodes_from(G.subgraph(node))
-  for i, (_, t, data) in enumerate(edges):
+  for i, (s, t, data) in enumerate(edges):
       new_node = f"{node}_{i}"
       Ix = nx.relabel_nodes(H, {node: new_node})
       new_nodes += list(Ix.nodes(data = True))
@@ -1509,9 +1511,9 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   branch_node = [branch_node[i] for i in new_order]
   branch_connection = [branch_connection[i] for i in new_order]
 
-  for k, bbc in enumerate(branch_branch_connection):
-    tmp = get_indices(new_order, [bbc[0]])
-    branch_branch_connection[k] = (tmp[0][0], bbc[1])
+  for k in range(len(branch_branch_connection)):
+    tmp = get_indices(new_order, [branch_branch_connection[k][0]])
+    branch_branch_connection[k] = (tmp[0][0], branch_branch_connection[k][1])
 
   # Order multiple connections on a branch_branch level
   new_order = []
@@ -1696,68 +1698,68 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
     for pair in pairwise_node_crawl:
       idx_A = [k for k in get_indices(node_list, [str(k) for k in pair[0]]) if k != [None]]
       idx_B = [k for k in get_indices(node_list, [str(k) for k in pair[1]]) if k != [None]]
-      upper, _ = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
+      upper, lower = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
       upper_min = min(y_list[k[0]] for k in (idx_A if upper == pair[0] else idx_B))
       lower_max = max(y_list[k[0]] for k in (idx_B if upper == pair[0] else idx_A))
 
-      to_add = 2 - (upper_min - lower_max)
+      to_add = 2 - (upper_min-lower_max)
       if main_sugar[-1] not in {'Fuc', 'Xyl'} or len(main_sugar) != 2:
-        for k, temp_y_pos in enumerate(branch_y_pos):
-          for j, temp_y_pos_inner in enumerate(temp_y_pos):
-            if [m[::2][::-1] for m in branch_node][k][j] in {str(m) for m in upper} and branch_sugar[k] not in [['Fuc'], ['Xyl']]:
-              temp_y_pos_inner += to_add
+        for k in range(len(branch_y_pos)):
+          for j in range(len(branch_y_pos[k])):
+            if [k[::2][::-1] for k in branch_node][k][j] in [str(k) for k in upper] and branch_sugar[k] not in [['Fuc'], ['Xyl']]:
+              branch_y_pos[k][j] = branch_y_pos[k][j] + to_add
 
-      for k, temp_y_pos in enumerate(branch_branch_y_pos):
-        for j, temp_y_pos_inner in enumerate(temp_y_pos):
-          if [m[::2][::-1] for m in branch_branch_node][k][j] in {str(m) for m in upper}:
-            temp_y_pos_inner += to_add
+      for k in range(len(branch_branch_y_pos)):
+        for j in range(len(branch_branch_y_pos[k])):
+          if [k[::2][::-1] for k in branch_branch_node][k][j] in [str(k) for k in upper]:
+            branch_branch_y_pos[k][j] = branch_branch_y_pos[k][j] + to_add
 
-      for k, temp_y_pos in enumerate(bbb_y_pos):
-        for j, temp_y_pos_inner in range(len(temp_y_pos)):
-          if [m[::2][::-1] for m in branch_branch_branch_node][k][j] in {str(m) for m in upper}:
-            temp_y_pos_inner += to_add
+      for k in range(len(bbb_y_pos)):
+        for j in range(len(bbb_y_pos[k])):
+          if [k[::2][::-1] for k in branch_branch_branch_node][k][j] in [str(k) for k in upper]:
+            bbb_y_pos[k][j] = bbb_y_pos[k][j] + to_add
 
   # Adjust y branch_branch connections
   for j, conn in enumerate(unique(branch_branch_connection)):
     if branch_branch_sugar[j] not in [['Fuc'], ['Xyl']] and max(branch_x_pos[branch_branch_connection[j][0]]) >= branch_branch_x_pos[j][0]:
       tmp = [branch_branch_y_pos[j][0] for j in unwrap(get_indices(branch_branch_connection, [conn]))]
-      y_adj = (max(tmp) - branch_y_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]+1])/2
+      y_adj = (max(tmp)-branch_y_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]+1])/2
       # For each branch
-      for k, temp_x_pos in enumerate(branch_x_pos):
+      for k in range(len(branch_x_pos)):
         # If connected
         if k == branch_branch_connection[j][0]:
           # And if smaller/equal x
-          for n, temp_x_pos_inner in enumerate(temp_x_pos):
-            if temp_x_pos_inner <= branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]:
-              branch_y_pos[k][n] += y_adj
+          for n in range(len(branch_x_pos[k])):
+            if branch_x_pos[k][n] <= branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]:
+              branch_y_pos[k][n] = branch_y_pos[k][n] + y_adj
       # For each branch branch
-      for k, temp_x_pos in enumerate(branch_branch_x_pos):
+      for k in range(len(branch_branch_x_pos)):
         # If connected
         if branch_branch_connection[k][0] == branch_branch_connection[j][0] and branch_branch_connection[k][1] == branch_branch_connection[j][1]:
           # And if smaller/equal x
-          for n, temp_x_pos_inner in enumerate(temp_x_pos):
-            if temp_x_pos_inner <= branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]:
-              branch_branch_y_pos[k][n] += y_adj
+          for n in range(len(branch_branch_x_pos[k])):
+            if branch_branch_x_pos[k][n] <= branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]:
+              branch_branch_y_pos[k][n] = branch_branch_y_pos[k][n] + y_adj
 
   # Adjust y branch connections
   # print(branch_connection)
-  for conn in unique(branch_connection):
-    tmp = [branch_y_pos[j][0] for j in unwrap(get_indices(branch_connection, [conn]))]
-    if ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [conn]))] and branch_connection.count(conn) < 2 or ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [conn]))] and branch_connection.count(0) > 1:  # and list(set(unwrap([branch_sugar[k] for k in unwrap(get_indices(unwrap(branch_sugar), ['Fuc']))]))) == ['Fuc']:
+  for k in range(len(unique(branch_connection))):
+    tmp = [branch_y_pos[j][0] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))]
+    if ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(unique(branch_connection)[k]) < 2 or ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(0) > 1:  # and list(set(unwrap([branch_sugar[k] for k in unwrap(get_indices(unwrap(branch_sugar), ['Fuc']))]))) == ['Fuc']:
       y_adj = 0
-    elif ['Xyl'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [conn]))] and branch_connection.count(conn) < 2:
+    elif ['Xyl'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(unique(branch_connection)[k]) < 2:
       y_adj = 0
     else:
-      y_adj = (max(tmp) - main_sugar_y_pos[conn])/2
-    for j, temp_x_pos in enumerate(main_sugar_x_pos):
-      if temp_x_pos <= main_sugar_x_pos[conn]:
+      y_adj = (max(tmp)-main_sugar_y_pos[unique(branch_connection)[k]])/2
+    for j in range(len(main_sugar_x_pos)):
+      if main_sugar_x_pos[j] <= main_sugar_x_pos[unique(branch_connection)[k]]:
         main_sugar_y_pos[j] += y_adj
       else:
         pass
-    for j, temp_x_pos in enumerate(branch_x_pos):
-      if branch_connection[j] == conn or branch_sugar[j] in [['Fuc'], ['Xyl']]:
-        for n, temp_x_pos_inner in enumerate(temp_x_pos):
-          if temp_x_pos_inner <= main_sugar_x_pos[conn]:
+    for j in range(len(branch_x_pos)):
+      if branch_connection[j] == unique(branch_connection)[k] or branch_sugar[j] in [['Fuc'], ['Xyl']]:
+        for n in range(len(branch_x_pos[j])):
+          if branch_x_pos[j][n] <= main_sugar_x_pos[unique(branch_connection)[k]]:
             branch_y_pos[j][n] += y_adj
 
   # Fix for handling 'wrong' structures with the core fucose in the main chain
@@ -1793,7 +1795,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
     for pair in pairwise_node_crawl:
       idx_A = [k for k in get_indices(node_list, [str(k) for k in pair[0]]) if k != [None]]
       idx_B = [k for k in get_indices(node_list, [str(k) for k in pair[1]]) if k != [None]]
-      upper, _ = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
+      upper, lower = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
       upper_min = min(y_list[k[0]] for k in (idx_A if upper == pair[0] else idx_B))
       lower_max = max(y_list[k[0]] for k in (idx_B if upper == pair[0] else idx_A))
 
@@ -1809,18 +1811,18 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
         if x_cor in list(set(lower_x)):
           min_y_upper = min([upper_y[k] for k in unwrap(get_indices(upper_x, [x_cor]))])
           max_y_lower = max([lower_y[k] for k in unwrap(get_indices(lower_x, [x_cor]))])
-          diff_to_fix.append(2 - (min_y_upper - max_y_lower))
+          diff_to_fix.append(2 - (min_y_upper-max_y_lower))
       if diff_to_fix:
         to_add = max(diff_to_fix)
 
       str_upper = [str(k) for k in upper]
       if main_sugar[-1] != 'Fuc':
-        for k, temp_branch_y in enumerate(branch_y_pos):
-          for j, temp_branch_y_inner in enumerate(temp_branch_y):
-            if [m[::2][::-1] for m in branch_node][k][j] in str_upper:
-              temp_branch_y_inner += to_add
+        for k in range(len(branch_y_pos)):
+          for j in range(len(branch_y_pos[k])):
+            if [k[::2][::-1] for k in branch_node][k][j] in str_upper:
+              branch_y_pos[k][j] += to_add
             if branch_x_pos[k][j] == 0:
-                temp_branch_y_inner += (to_add/2)
+                branch_y_pos[k][j] += (to_add/2)
         tmp_listy = []
         for k in range(len(main_sugar)):
           if main_sugar_x_pos[k] < min([x for x in unwrap(branch_x_pos) if x > 0]):
@@ -1829,10 +1831,10 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
           main_sugar_y_pos[k] += (to_add/2)
 
       for list_to_update in [branch_branch_y_pos, bbb_y_pos]:
-        for k, listy in enumerate(list_to_update):
-          for j, listy_inner in enumerate(listy):
-            if [m[::2][::-1] for m in (branch_branch_node if list_to_update is branch_branch_y_pos else branch_branch_branch_node)][k][j] in str_upper:
-              listy_inner += to_add
+        for k in range(len(list_to_update)):
+          for j in range(len(list_to_update[k])):
+            if [k[::2][::-1] for k in (branch_branch_node if list_to_update is branch_branch_y_pos else branch_branch_branch_node)][k][j] in str_upper:
+              list_to_update[k][j] += to_add
 
   main_conf = [k.group()[0] if k is not None else '' for k in [re.search('^L-|^D-', k) for k in main_sugar_modification]]
   main_sugar_modification = [re.sub('^L-|^D-', '', k) for k in main_sugar_modification]
@@ -1867,14 +1869,17 @@ def draw_bracket(x, y_min_max, direction = 'right', dim = 50,  highlight = 'show
   | :-
   | None
   """
-  col_dict = col_dict_transparent if highlight == 'hide' else col_dict_base
+  if highlight == 'hide':
+    col_dict = col_dict_transparent
+  else:
+    col_dict = col_dict_base
 
   stroke_opts = {'stroke_width': 0.04 * dim, 'stroke': col_dict['black']}
   x_common = 0 - (x * dim)
   y_min = 0 + (y_min_max[0] * dim) - 0.75 * dim
   y_max = 0 + (y_min_max[1] * dim) + 0.75 * dim
   # rot = 'rotate(' + str(deg) + ' ' + str(0-abs(x*2)*(dim)) + ' ' + str(0-abs(y_min)*(dim)) + ')'
-  rot = f"rotate({deg} {x_common} {np.mean(y_min_max)})"
+  rot = 'rotate(' + str(deg) + ' ' + str(x_common) + ' ' + str(np.mean(y_min_max)) + ')'
   # Vertical
 
   g = draw.Group(transform = rot)
@@ -1939,7 +1944,7 @@ def process_per_residue(glycan, per_residue):
   branched_side_chain_indices = []
   side_chain_stack = []
   idx = 0
-  for char in temp:
+  for index, char in enumerate(temp):
     if char == '[':
       side_chain_stack.append([])
     elif char == ']':
@@ -2016,7 +2021,7 @@ def get_hit_atoms_and_bonds(mol, smt):
   return alist, blist
 
 
-def add_colours_to_map(els, cols, col_num, alpha = True, hex_colors = True):
+def add_colours_to_map(els, cols, col_num, alpha = True, hex = True):
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
   from matplotlib.colors import ColorConverter
 
@@ -2028,7 +2033,7 @@ def add_colours_to_map(els, cols, col_num, alpha = True, hex_colors = True):
     if el not in cols:
       cols[el] = []
     if COLS[col_num] not in cols[el]:
-      if hex_colors:
+      if hex:
         cols[el].append(COLS[col_num])
       else:
         cols[el].append(ColorConverter().to_rgb(COLS[col_num]))
@@ -2059,8 +2064,8 @@ def draw_chem2d(draw_this, mono_list, filepath = None):
   for i, smt in enumerate(smarts_list):
     alist, blist = get_hit_atoms_and_bonds(mol, smt)
     col = i
-    add_colours_to_map(alist, acols, col, hex_colors = False, alpha = True)
-    add_colours_to_map(blist, bcols, col, hex_colors = False, alpha = True)
+    add_colours_to_map(alist, acols, col, hex = False, alpha = True)
+    add_colours_to_map(blist, bcols, col, hex = False, alpha = True)
 
   for k in list(acols.keys()):
     if len(acols[k]) > 1:
@@ -2090,7 +2095,7 @@ def draw_chem2d(draw_this, mono_list, filepath = None):
         svg2pdf(bytestring = data, write_to = filepath)
       except:
         raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-
+  
   return SVG(d.GetDrawingText())
 
 def draw_chem3d(draw_this, mono_list, filepath = None):
@@ -2114,8 +2119,8 @@ def draw_chem3d(draw_this, mono_list, filepath = None):
   for i, smt in enumerate(smarts_list):
       alist, blist = get_hit_atoms_and_bonds(mol, smt)
       col = i
-      add_colours_to_map(alist, acols, col, alpha = False, hex_colors = True)
-      add_colours_to_map(blist, bcols, col, alpha = False, hex_colors = True)
+      add_colours_to_map(alist, acols, col, alpha = False, hex = True)
+      add_colours_to_map(blist, bcols, col, alpha = False, hex = True)
 
   for k in acols.keys():
     if len(acols[k]) > 1:
@@ -2138,7 +2143,7 @@ def draw_chem3d(draw_this, mono_list, filepath = None):
       MolToPDBFile(mol, filepath)
     else:
       print("3D structure can only be saved as .pdb file.")
-
+  
   print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
   v.zoomTo()
   v.show()
@@ -2194,7 +2199,7 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
 
   # Handle floaty bits if present
   floaty_bits = []
-  for openpos, closepos, _ in matches(draw_this, opendelim = '{', closedelim = '}'):
+  for openpos, closepos, level in matches(draw_this, opendelim = '{', closedelim = '}'):
       floaty_bits.append(draw_this[openpos:closepos]+'blank')
       draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')
@@ -2214,15 +2219,15 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   bbb_sugar, bbb_x_pos, bbb_y_pos, bbb_sugar_modification, bbb_bond, bbb_connection, bbb_conf, bbb_sugar_label, bbb_bond_label = data[3]
 
   while bond_hack:
-    for k, bond in enumerate(main_bond):
-      if main_sugar[k] + '--' + bond == 'Man--α 6':
+    for k in range(len(main_bond)):
+      if main_sugar[k] + '--' + main_bond[k] == 'Man--α 6':
         main_bond[k] = 'α'
         bond_hack = False
 
-    for i_branch, branch in enumerate(branch_bond):
-      for i_bond, bond in enumerate(branch):
-        if branch_sugar[i_branch][i_bond] + '--' + bond == 'Man--α 6':
-          bond = 'α'
+    for branch in range(len(branch_bond)):
+      for bond in range(len(branch_bond[branch])):
+        if branch_sugar[branch][bond] + '--' + branch_bond[branch][bond] == 'Man--α 6':
+          branch_bond[branch][bond] = 'α'
           bond_hack = False
     bond_hack = False
 
@@ -2286,7 +2291,6 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   y_ori = (-height/2)+(((max_y-abs(min_y))/2)*dim)
 
   global d
-
   # Draw
   d2 = draw.Drawing(width, height, origin = (x_ori, y_ori))
   deg = 90 if vertical else 0
@@ -2326,18 +2330,18 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     fb_count = {i: floaty_bits.count(i) for i in floaty_bits}
     floaty_bits = list(set(floaty_bits))
     floaty_data = []
-    for k, fbit in enumerate(floaty_bits):
-      if in_lib(min_process_glycans([fbit])[0][0], lib):
-        floaty_data.append(get_coordinates_and_labels(fbit, show_linkage = show_linkage, highlight_motif = None))
+    for k in range(len(floaty_bits)):
+      if in_lib(min_process_glycans([floaty_bits[k]])[0][0], lib):
+        floaty_data.append(get_coordinates_and_labels(floaty_bits[k], show_linkage = show_linkage, highlight_motif = None))
       else:
         floaty_data.append(get_coordinates_and_labels('blank(-)blank', show_linkage = show_linkage, highlight_motif = None))
-    y_span = max_y - min_y
+    y_span = max_y-min_y
     n_floats = len(floaty_bits)
     floaty_span = n_floats * 2 - 2
     y_diff = (floaty_span/2) - (y_span/2)
 
-    for j, fdata in enumerate(floaty_data):
-      floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf, _, _ = fdata[0]
+    for j in range(len(floaty_data)):
+      floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf, _, _ = floaty_data[j][0]
       floaty_sugar_label = ['show' if highlight_motif == None else 'hide' for k in floaty_sugar]
       floaty_bond_label = ['show' if highlight_motif == None else 'hide' for k in floaty_bond]
       floaty_sugar_x_pos = [floaty_sugar_x_pos[k] + max_x + 1 for k in floaty_sugar_x_pos]
