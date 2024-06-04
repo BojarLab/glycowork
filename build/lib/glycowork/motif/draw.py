@@ -2280,14 +2280,17 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   if len(floaty_bits) > len(set(floaty_bits)):
      width += dim
   height = ((((max(abs(min_y), max_y)+1)*2)-1)*dim)+10+50
+  if vertical:
+    height = max(height, width)
   x_ori = -width+(dim/2)+0.5*dim
   y_ori = (-height/2)+(((max_y-abs(min_y))/2)*dim)
 
   global d
+
   # Draw
   d2 = draw.Drawing(width, height, origin = (x_ori, y_ori))
   deg = 90 if vertical else 0
-  rot = f'rotate({deg} {width / 2} {height / 2})'
+  rot = f'rotate({deg} {x_ori+0.5*width} {y_ori+0.5*height})'
   d = draw.Group(transform = rot)
 
   # Bond main chain
