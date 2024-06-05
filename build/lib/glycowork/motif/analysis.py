@@ -655,7 +655,9 @@ def get_differential_expression(df, group1, group2,
       'corr Levene p-val': [1.0] * len(df_prison),
       'Effect size': [0] * len(df_prison),
       'Equivalence p-val': [1.0] * len(df_prison)})
+  prison_rows = prison_rows.astype({'significant': 'bool'})
   df_out = pd.concat([df_out, prison_rows], ignore_index = True)
+  df_out['significant'] = df_out['significant'].astype('bool')
   if effect_size_variance:
     df_out['Effect size variance'] = variances + [0]*len(df_prison)
   return df_out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
@@ -734,7 +736,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed =
   df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
   x = df_res[x_metric].values
   y = df_res['log_p'].values
-  labels = df_res['Glycan'].values
+  labels = df_res['Glycan'].values if 'Glycan' in df_res.columns else df_res['Glycosite'].values
   # set y_thresh based on sample size via Bayesian-Adaptive Alpha Adjustment
   if n:
     y_thresh = get_alphaN(n)
@@ -839,7 +841,9 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
       'p-val': [1.0] * len(df_prison),
       'corr p-val': [1.0] * len(df_prison),
       'significant': [False] * len(df_prison)})
+    prison_rows = prison_rows.astype({'significant': 'bool'})
     df_out = pd.concat([df_out, prison_rows], ignore_index = True)
+    df_out['significant'] = df_out['significant'].astype('bool')
     return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
 
@@ -1274,7 +1278,7 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   return correlation_df, p_value_df
 
 
-def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["known", "exhaustive"], paired = False, impute = True,
+def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaustive"], paired = False, impute = True,
             min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0, filepath = ''):
   """Calculates ROC AUC for every feature and, optionally, plots the best\n
   | Arguments:
@@ -1282,7 +1286,6 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
   | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
   | group1 (list): list of column indices or names for the first group of samples, usually the control
   | group2 (list): list of column indices or names for the second group of samples (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
-  | plot (bool): whether to plot the ROC curve for the best feature; default: False
   | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
   | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
@@ -1340,24 +1343,22 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
       y_scores = np.concatenate([values_group1, values_group2])
       auc_scores[feature] = roc_auc_score(y_true, y_scores)
     sorted_auc_scores = sorted(auc_scores.items(), key = lambda item: item[1], reverse = True)
-    if plot:
-      best, res = sorted_auc_scores[0]
-      values = df.loc[best, :]
-      values_group1 = values[group1]
-      values_group2 = values[group2]
-      y_true = [0] * len(values_group1) + [1] * len(values_group2)
-      y_scores = np.concatenate([values_group1, values_group2])
-      fpr, tpr, _ = roc_curve(y_true, y_scores)
-      plt.figure()
-      plt.plot(fpr, tpr, label=f'ROC Curve (area = {res:.2f})')
-      plt.plot([0, 1], [0, 1], 'r--')
-      plt.xlabel('False Positive Rate')
-      plt.ylabel('True Positive Rate')
-      plt.title(f'ROC Curve for {best}')
-      plt.legend(loc = 'lower right')
-      if filepath:
-        plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
-      plt.show()
+    best, res = sorted_auc_scores[0]
+    values = df.loc[best, :]
+    values_group1 = values[group1]
+    values_group2 = values[group2]
+    y_true = [0] * len(values_group1) + [1] * len(values_group2)
+    y_scores = np.concatenate([values_group1, values_group2])
+    fpr, tpr, _ = roc_curve(y_true, y_scores)
+    plt.figure()
+    plt.plot(fpr, tpr, label = f'ROC Curve (area = {res:.2f})')
+    plt.plot([0, 1], [0, 1], 'r--')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(f'ROC Curve for {best}')
+    plt.legend(loc = 'lower right')
+    if filepath:
+      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
   else: # multi-group comparison
     df = df.groupby(df.index).mean()
     df = df.T  # Ensure features are columns
@@ -1381,20 +1382,19 @@ def get_roc(df, group1, group2, plot = False, motifs = False, feature_set = ["kn
           sorted_auc_scores[classes[i]] = (feature, roc_auc)
           best_fpr[classes[i]] = fpr
           best_tpr[classes[i]] = tpr
-    if plot:
-      # Plot average ROC curves for the best features
-      for classy, (best_feature, best_auc) in sorted_auc_scores.items():
-        plt.figure()
-        plt.plot(best_fpr[classy], best_tpr[classy], label = f'ROC curve (area = {best_auc:.2f})')
-        plt.plot([0, 1], [0, 1], 'k--')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.title(f'Best Feature ROC for {classy}: {best_feature}')
-        plt.legend(loc = "lower right")
-        if filepath:
-          plt.savefig(filepath.split('.')[0] + "_" + str(classy) + filepath.split('.')[-1], format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+    # Plot average ROC curves for the best features
+    for classy, (best_feature, best_auc) in sorted_auc_scores.items():
+      plt.figure()
+      plt.plot(best_fpr[classy], best_tpr[classy], label = f'ROC curve (area = {best_auc:.2f})')
+      plt.plot([0, 1], [0, 1], 'k--')
+      plt.xlim([0.0, 1.0])
+      plt.ylim([0.0, 1.05])
+      plt.xlabel('False Positive Rate')
+      plt.ylabel('True Positive Rate')
+      plt.title(f'Best Feature ROC for {classy}: {best_feature}')
+      plt.legend(loc = "lower right")
+    if filepath:
+      plt.savefig(filepath.split('.')[0] + "_" + str(classy) + filepath.split('.')[-1], format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
   return sorted_auc_scores
 
 

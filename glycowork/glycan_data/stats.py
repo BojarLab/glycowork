@@ -801,7 +801,7 @@ def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
     for idx in range(df.shape[1]):
       group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
-      clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma)
+      clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, size = df.shape[0])
   else:
     clr_adjusted = np.log2(df) - np.log2(geometric_mean)
   return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
