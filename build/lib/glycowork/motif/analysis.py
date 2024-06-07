@@ -160,7 +160,7 @@ def clean_up_heatmap(df):
 
 def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
                  datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan',
-                custom_motifs = [], **kwargs):
+                custom_motifs = [], return_plot = False, **kwargs):
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
   | Arguments:
   | :-
@@ -176,6 +176,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
   | filepath (string): absolute path including full filename allows for saving the plot
   | index_col (string): default column to convert to dataframe index; default:'glycan'
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+  | return_plot (bool): whether to return the plot object for external saving; default:False
   | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                      
   | Returns:
   | :-
@@ -218,14 +219,18 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
   else:
     center = 0
   # Cluster the abundances
-  sns.clustermap(df, center = center, **kwargs)
+  g = sns.clustermap(df, center = center, **kwargs)
   plt.xlabel('Samples')
   plt.ylabel('Glycans' if not motifs else 'Motifs')
   plt.tight_layout()
-  if filepath:
+  if filepath and not return_plot:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
                 bbox_inches = 'tight')
-  plt.show()
+    plt.close(g.fig)
+  elif return_plot:
+    return g
+  else:
+    plt.show()
 
 
 def plot_embeddings(glycans, emb = None, label_list = None,

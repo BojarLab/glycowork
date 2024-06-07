@@ -2,6 +2,9 @@ import os
 import sys
 import threading
 import tkinter as tk
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 from tkinter import simpledialog, filedialog, messagebox, ttk
 from glycowork.motif.draw import GlycoDraw, plot_glycans_excel
 from glycowork.motif.analysis import get_differential_expression, get_heatmap, get_lectin_array
@@ -79,7 +82,6 @@ class GlycoDrawExcelDialog(simpledialog.Dialog):
     def body(self, master):
         self.title("GlycoDrawExcel Input")
         tk.Label(master, text = "Select CSV or Excel File:").grid(row = 0)
-
         self.csv_entry = tk.Entry(master)
         self.csv_entry.grid(row = 0, column = 1)
         self.csv_button = tk.Button(master, text = "Browse...", command = self.browse_csv)
@@ -215,8 +217,9 @@ class GetHeatmapDialog(simpledialog.Dialog):
         
         # Input file selection
         tk.Label(master, text = "Select Input CSV or Excel File:").grid(row = 0, sticky = tk.W)
-        self.input_file_entry = tk.Entry(master)
-        self.input_file_entry.grid(row = 0, column = 1)
+        self.input_file_entry = tk.StringVar(master)
+        self.input_entry = tk.Entry(master, textvariable = self.input_file_entry, state = 'readonly')
+        self.input_entry.grid(row = 0, column = 1)
         self.input_file_browse = tk.Button(master, text = "Browse...", command = self.browse_input_file)
         self.input_file_browse.grid(row = 0, column = 2)
         
@@ -226,38 +229,49 @@ class GetHeatmapDialog(simpledialog.Dialog):
         self.motif_analysis_check.grid(row = 1, columnspan = 3, sticky = tk.W)
         
         # Output PDF file selection
-        tk.Label(master, text = "Select Output for PDF File:").grid(row = 2, sticky = tk.W)
-        self.output_file_entry = tk.Entry(master)
-        self.output_file_entry.grid(row = 2, column = 1)
+        tk.Label(master, text = "Select Output for Heatmap File:").grid(row = 2, sticky = tk.W)
+        self.output_file_entry = tk.StringVar(master)
+        self.output_entry = tk.Entry(master, textvariable = self.output_file_entry, state = 'readonly')
+        self.output_entry.grid(row = 2, column = 1)
         self.output_file_browse = tk.Button(master, text = "Browse...", command = self.browse_output_file)
         self.output_file_browse.grid(row = 2, column = 2)
 
-        return self.input_file_entry  # to put focus on the input file entry widget
+        return self.input_entry  # to put focus on the input file entry widget
 
     def browse_input_file(self):
         file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv"), ("Excel Files", "*.xlsx")])
         if file_path:
-            self.input_file_entry.delete(0, tk.END)
-            self.input_file_entry.insert(0, file_path)
+            self.input_file_entry.set(file_path)
 
     def browse_output_file(self):
-        file_path = filedialog.asksaveasfilename(filetypes = [("PDF Files", "*.pdf")], defaultextension = ".pdf")
+        #file_path = filedialog.asksaveasfilename(filetypes = [("PDF Files", "*.pdf")], defaultextension = ".pdf")
+        file_path = filedialog.askdirectory()
         if file_path:
-            self.output_file_entry.delete(0, tk.END)
-            self.output_file_entry.insert(0, file_path)
+            self.output_file_entry.set(file_path + "/output.png")
 
     def apply(self):
         input_file_path = self.input_file_entry.get()
         motif_analysis = self.motif_analysis_var.get()
         output_file_path = self.output_file_entry.get()
-        self.result = input_file_path, motif_analysis, output_file_path
+        if input_file_path and output_file_path:
+            self.result = input_file_path, motif_analysis, output_file_path
+        else:
+            messagebox.showerror("Error", "Please complete all fields correctly.")
+            self.result = None  # Prevent dialog from closing
 
 
 def openGetHeatmapDialog():
     dialog_result = GetHeatmapDialog(app)
     if dialog_result.result:
         input_file_path, motif_analysis, output_file_path = dialog_result.result
-        get_heatmap(input_file_path, motifs = motif_analysis, feature_set = ["known", "exhaustive"], filepath = output_file_path)
+        try:
+            g = get_heatmap(df = input_file_path, motifs = motif_analysis,
+                    feature_set = ["known", "exhaustive"], return_plot = True)
+            fig = g.fig
+            fig.savefig(output_file_path, format = "png", dpi = 300,
+                bbox_inches = 'tight')
+        except Exception as e:
+            messagebox.showerror("Error Saving File", f"An error occurred: {str(e)}")
 
 
 class LectinArrayAnalysisDialog(simpledialog.Dialog):
@@ -272,12 +286,12 @@ class LectinArrayAnalysisDialog(simpledialog.Dialog):
         self.file_browse.grid(row = 0, column = 2)
         
         # Treatment group indices
-        tk.Label(master, text = "Treatment Group Columns (comma-separated):").grid(row = 1, sticky = tk.W)
+        tk.Label(master, text = "Treatment Group Rows (comma-separated):").grid(row = 1, sticky = tk.W)
         self.treatment_entry = tk.Entry(master)
         self.treatment_entry.grid(row = 1, column = 1, columnspan = 2, sticky = tk.W+tk.E)
         
         # Control group indices
-        tk.Label(master, text = "Control Group Columns (comma-separated):").grid(row = 2, sticky = tk.W)
+        tk.Label(master, text = "Control Group Rows (comma-separated):").grid(row = 2, sticky = tk.W)
         self.control_entry = tk.Entry(master)
         self.control_entry.grid(row = 2, column = 1, columnspan = 2, sticky = tk.W+tk.E)
         
@@ -349,7 +363,7 @@ def show_about_info():
 
 app = tk.Tk()
 app.title("glycowork GUI")
-app.geometry("300x150")
+app.geometry("300x225")
 
 btn_function1 = tk.Button(app, text = "Run GlycoDraw", command = openGlycoDrawDialog)
 btn_function1.pack(pady = 5)
