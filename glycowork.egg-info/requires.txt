@@ -3,7 +3,7 @@ regex
 networkx>=3.0
 statsmodels
 scipy
-torch
+gdown
 seaborn
 xgboost
 mpld3
@@ -12,6 +12,7 @@ matplotlib-inline
 
 [all]
 torch_geometric
+torch
 CairoSVG
 drawSvg~=2.0
 glyles
@@ -19,14 +20,18 @@ pubchempy
 requests
 Pillow
 openpyxl
+py3Dmol
+gdown
 
 [chem]
 glyles
 pubchempy
 requests
+py3Dmol
 
 [dev]
 torch_geometric
+torch
 CairoSVG
 drawSvg~=2.0
 glyles
@@ -34,6 +39,8 @@ pubchempy
 requests
 Pillow
 openpyxl
+py3Dmol
+gdown
 
 [draw]
 CairoSVG
@@ -43,3 +50,4 @@ openpyxl
 
 [ml]
 torch_geometric
+torch

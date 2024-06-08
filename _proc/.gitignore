@@ -1,1 +1,4 @@
 /.quarto/
+
+# Ignore .pkl files in the root directory
+/*.pkl

@@ -1,0 +1,10 @@
+﻿glycan,control_1,control_2,control_3,tumor_1,tumor_2,tumor_3
+Neu5Ac(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc,7.22,7.9,2.88,2.9,6.23,3.22
+Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc,3.84,2.81,0.99,1.56,2.78,0.97
+Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Gal(b1-3)]GalNAc,0.15,0.09,0,2.3,1.89,2.24
+Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-6)]GalNAc,0.24,0.14,0.4,4.33,4.51,4.9
+Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc,2.29,1.55,1.86,19.89,38.78,19.41
+Gal(b1-3)[Neu5Ac(a2-6)]GalNAc,3.03,3.58,1.08,1.43,1.29,1.52
+Neu5Ac(a2-3)Gal(b1-3)GalNAc,41.73,36.96,59.92,28.9,13.56,25.94
+Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc,40.27,44.5,30.47,27.41,22.76,25.19
+Neu5Ac(a2-3)Gal(b1-3)[GlcNAc(b1-6)]GalNAc,1.23,2.47,2.4,11.29,8.2,16.6

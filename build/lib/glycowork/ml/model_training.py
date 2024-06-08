@@ -1,20 +1,22 @@
 import copy
 import time
 import math
-import torch
 import numpy as np
 import pandas as pd
 import xgboost as xgb
 import seaborn as sns
 import matplotlib.pyplot as plt
-import torch.nn.functional as F
+try:
+    import torch
+    import torch.nn.functional as F
+    # Choose the correct computing architecture
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda:0"
+except ImportError:
+    raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error, label_ranking_average_precision_score, ndcg_score
 from glycowork.motif.annotate import annotate_dataset
-
-# Choose the correct computing architecture
-device = "cpu"
-if torch.cuda.is_available():
-    device = "cuda:0"
 
 
 class EarlyStopping:
@@ -122,7 +124,7 @@ def train_model(model, dataloaders, criterion, optimizer,
         model.train()
       else:
         model.eval()
-  
+
       running_loss = []
       running_acc = []
       running_mcc = []
@@ -167,7 +169,7 @@ def train_model(model, dataloaders, criterion, optimizer,
             else:
                 optimizer.step()
 
-        # Collecting relevant metrics         
+        # Collecting relevant metrics
         running_loss.append(loss.item())
         if mode == 'classification':
             if mode2 == 'multi':
@@ -236,7 +238,7 @@ def train_model(model, dataloaders, criterion, optimizer,
   model.load_state_dict(best_model_wts)
 
   # Plot loss & score over the course of training
-  fig, ax = plt.subplots(nrows = 2, ncols = 1)
+  _, _ = plt.subplots(nrows = 2, ncols = 1)
   plt.subplot(2, 1, 1)
   plt.plot(range(epoch+1), val_losses)
   plt.title('Model Training')

@@ -18,14 +18,12 @@ def seed_wildcard_hierarchy(glycans, labels, wildcard_list,
   | :-
   | Returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name
   """
-  added_glycans_labels = [(glycan.replace(j, wildcard_name), label) 
-                             for glycan, label in zip(glycans, labels) 
-                             for j in wildcard_list 
-                             if j in glycan and random.uniform(0, 1) < r]
+  added_glycans_labels = [(glycan.replace(j, wildcard_name), label)
+                             for glycan, label in zip(glycans, labels)
+                             for j in wildcard_list if j in glycan and random.uniform(0, 1) < r]
   if added_glycans_labels:
     added_glycans, added_labels = zip(*added_glycans_labels)
     return glycans + list(added_glycans), labels + list(added_labels)
-    
   return glycans, labels
 
 
@@ -60,24 +58,20 @@ def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False,
   class_list = list(set(df[rank].values.tolist()))
   class_list = [k for k in class_list if k != 'undetermined']
   temp = []
-
   # For each class in rank, get unique set of glycans
-  for i in range(len(class_list)):
-    t = df[df[rank] == class_list[i]]
+  for classy in class_list:
+    t = df[df[rank] == classy]
     t = t.drop_duplicates('glycan', keep = 'first')
     temp.append(t)
   df = pd.concat(temp).reset_index(drop = True)
-
   # Only keep classes in rank with minimum number of glycans
   counts = df[rank].value_counts()
   allowed_classes = [counts.index.tolist()[k] for k in range(len(counts.index.tolist())) if (counts >= min_seq).values.tolist()[k]]
   df = df[df[rank].isin(allowed_classes)]
-
   # Map string classes to integers
   class_list = list(sorted(list(set(df[rank].values.tolist()))))
   class_converter = {class_list[k]: k for k in range(len(class_list))}
   df[rank] = [class_converter[k] for k in df[rank]]
-
   # Split each class proportionally
   sss = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2)
   sss.get_n_splits(df[col].values.tolist(), df[rank].values.tolist())
@@ -95,7 +89,6 @@ def hierarchy_filter(df_in, rank = 'Domain', min_seq = 5, wildcard_seed = False,
                                              wildcard_name = wildcard_name, r = r)
     id_val = list(range(len(val_x)))
     len_val_x = [len(k) for k in val_x]
-
     id_val = [[id_val[k]] * len_val_x[k] for k in range(len(len_val_x))]
     id_val = [item for sublist in id_val for item in sublist]
 
@@ -133,8 +126,8 @@ def prepare_multilabel(df, rank = 'Species', glycan_col = 'glycan'):
   class_list = list(set(df[rank].values.tolist()))
   labels = [[0.]*len(class_list) for k in range(len(glycans))]
   # Get all class occurrences of glycan to construct multi-label
-  for k in range(len(glycans)):
-    sub_classes = df[df[glycan_col] == glycans[k]][rank].values.tolist()
+  for k, glyc in enumerate(glycans):
+    sub_classes = df[df[glycan_col] == glyc][rank].values.tolist()
     for j in sub_classes:
       labels[k][class_list.index(j)] = 1.
   return glycans, labels

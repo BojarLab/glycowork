@@ -1,7 +1,9 @@
 import networkx as nx
 import pandas as pd
+import numpy as np
 import re
 from collections import defaultdict
+from functools import partial
 
 from glycowork.glycan_data.loader import linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
@@ -59,20 +61,15 @@ def annotate_glycan(glycan, motifs = None, termini_list = [], gmotifs = None):
     motifs = motif_list
   # Check whether termini are specified
   if not termini_list and isinstance(motifs, pd.DataFrame):
-    termini_list = [eval(k) for k in motifs.termini_spec]
+    termini_list = list(map(eval, motifs.termini_spec))
   if gmotifs is None:
     termini = 'provided' if termini_list else 'ignore'
-    gmotifs = [glycan_to_nxGraph(g, termini = termini, termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
+    partial_glycan_to_nxGraph = partial(glycan_to_nxGraph, termini = termini)
+    gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
   # Count the number of times each motif occurs in a glycan
-  if termini_list:
-    ggraph = ensure_graph(glycan, termini = 'calc')
-    res = [subgraph_isomorphism(ggraph, gmotifs[k], termini_list = termini_list[k],
-                                count = True) for k in range(len(motifs))]*1
-  else:
-    ggraph = ensure_graph(glycan, termini = 'ignore')
-    res = [subgraph_isomorphism(ggraph, gmotifs[k], termini_list = termini_list,
-                                count = True) for k in range(len(motifs))]*1
- 
+  ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
+  res = [subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
+                                count = True) for i, g in enumerate(gmotifs)]*1
   out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
@@ -98,8 +95,7 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
   smiles_list = IUPAC_to_SMILES(glycan_list)
   if placeholder:
     dummy = IUPAC_to_SMILES(['Glc'])[0]
-  compounds_list = []
-  failed_requests = []
+  compounds_list, failed_requests = [], []
   for s in smiles_list:
     try:
       c = pcp.get_compounds(s, 'smiles')[0]
@@ -140,7 +136,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs of size 1), \
   |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
   |   and 'chemical' (molecular properties of glycan)
-  | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')
+  | termini_list (list): list of monosaccharide/linkage positions for motifs (from 'terminal', 'internal', and 'flexible')
   | condense (bool): if True, throws away columns with only zeroes; default:False
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
   | Returns:
@@ -153,24 +149,26 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     motifs = motif_list
   # Checks whether termini information is provided
   if not termini_list:
-    termini_list = [eval(k) for k in motifs.termini_spec]
+    termini_list = list(map(eval, motifs.termini_spec))
   shopping_cart = []
   if 'known' in feature_set:
     termini = 'provided' if termini_list else 'ignore'
     termini_list = termini_list if termini_list else ['ignore']*len(motifs)
-    gmotifs = [glycan_to_nxGraph(g, termini = termini, termini_list = termini_list[i]) for i, g in enumerate(motifs.motif)]
+    partial_glycan_to_nxGraph = partial(glycan_to_nxGraph, termini = termini)
+    gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
     # Counts literature-annotated motifs in each glycan
-    shopping_cart.append(pd.concat([annotate_glycan(k, motifs = motifs,
-                                                    gmotifs = gmotifs, termini_list = termini_list) for k in glycans], axis = 0))
+    partial_annotate = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
+    shopping_cart.append(pd.concat(list(map(partial_annotate, glycans)), axis = 0))
   if 'custom' in feature_set:
     normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
-    gmotifs = [glycan_to_nxGraph(g) for g in normal_motifs]
-    shopping_cart.append(pd.concat([annotate_glycan(k, motifs = normal_motifs, gmotifs = gmotifs) for k in glycans], axis = 0))
+    gmotifs = list(map(glycan_to_nxGraph, normal_motifs))
+    partial_annotate = partial(annotate_glycan, motifs = normal_motifs, gmotifs = gmotifs)
+    shopping_cart.append(pd.concat(list(map(partial_annotate, glycans)), axis = 0))
     regex_motifs = [m[1:] for m in custom_motifs if m.startswith('r')]
     shopping_cart.append(pd.concat([pd.DataFrame([len(get_match(p, k)) for p in regex_motifs], columns = regex_motifs, index = [k]) for k in glycans], axis = 0))
   if 'graph' in feature_set:
     # Calculates graph features of each glycan
-    shopping_cart.append(pd.concat([generate_graph_features(k) for k in glycans], axis = 0))
+    shopping_cart.append(pd.concat(list(map(generate_graph_features, glycans)), axis = 0))
   if 'exhaustive' in feature_set:
     # Counts disaccharides and monosaccharides in each glycan
     temp = get_k_saccharides(glycans, size = 2, up_to = True)
@@ -181,7 +179,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   if 'terminal' or 'terminal2' in feature_set:
     bag1, bag2 = [], []
     if 'terminal' in feature_set:
-      bag1 = [get_terminal_structures(glycan) for glycan in glycans]
+      bag1 = list(map(get_terminal_structures, glycans))
     if 'terminal2' in feature_set:
       bag2 = [get_terminal_structures(glycan, size = 2) for glycan in glycans]
     bag = bag1 + bag2
@@ -224,17 +222,22 @@ def quantify_motifs(df, glycans, feature_set, custom_motifs = []):
     if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     # Motif extraction
-    df_motif = annotate_dataset(glycans,
-                                feature_set = feature_set,
+    df_motif = annotate_dataset(glycans, feature_set = feature_set,
                                 condense = True, custom_motifs = custom_motifs)
     collect_dic = {}
     df = df.T
+    log2 = (df.values < 0).any()
     # Motif quantification
     for c, col in enumerate(df_motif.columns):
       indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
       temp = df.iloc[:, indices]
       temp.columns = range(temp.columns.size)
-      collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
+      if log2:
+        linear_values = np.power(2, temp)
+        weighted_values = (linear_values * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
+        collect_dic[col] = np.log2(weighted_values)
+      else:
+        collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
     df = pd.DataFrame(collect_dic)
     return df
 
@@ -321,8 +324,8 @@ def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False, ter
       if col_sums[col1] == col_sums[col2] and col_subs[col1] == col2:
         drop_columns.append(col2)
   out_matrix = out_matrix.drop(drop_columns, axis = 1)
-  if size > 3:
-    out_matrix.columns = [remove_unmatched_brackets(g) for g in out_matrix.columns]
+  out_matrix.columns = [remove_unmatched_brackets(g) for g in out_matrix.columns]
+  out_matrix = out_matrix.groupby(by = out_matrix.columns, axis = 1).sum()
   if up_to:
     combined_df= pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
     if just_motifs:
@@ -389,10 +392,10 @@ def group_glycans_core(glycans, p_values):
   | :-
   | Returns dictionaries of group : glycans and group : p-values
   """
-  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
-  grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAc6S(b1-6)GalNAc"]])]
-  grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and not g in grouped_glycans["core2"]]
+  grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAcOS(b1-6)GalNAc"]])]
+  grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and g not in grouped_glycans["core2"]]
   grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["core2"] and g not in grouped_glycans["core1"]]
   grouped_p_values["core2"] = [temp[g] for g in grouped_glycans["core2"]]
   grouped_p_values["core1"] = [temp[g] for g in grouped_glycans["core1"]]
@@ -413,7 +416,7 @@ def group_glycans_sia_fuc(glycans, p_values):
   | :-
   | Returns dictionaries of group : glycans and group : p-values
   """
-  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
   grouped_glycans["SiaFuc"] = [g for g in glycans if "Neu" in g and "Fuc" in g]
   grouped_glycans["Sia"] = [g for g in glycans if "Neu" in g and g not in grouped_glycans["SiaFuc"]]
@@ -440,7 +443,7 @@ def group_glycans_N_glycan_type(glycans, p_values):
   | :-
   | Returns dictionaries of group : glycans and group : p-values
   """
-  temp = {glycans[k]:p_values[k] for k in range(len(glycans))}
+  temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
   grouped_glycans["complex"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-6)", "GlcNAc(b1-2)Man(a1-?)[GlcNAc(b1-2)Man(a1-?)]Man"]])]
   grouped_glycans["hybrid"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man"]]) and g not in grouped_glycans["complex"]]
@@ -455,3 +458,147 @@ def group_glycans_N_glycan_type(glycans, p_values):
       del grouped_glycans[grp]
       del grouped_p_values[grp]
   return grouped_glycans, grouped_p_values
+
+
+def load_lectin_lib():
+  """create dictionary of lectin specificities for get_lectin_array\n
+  | Returns:
+  | :-
+  | Returns a dictionary of index: Lectin object, with its specificities
+  """
+  from glycowork.glycan_data.loader import lectin_specificity
+  lectin_lib = {}
+  for i, row in enumerate(lectin_specificity.itertuples()):
+    specificity_dict = {"primary": row.specificity_primary, "secondary": row.specificity_secondary, "negative": row.specificity_negative}
+    lectin_lib[i] = Lectin(abbr = row.abbreviation.split(","), name = row.name.split(","), specificity = specificity_dict,
+                           species = row.species, reference = row.reference, notes = row.notes)
+  return lectin_lib
+
+
+class Lectin():
+  def __init__(self, abbr: list, name: list, # A lectin may have multiple names and abbreviations
+                 specificity: dict = {"primary": None, "secondary": None, "negative": None},
+                 species: str = "", reference: str = "", notes: str = ""):
+    self.abbr = abbr
+    self.name = name
+    self.species = species
+    self.reference = reference
+    self.notes = notes
+    self.specificity = specificity
+
+  def get_all_binding_motifs_count(self):
+      return len(self.specificity["primary"]) + \
+               (len(self.specificity["secondary"]) if self.specificity["secondary"] else 0)
+
+  def get_all_binding_motifs(self):
+      return list(self.specificity["primary"].keys()) + list(self.specificity["secondary"].keys())
+
+  def show_info(self):
+      print(f"Name(s): {'; '.join(self.name)}\n"+\
+      f"Abbreviation(s): {'; '.join(self.abbr)}\n"+\
+      f"Species: {self.species}\n" + \
+                       ''.join(f"Specificity ({key}): {'; '.join(value) if value else 'no information'}\n" 
+                               for key, value in self.specificity.items()) + \
+                       f"Reference: {self.reference}\nnotes: {self.notes}\n")
+
+  def check_binding(self, glycan: str):
+    """Check whether a glycan binds to this lectin. 
+    Returns an integer. 
+    0: no binding; 
+    1: binds to lectin's primary recognition motif;
+    2: binds to lectin's seconary recognition motif;
+    """
+    for key in ["negative", "primary", "secondary"]:
+      motifs = self.specificity.get(key, [])
+      if motifs:
+        for motif, termini in motifs.items():
+          if subgraph_isomorphism(glycan, motif, termini_list = termini):
+            return 0 if key == "negative" else (1 if key == "primary" else 2)
+    return 0
+
+
+def create_lectin_and_motif_mappings(lectin_list, lectin_lib):
+  """Create a collection of lectins that can be used for motif scoring and all possible binding motifs.\n
+  | Arguments:
+  | :-
+  | lectin_list (list): list of lectins used in this experiment
+  | lectin_lib (dict): dictionary of type index : Lectin object\n
+  | Returns:
+  | :-
+  | 1. A useable lectin mapping dictionary that maps a user input lectin (string) to the index of a lectin in library --- {lectin: index}.
+  | 2. A motif mapping dictionary that maps a glycan motif to a dictionary of its corresponding lectins, each of which is assigned a weight class that indicates the level of evidence this lectin provides when scoring for this motif --- {motif: {lectin: weight_class}}.
+  | The weight class depends on the match between the motif and the specificity profile of the lectin.
+  | class 0: exact match between motif and primary specificity
+  | class 1: exact match between motif and secondary specificity
+  | class 2: motif encompasses primary specificity but not negative specificity
+  | class 3: motif encompasses secondary specificity but not negative specificity
+  """
+  useable_lectin_mapping = {}
+  motif_mapping = {}
+  lib_lectin_lookup = {i: set(abbr.lower() for abbr in lib_lectin.abbr) for i, lib_lectin in lectin_lib.items()}
+  # Match user's lectin list (of abbreviations) to the library lectins.
+  for lectin in lectin_list:
+    lectin_low = lectin.split("_")[0].lower()
+    for i, abbr_set in lib_lectin_lookup.items():
+      if lectin_low in abbr_set:
+        useable_lectin_mapping[lectin] = i
+        # When an input lectin is matched to a library lectin, assign weight class 0 and 1 to its primary and secondary motif
+        for motif in lectin_lib[i].specificity["primary"]:
+          if motif not in motif_mapping:
+            motif_mapping[motif] = {lectin: 0}
+          else:
+            motif_mapping[motif][lectin] = 0
+        if lectin_lib[i].specificity["secondary"] is not None:
+          for motif in lectin_lib[i].specificity["secondary"]:
+            if motif not in motif_mapping:
+              motif_mapping[motif] = {lectin: 1}
+            else:
+              motif_mapping[motif][lectin] = 1
+        break
+    if lectin not in useable_lectin_mapping:
+      print(f'Lectin "{lectin}" is not found in our annotated lectin library and is excluded from analysis.')
+  # Now add lectins of weight class 2 and 3
+  for motif, mapping in motif_mapping.items():
+    for lectin, i in useable_lectin_mapping.items():
+      if lectin not in mapping:
+        binder = lectin_lib[i].check_binding(motif)
+        if binder:
+          motif_mapping[motif][lectin] = 2 if binder == 1 else 3
+    # sort lectins by weight class
+    motif_mapping[motif] = dict(sorted(mapping.items(), key=lambda x:x[1]))
+  return useable_lectin_mapping, motif_mapping
+
+
+def lectin_motif_scoring(useable_lectin_mapping, motif_mapping, lectin_score_dict, lectin_lib, idf,
+                  class_weight_dict = {0: 1, 1: 0.5, 2: 0.5, 3: 0.25}, specificity_weight_dict = {"<3": 1, "3-4": 0.75, ">4": 0.5},
+                  duplicate_lectin_penalty_factor = 0.8):
+  """Scores motifs based on observed lectin binding\n
+  | Arguments:
+  | :-
+  | useable_lectin_mapping (dict): returned from create_lectin_and_motif_mappings()
+  | motif_mapping (dict): returned from create_lectin_and_motif_mappings()
+  | lectin_score_dict (dict): dictionary of type lectin : effect_size
+  | lectin_lib (dict): dictionary of type index : lectin
+  | idf (float): variance of each lectin across groups
+  | class_weight_dict (dict, optional): dictionary of type lectin class : score weighting factor
+  | specificity_weight_dict (dict, optional): dictionary of type binding specificities : penalty weighting factor
+  | duplicate_lectin_penalty_factor (float, optional): penalty for having several of the same lectin; default:0.8\n
+  | Returns:
+  | :-
+  | Returns a dataframe with motifs, supporting lectins, observed change direction, and score
+  """
+  output = []
+  useable_lectin_count = {k: list(useable_lectin_mapping.values()).count(v) for k, v in useable_lectin_mapping.items()}
+  #max_motifs = max([lectin_lib[k].get_all_binding_motifs_count() for k in useable_lectin_mapping.values()]) + 1
+  for motif, lectins in motif_mapping.items():
+    score = 0
+    for lectin, weight_class in lectins.items():
+      same_lectin_count = useable_lectin_count[lectin]
+      specificity_count = lectin_lib[useable_lectin_mapping[lectin]].get_all_binding_motifs_count()
+      tf = 1/specificity_count
+      weight_final = class_weight_dict[weight_class] * (tf * idf[lectin])
+      weight_final *= (duplicate_lectin_penalty_factor ** same_lectin_count) if same_lectin_count > 1 else 1
+      score += lectin_score_dict[lectin] * weight_final
+    output.append({"motif": motif, "lectin(s)": ", ".join(lectins),
+                       "change": "down" if score < 0 else "up", "score": round(abs(score), ndigits = 2)})
+  return pd.DataFrame(output)

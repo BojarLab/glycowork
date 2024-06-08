@@ -2,30 +2,28 @@ import pandas as pd
 import numpy as np
 from importlib import resources
 import math
-import torch
-from torch.utils.data import Dataset
-from glycowork.glycan_data.loader import lib, unwrap
+try:
+    import torch
+    from torch.utils.data import Dataset
+    # Choosing the right computing architecture
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda:0"
+except ImportError:
+  raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
+from glycowork.glycan_data.loader import lib
 from glycowork.motif.tokenization import prot_to_coded
 from glycowork.ml.processing import dataset_to_dataloader
-
-# Background correction values for LectinOracle predictions
-with resources.open_text("glycowork.ml", "glycowork_lectinoracle_background_correction.csv") as f:
-  df_corr = pd.read_csv(f)
-
-# Choosing the right computing architecture
-device = "cpu"
-if torch.cuda.is_available():
-    device = "cuda:0"
 
 
 class SimpleDataset(Dataset):
   def __init__(self, x, y):
     self.x = x
     self.y = y
-    
+
   def __len__(self):
     return len(self.x)
-  
+
   def __getitem__(self, index):
     inp = self.x[index]
     out = self.y[index]
@@ -122,14 +120,14 @@ def get_multi_pred(prot, glycans, model, prot_dic,
   if background_correction:
     correction_df = pd.Series(correction_df.pred.values,
                               index = correction_df.motif).to_dict()
-    bg_res = [correction_dict.get(j, 0) for j in glycans]
+    bg_res = [correction_df.get(j, 0) for j in glycans]
     if 0 in bg_res:
       print("Warning: not all glycans are in the correction_df; consider adding their background to correction_df")
     res = [a_i - b_i for a_i, b_i in zip(res, bg_res)]
   return res
 
 
-def get_lectin_preds(prot, glycans, model, prot_dic = {}, background_correction = False,
+def get_lectin_preds(prot, glycans, model, prot_dic = None, background_correction = False,
                      correction_df = None, batch_size = 128, libr = None, sort = True,
                      flex = False):
   """Wrapper that uses LectinOracle-type model for predicting binding of protein to glycans\n
@@ -152,8 +150,9 @@ def get_lectin_preds(prot, glycans, model, prot_dic = {}, background_correction 
   if libr is None:
     libr = lib
   if correction_df is None:
-    correction_df = df_corr
-  if len(prot_dic) < 1 and not flex:
+    with resources.open_text("glycowork.ml", "glycowork_lectinoracle_background_correction.csv") as f:
+        correction_df = pd.read_csv(f)
+  if prot_dic is None and not flex:
     print("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
   preds = get_multi_pred(prot, glycans, model, prot_dic,
                          batch_size = batch_size, libr = libr,
@@ -188,7 +187,7 @@ def get_esm1b_representations(prots, model, alphabet):
         ('protein' + str(idx), prot[:min(len(prot), 1000)])
         for idx, prot in enumerate(unique_prots)
     ]
-  batch_labels, batch_strs, batch_tokens = batch_converter(data_list)
+  _, _, batch_tokens = batch_converter(data_list)
   with torch.no_grad():
       results = model(batch_tokens, repr_layers = [33], return_contacts = False)
   token_representations = results["representations"][33]
@@ -197,8 +196,8 @@ def get_esm1b_representations(prots, model, alphabet):
         for i, (_, seq) in enumerate(data_list)
     ]
   prot_dic = {
-        unique_prots[k]: sequence_representations[k].tolist() 
-        for k in range(len(sequence_representations))
+        unique_prots[k]: s_rep.tolist()
+        for k, s_rep in enumerate(sequence_representations)
     }
   return prot_dic
 
@@ -228,6 +227,6 @@ def get_Nsequon_preds(prots, model, prot_dic):
     preds.extend(pred)
   df_pred = pd.DataFrame({
         'seq': prots,
-        'glycosylated': all_preds
+        'glycosylated': preds
     })
   return df_pred

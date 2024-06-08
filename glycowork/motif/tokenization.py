@@ -3,14 +3,12 @@ import numpy as np
 import networkx as nx
 import re
 import copy
-import math
 from importlib import resources
-from itertools import product
 from collections import Counter
 from sklearn.cluster import DBSCAN
 
-from glycowork.glycan_data.loader import lib, unwrap, df_species, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages
-from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, rescue_glycans, rescue_compositions
+from glycowork.glycan_data.loader import lib, unwrap, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages
+from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 
 chars = {'A':1, 'B':2, 'C':3, 'D':4, 'E':5, 'F':6, 'G':7, 'H':8, 'I':9, 'J':10, 'K':11,
@@ -256,7 +254,7 @@ def stemify_dataset(df, stem_lib = None, libr = None,
 
 def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', reduced = False,
                       sample_prep = 'underivatized', mass_tolerance = 0.5, kingdom = 'Animalia',
-                      glycan_class = 'N', df_use = None, filter_out = set()):
+                      glycan_class = 'N', df_use = None, filter_out = None):
   """Mapping a m/z value to a matching monosaccharide composition within SugarBase\n
   | Arguments:
   | :-
@@ -276,6 +274,8 @@ def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', 
   """
   if df_use is None:
     df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
+  if filter_out is None:
+    filter_out = set()
   adduct = mass_dict['Acetate'] if mode == 'negative' else mass_dict['Na+']
   if reduced:
     mz_value -= 1.0078
@@ -339,7 +339,7 @@ def condense_composition_matching(matched_composition):
   """
   # Establish glycan equality given the wildcards
   match_matrix = pd.DataFrame(
-    [[compare_glycans(k, j, wildcards_ptm = True)
+    [[compare_glycans(k, j)
       for j in matched_composition] for k in matched_composition],
     columns = matched_composition
     )
@@ -406,7 +406,7 @@ def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = '
 
 def mz_to_structures(mz_list, glycan_class, kingdom = 'Animalia', abundances = None, mode = 'negative',
                      mass_value = 'monoisotopic', sample_prep = 'underivatized', mass_tolerance = 0.5,
-                     reduced = False, df_use = None, filter_out = set(), verbose = False):
+                     reduced = False, df_use = None, filter_out = None, verbose = False):
   """wrapper function to map precursor masses to structures, condense them, and match them with relative intensities\n
   | Arguments:
   | :-
@@ -428,6 +428,8 @@ def mz_to_structures(mz_list, glycan_class, kingdom = 'Animalia', abundances = N
   """
   if df_use is None:
     df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
+  if filter_out is None:
+    filter_out = set()
   if abundances is None:
     abundances = pd.DataFrame([range(len(mz_list))]*2).T
   # Check glycan class
@@ -613,7 +615,7 @@ def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivat
 
 
 @rescue_compositions
-def get_unique_topologies(composition, glycan_type, df_use = None, universal_replacers = {},
+def get_unique_topologies(composition, glycan_type, df_use = None, universal_replacers = None,
                          taxonomy_rank = "Kingdom", taxonomy_value = "Animalia"):
   """given a composition, retrieves all observed and unique base topologies\n
   | Arguments:
@@ -630,6 +632,8 @@ def get_unique_topologies(composition, glycan_type, df_use = None, universal_rep
   """
   if df_use is None:
     df_use = df_glycan
+  if universal_replacers is None:
+    universal_replacers = {}
   df_use = df_use[df_use.Composition == composition]
   df_use = df_use[df_use.glycan_type == glycan_type]
   df_use = df_use[df_use[taxonomy_rank].apply(lambda x: taxonomy_value in x)].glycan.values

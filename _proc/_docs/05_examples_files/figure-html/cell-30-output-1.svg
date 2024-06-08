@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+    width="300" height="310" viewBox="-250.0 -155.0 300 310">
+<defs>
+<path d="M-100,0.0 L0,-50.0" stroke-width="4.0" stroke="#000000" id="kQntighA0" />
+<path d="M-100,100.0 L-100,0.0" stroke-width="4.0" stroke="#000000" id="kQntighA1" />
+<path d="M-200,-100 L-100,-100" stroke-width="4.0" stroke="#000000" id="kQntighA2" />
+<path d="M-200,0 L-100,0.0" stroke-width="4.0" stroke="#000000" id="kQntighA3" />
+<path d="M-100,-100 L0,-50.0" stroke-width="4.0" stroke="#000000" id="kQntighA4" />
+<radialGradient cx="0" cy="-50.0" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="kQntighA5">
+<stop offset="0" stop-color="purple" stop-opacity="0.1" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-50,-25.0 L50,-25.0" stroke-width="0" id="kQntighA6" />
+<path d="M-50,-50.0 L50,-50.0" stroke-width="0" id="kQntighA7" />
+<radialGradient cx="-100" cy="0.0" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="kQntighA8">
+<stop offset="0" stop-color="purple" stop-opacity="0.3" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-150,25.0 L-50,25.0" stroke-width="0" id="kQntighA9" />
+<path d="M-150,0.0 L-50,0.0" stroke-width="0" id="kQntighA10" />
+<radialGradient cx="-100" cy="100.0" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="kQntighA11">
+<stop offset="0" stop-color="purple" stop-opacity="0.9" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-150,125.0 L-50,125.0" stroke-width="0" id="kQntighA12" />
+<path d="M-150,100.0 L-50,100.0" stroke-width="0" id="kQntighA13" />
+<radialGradient cx="-200" cy="0" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="kQntighA14">
+<stop offset="0" stop-color="purple" stop-opacity="0.7" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-250,25.0 L-150,25.0" stroke-width="0" id="kQntighA15" />
+<path d="M-250,0 L-150,0" stroke-width="0" id="kQntighA16" />
+<radialGradient cx="-100" cy="-100" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="kQntighA17">
+<stop offset="0" stop-color="purple" stop-opacity="0.5" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-150,-75.0 L-50,-75.0" stroke-width="0" id="kQntighA18" />
+<path d="M-150,-100 L-50,-100" stroke-width="0" id="kQntighA19" />
+<radialGradient cx="-200" cy="-100" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="kQntighA20">
+<stop offset="0" stop-color="purple" stop-opacity="0.2" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-250,-75.0 L-150,-75.0" stroke-width="0" id="kQntighA21" />
+<path d="M-250,-100 L-150,-100" stroke-width="0" id="kQntighA22" />
+</defs>
+<g transform="rotate(0 150.0 155.0)">
+<use xlink:href="#kQntighA0" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#kQntighA0" startOffset="50%">
+<tspan dy="-0.5em">β 3</tspan>
+</textPath></text>
+<use xlink:href="#kQntighA1" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#kQntighA1" startOffset="50%">
+<tspan dy="-0.5em">α 2</tspan>
+</textPath></text>
+<use xlink:href="#kQntighA2" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#kQntighA2" startOffset="50%">
+<tspan dy="-0.5em">α 8</tspan>
+</textPath></text>
+<use xlink:href="#kQntighA3" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#kQntighA3" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#kQntighA4" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#kQntighA4" startOffset="50%">
+<tspan dy="-0.5em">α 6</tspan>
+</textPath></text>
+<circle cx="0" cy="-50.0" r="50.0" fill="url(#kQntighA5)" />
+<rect x="-25.0" y="-75.0" width="50" height="50" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#kQntighA6" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA6" startOffset="50%"></textPath></text>
+<use xlink:href="#kQntighA7" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA7" startOffset="50%"></textPath></text>
+<circle cx="-100" cy="0.0" r="50.0" fill="url(#kQntighA8)" />
+<circle cx="-100" cy="0.0" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#kQntighA9" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA9" startOffset="50%"></textPath></text>
+<use xlink:href="#kQntighA10" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA10" startOffset="50%"></textPath></text>
+<circle cx="-100" cy="100.0" r="50.0" fill="url(#kQntighA11)" />
+<path d="M-125.0,121.65063509461096 L-100,78.34936490538904 L-75.0,121.65063509461096 Z" fill="#C23537" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#kQntighA12" />
+<text font-size="17.5" text-anchor="middle"><textPath xlink:href="#kQntighA12" startOffset="50%"></textPath></text>
+<use xlink:href="#kQntighA13" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA13" startOffset="50%"></textPath></text>
+<circle cx="-200" cy="0" r="50.0" fill="url(#kQntighA14)" />
+<path d="M-200,25.0 L-175.0,0 L-200,-25.0 L-225.0,0 Z" fill="#A15989" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#kQntighA15" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA15" startOffset="50%"></textPath></text>
+<use xlink:href="#kQntighA16" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA16" startOffset="50%"></textPath></text>
+<circle cx="-100" cy="-100" r="50.0" fill="url(#kQntighA17)" />
+<path d="M-100,-75.0 L-75.0,-100 L-100,-125.0 L-125.0,-100 Z" fill="#A15989" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#kQntighA18" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA18" startOffset="50%"></textPath></text>
+<use xlink:href="#kQntighA19" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA19" startOffset="50%"></textPath></text>
+<circle cx="-200" cy="-100" r="50.0" fill="url(#kQntighA20)" />
+<path d="M-200,-75.0 L-175.0,-100 L-200,-125.0 L-225.0,-100 Z" fill="#A15989" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#kQntighA21" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA21" startOffset="50%"></textPath></text>
+<use xlink:href="#kQntighA22" />
+<text font-size="15.0" fill="#000000" text-anchor="middle"><textPath xlink:href="#kQntighA22" startOffset="50%"></textPath></text>
+</g>
+</svg>

@@ -18,7 +18,7 @@ def get_insight(glycan, motifs = None):
     # Find glycan as string or as graph in df_glycan
     if glycan in df_glycan.glycan:
         idx = df_glycan.glycan.values.tolist().index(glycan)
-    else:     
+    else:
         idx = np.where([compare_glycans(glycan, k) for k in df_glycan.glycan.values.tolist()])[0][0]
     species = df_glycan.Species.values.tolist()[idx]
     if len(species) > 0:

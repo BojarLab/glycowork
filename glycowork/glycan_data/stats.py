@@ -2,17 +2,23 @@ import pandas as pd
 import numpy as np
 import math
 import warnings
-from collections import defaultdict
+from collections import defaultdict, Counter
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.base import BaseEstimator
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway
+from scipy.stats.mstats import winsorize
+from scipy.spatial import procrustes
+from scipy.spatial.distance import squareform
 import scipy.integrate as integrate
 from statsmodels.stats.multitest import multipletests
+from statsmodels.stats.weightstats import ttost_ind, ttost_paired
+from statsmodels.formula.api import ols
+from statsmodels.stats.anova import anova_lm
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
-import statsmodels.api as sm
 import statsmodels.formula.api as smf
+import copy
 rng = np.random.default_rng(42)
+np.random.seed(0)
 
 
 def fast_two_sum(a, b):
@@ -52,9 +58,9 @@ def hlm(z):
 def update_cf_for_m_n(m, n, MM, cf):
   """Constructs cumulative frequency table for experimental parameters defined in the function 'jtkinit'"""
   P = min(m + n, MM)
-  for t in range(n + 1, P + 1):  # Zero-based offset t
-    for u in range(MM, t - 1, -1):  # One-based descending index u
-      cf[u] = expansion_sum(cf[u], -cf[u - t])  # Shewchuk algorithm
+  for t_temp in range(n + 1, P + 1):  # Zero-based offset t_temp
+    for u in range(MM, t_temp - 1, -1):  # One-based descending index u
+      cf[u] = expansion_sum(cf[u], -cf[u - t_temp])  # Shewchuk algorithm
   Q = min(m, MM)
   for s in range(1, Q + 1): # Zero-based offset s
     for u in range(s, MM + 1):  # One-based descending index u
@@ -75,14 +81,19 @@ def cohen_d(x, y, paired = False):
   if paired:
     assert len(x) == len(y), "For paired samples, the size of x and y should be the same"
     diff = np.array(x) - np.array(y)
+    diff_std = np.std(diff, ddof = 1)
+    if diff_std == 0:
+      return 0, 0
     n = len(diff)
-    d = np.mean(diff) / np.std(diff, ddof = 1)
+    d = np.mean(diff) / diff_std
     var_d = 1 / n + d**2 / (2 * n)
   else:
     nx = len(x)
     ny = len(y)
+    sx = max(np.std(x, ddof = 1), 1e-6)
+    sy = max(np.std(y, ddof = 1), 1e-6)
     dof = nx + ny - 2
-    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof = 1) ** 2 + (ny-1)*np.std(y, ddof = 1) ** 2) / dof)
+    d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1) * sx ** 2 + (ny-1) * sy ** 2) / dof)
     var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
   return d, var_d
 
@@ -175,14 +186,13 @@ class MissForest:
   n_iter : int
   Determines the number of iterations for the imputation process.
   """
-
-  def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol = 1e-6):
+  def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol = 1e-5):
     self.regressor = regressor
     self.max_iter = max_iter
     self.tol = tol
 
   def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
-    # Step 1: Initialization 
+    # Step 1: Initialization
     # Keep track of where NaNs are in the original dataset
     X_nan = X.isnull()
     # Replace NaNs with median of the column in a new dataset that will be transformed
@@ -212,34 +222,36 @@ class MissForest:
     return X_transform
 
 
-def impute_and_normalize(df, groups, impute = True, min_samples = None):
+def impute_and_normalize(df, groups, impute = True, min_samples = 0.1):
     """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns
     | groups (list): nested list of column name lists, one list per group
     | impute (bool): replaces zeroes with predictions from MissForest; default:True
-    | min_samples (int): How many samples per group need to have non-zero values for glycan to be kept; default: at least half per group\n
+    | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%\n
     | Returns:
     | :-
     | Returns a dataframe in the same style as the input 
     """
-    if min_samples is None:
-      min_samples = [len(group_cols) // 2 for group_cols in groups]
-    else:
-      min_samples = [min_samples] * len(groups)
-    masks = [(df[group_cols] != 0).sum(axis = 1) >= thresh for group_cols, thresh in zip(groups, min_samples)]
-    df = df[np.all(masks, axis = 0)]
+    if min_samples:
+      min_count = max(np.floor(df.shape[1] * min_samples), 2) + 1
+      mask = (df != 0).sum(axis = 1) >= min_count
+      df = df[mask].reset_index(drop = True)
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
+    for group in groups:
+      group_data = df[group]
+      all_zero_mask = (group_data == 0).all(axis = 1)
+      df.loc[all_zero_mask, group] = 1e-5
     old_cols = []
     if isinstance(colname, int):
       old_cols = df.columns
       df.columns = df.columns.astype(str)
     if impute:
       mf = MissForest()
-      df.replace(0, np.nan, inplace = True)
+      df = df.replace(0, np.nan)
       df = mf.fit_transform(df)
     df = (df / df.sum(axis = 0)) * 100
     if len(old_cols) > 0:
@@ -248,17 +260,21 @@ def impute_and_normalize(df, groups, impute = True, min_samples = None):
     return df
 
 
-def variance_based_filtering(df, min_feature_variance = 0.01):
+def variance_based_filtering(df, min_feature_variance = 0.02):
     """Variance-based filtering of features\n
     | Arguments:
     | :-
     | df (dataframe): dataframe containing glycan sequences in index and samples in columns
-    | min_feature_variance (float): Minimum variance to include a feature in the analysis\n
+    | min_feature_variance (float): Minimum variance to include a feature in the analysis; default: 2%\n
     | Returns:
     | :-
-    | Returns a pandas DataFrame with remaining glycans as indices and samples in columns
+    | filtered_df (DataFrame): DataFrame with remaining glycans (variance > min_feature_variance) as indices and samples in columns.
+    | discarded_df (DataFrame): DataFrame with discarded glycans (variance <= min_feature_variance) as indices and samples in columns.
     """
-    return df[df.var(axis = 1) > min_feature_variance]
+    variances = df.var(axis = 1)
+    filtered_df = df.loc[variances > min_feature_variance]
+    discarded_df = df.loc[variances <= min_feature_variance]
+    return filtered_df, discarded_df
 
 
 def jtkdist(timepoints, param_dic, reps = 1, normal = False):
@@ -279,7 +295,6 @@ def jtkdist(timepoints, param_dic, reps = 1, normal = False):
   maxnlp = gammaln(np.sum(tim)) - np.sum(np.log(np.arange(1, np.max(tim)+1)))
   limit = math.log(float('inf'))
   normal = normal or (maxnlp > limit - 1)  # Switch to normal approximation if maxnlp is too large
-  lab = []
   nn = sum(tim)  # Number of data values (Independent of period and lag)
   M = (nn ** 2 - np.sum(np.square(tim))) / 2  # Max possible jtk statistic
   param_dic.update({"GRP_SIZE": tim, "NUM_GRPS": len(tim), "NUM_VALS": nn,
@@ -445,7 +460,6 @@ def jtkx(z, param_dic, ampci = False):
   else:
     pers_index = 0
   pers = param_dic["PERIODS"][int(pers_index)]    # all optimal periods
-  padj_values = padj[pers_index]
   lagis = np.where(padj == JTK_ADJP)[0]  # list of optimal lag indice for each optimal period
   best_results = {'bestper': 0, 'bestlag': 0, 'besttau': 0, 'maxamp': 0, 'maxamp_ci': 2, 'maxamp_pval': 0}
   sc = np.transpose(param_dic["SIGNCOS"])
@@ -455,7 +469,6 @@ def jtkx(z, param_dic, ampci = False):
       S = param_dic["CJTK"][lagi][1]
       s = np.sign(S) if S != 0 else 1
       lag = (pers + (1 - s) * pers / 4 - lagi / 2) % pers
-      signcos = sc[:, lagi]
       tmp = s * w * sc[:, lagi]
       amp = hlm(tmp)  # Allows missing values
       if ampci:
@@ -469,9 +482,6 @@ def jtkx(z, param_dic, ampci = False):
   JTK_PERIOD = param_dic["INTERVAL"] * best_results['bestper']
   JTK_LAG = param_dic["INTERVAL"] * best_results['bestlag']
   JTK_AMP = float(max(0, best_results['maxamp']))
-  JTK_TAU = best_results['besttau']
-  JTK_AMP_CI = best_results['maxamp_ci']
-  JTK_AMP_PVAL = best_results['maxamp_pval']
   return pd.Series([JTK_ADJP, JTK_PERIOD, JTK_LAG, JTK_AMP])
 
 
@@ -542,7 +552,7 @@ def pi0_tst(p_values, alpha = 0.05):
   n = len(p_values)
   # Apply the BH procedure at level α'
   sorted_indices = np.argsort(p_values)
-  sorted_p_values = p_values[sorted_indices] 
+  sorted_p_values = p_values[sorted_indices]
   bh_values = (n / rankdata(sorted_p_values)) * sorted_p_values
   corrected_p_values = np.minimum.accumulate(bh_values[::-1])[::-1]
   corrected_p_values_sorted_indices = np.argsort(sorted_indices)
@@ -582,7 +592,7 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
     sorted_indices = np.argsort(group_p_values)
     sorted_p_values = group_p_values[sorted_indices]
     # Weight the alpha value by π0 estimate
-    adjusted_alpha = alpha / pi0_estimate
+    adjusted_alpha = alpha / max(pi0_estimate, 0.3)
     # Calculate the BH adjusted p-values
     ecdffactor = (np.arange(1, n + 1) / n)
     pvals_corrected_raw = sorted_p_values / (ecdffactor)
@@ -614,7 +624,7 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, pair
   if paired:
     temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
   else:
-    mean_cohort_a = (cohort_a.mean(axis = 1) + 1e-8).values[:, np.newaxis]
+    mean_cohort_a = np.mean(cohort_a, axis = 1).values[:, np.newaxis] + 1e-8
     temp = pd.DataFrame(np.log2((cohort_b.values + 1e-8) / mean_cohort_a))
   temp.index = glycans
   temp = temp.reset_index()
@@ -671,6 +681,29 @@ def replace_outliers_with_IQR_bounds(full_row):
   return full_row
 
 
+def replace_outliers_winsorization(full_row):
+  """Replaces outlier values using Winsorization.\n
+  | Arguments:
+  | :-
+  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical\n
+  | Returns:
+  | :-
+  | Returns row with outliers replaced by Winsorization.
+  """
+  row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
+  # Apply Winsorization - limits set to match typical IQR outlier detection
+  nan_placeholder = row.min() - 1
+  row = row.fillna(nan_placeholder)
+  winsorized_values = winsorize(row, limits = [0.05, 0.05])
+  winsorized_values = pd.Series(winsorized_values, index = row.index)
+  winsorized_values = winsorized_values.replace(nan_placeholder, np.nan)
+  if isinstance(full_row.iloc[0], str):
+    full_row.iloc[1:] = winsorized_values
+  else:
+    full_row = winsorized_values
+  return full_row
+
+
 def hotellings_t2(group1, group2, paired = False):
   """Hotelling's T^2 test (the t-test for multivariate comparisons)\n
   """
@@ -719,3 +752,302 @@ def shannon_diversity_index(counts):
 def simpson_diversity_index(counts):
   proportions = counts / counts.sum()
   return 1 - np.sum(proportions**2)
+
+
+def get_equivalence_test(row_a, row_b, paired = False):
+  """performs an equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent\n
+  | Arguments:
+  | :-
+  | row_a (array-like): basically a row of the control samples for one glycan/motif
+  | row_b (array-like): basically a row of the case samples for one glycan/motif
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | Returns a p-value of whether the two group means can be considered equivalent
+  """
+  pooled_std = np.sqrt(((len(row_a) - 1) * np.var(row_a, ddof = 1) + (len(row_b) - 1) * np.var(row_b, ddof = 1)) / (len(row_a) + len(row_b) - 2))
+  delta = 0.2 * pooled_std
+  low, up = -delta, delta
+  return ttost_paired(row_a, row_b, low, up)[0] if paired else ttost_ind(row_a, row_b, low, up)[0]
+
+
+def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
+  """performs the Center Log-Ratio (CLR) Transformation with scale model adjustment\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing features in rows and samples in columns
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; default: 0.1
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | Returns:
+  | :-
+  | Returns a dataframe that is CLR-transformed with scale model adjustment
+  """
+  geometric_mean = gmean(df.replace(0, np.nan), axis = 0)
+  clr_adjusted = np.zeros_like(df.values)
+  if gamma and not isinstance(custom_scale, dict):
+    group1i = [df.columns.get_loc(c) for c in group1]
+    group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
+    geometric_mean = -np.log2(geometric_mean)
+    if group2:
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, size = (df.shape[0], len(group1))))
+      condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, size = (df.shape[0], len(group2))) if not custom_scale else norm.rvs(loc = np.log2(custom_scale), scale = gamma, size = (df.shape[0], len(group2)))
+      clr_adjusted[:, group2i] = np.log2(df[group2]) + condition
+    else:
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, size = (df.shape[0], len(group1)))
+  elif not group2 and isinstance(custom_scale, dict):
+    gamma = max(gamma, 0.1)
+    for idx in range(df.shape[1]):
+      group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
+      scale_factor = custom_scale.get(group_id, 1)
+      clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, size = df.shape[0])
+  else:
+    clr_adjusted = np.log2(df) - np.log2(geometric_mean)
+  return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
+
+
+def anosim(df, group_labels_in, permutations = 999):
+  """Performs analysis of similarity statistical test\n
+  | Arguments:
+  | :-
+  | df (dataframe): square distance matrix
+  | group_labels_in (list): list of group membership for each sample
+  | permutations (int): number of permutations to perform in ANOSIM statistical test; default:999\n
+  | Returns:
+  | :-
+  | (i) ANOSIM R statistic - ranges between -1 to 1.
+  | (ii) p-value of the R statistic
+  """
+  group_labels = copy.deepcopy(group_labels_in)
+  n = df.shape[0]
+  condensed_dist = df.values[np.tril_indices(n, k = -1)]
+  ranks = rankdata(condensed_dist, method = 'average')
+  # Boolean array for within and between group comparisons
+  group_matrix = np.equal.outer(group_labels, group_labels)
+  within_group_indices = group_matrix[np.tril_indices(n, k = -1)]
+  # Mean ranks for within and between groups
+  mean_rank_within = np.mean(ranks[within_group_indices])
+  mean_rank_between = np.mean(ranks[~within_group_indices])
+  # R statistic
+  divisor = n * (n - 1) / 4
+  R = (mean_rank_between - mean_rank_within) / divisor
+  # Permutation test
+  permuted_Rs = np.zeros(permutations)
+  for i in range(permutations):
+    np.random.shuffle(group_labels)
+    permuted_group_matrix = np.equal.outer(group_labels, group_labels)
+    permuted_within_group_indices = permuted_group_matrix[np.tril_indices(n, k = -1)]
+    perm_mean_rank_within = np.mean(ranks[permuted_within_group_indices])
+    perm_mean_rank_between = np.mean(ranks[~permuted_within_group_indices])
+    permuted_Rs[i] = (perm_mean_rank_between - perm_mean_rank_within) / divisor
+  # Calculate the p-value
+  p_value = np.sum(permuted_Rs >= R) / permutations
+  return R, p_value
+
+
+def alpha_biodiversity_stats(df, group_labels):
+  """Performs an ANOVA on the respective alpha diversity distance\n
+  | Arguments:
+  | :-
+  | df (dataframe): square distance matrix
+  | group_labels (list): list of group membership for each sample\n
+  | Returns:
+  | :-
+  | F statistic and p-value
+  """
+  group_counts = Counter(group_labels)
+  if all(count > 1 for count in group_counts.values()):
+    stat_outputs = pd.DataFrame({'group': group_labels, 'diversity': df.squeeze()})
+    grouped_diversity = stat_outputs.groupby('group')['diversity'].apply(list).tolist()
+    stats = f_oneway(*grouped_diversity)
+    return stats
+
+
+def calculate_permanova_stat(df, group_labels):
+  """Performs multivariate analysis of variance\n
+  | Arguments:
+  | :-
+  | df (dataframe): square distance matrix
+  | group_labels (list): list of group membership for each sample\n
+  | Returns:
+  | :-
+  | F statistic - higher means effect more likely.
+  """
+  unique_groups = np.unique(group_labels)
+  n = len(group_labels)
+  # Between-group and within-group sums of squares
+  ss_total = np.sum(squareform(df)) / 2
+  ss_within = 0
+  for group in unique_groups:
+    group_indices = np.where(group_labels == group)[0]
+    group_matrix = df.values[np.ix_(group_indices, group_indices)]
+    ss_within += np.sum(squareform(group_matrix)) / 2
+  ss_between = ss_total - ss_within
+  # Calculate the PERMANOVA test statistic: pseudo-F
+  ms_between = ss_between / (len(unique_groups) - 1)
+  ms_within = ss_within / (n - len(unique_groups))
+  f_stat = ms_between / ms_within
+  return f_stat
+
+
+def permanova_with_permutation(df, group_labels, permutations = 999):
+  """Performs permutational multivariate analysis of variance\n
+  | Arguments:
+  | :-
+  | df (dataframe): square distance matrix
+  | group_labels (list): list of group membership for each sample
+  | permutations (int): number of permutations to perform in PERMANOVA statistical test; default:999\n
+  | Returns:
+  | :-
+  | (i) F statistic - higher means effect more likely.
+  | (ii) p-value of the F statistic
+  """
+  observed_f = calculate_permanova_stat(df, group_labels)
+  permuted_fs = np.zeros(permutations)
+  for i in range(permutations):
+    permuted_labels = np.random.permutation(group_labels)
+    permuted_fs[i] = calculate_permanova_stat(df, permuted_labels)
+  p_value = np.sum(permuted_fs >= observed_f) / permutations
+  return observed_f, p_value
+
+
+def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.1, custom_scale = 0):
+  """Given a reference feature, performs additive log-ratio transformation (ALR) on the data\n
+  | Arguments:
+  | :-
+  | df (dataframe): log2-transformed dataframe with features as rows and samples as columns
+  | reference_component_index (int): row index of feature to be used as reference
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; default: 0.1
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | Returns:
+  | :-
+  | ALR-transformed dataframe
+  """
+  reference_values = df.iloc[reference_component_index, :]
+  alr_transformed = np.zeros_like(df.values)
+  group1i = [df.columns.get_loc(c) for c in group1]
+  group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
+  if not isinstance(custom_scale, dict):
+    if custom_scale:
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, size = len(group1i)), axis = 1)
+    else:
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values[group1i])
+    scale_adjustment = np.log2(custom_scale) if custom_scale else 0
+    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, size = len(group2i)), axis = 1)
+  else:
+    gamma = max(gamma, 0.1)
+    for idx in range(df.shape[1]):
+      group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
+      scale_factor = custom_scale.get(group_id, 1)
+      reference_adjusted = reference_values[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma)
+      alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted
+  alr_transformed = pd.DataFrame(alr_transformed, index = df.index, columns = df.columns)
+  alr_transformed = alr_transformed.drop(index = reference_values.name)
+  return alr_transformed
+
+
+def get_procrustes_scores(df, group1, group2, paired = False, custom_scale = 0):
+  """For each feature, estimates it value as ALR reference component\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with features as rows and samples as columns
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | Returns:
+  | :-
+  | List of Procrustes scores (Procrustes correlation * inverse of feature variance)
+  """
+  if isinstance(group1[0], int):
+    group1 = [df.columns.tolist()[k] for k in group1]
+    group2 = [df.columns.tolist()[k] for k in group2]
+  df = df.iloc[:, 1:]
+  ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale)
+  df = np.log2(df)
+  if group2:
+    if paired:
+      differences = df[group1].values - df[group2].values
+      variances = np.var(differences, axis = 1, ddof = 1)
+    else:
+      var_group1 = df[group1].var(axis = 1)
+      var_group2 = df[group2].var(axis = 1)
+      variances = abs(var_group1 - var_group2)
+  else:
+    variances = abs(df[group1].var(axis = 1))
+  procrustes_corr = [1 - procrustes(ref_matrix.drop(ref_matrix.index[i]),
+                                    alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale))[2] for i in range(df.shape[0])]
+  return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
+
+
+def get_additive_logratio_transformation(df, group1, group2, paired = False, gamma = 0.1, custom_scale = 0):
+  """Identifies ALR reference component and transforms data according to ALR\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with features as rows and samples as columns
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
+  | gamma (float): the degree of uncertainty that the CLR assumption holds; default: 0.1
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | Returns:
+  | :-
+  | ALR-transformed dataframe
+  """
+  scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired, custom_scale = custom_scale)
+  ref_component = np.argmax(scores)
+  ref_component_string = df.iloc[:, 0].values[ref_component]
+  print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
+  if procrustes_corr[ref_component] < 0.9 or variances[ref_component] > 0.1:
+    print("Metrics of chosen reference component not good enough for ALR; switching to CLR instead.")
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
+    return df
+  glycans = df.iloc[:, 0].values.tolist()
+  glycans = glycans[:ref_component] + glycans[ref_component+1:]
+  alr = alr_transformation(np.log2(df.iloc[:, 1:]), ref_component, group1, group2, gamma = gamma, custom_scale = custom_scale)
+  alr.insert(loc = 0, column = 'glycan', value = glycans)
+  return alr
+
+
+def correct_multiple_testing(pvals, alpha):
+  """Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure\n
+  | Arguments:
+  | :-
+  | pvals (list): list of raw p-values
+  | alpha (float): p-value threshold for statistical significance\n
+  | Returns:
+  | :-
+  | (i) list of corrected p-values
+  | (ii) list of True/False of whether corrected p-value reaches statistical significance
+  """
+  corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
+  corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
+  significance = [p < alpha for p in corrpvals]
+  if sum(significance) > 0.9*len(significance):
+    print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value.\
+             Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
+    res = multipletests(pvals, method = 'bonferroni')
+    corrpvals, alpha = res[1], res[3]
+    significance = [p < alpha for p in corrpvals]
+  return corrpvals, significance
+
+
+def omega_squared(row, groups):
+  """Calculates Omega squared, as an effect size in an ANOVA setting\n
+  | Arguments:
+  | :-
+  | row (pd.Series or array-like): values for one feature
+  | groups (list): list indicating group membership with indices per column\n
+  | Returns:
+  | :-
+  | Returns effect size as omega squared (float)
+  """
+  long_df = pd.DataFrame({'value': row, 'group': groups})
+  model = ols('value ~ C(group)', data=long_df).fit()
+  anova_results = anova_lm(model, typ = 2)
+  ss_total = sum(model.resid ** 2) + anova_results['sum_sq'].sum()
+  omega_squared = (anova_results.at['C(group)', 'sum_sq'] - (anova_results.at['C(group)', 'df'] * model.mse_resid)) / (ss_total + model.mse_resid)
+  return omega_squared

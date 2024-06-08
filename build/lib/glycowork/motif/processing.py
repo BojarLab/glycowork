@@ -1,11 +1,10 @@
-import pandas as pd
 import numpy as np
 import copy
 import re
 from functools import wraps
 from collections import defaultdict
 from glycowork.glycan_data.loader import (unwrap, multireplace,
-                                          find_nth, find_nth_reverse,
+                                          find_nth, find_nth_reverse, lib,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
 
@@ -100,7 +99,7 @@ def get_possible_linkages(wildcard, linkage_list = linkages):
   | :-
   | Returns a list of linkages that match the wildcard pattern.
   """
-  pattern = wildcard.replace("?", "[a-zA-Z0-9\?]")
+  pattern = wildcard.replace("?", r"[a-zA-Z0-9\?]")
   return [linkage for linkage in linkage_list if re.fullmatch(pattern, linkage)]
   #return possible_linkages if libr is None else list(possible_linkages & libr.keys())
 
@@ -452,7 +451,7 @@ def glycoct_to_iupac_int(glycoct, mono_replace, sub_replace):
     #linkage
     elif len(line) > 0:
       line = line.replace('-1', '?')
-      line = re.sub("\d\|\d", "?", line)
+      line = re.sub(r"\d\|\d", "?", line)
       parts = re.findall(r'(\d+)[do]\(([\d\?]+)\+(\d+)\)(\d+)', line)[0]
       parent_id, child_id = int(parts[0]), int(parts[3])
       link_type = f"{residue_dic.get(child_id, 99)}({parts[2]}-{parts[1]})"
@@ -826,18 +825,19 @@ def canonicalize_iupac(glycan):
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P',
-                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-',
+                 '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)'}
   glycan = multireplace(glycan, replace_dic)
   if '{' in glycan and '}' not in glycan:
-    glycan = '{' + glycan[:glycan.index('{')] + '?1-?' + '}' + glycan[glycan.index('{')+1:]
+    glycan = f'{{{glycan[:glycan.index("{")]}?1-?}}{glycan[glycan.index("{")+1:]}'
   if '{' in glycan and '(' not in glycan:
     glycan = glycan.replace('{', '(').replace('}', ')')
   # Trim linkers
   if '-' in glycan:
-    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[glycan.rindex('-')-1:])) and 'ol' not in glycan:
-      glycan = glycan[:glycan.rindex('-')]
+    last_dash = glycan.rindex('-')
+    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash-1:])) and 'ol' not in glycan and glycan[last_dash+1:] not in lib:
+      glycan = glycan[:last_dash]
   # Canonicalize usage of brackets and parentheses
   if bool(re.search(r'\([A-Zd3-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
@@ -869,21 +869,18 @@ def canonicalize_iupac(glycan):
       glycan = re.sub(r'(a|b)(\d)', r'\g<1>1-\g<2>', glycan)
   # Smudge uncertainty
   while '/' in glycan:
-    glycan = glycan[:glycan.index('/')-1] + '?' + glycan[glycan.index('/')+2:]
+    glycan = f'{glycan[:glycan.index("/")-1]}?{glycan[glycan.index("/")+2:]}'
   # Introduce parentheses for linkages
   if '(' not in glycan and len(glycan) > 6:
     for k in range(1, glycan.count('-')+1):
       idx = find_nth(glycan, '-', k)
       if (glycan[idx-1].isnumeric()) and (glycan[idx+1].isnumeric() or glycan[idx+1] == '?'):
-        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+2] + ')' + glycan[idx+2:]
+        glycan = f'{glycan[:idx-2]}({glycan[idx-2:idx+2]}){glycan[idx+2:]}'
       elif (glycan[idx-1].isnumeric()) and bool(re.search(r'[A-Z]', glycan[idx+1])):
-        glycan = glycan[:idx-2] + '(' + glycan[idx-2:idx+1] + '?)' + glycan[idx+1:]
+        glycan = f'{glycan[:idx-2]}({glycan[idx-2:idx+1]}?){glycan[idx+1:]}'
   # Canonicalize reducing end
   if bool(re.search(r'[a-z]ol', glycan)):
-    if 'Glcol' not in glycan:
-      glycan = glycan[:-2]
-    else:
-      glycan = glycan[:-2] + '-ol'
+    glycan = glycan[:-2] if 'Glcol' not in glycan else f'{glycan[:-2]}-ol'
   if glycan[-1] in 'ab' and glycan[-3:] not in ['Rha', 'Ara']:
     glycan = glycan[:-1]
   # Handle modifications
@@ -897,6 +894,16 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'([1-9]?[SP])(?!en)([A-Za-z]+)', r'\2\1', glycan)
   if bool(re.search(r'[1-9]?[SP]-[A-Za-z]+', glycan)):
     glycan = re.sub(r'([1-9]?[SP])-([A-Za-z]+)', r'\2\1', glycan)
+  # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
+  glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
+  glycan = re.sub(r'([c-z])([1-2])-', r'\1(?\2-', glycan)
+  glycan = re.sub(r'-([\?2-9])([A-Z])', r'-\1)\2', glycan)
+  glycan = re.sub(r'([\?2-9])([\[\]])', r'\1)\2', glycan)
+  # Floating bits
+  if '+' in glycan:
+    if '-' not in glycan[:glycan.index('+')]:
+      glycan = glycan.replace('+', '(?1-?)+')
+    glycan = '{'+glycan.replace('+', '}')
   post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?1': 'Kdn(a2',
                   'Kdn(a1': 'Kdn(a2'}
@@ -905,9 +912,6 @@ def canonicalize_iupac(glycan):
   if '[' in glycan:
     isos = find_isomorphs(glycan)
     glycan = choose_correct_isoform(isos)
-  # Floating bits
-  if '+' in glycan:
-    glycan = '{'+glycan.replace('+', '}')
   if '{' in glycan:
     floating_bits = re.findall(r'\{.*?\}', glycan)
     sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))
@@ -921,9 +925,9 @@ def rescue_glycans(func):
     try:
       # Try running the original function
       return func(*args, **kwargs)
-    except Exception as e:
+    except Exception:
       # If an error occurs, attempt to rescue the glycan sequences
-      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and isinstance(arg[0], str) else arg for arg in args]
+      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
       # After rescuing, attempt to run the function again
       return func(*rescued_args, **kwargs)
   return wrapper
@@ -935,7 +939,7 @@ def rescue_compositions(func):
     try:
       # Try running the original function
       return func(*args, **kwargs)
-    except Exception as e:
+    except Exception:
       # If an error occurs, attempt to rescue the glycan compositions
       rescued_args = [canonicalize_composition(arg) if isinstance(arg, str) else arg for arg in args]
       # After rescuing, attempt to run the function again
