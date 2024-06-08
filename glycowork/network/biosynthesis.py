@@ -964,7 +964,7 @@ def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
   return '_'.join(new_edge_label)
 
 
-def choose_path(diamond, species_list, network_dic, threshold = 0., nb_intermediates = 2):
+def choose_path(diamond, species_list, network_dic, threshold = 0., nb_intermediates = 2, mode = 'presence'):
   """given a shape such as diamonds in biosynthetic networks (A->B,A->C,B->D,C->D), which path is taken from A to D?\n
   | Arguments:
   | :-
@@ -972,7 +972,8 @@ def choose_path(diamond, species_list, network_dic, threshold = 0., nb_intermedi
   | species_list (list): list of species to compare network to
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
   | threshold (float): everything below or equal to that threshold will be cut; default:0.
-  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
+  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)
+  | mode (string): whether to analyze for "presence" or "abundance" of intermediates; default:"presence"\n
   | Returns:
   | :-
   | Returns dictionary of each intermediary path and its experimental support (0-1) across species
@@ -992,13 +993,17 @@ def choose_path(diamond, species_list, network_dic, threshold = 0., nb_intermedi
     temp_network_nodes = set(network_dic[species].nodes())
     if source in temp_network_nodes and target in temp_network_nodes:
       temp_network = network_dic[species]
+      lookup_dic = nx.get_node_attributes(temp_network, 'virtual') if mode == 'presence' else nx.get_node_attributes(temp_network, 'abundance')
       for alt in alternatives:
         alt_set = set(alt)
         if alt_set.issubset(temp_network_nodes):
-          alts[tuple(alt)].append(np.mean([temp_network.nodes[node]['virtual'] for node in alt]))
+          alts[tuple(alt)].append(np.mean([lookup_dic[node] for node in alt]))
         else:
-          alts[tuple(alt)].append(1)
-  alts = {k: 1 - np.mean(v) for k, v in alts.items()}
+          alts[tuple(alt)].append(1) if mode == 'presence' else alts[tuple(alt)].append(0)
+  if mode == 'presence':
+    alts = {k: 1 - np.mean(v) for k, v in alts.items()}
+  else:
+    alts = {k: np.mean(v) for k, v in alts.items()}
   # If both alternatives aren't observed, add minimum value (because one of the paths *has* to be taken)
   if sum(alts.values()) == 0:
     alts = {k: v + 0.01 + threshold for k, v in alts.items()}
@@ -1008,12 +1013,13 @@ def choose_path(diamond, species_list, network_dic, threshold = 0., nb_intermedi
   return alts
 
 
-def find_diamonds(network, nb_intermediates = 2):
+def find_diamonds(network, nb_intermediates = 2, mode = 'presence'):
   """automatically extracts shapes such as diamonds (A->B,A->C,B->D,C->D) from biosynthetic networks\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
-  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
+  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)
+  | mode (string): whether to analyze for "presence" or "abundance" of intermediates; default:"presence"\n
   | Returns:
   | :-
   | Returns list of dictionaries, with each dictionary a network motif in the form of position in the motif : glycan
@@ -1046,7 +1052,7 @@ def find_diamonds(network, nb_intermediates = 2):
     # For each middle node, test whether they are part of the same path as substrate node and product node (remove false positives)
     if all(nx.has_path(network, substrate_node, mn) and nx.has_path(network, mn, product_node) for mn in middle_nodes):
       virtual_states = [virtual_attr.get(mn, 0) for mn in middle_nodes]
-      if any(vs == 1 for vs in virtual_states):
+      if any(vs == 1 for vs in virtual_states) or mode == 'abundance':
         # Filter out non-diamond shapes with any cross-connections
         if nb_intermediates > 2:
           graph_dic = {k: glycan_to_nxGraph(k) for k in d.values()}
@@ -1279,7 +1285,7 @@ def get_maximum_flow(network, source = "Gal(b1-4)Glc-ol", sinks = None):
           'flow_dict': flow_dict
           }
     except:
-      print(sink + " cannot be reached.")
+      print(f"{sink} cannot be reached.")
   return flow_results
 
 

@@ -5,7 +5,7 @@ import warnings
 from collections import defaultdict, Counter
 from sklearn.ensemble import RandomForestRegressor
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues
 from scipy.stats.mstats import winsorize
 from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
@@ -1051,3 +1051,28 @@ def omega_squared(row, groups):
   ss_total = sum(model.resid ** 2) + anova_results['sum_sq'].sum()
   omega_squared = (anova_results.at['C(group)', 'sum_sq'] - (anova_results.at['C(group)', 'df'] * model.mse_resid)) / (ss_total + model.mse_resid)
   return omega_squared
+
+
+def get_glycoform_diff(df_res, alpha = 0.05, level = 'peptide'):
+  """Calculates differential expression of glycoforms of either a peptide or a whole protein\n
+  | Arguments:
+  | :-
+  | df_res (pd.DataFrame): result from .motif.analysis.get_differential_expression
+  | alpha (float): significance threshold for testing; default:0.05
+  | level (string): whether to analyze glycoform differential expression at the level of 'peptide' or 'protein'; default:'peptide'\n
+  | Returns:
+  | :-
+  | Returns a dataframe with:
+  | (i) Differentially expressed glycopeptides/glycoproteins
+  | (ii) Corrected p-values (Welch's t-test with two-stage Benjamini-Hochberg correction aggregated with Fisher’s Combined Probability Test) for difference in mean
+  | (iii) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  | (iv) Effect size as the average Cohen's d across glycoforms
+  """
+  label_col = 'Glycosite' if 'Glycosite' in df_res.columns else 'Glycan'
+  if level == 'protein':
+    df_res[label_col] = [k.split('_')[0] for k in df_res[label_col]]
+  grouped = df_res.groupby(label_col)['corr p-val'].apply(lambda p: combine_pvalues(p)[1]) # Fisher’s Combined Probability Test
+  mean_effect_size = df_res.groupby(label_col)['Effect size'].mean()
+  pvals, sig = correct_multiple_testing(grouped, alpha)
+  df_out = pd.DataFrame({'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})
+  return df_out.sort_values(by = 'corr p-val')

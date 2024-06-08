@@ -28,7 +28,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing,
-                                         omega_squared)
+                                         omega_squared, get_glycoform_diff)
 from glycowork.motif.processing import enforce_class
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
@@ -520,7 +520,7 @@ def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
                                 min_samples = 0.1, grouped_BH = False, custom_motifs = [], transform = None,
-                                gamma = 0.1, custom_scale = 0):
+                                gamma = 0.1, custom_scale = 0, glycoproteomics = False, level = 'peptide'):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -542,7 +542,9 @@ def get_differential_expression(df, group1, group2,
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
   | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+  | glycoproteomics (bool): whether the analyzed data in df comes from a glycoproteomics experiment; default:False
+  | level (string; only relevant if glycoproteomics=True): whether to analyze glycoform differential expression at the level of 'peptide' or 'protein'; default:'peptide'\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -550,7 +552,7 @@ def get_differential_expression(df, group1, group2,
   | (ii) Their mean abundance across all samples in group1 + group2
   | (iii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
   | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
-  | (v) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
+  | (v) Corrected p-values (Welch's t-test with two-stage Benjamini-Hochberg correction) for difference in mean
   | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
   | (vii) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
   | (viii) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
@@ -665,7 +667,10 @@ def get_differential_expression(df, group1, group2,
   df_out['significant'] = df_out['significant'].astype('bool')
   if effect_size_variance:
     df_out['Effect size variance'] = variances + [0]*len(df_prison)
-  return df_out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+  if glycoproteomics:
+    return get_glycoform_diff(df_out, alpha = alpha, level = level)
+  else:
+    return df_out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
 
 def get_pval_distribution(df_res, filepath = ''):
