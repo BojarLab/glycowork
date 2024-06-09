@@ -622,10 +622,10 @@ def add_high_man_removal(network):
   edges_to_add = []
   for source, target in network.edges():
     if target.count('Man') >= 5:
-      diff_attr = network[source][target]['diff']
+      diff_attr = network[source][target]['diffs']
       edges_to_add.append((target, source, diff_attr))
   for target, source, diff_attr in edges_to_add:
-    network.add_edge(target, source, diff = diff_attr)
+    network.add_edge(target, source, diffs = diff_attr)
 
 
 @rescue_glycans
@@ -1064,7 +1064,7 @@ def find_diamonds(network, nb_intermediates = 2, mode = 'presence'):
   return final_matchings
 
 
-def trace_diamonds(network, species_list, network_dic, threshold = 0., nb_intermediates = 2):
+def trace_diamonds(network, species_list, network_dic, threshold = 0., nb_intermediates = 2, mode = 'presence'):
   """extracts diamond-shape motifs from biosynthetic networks (A->B,A->C,B->D,C->D) and uses evolutionary information to determine which path is taken from A to D\n
   | Arguments:
   | :-
@@ -1072,15 +1072,16 @@ def trace_diamonds(network, species_list, network_dic, threshold = 0., nb_interm
   | species_list (list): list of species to compare network to
   | network_dic (dict): dictionary of form species name : biosynthetic network (gained from construct_network)
   | threshold (float): everything below or equal to that threshold will be cut; default:0.
-  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
+  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)
+  | mode (string): whether to analyze for "presence" or "abundance" of intermediates; default:"presence"\n
   | Returns:
   | :-
-  | Returns dataframe of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path
+  | Returns dataframe of each intermediary glycan and its proportion (0-1) of how often it has been experimentally observed in this path (or average abundance if mode = abundance)
   """
   # Get the diamonds
-  matchings_list = find_diamonds(network, nb_intermediates = nb_intermediates)
+  matchings_list = find_diamonds(network, nb_intermediates = nb_intermediates, mode = mode)
   # Calculate the path probabilities
-  paths = [choose_path(d, species_list, network_dic,
+  paths = [choose_path(d, species_list, network_dic, mode = mode,
                        threshold = threshold, nb_intermediates = nb_intermediates) for d in matchings_list]
   df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
   df_out.columns = ['glycan', 'probability']
@@ -1232,13 +1233,14 @@ def get_edge_weight_by_abundance(network, root = "Gal(b1-4)Glc-ol", root_default
   return network
 
 
-def estimate_weights(network, root = "Gal(b1-4)Glc-ol", root_default = 10):
+def estimate_weights(network, root = "Gal(b1-4)Glc-ol", root_default = 10, min_default = 0.001):
   """estimate reaction capacity of edges and missing relative abundances\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
   | root (string): root node of network; default:"Gal(b1-4)Glc-ol"
-  | root_default (float): dummy abundance value of root; default:10.0\n
+  | root_default (float): dummy abundance value of root; default:10.0
+  | min_default (float): a small default value if no non-zero neighboring weights; default: 0.001\n
   | Returns:
   | :-
   | Returns a network in which the edge attribute 'capacity' and missing abundances have been estimated
@@ -1250,7 +1252,7 @@ def estimate_weights(network, root = "Gal(b1-4)Glc-ol", root_default = 10):
     out_weights = [network[node][v]['capacity'] for v in network.successors(node) if network[node][v]['capacity'] > 0]
     if in_weights and out_weights:
       return np.mean(in_weights + out_weights)  # Average of non-zero in and out weights
-    return 0.001  # A small default value if no non-zero neighboring weights
+    return min_default  # A small default value if no non-zero neighboring weights
   # Estimate weights for zero-weight intermediates
   for node in network.nodes:
     if all(network[node][v]['capacity'] == 0 for v in network.successors(node)):
@@ -1381,9 +1383,11 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
   alpha = get_alphaN(df.shape[1] - 1)
   df = df.set_index(df.columns.tolist()[0])
   df = df[~(df == 0).all(axis = 1)]
+  df = (df / df.sum(axis = 0)) * 100
   root = list(infer_roots(df.index.tolist()))
   root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
-  nets = {col: estimate_weights(construct_network(df.index.tolist(), abundances = df[col].values.tolist()), root = root) for col in all_groups}
+  min_default = 0.1 if root.endswith('GlcNAc') else 0.001
+  nets = {col: estimate_weights(construct_network(df.index.tolist(), abundances = df[col].values.tolist()), root = root, min_default = min_default) for col in all_groups}
   res = {col: get_maximum_flow(nets[col], source = root) for col in all_groups}
   if analysis == "reaction":
     res2 = {col: get_reaction_flow(nets[col], res[col], aggregate = "sum") for col in all_groups}

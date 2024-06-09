@@ -62,6 +62,7 @@ class LazyLoader:
 
 glycomics_data_loader = LazyLoader("glycowork", "glycan_data")
 lectin_array_data_loader = LazyLoader("glycowork", "glycan_data", prefix = 'lectin_array_')
+glycoproteomics_data_loader = LazyLoader("glycowork", "glycan_data", prefix = 'glycoproteomics_')
 
 
 linkages = {
