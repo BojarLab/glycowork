@@ -1071,6 +1071,8 @@ def get_glycoform_diff(df_res, alpha = 0.05, level = 'peptide'):
   label_col = 'Glycosite' if 'Glycosite' in df_res.columns else 'Glycan'
   if level == 'protein':
     df_res[label_col] = [k.split('_')[0] for k in df_res[label_col]]
+  else:
+    df_res[label_col] = ['_'.join(k.split('_')[:-1]) for k in df_res[label_col]]
   grouped = df_res.groupby(label_col)['corr p-val'].apply(lambda p: combine_pvalues(p)[1]) # Fisher’s Combined Probability Test
   mean_effect_size = df_res.groupby(label_col)['Effect size'].mean()
   pvals, sig = correct_multiple_testing(grouped, alpha)

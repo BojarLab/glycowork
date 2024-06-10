@@ -6,7 +6,7 @@ from collections import defaultdict
 from functools import partial
 
 from glycowork.glycan_data.loader import linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, rescue_glycans
 from glycowork.motif.regex import get_match
 
@@ -70,6 +70,55 @@ def annotate_glycan(glycan, motifs = None, termini_list = [], gmotifs = None):
   ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
   res = [subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
                                 count = True) for i, g in enumerate(gmotifs)]*1
+  out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
+  out.loc[0] = res
+  out.loc[0] = out.loc[0].astype('int')
+  out.index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)]
+  return out
+
+
+def annotate_glycan_topology_uncertainty(glycan, feasibles = None, motifs = None, termini_list = [], gmotifs = None):
+  """searches for known motifs in glycan sequence\n
+  | Arguments:
+  | :-
+  | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
+  | feasibles (set): set of glycans in IUPAC-condensed format that are potentially relevant as full topologies; default: mammalian glycans from df_species
+  | motifs (dataframe): dataframe of glycan motifs (name + sequence), can be used with a list of glycans too; default:motif_list
+  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
+  | gmotifs (networkx): precalculated motif graphs for speed-up; default:None\n
+  | Returns:
+  | :-
+  | Returns dataframe with counts of motifs in glycan
+  """
+  if motifs is None:
+    motifs = motif_list
+  if feasibles is None:
+    feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
+  # Check whether termini are specified
+  if not termini_list and isinstance(motifs, pd.DataFrame):
+    termini_list = list(map(eval, motifs.termini_spec))
+  if gmotifs is None:
+    termini = 'provided' if termini_list else 'ignore'
+    partial_glycan_to_nxGraph = partial(glycan_to_nxGraph, termini = termini)
+    gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
+  # Count the number of times each motif occurs in a glycan
+  ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
+  glycan_len = glycan.count('(')
+  feasibles = [glycan_to_nxGraph(g, termini = 'calc') for g in feasibles if g.count('(') == glycan_len]
+  possibles = possible_topology_check(ggraph, feasibles, exhaustive = True)
+  res = []
+  for i, g in enumerate(gmotifs):
+    temp_res = subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
+                                count = True)
+    if temp_res:
+      res.append(temp_res*1)
+      continue
+    temp_res = [subgraph_isomorphism(p, g, termini_list = termini_list[i] if termini_list else termini_list,
+                                count = True) for p in possibles]
+    if np.mean(temp_res) > 0.5:
+      res.append(1)
+    else:
+      res.append(0)
   out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
@@ -158,7 +207,13 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
     # Counts literature-annotated motifs in each glycan
     partial_annotate = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
-    shopping_cart.append(pd.concat(list(map(partial_annotate, glycans)), axis = 0))
+    if '{' in ''.join(glycans):
+      from glycowork.glycan_data.loader import df_species
+      feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
+      partial_annotate_topology_uncertainty = partial(annotate_glycan_topology_uncertainty, feasibles = feasibles, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
+    def annotate_switchboard(glycan):
+      return partial_annotate_topology_uncertainty(glycan) if '{' in glycan else partial_annotate(glycan)
+    shopping_cart.append(pd.concat(list(map(annotate_switchboard, glycans)), axis = 0))
   if 'custom' in feature_set:
     normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
     gmotifs = list(map(glycan_to_nxGraph, normal_motifs))
