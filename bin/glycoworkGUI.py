@@ -4,7 +4,6 @@ import threading
 import tkinter as tk
 import matplotlib
 matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
 from tkinter import simpledialog, filedialog, messagebox, ttk
 from glycowork.motif.draw import GlycoDraw, plot_glycans_excel
 from glycowork.motif.analysis import get_differential_expression, get_heatmap, get_lectin_array
@@ -96,7 +95,7 @@ class GlycoDrawExcelDialog(simpledialog.Dialog):
         self.compact_var = tk.BooleanVar()
         self.compact_check = tk.Checkbutton(master, text = "Compact", variable = self.compact_var)
         self.compact_check.grid(row = 2, columnspan = 3)
-        
+
         return self.csv_entry  # to put focus on the csv file entry widget
     
     def browse_csv(self):

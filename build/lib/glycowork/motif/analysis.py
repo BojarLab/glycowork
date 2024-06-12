@@ -32,7 +32,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
 from glycowork.motif.processing import enforce_class
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
-                                      create_lectin_and_motif_mappings, lectin_motif_scoring)
+                                      create_lectin_and_motif_mappings, lectin_motif_scoring, clean_up_heatmap)
 from glycowork.motif.graph import subgraph_isomorphism
 
 
@@ -95,9 +95,6 @@ def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, fea
     # Motif extraction and quantification
     df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
     df_org = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-    # Deduplication
-    df = clean_up_heatmap(df.T)
-    df_org = clean_up_heatmap(df_org.T)
     # Re-normalization
     df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
   else:
@@ -211,28 +208,6 @@ def get_representative_substructures(enrichment_df):
     return [k for k in rep_motifs if sum(subgraph_isomorphism(j, k) for j in rep_motifs) <= 1]
 
 
-def clean_up_heatmap(df):
-  """removes redundant motifs from the dataframe\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe with glycan data, rows are glycan motifs and columns are samples\n
-  | Returns:
-  | :-
-  | Returns a cleaned up dataframe of the same format as the input
-  """
-  motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
-  df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' '*20 if x in motif_dic else x)
-  # Group the DataFrame by identical rows
-  grouped = df.groupby(list(df.columns))
-  # Find the row with the longest string index within each group and return a new DataFrame
-  max_idx_series = grouped.apply(lambda group: group.index.to_series().str.len().idxmax())
-  result = df.loc[max_idx_series].drop_duplicates()
-  result.index = result.index.str.strip()
-  motif_dic = {value: key for key, value in motif_dic.items()}
-  result.index = [motif_dic.get(k, k) for k in result.index]
-  return result
-
-
 def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
                  datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan',
                 custom_motifs = [], return_plot = False, **kwargs):
@@ -284,9 +259,8 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
       df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
       df = df_motif.T.fillna(0) @ df
       df = df.apply(lambda col: col / col.sum()).T
+      df = clean_up_heatmap(df.T)
   df = df.dropna(axis = 1)
-  if motifs:
-    df = clean_up_heatmap(df.T)
   if not (df < 0).any().any():
     df /= df.sum()
     df *= 100
@@ -523,7 +497,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   # get pca
   if motifs:
     # Motif extraction and quantification
-    df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T.reset_index()
+    df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs, remove_redundant = False).T.reset_index()
   X = np.array(df.iloc[:, 1:len(groups)+1].T) if groups and isinstance(groups, list) else np.array(df.iloc[:, 1:].T)
   scaler = StandardScaler()
   X_std = scaler.fit_transform(X)
@@ -1025,8 +999,6 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     glycans = [k.split('.')[0] for k in df.iloc[:, 0]]
     if motifs:
       df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set, custom_motifs = custom_motifs)
-      # Deduplication
-      df = clean_up_heatmap(df.T)
     else:
       df.index = glycans
       df = df.drop([df.columns[0]], axis = 1)
@@ -1093,8 +1065,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     else:
       raise ValueError("Only ALR and CLR are valid transforms for now.")
     if motifs:
-      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).T
-      df = clean_up_heatmap(df).reset_index()
+      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).reset_index()
     res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
     corrpvals, significance = correct_multiple_testing(res[0], alpha)
     df_out = pd.concat([df.iloc[:, 0], pd.DataFrame(corrpvals), res], axis = 1)
@@ -1244,10 +1215,8 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
     raise ValueError("Only ALR and CLR are valid transforms for now.")
   if motifs:
     df1 = quantify_motifs(df1.iloc[:, 1:], df1.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-    df1 = clean_up_heatmap(df1.T)
     if '(' in df2.iloc[:, 0].values.tolist()[0]:
       df2 = quantify_motifs(df2.iloc[:, 1:], df2.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-      df2 = clean_up_heatmap(df2.T)
     else:
       df2 = df2.set_index(df2.columns.tolist()[0])
   else:
@@ -1294,7 +1263,7 @@ def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaust
   | Returns a sorted list of tuples of type (glycan, AUC score) and, optionally, ROC curve for best feature
   """
   experiment = "diff" if group2 else "anova"
-  df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = impute,
+  df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = impute,
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
                                                custom_scale = custom_scale, custom_motifs = custom_motifs)
   auc_scores = {}

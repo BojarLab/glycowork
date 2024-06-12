@@ -260,7 +260,29 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     return pd.concat(shopping_cart, axis = 1)
 
 
-def quantify_motifs(df, glycans, feature_set, custom_motifs = []):
+def clean_up_heatmap(df):
+  """removes redundant motifs from the dataframe\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with glycan data, rows are glycan motifs and columns are samples\n
+  | Returns:
+  | :-
+  | Returns a cleaned up dataframe of the same format as the input
+  """
+  motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
+  df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' '*20 if x in motif_dic else x)
+  # Group the DataFrame by identical rows
+  grouped = df.groupby(list(df.columns))
+  # Find the row with the longest string index within each group and return a new DataFrame
+  max_idx_series = grouped.apply(lambda group: group.index.to_series().str.len().idxmax())
+  result = df.loc[max_idx_series].drop_duplicates()
+  result.index = result.index.str.strip()
+  motif_dic = {value: key for key, value in motif_dic.items()}
+  result.index = [motif_dic.get(k, k) for k in result.index]
+  return result
+
+
+def quantify_motifs(df, glycans, feature_set, custom_motifs = [], remove_redundant = True):
     """Extracts and quantifies motifs for a dataset\n
     | Arguments:
     | :-
@@ -269,7 +291,8 @@ def quantify_motifs(df, glycans, feature_set, custom_motifs = []):
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+    | remove_redundant (bool): whether to remove redundant motifs via clean_up_heatmap; default:True\n
     | Returns:
     | :-
     | Returns a pandas DataFrame with motifs as columns and samples as rows
@@ -294,7 +317,7 @@ def quantify_motifs(df, glycans, feature_set, custom_motifs = []):
       else:
         collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
     df = pd.DataFrame(collect_dic)
-    return df
+    return df if not remove_redundant else clean_up_heatmap(df.T)
 
 
 def count_unique_subgraphs_of_size_k(graph, size = 2, terminal = False):
