@@ -36,6 +36,78 @@ from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_fi
 from glycowork.motif.graph import subgraph_isomorphism
 
 
+def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
+                    impute = True, min_samples = 0.1, transform = "CLR", gamma = 0.1, custom_scale = 0, custom_motifs = []):
+  """Preprocesses data for analysis by the functions within .motif.analysis\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | group1 (list): list of column indices or names for the first group of samples, usually the control (or ANOVA-type group labels)
+  | group2 (list): list of column indices or names for the second group of samples
+  | experiment (string): what kind of experiment to process data for, options are: "diff", "anova"; default:"diff"
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
+  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
+  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
+  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
+  |   and 'chemical' (molecular properties of glycan)
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
+  | impute (bool): replaces zeroes with a Random Forest based model; default:True
+  | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
+  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | Returns:
+  | :-
+  | (i) transformed and processed dataset
+  | (ii) untransformed but processed dataset
+  | (iii) labels for group1
+  | (iv) labels for group2
+  """
+  if isinstance(df, str):
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  if not isinstance(group1[0], str) and experiment == "diff":
+    columns_list = df.columns.tolist()
+    group1 = [columns_list[k] for k in group1]
+    group2 = [columns_list[k] for k in group2]
+  df = df.iloc[:, :len(group1)+1].fillna(0) if experiment == "anova" else df.loc[:, [df.columns[0]]+group1+group2].fillna(0)
+  # Drop rows with all zero, followed by outlier removal and imputation & normalization
+  df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
+  df = df.apply(replace_outliers_winsorization, axis = 1)
+  if experiment == "diff":
+    df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
+  elif experiment == "anova":
+    groups_unq = sorted(set(group1))
+    df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(group1) if x == g] for g in groups_unq], impute = impute,
+                              min_samples = min_samples)
+  df_org = df.copy(deep = True)
+  if transform is None:
+    transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
+  if transform == "ALR":
+    df = get_additive_logratio_transformation(df, group1 if experiment == "diff" else df.columns[1:], group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
+  elif transform == "CLR":
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:], group2, gamma = gamma, custom_scale = custom_scale)
+  elif transform == "Nothing":
+    pass
+  else:
+    raise ValueError("Only ALR and CLR are valid transforms for now.")
+  if motifs:
+    # Motif extraction and quantification
+    df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+    df_org = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+    # Deduplication
+    df = clean_up_heatmap(df.T)
+    df_org = clean_up_heatmap(df_org.T)
+    # Re-normalization
+    df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
+  else:
+    df = df.set_index(df.columns.tolist()[0])
+    df = df.groupby(df.index).mean()
+    df_org = df_org.set_index(df_org.columns.tolist()[0])
+    df_org = df_org.groupby(df_org.index).mean()
+  return df, df_org, group1, group2
+
+
 def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
                      zscores = True, thresh = 1.645, sorting = True, feature_set = ['exhaustive'],
                      multiple_samples = False, motifs = None, custom_motifs = []):
@@ -148,13 +220,16 @@ def clean_up_heatmap(df):
   | :-
   | Returns a cleaned up dataframe of the same format as the input
   """
-  df.index = df.index.to_series().apply(lambda x: x + ' '*20 if x in motif_list.motif_name else x)
+  motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
+  df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' '*20 if x in motif_dic else x)
   # Group the DataFrame by identical rows
   grouped = df.groupby(list(df.columns))
   # Find the row with the longest string index within each group and return a new DataFrame
   max_idx_series = grouped.apply(lambda group: group.index.to_series().str.len().idxmax())
   result = df.loc[max_idx_series].drop_duplicates()
   result.index = result.index.str.strip()
+  motif_dic = {value: key for key, value in motif_dic.items()}
+  result.index = [motif_dic.get(k, k) for k in result.index]
   return result
 
 
@@ -559,44 +634,11 @@ def get_differential_expression(df, group1, group2,
   | (xi) Corrected p-values of equivalence test to test whether means are significantly equivalent; only done for p-values > 0.05 from (iv)
   | (x) [only if effect_size_variance=True] Effect size variance
   """
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-  if not isinstance(group1[0], str):
-    columns_list = df.columns.tolist()
-    group1 = [columns_list[k] for k in group1]
-    group2 = [columns_list[k] for k in group2]
-  df = df.loc[:, [df.columns.tolist()[0]]+group1+group2].fillna(0)
-  # Drop rows with all zero, followed by outlier removal and imputation & normalization
-  df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
-  df = df.apply(replace_outliers_winsorization, axis = 1)
-  df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
-  df_org = df.copy(deep = True)
-  if transform is None:
-    transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
-  if transform == "ALR":
-    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
-  elif transform == "CLR":
-    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
-  elif transform == "Nothing":
-    pass
-  else:
-    raise ValueError("Only ALR and CLR are valid transforms for now.")
+  df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs, impute = impute,
+                                               min_samples = min_samples, transform = transform, feature_set = feature_set,
+                                               paired = paired, gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
-  alpha = get_alphaN(df.shape[1] - 1)
-  if motifs:
-    # Motif extraction and quantification
-    df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-    df_org = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-    # Deduplication
-    df = clean_up_heatmap(df.T)
-    df_org = clean_up_heatmap(df_org.T)
-    # Re-normalization
-    df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
-  else:
-    df = df.set_index(df.columns.tolist()[0])
-    df = df.groupby(df.index).mean()
-    df_org = df_org.set_index(df_org.columns.tolist()[0])
-    df_org = df_org.groupby(df_org.index).mean()
+  alpha = get_alphaN(len(group1+group2))
   # Variance-based filtering of features
   df, df_prison = variance_based_filtering(df)
   df_org = df_org.loc[df.index]
@@ -799,34 +841,12 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | (i) a pandas DataFrame with an F statistic, corrected p-value, and indication of its significance for each glycan.
     | (ii) a dictionary of type glycan : pandas DataFrame, with post-hoc results for each glycan with a significant ANOVA.
     """
-    if isinstance(df, str):
-      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    df, _, groups, _ = preprocess_data(df, groups, [], experiment = "anova", motifs = motifs, impute = impute,
+                                      min_samples = min_samples, transform = transform, feature_set = feature_set,
+                                      gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs)
     results, posthoc_results = [], {}
-    df = df.iloc[:, :len(groups)+1].fillna(0)
-    df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
-    df = df.apply(replace_outliers_winsorization, axis = 1)
-    groups_unq = sorted(set(groups))
-    df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(groups) if x == g] for g in groups_unq], impute = impute,
-                              min_samples = min_samples)
-    if transform is None:
-      transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
-    if transform == "ALR":
-      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma, custom_scale = custom_scale)
-    elif transform == "CLR":
-      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma, custom_scale = custom_scale)
-    elif transform == "Nothing":
-      pass
-    else:
-      raise ValueError("Only ALR and CLR are valid transforms for now.")
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(groups))
-    if motifs:
-      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-      # Deduplication
-      df = clean_up_heatmap(df.T)
-    else:
-      df = df.set_index(df.columns.tolist()[0])
-      df = df.groupby(df.index).mean()
     # Variance-based filtering of features
     df, df_prison = variance_based_filtering(df)
     for glycan in df.index:
@@ -1114,42 +1134,19 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
   | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
   | (vii) Effect size as Cohen's d (ANOSIM R for beta; F statistics for PERMANOVA and Shannon/Simpson (ANOVA))
   """
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-  df = df.fillna(0)
-  # Drop rows with all zero, followed by outlier removal and imputation & normalization
-  df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
-  df = df.apply(replace_outliers_winsorization, axis = 1)
+  experiment = "diff" if group2 else "anova"
+  df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = False,
+                                               transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
+                                               custom_scale = custom_scale, custom_motifs = custom_motifs)
   shopping_cart = []
-  if not group2:
-    group_sizes = group1
-    # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
-    alpha = get_alphaN(df.shape[1] - 1)
-  else:
-    group_sizes = len(group1)*[1]+len(group2)*[2]
-    if not isinstance(group1[0], str):
-      columns_list = df.columns.tolist()
-      group1 = [columns_list[k] for k in group1]
-      group2 = [columns_list[k] for k in group2]
-    df = df.loc[:, [df.columns.tolist()[0]] + group1 + group2]
-    # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
-    alpha = get_alphaN(df.shape[1] - 1)
+  group_sizes = group1 if not group2 else len(group1)*[1]+len(group2)*[2]
   group_counts = Counter(group_sizes)
-  if motifs:
-    if 'beta' in metrics:
-      df_org = df.copy(deep = True)
-    # Motif extraction and quantification
-    df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-    # Deduplication
-    df = clean_up_heatmap(df.T)
-    # Re-normalization
-    df = df.apply(lambda col: col / col.sum() * 100, axis = 0)
-  else:
-    df = df.set_index(df.columns[0])
+  # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+  alpha = get_alphaN(len(group_sizes))
   if 'alpha' in metrics:
-    unique_counts = df.apply(sequence_richness)
-    shan_div = df.apply(shannon_diversity_index)
-    simp_div = df.apply(simpson_diversity_index)
+    unique_counts = df_org.apply(sequence_richness)
+    shan_div = df_org.apply(shannon_diversity_index)
+    simp_div = df_org.apply(simpson_diversity_index)
     a_df = pd.DataFrame({'species_richness': unique_counts,
                                'shannon_diversity': shan_div, 'simpson_diversity': simp_div}).T
     if len(group_counts) == 2:
@@ -1170,29 +1167,12 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
       si_stats = alpha_biodiversity_stats(simp_div, group_sizes)
       shopping_cart.append(pd.DataFrame({'Metric': 'Simpson diversity (ANOVA)', 'p-val': si_stats[1], 'Effect size': si_stats[0]}, index = [0]))
   if 'beta' in metrics:
-    if not motifs:
-      df_org = df.reset_index()
-    if transform is None:
-      transform = "ALR" if enforce_class(df_org.iloc[0, 0], "N") and len(df_org) > 50 else "CLR"
-    if transform == "ALR":
-      df_org = get_additive_logratio_transformation(df_org, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
-    elif transform == "CLR":
-      df_org.iloc[:, 1:] = clr_transformation(df_org.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
-    elif transform == "Nothing":
-      pass
-    else:
-      raise ValueError("Only ALR and CLR are valid transforms for now.")
-    if motifs:
-      b_df = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-      b_df = clean_up_heatmap(b_df.T)
-    else:
-      b_df = df_org
-    if not isinstance(b_df.index[0], str):
-      b_df = b_df.set_index(b_df.columns[0])
+    if not isinstance(df.index[0], str):
+      df = df.set_index(df.columns[0])
     bc_diversity = {}  # Calculating pair-wise indices
-    for index_1 in range(0, len(b_df.columns)):
-      for index_2 in range(0, len(b_df.columns)):
-        bc_pair = np.sqrt(np.sum((b_df.iloc[:, index_1] - b_df.iloc[:, index_2]) ** 2))
+    for index_1 in range(0, len(df.columns)):
+      for index_2 in range(0, len(df.columns)):
+        bc_pair = np.sqrt(np.sum((df.iloc[:, index_1] - df.iloc[:, index_2]) ** 2))
         bc_diversity[index_1, index_2] = bc_pair
     b_df_out = pd.DataFrame.from_dict(bc_diversity, orient = 'index')
     out_len = int(np.sqrt(len(b_df_out)))
@@ -1313,37 +1293,10 @@ def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaust
   | :-
   | Returns a sorted list of tuples of type (glycan, AUC score) and, optionally, ROC curve for best feature
   """
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-  if not isinstance(group1[0], str) and group2:
-    columns_list = df.columns.tolist()
-    group1 = [columns_list[k] for k in group1]
-    group2 = [columns_list[k] for k in group2]
-  df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
-  df = df.apply(replace_outliers_winsorization, axis = 1)
-  if group2:
-    df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
-  else:
-    classes = list(set(group1))
-    df = impute_and_normalize(df, [[df.columns[i+1] for i, x in enumerate(group1) if x == g] for g in classes], impute = impute, min_samples = min_samples)
-  if transform is None:
-    transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
-  if transform == "ALR":
-    if group2:
-      df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
-    else:
-      df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = paired, gamma = gamma, custom_scale = custom_scale)
-  elif transform == "CLR":
-    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
-  elif transform == "Nothing":
-    pass
-  else:
-    raise ValueError("Only ALR and CLR are valid transforms for now.")
-  if not isinstance(df.index[0], str):
-    df = df.set_index(df.columns[0])
-  if motifs:
-    df = quantify_motifs(df, df.index.tolist(), feature_set, custom_motifs = custom_motifs)
-    df = clean_up_heatmap(df.T)
+  experiment = "diff" if group2 else "anova"
+  df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = impute,
+                                               transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
+                                               custom_scale = custom_scale, custom_motifs = custom_motifs)
   auc_scores = {}
   if group2: # binary comparison
     for feature, values in df.iterrows():
@@ -1370,6 +1323,7 @@ def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaust
     if filepath:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
   else: # multi-group comparison
+    classes = list(set(group1))
     df = df.groupby(df.index).mean()
     df = df.T  # Ensure features are columns
     df['group'] = group1
