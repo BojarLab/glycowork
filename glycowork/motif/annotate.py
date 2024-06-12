@@ -247,10 +247,12 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     shadow_bag = pd.DataFrame([{i: j.count(i) for i in repertoire if '?' in i} for j in shadow_glycans])
     bag_out = pd.concat([bag_out, shadow_bag], axis = 1).reset_index(drop = True)
     bag_out.index = glycans
+    bag_out.columns = ['Terminal_' + c for c in bag_out.columns]
     shopping_cart.append(bag_out)
   if 'terminal3' in feature_set:
     temp = get_k_saccharides(glycans, size = 3, terminal = True)
     temp.index = glycans
+    temp.columns = ['Terminal_' + c for c in temp.columns]
     shopping_cart.append(temp)
   if condense:
     # Remove motifs that never occur

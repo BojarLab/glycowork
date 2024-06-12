@@ -812,7 +812,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | custom_scale (dict): dictionary of type group_idx : mean(group)/min(mean(groups)) for an informed scale model\n
     | Returns:
     | :-
-    | (i) a pandas DataFrame with an F statistic, corrected p-value, and indication of its significance for each glycan.
+    | (i) a pandas DataFrame with an F statistic, corrected p-value, indication of its significance, and effect size (Omega squared) for each glycan.
     | (ii) a dictionary of type glycan : pandas DataFrame, with post-hoc results for each glycan with a significant ANOVA.
     """
     df, _, groups, _ = preprocess_data(df, groups, [], experiment = "anova", motifs = motifs, impute = impute,
@@ -821,6 +821,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     results, posthoc_results = [], {}
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(groups))
+    effect_sizes = df.apply(omega_squared, axis = 1, args = (groups,))
     # Variance-based filtering of features
     df, df_prison = variance_based_filtering(df)
     for glycan in df.index:
@@ -848,6 +849,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     prison_rows = prison_rows.astype({'significant': 'bool'})
     df_out = pd.concat([df_out, prison_rows], ignore_index = True)
     df_out['significant'] = df_out['significant'].astype('bool')
+    df_out['Effect size'] = effect_sizes.values
     return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
 
