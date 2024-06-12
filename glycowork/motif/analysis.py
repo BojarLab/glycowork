@@ -238,7 +238,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
     df = df.set_index(index_col)
   elif isinstance(df.iloc[0,0], str):
     df = df.set_index(df.columns.tolist()[0])
-  if not isinstance(df.index.tolist()[0], str) or (isinstance(df.index.tolist()[0], str) and '(' not in df.index.tolist()[0] and '-' not in df.index.tolist()[0]):
+  if not isinstance(df.index[0], str) or (isinstance(df.index[0], str) and ('(' not in df.index[0] or '-' not in df.index[0])):
     df = df.T
   df = df.fillna(0)
   if transform == "CLR":
