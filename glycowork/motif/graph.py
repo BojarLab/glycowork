@@ -204,7 +204,7 @@ def compare_glycans(glycan_a, glycan_b):
     if glycan_a.count('(') != glycan_b.count('('):
       return False
     proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
-    if 'O' in ''.join(proc):
+    if 'O' in glycan_a + glycan_b:
       glycan_a, glycan_b = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in [glycan_a, glycan_b]]
     g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
   else:
@@ -215,7 +215,7 @@ def compare_glycans(glycan_a, glycan_b):
     proc = attrs_a.union(attrs_b)
     g1, g2 = (ptm_wildcard_for_graph(copy.deepcopy(glycan_a)), ptm_wildcard_for_graph(copy.deepcopy(glycan_b))) if 'O' in ''.join(proc) else (glycan_a, glycan_b)
   narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in proc
-                          if '?' in k or k in {'Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
+                          if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   if narrow_wildcard_list:
     return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
   else:
@@ -265,7 +265,7 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
     if motif.count('(') > glycan.count('('):
       return (0, []) if return_matches else 0 if count else False
     motif_comp = min_process_glycans([motif, glycan])
-    if 'O' in ''.join(unwrap(motif_comp)):
+    if 'O' in glycan + motif:
       glycan, motif = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', g).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for g in [glycan, motif]]
     g1 = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else None)
     g2 = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else None, termini_list = termini_list)
@@ -278,7 +278,7 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
     else:
       g1, g2 = copy.deepcopy(glycan), motif
   narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in set(unwrap(motif_comp))
-                          if '?' in k or k in {'Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
+                          if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   if termini_list or narrow_wildcard_list:
     graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
                                                                                                              'termini', 'flexible'))

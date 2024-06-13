@@ -498,7 +498,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   if motifs:
     # Motif extraction and quantification
     df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs, remove_redundant = False).T.reset_index()
-  X = np.array(df.iloc[:, 1:len(groups)+1].T) if groups and isinstance(groups, list) else np.array(df.iloc[:, 1:].T)
+  X = np.array(df.iloc[:, 1:len(groups)+1].T) if isinstance(groups, list) and groups else np.array(df.iloc[:, 1:].T)
   scaler = StandardScaler()
   X_std = scaler.fit_transform(X)
   pca = PCA()

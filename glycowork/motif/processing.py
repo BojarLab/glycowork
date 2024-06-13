@@ -4,7 +4,7 @@ import re
 from functools import wraps
 from collections import defaultdict
 from glycowork.glycan_data.loader import (unwrap, multireplace,
-                                          find_nth, find_nth_reverse, lib,
+                                          find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
 
@@ -108,15 +108,15 @@ def get_possible_monosaccharides(wildcard):
   """Retrieves all matching common monosaccharides of a type, given the type\n
   | Arguments:
   | :-
-  | wildcard (string): Monosaccharide type, from "HexNAc", "Hex", "dHex", "Sia", "HexA", "Pen"\n
+  | wildcard (string): Monosaccharide type, from "HexNAc", "HexNAcOS", "Hex", "HexOS", "dHex", "Sia", "HexA", "Pen"\n
   | Returns:
   | :-
   | Returns a list of specified monosaccharides of that type
   """
   wildcard_dict = {'Hex': Hex, 'HexNAc': HexNAc, 'dHex': dHex, 'Sia': Sia, 'HexA': HexA, 'Pen': Pen,
-                   'Monosaccharide': set().union(*[Hex, HexNAc, dHex, Sia, HexA, Pen])}
+                   'HexOS': HexOS, 'HexNAcOS': HexNAcOS,
+                   'Monosaccharide': set().union(*[Hex, HexOS, HexNAc, HexNAcOS, dHex, Sia, HexA, Pen])}
   return wildcard_dict.get(wildcard, [])
-  #return list(possible_monosaccharides) if libr is None else list(possible_monosaccharides & libr.keys())
 
 
 def bracket_removal(glycan_part):

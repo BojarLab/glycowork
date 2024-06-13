@@ -71,10 +71,12 @@ linkages = {
   '?2-?', '?1-2', '?1-3', '?1-4', '?1-6', '?2-3', '?2-6', '?2-8'
   }
 Hex = {'Glc', 'Gal', 'Man', 'Ins', 'Galf', 'Hex'}
+HexOS = [f"{h}OS" for h in Hex]
 dHex = {'Fuc', 'Qui', 'Rha', 'dHex'}
 HexA = {'GlcA', 'ManA', 'GalA', 'IdoA', 'HexA'}
 HexN = {'GlcN', 'ManN', 'GalN', 'HexN'}
 HexNAc = {'GlcNAc', 'GalNAc', 'ManNAc', 'HexNAc'}
+HexNAcOS = [f"{h}OS" for h in HexNAc]
 Pen = {'Ara', 'Xyl', 'Rib', 'Lyx', 'Pen'}
 Sia = {'Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia'}
 
