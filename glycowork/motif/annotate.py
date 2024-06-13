@@ -115,7 +115,7 @@ def annotate_glycan_topology_uncertainty(glycan, feasibles = None, motifs = None
       continue
     temp_res = [subgraph_isomorphism(p, g, termini_list = termini_list[i] if termini_list else termini_list,
                                 count = True) for p in possibles]
-    if np.mean(temp_res) > 0.5:
+    if temp_res and np.mean(temp_res) > 0.5:
       res.append(1)
     else:
       res.append(0)

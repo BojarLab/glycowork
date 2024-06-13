@@ -17,6 +17,7 @@ from sklearn.metrics import roc_auc_score, roc_curve, auc
 from sklearn.preprocessing import StandardScaler, label_binarize
 from sklearn.decomposition import PCA
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.feature_selection import SelectFromModel
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
@@ -974,7 +975,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     | (i) Glycans/motifs potentially exhibiting significant changes over time
     | (ii) The slope of their expression curve over time
     | (iii) Uncorrected p-values (t-test) for testing whether slope is significantly different from zero
-    | (iv) Corrected p-values (t-test with Benjamini-Hochberg correction) for testing whether slope is significantly different from zero
+    | (iv) Corrected p-values (t-test with two-stage Benjamini-Hochberg correction) for testing whether slope is significantly different from zero
     | (v) Significance: True/False whether the corrected p-value lies below the sample size-appropriate significance threshold
     """
     if isinstance(df, str):
@@ -1239,8 +1240,54 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   return correlation_df, p_value_df
 
 
+def multi_feature_scoring(df, group1, group2, filepath = ''):
+  """Finds the minimal set of glycan features that gives the best model to distinguish conditions\n
+  | Arguments:
+  | :-
+  | df (dataframe): transformed dataframe containing glycan sequences in first column and abundances in subsequent columns
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
+  | filepath (string): absolute path including full filename allows for saving the plot, if plot=True\n
+  | Returns:
+  | :-
+  | Prints the identified features and returns:
+  | (i) the trained model to distinguish conditions
+  | (ii) the ROC AUC score of the trained model
+  | (iii) (optionally, if filepath) a saved plot of the ROC curve for the model
+  """
+  if group2:
+    y = [0] * len(group1) + [1] * len(group2)
+  else:
+    y = group1
+  X = df.T
+  model = LogisticRegression(penalty = 'l1', solver = 'liblinear', random_state = 42)
+  model.fit(X.values, y)
+  model = SelectFromModel(model, prefit = True)
+  X_selected = model.transform(X.values)
+  selected_features = X.columns[model.get_support()]
+  print("Optimal features:", selected_features)
+  model = LogisticRegression(penalty = 'l2', solver = 'liblinear', random_state = 42)
+  model.fit(X_selected, y)
+  # Evaluate ROC AUC on the selected features
+  y_scores = model.predict_proba(X_selected)[:, 1]
+  roc_auc = roc_auc_score(y, y_scores)
+  # Plot ROC curve
+  fpr, tpr, _ = roc_curve(y, y_scores)
+  plt.figure()
+  plt.plot(fpr, tpr, label = f'ROC Curve (area = {roc_auc:.2f})')
+  plt.plot([0, 1], [0, 1], 'r--')
+  plt.xlabel('False Positive Rate')
+  plt.ylabel('True Positive Rate')
+  plt.title('ROC Curve with Optimal Features')
+  plt.legend(loc = "lower right")
+  if filepath:
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+  return model, roc_auc
+
+
 def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaustive"], paired = False, impute = True,
-            min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0, filepath = ''):
+            min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0, filepath = '',
+            multi_score = False):
   """Calculates ROC AUC for every feature and, optionally, plots the best\n
   | Arguments:
   | :-
@@ -1259,7 +1306,8 @@ def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaust
   | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
   | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-  | filepath (string): absolute path including full filename allows for saving the plot, if plot=True\n
+  | filepath (string): absolute path including full filename allows for saving the plot, if plot=True
+  | multi_score (bool): whether to find the best glycan risk score, containing multiple glycan features; default:False\n
   | Returns:
   | :-
   | Returns a sorted list of tuples of type (glycan, AUC score) and, optionally, ROC curve for best feature
@@ -1268,6 +1316,8 @@ def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaust
   df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = impute,
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
                                                custom_scale = custom_scale, custom_motifs = custom_motifs)
+  if multi_score:
+    return multi_feature_scoring(df, group1, group2, filepath = filepath)
   auc_scores = {}
   if group2: # binary comparison
     for feature, values in df.iterrows():
@@ -1341,7 +1391,7 @@ def get_lectin_array(df, group1, group2, paired = False, transform = ''):
   | group1 (list): list of indices or names for the first group of samples, usually the control
   | group2 (list): list of indices or names for the second group of samples (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | transform (string): optional data-processing, "log2" transforms the with np.log2; default:nothing\n
+  | transform (string): optional data-processing, "log2" transforms df with np.log2; default:nothing\n
   | Returns:
   | :-
   | Returns an output dataframe with:
