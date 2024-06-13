@@ -651,7 +651,7 @@ def get_differential_expression(df, group1, group2,
     corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_tsbh')[1] if len(valid_equivalence_pvals) else []
     equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
     equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
-    levene_pvals = [levene(row_b, row_a)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+    levene_pvals = [levene(row_b, row_a)[1] for row_a, row_b in zip(df_a.values, df_b.values)] if (df_a.shape[1] > 2 and df_b.shape[1] > 2) else [1.0]*len(df_a)
     effects = [cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)]
     effect_sizes, variances = list(zip(*effects)) if effects else [[0]*len(glycans), [0]*len(glycans)]
   # Multiple testing correction

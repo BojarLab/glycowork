@@ -693,7 +693,7 @@ def replace_outliers_winsorization(full_row):
   row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
   # Apply Winsorization - limits set to match typical IQR outlier detection
   nan_placeholder = row.min() - 1
-  row = row.fillna(nan_placeholder)
+  row = row.astype(float).fillna(nan_placeholder)
   winsorized_values = winsorize(row, limits = [0.05, 0.05])
   winsorized_values = pd.Series(winsorized_values, index = row.index)
   winsorized_values = winsorized_values.replace(nan_placeholder, np.nan)
