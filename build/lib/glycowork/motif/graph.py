@@ -248,6 +248,18 @@ def expand_termini_list(motif, termini_list):
   return t_list
 
 
+def handle_negation(original_func):
+  def wrapper(glycan, motif, *args, **kwargs):
+    if isinstance(motif, str) and '!' in motif:
+      return subgraph_isomorphism_with_negation(glycan, motif, *args, **kwargs)
+    elif hasattr(motif, 'nodes') and any('!' in data.get('string_labels', '') for _, data in motif.nodes(data = True)):
+      return subgraph_isomorphism_with_negation(glycan, motif, *args, **kwargs)
+    else:
+      return original_func(glycan, motif, *args, **kwargs)
+  return wrapper
+
+
+@handle_negation
 def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return_matches = False):
   """returns True if motif is in glycan and False if not\n
   | Arguments:
@@ -264,6 +276,8 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
   if isinstance(glycan, str) and isinstance(motif, str):
     if motif.count('(') > glycan.count('('):
       return (0, []) if return_matches else 0 if count else False
+    if not count and not return_matches and motif in glycan:
+      return True
     motif_comp = min_process_glycans([motif, glycan])
     if 'O' in glycan + motif:
       glycan, motif = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', g).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for g in [glycan, motif]]
@@ -320,6 +334,46 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
              return False if not return_matches else (0, [])
         return True if not return_matches else (1, mappings)
   return False if not return_matches else (0, [])
+
+
+def subgraph_isomorphism_with_negation(glycan, motif, termini_list = [], count = False, return_matches = False):
+  """returns True if motif is in glycan and False if not\n
+  | Arguments:
+  | :-
+  | glycan (string or networkx): glycan in IUPAC-condensed format or as graph in NetworkX format
+  | motif (string or networkx): glycan motif in IUPAC-condensed format or as graph in NetworkX format
+  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
+  | count (bool): whether to return the number or absence/presence of motifs; default:False
+  | return_matches (bool): whether the matched subgraphs in input glycan should be returned as node lists as an additional output; default:False\n
+  | Returns:
+  | :-
+  | Returns True if motif is in glycan and False if not
+  """
+  if isinstance(motif, str):
+    temp = motif[motif.index('!'):]
+    motif_stub = (motif[:motif.index('!')] + temp[temp.index(')')+1:]).replace('[]', '')
+  else:
+    motif_stub = motif.copy()
+    nodes_to_remove = {node for node, data in motif_stub.nodes(data = True)
+                       if '!' in data.get('string_labels', '')}
+    nodes_to_remove.update({node + 1 for node in nodes_to_remove if node + 1 in motif_stub})
+    motif_stub.remove_nodes_from(nodes_to_remove)
+  res = subgraph_isomorphism(glycan, motif_stub, termini_list = termini_list, count = count, return_matches = return_matches)
+  if not res or (isinstance(res, tuple) and not res[0]):
+    return res
+  else:
+    if isinstance(motif, str):
+      motif_too_large = motif.replace('!', '')
+    else:
+      motif_too_large = motif.copy()
+      for node, data in motif_too_large.nodes(data = True):
+        if '!' in data.get('string_labels', ''):
+          motif_too_large.nodes[node]['string_labels'] = data['string_labels'].replace('!', '')
+    res2 = subgraph_isomorphism(glycan, motif_too_large, termini_list = termini_list, count = count, return_matches = return_matches)
+    if res2:
+      return (0, []) if return_matches else 0 if count else False
+    else:
+      return res
 
 
 def generate_graph_features(glycan, glycan_graph = True, label = 'network'):
