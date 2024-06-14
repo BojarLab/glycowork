@@ -1114,8 +1114,8 @@ def prune_network(network, node_attr = 'abundance', threshold = 0.):
   return network_out
 
 
-def evoprune_network(network, network_dic = None, species_list = None,
-                     node_attr = 'abundance', threshold = 0.01, nb_intermediates = 2):
+def evoprune_network(network, network_dic = None, species_list = None, node_attr = 'abundance',
+                     threshold = 0.01, nb_intermediates = 2, mode = 'presence'):
   """given a biosynthetic network, this function uses evolutionary relationships to prune impossible paths\n
   | Arguments:
   | :-
@@ -1124,7 +1124,8 @@ def evoprune_network(network, network_dic = None, species_list = None,
   | species_list (list): list of species to compare network to; default:species from pre-computed milk networks
   | node_attr (string): which (numerical) node attribute to use for pruning; default:'abundance'
   | threshold (float): everything below or equal to that threshold will be cut; default:0.01
-  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)\n
+  | nb_intermediates (int): number of intermediate nodes expected in a network motif to extract; has to be a multiple of 2 (2: diamond, 4: hexagon,...)
+  | mode (string): whether to analyze for "presence" or "abundance" of intermediates; default:"presence"\n
   | Returns:
   | :-
   | Returns pruned network (with virtual node probability as a new node attribute)
@@ -1134,8 +1135,8 @@ def evoprune_network(network, network_dic = None, species_list = None,
   if species_list is None:
     species_list = list(network_dic.keys())
   # Calculate path probabilities of diamonds
-  df_out = trace_diamonds(network, species_list, network_dic,
-                          threshold = threshold, nb_intermediates = nb_intermediates)
+  df_out = trace_diamonds(network, species_list, network_dic, threshold = threshold,
+                          nb_intermediates = nb_intermediates, mode = mode)
   # Scale virtual node size by path probability
   network_out = highlight_network(network, highlight = 'abundance', abundance_df = df_out,
                                   intensity_col = 'probability')
