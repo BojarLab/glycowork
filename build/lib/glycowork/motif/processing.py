@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import copy
 import re
 from functools import wraps
@@ -309,7 +310,7 @@ def canonicalize_composition(comp):
   """converts a composition from any common format into the dictionary that is optimized for glycowork\n
   | Arguments:
   | :-
-  | comp (string): composition formatted either in the style of HexNAc2Hex1Fuc3Neu5Ac1 or N2H1F3A1\n
+  | comp (string): composition formatted either in the style of Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2\n
   | Returns:
   | :-
   | Returns composition as a dictionary of style monosaccharide : count
@@ -320,6 +321,13 @@ def canonicalize_composition(comp):
     return {k: v for k, v in temp.items() if v}
   elif comp.isdigit():
     temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+    return {k: v for k, v in temp.items() if v}
+  elif comp[0].isdigit():
+    comp = comp.replace(' ', '')
+    if len(comp) < 5:
+      temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+    else:
+      temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "Neu5Gc": int(comp[3]), "dHex": int(comp[4])}
     return {k: v for k, v in temp.items() if v}
   comp_dict = {}
   i = 0
@@ -959,3 +967,46 @@ def equal_repeats(r1, r2):
   """
   r1_long = r1[:r1.rindex(')')+1] * 2
   return any(r1_long[i:i + len(r2)] == r2 for i in range(len(r1)))
+
+
+@rescue_compositions
+def parse_glycoform(glycoform, glycan_features = ['H', 'N', 'A', 'F', 'G']):
+  """converts composition of style H5N4F1A2 into monosaccharide counts\n
+  | Arguments:
+  | :-
+  | comp (string): composition formatted either in the style of Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2\n
+  | Returns:
+  | :-
+  | Returns composition as a dictionary of style monosaccharide : count
+  """
+  if isinstance(glycoform, dict):
+    return {k: glycoform.get(k, 0) for k in glycan_features}
+  components = {c: 0 for c in glycan_features}
+  matches = re.finditer(r'([HNAFG])(\d+)', glycoform)
+  for match in matches:
+    components[match.group(1)] = int(match.group(2))
+  return components
+
+
+def process_for_glycoshift(df):
+  """extracts and formats compositions in glycoproteomics dataset\n
+  | Arguments:
+  | :-
+  | df (dataframe): glycoproteomics dataset, expects index to be formatted as protein_site_composition\n
+  | Returns:
+  | :-
+  | (i) glycoproteomics dataset with new columns for protein_site, composition, and composition counts
+  | (ii) list of identified glycan features, such as different monosaccharides
+  """
+  df['Glycosite'] = [k.split('_')[0] + '_' + k.split('_')[2] for i, k in enumerate(df.index)]
+  if '[' in df.index[0]:
+    comps = ['['+k.split('[')[1] for k in df.index]
+    comps = [list(map(int, re.findall(r'\d+', s))) for s in comps]
+    df['Glycoform'] = [f'H{c[0]}N{c[1]}F{c[3]}A{c[2]}' for c in comps]
+    glycan_features = ['H', 'N', 'A', 'F', 'G']
+  else:
+    df['Glycoform'] = [canonicalize_composition(k.split('_')[-1]) for k in df.index]
+    glycan_features = set(unwrap([list(c.keys()) for c in df.Glycoform]))
+  org_cols = df.columns.tolist()
+  df = df.join(df['Glycoform'].apply(parse_glycoform, glycan_features = glycan_features).apply(pd.Series))
+  return df, [c for c in df.columns if c not in org_cols]

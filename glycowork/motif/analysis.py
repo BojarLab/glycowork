@@ -29,8 +29,8 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing,
-                                         omega_squared, get_glycoform_diff)
-from glycowork.motif.processing import enforce_class
+                                         omega_squared, get_glycoform_diff, process_glm_results)
+from glycowork.motif.processing import enforce_class, process_for_glycoshift
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
                                       create_lectin_and_motif_mappings, lectin_motif_scoring, clean_up_heatmap)
@@ -1451,3 +1451,47 @@ def get_lectin_array(df, group1, group2, paired = False, transform = ''):
   if not group2:
     df_out["change"] = ["different"] * len(df_out)
   return df_out
+
+
+def get_glycoshift_per_site(df, group1, group2, paired = False, impute = True,
+                            min_samples = 0.2, gamma = 0.1, custom_scale = 0):
+  """Calculates differentially expressed glycans or motifs from glycomics data\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
+  | impute (bool): replaces zeroes with a Random Forest based model; default:True
+  | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 20%
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | Returns:
+  | :-
+  | Returns a dataframe with:
+  | (for each condition/interaction feature)
+  | (i) Regression coefficient from the GLM (indicating direction of change in the treatment condition)
+  | (ii) Corrected p-values (two-tailed t-test with two-stage Benjamini-Hochberg correction) for testing the coefficient against zero
+  | (iii) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  """
+  df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = False, impute = impute,
+                                               min_samples = min_samples, transform = "Nothing", paired = paired)
+  alpha = get_alphaN(len(group1+group2))
+  df, glycan_features = process_for_glycoshift(df) # potentially expand this further to infer and label high-Man/Hybrid/complex
+  necessary_columns = ['Glycoform'] + glycan_features
+  preserved_data = df[necessary_columns]
+  df = df.drop(necessary_columns, axis = 1)
+  df = df.set_index('Glycosite')
+  df = df.div(df.sum(axis = 0), axis = 1) * 100
+  df = df.reset_index()
+  results = [
+        clr_transformation(group_df[group1 + group2], group1, group2, gamma = gamma, custom_scale = custom_scale)
+        .assign(Glycosite = glycosite)
+        for glycosite, group_df in df.groupby('Glycosite')
+    ]
+  df = pd.concat(results, ignore_index = True)
+  df = pd.concat([df, preserved_data.reset_index(drop = True)], axis = 1)
+  df_long = pd.melt(df, id_vars = ['Glycosite', 'Glycoform'] + glycan_features,
+                  var_name = 'Sample', value_name = 'Abundance')
+  df_long['Condition'] = df_long['Sample'].apply(lambda x: 0 if x in group1 else 1)
+  return process_glm_results(df_long, alpha, glycan_features)

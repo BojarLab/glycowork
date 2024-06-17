@@ -15,6 +15,7 @@ from statsmodels.stats.weightstats import ttost_ind, ttost_paired
 from statsmodels.formula.api import ols
 from statsmodels.stats.anova import anova_lm
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
+import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import copy
 rng = np.random.default_rng(42)
@@ -1078,3 +1079,63 @@ def get_glycoform_diff(df_res, alpha = 0.05, level = 'peptide'):
   pvals, sig = correct_multiple_testing(grouped, alpha)
   df_out = pd.DataFrame({'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})
   return df_out.sort_values(by = 'corr p-val')
+
+
+def get_glm(group, glycan_features = ['H', 'N', 'A', 'F', 'G']):
+  """given glycoform data from a glycosite, constructs & fits a GLM formula for main+interaction effects of explaining glycoform abundance\n
+  | Arguments:
+  | :-
+  | group (dataframe): longform data of glycoform abundances for a particular glycosite
+  | glycan_features (list): list of extracted glycan features to consider as variables; default:['H', 'N', 'A', 'F', 'G']\n
+  | Returns:
+  | :-
+  | Returns fitted GLM (or string with failure message if unsuccessful) and a list of the variables that it contains
+  """
+  retained_vars = [c for c in glycan_features if c in group.columns and max(group[c]) > 0]
+  if not retained_vars:
+    return ("No variables retained", [])
+  base_formula = 'Abundance ~ '
+  formula_parts = ['Condition']
+  formula_parts += [f'{col} + {col}_Condition' for col in retained_vars] # Main and interaction effects
+  for col in retained_vars:
+    group[f'{col}_Condition'] = group[col] * group['Condition']
+  formula = base_formula + ' + '.join(formula_parts)
+  try:
+    with np.errstate(divide = 'ignore'):
+      model = smf.glm(formula = formula, data = group, family = sm.families.Gaussian()).fit()
+    return model, retained_vars
+  except Exception as e:
+    return (f"GLM fitting failed: {str(e)}", [])
+
+
+def process_glm_results(df, alpha, glycan_features):
+  """tests for interaction effects of glycan features and the condition on glycoform abundance via a GLM\n
+  | Arguments:
+  | :-
+  | df (dataframe): CLR-transformed glycoproteomics data (processed grouped by site), rows glycoforms, columns samples
+  | glycan_features (list): list of extracted glycan features to consider as variables\n
+  | Returns:
+  | :-
+  | (for each condition/interaction feature)
+  | (i) Regression coefficient from the GLM (indicating direction of change in the treatment condition)
+  | (ii) Corrected p-values (two-tailed t-test with two-stage Benjamini-Hochberg correction) for testing the coefficient against zero
+  | (iii) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  """
+  results = df.groupby('Glycosite').apply(get_glm, glycan_features = glycan_features)
+  all_retained_vars = set()
+  for _, retained_vars in results:
+    all_retained_vars.update(retained_vars)
+  int_terms = ['Condition'] + [f'{v}_Condition' for v in all_retained_vars]
+  out = {idx: [v.pvalues.get(term, 1.0) for term in int_terms] if not isinstance(v, str) else [1.0] * len(int_terms) for idx, (v, _) in results.items()}
+  out2 = {idx: [v.params.get(term, 0.0) for term in int_terms] if not isinstance(v, str) else [0.0] * len(int_terms) for idx, (v, _) in results.items()}
+  df_pvals = pd.DataFrame(out).T
+  df_coefs = pd.DataFrame(out2).T
+  df_pvals.columns = int_terms
+  df_coefs.columns = int_terms
+  df_out = pd.DataFrame(index = df_pvals.index)
+  for term in int_terms:
+    corrpvals, significance = correct_multiple_testing(df_pvals[term], alpha)
+    df_out[f'{term}_coefficient'] = df_coefs[term]
+    df_out[f'{term}_corr_pval'] = corrpvals
+    df_out[f'{term}_significant'] = significance
+  return df_out.sort_values(by = 'Condition_corr_pval')
