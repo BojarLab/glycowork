@@ -969,23 +969,50 @@ def equal_repeats(r1, r2):
   return any(r1_long[i:i + len(r2)] == r2 for i in range(len(r1)))
 
 
+def infer_features_from_composition(comp):
+  """extracts higher-order glycan features from a composition\n
+  | Arguments:
+  | :-
+  | comp (dict): composition as a dictionary of style monosaccharide : count\n
+  | Returns:
+  | :-
+  | Returns dictionary containing higher-order glycan features and their absence/presence
+  """
+  feature_dic = {}
+  if comp.get('A', 0) + comp.get('G', 0) > 1 or comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) > 1:
+    feature_dic['complex'] = 1
+  else:
+    feature_dic['complex'] = 0
+  if (comp.get('H', 0) > 5 and comp.get('N', 0) == 2) or (comp.get('Hex', 0) > 5 and comp.get('HexNAc', 0) == 2):
+    feature_dic['high_Man'] = 1
+  else:
+    feature_dic['high_Man'] = 0
+  if (comp.get('A', 0) + comp.get('G', 0) < 2 and comp.get('H', 0) > 4) or (comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) > 1 and comp.get('Hex', 0) > 4):
+    feature_dic['hybrid'] = 1
+  else:
+    feature_dic['hybrid'] = 0
+  return feature_dic
+
+
 @rescue_compositions
 def parse_glycoform(glycoform, glycan_features = ['H', 'N', 'A', 'F', 'G']):
   """converts composition of style H5N4F1A2 into monosaccharide counts\n
   | Arguments:
   | :-
-  | comp (string): composition formatted either in the style of Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2\n
+  | comp (string): composition formatted either in the style of Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2
+  | glycan_features (list): list of extracted glycan features to consider as variables\n
   | Returns:
   | :-
   | Returns composition as a dictionary of style monosaccharide : count
   """
   if isinstance(glycoform, dict):
-    return {k: glycoform.get(k, 0) for k in glycan_features}
+    components = {k: glycoform.get(k, 0) for k in glycan_features}
+    return components | infer_features_from_composition(components)
   components = {c: 0 for c in glycan_features}
   matches = re.finditer(r'([HNAFG])(\d+)', glycoform)
   for match in matches:
     components[match.group(1)] = int(match.group(2))
-  return components
+  return components | infer_features_from_composition(components)
 
 
 def process_for_glycoshift(df):
