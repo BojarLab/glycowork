@@ -29,7 +29,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing,
-                                         omega_squared, get_glycoform_diff, process_glm_results)
+                                         omega_squared, get_glycoform_diff, process_glm_results, partial_corr)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
@@ -1167,7 +1167,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
 
 
 def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], custom_motifs = [],
-               transform = None, gamma = 0.1):
+               transform = None, gamma = 0.1, partial_correlations = False):
   """Performs SparCC (Sparse Correlations for Compositional Data) on two (glycomics) datasets. Samples should be in the same order.\n
   | Arguments:
   | :-
@@ -1180,7 +1180,8 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   |   and 'chemical' (molecular properties of glycan)
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
   | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+  | partial_correlations (bool): whether to use regularized partial correlations instead (enriches for direct effects); default:False\n
   | Returns:
   | :-
   | Returns (i) a dataframe of pairwise correlations (Spearman's rho)
@@ -1228,10 +1229,22 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   df1, df2 = df1.T, df2.T
   correlation_matrix = np.zeros((df1.shape[1], df2.shape[1]))
   p_value_matrix = np.zeros((df1.shape[1], df2.shape[1]))
+  if partial_correlations:
+    correlations_df1 = np.abs(np.corrcoef(df1.transpose()))
+    correlations_df2 = np.abs(np.corrcoef(df2.transpose()))
+    threshold = 0.5 if motifs else 0.2
   # Compute Spearman correlation for each pair of columns between transformed df1 and df2
   for i in range(df1.shape[1]):
     for j in range(df2.shape[1]):
-      corr, p_val = spearmanr(df1.iloc[:, i], df2.iloc[:, j])
+      if partial_correlations:
+        valid_controls_i = [k for k in range(df1.shape[1]) if correlations_df1[i, k] > threshold and k != i]
+        valid_controls_j = [k for k in range(df2.shape[1]) if correlations_df2[j, k] > threshold and k != j]
+        controls_i = df1.iloc[:, valid_controls_i].values
+        controls_j = df2.iloc[:, valid_controls_j].values
+        controls = np.hstack([controls_i, controls_j])
+        corr, p_val = partial_corr(df1.iloc[:, i].values, df2.iloc[:, j].values, controls, motifs = motifs)
+      else:
+        corr, p_val = spearmanr(df1.iloc[:, i], df2.iloc[:, j])
       correlation_matrix[i, j] = corr
       p_value_matrix[i, j] = p_val
   p_value_matrix = multipletests(p_value_matrix.flatten(), method = 'fdr_tsbh')[1].reshape(p_value_matrix.shape)

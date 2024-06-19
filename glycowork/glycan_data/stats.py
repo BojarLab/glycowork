@@ -3,6 +3,7 @@ import numpy as np
 import math
 import warnings
 from collections import defaultdict, Counter
+from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from scipy.special import gammaln
 from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues
@@ -1139,3 +1140,28 @@ def process_glm_results(df, alpha, glycan_features):
     df_out[f'{term}_corr_pval'] = corrpvals
     df_out[f'{term}_significant'] = significance
   return df_out.sort_values(by = 'Condition_corr_pval')
+
+
+def partial_corr(x, y, controls, motifs = False):
+  """Compute regularized partial correlation of x and y, controlling for multiple other variables in controls\n
+  | Arguments:
+  | :-
+  | x (array-like): typically the values from a column or row
+  | y (array-like): typically the values from a column or row
+  | controls (array-like): variables that are correlated with x or y
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False\n
+  | Returns:
+  | :-
+  | float: regularized partial correlation coefficient.
+  | float: p-value associated with the Spearman correlation of residuals.\n
+  """
+  # Fit regression models
+  alpha = 0.1 if motifs else 0.25
+  beta_x = Ridge(alpha = alpha).fit(controls, x).coef_
+  beta_y = Ridge(alpha = alpha).fit(controls, y).coef_
+  # Compute residuals
+  res_x = x - controls.dot(beta_x)
+  res_y = y - controls.dot(beta_y)
+  # Compute correlation of residuals
+  corr, pval = spearmanr(res_x, res_y)
+  return corr, pval
