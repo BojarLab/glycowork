@@ -162,13 +162,14 @@ def get_virtual_nodes(glycan, graph_dic, min_size = 1):
   return ggraph_nb, ggraph_nb_t2
 
 
-def find_diff(glycan_a, glycan_b, graph_dic):
+def find_diff(glycan_a, glycan_b, graph_dic, allowed_ptms = allowed_ptms):
   """finds the subgraph that differs between glycans and returns it, will only work if the differing subgraph is connected\n
   | Arguments:
   | :-
   | glycan_a (networkx): glycan graph as networkx object
   | glycan_b (networkx): glycan graph as networkx object
-  | graph_dic (dict): dictionary of form glycan : glycan-graph\n
+  | graph_dic (dict): dictionary of form glycan : glycan-graph
+  | allowed_ptms (set): list of PTMs to consider\n
   | Returns:
   | :-
   | Returns difference between glycan_a and glycan_b in IUPAC-condensed
@@ -181,7 +182,8 @@ def find_diff(glycan_a, glycan_b, graph_dic):
   graphs = [safe_index(max(glycans, key = len), graph_dic), safe_index(min(glycans, key = len), graph_dic)]
   matched = subgraph_isomorphism(graphs[0], graphs[1], return_matches = True)
   if not isinstance(matched, bool) and matched[0]:
-    return graph_to_string(graphs[0].subgraph([k for k in graphs[0].nodes() if k not in matched[1][0]]))
+    diff_string = graph_to_string(graphs[0].subgraph([k for k in graphs[0].nodes() if k not in matched[1][0]]))
+    return diff_string if not any(ptm in diff_string for ptm in allowed_ptms) else 'disregard'
   else:
     return 'disregard'
 
@@ -287,7 +289,7 @@ def shells_to_edges(prev_shell, next_shell):
 
 
 def find_path(glycan_a, glycan_b, graph_dic,
-              permitted_roots = permitted_roots, min_size = 1):
+              permitted_roots = permitted_roots, min_size = 1, allowed_ptms = allowed_ptms):
   """find virtual node path between two glycans\n
   | Arguments:
   | :-
@@ -295,7 +297,8 @@ def find_path(glycan_a, glycan_b, graph_dic,
   | glycan_b (string): glycan in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
   | permitted_roots (set): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
-  | min_size (int): length of smallest root in biosynthetic network; default:1\n
+  | min_size (int): length of smallest root in biosynthetic network; default:1
+  | allowed_ptms (set): list of PTMs to consider\n
   | Returns:
   | :-
   | (1) list of edges to connect glycan_a and glycan_b via virtual nodes
@@ -313,11 +316,11 @@ def find_path(glycan_a, glycan_b, graph_dic,
   virtual_edges = unwrap([unwrap(shells_to_edges(virtual_shells_t[k-1], virtual_shells_t[k])) for k in range(1, len(virtual_shells_t))])
   del virtual_shells_t
   # Find the edge labels / differences between precursors
-  return virtual_edges, {el: find_diff(el[0], el[1], graph_dic) for el in virtual_edges}
+  return virtual_edges, {el: find_diff(el[0], el[1], graph_dic, allowed_ptms = allowed_ptms) for el in virtual_edges}
 
 
 def find_shortest_path(goal_glycan, glycan_list, graph_dic,
-                       permitted_roots = permitted_roots, min_size = 1):
+                       permitted_roots = permitted_roots, min_size = 1, allowed_ptms = allowed_ptms):
   """finds the glycan with the shortest path via virtual nodes to the goal glycan\n
   | Arguments:
   | :-
@@ -325,7 +328,8 @@ def find_shortest_path(goal_glycan, glycan_list, graph_dic,
   | glycan_list (list): list of glycans in IUPAC-condensed format
   | graph_dic (dict): dictionary of form glycan : glycan-graph
   | permitted_roots (set): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
-  | min_size (int): length of smallest root in biosynthetic network; default:1\n
+  | min_size (int): length of smallest root in biosynthetic network; default:1
+  | allowed_ptms (set): list of PTMs to consider\n
   | Returns:
   | :-
   | (1) list of edges of shortest path to connect goal_glycan and glycan via virtual nodes
@@ -340,7 +344,7 @@ def find_shortest_path(goal_glycan, glycan_list, graph_dic,
         try:
           # Finding a path through shells of generated virtual nodes
           virtual_edges, edge_labels = find_path(goal_glycan, glycan, graph_dic,
-                                                 permitted_roots = permitted_roots, min_size = min_size)
+                                                 permitted_roots = permitted_roots, min_size = min_size, allowed_ptms = allowed_ptms)
           return virtual_edges, edge_labels
         except:
           continue
@@ -506,14 +510,16 @@ def return_unconnected_to_root(network, permitted_roots = permitted_roots):
   return unconnected
 
 
-def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, min_size = 1):
+def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, min_size = 1,
+                                        allowed_ptms = allowed_ptms):
   """finds nodes unconnected to root nodes and tries to connect them\n
   | Arguments:
   | :-
   | network (networkx object): network that should be modified
   | graph_dic (dict): dictionary of form glycan : glycan-graph
   | permitted_roots (set): which nodes should be considered as roots; default:["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"]
-  | min_size (int): length of smallest root in biosynthetic network; default:1\n
+  | min_size (int): length of smallest root in biosynthetic network; default:1
+  | allowed_ptms (set): list of PTMs to consider\n
   | Returns:
   | :-
   | Returns network with deorphanized nodes (if they can be connected to root nodes)
@@ -541,7 +547,7 @@ def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, min
     r_target = next((r for r in real_nodes if subgraph_isomorphism(g_node, safe_index(r, graph_dic))), '')
     if not r_target:
       continue
-    e, el = find_path(node, r_target, graph_dic, permitted_roots = permitted_roots, min_size = min_size)
+    e, el = find_path(node, r_target, graph_dic, permitted_roots = permitted_roots, min_size = min_size, allowed_ptms = allowed_ptms)
     edges.append(e)
     edge_labels.append(el)
   edge_labels = unwrap([[k[j] for j in edges[i]] for i, k in enumerate(edge_labels)])
@@ -568,12 +574,13 @@ def prune_directed_edges(network):
   return network
 
 
-def deorphanize_edge_labels(network, graph_dic):
+def deorphanize_edge_labels(network, graph_dic, allowed_ptms = allowed_ptms):
   """completes edge labels in newly added edges of a biosynthetic network\n
   | Arguments:
   | :-
   | network (networkx object): biosynthetic network, returned from construct_network
-  | graph_dic (dict): dictionary of form glycan : glycan-graph\n
+  | graph_dic (dict): dictionary of form glycan : glycan-graph
+  | allowed_ptms (set): list of PTMs to consider\n
   | Returns:
   | :-
   | Returns a network with completed edge labels
@@ -581,7 +588,7 @@ def deorphanize_edge_labels(network, graph_dic):
   edge_labels = nx.get_edge_attributes(network, 'diffs')
   unlabeled_edges = [edge for edge in network.edges() if edge not in edge_labels]
   for k in unlabeled_edges:
-    network.edges[k]['diffs'] = find_diff(k[0], k[1], graph_dic)
+    network.edges[k]['diffs'] = find_diff(k[0], k[1], graph_dic, allowed_ptms = allowed_ptms)
   return network
 
 
@@ -669,7 +676,7 @@ def construct_network(glycans, allowed_ptms = allowed_ptms,
   for k in sorted(unconnected_nodes):
     try:
       virtual_edges, edge_labels = find_shortest_path(k, [j for j in network.nodes() if j != k], graph_dic,
-                                                      permitted_roots = permitted_roots, min_size = min_size)
+                                                      permitted_roots = permitted_roots, min_size = min_size, allowed_ptms = allowed_ptms)
       new_nodes.update(set(sum(virtual_edges, ())) - set(network.nodes()))
       new_edges.extend(virtual_edges)
       new_edge_labels.extend(edge_labels)
@@ -684,16 +691,16 @@ def construct_network(glycans, allowed_ptms = allowed_ptms,
   to_remove = [(u, v) for u, v in network.edges if u in virtual_nodes and v in virtual_nodes and network.degree[u if len(u) > len(v) else v] == 1]
   network.remove_edges_from(to_remove)
   # Create edge and node labels
-  nx.set_edge_attributes(network, {el: find_diff(el[0], el[1], graph_dic) for el in network.edges()}, 'diffs')
+  nx.set_edge_attributes(network, {el: find_diff(el[0], el[1], graph_dic, allowed_ptms = allowed_ptms) for el in network.edges()}, 'diffs')
   virtual_labels = {k: (1 if k in virtual_nodes else 0) for k in network.nodes()}
   nx.set_node_attributes(network, virtual_labels, 'virtual')
   # Connect post-translational modifications
   suffix = '-ol' if '-ol' in ''.join(glycans) else '1Cer' if '1Cer' in ''.join(glycans) else ''
-  ptm_links = process_ptm(glycans, graph_dic, stem_lib, allowed_ptms = allowed_ptms, suffix = suffix)
+  ptm_links = process_ptm(list(network.nodes()), graph_dic, stem_lib, allowed_ptms = allowed_ptms, suffix = suffix)
   if ptm_links:
     network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
   # Find any remaining orphan nodes and connect them to the root(s)
-  network = deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, min_size = min_size)
+  network = deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, min_size = min_size, allowed_ptms = allowed_ptms)
   # Final clean-up / condensation step
   nodeDict = dict(network.nodes(data = True))
   to_remove_nodes = [node for node in sorted(network.nodes(), key = len, reverse = True) if
@@ -704,7 +711,7 @@ def construct_network(glycans, allowed_ptms = allowed_ptms,
       graph_dic[node] = glycan_to_nxGraph(node)
   filler_network, _ = create_adjacency_matrix(list(network.nodes()), graph_dic, min_size = min_size)
   network.add_edges_from(list(filler_network.edges()))
-  network = deorphanize_edge_labels(network, graph_dic)
+  network = deorphanize_edge_labels(network, graph_dic, allowed_ptms = allowed_ptms)
   for node in network.nodes:
     network.nodes[node].setdefault('virtual', 1)
   # Edge label specification
