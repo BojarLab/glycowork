@@ -29,7 +29,8 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing,
-                                         omega_squared, get_glycoform_diff, process_glm_results, partial_corr)
+                                         omega_squared, get_glycoform_diff, process_glm_results, partial_corr, estimate_technical_variance,
+                                         perform_tests_monte_carlo)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
@@ -38,7 +39,8 @@ from glycowork.motif.graph import subgraph_isomorphism
 
 
 def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
-                    impute = True, min_samples = 0.1, transform = "CLR", gamma = 0.1, custom_scale = 0, custom_motifs = []):
+                    impute = True, min_samples = 0.1, transform = "CLR", gamma = 0.1, custom_scale = 0, custom_motifs = [],
+                    monte_carlo = False):
   """Preprocesses data for analysis by the functions within .motif.analysis\n
   | Arguments:
   | :-
@@ -57,7 +59,8 @@ def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, fea
   | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
   | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+  | monte_carlo (bool): whether to account for technical variation via Monte Carlo simulations; will be slower and much more conservative; default:False\n
   | Returns:
   | :-
   | (i) transformed and processed dataset
@@ -87,7 +90,11 @@ def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, fea
   if transform == "ALR":
     df = get_additive_logratio_transformation(df, group1 if experiment == "diff" else df.columns[1:], group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
   elif transform == "CLR":
-    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:], group2, gamma = gamma, custom_scale = custom_scale)
+    if monte_carlo and not motifs:
+      df = pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
+                                                                 gamma = gamma, custom_scale = custom_scale)], axis = 1)
+    else:
+      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:], group2, gamma = gamma, custom_scale = custom_scale)
   elif transform == "Nothing":
     pass
   else:
@@ -570,7 +577,8 @@ def get_differential_expression(df, group1, group2,
                                 motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
                                 impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
                                 min_samples = 0.1, grouped_BH = False, custom_motifs = [], transform = None,
-                                gamma = 0.1, custom_scale = 0, glycoproteomics = False, level = 'peptide'):
+                                gamma = 0.1, custom_scale = 0, glycoproteomics = False, level = 'peptide',
+                                monte_carlo = False):
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -594,7 +602,8 @@ def get_differential_expression(df, group1, group2,
   | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
   | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
   | glycoproteomics (bool): whether the analyzed data in df comes from a glycoproteomics experiment; default:False
-  | level (string; only relevant if glycoproteomics=True): whether to analyze glycoform differential expression at the level of 'peptide' or 'protein'; default:'peptide'\n
+  | level (string; only relevant if glycoproteomics=True): whether to analyze glycoform differential expression at the level of 'peptide' or 'protein'; default:'peptide'
+  | monte_carlo (bool): whether to account for technical variation via Monte Carlo simulations; will be slower and much more conservative; default:False\n
   | Returns:
   | :-
   | Returns a dataframe with:
@@ -611,11 +620,15 @@ def get_differential_expression(df, group1, group2,
   """
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs, impute = impute,
                                                min_samples = min_samples, transform = transform, feature_set = feature_set,
-                                               paired = paired, gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs)
+                                               paired = paired, gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,
+                                               monte_carlo = monte_carlo)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(len(group1+group2))
   # Variance-based filtering of features
-  df, df_prison = variance_based_filtering(df)
+  if not monte_carlo:
+    df, df_prison = variance_based_filtering(df)
+  else:
+    df_prison = []
   df_org = df_org.loc[df.index]
   glycans = df.index.tolist()
   mean_abundance = df_org.mean(axis = 1)
@@ -645,17 +658,23 @@ def get_differential_expression(df, group1, group2,
     log2fc = (df_b.values - df_a.values).mean(axis = 1) if paired else (df_b.mean(axis = 1) - df_a.mean(axis = 1))
     if paired:
       assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
-    pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-    equivalence_pvals = np.array([get_equivalence_test(row_a, row_b, paired = paired) if pvals[i] > 0.05 else np.nan for i, (row_a, row_b) in enumerate(zip(df_a.values, df_b.values))])
-    valid_equivalence_pvals = equivalence_pvals[~np.isnan(equivalence_pvals)]
-    corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_tsbh')[1] if len(valid_equivalence_pvals) else []
-    equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
-    equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
-    levene_pvals = [levene(row_b, row_a)[1] for row_a, row_b in zip(df_a.values, df_b.values)] if (df_a.shape[1] > 2 and df_b.shape[1] > 2) else [1.0]*len(df_a)
-    effects = [cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)]
-    effect_sizes, variances = list(zip(*effects)) if effects else [[0]*len(glycans), [0]*len(glycans)]
+    if monte_carlo:
+      pvals, corrpvals, effect_sizes = perform_tests_monte_carlo(df_a, df_b, paired = paired)
+      significance = [cp < alpha for cp in corrpvals]
+      equivalence_pvals = [1.0]*len(pvals)
+      levene_pvals = [1.0]*len(pvals)
+    else:
+      pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+      equivalence_pvals = np.array([get_equivalence_test(row_a, row_b, paired = paired) if pvals[i] > 0.05 else np.nan for i, (row_a, row_b) in enumerate(zip(df_a.values, df_b.values))])
+      valid_equivalence_pvals = equivalence_pvals[~np.isnan(equivalence_pvals)]
+      corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_tsbh')[1] if len(valid_equivalence_pvals) else []
+      equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
+      equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
+      levene_pvals = [levene(row_b, row_a)[1] for row_a, row_b in zip(df_a.values, df_b.values)] if (df_a.shape[1] > 2 and df_b.shape[1] > 2) else [1.0]*len(df_a)
+      effects = [cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)]
+      effect_sizes, variances = list(zip(*effects)) if effects else [[0]*len(glycans), [0]*len(glycans)]
   # Multiple testing correction
-  if pvals:
+  if not monte_carlo and pvals:
     if not motifs and grouped_BH:
       grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, paired = paired, grouped_BH = grouped_BH)
       corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
@@ -665,6 +684,8 @@ def get_differential_expression(df, group1, group2,
     else:
       corrpvals, significance = correct_multiple_testing(pvals, alpha)
     levene_pvals = multipletests(levene_pvals, method = 'fdr_tsbh')[1]
+  elif monte_carlo:
+    pass
   else:
     corrpvals, significance = [1]*len(glycans), [False]*len(glycans)
   df_out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes, equivalence_pvals)),

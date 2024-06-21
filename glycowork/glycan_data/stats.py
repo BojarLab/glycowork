@@ -786,7 +786,7 @@ def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
   | :-
   | Returns a dataframe that is CLR-transformed with scale model adjustment
   """
-  geometric_mean = gmean(df.replace(0, np.nan), axis = 0)
+  geometric_mean = gmean(df.replace(0, np.nan), axis = 0, nan_policy = 'omit')
   clr_adjusted = np.zeros_like(df.values)
   if gamma and not isinstance(custom_scale, dict):
     group1i = [df.columns.get_loc(c) for c in group1]
@@ -1165,3 +1165,72 @@ def partial_corr(x, y, controls, motifs = False):
   # Compute correlation of residuals
   corr, pval = spearmanr(res_x, res_y)
   return corr, pval
+
+
+def estimate_technical_variance(df, group1, group2, num_instances = 128,
+                                gamma = 0.1, custom_scale = 0):
+  """Monte Carlo sampling from the Dirichlet distribution with relative abundances as concentration, followed by CLR transformation.\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | num_instances (int): Number of Monte Carlo instances to sample; default:128
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | Returns:
+  | :-
+  | Returns a transformed dataframe of shape (features, samples*num_instances) with CLR-transformed Monte Carlo Dirichlet instances.
+  """
+  df = df.apply(lambda col: (col / col.sum())*5000, axis = 0)
+  features, samples = df.shape
+  transformed_data = np.zeros((features, samples, num_instances))
+  for j in range(samples):
+    dirichlet_samples = dirichlet.rvs(alpha = df.iloc[:, j], size = num_instances)
+    # CLR Transformation for each Monte Carlo instance
+    for n in range(num_instances):
+      sample_instance = pd.DataFrame(dirichlet_samples[n, :])
+      transformed_data[:, j, n] = clr_transformation(sample_instance, sample_instance.columns.tolist(), [],
+                                                     gamma = gamma, custom_scale = custom_scale).squeeze()
+  columns = [col for col in df.columns for _ in range(num_instances)]
+  transformed_data_2d = transformed_data.reshape((features, samples* num_instances))
+  transformed_df = pd.DataFrame(transformed_data_2d, columns = columns)
+  return transformed_df
+
+
+def perform_tests_monte_carlo(group_a, group_b, num_instances = 128, paired = False):
+  """Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, and calculate effect sizes and variances.\n
+  | Arguments:
+  | :-
+  | group_a (dataframe): rows as featureas and columns as sample instances from one condition
+  | group_b (dataframe): rows as featureas and columns as sample instances from one condition
+  | num_instances (int): Number of Monte Carlo instances to sample; default:128
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | (i) list of uncorrected p-values
+  | (ii) list of corrected p-values (two-stage Benjamini-Hochberg)
+  | (ii) list of effect sizes (Cohen's d)
+  """
+  num_features, num_columns = group_a.shape
+  avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes = np.zeros(num_features), np.zeros(num_features), np.zeros(num_features)
+  for instance in range(num_instances):
+    instance_p_values = []
+    instance_effect_sizes = []
+    for feature in range(num_features):
+      sample_a = group_a.iloc[feature, instance::num_instances].values
+      sample_b = group_b.iloc[feature, instance::num_instances].values
+      p_value = ttest_rel(sample_b, sample_a)[1] if paired else ttest_ind(sample_b, sample_a, equal_var = False)[1]
+      effect_size, effect_size_variance = cohen_d(sample_b, sample_a, paired = paired)
+      instance_p_values.append(p_value)
+      instance_effect_sizes.append(effect_size)
+    # Apply Benjamini-Hochberg correction for multiple testing within the instance
+    avg_uncorrected_p_values += instance_p_values
+    corrected_p_values = multipletests(instance_p_values, method = 'fdr_tsbh')[1]
+    avg_corrected_p_values += corrected_p_values
+    avg_effect_sizes += instance_effect_sizes
+  avg_uncorrected_p_values /= num_instances
+  avg_corrected_p_values /= num_instances
+  avg_corrected_p_values = [p if p >= avg_uncorrected_p_values[i] else avg_uncorrected_p_values[i] for i, p in enumerate(avg_corrected_p_values)]
+  avg_effect_sizes /= num_instances
+  return avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes
