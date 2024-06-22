@@ -629,7 +629,7 @@ def get_differential_expression(df, group1, group2,
     df, df_prison = variance_based_filtering(df)
   else:
     df_prison = []
-  df_org = df_org.loc[df.index]
+  df_org, df_org_prison = df_org.loc[df.index], df_org.loc[df_prison.index]
   glycans = df.index.tolist()
   mean_abundance = df_org.mean(axis = 1)
   df_a, df_b = df[group1], df[group2]
@@ -692,8 +692,8 @@ def get_differential_expression(df, group1, group2,
                      columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size', 'Equivalence p-val'])
   prison_rows = pd.DataFrame({
       'Glycan': df_prison.index,
-      'Mean abundance': [0] * len(df_prison),
-      'Log2FC': [0] * len(df_prison),
+      'Mean abundance': df_org_prison.mean(axis = 1),
+      'Log2FC': (df_prison[group2].values - df_prison[group1].values).mean(axis = 1) if paired else (df_prison[group2].mean(axis = 1) - df_prison[group1].mean(axis = 1)),
       'p-val': [1.0] * len(df_prison),
       'corr p-val': [1.0] * len(df_prison),
       'significant': [False] * len(df_prison),

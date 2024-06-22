@@ -6,7 +6,7 @@ from collections import defaultdict, Counter
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet
 from scipy.stats.mstats import winsorize
 from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
