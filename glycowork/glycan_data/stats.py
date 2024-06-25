@@ -657,11 +657,12 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, pair
   return icc, inter_group_corr
 
 
-def replace_outliers_with_IQR_bounds(full_row):
+def replace_outliers_with_IQR_bounds(full_row, cap_side = 'both'):
   """replaces outlier values with row median\n
   | Arguments:
   | :-
-  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical\n
+  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical
+  | cap_side (str): 'both', 'lower', or 'upper' to specify which side(s) to cap outliers on\n
   | Returns:
   | :-
   | Returns row with replaced outliers
@@ -673,8 +674,15 @@ def replace_outliers_with_IQR_bounds(full_row):
   IQR = Q3 - Q1
   lower_bound = Q1 - 1.5*IQR
   upper_bound = Q3 + 1.5*IQR
+  def cap_value(x):
+    if cap_side in ['both', 'lower'] and x < lower_bound and x != 0:
+      return lower_bound
+    elif cap_side in ['both', 'upper'] and x > upper_bound and x != 0:
+      return upper_bound
+    else:
+      return x
   # Define outliers as values outside of Q1 - 1.5*IQR and Q3 + 1.5*IQR
-  capped_values = row.apply(lambda x: lower_bound if (x < lower_bound and x != 0) else (upper_bound if (x > upper_bound and x != 0) else x))
+  capped_values = row.apply(cap_value)
   # Replace outliers with row median
   if isinstance(full_row.iloc[0], str):
     full_row.iloc[1:] = capped_values
@@ -683,11 +691,12 @@ def replace_outliers_with_IQR_bounds(full_row):
   return full_row
 
 
-def replace_outliers_winsorization(full_row):
+def replace_outliers_winsorization(full_row, cap_side = 'both'):
   """Replaces outlier values using Winsorization.\n
   | Arguments:
   | :-
-  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical\n
+  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical
+  | cap_side (str): 'both', 'lower', or 'upper' to specify which side(s) to cap outliers on\n
   | Returns:
   | :-
   | Returns row with outliers replaced by Winsorization.
@@ -696,7 +705,15 @@ def replace_outliers_winsorization(full_row):
   # Apply Winsorization - limits set to match typical IQR outlier detection
   nan_placeholder = row.min() - 1
   row = row.astype(float).fillna(nan_placeholder)
-  winsorized_values = winsorize(row, limits = [0.05, 0.05])
+  if cap_side == 'both':
+    limits = [0.05, 0.05]
+  elif cap_side == 'lower':
+    limits = [0.05, 0]
+  elif cap_side == 'upper':
+    limits = [0, 0.05]
+  else:
+    raise ValueError("cap_side must be 'both', 'lower', or 'upper'")
+  winsorized_values = winsorize(row, limits = limits)
   winsorized_values = pd.Series(winsorized_values, index = row.index)
   winsorized_values = winsorized_values.replace(nan_placeholder, np.nan)
   if isinstance(full_row.iloc[0], str):
