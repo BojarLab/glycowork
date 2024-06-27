@@ -194,6 +194,9 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   """
   if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
+  if difference := [item for item in feature_set if item not in ['known', 'graph', 'terminal', 'terminal1',
+                                                                 'terminal2', 'terminal3', 'custom', 'chemical']]:
+    print(f"Warning: {difference} not recognized as features.")
   if motifs is None:
     motifs = motif_list
   # Checks whether termini information is provided
@@ -231,9 +234,9 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     shopping_cart.append(temp)
   if 'chemical' in feature_set:
     shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
-  if 'terminal' or 'terminal2' in feature_set:
+  if 'terminal' or 'terminal1' or 'terminal2' in feature_set:
     bag1, bag2 = [], []
-    if 'terminal' in feature_set:
+    if 'terminal' or 'terminal1' in feature_set:
       bag1 = list(map(get_terminal_structures, glycans))
     if 'terminal2' in feature_set:
       bag2 = [get_terminal_structures(glycan, size = 2) for glycan in glycans]
