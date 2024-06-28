@@ -987,7 +987,7 @@ def infer_features_from_composition(comp):
     feature_dic['high_Man'] = 1
   else:
     feature_dic['high_Man'] = 0
-  if (comp.get('A', 0) + comp.get('G', 0) < 2 and comp.get('H', 0) > 4) or (comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) > 1 and comp.get('Hex', 0) > 4):
+  if (comp.get('A', 0) + comp.get('G', 0) < 2 and comp.get('H', 0) > 4) or (comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) < 2 and comp.get('Hex', 0) > 4):
     feature_dic['hybrid'] = 1
   else:
     feature_dic['hybrid'] = 0

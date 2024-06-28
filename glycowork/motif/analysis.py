@@ -1511,7 +1511,7 @@ def get_glycoshift_per_site(df, group1, group2, paired = False, impute = True,
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = False, impute = impute,
                                                min_samples = min_samples, transform = "Nothing", paired = paired)
   alpha = get_alphaN(len(group1+group2))
-  df, glycan_features = process_for_glycoshift(df) # potentially expand this further to infer and label high-Man/Hybrid/complex
+  df, glycan_features = process_for_glycoshift(df)
   necessary_columns = ['Glycoform'] + glycan_features
   preserved_data = df[necessary_columns]
   df = df.drop(necessary_columns, axis = 1)

@@ -234,9 +234,9 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     shopping_cart.append(temp)
   if 'chemical' in feature_set:
     shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
-  if 'terminal' or 'terminal1' or 'terminal2' in feature_set:
+  if 'terminal' in feature_set or 'terminal1' in feature_set or 'terminal2' in feature_set:
     bag1, bag2 = [], []
-    if 'terminal' or 'terminal1' in feature_set:
+    if 'terminal' in feature_set or 'terminal1' in feature_set:
       bag1 = list(map(get_terminal_structures, glycans))
     if 'terminal2' in feature_set:
       bag2 = [get_terminal_structures(glycan, size = 2) for glycan in glycans]
