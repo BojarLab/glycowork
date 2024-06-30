@@ -515,6 +515,8 @@ def map_to_basic(glycoletter, obfuscate_ptm = True):
       return 'HexOS' if obfuscate_ptm else 'Hex' + glycoletter[-2:]
     elif g2 in {k + 'OS' for k in HexNAc}:
       return 'HexNAcOS' if obfuscate_ptm else 'HexNAc' + glycoletter[-2:]
+    elif g2 in {k + 'OS' for k in HexA}:
+      return 'HexAOS' if obfuscate_ptm else 'HexA' + glycoletter[-2:]
   if 'P' in glycoletter:
     if g2 in {k + 'OP' for k in Hex}:
       return 'HexOP' if obfuscate_ptm else 'Hex' + glycoletter[-2:]
