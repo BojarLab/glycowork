@@ -240,7 +240,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
       bag1 = list(map(get_terminal_structures, glycans))
     if 'terminal2' in feature_set:
       bag2 = [get_terminal_structures(glycan, size = 2) for glycan in glycans]
-    bag = bag1 + bag2
+    bag = [a + b for a, b in zip(bag1, bag2)] if (bag1 and bag2) else bag1 + bag2
     repertoire = set(unwrap(bag))
     repertoire2 = [re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in repertoire]
     repertoire2 = set([k for k in repertoire2 if repertoire2.count(k) > 1 and k not in repertoire])
