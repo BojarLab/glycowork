@@ -195,7 +195,7 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if difference := [item for item in feature_set if item not in ['known', 'graph', 'terminal', 'terminal1',
-                                                                 'terminal2', 'terminal3', 'custom', 'chemical']]:
+                                                                 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive']]:
     print(f"Warning: {difference} not recognized as features.")
   if motifs is None:
     motifs = motif_list
