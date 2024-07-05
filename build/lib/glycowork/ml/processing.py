@@ -23,13 +23,19 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long)
   """
   if libr is None:
     libr = lib
-  # Generating glycan graphs
-  glycan_graphs = [glycan_to_nxGraph(k, libr = libr) for k in glycan_list]
-  # Converting graphs to Pytorch Geometric Data objects
-  data = [from_networkx(k) for k in glycan_graphs]
-  # Adding graph labels
-  for data_obj, label in zip(data, labels):
-    data_obj.y = torch.tensor(label, dtype = label_type)
+  glycan_cache = {}
+  data = []
+  for glycan, label in zip(glycan_list, labels):
+    if glycan not in glycan_cache:
+        nx_graph = glycan_to_nxGraph(glycan, libr = libr)
+        pyg_data = from_networkx(nx_graph)
+        glycan_cache[glycan] = pyg_data
+    else:
+        # Reuse cached data for duplicate glycan
+        pyg_data = glycan_cache[glycan].clone()
+    # Add label to the data object
+    pyg_data.y = torch.tensor(label, dtype = label_type)
+    data.append(pyg_data)
   return data
 
 
