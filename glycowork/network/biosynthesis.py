@@ -14,10 +14,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import unwrap, linkages
 from glycowork.glycan_data.stats import cohen_d, get_alphaN
-from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism
+from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism, get_possible_topologies
 from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans
 from glycowork.motif.tokenization import get_stem_lib
 from glycowork.motif.regex import get_match
+from glycowork.motif.annotate import link_find
 
 this_dir, this_filename = os.path.split(__file__)
 data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
@@ -1421,3 +1422,42 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
   out = pd.DataFrame(list(zip(features, mean_abundance, log2fc, pvals, corrpvals, significance, effect_sizes)),
                      columns = ['Feature', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'Effect size'])
   return out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+
+
+def extend_glycans(glycans, reactions, allowed_disaccharides = None):
+  """given a set of reactions, tries to extend observed glycans\n
+  | Arguments:
+  | :-
+  | glycans (list or set): glycans in IUPAC-condensed format
+  | reactions (list or set): reactions in the form of 'Fuc(a1-3)'
+  | allowed_disaccharides (set): disaccharides that are permitted when creating possible glycans; default:not used\n
+  | Returns:
+  | :-
+  | Returns set of new glycans that have been created with the provided reactions
+  """
+  new_glycans = []
+  for r in reactions:
+    temp_glycans = [f'{{{r}}}{g}' for g in glycans]
+    temp = unwrap([get_possible_topologies(g, exhaustive = True, allowed_disaccharides = allowed_disaccharides) for g in temp_glycans])
+    new_glycans.extend(list(map(graph_to_string, temp)))
+  return set(new_glycans)
+
+
+def extend_network(network, steps = 1):
+  """given a biosynthetic network, tries to extend it in a physiological manner\n
+  | Arguments:
+  | :-
+  | network (networkx): glycan biosynthetic network as returned by construct_network
+  | steps (int): how many biosynthetic steps to extend the network\n
+  | Returns:
+  | :-
+  | Returns updated network and a list of added glycans
+  """
+  from glycowork.glycan_data.loader import df_species
+  mammal_disac = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
+  mammal_disac = set(unwrap(list(map(link_find, mammal_disac))))
+  reactions = set([v for k, v in nx.get_edge_attributes(network, "diffs").items()])
+  leaf_glycans = [x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0]
+  for s in range(steps):
+    new_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
+  return network, new_glycans

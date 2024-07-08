@@ -469,7 +469,7 @@ def graph_to_string_int(graph):
   if len(nodes) == 1:
     return nodes[0]
   edges = {k: v for k, v in graph.edges()}
-  cache_last_index = len(graph)-1
+  cache_last_index = len(graph) - 1
   nodes = [k+')' if graph.degree[edges.get(i, cache_last_index)] > 2 or neighbor_is_branchpoint(graph, i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
   if graph.degree[cache_last_index] < 2:
     nodes = ''.join(nodes)[1:][::-1].replace('(', '', 1)[::-1]
@@ -494,11 +494,11 @@ def graph_to_string(graph):
   if nx.number_connected_components(graph) > 1:
     parts = [graph.subgraph(sorted(c)) for c in nx.connected_components(graph)]
     len_org = len(parts[-1])
-    for p in range(len(parts)-1):
+    for p in range(len(parts) - 1):
       H = nx.Graph()
       H.add_nodes_from(sorted(parts[p].nodes(data = True)))
       H.add_edges_from(parts[p].edges(data = True))
-      parts[p] = nx.relabel_nodes(H, {pn: pn-len_org for pn in H.nodes()})
+      parts[p] = nx.relabel_nodes(H, {pn: pn - len_org for pn in H.nodes()})
       len_org += len(H)
     parts = '}'.join(['{'+graph_to_string_int(p) for p in parts])
     return parts[:parts.rfind('{')] + parts[parts.rfind('{')+1:]
@@ -551,12 +551,13 @@ def largest_subgraph(glycan_a, glycan_b):
     return ""
 
 
-def get_possible_topologies(glycan, exhaustive = False):
+def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = None):
   """creates possible glycans given a floating substituent; only works with max one floating substituent\n
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format or as networkx graph
-  | exhaustive (bool): whether to also allow additions at internal positions; default:False\n
+  | exhaustive (bool): whether to also allow additions at internal positions; default:False
+  | allowed_disaccharides (set): disaccharides that are permitted when creating possible glycans; default:not used\n
   | Returns:
   | :-
   | Returns list of NetworkX-like glycan graphs of possible topologies
@@ -566,20 +567,23 @@ def get_possible_topologies(glycan, exhaustive = False):
       print("This glycan already has a defined topology; please don't use this function.")
   ggraph = ensure_graph(glycan)
   parts = [ggraph.subgraph(c) for c in nx.connected_components(ggraph)]
+  main_part, floating_part = parts[-1], parts[0]
+  dangling_linkage = max(floating_part.nodes())
+  floating_monosaccharide = dangling_linkage - 1
   topologies = []
-  for k in list(parts[-1].nodes())[::2]:
-    # Only add to non-reducing ends
-    if not exhaustive:
-      if parts[-1].degree[k] == 1 and k != max(parts[-1].nodes()):
-        ggraph2 = copy.deepcopy(ggraph)
-        ggraph2.add_edge(max(parts[0].nodes()), k)
-        ggraph2 = nx.relabel_nodes(ggraph2, {k: i for i, k in enumerate(ggraph2.nodes())})
-        topologies.append(ggraph2)
-    else:
-      ggraph2 = copy.deepcopy(ggraph)
-      ggraph2.add_edge(max(parts[0].nodes()), k)
-      ggraph2 = nx.relabel_nodes(ggraph2, {k: i for i, k in enumerate(ggraph2.nodes())})
-      topologies.append(ggraph2)
+  candidate_nodes = [k for k in list(main_part.nodes())[::2] 
+                     if exhaustive or (main_part.degree[k] == 1 and k != max(main_part.nodes()))]
+  for k in candidate_nodes:
+    new_graph = copy.deepcopy(ggraph)
+    new_graph.add_edge(dangling_linkage, k)
+    if allowed_disaccharides is not None:
+      disaccharide = (f"{new_graph.nodes[floating_monosaccharide]['string_labels']}"
+                      f"({new_graph.nodes[dangling_linkage]['string_labels']})"
+                      f"{new_graph.nodes[k]['string_labels']}")
+      if disaccharide not in allowed_disaccharides:
+        continue
+    new_graph = nx.convert_node_labels_to_integers(new_graph)
+    topologies.append(new_graph)
   return topologies
 
 
