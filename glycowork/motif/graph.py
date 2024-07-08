@@ -569,11 +569,15 @@ def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = 
   parts = [ggraph.subgraph(c) for c in nx.connected_components(ggraph)]
   main_part, floating_part = parts[-1], parts[0]
   dangling_linkage = max(floating_part.nodes())
+  dangling_carbon = ggraph.nodes[dangling_linkage]['string_labels'][-1]
   floating_monosaccharide = dangling_linkage - 1
   topologies = []
   candidate_nodes = [k for k in list(main_part.nodes())[::2] 
                      if exhaustive or (main_part.degree[k] == 1 and k != max(main_part.nodes()))]
   for k in candidate_nodes:
+    neighbor_carbons = [ggraph.nodes[n]['string_labels'][-1] for n in ggraph.neighbors(k) if n < k]
+    if dangling_carbon in neighbor_carbons:
+      continue
     new_graph = copy.deepcopy(ggraph)
     new_graph.add_edge(dangling_linkage, k)
     if allowed_disaccharides is not None:

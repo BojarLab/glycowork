@@ -1435,12 +1435,12 @@ def extend_glycans(glycans, reactions, allowed_disaccharides = None):
   | :-
   | Returns set of new glycans that have been created with the provided reactions
   """
-  new_glycans = []
+  new_glycans = set()
   for r in reactions:
     temp_glycans = [f'{{{r}}}{g}' for g in glycans]
     temp = unwrap([get_possible_topologies(g, exhaustive = True, allowed_disaccharides = allowed_disaccharides) for g in temp_glycans])
-    new_glycans.extend(list(map(graph_to_string, temp)))
-  return set(new_glycans)
+    new_glycans.update(set(map(graph_to_string, temp)))
+  return new_glycans
 
 
 def extend_network(network, steps = 1):
@@ -1456,7 +1456,8 @@ def extend_network(network, steps = 1):
   from glycowork.glycan_data.loader import df_species
   mammal_disac = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
   mammal_disac = set(unwrap(list(map(link_find, mammal_disac))))
-  reactions = set([v for k, v in nx.get_edge_attributes(network, "diffs").items()])
+  ptms = {'6S', 'OP', '3S'} # temporary; ideally they should be handled
+  reactions = set([v for k, v in nx.get_edge_attributes(network, "diffs").items() if v not in ptms])
   leaf_glycans = [x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0]
   for s in range(steps):
     new_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
