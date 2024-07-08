@@ -1456,8 +1456,7 @@ def extend_network(network, steps = 1):
   from glycowork.glycan_data.loader import df_species
   mammal_disac = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
   mammal_disac = set(unwrap(list(map(link_find, mammal_disac))))
-  ptms = {'6S', 'OP', '3S'} # temporary; ideally they should be handled
-  reactions = set([v for k, v in nx.get_edge_attributes(network, "diffs").items() if v not in ptms])
+  reactions = set([v for k, v in nx.get_edge_attributes(network, "diffs").items()])
   leaf_glycans = [x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0]
   for s in range(steps):
     new_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)

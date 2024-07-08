@@ -79,6 +79,8 @@ HexNAc = {'GlcNAc', 'GalNAc', 'ManNAc', 'HexNAc'}
 HexNAcOS = [f"{h}OS" for h in HexNAc]
 Pen = {'Ara', 'Xyl', 'Rib', 'Lyx', 'Pen'}
 Sia = {'Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia'}
+modification_map = {'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'},
+                    'OS': {'GlcNAc', 'Gal', 'GalNAc'}}
 
 
 def unwrap(nested_list):

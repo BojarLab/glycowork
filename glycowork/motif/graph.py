@@ -1,7 +1,7 @@
 import re
 import copy
 import networkx as nx
-from glycowork.glycan_data.loader import unwrap
+from glycowork.glycan_data.loader import unwrap, modification_map
 from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
 import numpy as np
 import pandas as pd
@@ -551,7 +551,8 @@ def largest_subgraph(glycan_a, glycan_b):
     return ""
 
 
-def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = None):
+def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = None,
+                            modification_map = modification_map):
   """creates possible glycans given a floating substituent; only works with max one floating substituent\n
   | Arguments:
   | :-
@@ -569,8 +570,13 @@ def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = 
   parts = [ggraph.subgraph(c) for c in nx.connected_components(ggraph)]
   main_part, floating_part = parts[-1], parts[0]
   dangling_linkage = max(floating_part.nodes())
-  dangling_carbon = ggraph.nodes[dangling_linkage]['string_labels'][-1]
-  floating_monosaccharide = dangling_linkage - 1
+  is_modification = len(floating_part.nodes()) == 1
+  if is_modification:
+    modification = ggraph.nodes[dangling_linkage]['string_labels']
+    dangling_carbon = modification[0]
+  else:
+    dangling_carbon = ggraph.nodes[dangling_linkage]['string_labels'][-1]
+    floating_monosaccharide = dangling_linkage - 1
   topologies = []
   candidate_nodes = [k for k in list(main_part.nodes())[::2] 
                      if exhaustive or (main_part.degree[k] == 1 and k != max(main_part.nodes()))]
@@ -579,13 +585,21 @@ def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = 
     if dangling_carbon in neighbor_carbons:
       continue
     new_graph = copy.deepcopy(ggraph)
-    new_graph.add_edge(dangling_linkage, k)
-    if allowed_disaccharides is not None:
-      disaccharide = (f"{new_graph.nodes[floating_monosaccharide]['string_labels']}"
-                      f"({new_graph.nodes[dangling_linkage]['string_labels']})"
-                      f"{new_graph.nodes[k]['string_labels']}")
-      if disaccharide not in allowed_disaccharides:
+    if is_modification:
+      mono = new_graph.nodes[k]['string_labels']
+      if modification_map and mono in modification_map.get(modification, set()):
+        new_graph.nodes[k]['string_labels'] += modification
+        new_graph.remove_node(dangling_linkage)
+      else:
         continue
+    else:
+      new_graph.add_edge(dangling_linkage, k)
+      if allowed_disaccharides is not None:
+        disaccharide = (f"{new_graph.nodes[floating_monosaccharide]['string_labels']}"
+                        f"({new_graph.nodes[dangling_linkage]['string_labels']})"
+                        f"{new_graph.nodes[k]['string_labels']}")
+        if disaccharide not in allowed_disaccharides:
+          continue
     new_graph = nx.convert_node_labels_to_integers(new_graph)
     topologies.append(new_graph)
   return topologies
