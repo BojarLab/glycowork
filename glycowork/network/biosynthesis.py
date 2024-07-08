@@ -1453,11 +1453,14 @@ def extend_network(network, steps = 1):
   | :-
   | Returns updated network and a list of added glycans
   """
+  # to-do: actually update the network with the new glycans/reactions as virtual nodes
   from glycowork.glycan_data.loader import df_species
+  new_glycans = set()
   mammal_disac = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
   mammal_disac = set(unwrap(list(map(link_find, mammal_disac))))
   reactions = set([v for k, v in nx.get_edge_attributes(network, "diffs").items()])
   leaf_glycans = [x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0]
   for s in range(steps):
-    new_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
+    leaf_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
+    new_glycans.update(leaf_glycans)
   return network, new_glycans
