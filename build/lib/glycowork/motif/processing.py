@@ -900,8 +900,8 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
   if bool(re.search(r'(\[|\)|\]|\^)[1-9]?[SP](?!en)[A-Za-z]+', glycan)):
     glycan = re.sub(r'([1-9]?[SP])(?!en)([A-Za-z]+)', r'\2\1', glycan)
-  if bool(re.search(r'[1-9]?[SP]-[A-Za-z]+', glycan)):
-    glycan = re.sub(r'([1-9]?[SP])-([A-Za-z]+)', r'\2\1', glycan)
+  if bool(re.search(r'[1-9]?[SP]-[A-Za-n]+', glycan)):
+    glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)
   # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
   glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
   glycan = re.sub(r'([c-z])([1-2])-', r'\1(?\2-', glycan)

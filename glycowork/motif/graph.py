@@ -470,7 +470,10 @@ def graph_to_string_int(graph):
     return nodes[0]
   edges = {k: v for k, v in graph.edges()}
   cache_last_index = len(graph) - 1
-  nodes = [k+')' if graph.degree[edges.get(i, cache_last_index)] > 2 or neighbor_is_branchpoint(graph, i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
+  main_chain = set(nx.shortest_path(graph, 0, cache_last_index))
+  nodes = [k+')' if (graph.degree[edges.get(i, cache_last_index)] > 2 and i not in main_chain) \
+           or (neighbor_is_branchpoint(graph, i) and i not in main_chain) \
+           else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
   if graph.degree[cache_last_index] < 2:
     nodes = ''.join(nodes)[1:][::-1].replace('(', '', 1)[::-1]
   else:
@@ -478,7 +481,7 @@ def graph_to_string_int(graph):
     nodes = ''.join(nodes)[1:]
   #if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')') == nodes[:nodes.index(')(')].count('('))):
   #  nodes = nodes.replace(')(', '(', 1)
-  nodes = nodes.replace(')(', '(')
+  #nodes = nodes.replace(')(', '(', 1)
   return canonicalize_iupac(nodes.strip('()'))
 
 
