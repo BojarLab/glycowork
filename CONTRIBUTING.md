@@ -37,7 +37,7 @@ nbdev_prepare
 
 * Docs are automatically created from the notebooks in the nbs folder.
 
-## Wishlist for future glycowork updates (last update: 2024-01-31)
+## Wishlist for future glycowork updates (last update: 2024-07-10)
 
 ### Urgent
 
@@ -51,3 +51,4 @@ nbdev_prepare
 * allow users to specify their own deep learning architecture in ml.models
 * implement multiple sequence alignment and other substitution matrices
 * parallelize motif matching
+* refactor glycan graphs to be directed graphs & treat linkages as edges (would mean a *lot* of downstream fixes/refactoring)
