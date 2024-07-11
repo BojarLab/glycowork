@@ -13,12 +13,13 @@ except ImportError:
   raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 
 
-def augment_glycan(glycan_data, generalization_prob = 0.2):
-  """Augment a single glycan by (de-)wildcarding some of its monosaccharides or linkages.\n
+def augment_glycan(glycan_data, libr, generalization_prob = 0.2):
+  """Augment a single glycan by wildcarding some of its monosaccharides or linkages.\n
   | Arguments:
   | :-
   | glycan_data (torch Data object): contains the glycan as a networkx graph
-  | generalization_prob (float): the probability (0-1) of (de-)wildcarding for every single monosaccharide/linkage; default: 0.2\n
+  | libr (dict): dictionary of form glycoletter:index
+  | generalization_prob (float): the probability (0-1) of wildcarding for every single monosaccharide/linkage; default: 0.2\n
   | Returns:
   | :-
   | Returns the data object with partially wildcarded glycan graph
@@ -27,18 +28,18 @@ def augment_glycan(glycan_data, generalization_prob = 0.2):
   # Augment node labels
   for i, label in enumerate(augmented_data.string_labels):
     if random() < generalization_prob:
-      if '?' in label or 'x' in label:
-        augmented_data.string_labels[i] = de_wildcard_glycoletter(label)
-      else:
-        augmented_data.string_labels[i] = map_to_basic(label, obfuscate_ptm = getrandbits(1))
+      temp = de_wildcard_glycoletter(label) if '?' in label or 'x' in label else map_to_basic(label, obfuscate_ptm = getrandbits(1))
+      augmented_data.string_labels[i] = temp
+      augmented_data.labels[i] = libr.get(temp, len(libr))
   return augmented_data
 
 
 class AugmentedGlycanDataset(torch.utils.data.Dataset):
-  def __init__(self, dataset, augment_prob = 0.5, generalization_prob = 0.2):
+  def __init__(self, dataset, libr, augment_prob = 0.5, generalization_prob = 0.2):
     self.dataset = dataset
     self.augment_prob = augment_prob
     self.generalization_prob = generalization_prob
+    self.libr = libr
 
   def __len__(self):
     return len(self.dataset)
@@ -46,7 +47,7 @@ class AugmentedGlycanDataset(torch.utils.data.Dataset):
   def __getitem__(self, idx):
     glycan_data = self.dataset[idx]
     if random() < self.augment_prob:
-      glycan_data = augment_glycan(glycan_data, self.generalization_prob)
+      glycan_data = augment_glycan(glycan_data, self.libr, self.generalization_prob)
     return glycan_data
 
 
@@ -109,7 +110,7 @@ def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
   if extra_feature is not None:
     for graph, feature in zip(glycan_graphs, extra_feature):
       graph.train_idx = torch.tensor(feature, dtype = torch.float)
-  augmented_dataset = AugmentedGlycanDataset(glycan_graphs, augment_prob = augment_prob, generalization_prob = generalization_prob)
+  augmented_dataset = AugmentedGlycanDataset(glycan_graphs, libr, augment_prob = augment_prob, generalization_prob = generalization_prob)
   # Generating the dataloader from the data objects
   return DataLoader(augmented_dataset, batch_size = batch_size, shuffle = shuffle, drop_last = drop_last)
 
