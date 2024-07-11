@@ -2,6 +2,7 @@ from copy import deepcopy
 from random import getrandbits, random
 from glycowork.motif.graph import glycan_to_nxGraph
 from glycowork.motif.tokenization import map_to_basic
+from glycowork.motif.processing import de_wildcard_glycoletter
 from glycowork.glycan_data.loader import lib
 
 try:
@@ -13,11 +14,11 @@ except ImportError:
 
 
 def augment_glycan(glycan_data, generalization_prob = 0.2):
-  """Augment a single glycan by wildcarding some of its monosaccharides or linkages.\n
+  """Augment a single glycan by (de-)wildcarding some of its monosaccharides or linkages.\n
   | Arguments:
   | :-
   | glycan_data (torch Data object): contains the glycan as a networkx graph
-  | generalization_prob (float): the probability (0-1) of wildcarding for every single monosaccharide/linkage; default: 0.2\n
+  | generalization_prob (float): the probability (0-1) of (de-)wildcarding for every single monosaccharide/linkage; default: 0.2\n
   | Returns:
   | :-
   | Returns the data object with partially wildcarded glycan graph
@@ -26,7 +27,10 @@ def augment_glycan(glycan_data, generalization_prob = 0.2):
   # Augment node labels
   for i, label in enumerate(augmented_data.string_labels):
     if random() < generalization_prob:
-      augmented_data.string_labels[i] = map_to_basic(label, obfuscate_ptm = getrandbits(1))
+      if '?' in label or 'x' in label:
+        augmented_data.string_labels[i] = de_wildcard_glycoletter(label)
+      else:
+        augmented_data.string_labels[i] = map_to_basic(label, obfuscate_ptm = getrandbits(1))
   return augmented_data
 
 

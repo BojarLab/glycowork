@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import copy
 import re
+from random import choice
 from functools import wraps
 from collections import defaultdict
 from glycowork.glycan_data.loader import (unwrap, multireplace,
@@ -118,6 +119,23 @@ def get_possible_monosaccharides(wildcard):
                    'HexOS': HexOS, 'HexNAcOS': HexNAcOS,
                    'Monosaccharide': set().union(*[Hex, HexOS, HexNAc, HexNAcOS, dHex, Sia, HexA, Pen])}
   return wildcard_dict.get(wildcard, [])
+
+
+def de_wildcard_glycoletter(glycoletter):
+  """Retrieves a random specified instance of a general type (e.g., "Gal" for "Hex")\n
+  | Arguments:
+  | :-
+  | glycoletter (string): Monosaccharide or linkage\n
+  | Returns:
+  | :-
+  | Returns a random specified glycoletter of that type
+  """
+  if '?' in glycoletter:
+    return choice(get_possible_linkages(glycoletter))
+  elif monos := get_possible_monosaccharides(glycoletter):
+    return choice(list(monos))
+  else:
+    return glycoletter
 
 
 def bracket_removal(glycan_part):
