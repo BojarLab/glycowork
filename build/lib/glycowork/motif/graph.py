@@ -1,5 +1,5 @@
 import re
-import copy
+from copy import deepcopy
 import networkx as nx
 from glycowork.glycan_data.loader import unwrap, modification_map
 from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
@@ -213,7 +213,7 @@ def compare_glycans(glycan_a, glycan_b):
     attrs_a = set(nx.get_node_attributes(glycan_a, "string_labels").values())
     attrs_b = set(nx.get_node_attributes(glycan_b, "string_labels").values())
     proc = attrs_a.union(attrs_b)
-    g1, g2 = (ptm_wildcard_for_graph(copy.deepcopy(glycan_a)), ptm_wildcard_for_graph(copy.deepcopy(glycan_b))) if 'O' in ''.join(proc) else (glycan_a, glycan_b)
+    g1, g2 = (ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))) if 'O' in ''.join(proc) else (glycan_a, glycan_b)
   narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in proc
                           if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   if narrow_wildcard_list:
@@ -239,7 +239,7 @@ def expand_termini_list(motif, termini_list):
   if len(termini_list[0]) < 2:
     mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
     termini_list = [mapping[t] for t in termini_list]
-  t_list = copy.deepcopy(termini_list)
+  t_list = deepcopy(termini_list)
   to_add = ['flexible'] * motif.count('(') if isinstance(motif, str) else ['flexible'] * ((len(motif)-1)//2)
   remainder = 0
   for i, k in enumerate(to_add):
@@ -288,9 +288,9 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
       return (0, []) if return_matches else 0 if count else False
     motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
     if 'O' in ''.join(unwrap(motif_comp)):
-      g1, g2 = ptm_wildcard_for_graph(copy.deepcopy(glycan)), ptm_wildcard_for_graph(copy.deepcopy(motif))
+      g1, g2 = ptm_wildcard_for_graph(deepcopy(glycan)), ptm_wildcard_for_graph(deepcopy(motif))
     else:
-      g1, g2 = copy.deepcopy(glycan), motif
+      g1, g2 = deepcopy(glycan), motif
   narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in set(unwrap(motif_comp))
                           if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   if termini_list or narrow_wildcard_list:
@@ -587,7 +587,7 @@ def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = 
     neighbor_carbons = [ggraph.nodes[n]['string_labels'][-1] for n in ggraph.neighbors(k) if n < k]
     if dangling_carbon in neighbor_carbons:
       continue
-    new_graph = copy.deepcopy(ggraph)
+    new_graph = deepcopy(ggraph)
     if is_modification:
       mono = new_graph.nodes[k]['string_labels']
       if modification_map and mono in modification_map.get(modification, set()):
