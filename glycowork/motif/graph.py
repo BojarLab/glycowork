@@ -1,10 +1,10 @@
 import re
 from copy import deepcopy
-import networkx as nx
 from glycowork.glycan_data.loader import unwrap, modification_map
 from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
 import numpy as np
 import pandas as pd
+import networkx as nx
 from scipy.sparse.linalg import eigsh
 
 
@@ -39,9 +39,9 @@ def glycan_to_graph(glycan):
   glycan_proc = min_process_glycans([glycan])[0]
   n = len(glycan_proc)
   # Map glycoletters to integers
-  mask_dic = {k: glycan_proc[k] for k in range(n)}
-  for k, j in mask_dic.items():
-    glycan = glycan.replace(j, str(k), 1)
+  mask_dic = dict(enumerate(glycan_proc))
+  for i, gl in mask_dic.items():
+    glycan = glycan.replace(gl, str(i), 1)
   # Initialize adjacency matrix
   adj_matrix = np.zeros((n, n), dtype = int)
   # Caching index positions
@@ -50,7 +50,7 @@ def glycan_to_graph(glycan):
   for k in range(n):
     # Integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
     adjustment = 2 if k >= 100 else 1 if k >= 10 else 0
-    adjustment2 = 2+adjustment
+    adjustment2 = 2 + adjustment
     cache_first_part = glycan_indices[str(k)]+1
     for j in range(k+1, n):
       # Subset the part of the glycan that is bookended by k and j
@@ -90,13 +90,13 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   if len(node_dict) > 1:
     # Needed for compatibility with monosaccharide-only graphs (size = 1)
     for _, _, d in g1.edges(data = True):
-      del d['weight']
+      d.pop('weight', None)
   else:
     g1.add_node(0)
   # Remove the helper monosaccharide if used
   if cache and glycan.endswith('x'):
-    node_to_remove = len(g1) - 1
-    del node_dict[node_to_remove]
+    node_to_remove = max(g1.nodes())
+    node_dict.pop(node_to_remove, None)
     g1.remove_node(node_to_remove)
   # Add node labels
   if libr is None:
@@ -137,7 +137,7 @@ def glycan_to_nxGraph(glycan, libr = None,
     for i, p in enumerate(parts[:-1]):
       parts[i] = nx.relabel_nodes(p, {pn: pn+len_org for pn in p.nodes()})
       len_org += len(p)
-    g1 = nx.algorithms.operators.all.compose_all(parts)
+    g1 = nx.compose_all(parts)
   else:
     g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
                                termini_list = termini_list)
@@ -205,7 +205,7 @@ def compare_glycans(glycan_a, glycan_b):
       return False
     proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
     if 'O' in glycan_a + glycan_b:
-      glycan_a, glycan_b = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in [glycan_a, glycan_b]]
+      glycan_a, glycan_b = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in (glycan_a, glycan_b)]
     g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
   else:
     if len(glycan_a.nodes) != len(glycan_b.nodes):
@@ -240,11 +240,9 @@ def expand_termini_list(motif, termini_list):
     mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
     termini_list = [mapping[t] for t in termini_list]
   t_list = deepcopy(termini_list)
-  to_add = ['flexible'] * motif.count('(') if isinstance(motif, str) else ['flexible'] * ((len(motif)-1)//2)
-  remainder = 0
-  for i, k in enumerate(to_add):
-    t_list.insert(i+1+remainder, k)
-    remainder += 1
+  to_add = ['flexible'] * (motif.count('(') if isinstance(motif, str) else (len(motif) - 1) // 2)
+  for i, k in enumerate(to_add, start = 1):
+    t_list.insert(i * 2 - 1, k)
   return t_list
 
 
@@ -409,20 +407,13 @@ def generate_graph_features(glycan, glycan_graph = True, label = 'network'):
       }
     features = {
       'diameter': np.nan if directed or not connected else nx.diameter(g),
-      'branching': np.sum(deg > 2),
-      'nbrLeaves': np.sum(deg == 1),
-      'avgDeg': np.mean(deg),
-      'varDeg': np.var(deg),
-      'maxDeg': np.max(deg),
-      'nbrDeg4': np.sum(deg > 3),
-      'max_deg_leaves': np.max(deg_to_leaves),
-      'mean_deg_leaves': np.mean(deg_to_leaves),
-      'deg_assort': nx.degree_assortativity_coefficient(g),
-      'size_corona': len(nx.k_corona(g, N).nodes()) if N > 0 else 0,
-      'size_core': len(nx.k_core(g, N).nodes()) if N > 0 else 0,
-      'nbr_node_types': nbr_node_types,
-      'N': N,
-      'dens': np.sum(deg) / 2
+      'branching': np.sum(deg > 2), 'nbrLeaves': np.sum(deg == 1),
+      'avgDeg': np.mean(deg), 'varDeg': np.var(deg),
+      'maxDeg': np.max(deg), 'nbrDeg4': np.sum(deg > 3),
+      'max_deg_leaves': np.max(deg_to_leaves), 'mean_deg_leaves': np.mean(deg_to_leaves),
+      'deg_assort': nx.degree_assortativity_coefficient(g), 'size_corona': len(nx.k_corona(g, N).nodes()) if N > 0 else 0,
+      'size_core': len(nx.k_core(g, N).nodes()) if N > 0 else 0, 'nbr_node_types': nbr_node_types,
+      'N': N, 'dens': np.sum(deg) / 2
       }
     for centr, vals in centralities.items():
       features.update({

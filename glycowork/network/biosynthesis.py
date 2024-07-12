@@ -1,9 +1,9 @@
-import itertools
 import mpld3
 import pickle
-from copy import deepcopy
-import os
 import re
+from os import path
+from copy import deepcopy
+from itertools import combinations
 from functools import lru_cache
 from importlib import resources
 from collections import defaultdict
@@ -21,8 +21,8 @@ from glycowork.motif.tokenization import get_stem_lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.annotate import link_find
 
-this_dir, this_filename = os.path.split(__file__)
-data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
+this_dir, this_filename = path.split(__file__)
+data_path = path.join(this_dir, 'milk_networks_exhaustive.pkl')
 
 def __getattr__(name):
   if name == "net_dic":
@@ -231,7 +231,7 @@ def create_adjacency_matrix(glycans, graph_dic, min_size = 1):
         df_out.iat[i[0], j] = 1
   # Find connections between virtual nodes that connect observed nodes
   virtual_edges = unwrap([find_shared_virtuals(k[0], k[1], graph_dic,
-                                               min_size = min_size) for k in itertools.combinations(glycans, 2)])
+                                               min_size = min_size) for k in combinations(glycans, 2)])
   new_nodes = list(set([k[1] for k in virtual_edges if k[1] not in df_out.columns]))
   idx = [i for i, k in enumerate(new_nodes) if any(compare_glycans(safe_index(k, graph_dic), safe_index(j, graph_dic)) for j in df_out.columns)]
   if idx:
@@ -413,7 +413,7 @@ def process_ptm(glycans, graph_dic, stem_lib, allowed_ptms = allowed_ptms, suffi
   """
   # Get glycans with PTMs and convert them to graphs
   ptm_glycans = [glycan for glycan in glycans if any(ptm in glycan for ptm in allowed_ptms)]
-  ggraphs = [safe_index(k, graph_dic) for k in glycans]
+  ggraphs = list(map(lambda k: safe_index(k, graph_dic), glycans))
   # Connect modified glycans to their unmodified counterparts
   edges = [find_ptm(k, glycans, graph_dic, stem_lib, allowed_ptms = allowed_ptms,
                     ggraphs = ggraphs, suffix = suffix) for k in ptm_glycans]
@@ -457,14 +457,10 @@ def return_unconnected_to_root(network, permitted_roots = permitted_roots):
   | :-
   | Returns set of nodes that are not connected to the root nodes
   """
-  unconnected = set()
   # Pre-filter nodes that are observed and not in permitted_roots
   candidate_nodes = {node for node, attr in network.nodes(data = True) if attr.get('virtual', 1) == 0 and node not in permitted_roots}
   # For each observed node, check whether it has a path to a root; if not, collect and return the node
-  for node in candidate_nodes:
-    if not any(nx.has_path(network, node, root) for root in permitted_roots):
-      unconnected.add(node)
-  return unconnected
+  return set(filter(lambda node: not any(nx.has_path(network, node, root) for root in permitted_roots), candidate_nodes))
 
 
 def deorphanize_nodes(network, graph_dic, permitted_roots = permitted_roots, min_size = 1,
@@ -669,7 +665,7 @@ def construct_network(glycans, allowed_ptms = allowed_ptms,
   network.remove_nodes_from([v for v in virtual_nodes if any(compare_glycans(safe_index(v, graph_dic), r) for r in real_nodes)])
   virtual_nodes = [x for x, y in network.nodes(data = True) if y['virtual'] == 1]
   virtual_graphs = [safe_index(x, graph_dic) for x in virtual_nodes]
-  isomeric_graphs = [k for k in itertools.combinations(virtual_graphs, 2) if compare_glycans(k[0], k[1])]
+  isomeric_graphs = [k for k in combinations(virtual_graphs, 2) if compare_glycans(k[0], k[1])]
   if len(isomeric_graphs) > 0:
     isomeric_nodes = [choose_correct_isoform([virtual_nodes[virtual_graphs.index(k[0])], virtual_nodes[virtual_graphs.index(k[1])]], reverse = True)
                           for k in isomeric_graphs if len(set(k)) > 1]
@@ -1166,8 +1162,7 @@ def get_edge_weight_by_abundance(network, root = "Gal(b1-4)Glc-ol", root_default
   for u, v in network.edges():
     source_abundance = abundance_dict.get(u, 0.1)
     sink_abundance = abundance_dict.get(v, 0.1)
-    edge_capacity = (source_abundance + sink_abundance) / 2
-    network[u][v]['capacity'] = edge_capacity
+    network[u][v]['capacity'] = (source_abundance + sink_abundance) / 2
   return network
 
 
@@ -1188,15 +1183,13 @@ def estimate_weights(network, root = "Gal(b1-4)Glc-ol", root_default = 10, min_d
   def estimate_weight(node):
     in_weights = [network[u][node]['capacity'] for u in network.predecessors(node) if network[u][node]['capacity'] > 0]
     out_weights = [network[node][v]['capacity'] for v in network.successors(node) if network[node][v]['capacity'] > 0]
-    if in_weights and out_weights:
-      return np.mean(in_weights + out_weights)  # Average of non-zero in and out weights
-    return min_default  # A small default value if no non-zero neighboring weights
+    return np.mean(in_weights + out_weights) if in_weights or out_weights else min_default  # Small default value if no non-zero neighboring weights
   # Estimate weights for zero-weight intermediates
-  for node in network.nodes:
-    if all(network[node][v]['capacity'] == 0 for v in network.successors(node)):
-      estimated_weight = estimate_weight(node)
-      for v in network.successors(node):
-        net_estimated[node][v]['capacity'] = estimated_weight
+  zero_weight_nodes = [node for node in net_estimated.nodes if all(net_estimated[node][v]['capacity'] == 0 for v in net_estimated.successors(node))]
+  for node in zero_weight_nodes:
+    estimated_weight = estimate_weight(node)
+    for v in net_estimated.successors(node):
+      net_estimated[node][v]['capacity'] = estimated_weight
   return net_estimated
 
 
@@ -1212,8 +1205,7 @@ def get_maximum_flow(network, source = "Gal(b1-4)Glc-ol", sinks = None):
   | Returns a dictionary of type sink : {maximum flow value, flow path dictionary}
   """
   if sinks is None:
-    sinks = [node for node, out_degree in network.out_degree() if out_degree == 0]
-    sinks = [node for node in sinks if node in network.nodes() and nx.has_path(network, source, node)]
+    sinks = [node for node, out_degree in network.out_degree() if out_degree == 0 and nx.has_path(network, source, node)]
   # Dictionary to store flow values and paths for each sink
   flow_results = {}
   for sink in sinks:
@@ -1224,7 +1216,7 @@ def get_maximum_flow(network, source = "Gal(b1-4)Glc-ol", sinks = None):
           'flow_value': flow_value * path_length,
           'flow_dict': flow_dict
           }
-    except:
+    except nx.NetworkXError:
       print(f"{sink} cannot be reached.")
   return flow_results
 
@@ -1246,14 +1238,9 @@ def get_max_flow_path(network, flow_dict, sink, source = "Gal(b1-4)Glc-ol"):
   abundance_dict = nx.get_node_attributes(network, 'abundance')
   while current_node != sink:
     max_metric = 0
-    next_node = None
-    for neighbor in network.neighbors(current_node):
-      flow = flow_dict[current_node][neighbor]
-      abundance = max(abundance_dict.get(neighbor, 0), 0.1)
-      metric = flow * abundance  # Combine flow and abundance
-      if metric > max_metric:
-        max_metric = metric
-        next_node = neighbor
+    next_node = max(network.neighbors(current_node),
+            key = lambda neighbor: flow_dict[current_node][neighbor] * max(abundance_dict.get(neighbor, 0), 0.1),
+            default = None)
     if next_node is None:
       raise ValueError("No path found")
     path.append((current_node, next_node))
@@ -1274,12 +1261,10 @@ def get_reaction_flow(network, res, aggregate = None):
   """
   # Aggregate flow values by reaction type
   reaction_flows = defaultdict(list)
-  for sink in res:
-    flow_dict = res[sink]['flow_dict']
-    for u, v in network.edges():
-      reaction_type = network[u][v]['diffs']
-      flow = flow_dict[u][v]  # Flow on this edge
-      reaction_flows[reaction_type].append(flow)
+  for sink_data in res.values():
+    flow_dict = sink_data['flow_dict']
+    for u, v, data in network.edges(data = True):
+      reaction_flows[data['diffs']].append(flow_dict[u][v])
   if aggregate == "sum":
     reaction_flows = {k: sum(v) for k, v in reaction_flows.items()}
   elif aggregate == "mean":
@@ -1315,17 +1300,23 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
     columns_list = df.columns.tolist()
     group1 = [columns_list[k] for k in group1]
     group2 = [columns_list[k] for k in group2]
-  all_groups = group1+group2
-  df = df.loc[:, [df.columns.tolist()[0]]+all_groups].fillna(0)
+  all_groups = group1 + group2
+  df = df.loc[:, [df.columns.tolist()[0]] + all_groups].fillna(0)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(df.shape[1] - 1)
   df = df.set_index(df.columns.tolist()[0])
-  df = df[~(df == 0).all(axis = 1)]
+  df = df[df.any(axis = 1)]
   df = (df / df.sum(axis = 0)) * 100
   root = list(infer_roots(frozenset(df.index.tolist())))
   root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
   min_default = 0.1 if root.endswith('GlcNAc') else 0.001
-  nets = {col: estimate_weights(construct_network(df.index.tolist(), abundances = df[col].values.tolist()), root = root, min_default = min_default) for col in all_groups}
+  core_net = construct_network(df.index.tolist())
+  nets = {}
+  for col in all_groups:
+    temp = deepcopy(core_net)
+    abundance_mapping = dict(zip(temp.nodes(), df[col].values.tolist()))
+    nx.set_node_attributes(temp, {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in temp.nodes()})
+    nets[col] = estimate_weights(temp, root = root, min_default = min_default)
   res = {col: get_maximum_flow(nets[col], source = root) for col in all_groups}
   if analysis == "reaction":
     res2 = {col: get_reaction_flow(nets[col], res[col], aggregate = "sum") for col in all_groups}
@@ -1335,21 +1326,21 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
     res2 = {k: {**v, **{r: np.mean([v2 for k2, v2 in v.items() if compare_glycans(k2, r)]) for r in shadow_reactions}} for k, v in res2.items()}
   elif analysis == "flow":
     res2 = {col: [res[col][sink]['flow_value'] for sink in res[col].keys()] for col in all_groups}
-  res2 = pd.DataFrame.from_dict(res2, orient = 'index')
+  else:
+    raise ValueError("Only 'reaction' and 'flow' are currently supported analysis modes.")
+  res2 = pd.DataFrame(res2).T
   res2 = res2.loc[:, res2.var(axis = 0) > 0.01]
   features = res2.columns.tolist() if analysis == "reaction" else list(res[all_groups[0]].keys())
   mean_abundance = res2.mean(axis = 0)
   df_a, df_b = res2.loc[group1, :].T, res2.loc[group2, :].T
   log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
   pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-  if pvals:
-    corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
-    significance = [p < alpha for p in corrpvals]
-  else:
-    corrpvals, significance = [], []
+  corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1] if pvals else []
+  significance = [p < alpha for p in corrpvals] if pvals else []
   effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
-  out = pd.DataFrame(list(zip(features, mean_abundance, log2fc, pvals, corrpvals, significance, effect_sizes)),
-                     columns = ['Feature', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'Effect size'])
+  out = pd.DataFrame({'Feature': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
+                      'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
+  out = out.set_index('Feature')
   return out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
 
