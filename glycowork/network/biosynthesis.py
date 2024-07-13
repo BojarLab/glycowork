@@ -1358,9 +1358,32 @@ def extend_glycans(glycans, reactions, allowed_disaccharides = None):
   new_glycans = set()
   for r in reactions:
     temp_glycans = [f'{{{r}}}{g}' for g in glycans]
-    temp = unwrap([get_possible_topologies(g, exhaustive = True, allowed_disaccharides = allowed_disaccharides) for g in temp_glycans])
+    temp = (topology for g in temp_glycans for topology in get_possible_topologies(g, exhaustive = True, allowed_disaccharides = allowed_disaccharides))
     new_glycans.update(set(map(graph_to_string, temp)))
   return new_glycans
+
+
+def edges_for_extension(leaf_glycans, new_glycans, graphs):
+  """given leaf nodes and their extensions, creates the corresponding edges and edge labels\n
+  | Arguments:
+  | :-
+  | leaf_glycans (set): set of glycans that are leaf nodes in network
+  | new_glycans (set): set of glycans that have been produced beyond leaf nodes
+  | graphs (dict): dictionary of glycan : glycan graph\n
+  | Returns:
+  | :-
+  | Returns new edges and edge labels that connect leaf_glycans and new_glycans
+  """
+  new_edges, new_edge_labels = [], []
+  new_glycans = list(new_glycans)
+  leaf_graphs = {k: safe_index(k, graphs) for k in leaf_glycans}
+  all_neighbors, _ = zip(*[get_neighbors(safe_index(g, graphs), list(leaf_glycans), leaf_graphs, min_size = 1) for g in new_glycans])
+  for j, neighbors in enumerate(all_neighbors):
+    for i in neighbors:
+      if i:
+        new_edges.append((i, new_glycans[j]))
+        new_edge_labels.append(find_diff(i, new_glycans[j], graphs))
+  return new_edges, new_edge_labels
 
 
 def extend_network(network, steps = 1):
@@ -1373,14 +1396,16 @@ def extend_network(network, steps = 1):
   | :-
   | Returns updated network and a list of added glycans
   """
-  # to-do: actually update the network with the new glycans/reactions as virtual nodes
   from glycowork.glycan_data.loader import df_species
+  graphs = {}
   new_glycans = set()
-  mammal_disac = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
-  mammal_disac = set(unwrap(list(map(link_find, mammal_disac))))
-  reactions = set([v for k, v in nx.get_edge_attributes(network, "diffs").items()])
-  leaf_glycans = [x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0]
-  for s in range(steps):
-    leaf_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
+  mammal_disac = set(unwrap(map(link_find, df_species[df_species.Class == "Mammalia"].glycan)))
+  reactions = set(nx.get_edge_attributes(network, "diffs").values())
+  leaf_glycans = {x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0}
+  for _ in range(steps):
+    new_leaf_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
+    new_edges, new_edge_labels = edges_for_extension(leaf_glycans, new_leaf_glycans, graphs)
+    network = update_network(network, new_edges, edge_labels = new_edge_labels, node_labels = {k: 1 for k in new_leaf_glycans})
+    leaf_glycans = new_leaf_glycans
     new_glycans.update(leaf_glycans)
   return network, new_glycans
