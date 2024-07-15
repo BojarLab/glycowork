@@ -445,7 +445,7 @@ def neighbor_is_branchpoint(graph, node):
   edges = graph.edges(node)
   edges = unwrap([e for e in edges if sum(e) > 2*node])
   edges = [graph.degree[e] for e in set(edges) if e != node]
-  return True if max(edges, default = 0) > 3 else False
+  return max(edges, default = 0) > 3
 
 
 def graph_to_string_int(graph):
@@ -462,20 +462,18 @@ def graph_to_string_int(graph):
   nodes = [graph.nodes[node]["string_labels"] for node in sorted_nodes]
   if len(nodes) == 1:
     return nodes[0]
-  edges = {k: v for k, v in graph.edges()}
+  edges = dict(graph.edges())
   cache_last_index = len(graph) - 1
   main_chain = set(nx.shortest_path(graph, 0, cache_last_index))
-  nodes = [k+')' if (graph.degree[edges.get(i, cache_last_index)] > 2 and i not in main_chain) \
+  degree = graph.degree()
+  nodes = [k+')' if (degree[edges.get(i, cache_last_index)] > 2 and i not in main_chain) \
            or (neighbor_is_branchpoint(graph, i) and i not in main_chain) \
-           else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
+           else k if degree[i] == 2 else '('+k if degree[i] == 1 else k for i, k in enumerate(nodes)]
   if graph.degree[cache_last_index] < 2:
     nodes = ''.join(nodes)[1:][::-1].replace('(', '', 1)[::-1]
   else:
     nodes[-1] = ')'+nodes[-1]
     nodes = ''.join(nodes)[1:]
-  #if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')') == nodes[:nodes.index(')(')].count('('))):
-  #  nodes = nodes.replace(')(', '(', 1)
-  #nodes = nodes.replace(')(', '(', 1)
   return canonicalize_iupac(nodes.strip('()'))
 
 

@@ -110,10 +110,11 @@ def create_neighbors(ggraph, min_size = 1):
     return [nx.relabel_nodes(ggraph.subgraph([2]), {2: 0})]
   # Generate all precursors by iteratively cleaving off the non-reducing-end monosaccharides
   max_node = max(ggraph.nodes())
-  terminal_pairs = [{k, next(ggraph.neighbors(k))} for k in ggraph.nodes() if ggraph.degree(k) == 1 and k != max_node]
+  terminal_pairs = [frozenset({k, next(ggraph.neighbors(k))}) for k in ggraph.nodes() if ggraph.degree(k) == 1 and k != max_node]
+  nodes = frozenset(ggraph.nodes())
   # Cleaving off messes with the node labeling, so they have to be re-labeled
   return [
-        nx.relabel_nodes(ggraph.subgraph(set(ggraph.nodes()) - pair), {m: i for i, m in enumerate(ggraph.nodes() - pair)})
+        nx.relabel_nodes(ggraph.subgraph(nodes - pair), {m: i for i, m in enumerate(nodes - pair)})
         for pair in terminal_pairs
     ]
 
@@ -135,10 +136,10 @@ def get_virtual_nodes(glycan, graph_dic, min_size = 1):
   # Get glycan graph
   ggraph = safe_index(glycan, graph_dic)
   # Get biosynthetic precursors
-  ggraph_nb_t = [graph_to_string(k) for k in create_neighbors(ggraph, min_size = min_size)]
+  ggraph_nb_t = set(map(graph_to_string, create_neighbors(ggraph, min_size = min_size)))
   # Get both string and graph versions of the precursors
   ggraph_nb, ggraph_nb_t2 = zip(*[(safe_index(k, graph_dic), k)
-                                    for k in ggraph_nb_t if k[0] != '('])
+                                    for k in ggraph_nb_t if not k.startswith('(')])
   return ggraph_nb, ggraph_nb_t2
 
 
@@ -230,8 +231,8 @@ def create_adjacency_matrix(glycans, graph_dic, min_size = 1):
       if i:
         df_out.iat[i[0], j] = 1
   # Find connections between virtual nodes that connect observed nodes
-  virtual_edges = unwrap([find_shared_virtuals(k[0], k[1], graph_dic,
-                                               min_size = min_size) for k in combinations(glycans, 2)])
+  virtual_edges = set(unwrap([find_shared_virtuals(k[0], k[1], graph_dic,
+                                               min_size = min_size) for k in combinations(glycans, 2)]))
   new_nodes = list(set([k[1] for k in virtual_edges if k[1] not in df_out.columns]))
   idx = [i for i, k in enumerate(new_nodes) if any(compare_glycans(safe_index(k, graph_dic), safe_index(j, graph_dic)) for j in df_out.columns)]
   if idx:
