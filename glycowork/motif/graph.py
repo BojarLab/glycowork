@@ -6,8 +6,10 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 from scipy.sparse.linalg import eigsh
+from functools import lru_cache
 
 
+@lru_cache(maxsize = 1024)
 def evaluate_adjacency(glycan_part, adjustment):
   """checks whether two glycoletters are adjacent in the graph-to-be-constructed\n
   | Arguments:
@@ -25,6 +27,7 @@ def evaluate_adjacency(glycan_part, adjustment):
           (last_char == ']' and glycan_part[-2] in {'(', ')'} and len_glycan_part-1 < 2+adjustment))
 
 
+@lru_cache(maxsize = 128)
 def glycan_to_graph(glycan):
   """the monumental function for converting glycans into graphs\n
   | Arguments:
@@ -36,7 +39,7 @@ def glycan_to_graph(glycan):
   | (2) an adjacency matrix of size glycoletter X glycoletter
   """
   # Get glycoletters
-  glycan_proc = min_process_glycans([glycan])[0]
+  glycan_proc = tuple(min_process_glycans([glycan])[0])
   n = len(glycan_proc)
   # Map glycoletters to integers
   mask_dic = dict(enumerate(glycan_proc))

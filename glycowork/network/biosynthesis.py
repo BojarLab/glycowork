@@ -706,27 +706,28 @@ def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
   fig, ax = plt.subplots(figsize = (16, 16))
   # Check whether are values to scale node size by
   node_attributes = nx.get_node_attributes(network, 'abundance')
-  node_sizes = list(node_attributes.values()) if node_attributes else 50
+  node_sizes = list(node_attributes.values()) if node_attributes else [50] * network.number_of_nodes()
   # Decide on network layout
   pos = {'pydot2': lambda: nx.nx_pydot.pydot_layout(network, prog = "dot"),
            'kamada_kawai': lambda: nx.kamada_kawai_layout(network),
            'spring': lambda: nx.spring_layout(network, k = 1/4)}.get(plot_format, lambda: nx.kamada_kawai_layout(network))()
   # Check whether there are values to scale node color by
   node_attributes = nx.get_node_attributes(network, 'origin')
-  alpha_map = [0.2 if k == 1 else 1 for k in nx.get_node_attributes(network, 'virtual').values()]
+  virtual_attrs = nx.get_node_attributes(network, 'virtual')
+  alpha_map = [0.2 if virtual_attrs.get(node, 0) == 1 else 1 for node in network.nodes()]
   if node_attributes:
     scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, ax = ax,
                                      node_color = list(node_attributes.values()), alpha = alpha_map)
   else:
-    color_map = ['darkorange' if k == 1 else 'cornflowerblue' if k == 0 else 'seagreen' for k in nx.get_node_attributes(network, 'virtual').values()]
+    color_map = ['darkorange' if virtual_attrs.get(node, 0) == 1 else 'cornflowerblue' if virtual_attrs.get(node, 0) == 0 else 'seagreen' for node in network.nodes()]
     scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, alpha = 0.7,
                                      node_color = color_map, ax = ax)
-  if edge_label_draw:
-    edge_attributes = nx.get_edge_attributes(network, 'diffs')
+  edge_attributes = nx.get_edge_attributes(network, 'diffs')
+  if edge_label_draw: 
     if lfc_dict:
       # Map log-fold changes of responsible enzymes onto biosynthetic steps
-      c_list = ['red' if lfc_dict.get(k, 0) < 0 else 'green' if lfc_dict.get(k, 0) > 0 else 'cornflowerblue' for k in edge_attributes.values()]
-      w_list = [abs(lfc_dict.get(k, 0)) or 1 for k in edge_attributes.values()]
+      c_list = ['red' if lfc_dict.get(attr, 0) < 0 else 'green' if lfc_dict.get(attr, 0) > 0 else 'cornflowerblue' for attr in edge_attributes.values()]
+      w_list = [abs(lfc_dict.get(attr, 0)) or 1 for attr in edge_attributes.values()]
       nx.draw_networkx_edges(network, pos, ax = ax, edge_color = c_list, width = w_list)
     else:
       nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
@@ -734,10 +735,9 @@ def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
                                  verticalalignment = 'baseline')
   else:
     # Alternatively, color edge by type of monosaccharide that is added
-    edge_attributes = nx.get_edge_attributes(network, 'diffs')
-    c_list = ['cornflowerblue' if 'Glc' in k else 'yellow' if 'Gal' in k else 'red' if 'Fuc' in k else 'mediumorchid' if '5Ac' in k
-              else 'turquoise' if '5Gc' in k else 'silver' for k in edge_attributes.values()]
-    w_list = [1 if 'b1' in k else 3 for k in edge_attributes.values()]
+    c_list = ['cornflowerblue' if 'Glc' in attr else 'yellow' if 'Gal' in attr else 'red' if 'Fuc' in attr else 'mediumorchid' if '5Ac' in attr
+                  else 'turquoise' if '5Gc' in attr else 'silver' for attr in edge_attributes.values()]
+    w_list = [1 if 'b1' in attr else 3 for attr in edge_attributes.values()]
     nx.draw_networkx_edges(network, pos, ax = ax, edge_color = c_list, width = w_list)
   ax.axis('off')
   tooltip = mpld3.plugins.PointLabelTooltip(scatter, labels = list(network.nodes()))
@@ -794,9 +794,9 @@ def infer_virtual_nodes(network_a, network_b, combined = None):
   a_nodes = set(network_a.nodes())
   b_nodes = set(network_b.nodes())
   # Find virtual nodes in network_a that are observed in network_b and vice versa
-  virtual_a = {k for k in a_nodes if network_a.nodes[k].get('virtual', 0) == 1}
-  virtual_b = {k for k in b_nodes if network_b.nodes[k].get('virtual', 0) == 1}
-  virtual_combined = {k for k in combined.nodes() if combined.nodes[k].get('virtual', 0) == 1}
+  virtual_a = {k for k, v in network_a.nodes(data = True) if v.get('virtual', 0) == 1}
+  virtual_b = {k for k, v in network_b.nodes(data = True) if v.get('virtual', 0) == 1}
+  virtual_combined = {k for k, v in combined.nodes(data = True) if v.get('virtual', 0) == 1}
   supported_a = virtual_a & virtual_b
   supported_b = virtual_b & virtual_a
   inferred_a = virtual_a - virtual_combined
@@ -827,8 +827,7 @@ def infer_network(network, network_species, species_list, network_dic):
     inferences.update(infer_network[0])
   # Output a new network with formerly virtual nodes updated to a new node status --> inferred
   network2 = network.copy()
-  upd = {j: 2 for j in inferences}
-  nx.set_node_attributes(network2, upd, 'virtual')
+  nx.set_node_attributes(network2, {j: 2 for j in inferences}, 'virtual')
   return network2
 
 
@@ -860,19 +859,17 @@ def export_network(network, filepath, other_node_attributes = None):
   """
   # Generate edge_list
   if network.edges():
-    edge_list = pd.DataFrame(network.edges(), columns = ['Source', 'Target'])
-    edge_list['Label'] = [nx.get_edge_attributes(network, 'diffs').get(edge) for edge in network.edges()]
+    edge_list = pd.DataFrame([(u, v, d.get('diffs', '')) for u, v, d in network.edges(data = True)], columns = ['Source', 'Target', 'Label'])
     edge_list.to_csv(f"{filepath}_edge_list.csv", index = False)
   else:
-    pd.DataFrame(columns=['Source', 'Target']).to_csv(f"{filepath}_edge_list.csv", index = False)
+    pd.DataFrame(columns = ['Source', 'Target', 'Label']).to_csv(f"{filepath}_edge_list.csv", index = False)
 
   # Generate node_labels
-  node_labels_dict = {'Id': list(network.nodes()), 'Virtual': list(nx.get_node_attributes(network, 'virtual').values())}
+  node_labels_dict = {'Id': list(network.nodes()), 'Virtual': [d.get('virtual', '') for _, d in network.nodes(data = True)]}
   if other_node_attributes is not None:
     for att in other_node_attributes:
-      node_labels_dict[att] = list(nx.get_node_attributes(network, att).values())
-  node_labels_df = pd.DataFrame(node_labels_dict)
-  node_labels_df.to_csv(f"{filepath}_node_labels.csv", index = False)
+      node_labels_dict[att] = [d.get(att, '') for _, d in network.nodes(data = True)]
+  pd.DataFrame(node_labels_dict).to_csv(f"{filepath}_node_labels.csv", index = False)
 
 
 def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
@@ -892,9 +889,7 @@ def monolink_to_glycoenzyme(edge_label, df, enzyme_column = 'glycoenzyme',
   if mode == 'condensed':
     enzyme_column = 'glycoclass'
   new_edge_label = df.loc[df[monolink_column] == edge_label, enzyme_column].unique()
-  if len(new_edge_label) == 0:
-        return edge_label
-  return '_'.join(new_edge_label)
+  return '_'.join(new_edge_label) if new_edge_label.size else edge_label
 
 
 def choose_path(diamond, species_list, network_dic, threshold = 0., nb_intermediates = 2, mode = 'presence'):
@@ -914,36 +909,29 @@ def choose_path(diamond, species_list, network_dic, threshold = 0., nb_intermedi
   graph_dic = {k: glycan_to_nxGraph(k) for k in diamond.values()}
   # Construct the diamond between source and target node
   network, _ = create_adjacency_matrix(list(diamond.values()), graph_dic)
-  source = diamond[1]
-  target = diamond[1 + int((nb_intermediates/2) + 1)]
+  source, target = diamond[1], diamond[1 + int((nb_intermediates/2) + 1)]
   # Get the intermediate nodes constituting the alternative paths
-  alternatives = [path[1:int((nb_intermediates/2)+1)] for path in nx.all_simple_paths(network, source = source, target = target)]
+  alternatives = [tuple(path[1:int((nb_intermediates/2)+1)]) for path in nx.all_simple_paths(network, source = source, target = target)]
   if len(alternatives) < 2:
     return {}
-  alts = {tuple(alt): [] for alt in alternatives}
+  alts = {alt: [] for alt in alternatives}
   # For each species, check whether an alternative has been observed
   for species in species_list:
-    temp_network_nodes = set(network_dic[species].nodes())
+    temp_network = network_dic[species]
+    temp_network_nodes = set(temp_network.nodes())
     if source in temp_network_nodes and target in temp_network_nodes:
-      temp_network = network_dic[species]
       lookup_dic = nx.get_node_attributes(temp_network, 'virtual') if mode == 'presence' else nx.get_node_attributes(temp_network, 'abundance')
       for alt in alternatives:
-        alt_set = set(alt)
-        if alt_set.issubset(temp_network_nodes):
-          alts[tuple(alt)].append(np.mean([lookup_dic[node] for node in alt]))
+        if set(alt).issubset(temp_network_nodes):
+          alts[alt].append(np.mean([lookup_dic.get(node, 0) for node in alt]))
         else:
-          alts[tuple(alt)].append(1) if mode == 'presence' else alts[tuple(alt)].append(0)
-  if mode == 'presence':
-    alts = {k: 1 - np.mean(v) for k, v in alts.items()}
-  else:
-    alts = {k: np.mean(v) for k, v in alts.items()}
+          alts[alt].append(1 if mode == 'presence' else 0)
+  alts = {k: 1 - np.mean(v) if mode == 'presence' else np.mean(v) for k, v in alts.items()}
   # If both alternatives aren't observed, add minimum value (because one of the paths *has* to be taken)
   if sum(alts.values()) == 0:
     alts = {k: v + 0.01 + threshold for k, v in alts.items()}
-  # Will be removed in the future
-  if nb_intermediates == 2:
-    alts = {k[0]: v for k, v in alts.items()}
-  return alts
+  # Will be reworked in the future
+  return {k[0]: v for k, v in alts.items()} if nb_intermediates == 2 else alts
 
 
 def find_diamonds(network, nb_intermediates = 2, mode = 'presence'):
@@ -959,11 +947,11 @@ def find_diamonds(network, nb_intermediates = 2, mode = 'presence'):
   """
   if nb_intermediates % 2 > 0:
     print("nb_intermediates has to be a multiple of 2; please re-try.")
-    return
+    return []
   # Generate matching motif
-  path_length = int(nb_intermediates / 2 + 2) # The length of one of the two paths is half of the number of intermediates + 1 source node + 1 target node
+  path_length = nb_intermediates // 2 + 2 # The length of one of the two paths is half of the number of intermediates + 1 source node + 1 target node
   first_path = list(range(1, path_length + 1))
-  second_path = [first_path[0]] + [x + len(first_path) - 1 for x in first_path[1:-1]] + [first_path[-1]]
+  second_path = [first_path[0]] + [x + path_length - 1 for x in first_path[1:-1]] + [first_path[-1]]
   g1 = nx.DiGraph()
   nx.add_path(g1, first_path)
   nx.add_path(g1, second_path)
@@ -974,8 +962,7 @@ def find_diamonds(network, nb_intermediates = 2, mode = 'presence'):
   matchings_list = list(graph_pair.subgraph_isomorphisms_iter())
   unique_keys = {tuple(sorted(d.keys())) for d in matchings_list}
   # Map found diamonds to the same format
-  matchings_list = [next(d for d in matchings_list if tuple(sorted(d.keys())) == k) for k in unique_keys]
-  matchings_list = [{v: k for k, v in d.items()} for d in matchings_list]
+  matchings_list = [{v: k for k, v in next(d for d in matchings_list if tuple(sorted(d.keys())) == key).items()} for key in unique_keys]
   final_matchings = []
   # For each diamond, only keep the diamond if at least one of the intermediate structures is virtual
   virtual_attr = nx.get_node_attributes(network, 'virtual')
@@ -1039,10 +1026,10 @@ def prune_network(network, node_attr = 'abundance', threshold = 0.):
   # Leave virtual nodes that are needed to retain a connected component
   to_cut = [k for k in to_cut if not any(network_out.in_degree[j] == 1 and len(j) > len(k) for j in network_out.neighbors(k))]
   network_out.remove_nodes_from(to_cut)
-  nodeDict = dict(network_out.nodes(data = True))
   # Remove virtual nodes with total degree of max 1 and an in-degree of at least 1
-  nodes_to_remove = [node for node, attr in nodeDict.items()
-                     if (network_out.degree[node] <= 1) and (attr['virtual'] == 1) and (network_out.in_degree[node] > 0)]
+  nodes_to_remove = [node for node, attr in network_out.nodes(data = True)
+                       if (network_out.degree[node] <= 1) and (attr.get('virtual') == 1) 
+                       and (network_out.in_degree[node] > 0)]
   network_out.remove_nodes_from(nodes_to_remove)
   return network_out
 
@@ -1138,8 +1125,8 @@ def highlight_network(network, highlight, motif = None,
   # Add the degree of evolutionary conervation as 'abundance' node attribute used for node size scaling
   elif highlight == 'conservation':
     species_list = conservation_df['Species'].unique().tolist()
-    spec_nodes = {k: list(network_dic[k].nodes()) for k in species_list}
-    flat_spec_nodes = [node for sublist in spec_nodes.values() for node in sublist]
+    spec_nodes = {k: set(network_dic[k].nodes()) for k in species_list}
+    flat_spec_nodes = [node for nodes in spec_nodes.values() for node in nodes]
     node_conservation = {k: flat_spec_nodes.count(k) * 100 for k in network_out.nodes()}
     nx.set_node_attributes(network_out, node_conservation, name = 'abundance')
   return network_out
