@@ -462,7 +462,7 @@ def graph_to_string_int(graph):
   nodes = [graph.nodes[node]["string_labels"] for node in sorted_nodes]
   if len(nodes) == 1:
     return nodes[0]
-  edges = dict(graph.edges())
+  edges = {k: v for k, v in graph.edges()}
   cache_last_index = len(graph) - 1
   main_chain = set(nx.shortest_path(graph, 0, cache_last_index))
   degree = graph.degree()
