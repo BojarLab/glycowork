@@ -13,10 +13,10 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from glycowork.glycan_data.loader import unwrap, linkages
+from glycowork.glycan_data.loader import unwrap, linkages, lib
 from glycowork.glycan_data.stats import cohen_d, get_alphaN
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism, get_possible_topologies
-from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans
+from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans, in_lib
 from glycowork.motif.tokenization import get_stem_lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.annotate import link_find
@@ -224,7 +224,11 @@ def create_adjacency_matrix(glycans, graph_dic, min_size = 1):
   # Connect glycans with biosynthetic precursors
   df_out = pd.DataFrame(0, index = glycans, columns = glycans)
   graphs = [safe_index(g, graph_dic) for g in glycans]
-  _, idx = zip(*[get_neighbors(g, glycans, graphs, min_size = min_size) for g in graphs])
+  results = [get_neighbors(g, glycans, graphs, min_size = min_size) for g in graphs]
+  if all(not result[0] and not result[1] for result in results):
+    idx = []
+  else:
+    _, idx = zip(*results)
   # Fill adjacency matrix
   for j, indices in enumerate(idx):
     for i in indices:
@@ -630,6 +634,9 @@ def construct_network(glycans, allowed_ptms = allowed_ptms,
   nx.set_node_attributes(network, {k: 1 if k in virtual_nodes else 0 for k in network.nodes()}, 'virtual')
   # Connect post-translational modifications
   suffix = '-ol' if '-ol' in ''.join(glycans) else '1Cer' if '1Cer' in ''.join(glycans) else ''
+  virtual_nodes = [x for x, y in network.nodes(data = True) if y['virtual'] == 1]
+  real_nodes = [safe_index(x, graph_dic) for x, y in network.nodes(data = True) if y['virtual'] == 0]
+  network.remove_nodes_from([v for v in virtual_nodes if any(compare_glycans(safe_index(v, graph_dic), r) for r in real_nodes) or not in_lib(v, lib)])
   ptm_links = process_ptm(list(network.nodes()), graph_dic, stem_lib, allowed_ptms = allowed_ptms, suffix = suffix)
   if ptm_links:
     network = update_network(network, ptm_links[0], edge_labels = ptm_links[1])
@@ -661,9 +668,6 @@ def construct_network(glycans, allowed_ptms = allowed_ptms,
           else:
             pass
   # Remove virtual nodes that are branch isomers of real nodes
-  virtual_nodes = [x for x, y in network.nodes(data = True) if y['virtual'] == 1]
-  real_nodes = [safe_index(x, graph_dic) for x, y in network.nodes(data = True) if y['virtual'] == 0]
-  network.remove_nodes_from([v for v in virtual_nodes if any(compare_glycans(safe_index(v, graph_dic), r) for r in real_nodes)])
   virtual_nodes = [x for x, y in network.nodes(data = True) if y['virtual'] == 1]
   virtual_graphs = [safe_index(x, graph_dic) for x in virtual_nodes]
   isomeric_graphs = [k for k in combinations(virtual_graphs, 2) if compare_glycans(k[0], k[1])]
@@ -1365,7 +1369,10 @@ def edges_for_extension(leaf_glycans, new_glycans, graphs):
   new_edges, new_edge_labels = [], []
   new_glycans = list(new_glycans)
   leaf_graphs = {k: safe_index(k, graphs) for k in leaf_glycans}
-  all_neighbors, _ = zip(*[get_neighbors(safe_index(g, graphs), list(leaf_glycans), leaf_graphs, min_size = 1) for g in new_glycans])
+  results = [get_neighbors(safe_index(g, graphs), list(leaf_glycans), list(leaf_graphs.values()), min_size = 1) for g in new_glycans]
+  if all(not result[0] and not result[1] for result in results):
+    return [], []
+  all_neighbors, _ = zip(*results)
   for j, neighbors in enumerate(all_neighbors):
     for i in neighbors:
       if i:

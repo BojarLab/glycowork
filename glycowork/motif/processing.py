@@ -291,7 +291,8 @@ def choose_correct_isoform(glycans, reverse = False):
   if floaty:
     correct_isoform = floaty + correct_isoform
   if reverse:
-    glycans.remove(correct_isoform)
+    if correct_isoform in glycans:
+      glycans.remove(correct_isoform)
     correct_isoform = glycans
   return correct_isoform
 
@@ -942,6 +943,8 @@ def canonicalize_iupac(glycan):
     floating_bits = re.findall(r'\{.*?\}', glycan)
     sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))
     glycan = sorted_floating_bits + glycan[glycan.rfind('}')+1:]
+  if glycan.count('[') != glycan.count(']'):
+    print("Warning: Mismatching brackets in formatted glycan string.")
   return glycan
 
 
