@@ -581,7 +581,7 @@ def calculate_adduct_mass(adduct, mass_value = 'monoisotopic'):
   """Calculate the mass of the adduct based on its chemical formula\n
   | Arguments:
   | :-
-  | adduct (string): chemical formula of adduct, e.g., "C2H6O4"
+  | adduct (string): chemical formula of adduct, e.g., "C2H4O2"
   | mass_value (string): whether to use 'monoisotopic' or 'average' mass; default:'monoisotopic'\n
   | Returns:
   | :-
@@ -642,7 +642,7 @@ def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivat
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
   | stem_libr (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
-  | adduct (string): chemical formula of adduct to be added, e.g., "C2H6O4"; default:None\n
+  | adduct (string): chemical formula of adduct to be added, e.g., "C2H4O2"; default:None\n
   | Returns:
   | :-
   | Returns the theoretical mass of input glycan

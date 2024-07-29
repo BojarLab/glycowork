@@ -296,7 +296,7 @@ def choose_correct_isoform(glycans, reverse = False):
     correct_isoform = glycans
   return correct_isoform
 
-
+  
 def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   """given a glycan and glycan class, determines whether glycan is from this class\n
   | Arguments:
@@ -310,19 +310,38 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   | Returns True if glycan is in glycan class and False if not
   """
   pools = {
-    'O': ['GalNAc', 'GalNAcOS', 'GalNAc4S', 'GalNAc6S', 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S'],
-    'N': ['GlcNAc'],
-    'free': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
-    'lipid': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
+    'O': 'GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S',
+    'N': 'GlcNAc',
+    'free': 'Glc|GlcOS|Glc3S|GlcNAc|GlcNAcOS|Gal|GalOS|Gal3S|Ins',
+    'lipid': 'Glc|GlcOS|Glc3S|GlcNAc|GlcNAcOS|Gal|GalOS|Gal3S|Ins'
     }
-  glycan = glycan[:-3] if glycan.endswith('-ol') else glycan
-  pool = pools.get(glycan_class, [])
-  truth = any([glycan.endswith(k) for k in pool])
+  if glycan_class not in pools:
+    return False
+  glycan = glycan[:-3] if glycan.endswith('-ol') else glycan[:-4] if glycan.endswith('1Cer') else glycan
+  truth = bool(re.search(f"({pools[glycan_class]})$", glycan))
   if truth and glycan_class in {'free', 'lipid', 'O'}:
-    truth = not any(glycan.endswith(k) for k in ['GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc'])
-  if not truth and conf:
-    return conf > extra_thresh
-  return truth
+    truth = not re.search(r'(GlcNAc\(b1-4\)GlcNAc|\[Fuc\(a1-6\)]GlcNAc)$', glycan)
+  return conf > extra_thresh if not truth and conf is not None else truth
+
+
+def get_class(glycan):
+  """given a glycan, determines its class\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed nomenclature\n
+  | Returns:
+  | :-
+  | Returns "O", "N", "free", or "lipid" (or empty string if not either)
+  """
+  if glycan.endswith('-ol'):
+    return 'free'
+  if glycan.endswith(('1Cer', 'Ins')):
+    return 'lipid'
+  if glycan.endswith(('GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc')):
+    return 'N'
+  if re.search(r'(GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S)$', glycan):
+    return 'O'
+  return ''
 
 
 def canonicalize_composition(comp):

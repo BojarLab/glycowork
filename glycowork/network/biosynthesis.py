@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import unwrap, linkages, lib
 from glycowork.glycan_data.stats import cohen_d, get_alphaN
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism, get_possible_topologies
-from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans, in_lib
+from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans, in_lib, get_class
 from glycowork.motif.tokenization import get_stem_lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.annotate import link_find
@@ -1394,7 +1394,10 @@ def extend_network(network, steps = 1):
   from glycowork.glycan_data.loader import df_species
   graphs = {}
   new_glycans = set()
-  mammal_disac = set(unwrap(map(link_find, df_species[df_species.Class == "Mammalia"].glycan)))
+  classy = get_class(list(network.nodes())[0])
+  glycs = df_species[df_species.Class == "Mammalia"].glycan
+  glycs = glycs[glycs.apply(get_class) == classy]
+  mammal_disac = set(unwrap(map(link_find, glycs)))
   reactions = set(nx.get_edge_attributes(network, "diffs").values())
   leaf_glycans = {x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0}
   for _ in range(steps):
