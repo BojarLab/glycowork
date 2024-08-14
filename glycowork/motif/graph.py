@@ -457,66 +457,66 @@ def graph_to_string_int(graph):
   | :-
   | Returns glycan in IUPAC-condensed format (string)
   """
-  graph = nx.relabel_nodes(graph, {n: i for i, n in enumerate(sorted(graph.nodes()))})
-  sorted_nodes = sorted(graph.nodes())
-  nodes = [graph.nodes[node]["string_labels"] for node in sorted_nodes]
-  if len(nodes) == 1:
-    return nodes[0]
-  elif len(nodes) < 1:
-    return ''
-  edges = {k: v for k, v in graph.edges()}
-  cache_last_index = max(graph.nodes(), default = 0)
-  main_chain = set(nx.shortest_path(graph, 0, cache_last_index))
-  degree = graph.degree()
+  def assign_depth(G: nx.DiGraph, idx: int):
+    """Assigns depth to each node in the graph recursively. Stored as the node attribute "depth".\n
+    | Arguments:
+    | :-
+    | G (networkx object): glycan graph
+    | idx (int): node index\n
+    | Returns:
+    | :-
+    | Returns depth of the node
+    """
+    min_depth = float("inf")
+    children = list(G.neighbors(idx))
+    if len(children) == 0:  # if it's a leaf node, the depth is zero
+      G.nodes[idx]["depth"] = 0
+      return 0
+    for child in children:  # if it's not a leaf node, the depth is the minimum depth of its children + 1
+      min_depth = min(assign_depth(G, child) + 1, min_depth)
+    G.nodes[idx]["depth"] = min_depth
+    return min_depth
 
-  chain_indices = {node: 0 for node in main_chain}
-  side_chain_index = 1
-  def label_branches(start_node, parent_node, level):
-    stack = [(start_node, parent_node, level)]
-    while stack:
-      node, parent, current_level = stack.pop()
-      if node not in chain_indices:
-        chain_indices[node] = current_level
-        children = sorted([n for n in graph.neighbors(node) if n != parent and n not in chain_indices])
-        if children:
-          # Keep the child with lowest index in the current level
-          stack.append((children[0], node, current_level))
-          # Increment level for other children
-          for child in children[1:]:
-            stack.append((child, node, current_level + 1))
-  
-  # Label side chains starting from the main chain
-  for node in main_chain:
-    children = sorted([n for n in graph.neighbors(node) if n not in main_chain])
-    if children:
-      # First child stays at level 1, others start at level 2
-      label_branches(children[0], node, 1)
-      for child in children[1:]:
-        label_branches(child, node, 2)
-  nodes_out = []
-  for i, k in enumerate(nodes):
-    neighbor = edges.get(i, cache_last_index)
-    if (degree[neighbor] > 2 and i not in main_chain) or (neighbor_is_branchpoint(graph, i) and i not in main_chain):
-      neighbor = max(graph.neighbors(i))
-      if chain_indices.get(i, 99) != chain_indices.get(neighbor, 99):
-        nodes_out.append(k + ')')
-      else:
-        nodes_out.append(k)
-    elif degree[i] == 1:
-      nodes_out.append('(' + k)
-    else:
-      nodes_out.append(k)
+  def dfs_to_string(G: nx.DiGraph, idx: int):
+    """Converts the DFT tree of a glycan graph to IUPAC-condensed format recursively.\n
+    | Arguments:
+    | :-
+    | G (networkx object): DFS tree of a glycan graph
+    | idx (int): node index\n
+    | Returns:
+    | :-
+    | Returns glycan in IUPAC-condensed format (string)
+    """
+    output = graph.nodes[idx]["string_labels"]
+    # put braces around the string describing linkages
+    if (output[0] in "?abn" or output[0].isdigit()) and (output[-1] == "?" or output[-1].isdigit()):
+      output = "(" + output + ")"
+    # sort kids from shallow to deep to have deepest as main branch in the end
+    children = list(sorted(G.neighbors(idx), key=lambda x: G.nodes[x]["depth"]))
+    if len(children) == 0:
+      return output
+    for child in children[:-1]:  # iterate over all children except the last one and put them in branching brackets
+      output = "[" + dfs_to_string(G, child) + "]" + output
+    # put the last child in front of the output, without brackets
+    output = dfs_to_string(G, children[-1]) + output
+    return output
 
-  if graph.degree[cache_last_index] < 2:
-    nodes = ''.join(nodes_out)[1:][::-1].replace('(', '', 1)[::-1]
-  else:
-    nodes[-1] = ')'+nodes_out[-1]
-    nodes = ''.join(nodes)[1:]
-  return canonicalize_iupac(nodes.strip('()'))
+  # get the DFS tree of the graph
+  dfs = nx.dfs_tree(graph, len(graph.nodes) - 1)
+
+  # assign depth to each node
+  assign_depth(dfs, len(graph.nodes) - 1)
+
+  # convert the DFS tree to IUPAC-condensed format
+  return dfs_to_string(dfs, len(graph.nodes) - 1)
 
 
 def graph_to_string(graph):
   """converts glycan graph back to IUPAC-condensed format\n
+
+  Assumptions:
+  1. The root node is the one with the highest index.
+
   | Arguments:
   | :-
   | graph (networkx object): glycan graph\n
