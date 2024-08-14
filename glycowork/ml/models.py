@@ -1,4 +1,6 @@
 import os
+from typing import Literal
+
 import numpy as np
 try:
     import torch
@@ -312,7 +314,8 @@ def init_weights(model, mode = 'sparse', sparsity = 0.1):
             print("This initialization option is not supported.")
 
 
-def prep_model(model_type, num_classes, libr=None, trained=False, hidden_dim: int = 128):
+def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_flex", "NSequonPred"],
+               num_classes: int, libr=None, trained=False, hidden_dim: int = 128):
     """wrapper to instantiate model, initialize it, and put it on the GPU\n
     | Arguments:
     | :-
