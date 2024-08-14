@@ -501,14 +501,17 @@ def graph_to_string_int(graph):
     output = dfs_to_string(G, children[-1]) + output
     return output
 
+  # get the root node index, assuming the root node has the highest index
+  root_idx = max(list(graph.nodes.keys()))
+
   # get the DFS tree of the graph
-  dfs = nx.dfs_tree(graph, len(graph.nodes) - 1)
+  dfs = nx.dfs_tree(graph, root_idx)
 
   # assign depth to each node
-  assign_depth(dfs, len(graph.nodes) - 1)
+  assign_depth(dfs, root_idx)
 
   # convert the DFS tree to IUPAC-condensed format
-  return dfs_to_string(dfs, len(graph.nodes) - 1)
+  return dfs_to_string(dfs, root_idx)
 
 
 def graph_to_string(graph):
