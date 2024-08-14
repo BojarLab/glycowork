@@ -515,6 +515,8 @@ def map_to_basic(glycoletter, obfuscate_ptm = True):
       return 'HexOS' if obfuscate_ptm else 'Hex' + glycoletter[-2:]
     elif g2 in {k + 'OS' for k in HexNAc}:
       return 'HexNAcOS' if obfuscate_ptm else 'HexNAc' + glycoletter[-2:]
+    elif g2 in {k + 'OS' for k in HexA}:
+      return 'HexAOS' if obfuscate_ptm else 'HexA' + glycoletter[-2:]
   if 'P' in glycoletter:
     if g2 in {k + 'OP' for k in Hex}:
       return 'HexOP' if obfuscate_ptm else 'Hex' + glycoletter[-2:]
@@ -575,9 +577,41 @@ def glycan_to_composition(glycan, stem_libr = None):
     return dict(composition)
 
 
+def calculate_adduct_mass(adduct, mass_value = 'monoisotopic'):
+  """Calculate the mass of the adduct based on its chemical formula\n
+  | Arguments:
+  | :-
+  | adduct (string): chemical formula of adduct, e.g., "C2H4O2"
+  | mass_value (string): whether to use 'monoisotopic' or 'average' mass; default:'monoisotopic'\n
+  | Returns:
+  | :-
+  | Returns the mass of the adduct
+  """
+  element_masses = {
+    'monoisotopic': {'C': 12.0000, 'H': 1.0078, 'O': 15.9949, 'N': 14.0031},
+    'average': {'C': 12.0107, 'H': 1.00794, 'O': 15.9994, 'N': 14.0067}
+  }
+  mass = 0
+  element_count = {'C': 0, 'H': 0, 'O': 0, 'N': 0}
+  current_element = ''
+  current_count = ''
+  for char in adduct:
+    if char.isalpha():
+      if current_element:
+        element_count[current_element] += int(current_count) if current_count else 1
+      current_element = char
+      current_count = ''
+    elif char.isdigit():
+      current_count += char
+  if current_element:
+    element_count[current_element] += int(current_count) if current_count else 1
+  for element, count in element_count.items():
+    mass += element_masses[mass_value][element] * count
+  return mass
+
+
 @rescue_compositions
-def composition_to_mass(dict_comp, mass_value = 'monoisotopic',
-                      sample_prep = 'underivatized'):
+def composition_to_mass(dict_comp, mass_value = 'monoisotopic', sample_prep = 'underivatized', adduct = None):
   """given a composition, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
   | Arguments:
   | :-
@@ -593,17 +627,22 @@ def composition_to_mass(dict_comp, mass_value = 'monoisotopic',
   for old_key, new_key in {'S': 'Sulphate', 'P': 'Phosphate', 'Me': 'Methyl', 'Ac': 'Acetate'}.items():
     if old_key in dict_comp:
       dict_comp[new_key] = dict_comp.pop(old_key)
-  return sum(mass_dict_in.get(k, 0) * v for k, v in dict_comp.items()) + mass_dict_in['red_end']
+  total_mass = sum(mass_dict_in.get(k, 0) * v for k, v in dict_comp.items()) + mass_dict_in['red_end']
+  if adduct:
+    adduct_mass = calculate_adduct_mass(adduct, mass_value)
+    total_mass += adduct_mass
+  return total_mass
 
 
-def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized', stem_libr = None):
+def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized', stem_libr = None, adduct = None):
   """given a glycan, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
   | Arguments:
   | :-
   | glycan (string): glycan in IUPAC-condensed format
   | mass_value (string): whether the expected mass is 'monoisotopic' or 'average'; default:'monoisotopic'
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
-  | stem_libr (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib\n
+  | stem_libr (dictionary): dictionary of form modified_monosaccharide:core_monosaccharide; default:created from lib
+  | adduct (string): chemical formula of adduct to be added, e.g., "C2H4O2"; default:None\n
   | Returns:
   | :-
   | Returns the theoretical mass of input glycan
@@ -611,7 +650,7 @@ def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivat
   if stem_libr is None:
     stem_libr = stem_lib
   comp = glycan_to_composition(glycan, stem_libr = stem_libr)
-  return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep)
+  return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct)
 
 
 @rescue_compositions

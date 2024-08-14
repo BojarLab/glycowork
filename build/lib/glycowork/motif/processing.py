@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import copy
 import re
+from random import choice
 from functools import wraps
 from collections import defaultdict
 from glycowork.glycan_data.loader import (unwrap, multireplace,
@@ -118,6 +119,23 @@ def get_possible_monosaccharides(wildcard):
                    'HexOS': HexOS, 'HexNAcOS': HexNAcOS,
                    'Monosaccharide': set().union(*[Hex, HexOS, HexNAc, HexNAcOS, dHex, Sia, HexA, Pen])}
   return wildcard_dict.get(wildcard, [])
+
+
+def de_wildcard_glycoletter(glycoletter):
+  """Retrieves a random specified instance of a general type (e.g., "Gal" for "Hex")\n
+  | Arguments:
+  | :-
+  | glycoletter (string): Monosaccharide or linkage\n
+  | Returns:
+  | :-
+  | Returns a random specified glycoletter of that type
+  """
+  if '?' in glycoletter:
+    return choice(get_possible_linkages(glycoletter))
+  elif monos := get_possible_monosaccharides(glycoletter):
+    return choice(list(monos))
+  else:
+    return glycoletter
 
 
 def bracket_removal(glycan_part):
@@ -273,11 +291,12 @@ def choose_correct_isoform(glycans, reverse = False):
   if floaty:
     correct_isoform = floaty + correct_isoform
   if reverse:
-    glycans.remove(correct_isoform)
+    if correct_isoform in glycans:
+      glycans.remove(correct_isoform)
     correct_isoform = glycans
   return correct_isoform
 
-
+  
 def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   """given a glycan and glycan class, determines whether glycan is from this class\n
   | Arguments:
@@ -291,19 +310,38 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   | Returns True if glycan is in glycan class and False if not
   """
   pools = {
-    'O': ['GalNAc', 'GalNAcOS', 'GalNAc4S', 'GalNAc6S', 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S'],
-    'N': ['GlcNAc'],
-    'free': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
-    'lipid': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
+    'O': 'GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S',
+    'N': 'GlcNAc',
+    'free': 'Glc|GlcOS|Glc3S|GlcNAc|GlcNAcOS|Gal|GalOS|Gal3S|Ins',
+    'lipid': 'Glc|GlcOS|Glc3S|GlcNAc|GlcNAcOS|Gal|GalOS|Gal3S|Ins'
     }
-  glycan = glycan[:-3] if glycan.endswith('-ol') else glycan
-  pool = pools.get(glycan_class, [])
-  truth = any([glycan.endswith(k) for k in pool])
+  if glycan_class not in pools:
+    return False
+  glycan = glycan[:-3] if glycan.endswith('-ol') else glycan[:-4] if glycan.endswith('1Cer') else glycan
+  truth = bool(re.search(f"({pools[glycan_class]})$", glycan))
   if truth and glycan_class in {'free', 'lipid', 'O'}:
-    truth = not any(glycan.endswith(k) for k in ['GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc'])
-  if not truth and conf:
-    return conf > extra_thresh
-  return truth
+    truth = not re.search(r'(GlcNAc\(b1-4\)GlcNAc|\[Fuc\(a1-6\)]GlcNAc)$', glycan)
+  return conf > extra_thresh if not truth and conf is not None else truth
+
+
+def get_class(glycan):
+  """given a glycan, determines its class\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed nomenclature\n
+  | Returns:
+  | :-
+  | Returns "O", "N", "free", or "lipid" (or empty string if not either)
+  """
+  if glycan.endswith('-ol'):
+    return 'free'
+  if glycan.endswith(('1Cer', 'Ins')):
+    return 'lipid'
+  if glycan.endswith(('GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc')):
+    return 'N'
+  if re.search(r'(GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S)$', glycan):
+    return 'O'
+  return ''
 
 
 def canonicalize_composition(comp):
@@ -900,8 +938,8 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
   if bool(re.search(r'(\[|\)|\]|\^)[1-9]?[SP](?!en)[A-Za-z]+', glycan)):
     glycan = re.sub(r'([1-9]?[SP])(?!en)([A-Za-z]+)', r'\2\1', glycan)
-  if bool(re.search(r'[1-9]?[SP]-[A-Za-z]+', glycan)):
-    glycan = re.sub(r'([1-9]?[SP])-([A-Za-z]+)', r'\2\1', glycan)
+  if bool(re.search(r'[1-9]?[SP]-[A-Za-n]+', glycan)):
+    glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)
   # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
   glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
   glycan = re.sub(r'([c-z])([1-2])-', r'\1(?\2-', glycan)
@@ -924,6 +962,8 @@ def canonicalize_iupac(glycan):
     floating_bits = re.findall(r'\{.*?\}', glycan)
     sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))
     glycan = sorted_floating_bits + glycan[glycan.rfind('}')+1:]
+  if glycan.count('[') != glycan.count(']'):
+    print("Warning: Mismatching brackets in formatted glycan string.")
   return glycan
 
 
@@ -987,7 +1027,7 @@ def infer_features_from_composition(comp):
     feature_dic['high_Man'] = 1
   else:
     feature_dic['high_Man'] = 0
-  if (comp.get('A', 0) + comp.get('G', 0) < 2 and comp.get('H', 0) > 4) or (comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) > 1 and comp.get('Hex', 0) > 4):
+  if (comp.get('A', 0) + comp.get('G', 0) < 2 and comp.get('H', 0) > 4) or (comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) < 2 and comp.get('Hex', 0) > 4):
     feature_dic['hybrid'] = 1
   else:
     feature_dic['hybrid'] = 0

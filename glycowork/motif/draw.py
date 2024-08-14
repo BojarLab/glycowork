@@ -2171,6 +2171,8 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   """
   if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
     raise Exception
+  if draw_this.startswith('Terminal') and draw_this not in motif_list.motif_name.values.tolist():
+    draw_this = draw_this.split('_')[-1]
   if per_residue:
     main_per_residue, side_per_residue, branched_side_per_residue = process_per_residue(draw_this, per_residue)
   bond_hack = False
@@ -2481,10 +2483,14 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
   svg_tmp = svg_tmp.replace('</svg>', '')
   element_id = 0
   edit_svg = False
+  motifs = motif_list.motif_name.values.tolist()
 
   for match in matches:
     # Keep track of current label and position in figure
     current_label = label_pattern.findall(match)[0]
+    if current_label.startswith('Terminal') and current_label not in motifs:
+      if in_lib(current_label.split('_')[-1], lib):
+        edit_svg = True
     # Check if label is glycan
     if in_lib(current_label, lib):
       edit_svg = True

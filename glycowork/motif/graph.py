@@ -1,13 +1,15 @@
 import re
-import copy
-import networkx as nx
-from glycowork.glycan_data.loader import unwrap
+from copy import deepcopy
+from glycowork.glycan_data.loader import unwrap, modification_map
 from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
 import numpy as np
 import pandas as pd
+import networkx as nx
 from scipy.sparse.linalg import eigsh
+from functools import lru_cache
 
 
+@lru_cache(maxsize = 1024)
 def evaluate_adjacency(glycan_part, adjustment):
   """checks whether two glycoletters are adjacent in the graph-to-be-constructed\n
   | Arguments:
@@ -25,6 +27,7 @@ def evaluate_adjacency(glycan_part, adjustment):
           (last_char == ']' and glycan_part[-2] in {'(', ')'} and len_glycan_part-1 < 2+adjustment))
 
 
+@lru_cache(maxsize = 128)
 def glycan_to_graph(glycan):
   """the monumental function for converting glycans into graphs\n
   | Arguments:
@@ -36,12 +39,12 @@ def glycan_to_graph(glycan):
   | (2) an adjacency matrix of size glycoletter X glycoletter
   """
   # Get glycoletters
-  glycan_proc = min_process_glycans([glycan])[0]
+  glycan_proc = tuple(min_process_glycans([glycan])[0])
   n = len(glycan_proc)
   # Map glycoletters to integers
-  mask_dic = {k: glycan_proc[k] for k in range(n)}
-  for k, j in mask_dic.items():
-    glycan = glycan.replace(j, str(k), 1)
+  mask_dic = dict(enumerate(glycan_proc))
+  for i, gl in mask_dic.items():
+    glycan = glycan.replace(gl, str(i), 1)
   # Initialize adjacency matrix
   adj_matrix = np.zeros((n, n), dtype = int)
   # Caching index positions
@@ -50,7 +53,7 @@ def glycan_to_graph(glycan):
   for k in range(n):
     # Integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
     adjustment = 2 if k >= 100 else 1 if k >= 10 else 0
-    adjustment2 = 2+adjustment
+    adjustment2 = 2 + adjustment
     cache_first_part = glycan_indices[str(k)]+1
     for j in range(k+1, n):
       # Subset the part of the glycan that is bookended by k and j
@@ -90,13 +93,13 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   if len(node_dict) > 1:
     # Needed for compatibility with monosaccharide-only graphs (size = 1)
     for _, _, d in g1.edges(data = True):
-      del d['weight']
+      d.pop('weight', None)
   else:
     g1.add_node(0)
   # Remove the helper monosaccharide if used
   if cache and glycan.endswith('x'):
-    node_to_remove = len(g1) - 1
-    del node_dict[node_to_remove]
+    node_to_remove = max(g1.nodes())
+    node_dict.pop(node_to_remove, None)
     g1.remove_node(node_to_remove)
   # Add node labels
   if libr is None:
@@ -137,7 +140,7 @@ def glycan_to_nxGraph(glycan, libr = None,
     for i, p in enumerate(parts[:-1]):
       parts[i] = nx.relabel_nodes(p, {pn: pn+len_org for pn in p.nodes()})
       len_org += len(p)
-    g1 = nx.algorithms.operators.all.compose_all(parts)
+    g1 = nx.compose_all(parts)
   else:
     g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
                                termini_list = termini_list)
@@ -205,7 +208,7 @@ def compare_glycans(glycan_a, glycan_b):
       return False
     proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
     if 'O' in glycan_a + glycan_b:
-      glycan_a, glycan_b = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in [glycan_a, glycan_b]]
+      glycan_a, glycan_b = [re.sub(r"(?<=[a-zA-Z])\d+(?=[a-zA-Z])", 'O', glycan).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc') for glycan in (glycan_a, glycan_b)]
     g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
   else:
     if len(glycan_a.nodes) != len(glycan_b.nodes):
@@ -213,7 +216,7 @@ def compare_glycans(glycan_a, glycan_b):
     attrs_a = set(nx.get_node_attributes(glycan_a, "string_labels").values())
     attrs_b = set(nx.get_node_attributes(glycan_b, "string_labels").values())
     proc = attrs_a.union(attrs_b)
-    g1, g2 = (ptm_wildcard_for_graph(copy.deepcopy(glycan_a)), ptm_wildcard_for_graph(copy.deepcopy(glycan_b))) if 'O' in ''.join(proc) else (glycan_a, glycan_b)
+    g1, g2 = (ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))) if 'O' in ''.join(proc) else (glycan_a, glycan_b)
   narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in proc
                           if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   if narrow_wildcard_list:
@@ -239,12 +242,10 @@ def expand_termini_list(motif, termini_list):
   if len(termini_list[0]) < 2:
     mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
     termini_list = [mapping[t] for t in termini_list]
-  t_list = copy.deepcopy(termini_list)
-  to_add = ['flexible'] * motif.count('(') if isinstance(motif, str) else ['flexible'] * ((len(motif)-1)//2)
-  remainder = 0
-  for i, k in enumerate(to_add):
-    t_list.insert(i+1+remainder, k)
-    remainder += 1
+  t_list = deepcopy(termini_list)
+  to_add = ['flexible'] * (motif.count('(') if isinstance(motif, str) else (len(motif) - 1) // 2)
+  for i, k in enumerate(to_add, start = 1):
+    t_list.insert(i * 2 - 1, k)
   return t_list
 
 
@@ -288,9 +289,9 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
       return (0, []) if return_matches else 0 if count else False
     motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
     if 'O' in ''.join(unwrap(motif_comp)):
-      g1, g2 = ptm_wildcard_for_graph(copy.deepcopy(glycan)), ptm_wildcard_for_graph(copy.deepcopy(motif))
+      g1, g2 = ptm_wildcard_for_graph(deepcopy(glycan)), ptm_wildcard_for_graph(deepcopy(motif))
     else:
-      g1, g2 = copy.deepcopy(glycan), motif
+      g1, g2 = deepcopy(glycan), motif
   narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in set(unwrap(motif_comp))
                           if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   if termini_list or narrow_wildcard_list:
@@ -409,20 +410,13 @@ def generate_graph_features(glycan, glycan_graph = True, label = 'network'):
       }
     features = {
       'diameter': np.nan if directed or not connected else nx.diameter(g),
-      'branching': np.sum(deg > 2),
-      'nbrLeaves': np.sum(deg == 1),
-      'avgDeg': np.mean(deg),
-      'varDeg': np.var(deg),
-      'maxDeg': np.max(deg),
-      'nbrDeg4': np.sum(deg > 3),
-      'max_deg_leaves': np.max(deg_to_leaves),
-      'mean_deg_leaves': np.mean(deg_to_leaves),
-      'deg_assort': nx.degree_assortativity_coefficient(g),
-      'size_corona': len(nx.k_corona(g, N).nodes()) if N > 0 else 0,
-      'size_core': len(nx.k_core(g, N).nodes()) if N > 0 else 0,
-      'nbr_node_types': nbr_node_types,
-      'N': N,
-      'dens': np.sum(deg) / 2
+      'branching': np.sum(deg > 2), 'nbrLeaves': np.sum(deg == 1),
+      'avgDeg': np.mean(deg), 'varDeg': np.var(deg),
+      'maxDeg': np.max(deg), 'nbrDeg4': np.sum(deg > 3),
+      'max_deg_leaves': np.max(deg_to_leaves), 'mean_deg_leaves': np.mean(deg_to_leaves),
+      'deg_assort': nx.degree_assortativity_coefficient(g), 'size_corona': len(nx.k_corona(g, N).nodes()) if N > 0 else 0,
+      'size_core': len(nx.k_core(g, N).nodes()) if N > 0 else 0, 'nbr_node_types': nbr_node_types,
+      'N': N, 'dens': np.sum(deg) / 2
       }
     for centr, vals in centralities.items():
       features.update({
@@ -451,7 +445,7 @@ def neighbor_is_branchpoint(graph, node):
   edges = graph.edges(node)
   edges = unwrap([e for e in edges if sum(e) > 2*node])
   edges = [graph.degree[e] for e in set(edges) if e != node]
-  return True if max(edges, default = 0) > 3 else False
+  return max(edges, default = 0) > 3
 
 
 def graph_to_string_int(graph):
@@ -468,17 +462,56 @@ def graph_to_string_int(graph):
   nodes = [graph.nodes[node]["string_labels"] for node in sorted_nodes]
   if len(nodes) == 1:
     return nodes[0]
+  elif len(nodes) < 1:
+    return ''
   edges = {k: v for k, v in graph.edges()}
-  cache_last_index = len(graph)-1
-  nodes = [k+')' if graph.degree[edges.get(i, cache_last_index)] > 2 or neighbor_is_branchpoint(graph, i) else k if graph.degree[i] == 2 else '('+k if graph.degree[i] == 1 else k for i, k in enumerate(nodes)]
+  cache_last_index = max(graph.nodes(), default = 0)
+  main_chain = set(nx.shortest_path(graph, 0, cache_last_index))
+  degree = graph.degree()
+
+  chain_indices = {node: 0 for node in main_chain}
+  side_chain_index = 1
+  def label_branches(start_node, parent_node, level):
+    stack = [(start_node, parent_node, level)]
+    while stack:
+      node, parent, current_level = stack.pop()
+      if node not in chain_indices:
+        chain_indices[node] = current_level
+        children = sorted([n for n in graph.neighbors(node) if n != parent and n not in chain_indices])
+        if children:
+          # Keep the child with lowest index in the current level
+          stack.append((children[0], node, current_level))
+          # Increment level for other children
+          for child in children[1:]:
+            stack.append((child, node, current_level + 1))
+  
+  # Label side chains starting from the main chain
+  for node in main_chain:
+    children = sorted([n for n in graph.neighbors(node) if n not in main_chain])
+    if children:
+      # First child stays at level 1, others start at level 2
+      label_branches(children[0], node, 1)
+      for child in children[1:]:
+        label_branches(child, node, 2)
+  nodes_out = []
+  for i, k in enumerate(nodes):
+    neighbor = edges.get(i, cache_last_index)
+    if (degree[neighbor] > 2 and i not in main_chain) or (neighbor_is_branchpoint(graph, i) and i not in main_chain):
+      neighbor = max(graph.neighbors(i))
+      if chain_indices.get(i, 99) != chain_indices.get(neighbor, 99):
+        nodes_out.append(k + ')')
+      else:
+        nodes_out.append(k)
+    elif degree[i] == 1:
+      nodes_out.append('(' + k)
+    else:
+      nodes_out.append(k)
+
   if graph.degree[cache_last_index] < 2:
-    nodes = ''.join(nodes)[1:][::-1].replace('(', '', 1)[::-1]
+    nodes = ''.join(nodes_out)[1:][::-1].replace('(', '', 1)[::-1]
   else:
-    nodes[-1] = ')'+nodes[-1]
+    nodes[-1] = ')'+nodes_out[-1]
     nodes = ''.join(nodes)[1:]
-  #if ')(' in nodes and ((nodes.index(')(') < nodes.index('(')) or (nodes[:nodes.index(')(')].count(')') == nodes[:nodes.index(')(')].count('('))):
-  #  nodes = nodes.replace(')(', '(', 1)
-  nodes = nodes.replace(')(', '(')
   return canonicalize_iupac(nodes.strip('()'))
 
 
@@ -494,11 +527,11 @@ def graph_to_string(graph):
   if nx.number_connected_components(graph) > 1:
     parts = [graph.subgraph(sorted(c)) for c in nx.connected_components(graph)]
     len_org = len(parts[-1])
-    for p in range(len(parts)-1):
+    for p in range(len(parts) - 1):
       H = nx.Graph()
       H.add_nodes_from(sorted(parts[p].nodes(data = True)))
       H.add_edges_from(parts[p].edges(data = True))
-      parts[p] = nx.relabel_nodes(H, {pn: pn-len_org for pn in H.nodes()})
+      parts[p] = nx.relabel_nodes(H, {pn: pn - len_org for pn in H.nodes()})
       len_org += len(H)
     parts = '}'.join(['{'+graph_to_string_int(p) for p in parts])
     return parts[:parts.rfind('{')] + parts[parts.rfind('{')+1:]
@@ -551,12 +584,14 @@ def largest_subgraph(glycan_a, glycan_b):
     return ""
 
 
-def get_possible_topologies(glycan, exhaustive = False):
+def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = None,
+                            modification_map = modification_map):
   """creates possible glycans given a floating substituent; only works with max one floating substituent\n
   | Arguments:
   | :-
   | glycan (string or networkx): glycan in IUPAC-condensed format or as networkx graph
-  | exhaustive (bool): whether to also allow additions at internal positions; default:False\n
+  | exhaustive (bool): whether to also allow additions at internal positions; default:False
+  | allowed_disaccharides (set): disaccharides that are permitted when creating possible glycans; default:not used\n
   | Returns:
   | :-
   | Returns list of NetworkX-like glycan graphs of possible topologies
@@ -566,20 +601,40 @@ def get_possible_topologies(glycan, exhaustive = False):
       print("This glycan already has a defined topology; please don't use this function.")
   ggraph = ensure_graph(glycan)
   parts = [ggraph.subgraph(c) for c in nx.connected_components(ggraph)]
+  main_part, floating_part = parts[-1], parts[0]
+  dangling_linkage = max(floating_part.nodes())
+  is_modification = len(floating_part.nodes()) == 1
+  if is_modification:
+    modification = ggraph.nodes[dangling_linkage]['string_labels']
+    dangling_carbon = modification[0]
+  else:
+    dangling_carbon = ggraph.nodes[dangling_linkage]['string_labels'][-1]
+    floating_monosaccharide = dangling_linkage - 1
   topologies = []
-  for k in list(parts[-1].nodes())[::2]:
-    # Only add to non-reducing ends
-    if not exhaustive:
-      if parts[-1].degree[k] == 1 and k != max(parts[-1].nodes()):
-        ggraph2 = copy.deepcopy(ggraph)
-        ggraph2.add_edge(max(parts[0].nodes()), k)
-        ggraph2 = nx.relabel_nodes(ggraph2, {k: i for i, k in enumerate(ggraph2.nodes())})
-        topologies.append(ggraph2)
+  candidate_nodes = [k for k in list(main_part.nodes())[::2] 
+                     if exhaustive or (main_part.degree[k] == 1 and k != max(main_part.nodes()))]
+  for k in candidate_nodes:
+    neighbor_carbons = [ggraph.nodes[n]['string_labels'][-1] for n in ggraph.neighbors(k) if n < k]
+    if dangling_carbon in neighbor_carbons:
+      continue
+    new_graph = deepcopy(ggraph)
+    if is_modification:
+      mono = new_graph.nodes[k]['string_labels']
+      if modification_map and mono in modification_map.get(modification, set()):
+        new_graph.nodes[k]['string_labels'] += modification
+        new_graph.remove_node(dangling_linkage)
+      else:
+        continue
     else:
-      ggraph2 = copy.deepcopy(ggraph)
-      ggraph2.add_edge(max(parts[0].nodes()), k)
-      ggraph2 = nx.relabel_nodes(ggraph2, {k: i for i, k in enumerate(ggraph2.nodes())})
-      topologies.append(ggraph2)
+      new_graph.add_edge(dangling_linkage, k)
+      if allowed_disaccharides is not None:
+        disaccharide = (f"{new_graph.nodes[floating_monosaccharide]['string_labels']}"
+                        f"({new_graph.nodes[dangling_linkage]['string_labels']})"
+                        f"{new_graph.nodes[k]['string_labels']}")
+        if disaccharide not in allowed_disaccharides:
+          continue
+    new_graph = nx.convert_node_labels_to_integers(new_graph)
+    topologies.append(new_graph)
   return topologies
 
 
