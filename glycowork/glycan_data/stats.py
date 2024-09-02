@@ -445,8 +445,8 @@ def jtkx(z, param_dic, ampci = False):
   | Returns an updated parameter dictionary containing the optimal waveform parameters for each molecular species.
   """
   param_dic = jtkstat(z, param_dic)  # Calculate p and S for all phases
-  pvals = [cjtk[0] for cjtk in param_dic["CJTK"]]  # Exact two-tailed p values for period/phase combos
-  padj = multipletests(pvals, method = 'fdr_bh')[1]
+  padj = [cjtk[0] for cjtk in param_dic["CJTK"]]  # Exact two-tailed p values for period/phase combos
+  #padj = multipletests(pvals, method = 'fdr_bh')[1]
   JTK_ADJP = min(padj)  # Global minimum adjusted p-value
   def groupings(padj, param_dic):
     d = defaultdict(list)

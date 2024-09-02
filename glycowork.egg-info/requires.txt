@@ -41,6 +41,7 @@ Pillow
 openpyxl
 py3Dmol
 gdown
+pytest
 
 [draw]
 CairoSVG

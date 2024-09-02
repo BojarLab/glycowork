@@ -82,3 +82,5 @@ glycowork/network/biosynthesis.py
 glycowork/network/evolution.py
 glycowork/network/milk_networks_exhaustive.pkl
 glycowork/network/monolink_to_enzyme.csv
+tests/__init__.py
+tests/test_core_functions.py

@@ -1395,7 +1395,7 @@ def extend_network(network, steps = 1):
   graphs = {}
   new_glycans = set()
   classy = get_class(list(network.nodes())[0])
-  glycs = df_species[df_species.Class == "Mammalia"].glycan
+  glycs = df_species[df_species.Class == "Mammalia"].glycan.drop_duplicates()
   glycs = glycs[glycs.apply(get_class) == classy]
   mammal_disac = set(unwrap(map(link_find, glycs)))
   reactions = set(nx.get_edge_attributes(network, "diffs").values())
