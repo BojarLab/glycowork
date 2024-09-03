@@ -951,11 +951,11 @@ def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.
   group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
   if not isinstance(custom_scale, dict):
     if custom_scale:
-      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, size = len(group1i)), axis = 1)
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, size = len(group1i)), axis = 1)
     else:
-      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values[group1i])
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i])
     scale_adjustment = np.log2(custom_scale) if custom_scale else 0
-    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, size = len(group2i)), axis = 1)
+    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values.iloc[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, size = len(group2i)), axis = 1)
   else:
     gamma = max(gamma, 0.1)
     for idx in range(df.shape[1]):
@@ -965,6 +965,7 @@ def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.
       alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted
   alr_transformed = pd.DataFrame(alr_transformed, index = df.index, columns = df.columns)
   alr_transformed = alr_transformed.drop(index = reference_values.name)
+  alr_transformed = alr_transformed.reset_index(drop=True)
   return alr_transformed
 
 
