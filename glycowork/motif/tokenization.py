@@ -112,7 +112,7 @@ def get_core(sugar):
                 'GalA', 'ManA', 'Tyv', 'Yer', 'Abe', 'GlcfNAc', 'GalfNAc', 'ManfNAc',
                 'FucfNAc', 'IdoA', 'GulA', 'LDManHep', 'DDManHep', 'DDGlcHep', 'LyxHep', 'ManHep',
                 'DDAltHep', 'IdoHep', 'DLGlcHep', 'GalHep', 'ddHex', 'ddNon', 'Unknown', 'Assigned',
-                'MurNGc', '6dTalNAc', '6dGul', 'AllA', 'TalA', 'AllNAc', 'TalNAc', 'Kdn'])
+                'MurNGc', '6dTalNAc', '6dGul', 'AllA', 'TalA', 'AllNAc', 'TalNAc', 'Kdn', 'Pen'])
   next_cores = set(['GlcN', 'GalN', 'ManN', 'FucN', 'QuiN', 'RhaN', 'AraN', 'IdoN' 'Glcf', 'Galf', 'Manf',
                 'Fucf', 'Araf', 'Lyxf', 'Xylf', '6dAltf', 'Ribf', 'Fruf', 'Apif', 'Kdof', 'Sedf',
                 '6dTal', 'AltNAc', '6dAlt', 'dHex', 'HexNAc', 'dNon', '4eLeg', 'GulN', 'AltN', 'AllN', 'TalN'])
