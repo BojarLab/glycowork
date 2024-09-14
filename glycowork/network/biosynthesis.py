@@ -246,8 +246,7 @@ def create_adjacency_matrix(glycans, graph_dic, min_size = 1):
   # Add virtual nodes
   for k in new_nodes:
     df_out[k] = 0
-    df_out.loc[len(df_out)] = 0
-    df_out.index = df_out.index.tolist()[:-1] + [k]
+    df_out.loc[k] = 0
   # Add virtual edges
   for k in virtual_edges:
     df_out.at[k[0], k[1]] = 1
@@ -580,7 +579,7 @@ def add_high_man_removal(network):
   | :-
   | Returns a network with edges going upstream to indicate removal of Man
   """
-  edges_to_add = [(target, source, network[source][target]['diffs'])
+  edges_to_add = [(target, source, network[source][target])
                     for source, target in network.edges()
                     if target.count('Man') >= 5]
   network.add_edges_from(edges_to_add, diffs = lambda x: x[2])
@@ -1173,8 +1172,8 @@ def estimate_weights(network, root = "Gal(b1-4)Glc-ol", root_default = 10, min_d
   net_estimated = get_edge_weight_by_abundance(network, root = root, root_default = root_default)
   # Function to estimate weight based on neighboring edges
   def estimate_weight(node):
-    in_weights = [network[u][node]['capacity'] for u in network.predecessors(node) if network[u][node]['capacity'] > 0]
-    out_weights = [network[node][v]['capacity'] for v in network.successors(node) if network[node][v]['capacity'] > 0]
+    in_weights = [network[u][node]['capacity'] for u in network.predecessors(node) if network[u][node]['capacity'] != 0]
+    out_weights = [network[node][v]['capacity'] for v in network.successors(node) if network[node][v]['capacity'] != 0]
     return np.mean(in_weights + out_weights) if in_weights or out_weights else min_default  # Small default value if no non-zero neighboring weights
   # Estimate weights for zero-weight intermediates
   zero_weight_nodes = [node for node in net_estimated.nodes if all(net_estimated[node][v]['capacity'] == 0 for v in net_estimated.successors(node))]

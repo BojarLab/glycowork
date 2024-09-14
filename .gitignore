@@ -9,6 +9,8 @@
 _tmp*
 tmp*
 tags
+/build/
+/_proc/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
