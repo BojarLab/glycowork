@@ -810,17 +810,18 @@ def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
     group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
     geometric_mean = -np.log2(geometric_mean)
     if group2:
-      clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, size = (df.shape[0], len(group1))))
-      condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, size = (df.shape[0], len(group2))) if not custom_scale else norm.rvs(loc = np.log2(custom_scale), scale = gamma, size = (df.shape[0], len(group2)))
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, random_state = rng, size = (df.shape[0], len(group1))))
+      condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, random_state = rng, size = (df.shape[0], len(group2))) if not custom_scale else \
+                  norm.rvs(loc = np.log2(custom_scale), scale = gamma, random_state = rng, size = (df.shape[0], len(group2)))
       clr_adjusted[:, group2i] = np.log2(df[group2]) + condition
     else:
-      clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, size = (df.shape[0], len(group1)))
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = rng, size = (df.shape[0], len(group1)))
   elif not group2 and isinstance(custom_scale, dict):
     gamma = max(gamma, 0.1)
     for idx in range(df.shape[1]):
       group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
-      clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, size = df.shape[0])
+      clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = rng, size = df.shape[0])
   else:
     clr_adjusted = np.log2(df) - np.log2(geometric_mean)
   return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
@@ -951,17 +952,17 @@ def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.
   group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
   if not isinstance(custom_scale, dict):
     if custom_scale:
-      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, size = len(group1i)), axis = 1)
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, random_state = rng, size = len(group1i)), axis = 1)
     else:
       alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i])
     scale_adjustment = np.log2(custom_scale) if custom_scale else 0
-    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values.iloc[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, size = len(group2i)), axis = 1)
+    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values.iloc[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, random_state = rng, size = len(group2i)), axis = 1)
   else:
     gamma = max(gamma, 0.1)
     for idx in range(df.shape[1]):
       group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
-      reference_adjusted = reference_values[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma)
+      reference_adjusted = reference_values[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = rng)
       alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted
   alr_transformed = pd.DataFrame(alr_transformed, index = df.index, columns = df.columns)
   alr_transformed = alr_transformed.drop(index = reference_values.name)
@@ -1066,7 +1067,7 @@ def omega_squared(row, groups):
   | Returns effect size as omega squared (float)
   """
   long_df = pd.DataFrame({'value': row, 'group': groups})
-  model = ols('value ~ C(group)', data=long_df).fit()
+  model = ols('value ~ C(group)', data = long_df).fit()
   anova_results = anova_lm(model, typ = 2)
   ss_total = sum(model.resid ** 2) + anova_results['sum_sq'].sum()
   omega_squared = (anova_results.at['C(group)', 'sum_sq'] - (anova_results.at['C(group)', 'df'] * model.mse_resid)) / (ss_total + model.mse_resid)
@@ -1204,7 +1205,7 @@ def estimate_technical_variance(df, group1, group2, num_instances = 128,
   features, samples = df.shape
   transformed_data = np.zeros((features, samples, num_instances))
   for j in range(samples):
-    dirichlet_samples = dirichlet.rvs(alpha = df.iloc[:, j], size = num_instances)
+    dirichlet_samples = dirichlet.rvs(alpha = df.iloc[:, j], random_state = rng, size = num_instances)
     # CLR Transformation for each Monte Carlo instance
     for n in range(num_instances):
       sample_instance = pd.DataFrame(dirichlet_samples[n, :])
