@@ -86,6 +86,12 @@ class GlycoDrawExcelDialog(simpledialog.Dialog):
         self.csv_button = tk.Button(master, text = "Browse...", command = self.browse_csv)
         self.csv_button.grid(row = 0, column = 2)
 
+        self.help_icon = tk.Label(master, text = "?", font = ("Arial", 10, "bold"), fg = "blue", cursor = "question_arrow")
+        self.help_icon.grid(row = 0, column = 3, padx = (5, 0))
+        self.create_tooltip(self.help_icon, "CSV Format Help:\n\n"
+                            "Glycans should be in first column (ideally in IUPAC-condensed)\n"
+                            "Other columns (e.g., abundances or intensities) are permitted")
+
         tk.Label(master, text = "Output Folder:").grid(row = 1)
         self.folder_entry = tk.Entry(master)
         self.folder_entry.grid(row = 1, column = 1)
@@ -97,6 +103,21 @@ class GlycoDrawExcelDialog(simpledialog.Dialog):
         self.compact_check.grid(row = 2, columnspan = 3)
 
         return self.csv_entry  # to put focus on the csv file entry widget
+
+    def create_tooltip(self, widget, text):
+        def enter(event):
+            self.tooltip = tk.Toplevel(widget)
+            self.tooltip.wm_overrideredirect(True)
+            self.tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            label = tk.Label(self.tooltip, text = text, justify = 'left',
+                             background = "#ffffff", relief = 'solid', borderwidth = 1,
+                             font=("Arial", "8", "normal"))
+            label.pack(ipadx = 1)
+        def leave(event):
+            if hasattr(self, 'tooltip'):
+                self.tooltip.destroy()
+        widget.bind('<Enter>', enter)
+        widget.bind('<Leave>', leave)
     
     def browse_csv(self):
         file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv"), ("Excel Files", "*.xlsx")])
@@ -136,6 +157,12 @@ class DifferentialExpressionDialog(simpledialog.Dialog):
         self.csv_entry.grid(row = 0, column = 1)
         self.csv_browse = tk.Button(master, text = "Browse...", command = self.browse_csv)
         self.csv_browse.grid(row = 0, column = 2)
+        self.help_icon = tk.Label(master, text = "?", font = ("Arial", 10, "bold"), fg = "blue", cursor = "question_arrow")
+        self.help_icon.grid(row = 0, column = 3, padx = (5, 0))
+        self.create_tooltip(self.help_icon, "CSV Format Help:\n\n"
+                            "Glycans should be in first column (ideally in IUPAC-condensed)\n"
+                            "If you do NOT analyze motifs, the glycan format does not matter at all\n"
+                            "Other columns should be the abundances (each sample one column)")
 
         # Output folder selection
         tk.Label(master, text = "Output Folder:").grid(row = 4, sticky = tk.W)
@@ -162,6 +189,21 @@ class DifferentialExpressionDialog(simpledialog.Dialog):
         self.motifs_check.grid(row = 3, column = 1, sticky = tk.W)
         
         return self.csv_entry  # to put focus on the csv file entry widget
+
+    def create_tooltip(self, widget, text):
+        def enter(event):
+            self.tooltip = tk.Toplevel(widget)
+            self.tooltip.wm_overrideredirect(True)
+            self.tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            label = tk.Label(self.tooltip, text = text, justify = 'left',
+                             background = "#ffffff", relief = 'solid', borderwidth = 1,
+                             font=("Arial", "8", "normal"))
+            label.pack(ipadx = 1)
+        def leave(event):
+            if hasattr(self, 'tooltip'):
+                self.tooltip.destroy()
+        widget.bind('<Enter>', enter)
+        widget.bind('<Leave>', leave)
 
     def apply(self):
         csv_file_path = self.csv_file_var.get()
@@ -221,6 +263,12 @@ class GetHeatmapDialog(simpledialog.Dialog):
         self.input_entry.grid(row = 0, column = 1)
         self.input_file_browse = tk.Button(master, text = "Browse...", command = self.browse_input_file)
         self.input_file_browse.grid(row = 0, column = 2)
+        self.help_icon = tk.Label(master, text = "?", font = ("Arial", 10, "bold"), fg = "blue", cursor = "question_arrow")
+        self.help_icon.grid(row = 0, column = 3, padx = (5, 0))
+        self.create_tooltip(self.help_icon, "CSV Format Help:\n\n"
+                            "Ideally, rows are samples and columns are glycans (but the function can deal with the opposite)\n"
+                            "Glycans should be ideally in IUPAC-condensed\n"
+                            "If you do NOT analyze motifs, the glycan format does not matter at all")
         
         # Motif analysis option
         self.motif_analysis_var = tk.BooleanVar()
@@ -236,6 +284,21 @@ class GetHeatmapDialog(simpledialog.Dialog):
         self.output_file_browse.grid(row = 2, column = 2)
 
         return self.input_entry  # to put focus on the input file entry widget
+
+    def create_tooltip(self, widget, text):
+        def enter(event):
+            self.tooltip = tk.Toplevel(widget)
+            self.tooltip.wm_overrideredirect(True)
+            self.tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            label = tk.Label(self.tooltip, text = text, justify = 'left',
+                             background = "#ffffff", relief = 'solid', borderwidth = 1,
+                             font=("Arial", "8", "normal"))
+            label.pack(ipadx = 1)
+        def leave(event):
+            if hasattr(self, 'tooltip'):
+                self.tooltip.destroy()
+        widget.bind('<Enter>', enter)
+        widget.bind('<Leave>', leave)
 
     def browse_input_file(self):
         file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv"), ("Excel Files", "*.xlsx")])
@@ -283,6 +346,11 @@ class LectinArrayAnalysisDialog(simpledialog.Dialog):
         self.file_entry.grid(row = 0, column = 1)
         self.file_browse = tk.Button(master, text = "Browse...", command = self.browse_file)
         self.file_browse.grid(row = 0, column = 2)
+        self.help_icon = tk.Label(master, text = "?", font = ("Arial", 10, "bold"), fg = "blue", cursor = "question_arrow")
+        self.help_icon.grid(row = 0, column = 3, padx = (5, 0))
+        self.create_tooltip(self.help_icon, "CSV Format Help:\n\n"
+                            "Format data as samples as rows and lectins as columns (first column = sample names)\n"
+                            "Have lectin names in the column names")
         
         # Treatment group indices
         tk.Label(master, text = "Treatment Group Rows (comma-separated):").grid(row = 1, sticky = tk.W)
@@ -308,6 +376,21 @@ class LectinArrayAnalysisDialog(simpledialog.Dialog):
         self.output_dir_browse.grid(row = 4, column = 2)
 
         return self.file_entry  # Set focus to the file entry
+
+    def create_tooltip(self, widget, text):
+        def enter(event):
+            self.tooltip = tk.Toplevel(widget)
+            self.tooltip.wm_overrideredirect(True)
+            self.tooltip.wm_geometry(f"+{event.x_root+10}+{event.y_root+10}")
+            label = tk.Label(self.tooltip, text = text, justify = 'left',
+                             background = "#ffffff", relief = 'solid', borderwidth = 1,
+                             font=("Arial", "8", "normal"))
+            label.pack(ipadx = 1)
+        def leave(event):
+            if hasattr(self, 'tooltip'):
+                self.tooltip.destroy()
+        widget.bind('<Enter>', enter)
+        widget.bind('<Leave>', leave)
 
     def apply(self):
         # This method processes the input when the user presses OK

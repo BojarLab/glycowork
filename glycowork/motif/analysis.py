@@ -1489,10 +1489,10 @@ def get_lectin_array(df, group1, group2, paired = False, transform = ''):
 
 def get_glycoshift_per_site(df, group1, group2, paired = False, impute = True,
                             min_samples = 0.2, gamma = 0.1, custom_scale = 0):
-  """Calculates differentially expressed glycans or motifs from glycomics data\n
+  """Calculates differentially expressed glycans or motifs from glycoproteomics data\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | df (dataframe): glycoproteomics dataset, expects first column to be formatted as protein_site_composition and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
   | group1 (list): list of column indices or names for the first group of samples, usually the control
   | group2 (list): list of column indices or names for the second group of samples
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
