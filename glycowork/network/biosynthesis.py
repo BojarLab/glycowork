@@ -1203,7 +1203,10 @@ def get_maximum_flow(network, source = "Gal(b1-4)Glc-ol", sinks = None):
   for sink in sinks:
     path_length = nx.shortest_path_length(network, source = source, target = sink)
     try:
-      flow_value, flow_dict = nx.maximum_flow(network, source, sink)
+      try:
+        flow_value, flow_dict = nx.maximum_flow(network, source, sink)
+      except:
+        flow_value, flow_dict = nx.maximum_flow(network, source, sink, flow_func = nx.algorithms.flow.edmonds_karp)
       flow_results[sink] = {
           'flow_value': flow_value * path_length,
           'flow_dict': flow_dict
@@ -1306,7 +1309,7 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
   nets = {}
   for col in all_groups:
     temp = deepcopy(core_net)
-    abundance_mapping = dict(zip(temp.nodes(), df[col].values.tolist()))
+    abundance_mapping = dict(zip(df.index.tolist(), df[col].values.tolist()))
     nx.set_node_attributes(temp, {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in temp.nodes()})
     nets[col] = estimate_weights(temp, root = root, min_default = min_default)
   res = {col: get_maximum_flow(nets[col], source = root) for col in all_groups}
@@ -1321,12 +1324,14 @@ def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", pai
   else:
     raise ValueError("Only 'reaction' and 'flow' are currently supported analysis modes.")
   res2 = pd.DataFrame(res2).T
-  res2 = res2.loc[:, res2.var(axis = 0) > 0.01]
+  if analysis == "reaction":
+    res2 = res2.loc[:, res2.var(axis = 0) > 0.01]
   features = res2.columns.tolist() if analysis == "reaction" else list(res[all_groups[0]].keys())
   mean_abundance = res2.mean(axis = 0)
   df_a, df_b = res2.loc[group1, :].T, res2.loc[group2, :].T
   log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
   pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+  pvals = [p if p > 0 else 1.0 for p in pvals]
   corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1] if pvals else []
   significance = [p < alpha for p in corrpvals] if pvals else []
   effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
