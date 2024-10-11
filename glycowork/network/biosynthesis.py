@@ -601,6 +601,7 @@ def construct_network(glycans, allowed_ptms = allowed_ptms,
   | :-
   | Returns a networkx object of the network
   """
+  glycans = list(set(glycans))
   stem_lib = get_stem_lib(get_lib(glycans))
   if permitted_roots is None:
     permitted_roots = infer_roots(frozenset(glycans))
@@ -961,7 +962,7 @@ def find_diamonds(network, nb_intermediates = 2, mode = 'presence'):
   nx.add_path(g1, second_path)
 
   # Find networks containing the matching motif
-  graph_pair = nx.algorithms.isomorphism.GraphMatcher(network, g1)
+  graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(network, g1)
   # Find diamonds within those networks
   matchings_list = list(graph_pair.subgraph_isomorphisms_iter())
   unique_keys = {tuple(sorted(d.keys())) for d in matchings_list}
@@ -975,7 +976,7 @@ def find_diamonds(network, nb_intermediates = 2, mode = 'presence'):
     middle_nodes = [d[k] for k in range(2, path_length) if k != path_length]
     # For each middle node, test whether they are part of the same path as substrate node and product node (remove false positives)
     if all(nx.has_path(network, substrate_node, mn) and nx.has_path(network, mn, product_node) for mn in middle_nodes):
-      virtual_states = [virtual_attr.get(mn, 0) for mn in middle_nodes]
+      virtual_states = (virtual_attr.get(mn, 0) for mn in middle_nodes)
       if any(vs == 1 for vs in virtual_states) or mode == 'abundance':
         # Filter out non-diamond shapes with any cross-connections
         if nb_intermediates > 2:
@@ -1397,7 +1398,7 @@ def extend_network(network, steps = 1):
   glycs = df_species[df_species.Class == "Mammalia"].glycan.drop_duplicates()
   glycs = glycs[glycs.apply(get_class) == classy]
   mammal_disac = set(unwrap(map(link_find, glycs)))
-  reactions = set(nx.get_edge_attributes(network, "diffs").values())
+  reactions = {r for r in nx.get_edge_attributes(network, "diffs").values() if '?' not in r}
   leaf_glycans = {x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0}
   for _ in range(steps):
     new_leaf_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
