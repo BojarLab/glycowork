@@ -254,7 +254,7 @@ def stemify_dataset(df, stem_lib = None, libr = None,
 
 def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', reduced = False,
                       sample_prep = 'underivatized', mass_tolerance = 0.5, kingdom = 'Animalia',
-                      glycan_class = 'N', df_use = None, filter_out = None):
+                      glycan_class = 'all', df_use = None, filter_out = None, extras = ["adduct", "doubly_charged"]):
   """Mapping a m/z value to a matching monosaccharide composition within SugarBase\n
   | Arguments:
   | :-
@@ -265,15 +265,19 @@ def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', 
   | sample_prep (string): whether the glycans has been 'underivatized', 'permethylated', or 'peracetylated'; default:'underivatized'
   | mass_tolerance (float): how much deviation to tolerate for a match; default:0.5
   | kingdom (string): taxonomic kingdom for choosing a subset of glycans to consider; default:'Animalia'
-  | glycan_class (string): which glycan class does the m/z value stem from, 'N', 'O', or 'lipid' linked glycans or 'free' glycans; default:'N'
+  | glycan_class (string): which glycan class does the m/z value stem from, 'N', 'O', 'lipid' linked glycans, or 'free' glycans; default:'all'
   | df_use (dataframe): species-specific glycan dataframe to use for mapping; default: df_glycan
-  | filter_out (set): set of monosaccharide types to ignore during composition finding; default:None\n
+  | filter_out (set): set of monosaccharide types to ignore during composition finding; default:None
+  | extras (list): additional operations to perform if regular m/z matching does not yield a result; options include "adduct" and "doubly_charged"\n
   | Returns:
   | :-
   | Returns a list of matching compositions in dict form
   """
   if df_use is None:
-    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
+    if glycan_class == "all":
+      df_use = df_glycan[df_glycan.Kingdom.apply(lambda x: kingdom in x)]
+    else:
+      df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
   if filter_out is None:
     filter_out = set()
   adduct = mass_dict['Acetate'] if mode == 'negative' else mass_dict['Na+']
@@ -290,17 +294,19 @@ def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', 
     if abs(mass - mz_value) < mass_tolerance:
       if not filter_out.intersection(comp.keys()):
         return [comp]
-  # Check for matches including the adduct mass
-  for mass, comp in cache.items():
-    if abs(mass + adduct - mz_value) < mass_tolerance:
-      if not filter_out.intersection(comp.keys()):
-        return [comp]
-  # If no matches are found, consider a double charge scenario
-  mz_value = (mz_value+0.5*multiplier)*2+(1.0078 if reduced else 0)
-  for mass, comp in cache.items():
-    if abs(mass - mz_value) < mass_tolerance:
-      if not filter_out.intersection(comp.keys()):
-        return [comp]
+  if "adduct" in extras:
+    # Check for matches including the adduct mass
+    for mass, comp in cache.items():
+      if abs(mass + adduct - mz_value) < mass_tolerance:
+        if not filter_out.intersection(comp.keys()):
+          return [comp]
+  if "doubly_charged" in extras:
+    # If no matches are found, consider a double charge scenario
+    mz_value = (mz_value + 0.5*multiplier)*2 + (1.0078 if reduced else 0)
+    for mass, comp in cache.items():
+      if abs(mass - mz_value) < mass_tolerance:
+        if not filter_out.intersection(comp.keys()):
+          return [comp]
   return out
 
 

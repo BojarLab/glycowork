@@ -1366,22 +1366,26 @@ def choose_leaves_to_extend(leaf_glycans, target_composition):
   return [glycan for glycan, score in scored_glycans if score == min_score]
 
 
-def extend_network(network, steps = 1, to_extend = "all"):
+def extend_network(network, steps = 1, to_extend = "all", strict_context = False):
   """Given a biosynthetic network, tries to extend it in a physiological manner\n
   | Arguments:
   | :-
   | network (networkx): glycan biosynthetic network as returned by construct_network
   | steps (int): how many biosynthetic steps to extend the network
-  | to_extend (string/dict/list): which leaves to extend (default is "all"), a glycan as a string indicates a specific leaf node to extend, a dict indicates a target composition to be reached from the best leaf\n
+  | to_extend (string/dict/list): which leaves to extend (default is "all"), a glycan as a string indicates a specific leaf node to extend, a dict indicates a target composition to be reached from the best leaf
+  | strict_context (bool): whether to infer permitted sequence contexts for extension from database (False) or only from network (True); default:False\n
   | Returns:
   | :-
   | Returns updated network and a list of added glycans"""
-  from glycowork.glycan_data.loader import df_species
   graphs = {}
   new_glycans = set()
   classy = get_class(list(network.nodes())[0])
-  glycs = df_species[df_species.Class == "Mammalia"].glycan.drop_duplicates()
-  glycs = glycs[glycs.apply(get_class) == classy]
+  if strict_context:
+    glycs = list(network.nodes())
+  else:
+    from glycowork.glycan_data.loader import df_species
+    glycs = df_species[df_species.Class == "Mammalia"].glycan.drop_duplicates()
+    glycs = glycs[glycs.apply(get_class) == classy]
   mammal_disac = set(unwrap(map(link_find, glycs)))
   reactions = {r for r in nx.get_edge_attributes(network, "diffs").values() if '?' not in r}
   leaf_glycans = {x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0}
