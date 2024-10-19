@@ -1226,77 +1226,150 @@ def get_reaction_flow(network, res, aggregate = None):
   return reaction_flows
 
 
-def get_differential_biosynthesis(df, group1, group2, analysis = "reaction", paired = False):
-  """Compares biosynthetic patterns between glycomes of two conditions\n
+def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reaction", paired = False, longitudinal = False, id_column = "ID"):
+  """Compares biosynthetic patterns between glycomes of two conditions or across multiple time points\n
   | Arguments:
   | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv]
-  | group1 (list): list of column indices or names for the first group of samples, usually the control
-  | group2 (list): list of column indices or names for the second group of samples
-  | analysis (string): what type of analysis to perform on networks, options are "reaction" for reaction type fluxes and "flow" for comparing flow to sinks; default:"reaction"
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | df (dataframe): dataframe containing glycan sequences and relative abundances [or filepath to .csv]
+  | group1 (list): list of column indices/names for first group of samples (or time points in longitudinal analysis)
+  | group2 (list): list of column indices/names for second group of samples (ignored in longitudinal analysis)
+  | analysis (string): type of analysis to perform on networks, "reaction" or "flow"; default: "reaction"
+  | paired (bool): whether samples are paired or not; default: False
+  | longitudinal (bool): whether to perform longitudinal analysis; default: False
+  | id_column (str): name of the column containing sample IDs for longitudinal analysis in the ID-style of participant_time_replicate; default: "ID"\n
   | Returns:
   | :-
-  | Returns a dataframe with:
-  | (i) Differential flow features
-  | (ii) Their mean abundance across all samples in group1 + group2
-  | (iii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
-  | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
-  | (v) Corrected p-values (Welch's t-test with Benjamini-Hochberg correction) for difference in mean
-  | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
-  | (vii) Effect size as Cohen's d"""
-  if paired:
-    assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
+  | For binary comparison: A dataframe with differential flow features and statistics
+  | For longitudinal analysis: A dataframe with reaction changes over time"""
+  
+  if longitudinal:
+    assert id_column is not None, "id_column must be specified for longitudinal analysis"
+    assert group2 is None, "group2 should not be specified for longitudinal analysis"
+    assert analysis == "reaction", "Longitudinal analysis of flow to sinks not yet supported"
+    time_points = group1
+  else:
+    assert group2 is not None, "group2 must be specified for binary comparison"
+    if paired:
+      assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
+  
+  # Handle input data
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-  if not isinstance(group1[0], str):
+  
+  if not longitudinal and not isinstance(group1[0], str):
     columns_list = df.columns.tolist()
     group1 = [columns_list[k] for k in group1]
     group2 = [columns_list[k] for k in group2]
-  all_groups = group1 + group2
-  df = df.loc[:, [df.columns.tolist()[0]] + all_groups].fillna(0)
-  # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
-  alpha = get_alphaN(df.shape[1] - 1)
-  df = df.set_index(df.columns.tolist()[0])
-  df = df[df.any(axis = 1)]
-  df = (df / df.sum(axis = 0)) * 100
-  root = list(infer_roots(frozenset(df.index.tolist())))
+  
+  all_groups = group1 + (group2 or [])
+  
+  # Prepare data for analysis
+  if longitudinal:
+    df['participant'] = df[id_column].apply(lambda x: x.split('_')[0])
+    df['time_point'] = df[id_column].apply(lambda x: x.split('_')[1])
+    assert all(tp in df['time_point'].unique() for tp in time_points), "Not all specified time points found in the data"
+    df = df.set_index(id_column)
+    glycan_columns = [col for col in df.columns if col not in [id_column, 'participant', 'time_point']]
+    df_analysis = df[df['time_point'].isin(time_points)].copy()
+  else:
+    glycan_columns = all_groups
+  
+  df_analysis = df_analysis if longitudinal else df.set_index(df.columns.tolist()[0])
+  df_analysis = df_analysis.loc[:, glycan_columns].fillna(0)
+  df_analysis = (df_analysis / df_analysis.sum(axis = 1).values[:, None]) * 100
+  
+  if not longitudinal:
+    df_analysis = df_analysis[df_analysis.any(axis = 1)]
+  else:
+    df_analysis = df_analysis.T
+
+  # Network analysis
+  root = list(infer_roots(frozenset(df_analysis.index.tolist() if not longitudinal else glycan_columns)))
   root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
   min_default = 0.1 if root.endswith('GlcNAc') else 0.001
-  core_net = construct_network(df.index.tolist())
+  core_net = construct_network(df_analysis.index.tolist() if not longitudinal else glycan_columns)
+  
   nets = {}
-  for col in all_groups:
+  for col in df_analysis.columns:
     temp = deepcopy(core_net)
-    abundance_mapping = dict(zip(df.index.tolist(), df[col].values.tolist()))
+    abundance_mapping = dict(zip(df_analysis.index.tolist() if not longitudinal else glycan_columns,
+                                 df_analysis[col].values.tolist()))
     nx.set_node_attributes(temp, {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in temp.nodes()})
     nets[col] = estimate_weights(temp, root = root, min_default = min_default)
-  res = {col: get_maximum_flow(nets[col], source = root) for col in all_groups}
+  
+  res = {col: get_maximum_flow(nets[col], source = root) for col in nets}
+  
+  # Perform reaction or flow analysis
   if analysis == "reaction":
-    res2 = {col: get_reaction_flow(nets[col], res[col], aggregate = "sum") for col in all_groups}
+    res2 = {col: get_reaction_flow(nets[col], res[col], aggregate = "sum") for col in nets}
     regex = re.compile(r"\(([ab])(\d)-(\d)\)")
-    shadow_reactions = [regex.sub(r"(\1\2-?)", g) for g in res2[all_groups[0]]]
+    shadow_reactions = [regex.sub(r"(\1\2-?)", g) for g in res2[list(res2.keys())[0]]]
     shadow_reactions = {r for r in shadow_reactions if shadow_reactions.count(r) > 1}
     res2 = {k: {**v, **{r: np.mean([v2 for k2, v2 in v.items() if compare_glycans(k2, r)]) for r in shadow_reactions}} for k, v in res2.items()}
   elif analysis == "flow":
-    res2 = {col: [res[col][sink]['flow_value'] for sink in res[col].keys()] for col in all_groups}
+    res2 = {col: [res[col][sink]['flow_value'] for sink in res[col].keys()] for col in nets}
+    features = res[col].keys()
   else:
     raise ValueError("Only 'reaction' and 'flow' are currently supported analysis modes.")
+
   res2 = pd.DataFrame(res2).T
-  if analysis == "reaction":
+  
+  if analysis == "reaction" and not longitudinal:
     res2 = res2.loc[:, res2.var(axis = 0) > 0.01]
-  features = res2.columns.tolist() if analysis == "reaction" else list(res[all_groups[0]].keys())
-  mean_abundance = res2.mean(axis = 0)
-  df_a, df_b = res2.loc[group1, :].T, res2.loc[group2, :].T
-  log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
-  pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-  pvals = [p if p > 0 else 1.0 for p in pvals]
-  corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1] if pvals else []
-  significance = [p < alpha for p in corrpvals] if pvals else []
-  effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
-  out = pd.DataFrame({'Feature': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
-                      'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
+  elif analysis == "flow" and not longitudinal:
+    res2.columns = features
+  
+  features = res2.columns.tolist()
+  
+  # Perform statistical analysis
+  if longitudinal:
+    res_df = res2.reset_index()
+    res_df = res_df.rename(columns = {'index': id_column})
+    res_df = pd.merge(res_df, df[['participant', 'time_point']], on = id_column)
+    
+    results = []
+    for reaction in features:
+      reaction_data = res_df[[id_column, 'participant', 'time_point', reaction]]
+      reaction_data = reaction_data.groupby(['participant', 'time_point'])[reaction].mean().reset_index()
+      reaction_data['time_numeric'] = pd.Categorical(reaction_data['time_point']).codes
+      # Calculate the average slope for each participant
+      slopes = reaction_data.groupby('participant').apply(lambda x: np.polyfit(x['time_numeric'], x[reaction], 1)[0], include_groups = False)
+      average_slope = slopes.mean()
+      direction = "Increase" if average_slope > 0 else "Decrease"
+      
+      model = ols('Q("{0}") ~ C(time_point) + C(participant)'.format(reaction), data=reaction_data).fit()
+      anova_table = sm.stats.anova_lm(model, typ=2)
+      
+      f_value = anova_table.loc['C(time_point)', 'F']
+      p_value = anova_table.loc['C(time_point)', 'PR(>F)']
+      
+      results.append({
+          'Feature': reaction,
+          'F-statistic': f_value,
+          'p-val': p_value,
+          'Direction': direction,
+          'Average Slope': average_slope
+        })
+    
+    out = pd.DataFrame(results)
+    out['corr p-val'] = multipletests(out['p-val'], method='fdr_bh')[1]
+    out['significant'] = out['corr p-val'] < 0.05
+  else:
+    mean_abundance = res2.mean(axis=0)
+    df_a, df_b = res2.loc[group1, :].T, res2.loc[group2, :].T
+    log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis=1) if paired else np.log2(df_b.mean(axis=1) / df_a.mean(axis=1))
+    pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
+    pvals = [p if p > 0 else 1.0 for p in pvals]
+    corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1] if pvals else []
+    alpha = get_alphaN(len(all_groups))
+    significance = [p < alpha for p in corrpvals] if pvals else []
+    effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
+    
+    out = pd.DataFrame({'Feature': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
+                        'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
+  
   out = out.set_index('Feature')
-  return out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+  return out.dropna().sort_values(by = 'p-val')
 
 
 def extend_glycans(glycans, reactions, allowed_disaccharides = None):
@@ -1347,10 +1420,10 @@ def choose_leaves_to_extend(leaf_glycans, target_composition):
   | Arguments:
   | :-
   | leaf_glycans (set): set of leaf nodes glycans as strings in IUPAC-condensed
-  | target_composition (dict): composition of type {"HexNAc": 2, "Hex": 9} that is the target for extension\n
+  | target_composition (dict): composition of type {"HexNAc": 2, "Hex": 9} that's the target for extension\n
   | Returns:
   | :-
-  | Returns list of leaf nodes to extend"""
+  | Returns set of leaf nodes to extend"""
   target_comp = Counter(target_composition)
 
   def score_glycan(glycan):
@@ -1363,7 +1436,7 @@ def choose_leaves_to_extend(leaf_glycans, target_composition):
   min_score = min(score for _, score in scored_glycans)
   if min_score == 0:
     print("Target composition found in leaf nodes")
-  return [glycan for glycan, score in scored_glycans if score == min_score]
+  return {glycan for glycan, score in scored_glycans if score == min_score}
 
 
 def extend_network(network, steps = 1, to_extend = "all", strict_context = False):
@@ -1379,7 +1452,7 @@ def extend_network(network, steps = 1, to_extend = "all", strict_context = False
   | Returns updated network and a list of added glycans"""
   graphs = {}
   new_glycans = set()
-  classy = get_class(list(network.nodes())[0])
+  classy = get_class(next(iter(network.nodes())))
   if strict_context:
     glycs = list(network.nodes())
   else:
@@ -1387,12 +1460,12 @@ def extend_network(network, steps = 1, to_extend = "all", strict_context = False
     glycs = df_species[df_species.Class == "Mammalia"].glycan.drop_duplicates()
     glycs = glycs[glycs.apply(get_class) == classy]
   mammal_disac = set(unwrap(map(link_find, glycs)))
-  reactions = {r for r in nx.get_edge_attributes(network, "diffs").values() if '?' not in r}
+  reactions = {r for r in nx.get_edge_attributes(network, "diffs").values() if all(x not in r for x in ('?', 'Hex', 'O'))}
   leaf_glycans = {x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0}
   if isinstance(to_extend, dict):
     leaf_glycans = choose_leaves_to_extend(leaf_glycans, to_extend)
   if (isinstance(to_extend, str) and to_extend != "all") or isinstance(to_extend, list):
-    leaf_glycans = set([to_extend]) if isinstance(to_extend, str) else set(to_extend)
+    leaf_glycans = {to_extend} if isinstance(to_extend, str) else set(to_extend)
   for _ in range(steps):
     new_leaf_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
     new_edges, new_edge_labels = edges_for_extension(leaf_glycans, new_leaf_glycans, graphs)
