@@ -8,7 +8,9 @@ from functools import lru_cache
 from importlib import resources
 from collections import defaultdict, Counter
 from scipy.stats import ttest_rel, ttest_ind
+from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
+import statsmodels.api as sm
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -17,7 +19,7 @@ from glycowork.glycan_data.loader import unwrap, linkages, lib
 from glycowork.glycan_data.stats import cohen_d, get_alphaN
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism, get_possible_topologies
 from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans, in_lib, get_class
-from glycowork.motif.tokenization import get_stem_lib, glycan_to_composition
+from glycowork.motif.tokenization import get_stem_lib, glycan_to_composition, map_to_basic
 from glycowork.motif.regex import get_match
 from glycowork.motif.annotate import link_find
 
@@ -1464,6 +1466,7 @@ def extend_network(network, steps = 1, to_extend = "all", strict_context = False
   leaf_glycans = {x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0}
   if isinstance(to_extend, dict):
     leaf_glycans = choose_leaves_to_extend(leaf_glycans, to_extend)
+    reactions = {r for r in reactions if map_to_basic(r.split('(')[0]) in to_extend.keys()}
   if (isinstance(to_extend, str) and to_extend != "all") or isinstance(to_extend, list):
     leaf_glycans = {to_extend} if isinstance(to_extend, str) else set(to_extend)
   for _ in range(steps):
