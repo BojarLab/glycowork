@@ -546,8 +546,10 @@ def infer_roots(glycans):
   # Glycolipid
   elif any(k.endswith('1Cer') or k.endswith('Ins') for k in glycans):
     return frozenset({'Glc1Cer', 'Gal1Cer', 'Ins'})
+  elif any(k.endswith('Glc') for k in glycans):
+    print("Are you working with free oligosaccharides or glycolipids? Append '-ol' or '1Cer' to your glycans, respectively")
   else:
-    print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or Glc")
+    print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or 1Cer")
 
 
 def add_high_man_removal(network):
@@ -1339,8 +1341,8 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
       average_slope = slopes.mean()
       direction = "Increase" if average_slope > 0 else "Decrease"
       
-      model = ols('Q("{0}") ~ C(time_point) + C(participant)'.format(reaction), data=reaction_data).fit()
-      anova_table = sm.stats.anova_lm(model, typ=2)
+      model = ols('Q("{0}") ~ C(time_point) + C(participant)'.format(reaction), data = reaction_data).fit()
+      anova_table = sm.stats.anova_lm(model, typ = 2)
       
       f_value = anova_table.loc['C(time_point)', 'F']
       p_value = anova_table.loc['C(time_point)', 'PR(>F)']
@@ -1354,12 +1356,12 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
         })
     
     out = pd.DataFrame(results)
-    out['corr p-val'] = multipletests(out['p-val'], method='fdr_bh')[1]
+    out['corr p-val'] = multipletests(out['p-val'], method = 'fdr_bh')[1]
     out['significant'] = out['corr p-val'] < 0.05
   else:
-    mean_abundance = res2.mean(axis=0)
+    mean_abundance = res2.mean(axis = 0)
     df_a, df_b = res2.loc[group1, :].T, res2.loc[group2, :].T
-    log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis=1) if paired else np.log2(df_b.mean(axis=1) / df_a.mean(axis=1))
+    log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis=1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
     pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
     pvals = [p if p > 0 else 1.0 for p in pvals]
     corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1] if pvals else []

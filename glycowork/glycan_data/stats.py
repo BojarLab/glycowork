@@ -1033,18 +1033,19 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False, gam
   return alr
 
 
-def correct_multiple_testing(pvals, alpha):
+def correct_multiple_testing(pvals, alpha, correction_method = "two-stage"):
   """Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure\n
   | Arguments:
   | :-
   | pvals (list): list of raw p-values
-  | alpha (float): p-value threshold for statistical significance\n
+  | alpha (float): p-value threshold for statistical significance
+  | correction_method (string): whether to use "two-stage" or "one-stage" Benjamini-Hochberg for correction; default:"two-stage"\n
   | Returns:
   | :-
   | (i) list of corrected p-values
   | (ii) list of True/False of whether corrected p-value reaches statistical significance
   """
-  corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
+  corrpvals = multipletests(pvals, method = 'fdr_tsbh' if correction_method == "two-stage" else 'fdr_bh')[1]
   corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
   significance = [p < alpha for p in corrpvals]
   if sum(significance) > 0.9*len(significance):

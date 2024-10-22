@@ -254,7 +254,7 @@ def stemify_dataset(df, stem_lib = None, libr = None,
 
 def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', reduced = False,
                       sample_prep = 'underivatized', mass_tolerance = 0.5, kingdom = 'Animalia',
-                      glycan_class = 'all', df_use = None, filter_out = None, extras = ["adduct", "doubly_charged"]):
+                      glycan_class = 'all', df_use = None, filter_out = None, extras = ["doubly_charged"]):
   """Mapping a m/z value to a matching monosaccharide composition within SugarBase\n
   | Arguments:
   | :-

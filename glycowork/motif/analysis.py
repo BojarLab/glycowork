@@ -1040,7 +1040,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
 
 
 def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal'],
-            custom_motifs = [], transform = None, gamma = 0.1):
+            custom_motifs = [], transform = None, gamma = 0.1, correction_method = "two-stage"):
     """Detecting rhythmically expressed glycans via the Jonckheere–Terpstra–Kendall (JTK) algorithm\n
     | Arguments:
     | :-
@@ -1056,7 +1056,8 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     |   and 'chemical' (molecular properties of glycan)
     | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
     | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1\n
+    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+    | correction_method (string): whether to use "two-stage" or "one-stage" Benjamini-Hochberg for correction; default:"two-stage"\n
     | Returns:
     | :-
     | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
@@ -1091,7 +1092,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     if motifs:
       df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).reset_index()
     res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
-    corrpvals, significance = correct_multiple_testing(res[0], alpha)
+    corrpvals, significance = correct_multiple_testing(res[0], alpha, correction_method = correction_method)
     df_out = pd.concat([df.iloc[:, 0], pd.DataFrame(corrpvals), res], axis = 1)
     df_out.columns = ['Molecule_Name', 'BH_Q_Value', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude']
     df_out['significant'] = significance
