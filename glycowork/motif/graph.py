@@ -1,7 +1,7 @@
 import re
 from copy import deepcopy
 from glycowork.glycan_data.loader import unwrap, modification_map
-from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
+from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, choose_correct_isoform
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -18,8 +18,7 @@ def evaluate_adjacency(glycan_part, adjustment):
   | adjustment (int): number of characters to allow for extra length (consequence of tokenizing glycoletters)\n
   | Returns:
   | :-
-  | Returns True if adjacent and False if not
-  """
+  | Returns True if adjacent and False if not"""
   last_char = glycan_part[-1]
   len_glycan_part = len(glycan_part)
   # Check whether (i) glycoletters are adjacent in the main chain or (ii) whether glycoletters are connected but separated by a branch delimiter
@@ -36,8 +35,7 @@ def glycan_to_graph(glycan):
   | Returns:
   | :-
   | (1) a dictionary of node : monosaccharide/linkage
-  | (2) an adjacency matrix of size glycoletter X glycoletter
-  """
+  | (2) an adjacency matrix of size glycoletter X glycoletter"""
   # Get glycoletters
   glycan_proc = tuple(min_process_glycans([glycan])[0])
   n = len(glycan_proc)
@@ -80,8 +78,7 @@ def glycan_to_nxGraph_int(glycan, libr = None,
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
-  | Returns networkx graph object of glycan
-  """
+  | Returns networkx graph object of glycan"""
   # This allows to make glycan graphs of motifs ending in a linkage
   cache = glycan.endswith(')')
   if cache:
@@ -127,8 +124,7 @@ def glycan_to_nxGraph(glycan, libr = None,
   | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
-  | Returns networkx graph object of glycan
-  """
+  | Returns networkx graph object of glycan"""
   if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if termini_list:
@@ -155,8 +151,7 @@ def ensure_graph(glycan, **kwargs):
   | **kwargs: keyword arguments that are directly passed on to glycan_to_nxGraph\n
   | Returns:
   | :-
-  | Returns networkx graph object of glycan
-  """
+  | Returns networkx graph object of glycan"""
   return glycan_to_nxGraph(glycan, **kwargs) if isinstance(glycan, str) else glycan
 
 
@@ -199,8 +194,7 @@ def compare_glycans(glycan_a, glycan_b):
   | glycan_b (string or networkx object): glycan in IUPAC-condensed format or as a precomputed networkx object\n
   | Returns:
   | :-
-  | Returns True if two glycans are the same and False if not
-  """
+  | Returns True if two glycans are the same and False if not"""
   if glycan_a == glycan_b:
     return True
   if isinstance(glycan_a, str) and isinstance(glycan_b, str):
@@ -237,8 +231,7 @@ def expand_termini_list(motif, termini_list):
   | termini_list (list): list of monosaccharide/linkage positions (from 'terminal', 'internal', and 'flexible')\n
   | Returns:
   | :-
-  | Returns expanded termini_list
-  """
+  | Returns expanded termini_list"""
   if len(termini_list[0]) < 2:
     mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
     termini_list = [mapping[t] for t in termini_list]
@@ -272,8 +265,7 @@ def subgraph_isomorphism(glycan, motif, termini_list = [], count = False, return
   | return_matches (bool): whether the matched subgraphs in input glycan should be returned as node lists as an additional output; default:False\n
   | Returns:
   | :-
-  | Returns True if motif is in glycan and False if not
-  """
+  | Returns True if motif is in glycan and False if not"""
   if isinstance(glycan, str) and isinstance(motif, str):
     if motif.count('(') > glycan.count('('):
       return (0, []) if return_matches else 0 if count else False
@@ -348,8 +340,7 @@ def subgraph_isomorphism_with_negation(glycan, motif, termini_list = [], count =
   | return_matches (bool): whether the matched subgraphs in input glycan should be returned as node lists as an additional output; default:False\n
   | Returns:
   | :-
-  | Returns True if motif is in glycan and False if not
-  """
+  | Returns True if motif is in glycan and False if not"""
   if isinstance(motif, str):
     temp = motif[motif.index('!'):]
     motif_stub = (motif[:motif.index('!')] + temp[temp.index(')')+1:]).replace('[]', '')
@@ -386,8 +377,7 @@ def generate_graph_features(glycan, glycan_graph = True, label = 'network'):
     | label (string): Label to place in output dataframe if glycan_graph=False; default:'network'\n
     | Returns:
     | :-
-    | Returns a pandas dataframe with different graph features as columns and glycan as row
-    """
+    | Returns a pandas dataframe with different graph features as columns and glycan as row"""
     g = ensure_graph(glycan) if glycan_graph else glycan
     glycan = label if not glycan_graph else glycan
     nbr_node_types = len(set(nx.get_node_attributes(g, "labels") if glycan_graph else g.nodes()))
@@ -396,39 +386,41 @@ def generate_graph_features(glycan, glycan_graph = True, label = 'network'):
     N = A.shape[0]
     directed = nx.is_directed(g)
     connected = nx.is_connected(g)
-    deg = np.sum(A, axis = 1)
-    deg_to_leaves = np.array([np.sum(A[:, deg == 1]) for i in range(N)])
-    centralities = {
-      'betweeness': list(nx.betweenness_centrality(g).values()),
-      'eigen': list(nx.katz_centrality_numpy(g).values()),
-      'close': list(nx.closeness_centrality(g).values()),
-      'load': list(nx.load_centrality(g).values()),
-      'harm': list(nx.harmonic_centrality(g).values()),
-      'flow': list(nx.current_flow_betweenness_centrality(g).values()) if not directed and connected else [],
-      'flow_edge': list(nx.edge_current_flow_betweenness_centrality(g).values()) if not directed and connected else [],
-      'secorder': list(nx.second_order_centrality(g).values()) if not directed and connected else []
-      }
+    if N == 1:
+      deg = np.array([0])
+      deg_to_leaves = np.array([0])
+      centralities = {'betweeness': [0.0], 'eigen': [1.0], 'close': [0.0], 'load': [0.0],
+                      'harm': [0.0], 'flow': [], 'flow_edge': [], 'secorder': []}
+    else:
+      deg = np.sum(A, axis = 1)
+      deg_to_leaves = np.array([np.sum(A[:, deg == 1]) for i in range(N)])
+      centralities = {'betweeness': list(nx.betweenness_centrality(g).values()), 'eigen': list(nx.katz_centrality_numpy(g).values()),
+                      'close': list(nx.closeness_centrality(g).values()), 'load': list(nx.load_centrality(g).values()),
+                      'harm': list(nx.harmonic_centrality(g).values()), 'flow': list(nx.current_flow_betweenness_centrality(g).values()) if not directed and connected else [],
+                      'flow_edge': list(nx.edge_current_flow_betweenness_centrality(g).values()) if not directed and connected else [],
+                      'secorder': list(nx.second_order_centrality(g).values()) if not directed and connected else []}
     features = {
-      'diameter': np.nan if directed or not connected else nx.diameter(g),
+      'diameter': np.nan if directed or not connected or N == 1 else nx.diameter(g),
       'branching': np.sum(deg > 2), 'nbrLeaves': np.sum(deg == 1),
       'avgDeg': np.mean(deg), 'varDeg': np.var(deg),
       'maxDeg': np.max(deg), 'nbrDeg4': np.sum(deg > 3),
       'max_deg_leaves': np.max(deg_to_leaves), 'mean_deg_leaves': np.mean(deg_to_leaves),
-      'deg_assort': nx.degree_assortativity_coefficient(g), 'size_corona': len(nx.k_corona(g, N).nodes()) if N > 0 else 0,
-      'size_core': len(nx.k_core(g, N).nodes()) if N > 0 else 0, 'nbr_node_types': nbr_node_types,
+      'deg_assort': 0.0 if N == 1 else nx.degree_assortativity_coefficient(g), 'size_corona': 0 if N <= 1 else len(nx.k_corona(g, N).nodes()),
+      'size_core': 0 if N <= 1 else len(nx.k_core(g, N).nodes()), 'nbr_node_types': nbr_node_types,
       'N': N, 'dens': np.sum(deg) / 2
       }
     for centr, vals in centralities.items():
       features.update({
-        f"{centr}Max": np.nan if not vals else np.max(vals),
-        f"{centr}Min": np.nan if not vals else np.min(vals),
-        f"{centr}Avg": np.nan if not vals else np.mean(vals),
-        f"{centr}Var": np.nan if not vals else np.var(vals)
+        f"{centr}Max": np.nan if not vals else np.max(vals), f"{centr}Min": np.nan if not vals else np.min(vals),
+        f"{centr}Avg": np.nan if not vals else np.mean(vals), f"{centr}Var": np.nan if not vals else np.var(vals)
         })
-    M = ((A + np.diag(np.ones(N))).T / (deg + 1)).T
-    eigval, vec = eigsh(M, 2, which = 'LM')
-    distr = np.abs(vec[:, -1]) / sum(np.abs(vec[:, -1]))
-    features.update({'egap': 1 - eigval[0], 'entropyStation': np.sum(distr * np.log(distr))})
+    if N == 1:
+      features.update({'egap': 0.0, 'entropyStation': 0.0})
+    else:
+      M = ((A + np.diag(np.ones(N))).T / (deg + 1)).T
+      eigval, vec = eigsh(M, 2, which = 'LM')
+      distr = np.abs(vec[:, -1]) / sum(np.abs(vec[:, -1]))
+      features.update({'egap': 1 - eigval[0], 'entropyStation': np.sum(distr * np.log(distr))})
     return pd.DataFrame(features, index = [glycan])
 
 
@@ -440,8 +432,7 @@ def neighbor_is_branchpoint(graph, node):
   | node (int): node index\n
   | Returns:
   | :-
-  | Returns True if node is connected to downstream multi-branch node and False if not
-  """
+  | Returns True if node is connected to downstream multi-branch node and False if not"""
   edges = graph.edges(node)
   edges = unwrap([e for e in edges if sum(e) > 2*node])
   edges = [graph.degree[e] for e in set(edges) if e != node]
@@ -455,8 +446,7 @@ def graph_to_string_int(graph):
   | graph (networkx object): glycan graph\n
   | Returns:
   | :-
-  | Returns glycan in IUPAC-condensed format (string)
-  """
+  | Returns glycan in IUPAC-condensed format (string)"""
   def assign_depth(G: nx.DiGraph, idx: int):
     """Assigns depth to each node in the graph recursively. Stored as the node attribute "depth".\n
     | Arguments:
@@ -465,8 +455,7 @@ def graph_to_string_int(graph):
     | idx (int): node index\n
     | Returns:
     | :-
-    | Returns depth of the node
-    """
+    | Returns depth of the node"""
     min_depth = float("inf")
     children = list(G.neighbors(idx))
     if len(children) == 0:  # if it's a leaf node, the depth is zero
@@ -485,8 +474,7 @@ def graph_to_string_int(graph):
     | idx (int): node index\n
     | Returns:
     | :-
-    | Returns glycan in IUPAC-condensed format (string)
-    """
+    | Returns glycan in IUPAC-condensed format (string)"""
     output = graph.nodes[idx]["string_labels"]
     # put braces around the string describing linkages
     if (output[0] in "?abn" or output[0].isdigit()) and (output[-1] == "?" or output[-1].isdigit()):
@@ -525,8 +513,7 @@ def graph_to_string(graph):
   | graph (networkx object): glycan graph\n
   | Returns:
   | :-
-  | Returns glycan in IUPAC-condensed format (string)
-  """
+  | Returns glycan in IUPAC-condensed format (string)"""
   if nx.number_connected_components(graph) > 1:
     parts = [graph.subgraph(sorted(c)) for c in nx.connected_components(graph)]
     len_org = len(parts[-1])
@@ -549,8 +536,7 @@ def try_string_conversion(graph):
   | graph (networkx object): glycan graph, works with branched glycans\n
   | Returns:
   | :-
-  | Returns glycan in IUPAC-condensed format (string) if glycan is valid, otherwise returns None
-  """
+  | Returns glycan in IUPAC-condensed format (string) if glycan is valid, otherwise returns None"""
   try:
     temp = graph_to_string(graph)
     temp = glycan_to_nxGraph(temp)
@@ -567,8 +553,7 @@ def largest_subgraph(glycan_a, glycan_b):
   | glycan_b (string or networkx): glycan in IUPAC-condensed format or as networkx graph\n
   | Returns:
   | :-
-  | Returns the largest common subgraph as a string in IUPAC-condensed; returns empty string if there is no common subgraph
-  """
+  | Returns the largest common subgraph as a string in IUPAC-condensed; returns empty string if there is no common subgraph"""
   graph_a = ensure_graph(glycan_a)
   graph_b = ensure_graph(glycan_b)
   ismags = nx.isomorphism.ISMAGS(graph_a, graph_b,
@@ -597,8 +582,7 @@ def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = 
   | allowed_disaccharides (set): disaccharides that are permitted when creating possible glycans; default:not used\n
   | Returns:
   | :-
-  | Returns list of NetworkX-like glycan graphs of possible topologies
-  """
+  | Returns list of NetworkX-like glycan graphs of possible topologies"""
   if isinstance(glycan, str):
     if '{' not in glycan:
       print("This glycan already has a defined topology; please don't use this function.")
@@ -651,8 +635,37 @@ def possible_topology_check(glycan, glycans, exhaustive = False, **kwargs):
   | **kwargs: keyword arguments that are directly passed on to compare_glycans\n
   | Returns:
   | :-
-  | Returns list of glycans that could match input glycan
-  """
+  | Returns list of glycans that could match input glycan"""
   topologies = get_possible_topologies(glycan, exhaustive = exhaustive)
   ggraphs = map(ensure_graph, glycans)
   return [g for g, ggraph in zip(glycans, ggraphs) if any(compare_glycans(t, ggraph, **kwargs) for t in topologies)]
+
+
+def deduplicate_glycans(glycans):
+  """removes duplicate glycans from a list/set, even if they have different strings\n
+  | Arguments:
+  | :-
+  | glycans (list or set): glycans in IUPAC-condensed format\n
+  | Returns:
+  | :-
+  | Returns deduplicated list of glycans"""
+  if not glycans:
+    return []
+  glycans = list(glycans) if isinstance(glycans, set) else list(set(glycans))
+  ggraphs = list(map(glycan_to_nxGraph, glycans))
+  n = len(glycans)
+  keep = [True] * n
+  for i in range(n):
+    if not keep[i]:
+      continue
+    for j in range(i + 1, n):
+      if not keep[j]:
+        continue
+      if compare_glycans(ggraphs[i], ggraphs[j]):
+        correct_glycan = choose_correct_isoform(glycans[i], glycans[j])
+        if correct_glycan == glycans[i]:
+          keep[j] = False
+        else:
+          keep[i] = False
+          break
+  return [g for i, g in enumerate(glycans) if keep[i]]
