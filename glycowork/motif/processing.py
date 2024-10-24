@@ -236,6 +236,9 @@ def choose_correct_isoform(glycans, reverse = False):
   | Returns the correct isomer as a string (if reverse=False; otherwise it returns a list of strings)
   """
   glycans = list(set(glycans))
+  if '?' in ''.join(glycans) and not reverse:
+    min_questions = min(glycan.count('?') for glycan in glycans)
+    glycans = [glycan for glycan in glycans if glycan.count('?') == min_questions]
   if len(glycans) == 1:
     return glycans[0]
   if not any(['[' in g for g in glycans]):
@@ -1065,7 +1068,7 @@ def process_for_glycoshift(df):
   | (i) glycoproteomics dataset with new columns for protein_site, composition, and composition counts
   | (ii) list of identified glycan features, such as different monosaccharides
   """
-  df['Glycosite'] = [k.split('_')[0] + '_' + k.split('_')[2] for i, k in enumerate(df.index)]
+  df['Glycosite'] = [k.split('_')[0] + '_' + k.split('_')[1] for i, k in enumerate(df.index)]
   if '[' in df.index[0]:
     comps = ['['+k.split('[')[1] for k in df.index]
     comps = [list(map(int, re.findall(r'\d+', s))) for s in comps]

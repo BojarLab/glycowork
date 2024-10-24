@@ -66,8 +66,7 @@ def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, fea
   | (i) transformed and processed dataset
   | (ii) untransformed but processed dataset
   | (iii) labels for group1
-  | (iv) labels for group2
-  """
+  | (iv) labels for group2"""
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if not isinstance(group1[0], str) and experiment == "diff":
@@ -134,8 +133,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
     | Returns:
     | :-
-    | Returns dataframe with p-values, corrected p-values, and Cohen's d as effect size for every glycan motif
-    """
+    | Returns dataframe with p-values, corrected p-values, and Cohen's d as effect size for every glycan motif"""
     if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     # Reformat to allow for proper annotation in all samples
@@ -189,8 +187,7 @@ def get_representative_substructures(enrichment_df):
     | enrichment_df (dataframe): output from get_pvals_motifs\n
     | Returns:
     | :-
-    | Returns up to 10 minimal glycans in a list
-    """
+    | Returns up to 10 minimal glycans in a list"""
     glycans = list(set(df_species.glycan))
     # Only consider motifs that are significantly enriched
     filtered_df = enrichment_df[enrichment_df.corr_pval < 0.05].reset_index(drop = True)
@@ -238,8 +235,7 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
   | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                      
   | Returns:
   | :-
-  | Prints clustermap              
-  """
+  | Prints clustermap"""
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if index_col in df.columns:
@@ -303,8 +299,7 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     | filepath (string): absolute path including full filename allows for saving the plot
     | alpha (float): transparency of points in plot; default:0.8
     | palette (string): color palette to color different classes; default:'colorblind'
-    | **kwargs: keyword arguments that are directly passed on to matplotlib\n
-    """
+    | **kwargs: keyword arguments that are directly passed on to matplotlib\n"""
     idx = [i for i, g in enumerate(glycans) if '{' not in g]
     glycans = [glycans[i] for i in idx]
     label_list = [label_list[i] for i in idx]
@@ -355,8 +350,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   | thresh (int): threshold count of when to include motifs in plot; default:10 occurrences\n
   | Returns:
   | :-
-  | Plots modification distribution and typical neighboring bond/monosaccharide
-  """
+  | Plots modification distribution and typical neighboring bond/monosaccharide"""
   if df is None:
     df = df_species
   if rank is not None and focus is not None:
@@ -451,8 +445,7 @@ def get_coverage(df, filepath = ''):
   | filepath (string): absolute path including full filename allows for saving the plot\n
   | Returns:
   | :-
-  | Prints the heatmap
-  """
+  | Prints the heatmap"""
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   d = df.iloc[:,1:]
@@ -492,8 +485,7 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05\n
   | Returns:
   | :-
-  | Prints PCA plot
-  """
+  | Prints PCA plot"""
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if transform == "ALR":
@@ -544,8 +536,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
   | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False\n 
   | Returns:
   | :-
-  | Returns dictionaries of group : glycans and group : p-values (just one big group if no grouping can be found)
-  """
+  | Returns dictionaries of group : glycans and group : p-values (just one big group if no grouping can be found)"""
   if not grouped_BH:
     return {"group1": glycans}, {"group1": p_values}
   funcs = {"by_Sia/Fuc": group_glycans_sia_fuc}
@@ -616,8 +607,7 @@ def get_differential_expression(df, group1, group2,
   | (vii) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
   | (viii) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
   | (xi) Corrected p-values of equivalence test to test whether means are significantly equivalent; only done for p-values > 0.05 from (iv)
-  | (x) [only if effect_size_variance=True] Effect size variance
-  """
+  | (x) [only if effect_size_variance=True] Effect size variance"""
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs, impute = impute,
                                                min_samples = min_samples, transform = transform, feature_set = feature_set,
                                                paired = paired, gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,
@@ -719,8 +709,7 @@ def get_pval_distribution(df_res, filepath = ''):
   | filepath (string): absolute path including full filename allows for saving the plot\n
   | Returns:
   | :-
-  | prints p-value distribution plot
-  """
+  | prints p-value distribution plot"""
   if isinstance(df_res, str):
     df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   # make plot
@@ -742,8 +731,7 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   | filepath (string): absolute path including full filename allows for saving the plot\n
   | Returns:
   | :-
-  | prints MA plot
-  """
+  | prints MA plot"""
   if isinstance(df_res, str):
     df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   # Create masks for significant and non-significant points
@@ -777,8 +765,7 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed =
   | **kwargs: keyword arguments that are directly passed on to seaborn scatterplot\n
   | Returns:
   | :-
-  | Prints volcano plot
-  """
+  | Prints volcano plot"""
   if isinstance(df_res, str):
     df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
@@ -835,8 +822,7 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     | Returns:
     | :-
     | (i) a pandas DataFrame with an F statistic, corrected p-value, indication of its significance, and effect size (Omega squared) for each glycan.
-    | (ii) a dictionary of type glycan : pandas DataFrame, with post-hoc results for each glycan with a significant ANOVA.
-    """
+    | (ii) a dictionary of type glycan : pandas DataFrame, with post-hoc results for each glycan with a significant ANOVA."""
     df, _, groups, _ = preprocess_data(df, groups, [], experiment = "anova", motifs = motifs, impute = impute,
                                       min_samples = min_samples, transform = transform, feature_set = feature_set,
                                       gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs)
@@ -888,8 +874,7 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
     | Returns:
     | :-
     | (1) The combined effect size 
-    | (2) The p-value for the combined effect size
-    """
+    | (2) The p-value for the combined effect size"""
     if model not in ['fixed', 'random']:
       raise ValueError("Model must be 'fixed' or 'random'")
     weights = 1 / np.array(variances)
@@ -951,8 +936,7 @@ def get_glycan_change_over_time(data, degree = 1):
     | Returns:
     | :-
     | (i) slope -- the slope of the regression line (i.e., the rate of change of glycan expression over time)
-    | (ii) p_value -- the p-value of the t-test for the slope
-    """
+    | (ii) p_value -- the p-value of the t-test for the slope"""
     # Extract arrays for time and glycan abundance from the 2D input array
     time, glycan_abundance = data[:, 0], data[:, 1]
     if degree == 1:
@@ -997,8 +981,7 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     | (ii) The slope of their expression curve over time
     | (iii) Uncorrected p-values (t-test) for testing whether slope is significantly different from zero
     | (iv) Corrected p-values (t-test with two-stage Benjamini-Hochberg correction) for testing whether slope is significantly different from zero
-    | (v) Significance: True/False whether the corrected p-value lies below the sample size-appropriate significance threshold
-    """
+    | (v) Significance: True/False whether the corrected p-value lies below the sample size-appropriate significance threshold"""
     if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     df = df.fillna(0)
@@ -1061,8 +1044,7 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     | Returns:
     | :-
     | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
-    | molecule in the analysis.
-    """
+    | molecule in the analysis."""
     if isinstance(df_in, str):
       df = pd.read_csv(df_in) if df_in.endswith(".csv") else pd.read_excel(df_in)
     else:
@@ -1128,8 +1110,7 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
   | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
   | (v) Corrected p-values (Welch's t-test with two-stage Benjamini-Hochberg correction) for difference in mean
   | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
-  | (vii) Effect size as Cohen's d (ANOSIM R for beta; F statistics for PERMANOVA and Shannon/Simpson (ANOVA))
-  """
+  | (vii) Effect size as Cohen's d (ANOSIM R for beta; F statistics for PERMANOVA and Shannon/Simpson (ANOVA))"""
   experiment = "diff" if group2 else "anova"
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = False,
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
@@ -1207,8 +1188,7 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   | Returns:
   | :-
   | Returns (i) a dataframe of pairwise correlations (Spearman's rho)
-  | and (ii) a dataframe with corrected p-values (two-stage Benjamini-Hochberg)
-  """
+  | and (ii) a dataframe with corrected p-values (two-stage Benjamini-Hochberg)"""
   if isinstance(df1, str):
     df1 = pd.read_csv(df1) if df1.endswith(".csv") else pd.read_excel(df1)
     df2 = pd.read_csv(df2) if df2.endswith(".csv") else pd.read_excel(df2)
@@ -1288,8 +1268,7 @@ def multi_feature_scoring(df, group1, group2, filepath = ''):
   | Prints the identified features and returns:
   | (i) the trained model to distinguish conditions
   | (ii) the ROC AUC score of the trained model
-  | (iii) (optionally, if filepath) a saved plot of the ROC curve for the model
-  """
+  | (iii) (optionally, if filepath) a saved plot of the ROC curve for the model"""
   if group2:
     y = [0] * len(group1) + [1] * len(group2)
   else:
@@ -1345,8 +1324,7 @@ def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaust
   | multi_score (bool): whether to find the best glycan risk score, containing multiple glycan features; default:False\n
   | Returns:
   | :-
-  | Returns a sorted list of tuples of type (glycan, AUC score) and, optionally, ROC curve for best feature
-  """
+  | Returns a sorted list of tuples of type (glycan, AUC score) and, optionally, ROC curve for best feature"""
   experiment = "diff" if group2 else "anova"
   df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = impute,
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
@@ -1435,8 +1413,7 @@ def get_lectin_array(df, group1, group2, paired = False, transform = ''):
   | (iii) Lectins supporting the change in (i)
   | (iv) Direction of the change (e.g., "up" means higher in group2)
   | (v) Score/Magnitude of the change (remember, if you have more than two groups this reports on any pairwise combination, like an ANOVA)
-  | (vi) Clustering of the scores into highly/moderate/low significance findings
-  """
+  | (vi) Clustering of the scores into highly/moderate/low significance findings"""
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   df = df.set_index(df.columns[0])
@@ -1507,11 +1484,10 @@ def get_glycoshift_per_site(df, group1, group2, paired = False, impute = True,
   | (for each condition/interaction feature)
   | (i) Regression coefficient from the GLM (indicating direction of change in the treatment condition)
   | (ii) Corrected p-values (two-tailed t-test with two-stage Benjamini-Hochberg correction) for testing the coefficient against zero
-  | (iii) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
-  """
+  | (iii) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold"""
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = False, impute = impute,
                                                min_samples = min_samples, transform = "Nothing", paired = paired)
-  alpha = get_alphaN(len(group1+group2))
+  alpha = get_alphaN(len(group1 + group2))
   df, glycan_features = process_for_glycoshift(df)
   necessary_columns = ['Glycoform'] + glycan_features
   preserved_data = df[necessary_columns]

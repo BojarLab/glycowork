@@ -1043,8 +1043,9 @@ def correct_multiple_testing(pvals, alpha, correction_method = "two-stage"):
   | Returns:
   | :-
   | (i) list of corrected p-values
-  | (ii) list of True/False of whether corrected p-value reaches statistical significance
-  """
+  | (ii) list of True/False of whether corrected p-value reaches statistical significance"""
+  if not isinstance(pvals, list):
+    pvals = pvals.tolist()
   corrpvals = multipletests(pvals, method = 'fdr_tsbh' if correction_method == "two-stage" else 'fdr_bh')[1]
   corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
   significance = [p < alpha for p in corrpvals]

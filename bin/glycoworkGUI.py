@@ -434,7 +434,7 @@ def openLectinArrayAnalysisDialog():
 
 
 def show_about_info():
-    about_message = "glycowork v1.3\n\n" \
+    about_message = "glycowork v1.4\n\n" \
                     "For more information and citation, please refer to:\n" \
                     "Thomès, L., et al. (2021). Glycowork: A Python package for glycan data science and machine learning. Glycobiology, 31(10), 1240-1244.\n" \
                     "DOI: 10.1093/glycob/cwab067\n" \
