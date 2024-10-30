@@ -274,6 +274,16 @@ class GetHeatmapDialog(simpledialog.Dialog):
         self.motif_analysis_var = tk.BooleanVar()
         self.motif_analysis_check = tk.Checkbutton(master, text = "Motif Analysis", variable = self.motif_analysis_var)
         self.motif_analysis_check.grid(row = 1, columnspan = 3, sticky = tk.W)
+
+        # Add CLR transform option
+        self.clr_transform_var = tk.BooleanVar()
+        self.clr_transform_check = tk.Checkbutton(master, text = "CLR?", variable = self.clr_transform_var)
+        self.clr_transform_check.grid(row = 1, column = 1, sticky = tk.W)
+
+        # Add show all option
+        self.show_all_var = tk.BooleanVar()
+        self.show_all_check = tk.Checkbutton(master, text = "Show all?", variable = self.show_all_var)
+        self.show_all_check.grid(row = 1, column = 2, sticky = tk.W)
         
         # Output PDF file selection
         tk.Label(master, text = "Select Output for Heatmap File:").grid(row = 2, sticky = tk.W)
@@ -314,9 +324,11 @@ class GetHeatmapDialog(simpledialog.Dialog):
     def apply(self):
         input_file_path = self.input_file_entry.get()
         motif_analysis = self.motif_analysis_var.get()
+        clr_transform = self.clr_transform_var.get()
+        show_all = self.show_all_var.get()
         output_file_path = self.output_file_entry.get()
         if input_file_path and output_file_path:
-            self.result = input_file_path, motif_analysis, output_file_path
+            self.result = input_file_path, motif_analysis, clr_transform, show_all, output_file_path
         else:
             messagebox.showerror("Error", "Please complete all fields correctly.")
             self.result = None  # Prevent dialog from closing
@@ -325,10 +337,12 @@ class GetHeatmapDialog(simpledialog.Dialog):
 def openGetHeatmapDialog():
     dialog_result = GetHeatmapDialog(app)
     if dialog_result.result:
-        input_file_path, motif_analysis, output_file_path = dialog_result.result
+        input_file_path, motif_analysis, clr_transform, show_all, output_file_path = dialog_result.result
         try:
+            transform = "CLR" if clr_transform else ''
             g = get_heatmap(df = input_file_path, motifs = motif_analysis,
-                    feature_set = ["known", "exhaustive"], return_plot = True)
+                    feature_set = ["known", "exhaustive"], transform = transform,
+                            show_all = show_all, return_plot = True)
             fig = g.fig
             fig.savefig(output_file_path, format = "png", dpi = 300,
                 bbox_inches = 'tight')
