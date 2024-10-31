@@ -9,7 +9,7 @@ from importlib import resources
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
 this_dir, this_filename = path.split(__file__)  # Get path of data.pkl
-data_path = path.join(this_dir, 'lib_v10.pkl')
+data_path = path.join(this_dir, 'lib_v11.pkl')
 lib = load(open(data_path, 'rb'))
 
 
@@ -20,12 +20,12 @@ def __getattr__(name):
     globals()[name] = glycan_binding  # Cache it to avoid reloading
     return glycan_binding
   elif name == "df_species":
-    with resources.open_text("glycowork.glycan_data", "v10_df_species.csv") as f:
+    with resources.open_text("glycowork.glycan_data", "v11_df_species.csv") as f:
       df_species = pd.read_csv(f)
     globals()[name] = df_species  # Cache it to avoid reloading
     return df_species
   elif name == "df_glycan":
-    data_path = path.join(this_dir, 'v10_sugarbase.pkl')
+    data_path = path.join(this_dir, 'v11_sugarbase.pkl')
     df_glycan = load(open(data_path, 'rb'))
     globals()[name] = df_glycan  # Cache it to avoid reloading
     return df_glycan

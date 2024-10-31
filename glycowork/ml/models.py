@@ -336,9 +336,9 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
       if trained:
         if hidden_dim != 128:
           raise ValueError("Hidden dimension must be 128 for pretrained model")
-        if not os.path.exists("SweetNet.pt"):
-          download_model("https://drive.google.com/file/d/1V4mMywfFW8tSmjLGbmKH_D8XbLoJnqqs/view?usp=sharing", local_path = "SweetNet.pt")
-        model.load_state_dict(torch.load("SweetNet.pt", map_location = device, weights_only = True))
+        if not os.path.exists("SweetNet_v1_4.pt"):
+          download_model("https://drive.google.com/file/d/1arIT31FpA1FCKSDVUuntc9-UQEUpcXVz/view?usp=sharing", local_path = "SweetNet_v1_4.pt")
+        model.load_state_dict(torch.load("SweetNet_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     elif model_type == 'LectinOracle':
       model = LectinOracle(len(libr), num_classes = num_classes)
@@ -360,9 +360,9 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
       model = NSequonPred()
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
-        if not os.path.exists("NSequonPred.pt"):
-          download_model("https://drive.google.com/file/d/1hb0f0zZfTfaAscyvtiEU9hZHfyE2_NtD/view?usp=sharing", local_path = "NSequonPred.pt")
-        model.load_state_dict(torch.load("NSequonPred.pt", map_location = device, weights_only = True))
+        if not os.path.exists("NSequonPred_v1_4.pt"):
+          download_model("https://drive.google.com/file/d/12KQOfwCAUkXwCKw5DHYTh3uHEjXsJzSA/view?usp=sharing", local_path = "NSequonPred_v1_4.pt")
+        model.load_state_dict(torch.load("NSequonPred_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     else:
       print("Invalid Model Type")

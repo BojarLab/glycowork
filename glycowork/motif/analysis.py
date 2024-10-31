@@ -308,9 +308,9 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
-      if not os.path.exists('glycan_representations.pkl'):
-          download_model("https://drive.google.com/file/d/1DPeaj9steysrwOJ_v5y5fjd-9snI0BES/view?usp=sharing", local_path = 'glycan_representations.pkl')
-      emb = pickle.load(open('glycan_representations.pkl', 'rb'))
+      if not os.path.exists('glycan_representations_v1_4.pkl'):
+          download_model("https://drive.google.com/file/d/1--tf0kyea9jFLfffUtICKkyIw36E9hJ3/view?usp=sharing", local_path = 'glycan_representations_v1_4.pkl')
+      emb = pickle.load(open('glycan_representations_v1_4.pkl', 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
     if isinstance(emb, pd.DataFrame):
       emb = {g: emb.iloc[i, :] for i, g in enumerate(glycans)}
