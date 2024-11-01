@@ -14,7 +14,7 @@ setuptools.setup(
     url="https://github.com/BojarLab/glycowork",
     packages=setuptools.find_packages(),
     include_package_data=True,
-    package_data={'': ['*.csv', '*.pkl', '*.jpg', '*.pt']},
+    package_data={'': ['*.csv', '*.pkl', '*.jpg', '*.pt', '*.json']},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
