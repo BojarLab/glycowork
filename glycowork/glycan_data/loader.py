@@ -1,10 +1,12 @@
 import re
+import json
 import gdown
 import pandas as pd
 from pickle import load
 from os import path
 from itertools import chain
 from importlib import resources
+from typing import Any, Dict, List, Union
 
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
@@ -25,8 +27,10 @@ def __getattr__(name):
     globals()[name] = df_species  # Cache it to avoid reloading
     return df_species
   elif name == "df_glycan":
-    data_path = path.join(this_dir, 'v11_sugarbase.pkl')
-    df_glycan = load(open(data_path, 'rb'))
+    #data_path = path.join(this_dir, 'v11_sugarbase.pkl')
+    #df_glycan = load(open(data_path, 'rb'))
+    data_path = path.join(this_dir, 'v11_sugarbase.json')
+    df_glycan = serializer.deserialize(data_path)
     globals()[name] = df_glycan  # Cache it to avoid reloading
     return df_glycan
   elif name == "lectin_specificity":
@@ -278,3 +282,98 @@ def download_model(file_id, local_path = 'model_weights.pt'):
   url = f'https://drive.google.com/uc?id={file_id}'
   gdown.download(url, local_path, quiet = False)
   print("Download completed.")
+
+
+class DataFrameSerializer:
+  """A utility class for serializing and deserializing pandas DataFrames with complex data types
+  in a version-independent manner."""
+  
+  @staticmethod
+  def _serialize_cell(value: Any) -> Dict[str, Any]:
+    """Convert a cell value to a serializable format with type information."""
+    if isinstance(value, list):
+      return {
+        'type': 'list',
+        'value': [str(item) for item in value]
+      }
+    elif isinstance(value, dict):
+      # Check if it's a string:int dictionary
+      if all(isinstance(k, str) and isinstance(v, int) for k, v in value.items()):
+        return {
+          'type': 'str_int_dict',
+          'value': {str(k): int(v) for k, v in value.items()}
+        }
+      # Fall back to string:string for other dictionaries
+      return {
+        'type': 'dict',
+        'value': {str(k): str(v) for k, v in value.items()}
+      }
+    elif pd.isna(value):
+      return {
+        'type': 'null',
+        'value': None
+      }
+    else:
+      return {
+        'type': 'primitive',
+        'value': str(value)
+      }
+
+  @staticmethod
+  def _deserialize_cell(cell_data: Dict[str, Any]) -> Any:
+    """Convert a serialized cell back to its original type."""
+    if cell_data['type'] == 'list':
+      return cell_data['value']
+    elif cell_data['type'] == 'str_int_dict':
+      return {str(k): int(v) for k, v in cell_data['value'].items()}
+    elif cell_data['type'] == 'dict':
+      return cell_data['value']
+    elif cell_data['type'] == 'null':
+      return None
+    else:
+      return cell_data['value']
+
+  @classmethod
+  def serialize(cls, df: pd.DataFrame, path: str) -> None:
+    """Serialize a DataFrame to JSON with type information.
+    
+    Args:
+      df: pandas DataFrame to serialize
+      path: file path to save the serialized data"""
+    data = {
+      'columns': list(df.columns),
+      'index': list(df.index),
+      'data': []
+    }
+    
+    for _, row in df.iterrows():
+      serialized_row = [cls._serialize_cell(val) for val in row]
+      data['data'].append(serialized_row)
+    
+    with open(path, 'w') as f:
+      json.dump(data, f)
+
+  @classmethod
+  def deserialize(cls, path: str) -> pd.DataFrame:
+    """Deserialize a DataFrame from JSON.
+    
+    Args:
+      path: file path to load the serialized data from
+    
+    Returns:
+      pandas DataFrame with restored data types"""
+    with open(path, 'r') as f:
+      data = json.load(f)
+    
+    deserialized_data = []
+    for row in data['data']:
+      deserialized_row = [cls._deserialize_cell(cell) for cell in row]
+      deserialized_data.append(deserialized_row)
+    
+    return pd.DataFrame(
+      data = deserialized_data,
+      columns = data['columns'],
+      index = data['index']
+    )
+
+serializer = DataFrameSerializer()
