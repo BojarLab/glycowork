@@ -344,17 +344,17 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
       model = LectinOracle(len(libr), num_classes = num_classes)
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
-        if not os.path.exists("LectinOracle.pt"):
-          download_model("https://drive.google.com/file/d/1kBKtO7BZCpHuIvF_rNiG7FYfi-eGnWO6/view?usp=sharing", local_path = "LectinOracle.pt")
-        model.load_state_dict(torch.load("LectinOracle.pt", map_location = device, weights_only = True))
+        if not os.path.exists("LectinOracle_v1_4.pt"):
+          download_model("https://drive.google.com/file/d/1g5GnwJvGW0Zis2zwxjRsZE9t-ueV6-cP/view?usp=sharing", local_path = "LectinOracle_v1_4.pt")
+        model.load_state_dict(torch.load("LectinOracle_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     elif model_type == 'LectinOracle_flex':
       model = LectinOracle_flex(len(libr), num_classes = num_classes)
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
-        if not os.path.exists("LectinOracle_flex.pt"):
-          download_model("https://drive.google.com/file/d/1Z7by3RtGkYnujQ4ypsOir6ss8c5dxQA_/view?usp=sharing", local_path = "LectinOracle_flex.pt")
-        model.load_state_dict(torch.load("LectinOracle_flex.pt", map_location = device, weights_only = True))
+        if not os.path.exists("LectinOracle_flex_v1_4.pt"):
+          download_model("https://drive.google.com/file/d/1h051ql_LTfzQjuTpDzTrAqNTAPDpKqwB/view?usp=sharing", local_path = "LectinOracle_flex_v1_4.pt")
+        model.load_state_dict(torch.load("LectinOracle_flex_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     elif model_type == 'NSequonPred':
       model = NSequonPred()

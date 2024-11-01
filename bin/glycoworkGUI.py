@@ -69,7 +69,10 @@ def openGlycoDrawDialog():
         if dialog_result.result:
             glycan_sequence, compact = dialog_result.result
             file_path = os.path.join(folder_path, f"{glycan_sequence}.pdf")
-            GlycoDraw(glycan_sequence, filepath = file_path, compact = compact)
+            try:
+                GlycoDraw(glycan_sequence, filepath = file_path, compact = compact)
+            except Exception as e:
+                messagebox.showerror("Error", f"An error occurred: {str(e)}")
             # Optionally, ask if the user wants to continue or not
             if not messagebox.askyesno("Continue", "Do you want to draw another glycan?"):
                 break
@@ -142,8 +145,10 @@ def openGlycoDrawExcelDialog():
     dialog_result = GlycoDrawExcelDialog(app)
     if dialog_result.result:
         csv_file_path, output_folder, compact = dialog_result.result
-        plot_glycans_excel(csv_file_path, output_folder, compact = compact)
-
+        try:
+            plot_glycans_excel(csv_file_path, output_folder, compact = compact)
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
 
 class DifferentialExpressionDialog(simpledialog.Dialog):
@@ -240,6 +245,8 @@ def run_differential_expression(csv_file_path, treatment_indices, control_indice
                                group2 = treatment_indices,
                                motifs = motifs)
         plot_glycans_excel(df_out, output_folder)
+    except Exception as e:
+        messagebox.showerror("Error", f"An error occurred: {str(e)}")
     finally:
         progress_dialog.end()
 

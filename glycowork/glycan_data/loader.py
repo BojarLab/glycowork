@@ -27,8 +27,6 @@ def __getattr__(name):
     globals()[name] = df_species  # Cache it to avoid reloading
     return df_species
   elif name == "df_glycan":
-    #data_path = path.join(this_dir, 'v11_sugarbase.pkl')
-    #df_glycan = load(open(data_path, 'rb'))
     data_path = path.join(this_dir, 'v11_sugarbase.json')
     df_glycan = serializer.deserialize(data_path)
     globals()[name] = df_glycan  # Cache it to avoid reloading

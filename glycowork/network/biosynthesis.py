@@ -62,9 +62,7 @@ def safe_index(glycan, graph_dic):
   | Returns:
   | :-
   | Returns a glycan graph, either from graph_dic or freshly generated"""
-  if glycan not in graph_dic:
-    graph_dic[glycan] = glycan_to_nxGraph(glycan)
-  return graph_dic[glycan]
+  return graph_dic.setdefault(glycan, glycan_to_nxGraph(glycan))
 
 
 def get_neighbors(ggraph, glycans, graphs, min_size = 1):
