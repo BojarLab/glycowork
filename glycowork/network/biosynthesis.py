@@ -545,7 +545,8 @@ def infer_roots(glycans):
   elif any(k.endswith('1Cer') or k.endswith('Ins') for k in glycans):
     return frozenset({'Glc1Cer', 'Gal1Cer', 'Ins'})
   elif any(k.endswith('Glc') for k in glycans):
-    print("Are you working with free oligosaccharides or glycolipids? Append '-ol' or '1Cer' to your glycans, respectively")
+    print("Are you working with free oligosaccharides or glycolipids? Append '-ol' or '1Cer' to your glycans, respectively. We'll pretend it's milk glycans for now")
+    return frozenset({'Gal(b1-4)Glc', 'Gal(b1-4)GlcNAc'})
   else:
     print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or 1Cer")
 
