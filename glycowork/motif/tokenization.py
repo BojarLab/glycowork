@@ -272,7 +272,7 @@ def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', 
   if filter_out is None:
     filter_out = set()
   if adduct:
-    mz -= calculate_adduct_mass(adduct, mass_value)
+    mz_value -= calculate_adduct_mass(adduct, mass_value)
   adduct_mass = mass_dict['Acetate'] if mode == 'negative' else mass_dict['Na+']
   if reduced:
     mz_value -= 1.0078

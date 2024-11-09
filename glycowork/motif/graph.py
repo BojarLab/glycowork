@@ -1,7 +1,7 @@
 import re
 from copy import deepcopy
 from glycowork.glycan_data.loader import unwrap, modification_map
-from glycowork.motif.processing import min_process_glycans, canonicalize_iupac, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, choose_correct_isoform
+from glycowork.motif.processing import min_process_glycans, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, choose_correct_isoform
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -598,7 +598,7 @@ def get_possible_topologies(glycan, exhaustive = False, allowed_disaccharides = 
     dangling_carbon = ggraph.nodes[dangling_linkage]['string_labels'][-1]
     floating_monosaccharide = dangling_linkage - 1
   topologies = []
-  candidate_nodes = [k for k in list(main_part.nodes())[::2] 
+  candidate_nodes = [k for k in list(main_part.nodes())[::2]
                      if exhaustive or (main_part.degree[k] == 1 and k != max(main_part.nodes()))]
   for k in candidate_nodes:
     neighbor_carbons = [ggraph.nodes[n]['string_labels'][-1] for n in ggraph.neighbors(k) if n < k]

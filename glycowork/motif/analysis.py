@@ -1488,7 +1488,7 @@ def get_glycoshift_per_site(df, group1, group2, paired = False, impute = True,
   | (i) Regression coefficient from the GLM (indicating direction of change in the treatment condition)
   | (ii) Corrected p-values (two-tailed t-test with two-stage Benjamini-Hochberg correction) for testing the coefficient against zero
   | (iii) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold"""
-  df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = False, impute = impute,
+  df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = False, impute = impute,
                                                min_samples = min_samples, transform = "Nothing", paired = paired)
   alpha = get_alphaN(len(group1 + group2))
   df, glycan_features = process_for_glycoshift(df)

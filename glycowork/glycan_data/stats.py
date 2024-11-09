@@ -6,7 +6,7 @@ from collections import defaultdict, Counter
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel
 from scipy.stats.mstats import winsorize
 from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
@@ -1190,7 +1190,7 @@ def perform_tests_monte_carlo(group_a, group_b, num_instances = 128, paired = Fa
   | (i) list of uncorrected p-values
   | (ii) list of corrected p-values (two-stage Benjamini-Hochberg)
   | (ii) list of effect sizes (Cohen's d)"""
-  num_features, num_columns = group_a.shape
+  num_features, _ = group_a.shape
   avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes = np.zeros(num_features), np.zeros(num_features), np.zeros(num_features)
   for instance in range(num_instances):
     instance_p_values = []
@@ -1199,7 +1199,7 @@ def perform_tests_monte_carlo(group_a, group_b, num_instances = 128, paired = Fa
       sample_a = group_a.iloc[feature, instance::num_instances].values
       sample_b = group_b.iloc[feature, instance::num_instances].values
       p_value = ttest_rel(sample_b, sample_a)[1] if paired else ttest_ind(sample_b, sample_a, equal_var = False)[1]
-      effect_size, effect_size_variance = cohen_d(sample_b, sample_a, paired = paired)
+      effect_size, _ = cohen_d(sample_b, sample_a, paired = paired)
       instance_p_values.append(p_value)
       instance_effect_sizes.append(effect_size)
     # Apply Benjamini-Hochberg correction for multiple testing within the instance

@@ -299,7 +299,7 @@ def choose_correct_isoform(glycans, reverse = False):
     correct_isoform = glycans
   return correct_isoform
 
-  
+
 def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   """given a glycan and glycan class, determines whether glycan is from this class\n
   | Arguments:

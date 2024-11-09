@@ -6,7 +6,7 @@ from pickle import load
 from os import path
 from itertools import chain
 from importlib import resources
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Union
 
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
@@ -212,7 +212,7 @@ def replace_every_second(string, old_char, new_char):
   | old_char (string): a string character to be replaced (every second occurrence)
   | new_char (string): the string character to replace old_char with\n
   | Returns:
-  | :-                           
+  | :-
   | Returns string with replaced characters
   """
   count = 0
@@ -285,7 +285,7 @@ def download_model(file_id, local_path = 'model_weights.pt'):
 class DataFrameSerializer:
   """A utility class for serializing and deserializing pandas DataFrames with complex data types
   in a version-independent manner."""
-  
+
   @staticmethod
   def _serialize_cell(value: Any) -> Dict[str, Any]:
     """Convert a cell value to a serializable format with type information."""
@@ -334,7 +334,7 @@ class DataFrameSerializer:
   @classmethod
   def serialize(cls, df: pd.DataFrame, path: str) -> None:
     """Serialize a DataFrame to JSON with type information.
-    
+
     Args:
       df: pandas DataFrame to serialize
       path: file path to save the serialized data"""
@@ -343,31 +343,31 @@ class DataFrameSerializer:
       'index': list(df.index),
       'data': []
     }
-    
+
     for _, row in df.iterrows():
       serialized_row = [cls._serialize_cell(val) for val in row]
       data['data'].append(serialized_row)
-    
+
     with open(path, 'w') as f:
       json.dump(data, f)
 
   @classmethod
   def deserialize(cls, path: str) -> pd.DataFrame:
     """Deserialize a DataFrame from JSON.
-    
+
     Args:
       path: file path to load the serialized data from
-    
+
     Returns:
       pandas DataFrame with restored data types"""
     with open(path, 'r') as f:
       data = json.load(f)
-    
+
     deserialized_data = []
     for row in data['data']:
       deserialized_row = [cls._deserialize_cell(cell) for cell in row]
       deserialized_data.append(deserialized_row)
-    
+
     return pd.DataFrame(
       data = deserialized_data,
       columns = data['columns'],

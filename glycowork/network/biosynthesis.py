@@ -706,7 +706,7 @@ def plot_network(network, plot_format = 'pydot2', edge_label_draw = True,
     scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, alpha = 0.7,
                                      node_color = color_map, ax = ax)
   edge_attributes = nx.get_edge_attributes(network, 'diffs')
-  if edge_label_draw: 
+  if edge_label_draw:
     if lfc_dict:
       # Map log-fold changes of responsible enzymes onto biosynthetic steps
       c_list = ['red' if lfc_dict.get(attr, 0) < 0 else 'green' if lfc_dict.get(attr, 0) > 0 else 'cornflowerblue' for attr in edge_attributes.values()]
@@ -1001,7 +1001,7 @@ def prune_network(network, node_attr = 'abundance', threshold = 0.):
   network_out.remove_nodes_from(to_cut)
   # Remove virtual nodes with total degree of max 1 and an in-degree of at least 1
   nodes_to_remove = [node for node, attr in network_out.nodes(data = True)
-                       if (network_out.degree[node] <= 1) and (attr.get('virtual') == 1) 
+                       if (network_out.degree[node] <= 1) and (attr.get('virtual') == 1)
                        and (network_out.in_degree[node] > 0)]
   network_out.remove_nodes_from(nodes_to_remove)
   return network_out
@@ -1244,7 +1244,7 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
   | :-
   | For binary comparison: A dataframe with differential flow features and statistics
   | For longitudinal analysis: A dataframe with reaction changes over time"""
-  
+
   if longitudinal:
     assert id_column is not None, "id_column must be specified for longitudinal analysis"
     assert group2 is None, "group2 should not be specified for longitudinal analysis"
@@ -1254,18 +1254,18 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
     assert group2 is not None, "group2 must be specified for binary comparison"
     if paired:
       assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
-  
+
   # Handle input data
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-  
+
   if not longitudinal and not isinstance(group1[0], str):
     columns_list = df.columns.tolist()
     group1 = [columns_list[k] for k in group1]
     group2 = [columns_list[k] for k in group2]
-  
+
   all_groups = group1 + (group2 or [])
-  
+
   # Prepare data for analysis
   if longitudinal:
     df['participant'] = df[id_column].apply(lambda x: x.split('_')[0])
@@ -1276,11 +1276,11 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
     df_analysis = df[df['time_point'].isin(time_points)].copy()
   else:
     glycan_columns = all_groups
-  
+
   df_analysis = df_analysis if longitudinal else df.set_index(df.columns.tolist()[0])
   df_analysis = df_analysis.loc[:, glycan_columns].fillna(0)
   df_analysis = (df_analysis / df_analysis.sum(axis = 1).values[:, None]) * 100
-  
+
   if not longitudinal:
     df_analysis = df_analysis[df_analysis.any(axis = 1)]
   else:
@@ -1291,17 +1291,17 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
   root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
   min_default = 0.1 if root.endswith('GlcNAc') else 0.001
   core_net = construct_network(df_analysis.index.tolist() if not longitudinal else glycan_columns)
-  
-  nets = {}
+
+  nets, features = {}, []
   for col in df_analysis.columns:
     temp = deepcopy(core_net)
     abundance_mapping = dict(zip(df_analysis.index.tolist() if not longitudinal else glycan_columns,
                                  df_analysis[col].values.tolist()))
     nx.set_node_attributes(temp, {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in temp.nodes()})
     nets[col] = estimate_weights(temp, root = root, min_default = min_default)
-  
+
   res = {col: get_maximum_flow(nets[col], source = root) for col in nets}
-  
+
   # Perform reaction or flow analysis
   if analysis == "reaction":
     res2 = {col: get_reaction_flow(nets[col], res[col], aggregate = "sum") for col in nets}
@@ -1316,20 +1316,20 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
     raise ValueError("Only 'reaction' and 'flow' are currently supported analysis modes.")
 
   res2 = pd.DataFrame(res2).T
-  
+
   if analysis == "reaction" and not longitudinal:
     res2 = res2.loc[:, res2.var(axis = 0) > 0.01]
   elif analysis == "flow" and not longitudinal:
     res2.columns = features
-  
+
   features = res2.columns.tolist()
-  
+
   # Perform statistical analysis
   if longitudinal:
     res_df = res2.reset_index()
     res_df = res_df.rename(columns = {'index': id_column})
     res_df = pd.merge(res_df, df[['participant', 'time_point']], on = id_column)
-    
+
     results = []
     for reaction in features:
       reaction_data = res_df[[id_column, 'participant', 'time_point', reaction]]
@@ -1339,13 +1339,13 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
       slopes = reaction_data.groupby('participant').apply(lambda x: np.polyfit(x['time_numeric'], x[reaction], 1)[0], include_groups = False)
       average_slope = slopes.mean()
       direction = "Increase" if average_slope > 0 else "Decrease"
-      
+
       model = ols('Q("{0}") ~ C(time_point) + C(participant)'.format(reaction), data = reaction_data).fit()
       anova_table = sm.stats.anova_lm(model, typ = 2)
-      
+
       f_value = anova_table.loc['C(time_point)', 'F']
       p_value = anova_table.loc['C(time_point)', 'PR(>F)']
-      
+
       results.append({
           'Feature': reaction,
           'F-statistic': f_value,
@@ -1353,7 +1353,7 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
           'Direction': direction,
           'Average Slope': average_slope
         })
-    
+
     out = pd.DataFrame(results)
     out['corr p-val'] = multipletests(out['p-val'], method = 'fdr_bh')[1]
     out['significant'] = out['corr p-val'] < 0.05
@@ -1367,10 +1367,10 @@ def get_differential_biosynthesis(df, group1, group2 = None, analysis = "reactio
     alpha = get_alphaN(len(all_groups))
     significance = [p < alpha for p in corrpvals] if pvals else []
     effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
-    
+
     out = pd.DataFrame({'Feature': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
                         'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
-  
+
   out = out.set_index('Feature')
   return out.dropna().sort_values(by = 'p-val')
 

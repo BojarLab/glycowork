@@ -214,6 +214,8 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
       from glycowork.glycan_data.loader import df_species
       feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
       partial_annotate_topology_uncertainty = partial(annotate_glycan_topology_uncertainty, feasibles = feasibles, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
+    else:
+      partial_annotate_topology_uncertainty = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
     def annotate_switchboard(glycan):
       return partial_annotate_topology_uncertainty(glycan) if glycan.count('{') == 1 else partial_annotate(glycan)
     shopping_cart.append(pd.concat(list(map(annotate_switchboard, glycans)), axis = 0))
