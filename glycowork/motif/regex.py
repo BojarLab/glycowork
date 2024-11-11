@@ -339,10 +339,7 @@ def process_pattern(p, p2, ggraph, glycan, match_location):
   | :-
   | Returns list of matches as list of node indices
   """
-  if isinstance(p2, dict):
-    return process_complex_pattern(p, p2, ggraph, glycan, match_location)
-  else:
-    return process_simple_pattern(p2, ggraph, match_location)
+  return process_complex_pattern(p, p2, ggraph, glycan, match_location) if isinstance(p2, dict) else process_simple_pattern(p2, ggraph, match_location)
 
 
 def match_it_up(pattern_components, glycan, ggraph):

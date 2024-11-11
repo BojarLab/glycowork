@@ -11,7 +11,7 @@ try:
         device = "cuda:0"
 except ImportError:
   raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
-from glycowork.glycan_data.loader import lib
+from glycowork.glycan_data.loader import lib, unwrap
 from glycowork.motif.tokenization import prot_to_coded
 from glycowork.ml.processing import dataset_to_dataloader
 
@@ -154,9 +154,9 @@ def get_lectin_preds(prot, glycans, model, prot_dic = None, background_correctio
         correction_df = pd.read_csv(f)
   if prot_dic is None and not flex:
     print("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
-  preds = get_multi_pred(prot, glycans, model, prot_dic,
+  preds = unwrap(get_multi_pred(prot, glycans, model, prot_dic,
                          batch_size = batch_size, libr = libr,
-                         flex = flex)
+                         flex = flex))
   df_pred = pd.DataFrame({'motif': glycans, 'pred': preds})
   if background_correction:
     correction_dict = {motif: pred for motif, pred in zip(correction_df['motif'], correction_df['pred'])}

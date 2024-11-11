@@ -5,7 +5,7 @@ with open("README.md", "r", encoding = "utf-8") as fh:
 
 setuptools.setup(
     name="glycowork",
-    version="1.3.0",
+    version="1.4.0",
     author="Daniel Bojar",
     author_email="daniel.bojar@gu.se",
     description="Package for processing and analyzing glycans",
@@ -14,7 +14,7 @@ setuptools.setup(
     url="https://github.com/BojarLab/glycowork",
     packages=setuptools.find_packages(),
     include_package_data=True,
-    package_data={'': ['*.csv', '*.pkl', '*.jpg', '*.pt']},
+    package_data={'': ['*.csv', '*.pkl', '*.jpg', '*.pt', '*.json']},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -30,7 +30,7 @@ setuptools.setup(
                            "Pillow", "openpyxl", "py3Dmol", "gdown"],
                     'dev':["torch_geometric", "torch", "CairoSVG",
                            "drawSvg~=2.0", "glyles", "pubchempy", "requests",
-                           "Pillow", "openpyxl", "py3Dmol", "gdown"],
+                           "Pillow", "openpyxl", "py3Dmol", "gdown", "pytest"],
                     'ml':["torch_geometric", "torch"],
                     'draw':["CairoSVG", "drawSvg~=2.0", "Pillow",
                             "openpyxl"],

@@ -6,7 +6,7 @@ from collections import defaultdict
 from functools import partial
 
 from glycowork.glycan_data.loader import linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, rescue_glycans
 from glycowork.motif.regex import get_match
 
@@ -70,6 +70,55 @@ def annotate_glycan(glycan, motifs = None, termini_list = [], gmotifs = None):
   ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
   res = [subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
                                 count = True) for i, g in enumerate(gmotifs)]*1
+  out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
+  out.loc[0] = res
+  out.loc[0] = out.loc[0].astype('int')
+  out.index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)]
+  return out
+
+
+def annotate_glycan_topology_uncertainty(glycan, feasibles = None, motifs = None, termini_list = [], gmotifs = None):
+  """searches for known motifs in glycan sequence\n
+  | Arguments:
+  | :-
+  | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
+  | feasibles (set): set of glycans in IUPAC-condensed format that are potentially relevant as full topologies; default: mammalian glycans from df_species
+  | motifs (dataframe): dataframe of glycan motifs (name + sequence), can be used with a list of glycans too; default:motif_list
+  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
+  | gmotifs (networkx): precalculated motif graphs for speed-up; default:None\n
+  | Returns:
+  | :-
+  | Returns dataframe with counts of motifs in glycan
+  """
+  if motifs is None:
+    motifs = motif_list
+  if feasibles is None:
+    feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
+  # Check whether termini are specified
+  if not termini_list and isinstance(motifs, pd.DataFrame):
+    termini_list = list(map(eval, motifs.termini_spec))
+  if gmotifs is None:
+    termini = 'provided' if termini_list else 'ignore'
+    partial_glycan_to_nxGraph = partial(glycan_to_nxGraph, termini = termini)
+    gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
+  # Count the number of times each motif occurs in a glycan
+  ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
+  glycan_len = glycan.count('(')
+  feasibles = [glycan_to_nxGraph(g, termini = 'calc') for g in feasibles if g.count('(') == glycan_len]
+  possibles = possible_topology_check(ggraph, feasibles, exhaustive = True)
+  res = []
+  for i, g in enumerate(gmotifs):
+    temp_res = subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
+                                count = True)
+    if temp_res:
+      res.append(temp_res*1)
+      continue
+    temp_res = [subgraph_isomorphism(p, g, termini_list = termini_list[i] if termini_list else termini_list,
+                                count = True) for p in possibles]
+    if temp_res and np.mean(temp_res) > 0.5:
+      res.append(1)
+    else:
+      res.append(0)
   out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
@@ -145,6 +194,9 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
   """
   if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
+  invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive'}
+  if invalid_features:
+    print(f"Warning: {', '.join(invalid_features)} not recognized as features.")
   if motifs is None:
     motifs = motif_list
   # Checks whether termini information is provided
@@ -158,7 +210,15 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
     # Counts literature-annotated motifs in each glycan
     partial_annotate = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
-    shopping_cart.append(pd.concat(list(map(partial_annotate, glycans)), axis = 0))
+    if '{' in ''.join(glycans):
+      from glycowork.glycan_data.loader import df_species
+      feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
+      partial_annotate_topology_uncertainty = partial(annotate_glycan_topology_uncertainty, feasibles = feasibles, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
+    else:
+      partial_annotate_topology_uncertainty = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
+    def annotate_switchboard(glycan):
+      return partial_annotate_topology_uncertainty(glycan) if glycan.count('{') == 1 else partial_annotate(glycan)
+    shopping_cart.append(pd.concat(list(map(annotate_switchboard, glycans)), axis = 0))
   if 'custom' in feature_set:
     normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
     gmotifs = list(map(glycan_to_nxGraph, normal_motifs))
@@ -176,13 +236,13 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     shopping_cart.append(temp)
   if 'chemical' in feature_set:
     shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
-  if 'terminal' or 'terminal2' in feature_set:
+  if 'terminal' in feature_set or 'terminal1' in feature_set or 'terminal2' in feature_set:
     bag1, bag2 = [], []
-    if 'terminal' in feature_set:
+    if 'terminal' in feature_set or 'terminal1' in feature_set:
       bag1 = list(map(get_terminal_structures, glycans))
     if 'terminal2' in feature_set:
       bag2 = [get_terminal_structures(glycan, size = 2) for glycan in glycans]
-    bag = bag1 + bag2
+    bag = [a + b for a, b in zip(bag1, bag2)] if (bag1 and bag2) else bag1 + bag2
     repertoire = set(unwrap(bag))
     repertoire2 = [re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in repertoire]
     repertoire2 = set([k for k in repertoire2 if repertoire2.count(k) > 1 and k not in repertoire])
@@ -192,10 +252,12 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     shadow_bag = pd.DataFrame([{i: j.count(i) for i in repertoire if '?' in i} for j in shadow_glycans])
     bag_out = pd.concat([bag_out, shadow_bag], axis = 1).reset_index(drop = True)
     bag_out.index = glycans
+    bag_out.columns = ['Terminal_' + c for c in bag_out.columns]
     shopping_cart.append(bag_out)
   if 'terminal3' in feature_set:
     temp = get_k_saccharides(glycans, size = 3, terminal = True)
     temp.index = glycans
+    temp.columns = ['Terminal_' + c for c in temp.columns]
     shopping_cart.append(temp)
   if condense:
     # Remove motifs that never occur
@@ -205,7 +267,29 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     return pd.concat(shopping_cart, axis = 1)
 
 
-def quantify_motifs(df, glycans, feature_set, custom_motifs = []):
+def clean_up_heatmap(df):
+  """removes redundant motifs from the dataframe\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe with glycan data, rows are glycan motifs and columns are samples\n
+  | Returns:
+  | :-
+  | Returns a cleaned up dataframe of the same format as the input
+  """
+  motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
+  df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' '*20 if x in motif_dic else x)
+  # Group the DataFrame by identical rows
+  grouped = df.groupby(list(df.columns))
+  # Find the row with the longest string index within each group and return a new DataFrame
+  max_idx_series = grouped.apply(lambda group: group.index.to_series().str.len().idxmax())
+  result = df.loc[max_idx_series].drop_duplicates()
+  result.index = result.index.str.strip()
+  motif_dic = {value: key for key, value in motif_dic.items()}
+  result.index = [motif_dic.get(k, k) for k in result.index]
+  return result
+
+
+def quantify_motifs(df, glycans, feature_set, custom_motifs = [], remove_redundant = True):
     """Extracts and quantifies motifs for a dataset\n
     | Arguments:
     | :-
@@ -214,7 +298,8 @@ def quantify_motifs(df, glycans, feature_set, custom_motifs = []):
     | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), \
     |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
     |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
+    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
+    | remove_redundant (bool): whether to remove redundant motifs via clean_up_heatmap; default:True\n
     | Returns:
     | :-
     | Returns a pandas DataFrame with motifs as columns and samples as rows
@@ -239,7 +324,7 @@ def quantify_motifs(df, glycans, feature_set, custom_motifs = []):
       else:
         collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
     df = pd.DataFrame(collect_dic)
-    return df
+    return df if not remove_redundant else clean_up_heatmap(df.T)
 
 
 def count_unique_subgraphs_of_size_k(graph, size = 2, terminal = False):
@@ -325,7 +410,7 @@ def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False, ter
         drop_columns.append(col2)
   out_matrix = out_matrix.drop(drop_columns, axis = 1)
   out_matrix.columns = [remove_unmatched_brackets(g) for g in out_matrix.columns]
-  out_matrix = out_matrix.groupby(by = out_matrix.columns, axis = 1).sum()
+  out_matrix = out_matrix.T.groupby(by = out_matrix.columns).sum().T
   if up_to:
     combined_df= pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
     if just_motifs:

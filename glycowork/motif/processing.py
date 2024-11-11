@@ -1,10 +1,12 @@
 import numpy as np
+import pandas as pd
 import copy
 import re
+from random import choice
 from functools import wraps
 from collections import defaultdict
 from glycowork.glycan_data.loader import (unwrap, multireplace,
-                                          find_nth, find_nth_reverse, lib,
+                                          find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
 
@@ -108,15 +110,32 @@ def get_possible_monosaccharides(wildcard):
   """Retrieves all matching common monosaccharides of a type, given the type\n
   | Arguments:
   | :-
-  | wildcard (string): Monosaccharide type, from "HexNAc", "Hex", "dHex", "Sia", "HexA", "Pen"\n
+  | wildcard (string): Monosaccharide type, from "HexNAc", "HexNAcOS", "Hex", "HexOS", "dHex", "Sia", "HexA", "Pen"\n
   | Returns:
   | :-
   | Returns a list of specified monosaccharides of that type
   """
   wildcard_dict = {'Hex': Hex, 'HexNAc': HexNAc, 'dHex': dHex, 'Sia': Sia, 'HexA': HexA, 'Pen': Pen,
-                   'Monosaccharide': set().union(*[Hex, HexNAc, dHex, Sia, HexA, Pen])}
+                   'HexOS': HexOS, 'HexNAcOS': HexNAcOS,
+                   'Monosaccharide': set().union(*[Hex, HexOS, HexNAc, HexNAcOS, dHex, Sia, HexA, Pen])}
   return wildcard_dict.get(wildcard, [])
-  #return list(possible_monosaccharides) if libr is None else list(possible_monosaccharides & libr.keys())
+
+
+def de_wildcard_glycoletter(glycoletter):
+  """Retrieves a random specified instance of a general type (e.g., "Gal" for "Hex")\n
+  | Arguments:
+  | :-
+  | glycoletter (string): Monosaccharide or linkage\n
+  | Returns:
+  | :-
+  | Returns a random specified glycoletter of that type
+  """
+  if '?' in glycoletter:
+    return choice(get_possible_linkages(glycoletter))
+  elif monos := get_possible_monosaccharides(glycoletter):
+    return choice(list(monos))
+  else:
+    return glycoletter
 
 
 def bracket_removal(glycan_part):
@@ -217,6 +236,9 @@ def choose_correct_isoform(glycans, reverse = False):
   | Returns the correct isomer as a string (if reverse=False; otherwise it returns a list of strings)
   """
   glycans = list(set(glycans))
+  if '?' in ''.join(glycans) and not reverse:
+    min_questions = min(glycan.count('?') for glycan in glycans)
+    glycans = [glycan for glycan in glycans if glycan.count('?') == min_questions]
   if len(glycans) == 1:
     return glycans[0]
   if not any(['[' in g for g in glycans]):
@@ -272,7 +294,8 @@ def choose_correct_isoform(glycans, reverse = False):
   if floaty:
     correct_isoform = floaty + correct_isoform
   if reverse:
-    glycans.remove(correct_isoform)
+    if correct_isoform in glycans:
+      glycans.remove(correct_isoform)
     correct_isoform = glycans
   return correct_isoform
 
@@ -290,26 +313,45 @@ def enforce_class(glycan, glycan_class, conf = None, extra_thresh = 0.3):
   | Returns True if glycan is in glycan class and False if not
   """
   pools = {
-    'O': ['GalNAc', 'GalNAcOS', 'GalNAc4S', 'GalNAc6S', 'Man', 'Fuc', 'Gal', 'GlcNAc', 'GlcNAcOS', 'GlcNAc6S'],
-    'N': ['GlcNAc'],
-    'free': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
-    'lipid': ['Glc', 'GlcOS', 'Glc3S', 'GlcNAc', 'GlcNAcOS', 'Gal', 'GalOS', 'Gal3S', 'Ins'],
+    'O': 'GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S',
+    'N': 'GlcNAc',
+    'free': 'Glc|GlcOS|Glc3S|GlcNAc|GlcNAcOS|Gal|GalOS|Gal3S|Ins',
+    'lipid': 'Glc|GlcOS|Glc3S|GlcNAc|GlcNAcOS|Gal|GalOS|Gal3S|Ins'
     }
-  glycan = glycan[:-3] if glycan.endswith('-ol') else glycan
-  pool = pools.get(glycan_class, [])
-  truth = any([glycan.endswith(k) for k in pool])
+  if glycan_class not in pools:
+    return False
+  glycan = glycan[:-3] if glycan.endswith('-ol') else glycan[:-4] if glycan.endswith('1Cer') else glycan
+  truth = bool(re.search(f"({pools[glycan_class]})$", glycan))
   if truth and glycan_class in {'free', 'lipid', 'O'}:
-    truth = not any(glycan.endswith(k) for k in ['GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc'])
-  if not truth and conf:
-    return conf > extra_thresh
-  return truth
+    truth = not re.search(r'(GlcNAc\(b1-4\)GlcNAc|\[Fuc\(a1-6\)]GlcNAc)$', glycan)
+  return conf > extra_thresh if not truth and conf is not None else truth
+
+
+def get_class(glycan):
+  """given a glycan, determines its class\n
+  | Arguments:
+  | :-
+  | glycan (string): glycan in IUPAC-condensed nomenclature\n
+  | Returns:
+  | :-
+  | Returns "O", "N", "free", or "lipid" (or empty string if not either)
+  """
+  if glycan.endswith('-ol'):
+    return 'free'
+  if glycan.endswith(('1Cer', 'Ins')):
+    return 'lipid'
+  if glycan.endswith(('GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc')):
+    return 'N'
+  if re.search(r'(GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S)$', glycan):
+    return 'O'
+  return ''
 
 
 def canonicalize_composition(comp):
   """converts a composition from any common format into the dictionary that is optimized for glycowork\n
   | Arguments:
   | :-
-  | comp (string): composition formatted either in the style of HexNAc2Hex1Fuc3Neu5Ac1 or N2H1F3A1\n
+  | comp (string): composition formatted either in the style of Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2\n
   | Returns:
   | :-
   | Returns composition as a dictionary of style monosaccharide : count
@@ -320,6 +362,13 @@ def canonicalize_composition(comp):
     return {k: v for k, v in temp.items() if v}
   elif comp.isdigit():
     temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+    return {k: v for k, v in temp.items() if v}
+  elif comp[0].isdigit():
+    comp = comp.replace(' ', '')
+    if len(comp) < 5:
+      temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+    else:
+      temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "Neu5Gc": int(comp[3]), "dHex": int(comp[4])}
     return {k: v for k, v in temp.items() if v}
   comp_dict = {}
   i = 0
@@ -892,8 +941,8 @@ def canonicalize_iupac(glycan):
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
   if bool(re.search(r'(\[|\)|\]|\^)[1-9]?[SP](?!en)[A-Za-z]+', glycan)):
     glycan = re.sub(r'([1-9]?[SP])(?!en)([A-Za-z]+)', r'\2\1', glycan)
-  if bool(re.search(r'[1-9]?[SP]-[A-Za-z]+', glycan)):
-    glycan = re.sub(r'([1-9]?[SP])-([A-Za-z]+)', r'\2\1', glycan)
+  if bool(re.search(r'[1-9]?[SP]-[A-Za-n]+', glycan)):
+    glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)
   # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
   glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
   glycan = re.sub(r'([c-z])([1-2])-', r'\1(?\2-', glycan)
@@ -916,6 +965,8 @@ def canonicalize_iupac(glycan):
     floating_bits = re.findall(r'\{.*?\}', glycan)
     sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))
     glycan = sorted_floating_bits + glycan[glycan.rfind('}')+1:]
+  if glycan.count('[') != glycan.count(']'):
+    print("Warning: Mismatching brackets in formatted glycan string.")
   return glycan
 
 
@@ -959,3 +1010,73 @@ def equal_repeats(r1, r2):
   """
   r1_long = r1[:r1.rindex(')')+1] * 2
   return any(r1_long[i:i + len(r2)] == r2 for i in range(len(r1)))
+
+
+def infer_features_from_composition(comp):
+  """extracts higher-order glycan features from a composition\n
+  | Arguments:
+  | :-
+  | comp (dict): composition as a dictionary of style monosaccharide : count\n
+  | Returns:
+  | :-
+  | Returns dictionary containing higher-order glycan features and their absence/presence
+  """
+  feature_dic = {}
+  if comp.get('A', 0) + comp.get('G', 0) > 1 or comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) > 1:
+    feature_dic['complex'] = 1
+  else:
+    feature_dic['complex'] = 0
+  if (comp.get('H', 0) > 5 and comp.get('N', 0) == 2) or (comp.get('Hex', 0) > 5 and comp.get('HexNAc', 0) == 2):
+    feature_dic['high_Man'] = 1
+  else:
+    feature_dic['high_Man'] = 0
+  if (comp.get('A', 0) + comp.get('G', 0) < 2 and comp.get('H', 0) > 4) or (comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) < 2 and comp.get('Hex', 0) > 4):
+    feature_dic['hybrid'] = 1
+  else:
+    feature_dic['hybrid'] = 0
+  return feature_dic
+
+
+@rescue_compositions
+def parse_glycoform(glycoform, glycan_features = ['H', 'N', 'A', 'F', 'G']):
+  """converts composition of style H5N4F1A2 into monosaccharide counts\n
+  | Arguments:
+  | :-
+  | comp (string): composition formatted either in the style of Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2
+  | glycan_features (list): list of extracted glycan features to consider as variables\n
+  | Returns:
+  | :-
+  | Returns composition as a dictionary of style monosaccharide : count
+  """
+  if isinstance(glycoform, dict):
+    components = {k: glycoform.get(k, 0) for k in glycan_features}
+    return components | infer_features_from_composition(components)
+  components = {c: 0 for c in glycan_features}
+  matches = re.finditer(r'([HNAFG])(\d+)', glycoform)
+  for match in matches:
+    components[match.group(1)] = int(match.group(2))
+  return components | infer_features_from_composition(components)
+
+
+def process_for_glycoshift(df):
+  """extracts and formats compositions in glycoproteomics dataset\n
+  | Arguments:
+  | :-
+  | df (dataframe): glycoproteomics dataset, expects index to be formatted as protein_site_composition\n
+  | Returns:
+  | :-
+  | (i) glycoproteomics dataset with new columns for protein_site, composition, and composition counts
+  | (ii) list of identified glycan features, such as different monosaccharides
+  """
+  df['Glycosite'] = [k.split('_')[0] + '_' + k.split('_')[1] for i, k in enumerate(df.index)]
+  if '[' in df.index[0]:
+    comps = ['['+k.split('[')[1] for k in df.index]
+    comps = [list(map(int, re.findall(r'\d+', s))) for s in comps]
+    df['Glycoform'] = [f'H{c[0]}N{c[1]}F{c[3]}A{c[2]}' for c in comps]
+    glycan_features = ['H', 'N', 'A', 'F', 'G']
+  else:
+    df['Glycoform'] = [canonicalize_composition(k.split('_')[-1]) for k in df.index]
+    glycan_features = set(unwrap([list(c.keys()) for c in df.Glycoform]))
+  org_cols = df.columns.tolist()
+  df = df.join(df['Glycoform'].apply(parse_glycoform, glycan_features = glycan_features).apply(pd.Series))
+  return df, [c for c in df.columns if c not in org_cols]

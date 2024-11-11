@@ -382,8 +382,12 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
         :param labels: tensor of shape [N]
         :return: poly cross-entropy loss
         """
-        labels_onehot = F.one_hot(labels, num_classes = self.num_classes).to(device = logits.device,
-                                                                           dtype=logits.dtype)
+        if len(labels.shape) == 2 and labels.shape[1] == self.num_classes:
+            labels_onehot = labels.to(device = logits.device, dtype = logits.dtype)
+            labels = torch.argmax(labels, dim = 1)
+        else:
+            labels_onehot = F.one_hot(labels, num_classes = self.num_classes).to(device = logits.device,
+                                                                           dtype = logits.dtype)
         pt = torch.sum(labels_onehot * F.softmax(logits, dim = -1), dim = -1)
         CE = F.cross_entropy(input = logits,
                              target = labels,
@@ -420,12 +424,12 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
         optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, alpha = gsam_alpha, lr = lr,
                            weight_decay = weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
-                                                               factor = factor, verbose = True)
+                                                               factor = factor)
     else:
         optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
                                          weight_decay = weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
-                                                               factor = factor, verbose = True)
+                                                               factor = factor)
     # Choose loss function
     if mode == 'multiclass':
         if num_classes == 2:

@@ -3,9 +3,10 @@ import numpy as np
 import math
 import warnings
 from collections import defaultdict, Counter
+from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel
 from scipy.stats.mstats import winsorize
 from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
@@ -15,6 +16,7 @@ from statsmodels.stats.weightstats import ttost_ind, ttost_paired
 from statsmodels.formula.api import ols
 from statsmodels.stats.anova import anova_lm
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
+import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import copy
 rng = np.random.default_rng(42)
@@ -76,8 +78,7 @@ def cohen_d(x, y, paired = False):
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
   | Returns:
   | :-
-  | Returns Cohen's d (and its variance) as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)
-  """
+  | Returns Cohen's d (and its variance) as a measure of effect size (0.2 small; 0.5 medium; 0.8 large)"""
   if paired:
     assert len(x) == len(y), "For paired samples, the size of x and y should be the same"
     diff = np.array(x) - np.array(y)
@@ -107,8 +108,7 @@ def mahalanobis_distance(x, y, paired = False):
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
   | Returns:
   | :-
-  | Returns Mahalanobis distance as a measure of effect size
-  """
+  | Returns Mahalanobis distance as a measure of effect size"""
   if paired:
     assert x.shape == y.shape, "For paired samples, the size of x and y should be the same"
     x = np.array(x) - np.array(y)
@@ -132,8 +132,7 @@ def mahalanobis_variance(x, y, paired = False):
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
   | Returns:
   | :-
-  | Returns Mahalanobis distance as a measure of effect size
-  """
+  | Returns Mahalanobis distance as a measure of effect size"""
   # Combine gp1 and gp2 into a single matrix
   data = np.concatenate((x.T, y.T), axis = 0)
   # Perform bootstrap resampling
@@ -142,13 +141,13 @@ def mahalanobis_variance(x, y, paired = False):
   bootstrap_samples = np.empty(n_iterations)
   size_x = x.shape[1]
   for i in range(n_iterations):
-      # Generate a random bootstrap sample
-      sample = data[rng.choice(range(data.shape[0]), size = data.shape[0], replace = True)]
-      # Split the bootstrap sample into two groups
-      x_sample = sample[:size_x]
-      y_sample = sample[size_x:]
-      # Calculate the Mahalanobis distance for the bootstrap sample
-      bootstrap_samples[i] = mahalanobis_distance(x_sample.T, y_sample.T, paired = paired)
+    # Generate a random bootstrap sample
+    sample = data[rng.choice(range(data.shape[0]), size = data.shape[0], replace = True)]
+    # Split the bootstrap sample into two groups
+    x_sample = sample[:size_x]
+    y_sample = sample[size_x:]
+    # Calculate the Mahalanobis distance for the bootstrap sample
+    bootstrap_samples[i] = mahalanobis_distance(x_sample.T, y_sample.T, paired = paired)
   # Estimate the variance of the Mahalanobis distance
   return np.var(bootstrap_samples)
 
@@ -161,8 +160,7 @@ def variance_stabilization(data, groups = None):
   | groups (nested list): list containing lists of column names of samples from same group for group-specific normalization; otherwise global; default:None\n
   | Returns:
   | :-
-  | Returns a dataframe in the same style as the input
-  """
+  | Returns a dataframe in the same style as the input"""
   # Apply log1p transformation
   data = np.log1p(data)
   # Scale data to have zero mean and unit variance
@@ -184,8 +182,7 @@ class MissForest:
   This object is assumed to implement the scikit-learn estimator API.
 
   n_iter : int
-  Determines the number of iterations for the imputation process.
-  """
+  Determines the number of iterations for the imputation process."""
   def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol = 1e-5):
     self.regressor = regressor
     self.max_iter = max_iter
@@ -232,8 +229,7 @@ def impute_and_normalize(df, groups, impute = True, min_samples = 0.1):
     | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%\n
     | Returns:
     | :-
-    | Returns a dataframe in the same style as the input 
-    """
+    | Returns a dataframe in the same style as the input """
     if min_samples:
       min_count = max(np.floor(df.shape[1] * min_samples), 2) + 1
       mask = (df != 0).sum(axis = 1) >= min_count
@@ -269,8 +265,7 @@ def variance_based_filtering(df, min_feature_variance = 0.02):
     | Returns:
     | :-
     | filtered_df (DataFrame): DataFrame with remaining glycans (variance > min_feature_variance) as indices and samples in columns.
-    | discarded_df (DataFrame): DataFrame with discarded glycans (variance <= min_feature_variance) as indices and samples in columns.
-    """
+    | discarded_df (DataFrame): DataFrame with discarded glycans (variance <= min_feature_variance) as indices and samples in columns."""
     variances = df.var(axis = 1)
     filtered_df = df.loc[variances > min_feature_variance]
     discarded_df = df.loc[variances <= min_feature_variance]
@@ -288,8 +283,7 @@ def jtkdist(timepoints, param_dic, reps = 1, normal = False):
   | normal (bool): a flag for normal approximation if maximum possible negative log p-value is too large.\n
   | Returns:
   | :-
-  | Returns statistical values, added to 'param_dic'.
-  """
+  | Returns statistical values, added to 'param_dic'."""
   timepoints = timepoints if isinstance(timepoints, int) else timepoints.sum()
   tim = np.full(timepoints, reps) if reps != timepoints else reps  # Support for unbalanced replication (unequal replicates in all groups)
   maxnlp = gammaln(np.sum(tim)) - np.sum(np.log(np.arange(1, np.max(tim)+1)))
@@ -340,8 +334,7 @@ def jtkinit(periods, param_dic, interval = 1, replicates = 1):
   | replicates (int): number of replicates within each group.\n
   | Returns:
   | :-
-  | Returns values describing waveforms, added to 'param_dic'.
-  """
+  | Returns values describing waveforms, added to 'param_dic'."""
   param_dic["INTERVAL"] = interval
   if len(periods) > 1:
     param_dic["PERIODS"] = list(periods)
@@ -406,8 +399,7 @@ def jtkstat(z, param_dic):
   | Returns:
   | :-
   | Returns an updated parameter dictionary where the appropriate model waveform has been assigned to the
-  | molecules in the analysis.
-  """
+  | molecules in the analysis."""
   param_dic["CJTK"] = []
   M = param_dic["MAX"]
   z = np.array(z)
@@ -440,11 +432,10 @@ def jtkx(z, param_dic, ampci = False):
   | ampci (bool): flag for calculating amplitude confidence interval (TRUE = compute); default=False.\n
   | Returns:
   | :-
-  | Returns an updated parameter dictionary containing the optimal waveform parameters for each molecular species.
-  """
+  | Returns an updated parameter dictionary containing the optimal waveform parameters for each molecular species."""
   param_dic = jtkstat(z, param_dic)  # Calculate p and S for all phases
-  pvals = [cjtk[0] for cjtk in param_dic["CJTK"]]  # Exact two-tailed p values for period/phase combos
-  padj = multipletests(pvals, method = 'fdr_bh')[1]
+  padj = [cjtk[0] for cjtk in param_dic["CJTK"]]  # Exact two-tailed p values for period/phase combos
+  #padj = multipletests(pvals, method = 'fdr_bh')[1]
   JTK_ADJP = min(padj)  # Global minimum adjusted p-value
   def groupings(padj, param_dic):
     d = defaultdict(list)
@@ -496,13 +487,8 @@ def get_BF(n, p, z = False, method = "robust", upper = 10):
   | upper (float): The upper limit for the range of realistic effect sizes. Only relevant when method="balanced"; default:10\n
   | Returns:
   | :-
-  | float: A numeric value for the BF in favour of H1.
-  """
-  method_dict = {
-    "JAB": lambda n: 1/n,
-    "min": lambda n: 2/n,
-    "robust": lambda n: max(2/n, 1/np.sqrt(n)),
-    }
+  | float: A numeric value for the BF in favour of H1."""
+  method_dict = {"JAB": lambda n: 1/n, "min": lambda n: 2/n, "robust": lambda n: max(2/n, 1/np.sqrt(n))}
   if method == "balanced":
     integrand = lambda x: np.exp(-n * x**2 / 4)
     method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
@@ -522,13 +508,8 @@ def get_alphaN(n, BF = 3, method = "robust", upper = 10):
   | upper (float): The upper limit for the range of realistic effect sizes. Only relevant when method="balanced"; default:10\n
   | Returns:
   | :-
-  | float: Numeric alpha level required to achieve the desired level of evidence.
-  """
-  method_dict = {
-    "JAB": lambda n: 1/n,
-    "min": lambda n: 2/n,
-    "robust": lambda n: max(2/n, 1/np.sqrt(n)),
-    }
+  | float: Numeric alpha level required to achieve the desired level of evidence."""
+  method_dict = {"JAB": lambda n: 1/n, "min": lambda n: 2/n, "robust": lambda n: max(2/n, 1/np.sqrt(n))}
   if method == "balanced":
     integrand = lambda x: np.exp(-n * x**2 / 4)
     method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
@@ -546,8 +527,7 @@ def pi0_tst(p_values, alpha = 0.05):
   | alpha (float): significance threshold for testing; default:0.05\n
   | Returns:
   | :-
-  | Returns an estimate of π0, the proportion of true null hypotheses in that dataset
-  """
+  | Returns an estimate of π0, the proportion of true null hypotheses in that dataset"""
   alpha_prime = alpha / (1 + alpha)
   n = len(p_values)
   # Apply the BH procedure at level α'
@@ -573,8 +553,7 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
   | alpha (float): significance threshold for testing\n
   | Returns:
   | :-
-  | Returns dictionaries of glycan : corrected p-value and glycan : significant?
-  """
+  | Returns dictionaries of glycan : corrected p-value and glycan : significant?"""
   # Initialize results
   adjusted_p_values = {}
   significance_dict = {}
@@ -618,8 +597,7 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, pair
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
   | Returns:
   | :-
-  | Returns floats for the intra-group and inter-group correlation
-  """
+  | Returns floats for the intra-group and inter-group correlation"""
   reverse_lookup = {k: v for v, l in grouped_glycans.items() for k in l}
   if paired:
     temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
@@ -655,15 +633,15 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, pair
   return icc, inter_group_corr
 
 
-def replace_outliers_with_IQR_bounds(full_row):
+def replace_outliers_with_IQR_bounds(full_row, cap_side = 'both'):
   """replaces outlier values with row median\n
   | Arguments:
   | :-
-  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical\n
+  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical
+  | cap_side (str): 'both', 'lower', or 'upper' to specify which side(s) to cap outliers on\n
   | Returns:
   | :-
-  | Returns row with replaced outliers
-  """
+  | Returns row with replaced outliers"""
   row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
   # Calculate Q1, Q3, and IQR for each row
   Q1 = row.quantile(0.25)
@@ -671,8 +649,15 @@ def replace_outliers_with_IQR_bounds(full_row):
   IQR = Q3 - Q1
   lower_bound = Q1 - 1.5*IQR
   upper_bound = Q3 + 1.5*IQR
+  def cap_value(x):
+    if cap_side in ['both', 'lower'] and x < lower_bound and x != 0:
+      return lower_bound
+    elif cap_side in ['both', 'upper'] and x > upper_bound and x != 0:
+      return upper_bound
+    else:
+      return x
   # Define outliers as values outside of Q1 - 1.5*IQR and Q3 + 1.5*IQR
-  capped_values = row.apply(lambda x: lower_bound if (x < lower_bound and x != 0) else (upper_bound if (x > upper_bound and x != 0) else x))
+  capped_values = row.apply(cap_value)
   # Replace outliers with row median
   if isinstance(full_row.iloc[0], str):
     full_row.iloc[1:] = capped_values
@@ -681,20 +666,28 @@ def replace_outliers_with_IQR_bounds(full_row):
   return full_row
 
 
-def replace_outliers_winsorization(full_row):
+def replace_outliers_winsorization(full_row, cap_side = 'both'):
   """Replaces outlier values using Winsorization.\n
   | Arguments:
   | :-
-  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical\n
+  | full_row (pd.DataFrame row): row from a pandas dataframe, with all but possibly the first value being numerical
+  | cap_side (str): 'both', 'lower', or 'upper' to specify which side(s) to cap outliers on\n
   | Returns:
   | :-
-  | Returns row with outliers replaced by Winsorization.
-  """
+  | Returns row with outliers replaced by Winsorization."""
   row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
   # Apply Winsorization - limits set to match typical IQR outlier detection
   nan_placeholder = row.min() - 1
-  row = row.fillna(nan_placeholder)
-  winsorized_values = winsorize(row, limits = [0.05, 0.05])
+  row = row.astype(float).fillna(nan_placeholder)
+  if cap_side == 'both':
+    limits = [0.05, 0.05]
+  elif cap_side == 'lower':
+    limits = [0.05, 0]
+  elif cap_side == 'upper':
+    limits = [0, 0.05]
+  else:
+    raise ValueError("cap_side must be 'both', 'lower', or 'upper'")
+  winsorized_values = winsorize(row, limits = limits)
   winsorized_values = pd.Series(winsorized_values, index = row.index)
   winsorized_values = winsorized_values.replace(nan_placeholder, np.nan)
   if isinstance(full_row.iloc[0], str):
@@ -705,8 +698,7 @@ def replace_outliers_winsorization(full_row):
 
 
 def hotellings_t2(group1, group2, paired = False):
-  """Hotelling's T^2 test (the t-test for multivariate comparisons)\n
-  """
+  """Hotelling's T^2 test (the t-test for multivariate comparisons)\n"""
   if paired:
     assert group1.shape == group2.shape, "For paired samples, the size of group1 and group2 should be the same"
     group1 -= group2
@@ -763,8 +755,7 @@ def get_equivalence_test(row_a, row_b, paired = False):
   | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
   | Returns:
   | :-
-  | Returns a p-value of whether the two group means can be considered equivalent
-  """
+  | Returns a p-value of whether the two group means can be considered equivalent"""
   pooled_std = np.sqrt(((len(row_a) - 1) * np.var(row_a, ddof = 1) + (len(row_b) - 1) * np.var(row_b, ddof = 1)) / (len(row_a) + len(row_b) - 2))
   delta = 0.2 * pooled_std
   low, up = -delta, delta
@@ -782,26 +773,26 @@ def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
   | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
   | Returns:
   | :-
-  | Returns a dataframe that is CLR-transformed with scale model adjustment
-  """
-  geometric_mean = gmean(df.replace(0, np.nan), axis = 0)
+  | Returns a dataframe that is CLR-transformed with scale model adjustment"""
+  geometric_mean = gmean(df.replace(0, np.nan), axis = 0, nan_policy = 'omit')
   clr_adjusted = np.zeros_like(df.values)
   if gamma and not isinstance(custom_scale, dict):
     group1i = [df.columns.get_loc(c) for c in group1]
     group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
     geometric_mean = -np.log2(geometric_mean)
     if group2:
-      clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, size = (df.shape[0], len(group1))))
-      condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, size = (df.shape[0], len(group2))) if not custom_scale else norm.rvs(loc = np.log2(custom_scale), scale = gamma, size = (df.shape[0], len(group2)))
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, random_state = rng, size = (df.shape[0], len(group1))))
+      condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, random_state = rng, size = (df.shape[0], len(group2))) if not custom_scale else \
+                  norm.rvs(loc = np.log2(custom_scale), scale = gamma, random_state = rng, size = (df.shape[0], len(group2)))
       clr_adjusted[:, group2i] = np.log2(df[group2]) + condition
     else:
-      clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, size = (df.shape[0], len(group1)))
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = rng, size = (df.shape[0], len(group1)))
   elif not group2 and isinstance(custom_scale, dict):
     gamma = max(gamma, 0.1)
     for idx in range(df.shape[1]):
       group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
-      clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, size = df.shape[0])
+      clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = rng, size = df.shape[0])
   else:
     clr_adjusted = np.log2(df) - np.log2(geometric_mean)
   return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
@@ -817,8 +808,7 @@ def anosim(df, group_labels_in, permutations = 999):
   | Returns:
   | :-
   | (i) ANOSIM R statistic - ranges between -1 to 1.
-  | (ii) p-value of the R statistic
-  """
+  | (ii) p-value of the R statistic"""
   group_labels = copy.deepcopy(group_labels_in)
   n = df.shape[0]
   condensed_dist = df.values[np.tril_indices(n, k = -1)]
@@ -854,8 +844,7 @@ def alpha_biodiversity_stats(df, group_labels):
   | group_labels (list): list of group membership for each sample\n
   | Returns:
   | :-
-  | F statistic and p-value
-  """
+  | F statistic and p-value"""
   group_counts = Counter(group_labels)
   if all(count > 1 for count in group_counts.values()):
     stat_outputs = pd.DataFrame({'group': group_labels, 'diversity': df.squeeze()})
@@ -872,8 +861,7 @@ def calculate_permanova_stat(df, group_labels):
   | group_labels (list): list of group membership for each sample\n
   | Returns:
   | :-
-  | F statistic - higher means effect more likely.
-  """
+  | F statistic - higher means effect more likely."""
   unique_groups = np.unique(group_labels)
   n = len(group_labels)
   # Between-group and within-group sums of squares
@@ -901,8 +889,7 @@ def permanova_with_permutation(df, group_labels, permutations = 999):
   | Returns:
   | :-
   | (i) F statistic - higher means effect more likely.
-  | (ii) p-value of the F statistic
-  """
+  | (ii) p-value of the F statistic"""
   observed_f = calculate_permanova_stat(df, group_labels)
   permuted_fs = np.zeros(permutations)
   for i in range(permutations):
@@ -924,28 +911,28 @@ def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.
   | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
   | Returns:
   | :-
-  | ALR-transformed dataframe
-  """
+  | ALR-transformed dataframe"""
   reference_values = df.iloc[reference_component_index, :]
   alr_transformed = np.zeros_like(df.values)
   group1i = [df.columns.get_loc(c) for c in group1]
   group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
   if not isinstance(custom_scale, dict):
     if custom_scale:
-      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, size = len(group1i)), axis = 1)
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, random_state = rng, size = len(group1i)), axis = 1)
     else:
-      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values[group1i])
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i])
     scale_adjustment = np.log2(custom_scale) if custom_scale else 0
-    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, size = len(group2i)), axis = 1)
+    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values.iloc[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, random_state = rng, size = len(group2i)), axis = 1)
   else:
     gamma = max(gamma, 0.1)
     for idx in range(df.shape[1]):
       group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
-      reference_adjusted = reference_values[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma)
+      reference_adjusted = reference_values[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = rng)
       alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted
   alr_transformed = pd.DataFrame(alr_transformed, index = df.index, columns = df.columns)
   alr_transformed = alr_transformed.drop(index = reference_values.name)
+  alr_transformed = alr_transformed.reset_index(drop=True)
   return alr_transformed
 
 
@@ -960,8 +947,7 @@ def get_procrustes_scores(df, group1, group2, paired = False, custom_scale = 0):
   | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
   | Returns:
   | :-
-  | List of Procrustes scores (Procrustes correlation * inverse of feature variance)
-  """
+  | List of Procrustes scores (Procrustes correlation * inverse of feature variance)"""
   if isinstance(group1[0], int):
     group1 = [df.columns.tolist()[k] for k in group1]
     group2 = [df.columns.tolist()[k] for k in group2]
@@ -995,8 +981,7 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False, gam
   | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
   | Returns:
   | :-
-  | ALR-transformed dataframe
-  """
+  | ALR-transformed dataframe"""
   scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired, custom_scale = custom_scale)
   ref_component = np.argmax(scores)
   ref_component_string = df.iloc[:, 0].values[ref_component]
@@ -1012,18 +997,20 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False, gam
   return alr
 
 
-def correct_multiple_testing(pvals, alpha):
+def correct_multiple_testing(pvals, alpha, correction_method = "two-stage"):
   """Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure\n
   | Arguments:
   | :-
   | pvals (list): list of raw p-values
-  | alpha (float): p-value threshold for statistical significance\n
+  | alpha (float): p-value threshold for statistical significance
+  | correction_method (string): whether to use "two-stage" or "one-stage" Benjamini-Hochberg for correction; default:"two-stage"\n
   | Returns:
   | :-
   | (i) list of corrected p-values
-  | (ii) list of True/False of whether corrected p-value reaches statistical significance
-  """
-  corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1]
+  | (ii) list of True/False of whether corrected p-value reaches statistical significance"""
+  if not isinstance(pvals, list):
+    pvals = pvals.tolist()
+  corrpvals = multipletests(pvals, method = 'fdr_tsbh' if correction_method == "two-stage" else 'fdr_bh')[1]
   corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
   significance = [p < alpha for p in corrpvals]
   if sum(significance) > 0.9*len(significance):
@@ -1043,11 +1030,185 @@ def omega_squared(row, groups):
   | groups (list): list indicating group membership with indices per column\n
   | Returns:
   | :-
-  | Returns effect size as omega squared (float)
-  """
+  | Returns effect size as omega squared (float)"""
   long_df = pd.DataFrame({'value': row, 'group': groups})
-  model = ols('value ~ C(group)', data=long_df).fit()
+  model = ols('value ~ C(group)', data = long_df).fit()
   anova_results = anova_lm(model, typ = 2)
   ss_total = sum(model.resid ** 2) + anova_results['sum_sq'].sum()
   omega_squared = (anova_results.at['C(group)', 'sum_sq'] - (anova_results.at['C(group)', 'df'] * model.mse_resid)) / (ss_total + model.mse_resid)
   return omega_squared
+
+
+def get_glycoform_diff(df_res, alpha = 0.05, level = 'peptide'):
+  """Calculates differential expression of glycoforms of either a peptide or a whole protein\n
+  | Arguments:
+  | :-
+  | df_res (pd.DataFrame): result from .motif.analysis.get_differential_expression
+  | alpha (float): significance threshold for testing; default:0.05
+  | level (string): whether to analyze glycoform differential expression at the level of 'peptide' or 'protein'; default:'peptide'\n
+  | Returns:
+  | :-
+  | Returns a dataframe with:
+  | (i) Differentially expressed glycopeptides/glycoproteins
+  | (ii) Corrected p-values (Welch's t-test with two-stage Benjamini-Hochberg correction aggregated with Fisher’s Combined Probability Test) for difference in mean
+  | (iii) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
+  | (iv) Effect size as the average Cohen's d across glycoforms"""
+  label_col = 'Glycosite' if 'Glycosite' in df_res.columns else 'Glycan'
+  if level == 'protein':
+    df_res[label_col] = [k.split('_')[0] for k in df_res[label_col]]
+  else:
+    df_res[label_col] = ['_'.join(k.split('_')[:-1]) for k in df_res[label_col]]
+  grouped = df_res.groupby(label_col)['corr p-val'].apply(lambda p: combine_pvalues(p)[1]) # Fisher’s Combined Probability Test
+  mean_effect_size = df_res.groupby(label_col)['Effect size'].mean()
+  pvals, sig = correct_multiple_testing(grouped, alpha)
+  df_out = pd.DataFrame({'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})
+  return df_out.sort_values(by = 'corr p-val')
+
+
+def get_glm(group, glycan_features = ['H', 'N', 'A', 'F', 'G']):
+  """given glycoform data from a glycosite, constructs & fits a GLM formula for main+interaction effects of explaining glycoform abundance\n
+  | Arguments:
+  | :-
+  | group (dataframe): longform data of glycoform abundances for a particular glycosite
+  | glycan_features (list): list of extracted glycan features to consider as variables; default:['H', 'N', 'A', 'F', 'G']\n
+  | Returns:
+  | :-
+  | Returns fitted GLM (or string with failure message if unsuccessful) and a list of the variables that it contains"""
+  retained_vars = [c for c in glycan_features if c in group.columns and max(group[c]) > 0]
+  if not retained_vars:
+    return ("No variables retained", [])
+  base_formula = 'Abundance ~ '
+  formula_parts = ['Condition']
+  formula_parts += [f'{col} + {col}_Condition' for col in retained_vars] # Main and interaction effects
+  for col in retained_vars:
+    group[f'{col}_Condition'] = group[col] * group['Condition']
+  formula = base_formula + ' + '.join(formula_parts)
+  try:
+    with np.errstate(divide = 'ignore'):
+      model = smf.glm(formula = formula, data = group, family = sm.families.Gaussian()).fit()
+    return model, retained_vars
+  except Exception as e:
+    return (f"GLM fitting failed: {str(e)}", [])
+
+
+def process_glm_results(df, alpha, glycan_features):
+  """tests for interaction effects of glycan features and the condition on glycoform abundance via a GLM\n
+  | Arguments:
+  | :-
+  | df (dataframe): CLR-transformed glycoproteomics data (processed grouped by site), rows glycoforms, columns samples
+  | glycan_features (list): list of extracted glycan features to consider as variables\n
+  | Returns:
+  | :-
+  | (for each condition/interaction feature)
+  | (i) Regression coefficient from the GLM (indicating direction of change in the treatment condition)
+  | (ii) Corrected p-values (two-tailed t-test with two-stage Benjamini-Hochberg correction) for testing the coefficient against zero
+  | (iii) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold"""
+  results = df.groupby('Glycosite').apply(get_glm, glycan_features = glycan_features)
+  all_retained_vars = set()
+  for _, retained_vars in results:
+    all_retained_vars.update(retained_vars)
+  int_terms = ['Condition'] + [f'{v}_Condition' for v in all_retained_vars]
+  out = {idx: [v.pvalues.get(term, 1.0) for term in int_terms] if not isinstance(v, str) else [1.0] * len(int_terms) for idx, (v, _) in results.items()}
+  out2 = {idx: [v.params.get(term, 0.0) for term in int_terms] if not isinstance(v, str) else [0.0] * len(int_terms) for idx, (v, _) in results.items()}
+  df_pvals = pd.DataFrame(out).T
+  df_coefs = pd.DataFrame(out2).T
+  df_pvals.columns = int_terms
+  df_coefs.columns = int_terms
+  df_out = pd.DataFrame(index = df_pvals.index)
+  for term in int_terms:
+    corrpvals, significance = correct_multiple_testing(df_pvals[term], alpha)
+    df_out[f'{term}_coefficient'] = df_coefs[term]
+    df_out[f'{term}_corr_pval'] = corrpvals
+    df_out[f'{term}_significant'] = significance
+  return df_out.sort_values(by = 'Condition_corr_pval')
+
+
+def partial_corr(x, y, controls, motifs = False):
+  """Compute regularized partial correlation of x and y, controlling for multiple other variables in controls\n
+  | Arguments:
+  | :-
+  | x (array-like): typically the values from a column or row
+  | y (array-like): typically the values from a column or row
+  | controls (array-like): variables that are correlated with x or y
+  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False\n
+  | Returns:
+  | :-
+  | float: regularized partial correlation coefficient.
+  | float: p-value associated with the Spearman correlation of residuals.\n"""
+  # Fit regression models
+  alpha = 0.1 if motifs else 0.25
+  beta_x = Ridge(alpha = alpha).fit(controls, x).coef_
+  beta_y = Ridge(alpha = alpha).fit(controls, y).coef_
+  # Compute residuals
+  res_x = x - controls.dot(beta_x)
+  res_y = y - controls.dot(beta_y)
+  # Compute correlation of residuals
+  corr, pval = spearmanr(res_x, res_y)
+  return corr, pval
+
+
+def estimate_technical_variance(df, group1, group2, num_instances = 128,
+                                gamma = 0.1, custom_scale = 0):
+  """Monte Carlo sampling from the Dirichlet distribution with relative abundances as concentration, followed by CLR transformation.\n
+  | Arguments:
+  | :-
+  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
+  | group1 (list): list of column indices or names for the first group of samples, usually the control
+  | group2 (list): list of column indices or names for the second group of samples
+  | num_instances (int): Number of Monte Carlo instances to sample; default:128
+  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
+  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
+  | Returns:
+  | :-
+  | Returns a transformed dataframe of shape (features, samples*num_instances) with CLR-transformed Monte Carlo Dirichlet instances."""
+  df = df.apply(lambda col: (col / col.sum())*5000, axis = 0)
+  features, samples = df.shape
+  transformed_data = np.zeros((features, samples, num_instances))
+  for j in range(samples):
+    dirichlet_samples = dirichlet.rvs(alpha = df.iloc[:, j], random_state = rng, size = num_instances)
+    # CLR Transformation for each Monte Carlo instance
+    for n in range(num_instances):
+      sample_instance = pd.DataFrame(dirichlet_samples[n, :])
+      transformed_data[:, j, n] = clr_transformation(sample_instance, sample_instance.columns.tolist(), [],
+                                                     gamma = gamma, custom_scale = custom_scale).squeeze()
+  columns = [col for col in df.columns for _ in range(num_instances)]
+  transformed_data_2d = transformed_data.reshape((features, samples* num_instances))
+  transformed_df = pd.DataFrame(transformed_data_2d, columns = columns)
+  return transformed_df
+
+
+def perform_tests_monte_carlo(group_a, group_b, num_instances = 128, paired = False):
+  """Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, and calculate effect sizes and variances.\n
+  | Arguments:
+  | :-
+  | group_a (dataframe): rows as featureas and columns as sample instances from one condition
+  | group_b (dataframe): rows as featureas and columns as sample instances from one condition
+  | num_instances (int): Number of Monte Carlo instances to sample; default:128
+  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False\n
+  | Returns:
+  | :-
+  | (i) list of uncorrected p-values
+  | (ii) list of corrected p-values (two-stage Benjamini-Hochberg)
+  | (ii) list of effect sizes (Cohen's d)"""
+  num_features, _ = group_a.shape
+  avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes = np.zeros(num_features), np.zeros(num_features), np.zeros(num_features)
+  for instance in range(num_instances):
+    instance_p_values = []
+    instance_effect_sizes = []
+    for feature in range(num_features):
+      sample_a = group_a.iloc[feature, instance::num_instances].values
+      sample_b = group_b.iloc[feature, instance::num_instances].values
+      p_value = ttest_rel(sample_b, sample_a)[1] if paired else ttest_ind(sample_b, sample_a, equal_var = False)[1]
+      effect_size, _ = cohen_d(sample_b, sample_a, paired = paired)
+      instance_p_values.append(p_value)
+      instance_effect_sizes.append(effect_size)
+    # Apply Benjamini-Hochberg correction for multiple testing within the instance
+    avg_uncorrected_p_values += instance_p_values
+    corrected_p_values = multipletests(instance_p_values, method = 'fdr_tsbh')[1]
+    avg_corrected_p_values += corrected_p_values
+    avg_effect_sizes += instance_effect_sizes
+  avg_uncorrected_p_values /= num_instances
+  avg_corrected_p_values /= num_instances
+  avg_corrected_p_values = [p if p >= avg_uncorrected_p_values[i] else avg_uncorrected_p_values[i] for i, p in enumerate(avg_corrected_p_values)]
+  avg_effect_sizes /= num_instances
+  return avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes
