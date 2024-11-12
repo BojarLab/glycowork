@@ -1,6 +1,7 @@
 import copy
 import time
 import math
+from typing import Any, Callable
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -21,7 +22,7 @@ from glycowork.motif.annotate import annotate_dataset
 
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
-    def __init__(self, patience = 7, verbose = False):
+    def __init__(self, patience: int = 7, verbose: bool = False) -> None:
         """
         Args:
             patience (int): How long to wait after last time validation loss improved.
@@ -36,7 +37,7 @@ class EarlyStopping:
         self.early_stop = False
         self.val_loss_min = 0
 
-    def __call__(self, val_loss, model):
+    def __call__(self, val_loss: float, model: torch.nn.Module) -> None:
 
         score = -val_loss
 
@@ -53,7 +54,7 @@ class EarlyStopping:
             self.save_checkpoint(val_loss, model)
             self.counter = 0
 
-    def save_checkpoint(self, val_loss, model):
+    def save_checkpoint(self, val_loss: float, model: torch.nn.Module) -> None:
         '''Saves model when validation loss decrease.'''
         if self.verbose:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
@@ -61,11 +62,11 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 
-def sigmoid(x):
+def sigmoid(x: float) -> float:
     return 1 / (1 + math.exp(-x))
 
 
-def disable_running_stats(model):
+def disable_running_stats(model: torch.nn.Module) -> None:
 
     def _disable(module):
         if isinstance(module, torch.nn.BatchNorm1d):
@@ -75,7 +76,7 @@ def disable_running_stats(model):
     model.apply(_disable)
 
 
-def enable_running_stats(model):
+def enable_running_stats(model: torch.nn.Module) -> None:
 
     def _enable(module):
         if isinstance(module, torch.nn.BatchNorm1d) and hasattr(module, "backup_momentum"):
@@ -84,9 +85,9 @@ def enable_running_stats(model):
     model.apply(_enable)
 
 
-def train_model(model, dataloaders, criterion, optimizer,
-                scheduler, num_epochs = 25, patience = 50,
-                mode = 'classification', mode2 = 'multi'):
+def train_model(model: torch.nn.Module, dataloaders: dict[str, torch.utils.data.DataLoader], criterion: torch.nn.Module,
+                optimizer: torch.optim.Optimizer, scheduler: torch.optim.lr_scheduler._LRScheduler, num_epochs: int = 25,
+                patience: int = 50, mode: str = 'classification', mode2: str = 'multi') -> torch.nn.Module:
   """trains a deep learning model on predicting glycan properties\n
   | Arguments:
   | :-
@@ -101,8 +102,7 @@ def train_model(model, dataloaders, criterion, optimizer,
   | mode2 (string): further specifying classification into 'multi' or 'binary' classification;default:multi\n
   | Returns:
   | :-
-  | Returns the best model seen during training
-  """
+  | Returns the best model seen during training"""
   since = time.time()
   early_stopping = EarlyStopping(patience = patience, verbose = True)
   best_model_wts = copy.deepcopy(model.state_dict())
@@ -262,9 +262,8 @@ def train_model(model, dataloaders, criterion, optimizer,
 
 class SAM(torch.optim.Optimizer):
     # Adapted from https://github.com/davda54/sam
-
-    def __init__(self, params, base_optimizer, rho = 0.5, alpha = 0.0,
-                 adaptive = False, **kwargs):
+    def __init__(self, params: list[torch.nn.Parameter],  base_optimizer: type[torch.optim.Optimizer],
+                 rho: float = 0.5, alpha: float = 0.0, adaptive: bool = False, **kwargs) -> None:
         assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
         assert alpha >= 0.0, f"Invalid alpha, should be non-negative: {alpha}"
 
@@ -277,7 +276,7 @@ class SAM(torch.optim.Optimizer):
         self.minimize_surrogate_gap = any(group["alpha"] > 0.0 for group in self.param_groups)
 
     @torch.no_grad()
-    def first_step(self, zero_grad = False):
+    def first_step(self, zero_grad: bool = False) -> None:
         grad_norm = self._grad_norm()
         for group in self.param_groups:
             scale = group["rho"] / (grad_norm + 1e-12)
@@ -295,7 +294,7 @@ class SAM(torch.optim.Optimizer):
             self.zero_grad()
 
     @torch.no_grad()
-    def second_step(self, zero_grad=False):
+    def second_step(self, zero_grad: bool = False) -> None:
         for group in self.param_groups:
             for p in group["params"]:
                 if p.grad is None:
@@ -310,7 +309,7 @@ class SAM(torch.optim.Optimizer):
             self.zero_grad()
 
     @torch.no_grad()
-    def step(self, closure = None):
+    def step(self, closure: Callable | None = None) -> None:
         assert closure is not None, "Sharpness Aware Minimization requires closure, but it was not provided"
         closure = torch.enable_grad()(closure)  # The closure should do a full forward-backward pass
 
@@ -318,7 +317,7 @@ class SAM(torch.optim.Optimizer):
         closure()
         self.second_step()
 
-    def _gradient_decompose(self):
+    def _gradient_decompose(self) -> None:
         coeff_nomin, coeff_denom = 0.0, 0.0
         for group in self.param_groups:
             for p in group['params']:
@@ -338,7 +337,7 @@ class SAM(torch.optim.Optimizer):
                 rejection = self.state[p]['old_g'] - coeff * p.grad
                 p.grad.data.add_(rejection, alpha=-group["alpha"])
 
-    def _grad_norm(self):
+    def _grad_norm(self) -> torch.Tensor:
         shared_device = self.param_groups[0]["params"][0].device  # Put everything on the same device, in case of model parallelism
         norm = torch.norm(
                     torch.stack([
@@ -350,24 +349,18 @@ class SAM(torch.optim.Optimizer):
                )
         return norm
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict: dict) -> None:
         super().load_state_dict(state_dict)
         self.base_optimizer.param_groups = self.param_groups
 
 
 class Poly1CrossEntropyLoss(torch.nn.Module):
-    def __init__(self,
-                 num_classes: int,
-                 epsilon: float = 1.0,
-                 reduction: str = "mean",
-                 weight: torch.Tensor = None):
-        """
-        Create instance of Poly1CrossEntropyLoss
+    def __init__(self, num_classes: int, epsilon: float = 1.0, reduction: str = "mean", weight: torch.Tensor | None = None) -> None:
+        """Create instance of Poly1CrossEntropyLoss
         :param num_classes:
         :param epsilon:
         :param reduction: one of none|sum|mean, apply reduction to final loss tensor
-        :param weight: manual rescaling weight for each class, passed to Cross-Entropy loss
-        """
+        :param weight: manual rescaling weight for each class, passed to Cross-Entropy loss"""
         super(Poly1CrossEntropyLoss, self).__init__()
         self.num_classes = num_classes
         self.epsilon = epsilon
@@ -375,13 +368,11 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
         self.weight = weight
         return
 
-    def forward(self, logits, labels):
-        """
-        Forward pass
+    def forward(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        """Forward pass
         :param logits: tensor of shape [N, num_classes]
         :param labels: tensor of shape [N]
-        :return: poly cross-entropy loss
-        """
+        :return: poly cross-entropy loss"""
         if len(labels.shape) == 2 and labels.shape[1] == self.num_classes:
             labels_onehot = labels.to(device = logits.device, dtype = logits.dtype)
             labels = torch.argmax(labels, dim = 1)
@@ -402,8 +393,9 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
         return poly1
 
 
-def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.0001,
-                   mode = 'multiclass', num_classes = 2, gsam_alpha = 0.):
+def training_setup(model: torch.nn.Module, lr: float, lr_patience: int = 4, factor: float = 0.2, weight_decay: float = 0.0001,
+                  mode: str = 'multiclass', num_classes: int = 2, gsam_alpha: float = 0.) -> tuple[torch.optim.Optimizer, 
+                                                 torch.optim.lr_scheduler._LRScheduler, torch.nn.Module]:
     """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
     | Arguments:
     | :-
@@ -417,8 +409,7 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
     | gsam_alpha (float): if higher than zero, uses GSAM instead of SAM for the optimizer\n
     | Returns:
     | :-
-    | Returns optimizer, learning rate scheduler, and loss criterion objects
-    """
+    | Returns optimizer, learning rate scheduler, and loss criterion objects"""
     # Choose optimizer & learning rate scheduler
     if mode in {'multiclass', 'multilabel'}:
         optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, alpha = gsam_alpha, lr = lr,
@@ -446,10 +437,10 @@ def training_setup(model, lr, lr_patience = 4, factor = 0.2, weight_decay = 0.00
     return optimizer_ft, scheduler, criterion
 
 
-def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
-                   feature_calc = False, return_features = False,
-                   feature_set = ['known', 'exhaustive'], additional_features_train = None,
-                   additional_features_test = None):
+def train_ml_model(X_train: pd.DataFrame | list, X_test: pd.DataFrame | list, y_train: list, y_test: list, mode: str = 'classification',
+                  feature_calc: bool = False, return_features: bool = False, feature_set: list[str] = ['known', 'exhaustive'],
+                  additional_features_train: pd.DataFrame | None = None,
+                  additional_features_test: pd.DataFrame | None = None) -> xgb.XGBModel | tuple[xgb.XGBModel, pd.DataFrame, pd.DataFrame]:
     """wrapper function to train standard machine learning models on glycans\n
     | Arguments:
     | :-
@@ -463,8 +454,7 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
     | additional_features_test (dataframe): additional features (apart from glycans) to be used for evaluation. Has to be of the same length as X_test; default:None\n
     | Returns:
     | :-
-    | Returns trained model                        
-    """
+    | Returns trained model"""
     # Choose model type
     if mode == 'classification':
         model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,  max_depth = 3)
@@ -508,12 +498,11 @@ def train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
         return model
 
 
-def analyze_ml_model(model):
+def analyze_ml_model(model: xgb.XGBModel) -> None:
     """plots relevant features for model prediction\n
     | Arguments:
     | :-
-    | model (model object): trained machine learning model from train_ml_model
-    """
+    | model (model object): trained machine learning model from train_ml_model"""
     # Get important features
     feat_imp = model.get_booster().get_score(importance_type = 'gain')
     feat_imp = pd.DataFrame(feat_imp, index = [0]).T
@@ -532,7 +521,7 @@ def analyze_ml_model(model):
     plt.show()
 
 
-def get_mismatch(model, X_test, y_test, n = 10):
+def get_mismatch(model: xgb.XGBModel, X_test: pd.DataFrame, y_test: list, n: int = 10) -> list[tuple[Any, float]]:
     """analyzes misclassifications of trained machine learning model\n
     | Arguments:
     | :-
@@ -542,8 +531,7 @@ def get_mismatch(model, X_test, y_test, n = 10):
     | n (int): number of returned misclassifications; default:10\n
     | Returns:
     | :-
-    | Returns tuples of misclassifications and their predicted probability
-    """
+    | Returns tuples of misclassifications and their predicted probability"""
     # Get predictions
     preds = model.predict(X_test)
     preds_proba = model.predict_proba(X_test)

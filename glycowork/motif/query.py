@@ -1,17 +1,17 @@
 import numpy as np
+import pandas as pd
 
 from glycowork.glycan_data.loader import motif_list, df_glycan
 from glycowork.motif.graph import compare_glycans
 from glycowork.motif.annotate import annotate_glycan
 
 
-def get_insight(glycan, motifs = None):
+def get_insight(glycan: str, motifs: pd.DataFrame | None = None) -> None:
     """prints out meta-information about a glycan\n
     | Arguments:
     | :-
     | glycan (string): glycan in IUPAC-condensed format
-    | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list\n
-    """
+    | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list\n"""
     if motifs is None:
         motifs = motif_list
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
@@ -48,7 +48,7 @@ def get_insight(glycan, motifs = None):
     print("\nThat's all we can do for you at this point!")
 
 
-def glytoucan_to_glycan(ids, revert = False):
+def glytoucan_to_glycan(ids: list[str], revert: bool = False) -> list[str]:
     """interconverts GlyTouCan IDs and glycans in IUPAC-condensed\n
     | Arguments:
     | :-
@@ -56,8 +56,7 @@ def glytoucan_to_glycan(ids, revert = False):
     | revert (bool): whether glycans should be mapped to GlyTouCan IDs or vice versa; default:False\n
     | Returns:
     | :-
-    | Returns list of either GlyTouCan IDs or glycans in IUPAC-condensed
-    """
+    | Returns list of either GlyTouCan IDs or glycans in IUPAC-condensed"""
     if revert:
         ids = [df_glycan.glytoucan_id.values.tolist()[df_glycan.glycan.values.tolist().index(k)[0]] for k in ids]
         if any([k not in df_glycan.glycan.values.tolist() for k in ids]):

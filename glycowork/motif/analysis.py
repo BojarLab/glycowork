@@ -7,6 +7,7 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 plt.style.use('default')
 from collections import Counter
+from typing import Any
 from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway, spearmanr
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
@@ -38,9 +39,10 @@ from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_fi
 from glycowork.motif.graph import subgraph_isomorphism
 
 
-def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
-                    impute = True, min_samples = 0.1, transform = "CLR", gamma = 0.1, custom_scale = 0, custom_motifs = [],
-                    monte_carlo = False):
+def preprocess_data(df: pd.DataFrame | str, group1: list[str | int], group2: list[str | int], experiment: str = "diff", motifs: bool = False,
+                   feature_set: list[str] = ['exhaustive', 'known'], paired: bool = False, impute: bool = True, min_samples: float = 0.1,
+                   transform: str | None = None, gamma: float = 0.1, custom_scale: float | dict = 0, custom_motifs: list[str] = [],
+                   monte_carlo: bool = False) -> tuple[pd.DataFrame, pd.DataFrame, list[str | int], list[str | int]]:
   """Preprocesses data for analysis by the functions within .motif.analysis\n
   | Arguments:
   | :-
@@ -112,9 +114,9 @@ def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, fea
   return df, df_org, group1, group2
 
 
-def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
-                     zscores = True, thresh = 1.645, sorting = True, feature_set = ['exhaustive'],
-                     multiple_samples = False, motifs = None, custom_motifs = []):
+def get_pvals_motifs(df: pd.DataFrame | str, glycan_col_name: str = 'glycan', label_col_name: str = 'target', zscores: bool = True,
+                     thresh: float = 1.645, sorting: bool = True, feature_set: list[str] = ['exhaustive'], multiple_samples: bool = False,
+                     motifs: pd.DataFrame | None = None, custom_motifs: list[str] = []) -> pd.DataFrame:
     """returns enriched motifs based on label data or predicted data\n
     | Arguments:
     | :-
@@ -180,7 +182,7 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     return out
 
 
-def get_representative_substructures(enrichment_df):
+def get_representative_substructures(enrichment_df: pd.DataFrame) -> list[str]:
     """builds minimal glycans that contain enriched motifs from get_pvals_motifs\n
     | Arguments:
     | :-
@@ -213,9 +215,9 @@ def get_representative_substructures(enrichment_df):
     return [k for k in rep_motifs if sum(subgraph_isomorphism(j, k) for j in rep_motifs) <= 1]
 
 
-def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
-                 datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan',
-                custom_motifs = [], return_plot = False, show_all = False, **kwargs):
+def get_heatmap(df: pd.DataFrame | str, motifs: bool = False, feature_set: list[str] = ['known'], transform: str = '', datatype: str = 'response',
+                rarity_filter: float = 0.05, filepath: str = '', index_col: str = 'glycan', custom_motifs: list[str] = [], return_plot: bool = False,
+                show_all: bool = False, **kwargs) -> None | Any:
   """clusters samples based on glycan data (for instance glycan binding etc.)\n
   | Arguments:
   | :-
@@ -289,9 +291,8 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
     plt.show()
 
 
-def plot_embeddings(glycans, emb = None, label_list = None,
-                    shape_feature = None, filepath = '', alpha = 0.8,
-                    palette = 'colorblind', **kwargs):
+def plot_embeddings(glycans: list[str], emb: dict[str, np.ndarray] | pd.DataFrame | None = None, label_list: list[Any] | None = None,
+                   shape_feature: str | None = None, filepath: str = '', alpha: float = 0.8, palette: str = 'colorblind', **kwargs) -> None:
     """plots glycan representations for a list of glycans\n
     | Arguments:
     | :-
@@ -337,8 +338,8 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     plt.show()
 
 
-def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_name = 'glycan',
-                                rank = None, focus = None, modifications = False, filepath = '', thresh = 10):
+def characterize_monosaccharide(sugar: str, df: pd.DataFrame | None = None, mode: str = 'sugar', glycan_col_name: str = 'glycan',
+                              rank: str | None = None, focus: str | None = None, modifications: bool = False, filepath: str = '', thresh: int = 10) -> None:
   """for a given monosaccharide/linkage, return typical neighboring linkage/monosaccharide\n
   | Arguments:
   | :-
@@ -440,7 +441,7 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   plt.show()
 
 
-def get_coverage(df, filepath = ''):
+def get_coverage(df: pd.DataFrame | str, filepath: str = '') -> None:
   """ Plot glycan coverage across samples, ordered by average intensity\n
   | Arguments:
   | :-
@@ -464,9 +465,9 @@ def get_coverage(df, filepath = ''):
   plt.show()
 
 
-def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhaustive'],
-            pc_x = 1, pc_y = 2, color = None, shape = None, filepath = '', custom_motifs = [],
-            transform = None, rarity_filter = 0.05):
+def get_pca(df: pd.DataFrame | str, groups: list[int] | pd.DataFrame | None = None, motifs: bool = False, feature_set: list[str] = ['known', 'exhaustive'],
+            pc_x: int = 1, pc_y: int = 2, color: str | None = None, shape: str | None = None, filepath: str = '', custom_motifs: list[str] = [],
+            transform: str | None = None, rarity_filter: float = 0.05) -> None:
   """ PCA plot from glycomics abundance dataframe\n
   | Arguments:
   | :-
@@ -527,7 +528,8 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   plt.show()
 
 
-def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, grouped_BH = False):
+def select_grouping(cohort_b: pd.DataFrame, cohort_a: pd.DataFrame, glycans: list[str], p_values: list[float],
+                   paired: bool = False, grouped_BH: bool = False) -> tuple[dict[str, list[str]], dict[str, list[float]]]:
   """test various means of grouping glycans by domain knowledge, to obtain high intra-group correlation\n
   | Arguments:
   | :-
@@ -567,12 +569,11 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
   return {"group1": glycans}, {"group1": p_values}
 
 
-def get_differential_expression(df, group1, group2,
-                                motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
-                                impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = 0.1, grouped_BH = False, custom_motifs = [], transform = None,
-                                gamma = 0.1, custom_scale = 0, glycoproteomics = False, level = 'peptide',
-                                monte_carlo = False):
+def get_differential_expression(df: pd.DataFrame | str, group1: list[str | int], group2: list[str | int], motifs: bool = False,
+                              feature_set: list[str] = ['exhaustive', 'known'], paired: bool = False, impute: bool = True, sets: bool = False,
+                              set_thresh: float = 0.9, effect_size_variance: bool = False, min_samples: float = 0.1, grouped_BH: bool = False,
+                              custom_motifs: list[str] = [], transform: str | None = None, gamma: float = 0.1, custom_scale: float | dict = 0,
+                              glycoproteomics: bool = False, level: str = 'peptide', monte_carlo: bool = False) -> pd.DataFrame:
   """Calculates differentially expressed glycans or motifs from glycomics data\n
   | Arguments:
   | :-
@@ -704,8 +705,8 @@ def get_differential_expression(df, group1, group2,
     return df_out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
 
-def get_pval_distribution(df_res, filepath = ''):
-  """ p-value distribution plot of glycan differential expression result\n
+def get_pval_distribution(df_res: pd.DataFrame | str, filepath: str = '') -> None:
+  """p-value distribution plot of glycan differential expression result\n
   | Arguments:
   | :-
   | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv]
@@ -724,8 +725,8 @@ def get_pval_distribution(df_res, filepath = ''):
   plt.show()
 
 
-def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
-  """ MA plot of glycan differential expression result\n
+def get_ma(df_res: pd.DataFrame | str, log2fc_thresh: int = 1, sig_thresh: float = 0.05, filepath: str = '') -> None:
+  """MA plot of glycan differential expression result\n
   | Arguments:
   | :-
   | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv or .xlsx]
@@ -752,8 +753,9 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   plt.show()
 
 
-def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed = True,
-                x_metric = 'Log2FC', annotate_volcano = False, filepath = '', **kwargs):
+def get_volcano(df_res: pd.DataFrame | str, y_thresh: float = 0.05, x_thresh: float = 0, n: int | None = None,
+                label_changed: bool = True, x_metric: str = 'Log2FC', annotate_volcano: bool = False, filepath: str = '',
+                **kwargs) -> tuple[tuple[str, float], ...] | dict[Any, tuple[str, float]]:
   """Plots glycan differential expression results in a volcano plot\n
   | Arguments:
   | :-
@@ -803,8 +805,9 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed =
   plt.show()
 
 
-def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'],
-                  min_samples = 0.1, posthoc = True, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0):
+def get_glycanova(df: pd.DataFrame | str, groups: list[Any], impute: bool = True, motifs: bool = False, feature_set: list[str] = ['exhaustive', 'known'],
+                  min_samples: float = 0.1, posthoc: bool = True, custom_motifs: list[str] = [], transform: str | None = None,
+                  gamma: float = 0.1, custom_scale: float = 0) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
     | Arguments:
     | :-
@@ -864,8 +867,8 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
 
-def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
-                      study_names = []):
+def get_meta_analysis(effect_sizes: np.ndarray | list[float], variances: np.ndarray | list[float], model: str = 'fixed',
+                     filepath: str = '', study_names: list[str] = []) -> tuple[float, float]:
     """Fixed-effects model or random-effects model for meta-analysis of glycan effect sizes\n
     | Arguments:
     | :-
@@ -930,7 +933,7 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
     return combined_effect_size, p_value
 
 
-def get_glycan_change_over_time(data, degree = 1):
+def get_glycan_change_over_time(data: np.ndarray, degree: int = 1) -> tuple[float | np.ndarray, float]:
     """Tests if the abundance of a glycan changes significantly over time using an OLS model\n
     | Arguments:
     | :-
@@ -959,8 +962,9 @@ def get_glycan_change_over_time(data, degree = 1):
     return coefficients, p_value
 
 
-def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1,
-                    min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0):
+def get_time_series(df: pd.DataFrame | str, impute: bool = True, motifs: bool = False, feature_set: list[str] = ['known', 'exhaustive'],
+                    degree: int = 1, min_samples: float = 0.1, custom_motifs: list[str] = [], transform: str | None = None,
+                    gamma: float = 0.1, custom_scale: float | dict = 0) -> pd.DataFrame:
     """Analyzes time series data of glycans using an OLS model\n
     | Arguments:
     | :-
@@ -1025,8 +1029,9 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     return df_out.sort_values(by = 'corr p-val')
 
 
-def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal'],
-            custom_motifs = [], transform = None, gamma = 0.1, correction_method = "two-stage"):
+def get_jtk(df_in: pd.DataFrame | str, timepoints: int, periods: list[int], interval: int, motifs: bool = False,
+            feature_set: list[str] = ['known', 'exhaustive', 'terminal'], custom_motifs: list[str] = [], transform: str | None = None,
+            gamma: float = 0.1, correction_method: str = "two-stage") -> pd.DataFrame:
     """Detecting rhythmically expressed glycans via the Jonckheere–Terpstra–Kendall (JTK) algorithm\n
     | Arguments:
     | :-
@@ -1084,8 +1089,9 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     return df_out.sort_values("Adjusted_P_value")
 
 
-def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = False, feature_set = ['exhaustive', 'known'],
-                     custom_motifs = [], paired = False, permutations = 999, transform = None, gamma = 0.1, custom_scale = 0):
+def get_biodiversity(df: pd.DataFrame | str, group1: list[str | int], group2: list[str | int], metrics: list[str] = ['alpha', 'beta'],
+                    motifs: bool = False, feature_set: list[str] = ['exhaustive', 'known'], custom_motifs: list[str] = [], paired: bool = False,
+                    permutations: int = 999, transform: str | None = None, gamma: float = 0.1, custom_scale: float | dict = 0) -> pd.DataFrame:
   """Calculates diversity indices from glycomics data, similar to alpha/beta diversity etc in microbiome data\n
   | Arguments:
   | :-
@@ -1172,8 +1178,9 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
   return df_out.sort_values(by = 'p-val').sort_values(by = 'corr p-val').reset_index(drop = True)
 
 
-def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], custom_motifs = [],
-               transform = None, gamma = 0.1, partial_correlations = False):
+def get_SparCC(df1: pd.DataFrame | str, df2: pd.DataFrame | str, motifs: bool = False, feature_set: list[str] = ["known", "exhaustive"],
+               custom_motifs: list[str] = [], transform: str | None = None, gamma: float = 0.1,
+               partial_correlations: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
   """Performs SparCC (Sparse Correlations for Compositional Data) on two (glycomics) datasets. Samples should be in the same order.\n
   | Arguments:
   | :-
@@ -1258,7 +1265,7 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   return correlation_df, p_value_df
 
 
-def multi_feature_scoring(df, group1, group2, filepath = ''):
+def multi_feature_scoring(df: pd.DataFrame, group1: list[str | int], group2: list[str | int], filepath: str = '') -> tuple[LogisticRegression, float]:
   """Finds the minimal set of glycan features that gives the best model to distinguish conditions\n
   | Arguments:
   | :-
@@ -1302,9 +1309,10 @@ def multi_feature_scoring(df, group1, group2, filepath = ''):
   return model, roc_auc
 
 
-def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaustive"], paired = False, impute = True,
-            min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0, filepath = '',
-            multi_score = False):
+def get_roc(df: pd.DataFrame | str, group1: list[str | int], group2: list[str | int], motifs: bool = False, feature_set: list[str] = ["known", "exhaustive"],
+            paired: bool = False, impute: bool = True, min_samples: float = 0.1, custom_motifs: list[str] = [],
+            transform: str | None = None, gamma: float = 0.1, custom_scale: float | dict = 0, filepath: str = '',
+            multi_score: bool = False) -> list[tuple[str, float]] | dict[str, tuple[str, float]] | tuple[LogisticRegression, float]:
   """Calculates ROC AUC for every feature and, optionally, plots the best\n
   | Arguments:
   | :-
@@ -1399,7 +1407,8 @@ def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaust
   return sorted_auc_scores
 
 
-def get_lectin_array(df, group1, group2, paired = False, transform = ''):
+def get_lectin_array(df: pd.DataFrame | str, group1: list[str | int], group2: list[str | int],
+                     paired: bool = False, transform: str = '') -> pd.DataFrame:
   """Function for analyzing lectin array data for two or more groups.\n
   | Arguments:
   | :-
@@ -1468,8 +1477,8 @@ def get_lectin_array(df, group1, group2, paired = False, transform = ''):
   return df_out
 
 
-def get_glycoshift_per_site(df, group1, group2, paired = False, impute = True,
-                            min_samples = 0.2, gamma = 0.1, custom_scale = 0):
+def get_glycoshift_per_site(df: pd.DataFrame | str, group1: list[str | int], group2: list[str | int], paired: bool = False,
+                           impute: bool = True, min_samples: float = 0.2, gamma: float = 0.1, custom_scale: float | dict = 0) -> pd.DataFrame:
   """Calculates differentially expressed glycans or motifs from glycoproteomics data\n
   | Arguments:
   | :-

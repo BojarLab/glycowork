@@ -13,7 +13,7 @@ except ImportError:
   raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 
 
-def augment_glycan(glycan_data, libr, generalization_prob = 0.2):
+def augment_glycan(glycan_data: torch.utils.data.Dataset, libr: dict[str, int], generalization_prob: float = 0.2) -> torch.utils.data.Dataset:
   """Augment a single glycan by wildcarding some of its monosaccharides or linkages.\n
   | Arguments:
   | :-
@@ -22,8 +22,7 @@ def augment_glycan(glycan_data, libr, generalization_prob = 0.2):
   | generalization_prob (float): the probability (0-1) of wildcarding for every single monosaccharide/linkage; default: 0.2\n
   | Returns:
   | :-
-  | Returns the data object with partially wildcarded glycan graph
-  """
+  | Returns the data object with partially wildcarded glycan graph"""
   augmented_data = deepcopy(glycan_data)
   # Augment node labels
   for i, label in enumerate(augmented_data.string_labels):
@@ -35,23 +34,24 @@ def augment_glycan(glycan_data, libr, generalization_prob = 0.2):
 
 
 class AugmentedGlycanDataset(torch.utils.data.Dataset):
-  def __init__(self, dataset, libr, augment_prob = 0.5, generalization_prob = 0.2):
+  def __init__(self, dataset: torch.utils.data.Dataset, libr: dict[str, int], augment_prob: float = 0.5,  generalization_prob: float = 0.2) -> None:
     self.dataset = dataset
     self.augment_prob = augment_prob
     self.generalization_prob = generalization_prob
     self.libr = libr
 
-  def __len__(self):
+  def __len__(self) -> int:
     return len(self.dataset)
 
-  def __getitem__(self, idx):
+  def __getitem__(self, idx: int) -> torch.utils.data.Dataset:
     glycan_data = self.dataset[idx]
     if random() < self.augment_prob:
       glycan_data = augment_glycan(glycan_data, self.libr, self.generalization_prob)
     return glycan_data
 
 
-def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long):
+def dataset_to_graphs(glycan_list: list[str], labels: list[float | int], libr: dict[str, int] | None = None,
+                     label_type: torch.dtype = torch.long) -> list[torch.utils.data.Dataset]:
   """wrapper function to convert a whole list of glycans into a graph dataset\n
   | Arguments:
   | :-
@@ -61,8 +61,7 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long)
   | label_type (torch object): which tensor type for label, default is torch.long for binary labels, change to torch.float for continuous\n
   | Returns:
   | :-
-  | Returns list of node list / edge list / label list data tuples
-  """
+  | Returns list of node list / edge list / label list data tuples"""
   if libr is None:
     libr = lib
   glycan_cache = {}
@@ -81,9 +80,9 @@ def dataset_to_graphs(glycan_list, labels, libr = None, label_type = torch.long)
   return data
 
 
-def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
-                          shuffle = True, drop_last = False, extra_feature = None, label_type = torch.long,
-                          augment_prob = 0., generalization_prob = 0.2):
+def dataset_to_dataloader(glycan_list: list[str], labels: list[float | int], libr: dict[str, int] | None = None, batch_size: int = 32,
+                         shuffle: bool = True, drop_last: bool = False, extra_feature: list[float] | None = None, label_type: torch.dtype = torch.long,
+                         augment_prob: float = 0., generalization_prob: float = 0.2) -> torch.utils.data.DataLoader:
   """wrapper function to convert glycans and labels to a torch_geometric DataLoader\n
   | Arguments:
   | :-
@@ -99,8 +98,7 @@ def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
   | generalization_prob (float): the probability (0-1) of wildcarding for every single monosaccharide/linkage; default: 0.2\n
   | Returns:
   | :-
-  | Returns a dataloader object used for training deep learning models
-  """
+  | Returns a dataloader object used for training deep learning models"""
   if libr is None:
     libr = lib
   # Converting glycans and labels to PyTorch Geometric Data objects
@@ -115,11 +113,10 @@ def dataset_to_dataloader(glycan_list, labels, libr = None, batch_size = 32,
   return DataLoader(augmented_dataset, batch_size = batch_size, shuffle = shuffle, drop_last = drop_last)
 
 
-def split_data_to_train(glycan_list_train, glycan_list_val,
-                        labels_train, labels_val, libr = None,
-                        batch_size = 32, drop_last = False,
-                        extra_feature_train = None, extra_feature_val = None,
-                        label_type = torch.long, augment_prob = 0., generalization_prob = 0.2):
+def split_data_to_train(glycan_list_train: list[str], glycan_list_val: list[str], labels_train: list[float | int], labels_val: list[float | int],
+                       libr: dict[str, int] | None = None, batch_size: int = 32, drop_last: bool = False, extra_feature_train: list[float] | None = None,
+                       extra_feature_val: list[float] | None = None, label_type: torch.dtype = torch.long, augment_prob: float = 0.,
+                       generalization_prob: float = 0.2) -> dict[str, torch.utils.data.DataLoader]:
   """wrapper function to convert split training/test data into dictionary of dataloaders\n
   | Arguments:
   | :-
@@ -137,8 +134,7 @@ def split_data_to_train(glycan_list_train, glycan_list_val,
   | generalization_prob (float): the probability (0-1) of wildcarding for every single monosaccharide/linkage; default: 0.2\n
   | Returns:
   | :-
-  | Returns a dictionary of dataloaders for training and testing deep learning models
-  """
+  | Returns a dictionary of dataloaders for training and testing deep learning models"""
   if libr is None:
     libr = lib
   # Generating train and validation set loaders

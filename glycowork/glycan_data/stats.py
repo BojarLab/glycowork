@@ -23,21 +23,21 @@ rng = np.random.default_rng(42)
 np.random.seed(0)
 
 
-def fast_two_sum(a, b):
+def fast_two_sum(a: int | float, b: int | float) -> list[int]:
   """Assume abs(a) >= abs(b)"""
   x = int(a) + int(b)
   y = b - (x - int(a))
   return [x] if y == 0 else [x, y]
 
 
-def two_sum(a, b):
+def two_sum(a: int | float, b: int | float) -> list[int]:
   """For unknown order of a and b"""
   x = int(a) + int(b)
   y = (a - (x - int(b))) + (b - (x - int(a)))
   return [x] if y == 0 else [x, y]
 
 
-def expansion_sum(*args):
+def expansion_sum(*args: int | float) -> int | list[int | float]:
   """For the expansion sum of floating points"""
   g = sorted(args, reverse = True)
   q, *h = fast_two_sum(np.array(g[0]), np.array(g[1]))
@@ -49,7 +49,7 @@ def expansion_sum(*args):
   return [h, q] if h else q
 
 
-def hlm(z):
+def hlm(z: np.ndarray | list[float]) -> float:
   """Hodges-Lehmann estimator of the median"""
   z = np.array(z)
   zz = np.add.outer(z, z)
@@ -57,7 +57,7 @@ def hlm(z):
   return np.median(zz) / 2
 
 
-def update_cf_for_m_n(m, n, MM, cf):
+def update_cf_for_m_n(m: int, n: int, MM: int, cf: list[float]) -> None:
   """Constructs cumulative frequency table for experimental parameters defined in the function 'jtkinit'"""
   P = min(m + n, MM)
   for t_temp in range(n + 1, P + 1):  # Zero-based offset t_temp
@@ -69,7 +69,7 @@ def update_cf_for_m_n(m, n, MM, cf):
       cf[u] = expansion_sum(cf[u], cf[u - s])  # Shewchuk algorithm
 
 
-def cohen_d(x, y, paired = False):
+def cohen_d(x: np.ndarray | list[float], y: np.ndarray | list[float], paired: bool = False) -> tuple[float, float]:
   """calculates effect size between two groups\n
   | Arguments:
   | :-
@@ -99,7 +99,7 @@ def cohen_d(x, y, paired = False):
   return d, var_d
 
 
-def mahalanobis_distance(x, y, paired = False):
+def mahalanobis_distance(x: np.ndarray | pd.DataFrame, y: np.ndarray | pd.DataFrame, paired: bool = False) -> float:
   """calculates effect size between two groups in a multivariate comparison\n
   | Arguments:
   | :-
@@ -123,7 +123,7 @@ def mahalanobis_distance(x, y, paired = False):
   return mahalanobis_d[0][0]
 
 
-def mahalanobis_variance(x, y, paired = False):
+def mahalanobis_variance(x: np.ndarray | pd.DataFrame, y: np.ndarray | pd.DataFrame, paired: bool = False) -> float:
   """Estimates variance of Mahalanobis distance via bootstrapping\n
   | Arguments:
   | :-
@@ -152,7 +152,7 @@ def mahalanobis_variance(x, y, paired = False):
   return np.var(bootstrap_samples)
 
 
-def variance_stabilization(data, groups = None):
+def variance_stabilization(data: pd.DataFrame, groups: list[list[str]] | None = None) -> pd.DataFrame:
   """Variance stabilization normalization\n
   | Arguments:
   | :-
@@ -183,7 +183,8 @@ class MissForest:
 
   n_iter : int
   Determines the number of iterations for the imputation process."""
-  def __init__(self, regressor = RandomForestRegressor(n_jobs = -1), max_iter = 5, tol = 1e-5):
+  def __init__(self, regressor: RandomForestRegressor = RandomForestRegressor(n_jobs = -1),
+               max_iter: int = 5, tol: float = 1e-5) -> None:
     self.regressor = regressor
     self.max_iter = max_iter
     self.tol = tol
@@ -219,7 +220,7 @@ class MissForest:
     return X_transform
 
 
-def impute_and_normalize(df, groups, impute = True, min_samples = 0.1):
+def impute_and_normalize(df: pd.DataFrame, groups: list[list[str]], impute: bool = True, min_samples: float = 0.1) -> pd.DataFrame:
     """given a dataframe, discards rows with too many missings, imputes the rest, and normalizes\n
     | Arguments:
     | :-
@@ -256,7 +257,7 @@ def impute_and_normalize(df, groups, impute = True, min_samples = 0.1):
     return df
 
 
-def variance_based_filtering(df, min_feature_variance = 0.02):
+def variance_based_filtering(df: pd.DataFrame, min_feature_variance: float = 0.02) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Variance-based filtering of features\n
     | Arguments:
     | :-
@@ -272,7 +273,7 @@ def variance_based_filtering(df, min_feature_variance = 0.02):
     return filtered_df, discarded_df
 
 
-def jtkdist(timepoints, param_dic, reps = 1, normal = False):
+def jtkdist(timepoints: int | np.ndarray, param_dic: dict, reps: int = 1, normal: bool = False) -> dict:
   """Precalculates all possible JT test statistic permutation probabilities for reference later, speeding up the
   | analysis. Calculates the exact null distribution using the Harding algorithm.\n
   | Arguments:
@@ -321,7 +322,7 @@ def jtkdist(timepoints, param_dic, reps = 1, normal = False):
   return param_dic
 
 
-def jtkinit(periods, param_dic, interval = 1, replicates = 1):
+def jtkinit(periods: list[int], param_dic: dict, interval: int = 1, replicates: int = 1) -> dict:
   """Defines the parameters of the simulated sine waves for reference later.\n
   | Each molecular species within the analysis is matched to the optimal wave defined here, and the parameters
   | describing that wave are attributed to the molecular species.\n
@@ -390,7 +391,7 @@ def jtkinit(periods, param_dic, interval = 1, replicates = 1):
   return param_dic
 
 
-def jtkstat(z, param_dic):
+def jtkstat(z: pd.DataFrame, param_dic: dict) -> dict:
   """Determines the JTK statistic and p-values for all model phases, compared to expression data.\n
   | Arguments:
   | :-
@@ -423,7 +424,7 @@ def jtkstat(z, param_dic):
   return param_dic
 
 
-def jtkx(z, param_dic, ampci = False):
+def jtkx(z: pd.DataFrame, param_dic: dict, ampci: bool = False) -> pd.Series:
   """Deployment of jtkstat for repeated use, and parameter extraction\n
   | Arguments:
   | :-
@@ -476,7 +477,7 @@ def jtkx(z, param_dic, ampci = False):
   return pd.Series([JTK_ADJP, JTK_PERIOD, JTK_LAG, JTK_AMP])
 
 
-def get_BF(n, p, z = False, method = "robust", upper = 10):
+def get_BF(n: int, p: float, z: bool = False, method: str = "robust", upper: float = 10) -> float:
   """Transforms a p-value into Jeffreys' approximate Bayes factor (BF)\n
   | Arguments:
   | :-
@@ -498,7 +499,7 @@ def get_BF(n, p, z = False, method = "robust", upper = 10):
   return BF
 
 
-def get_alphaN(n, BF = 3, method = "robust", upper = 10):
+def get_alphaN(n: int, BF: float = 3, method: str = "robust", upper: float = 10) -> float:
   """Set the alpha level based on sample size via Bayesian-Adaptive Alpha Adjustment.\n
   | Arguments:
   | :-
@@ -519,7 +520,7 @@ def get_alphaN(n, BF = 3, method = "robust", upper = 10):
   return alpha
 
 
-def pi0_tst(p_values, alpha = 0.05):
+def pi0_tst(p_values: np.ndarray, alpha: float = 0.05) -> float:
   """estimate the proportion of true null hypotheses in a set of p-values\n
   | Arguments:
   | :-
@@ -544,7 +545,8 @@ def pi0_tst(p_values, alpha = 0.05):
   return pi0_estimate
 
 
-def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha):
+def TST_grouped_benjamini_hochberg(identifiers_grouped: dict[str, list], p_values_grouped: dict[str, list[float]],
+                                   alpha: float) -> tuple[dict[str, float], dict[str, bool]]:
   """perform the two-stage adaptive Benjamini-Hochberg procedure for multiple testing correction\n
   | Arguments:
   | :-
@@ -586,7 +588,8 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped, p_values_grouped, alpha)
   return adjusted_p_values, significance_dict
 
 
-def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = False):
+def test_inter_vs_intra_group(cohort_b: pd.DataFrame, cohort_a: pd.DataFrame, glycans: list[str],
+                              grouped_glycans: dict[str, list[str]], paired: bool = False) -> tuple[float, float]:
   """estimates intra- and inter-group correlation of a given grouping of glycans via a mixed-effects model\n
   | Arguments:
   | :-
@@ -633,7 +636,7 @@ def test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, pair
   return icc, inter_group_corr
 
 
-def replace_outliers_with_IQR_bounds(full_row, cap_side = 'both'):
+def replace_outliers_with_IQR_bounds(full_row: pd.Series, cap_side: str = 'both') -> pd.Series:
   """replaces outlier values with row median\n
   | Arguments:
   | :-
@@ -666,7 +669,7 @@ def replace_outliers_with_IQR_bounds(full_row, cap_side = 'both'):
   return full_row
 
 
-def replace_outliers_winsorization(full_row, cap_side = 'both'):
+def replace_outliers_winsorization(full_row: pd.Series, cap_side: str = 'both') -> pd.Series:
   """Replaces outlier values using Winsorization.\n
   | Arguments:
   | :-
@@ -697,7 +700,7 @@ def replace_outliers_winsorization(full_row, cap_side = 'both'):
   return full_row
 
 
-def hotellings_t2(group1, group2, paired = False):
+def hotellings_t2(group1: np.ndarray, group2: np.ndarray, paired: bool = False) -> tuple[float, float]:
   """Hotelling's T^2 test (the t-test for multivariate comparisons)\n"""
   if paired:
     assert group1.shape == group2.shape, "For paired samples, the size of group1 and group2 should be the same"
@@ -732,21 +735,21 @@ def hotellings_t2(group1, group2, paired = False):
   return F, p_value
 
 
-def sequence_richness(counts):
+def sequence_richness(counts: np.ndarray) -> int:
   return (counts != 0).sum()
 
 
-def shannon_diversity_index(counts):
+def shannon_diversity_index(counts: np.ndarray) -> float:
   proportions = counts / counts.sum()
   return entropy(proportions)
 
 
-def simpson_diversity_index(counts):
+def simpson_diversity_index(counts: np.ndarray) -> float:
   proportions = counts / counts.sum()
   return 1 - np.sum(proportions**2)
 
 
-def get_equivalence_test(row_a, row_b, paired = False):
+def get_equivalence_test(row_a: np.ndarray, row_b: np.ndarray, paired: bool = False) -> float:
   """performs an equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent\n
   | Arguments:
   | :-
@@ -762,7 +765,8 @@ def get_equivalence_test(row_a, row_b, paired = False):
   return ttost_paired(row_a, row_b, low, up)[0] if paired else ttost_ind(row_a, row_b, low, up)[0]
 
 
-def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
+def clr_transformation(df: pd.DataFrame, group1: list[str | int], group2: list[str | int],
+                       gamma: float = 0.1, custom_scale: float | dict = 0) -> pd.DataFrame:
   """performs the Center Log-Ratio (CLR) Transformation with scale model adjustment\n
   | Arguments:
   | :-
@@ -798,7 +802,7 @@ def clr_transformation(df, group1, group2, gamma = 0.1, custom_scale = 0):
   return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
 
 
-def anosim(df, group_labels_in, permutations = 999):
+def anosim(df: pd.DataFrame, group_labels_in: list[str], permutations: int = 999) -> tuple[float, float]:
   """Performs analysis of similarity statistical test\n
   | Arguments:
   | :-
@@ -836,7 +840,7 @@ def anosim(df, group_labels_in, permutations = 999):
   return R, p_value
 
 
-def alpha_biodiversity_stats(df, group_labels):
+def alpha_biodiversity_stats(df: pd.DataFrame, group_labels: list[str]) -> tuple[float, float] | None:
   """Performs an ANOVA on the respective alpha diversity distance\n
   | Arguments:
   | :-
@@ -853,7 +857,7 @@ def alpha_biodiversity_stats(df, group_labels):
     return stats
 
 
-def calculate_permanova_stat(df, group_labels):
+def calculate_permanova_stat(df: pd.DataFrame, group_labels: list[str]) -> float:
   """Performs multivariate analysis of variance\n
   | Arguments:
   | :-
@@ -879,7 +883,7 @@ def calculate_permanova_stat(df, group_labels):
   return f_stat
 
 
-def permanova_with_permutation(df, group_labels, permutations = 999):
+def permanova_with_permutation(df: pd.DataFrame, group_labels: list[str], permutations: int = 999) -> tuple[float, float]:
   """Performs permutational multivariate analysis of variance\n
   | Arguments:
   | :-
@@ -899,7 +903,8 @@ def permanova_with_permutation(df, group_labels, permutations = 999):
   return observed_f, p_value
 
 
-def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.1, custom_scale = 0):
+def alr_transformation(df: pd.DataFrame, reference_component_index: int, group1: list[str | int], group2: list[str | int],
+                       gamma: float = 0.1, custom_scale: float | dict = 0) -> pd.DataFrame:
   """Given a reference feature, performs additive log-ratio transformation (ALR) on the data\n
   | Arguments:
   | :-
@@ -936,7 +941,8 @@ def alr_transformation(df, reference_component_index, group1, group2, gamma = 0.
   return alr_transformed
 
 
-def get_procrustes_scores(df, group1, group2, paired = False, custom_scale = 0):
+def get_procrustes_scores(df: pd.DataFrame, group1: list[str | int], group2: list[str | int], paired: bool = False,
+                          custom_scale: float | dict = 0) -> tuple[list[float], list[float], list[float]]:
   """For each feature, estimates it value as ALR reference component\n
   | Arguments:
   | :-
@@ -969,7 +975,8 @@ def get_procrustes_scores(df, group1, group2, paired = False, custom_scale = 0):
   return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
 
-def get_additive_logratio_transformation(df, group1, group2, paired = False, gamma = 0.1, custom_scale = 0):
+def get_additive_logratio_transformation(df: pd.DataFrame, group1: list[str | int], group2: list[str | int],
+                                         paired: bool = False, gamma: float = 0.1, custom_scale: float | dict = 0) -> pd.DataFrame:
   """Identifies ALR reference component and transforms data according to ALR\n
   | Arguments:
   | :-
@@ -997,7 +1004,7 @@ def get_additive_logratio_transformation(df, group1, group2, paired = False, gam
   return alr
 
 
-def correct_multiple_testing(pvals, alpha, correction_method = "two-stage"):
+def correct_multiple_testing(pvals: list[float] | np.ndarray, alpha: float, correction_method: str = "two-stage") -> tuple[list[float], list[bool]]:
   """Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure\n
   | Arguments:
   | :-
@@ -1022,7 +1029,7 @@ def correct_multiple_testing(pvals, alpha, correction_method = "two-stage"):
   return corrpvals, significance
 
 
-def omega_squared(row, groups):
+def omega_squared(row: pd.Series | np.ndarray, groups: list[str]) -> float:
   """Calculates Omega squared, as an effect size in an ANOVA setting\n
   | Arguments:
   | :-
@@ -1039,7 +1046,7 @@ def omega_squared(row, groups):
   return omega_squared
 
 
-def get_glycoform_diff(df_res, alpha = 0.05, level = 'peptide'):
+def get_glycoform_diff(df_res: pd.DataFrame, alpha: float = 0.05, level: str = 'peptide') -> pd.DataFrame:
   """Calculates differential expression of glycoforms of either a peptide or a whole protein\n
   | Arguments:
   | :-
@@ -1065,7 +1072,7 @@ def get_glycoform_diff(df_res, alpha = 0.05, level = 'peptide'):
   return df_out.sort_values(by = 'corr p-val')
 
 
-def get_glm(group, glycan_features = ['H', 'N', 'A', 'F', 'G']):
+def get_glm(group: pd.DataFrame, glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G']) -> tuple[str | str, list[str]]:
   """given glycoform data from a glycosite, constructs & fits a GLM formula for main+interaction effects of explaining glycoform abundance\n
   | Arguments:
   | :-
@@ -1091,7 +1098,7 @@ def get_glm(group, glycan_features = ['H', 'N', 'A', 'F', 'G']):
     return (f"GLM fitting failed: {str(e)}", [])
 
 
-def process_glm_results(df, alpha, glycan_features):
+def process_glm_results(df: pd.DataFrame, alpha: float, glycan_features: list[str]) -> pd.DataFrame:
   """tests for interaction effects of glycan features and the condition on glycoform abundance via a GLM\n
   | Arguments:
   | :-
@@ -1123,7 +1130,7 @@ def process_glm_results(df, alpha, glycan_features):
   return df_out.sort_values(by = 'Condition_corr_pval')
 
 
-def partial_corr(x, y, controls, motifs = False):
+def partial_corr(x: np.ndarray, y: np.ndarray, controls: np.ndarray, motifs: bool = False) -> tuple[float, float]:
   """Compute regularized partial correlation of x and y, controlling for multiple other variables in controls\n
   | Arguments:
   | :-
@@ -1147,8 +1154,8 @@ def partial_corr(x, y, controls, motifs = False):
   return corr, pval
 
 
-def estimate_technical_variance(df, group1, group2, num_instances = 128,
-                                gamma = 0.1, custom_scale = 0):
+def estimate_technical_variance(df: pd.DataFrame, group1: list[str | int], group2: list[str | int], num_instances: int = 128,
+                                gamma: float = 0.1, custom_scale: float | dict = 0) -> pd.DataFrame:
   """Monte Carlo sampling from the Dirichlet distribution with relative abundances as concentration, followed by CLR transformation.\n
   | Arguments:
   | :-
@@ -1177,7 +1184,8 @@ def estimate_technical_variance(df, group1, group2, num_instances = 128,
   return transformed_df
 
 
-def perform_tests_monte_carlo(group_a, group_b, num_instances = 128, paired = False):
+def perform_tests_monte_carlo(group_a: pd.DataFrame, group_b: pd.DataFrame, num_instances: int = 128,
+                              paired: bool = False) -> tuple[list[float], list[float], list[float]]:
   """Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, and calculate effect sizes and variances.\n
   | Arguments:
   | :-

@@ -6,7 +6,7 @@ from pickle import load
 from os import path
 from itertools import chain
 from importlib import resources
-from typing import Any, Dict, Union
+from typing import Any, Dict
 
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
@@ -85,12 +85,12 @@ modification_map = {'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'},
                     'OS': {'GlcNAc', 'Gal', 'GalNAc'}}
 
 
-def unwrap(nested_list):
+def unwrap(nested_list: list) -> list:
   """converts a nested list into a flat list"""
   return list(chain(*nested_list))
 
 
-def find_nth(haystack, needle, n):
+def find_nth(haystack: str, needle: str, n: int) -> int:
   """finds n-th instance of motif\n
   | Arguments:
   | :-
@@ -99,8 +99,7 @@ def find_nth(haystack, needle, n):
   | n (int): n-th occurrence in string (not zero-indexed)\n
   | Returns:
   | :-
-  | Returns starting index of n-th occurrence in string
-  """
+  | Returns starting index of n-th occurrence in string"""
   start = haystack.find(needle)
   while start >= 0 and n > 1:
     start = haystack.find(needle, start+len(needle))
@@ -108,7 +107,7 @@ def find_nth(haystack, needle, n):
   return start
 
 
-def find_nth_reverse(string, substring, n, ignore_branches = False):
+def find_nth_reverse(string: str, substring: str, n: int, ignore_branches: bool = False) -> int:
   # Reverse the string and the substring
   reversed_string = string[::-1]
   reversed_substring = substring[::-1]
@@ -142,15 +141,14 @@ def find_nth_reverse(string, substring, n, ignore_branches = False):
   return original_start_index
 
 
-def remove_unmatched_brackets(s):
+def remove_unmatched_brackets(s: str) -> str:
   """Removes all unmatched brackets from the string s.\n
   | Arguments:
   | :-
   | s (string): glycan string in IUPAC-condensed\n
   | Returns:
   | :-
-  | Returns glycan without unmatched brackets
-   """
+  | Returns glycan without unmatched brackets"""
   while True:
     # Keep track of the indexes of the brackets
     stack = []
@@ -173,7 +171,7 @@ def remove_unmatched_brackets(s):
   return s
 
 
-def reindex(df_new, df_old, out_col, ind_col, inp_col):
+def reindex(df_new: pd.DataFrame, df_old: pd.DataFrame, out_col: str, ind_col: str, inp_col: str) -> list:
   """Returns columns values in order of new dataframe rows\n
   | Arguments:
   | :-
@@ -184,27 +182,25 @@ def reindex(df_new, df_old, out_col, ind_col, inp_col):
   | inp_col (string): column name of column in df_new that indicates the new order; ind_col and inp_col should match\n
   | Returns:
   | :-
-  | Returns out_col from df_old in the same order of inp_col in df_new
-  """
+  | Returns out_col from df_old in the same order of inp_col in df_new"""
   if ind_col != inp_col:
     print("Mismatching column names for ind_col and inp_col. Doesn't mean it's wrong but pay attention.")
   return [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
 
 
-def stringify_dict(dicty):
+def stringify_dict(dicty: dict) -> str:
   """Converts dictionary into a string\n
   | Arguments:
   | :-
   | dicty (dictionary): dictionary\n
   | Returns:
   | :-
-  | Returns string of type key:value for sorted items
-  """
+  | Returns string of type key:value for sorted items"""
   dicty = dict(sorted(dicty.items()))
   return ''.join(f"{key}{value}" for key, value in dicty.items())
 
 
-def replace_every_second(string, old_char, new_char):
+def replace_every_second(string: str, old_char: str, new_char: str) -> str:
   """function to replace every second occurrence of old_char in string with new_char\n
   | Arguments:
   | :-
@@ -213,8 +209,7 @@ def replace_every_second(string, old_char, new_char):
   | new_char (string): the string character to replace old_char with\n
   | Returns:
   | :-
-  | Returns string with replaced characters
-  """
+  | Returns string with replaced characters"""
   count = 0
   result = []
   for char in string:
@@ -226,7 +221,7 @@ def replace_every_second(string, old_char, new_char):
   return ''.join(result)
 
 
-def multireplace(string, remove_dic):
+def multireplace(string: str, remove_dic: dict[str, str]) -> str:
   """Replaces all occurences of items in a set with a given string\n
   | Arguments:
   | :-
@@ -234,19 +229,18 @@ def multireplace(string, remove_dic):
   | remove_dic (set): dict of form to_replace:replace_with\n
   | Returns:
   | :-
-  | (str) modified string
-  """
+  | (str) modified string"""
   for k, v in remove_dic.items():
     string = string.replace(k, v)
   return string
 
 
-def strip_suffixes(columns):
+def strip_suffixes(columns: list) -> list[str]:
   """Strip numerical suffixes like .1, .2, etc., from column names."""
   return [re.sub(r"\.\d+$", "", str(name)) for name in columns]
 
 
-def build_custom_df(df, kind = 'df_species'):
+def build_custom_df(df: pd.DataFrame, kind: str = 'df_species') -> pd.DataFrame:
   """creates custom df from df_glycan\n
   | Arguments:
   | :-
@@ -254,8 +248,7 @@ def build_custom_df(df, kind = 'df_species'):
   | kind (string): whether to create 'df_species', 'df_tissue', or 'df_disease' from df_glycan; default:df_species\n
   | Returns:
   | :-
-  | Returns custom df in the form of one glycan - species/tissue/disease association per row
-  """
+  | Returns custom df in the form of one glycan - species/tissue/disease association per row"""
   kind_to_cols = {
         'df_species': ['glycan', 'Species', 'Genus', 'Family', 'Order', 'Class',
                        'Phylum', 'Kingdom', 'Domain', 'ref'],
@@ -274,7 +267,7 @@ def build_custom_df(df, kind = 'df_species'):
   return df
 
 
-def download_model(file_id, local_path = 'model_weights.pt'):
+def download_model(file_id: str, local_path: str = 'model_weights.pt') -> None:
   """Download the model weights file from Google Drive."""
   file_id = file_id.split('/d/')[1].split('/view')[0]
   url = f'https://drive.google.com/uc?id={file_id}'

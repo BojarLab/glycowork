@@ -20,7 +20,7 @@ with resources.open_text("glycowork.motif", "mz_to_composition.csv") as f:
 mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
 
 
-def constrain_prot(proteins, libr = None):
+def constrain_prot(proteins: list[str], libr: dict[str, int] | None = None) -> list[str]:
   """Ensures that no characters outside of libr are present in proteins\n
   | Arguments:
   | :-
@@ -36,7 +36,7 @@ def constrain_prot(proteins, libr = None):
   return [''.join(c if c in libr_set else 'z' for c in protein) for protein in proteins]
 
 
-def prot_to_coded(proteins, libr = None, pad_len = 1000):
+def prot_to_coded(proteins: list[str], libr: dict[str, int] | None = None, pad_len: int = 1000) -> list[list[int]]:
   """Encodes protein sequences to be used in LectinOracle-flex\n
   | Arguments:
   | :-
@@ -59,7 +59,7 @@ def prot_to_coded(proteins, libr = None, pad_len = 1000):
   return encoded_prots
 
 
-def string_to_labels(character_string, libr = None):
+def string_to_labels(character_string: str, libr: dict[str, int] | None = None) -> list[int]:
   """tokenizes word by indexing characters in passed library\n
   | Arguments:
   | :-
@@ -73,7 +73,7 @@ def string_to_labels(character_string, libr = None):
   return list(map(libr.get, character_string))
 
 
-def pad_sequence(seq, max_length, pad_label = None, libr = None):
+def pad_sequence(seq: list[int], max_length: int, pad_label: int | None = None, libr: dict[str, int] | None = None) -> list[int]:
   """brings all sequences to same length by adding padding token\n
   | Arguments:
   | :-
@@ -94,7 +94,7 @@ def pad_sequence(seq, max_length, pad_label = None, libr = None):
   return seq
 
 
-def get_core(sugar):
+def get_core(sugar: str) -> str:
   """retrieves core monosaccharide from modified monosaccharide\n
   | Arguments:
   | :-
@@ -132,7 +132,7 @@ def get_core(sugar):
   return 'Monosaccharide'
 
 
-def get_modification(sugar):
+def get_modification(sugar: str) -> str:
   """retrieves modification from modified monosaccharide\n
   | Arguments:
   | :-
@@ -145,7 +145,7 @@ def get_modification(sugar):
   return modification
 
 
-def get_stem_lib(libr):
+def get_stem_lib(libr: dict[str, int]) -> dict[str, str]:
   """creates a mapping file to map modified monosaccharides to core monosaccharides\n
   | Arguments:
   | :-
@@ -159,7 +159,7 @@ def get_stem_lib(libr):
 stem_lib = get_stem_lib(lib)
 
 
-def stemify_glycan(glycan, stem_lib = None, libr = None):
+def stemify_glycan(glycan: str, stem_lib: dict[str, str] | None = None, libr: dict[str, int] | None = None) -> str:
   """removes modifications from all monosaccharides in a glycan\n
   | Arguments:
   | :-
@@ -216,8 +216,8 @@ def stemify_glycan(glycan, stem_lib = None, libr = None):
   return glycan
 
 
-def stemify_dataset(df, stem_lib = None, libr = None,
-                    glycan_col_name = 'glycan', rarity_filter = 1):
+def stemify_dataset(df: pd.DataFrame, stem_lib: dict[str, str] | None = None, libr: dict[str, int] | None = None,
+                    glycan_col_name: str = 'glycan', rarity_filter: int = 1) -> pd.DataFrame:
   """stemifies all glycans in a dataset by removing monosaccharide modifications\n
   | Arguments:
   | :-
@@ -243,9 +243,10 @@ def stemify_dataset(df, stem_lib = None, libr = None,
   return df_out
 
 
-def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', reduced = False,
-                      sample_prep = 'underivatized', mass_tolerance = 0.5, kingdom = 'Animalia',
-                      glycan_class = 'all', df_use = None, filter_out = None, extras = ["doubly_charged"], adduct = None):
+def mz_to_composition(mz_value: float, mode: str = 'negative', mass_value: str = 'monoisotopic', reduced: bool = False,
+                      sample_prep: str = 'underivatized', mass_tolerance: float = 0.5, kingdom: str = 'Animalia',
+                      glycan_class: str = 'all', df_use: pd.DataFrame | None = None, filter_out: set[str] | None = None,
+                      extras: list[str] = ["doubly_charged"], adduct: str | None = None) -> list[dict[str, int]]:
   """Mapping a m/z value to a matching monosaccharide composition within SugarBase\n
   | Arguments:
   | :-
@@ -304,7 +305,8 @@ def mz_to_composition(mz_value, mode = 'negative', mass_value = 'monoisotopic', 
 
 
 @rescue_compositions
-def match_composition_relaxed(composition, glycan_class = 'N', kingdom = 'Animalia', df_use = None, reducing_end = None):
+def match_composition_relaxed(composition: dict[str, int], glycan_class: str = 'N', kingdom: str = 'Animalia',
+                              df_use: pd.DataFrame | None = None, reducing_end: str | None = None) -> list[str]:
   """Given a coarse-grained monosaccharide composition (Hex, HexNAc, etc.), it returns all corresponding glycans\n
   | Arguments:
   | :-
@@ -326,7 +328,7 @@ def match_composition_relaxed(composition, glycan_class = 'N', kingdom = 'Animal
   return [glycan for glycan, glycan_comp in zip(output_list, output_compositions) if glycan_comp == composition]
 
 
-def condense_composition_matching(matched_composition):
+def condense_composition_matching(matched_composition: list[str]) -> list[str]:
   """Given a list of glycans matching a composition, find the minimum number of glycans characterizing this set\n
   | Arguments:
   | :-
@@ -357,8 +359,9 @@ def condense_composition_matching(matched_composition):
 
 
 @rescue_compositions
-def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = 'Animalia', abundances = None,
-                               df_use = None, verbose = False):
+def compositions_to_structures(composition_list: list[dict[str, int]], glycan_class: str = 'N', kingdom: str = 'Animalia',
+                               abundances: pd.DataFrame | None = None, df_use: pd.DataFrame | None = None,
+                               verbose: bool = False) -> pd.DataFrame:
   """wrapper function to map compositions to structures, condense them, and match them with relative intensities\n
   | Arguments:
   | :-
@@ -400,9 +403,10 @@ def compositions_to_structures(composition_list, glycan_class = 'N', kingdom = '
   return df_out
 
 
-def mz_to_structures(mz_list, glycan_class, kingdom = 'Animalia', abundances = None, mode = 'negative',
-                     mass_value = 'monoisotopic', sample_prep = 'underivatized', mass_tolerance = 0.5,
-                     reduced = False, df_use = None, filter_out = None, verbose = False):
+def mz_to_structures(mz_list: list[float], glycan_class: str, kingdom: str = 'Animalia', abundances: pd.DataFrame | None = None,
+                     mode: str = 'negative', mass_value: str = 'monoisotopic', sample_prep: str = 'underivatized',
+                     mass_tolerance: float = 0.5, reduced: bool = False, df_use: pd.DataFrame | None = None,
+                     filter_out: set[str] | None = None, verbose: bool = False) -> pd.DataFrame | list:
   """wrapper function to map precursor masses to structures, condense them, and match them with relative intensities\n
   | Arguments:
   | :-
@@ -445,7 +449,7 @@ def mz_to_structures(mz_list, glycan_class, kingdom = 'Animalia', abundances = N
     return []
 
 
-def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkages = None):
+def mask_rare_glycoletters(glycans: list[str], thresh_monosaccharides: int | None = None, thresh_linkages: int | None = None) -> list[str]:
   """masks rare monosaccharides and linkages in a list of glycans\n
   | Arguments:
   | :-
@@ -489,7 +493,7 @@ def mask_rare_glycoletters(glycans, thresh_monosaccharides = None, thresh_linkag
   return out
 
 
-def map_to_basic(glycoletter, obfuscate_ptm = True):
+def map_to_basic(glycoletter: str, obfuscate_ptm: bool = True) -> str:
   """given a monosaccharide/linkage, try to map it to the corresponding base monosaccharide/linkage\n
   | Arguments:
   | :-
@@ -520,7 +524,7 @@ def map_to_basic(glycoletter, obfuscate_ptm = True):
   return glycoletter
 
 
-def structure_to_basic(glycan):
+def structure_to_basic(glycan: str) -> str:
   """converts a monosaccharide- and linkage-defined glycan structure to the base topology\n
   | Arguments:
   | :-
@@ -539,7 +543,7 @@ def structure_to_basic(glycan):
 
 
 @rescue_glycans
-def glycan_to_composition(glycan, stem_libr = None):
+def glycan_to_composition(glycan: str, stem_libr: dict[str, str] | None = None) -> dict[str, int]:
   """maps glycan to its composition\n
   | Arguments:
   | :-
@@ -570,7 +574,7 @@ def glycan_to_composition(glycan, stem_libr = None):
     return dict(composition)
 
 
-def calculate_adduct_mass(adduct, mass_value = 'monoisotopic'):
+def calculate_adduct_mass(adduct: str, mass_value: str = 'monoisotopic') -> float:
   """Calculate the mass of the adduct based on its chemical formula\n
   | Arguments:
   | :-
@@ -603,7 +607,8 @@ def calculate_adduct_mass(adduct, mass_value = 'monoisotopic'):
 
 
 @rescue_compositions
-def composition_to_mass(dict_comp_in, mass_value = 'monoisotopic', sample_prep = 'underivatized', adduct = None):
+def composition_to_mass(dict_comp_in: dict[str, int], mass_value: str = 'monoisotopic',
+                       sample_prep: str = 'underivatized', adduct: str | None = None) -> float:
   """given a composition, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
   | Arguments:
   | :-
@@ -627,7 +632,8 @@ def composition_to_mass(dict_comp_in, mass_value = 'monoisotopic', sample_prep =
   return total_mass
 
 
-def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivatized', stem_libr = None, adduct = None):
+def glycan_to_mass(glycan: str, mass_value: str = 'monoisotopic', sample_prep: str = 'underivatized',
+                   stem_libr: dict[str, str] | None = None, adduct: str | None = None) -> float:
   """given a glycan, calculates its theoretical mass; only allowed extra-modifications are methylation, sulfation, phosphorylation\n
   | Arguments:
   | :-
@@ -646,8 +652,8 @@ def glycan_to_mass(glycan, mass_value = 'monoisotopic', sample_prep = 'underivat
 
 
 @rescue_compositions
-def get_unique_topologies(composition, glycan_type, df_use = None, universal_replacers = None,
-                         taxonomy_rank = "Kingdom", taxonomy_value = "Animalia"):
+def get_unique_topologies(composition: dict[str, int], glycan_type: str, df_use: pd.DataFrame | None = None,
+                         universal_replacers: dict[str, str] | None = None, taxonomy_rank: str = "Kingdom", taxonomy_value: str = "Animalia") -> list[str]:
   """given a composition, retrieves all observed and unique base topologies\n
   | Arguments:
   | :-

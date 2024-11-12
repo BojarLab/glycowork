@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
+from typing import Callable
 from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
 from glycowork.motif.graph import subgraph_isomorphism
@@ -13,7 +14,8 @@ data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
 net_dic = pickle.load(open(data_path, 'rb'))
 
 
-def calculate_distance_matrix(to_compare, dist_func, label_list = None):
+def calculate_distance_matrix(to_compare: dict[str, list] | list, dist_func: Callable[[list, list], float], 
+                            label_list: list[str] | None = None) -> pd.DataFrame:
   """calculates pairwise distances based on objects and a metric\n
   | Arguments:
   | :-
@@ -22,8 +24,7 @@ def calculate_distance_matrix(to_compare, dist_func, label_list = None):
   | label_list (list): column names for the resulting distance matrix; default:range(len(to_compare))\n
   | Returns:
   | :-
-  | Returns a len(to_compare) x len(to_compare) distance matrix
-  """
+  | Returns a len(to_compare) x len(to_compare) distance matrix"""
   n = len(to_compare)
   dm = np.zeros((n, n))
   # Check whether comparison objects are in a dict or list
@@ -45,8 +46,8 @@ def calculate_distance_matrix(to_compare, dist_func, label_list = None):
   return dm
 
 
-def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
-                             averaging = 'median'):
+def distance_from_embeddings(df: pd.DataFrame, embeddings: pd.DataFrame, 
+                           cut_off: int = 10, rank: str = 'Species', averaging: str = 'median') -> pd.DataFrame:
   """calculates a cosine distance matrix from learned embeddings\n
   | Arguments:
   | :-
@@ -57,8 +58,7 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
   | averaging (string): how to average embeddings, by 'median' or 'mean'; default:'median'\n
   | Returns:
   | :-
-  | Returns a rank x rank distance matrix
-  """
+  | Returns a rank x rank distance matrix"""
   if averaging not in ['mean', 'median']:
     print("Only 'median' and 'mean' are permitted averaging choices.")
     return
@@ -75,7 +75,7 @@ def distance_from_embeddings(df, embeddings, cut_off = 10, rank = 'Species',
   return calculate_distance_matrix(avg_values, cosine, label_list = valid_ranks)
 
 
-def jaccard(list1, list2):
+def jaccard(list1: list | nx.Graph, list2: list | nx.Graph) -> float:
   """calculates Jaccard distance from two networks\n
   | Arguments:
   | :-
@@ -83,14 +83,14 @@ def jaccard(list1, list2):
   | list2 (list or networkx graph): list containing objects to compare\n
   | Returns:
   | :-
-  | Returns Jaccard distance between list1 and list2
-  """
+  | Returns Jaccard distance between list1 and list2"""
   intersection = len(set(list1).intersection(list2))
   union = (len(list1) + len(list2)) - intersection
   return 1 - float(intersection) / union
 
 
-def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = "Species"):
+def distance_from_metric(df: pd.DataFrame, networks: list[nx.Graph], 
+                        metric: str = "Jaccard", cut_off: int = 10, rank: str = "Species") -> pd.DataFrame:
   """calculates a distance matrix of generated networks based on provided metric\n
   | Arguments:
   | :-
@@ -101,8 +101,7 @@ def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = 
   | rank (string): which taxonomic rank to use for grouping organisms; default:'Species'\n
   | Returns:
   | :-
-  | Returns a rank x rank distance matrix
-  """
+  | Returns a rank x rank distance matrix"""
   # Choose distance metric
   metric_funcs = {"Jaccard": jaccard}
   dist_func = metric_funcs.get(metric)
@@ -117,14 +116,13 @@ def distance_from_metric(df, networks, metric = "Jaccard", cut_off = 10, rank = 
   return calculate_distance_matrix(valid_networks, dist_func, label_list = valid_ranks.tolist())
 
 
-def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
+def dendrogram_from_distance(dm: pd.DataFrame, ylabel: str = 'Mammalia', filepath: str = '') -> None:
   """plots a dendrogram from distance matrix\n
   | Arguments:
   | :-
   | dm (dataframe): a rank x rank distance matrix (e.g., from distance_from_embeddings)
   | ylabel (string): how to label the y-axis of the dendrogram; default:'Mammalia'
-  | filepath (string): absolute path including full filename allows for saving the plot\n
-  """
+  | filepath (string): absolute path including full filename allows for saving the plot\n"""
   # Hierarchical clustering on the distance matrix
   Z = linkage(dm)
   plt.figure(figsize = (10, 10))
@@ -147,7 +145,8 @@ def dendrogram_from_distance(dm, ylabel = 'Mammalia', filepath = ''):
                 bbox_inches = 'tight')
 
 
-def check_conservation(glycan, df, network_dic = None, rank = 'Order', threshold = 5, motif = False):
+def check_conservation(glycan: str, df: pd.DataFrame, network_dic: dict[str, nx.Graph] | None = None, 
+                      rank: str = 'Order', threshold: int = 5, motif: bool = False) -> dict[str, float]:
   """estimates evolutionary conservation of glycans and glycan motifs via biosynthetic networks\n
   | Arguments:
   | :-
@@ -159,8 +158,7 @@ def check_conservation(glycan, df, network_dic = None, rank = 'Order', threshold
   | motif (bool): whether glycan is a motif (True) or a full sequence (False); default:False\n
   | Returns:
   | :-
-  | Returns a dictionary of taxonomic group : degree of conservation
-  """
+  | Returns a dictionary of taxonomic group : degree of conservation"""
   if network_dic is None:
     network_dic = net_dic
   # Subset species with at least the threshold-number of glycans
@@ -189,7 +187,7 @@ def check_conservation(glycan, df, network_dic = None, rank = 'Order', threshold
   return conserved
 
 
-def get_communities(network_list, label_list = None):
+def get_communities(network_list: list[nx.Graph], label_list: list[str] | None = None) -> dict[str, list[str]]:
   """Find communities for each graph in a list of graphs\n
   | Arguments:
   | :-
@@ -197,8 +195,7 @@ def get_communities(network_list, label_list = None):
   | label_list (list): labels to create the community names, which are running_number + _ + label[k]  for graph_list[k]; default:range(len(graph_list))\n
   | Returns:
   | :-
-  | Returns a merged dictionary of community : glycans in that community
-  """
+  | Returns a merged dictionary of community : glycans in that community"""
   if label_list is None:
     label_list = list(range(len(network_list)))
   final_comm_dict = {}

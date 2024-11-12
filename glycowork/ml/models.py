@@ -23,9 +23,8 @@ class SweetNet(torch.nn.Module):
     | num_classes (int): number of output classes; only >1 for multilabel classification; default:1\n
     | Returns:
     | :-
-    | Returns batch-wise predictions
-    """
-    def __init__(self, lib_size, num_classes: int = 1, hidden_dim: int = 128):
+    | Returns batch-wise predictions"""
+    def __init__(self, lib_size: int, num_classes: int = 1, hidden_dim: int = 128) -> None:
         super(SweetNet, self).__init__()
 
         # Convolution operations on the graph
@@ -44,8 +43,7 @@ class SweetNet(torch.nn.Module):
         self.act1 = torch.nn.LeakyReLU()
         self.act2 = torch.nn.LeakyReLU()
 
-    def forward(self, x, edge_index, batch, inference = False):
-
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor, inference: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         # Getting node features
         x = self.item_embedding(x)
         x = x.squeeze(1)
@@ -73,9 +71,8 @@ class NSequonPred(torch.nn.Module):
     """given an ESM1b representation of N and 20 AA up + downstream, predicts whether it's a sequon\n
     | Returns:
     | :-
-    | Returns batch-wise predictions
-    """
-    def __init__(self):
+    | Returns batch-wise predictions"""
+    def __init__(self) -> None:
         super(NSequonPred, self).__init__()
 
         self.fc1 = torch.nn.Linear(1280, 512)
@@ -87,7 +84,7 @@ class NSequonPred(torch.nn.Module):
         self.bn2 = torch.nn.BatchNorm1d(256)
         self.bn3 = torch.nn.BatchNorm1d(64)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
       x = F.dropout(F.rrelu(self.bn1(self.fc1(x))), p = 0.2, training = self.training)
       x = F.dropout(F.rrelu(self.bn2(self.fc2(x))), p = 0.2, training = self.training)
       x = F.dropout(F.rrelu(self.bn3(self.fc3(x))), p = 0.1, training = self.training)
@@ -95,19 +92,18 @@ class NSequonPred(torch.nn.Module):
       return x
 
 
-def sigmoid_range(x, low, high):
+def sigmoid_range(x: torch.Tensor, low: float, high: float) -> torch.Tensor:
     "Sigmoid function with range `(low, high)`"
     return torch.sigmoid(x) * (high - low) + low
 
 
 class SigmoidRange(torch.nn.Module):
     "Sigmoid module with range `(low, x_max)`"
-
-    def __init__(self, low, high):
+    def __init__(self, low: float, high: float) -> None:
       super(SigmoidRange, self).__init__()
       self.low, self.high = low, high
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return sigmoid_range(x, self.low, self.high)
 
 
@@ -123,10 +119,9 @@ class LectinOracle(torch.nn.Module):
   | input_size_prot (int): dimensionality of protein representations used as input; default:1280\n
   | Returns:
   | :-
-  | Returns batch-wise predictions
-  """
-  def __init__(self, input_size_glyco, hidden_size = 128, num_classes = 1, data_min = -11.355,
-               data_max = 23.892, input_size_prot = 1280):
+  | Returns batch-wise predictions"""
+  def __init__(self, input_size_glyco: int, hidden_size: int = 128, num_classes: int = 1, 
+                 data_min: float = -11.355, data_max: float = 23.892, input_size_prot: int = 1280) -> None:
     super(LectinOracle, self).__init__()
     self.input_size_prot = input_size_prot
     self.input_size_glyco = input_size_glyco
@@ -161,7 +156,8 @@ class LectinOracle(torch.nn.Module):
     self.act1 = torch.nn.LeakyReLU()
     self.sigmoid = SigmoidRange(self.data_min, self.data_max)
 
-  def forward(self, prot, nodes, edge_index, batch, inference = False):
+  def forward(self, prot: torch.Tensor, nodes: torch.Tensor, edge_index: torch.Tensor, 
+                batch: torch.Tensor, inference: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # Fully connected part for the protein
     embedded_prot = self.bn_prot1(self.act_prot1(self.dp_prot1(self.prot_encoder1(prot))))
     embedded_prot = self.bn_prot2(self.act_prot2(self.dp_prot2(self.prot_encoder2(embedded_prot))))
@@ -211,10 +207,9 @@ class LectinOracle_flex(torch.nn.Module):
   | input_size_prot (int): maximum length of protein sequence for padding/cutting; default:1000\n
   | Returns:
   | :-
-  | Returns batch-wise predictions
-  """
-  def __init__(self, input_size_glyco, hidden_size = 128, num_classes = 1, data_min = -11.355,
-               data_max = 23.892, input_size_prot = 1000):
+  | Returns batch-wise predictions"""
+  def __init__(self, input_size_glyco: int, hidden_size: int = 128, num_classes: int = 1,
+                 data_min: float = -11.355, data_max: float = 23.892, input_size_prot: int = 1000) -> None:
     super(LectinOracle_flex, self).__init__()
     self.input_size_prot = input_size_prot
     self.input_size_glyco = input_size_glyco
@@ -260,7 +255,8 @@ class LectinOracle_flex(torch.nn.Module):
     self.act1_n = torch.nn.LeakyReLU()
     self.sigmoid = SigmoidRange(self.data_min, self.data_max)
 
-  def forward(self, prot, nodes, edge_index, batch, inference = False):
+  def forward(self, prot: torch.Tensor, nodes: torch.Tensor, edge_index: torch.Tensor,
+                batch: torch.Tensor, inference: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # ESM-1b mimicking
     prot = self.dp1(self.act1(self.bn1(self.fc1(prot))))
     prot = self.dp2(self.act2(self.bn2(self.fc2(prot))))
@@ -295,14 +291,13 @@ class LectinOracle_flex(torch.nn.Module):
       return out
 
 
-def init_weights(model, mode = 'sparse', sparsity = 0.1):
+def init_weights(model: torch.nn.Module, mode: str = 'sparse', sparsity: float = 0.1) -> None:
     """initializes linear layers of PyTorch model with a weight initialization\n
     | Arguments:
     | :-
     | model (Pytorch object): neural network (such as SweetNet) for analyzing glycans
     | mode (string): which initialization algorithm; choices are 'sparse','kaiming','xavier';default:'sparse'
-    | sparsity (float): proportion of sparsity after initialization; default:0.1 / 10%
-    """
+    | sparsity (float): proportion of sparsity after initialization; default:0.1 / 10%"""
     if isinstance(model, torch.nn.Linear):
         if mode == 'sparse':
             torch.nn.init.sparse_(model.weight, sparsity = sparsity)
@@ -315,7 +310,7 @@ def init_weights(model, mode = 'sparse', sparsity = 0.1):
 
 
 def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_flex", "NSequonPred"],
-               num_classes: int, libr=None, trained=False, hidden_dim: int = 128):
+               num_classes: int, libr: dict[str, int] | None = None, trained: bool = False, hidden_dim: int = 128) -> torch.nn.Module:
     """wrapper to instantiate model, initialize it, and put it on the GPU\n
     | Arguments:
     | :-
@@ -326,8 +321,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
     | hidden_dim (int): hidden dimension for the model (currently only for SweetNet); default:128\n
     | Returns:
     | :-
-    | Returns PyTorch model object
-    """
+    | Returns PyTorch model object"""
     if libr is None:
       libr = lib
     if model_type == 'SweetNet':
