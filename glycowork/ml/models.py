@@ -1,5 +1,5 @@
 import os
-from typing import Literal
+from typing import Literal, Optional
 
 import numpy as np
 try:
@@ -310,7 +310,7 @@ def init_weights(model: torch.nn.Module, mode: str = 'sparse', sparsity: float =
 
 
 def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_flex", "NSequonPred"],
-               num_classes: int, libr: dict[str, int] | None = None, trained: bool = False, hidden_dim: int = 128) -> torch.nn.Module:
+               num_classes: int, libr: Optional[dict[str, int]] = None, trained: bool = False, hidden_dim: int = 128) -> torch.nn.Module:
     """wrapper to instantiate model, initialize it, and put it on the GPU\n
     | Arguments:
     | :-
