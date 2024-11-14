@@ -1,7 +1,7 @@
 import copy
 import time
 import math
-from typing import Any, Callable
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -21,15 +21,10 @@ from glycowork.motif.annotate import annotate_dataset
 
 
 class EarlyStopping:
-    """Early stops the training if validation loss doesn't improve after a given patience."""
-    def __init__(self, patience: int = 7, verbose: bool = False) -> None:
-        """
-        Args:
-            patience (int): How long to wait after last time validation loss improved.
-                            Default: 7
-            verbose (bool): If True, prints a message for each validation loss improvement.
-                            Default: False
-        """
+    def __init__(self, patience: int = 7, # epochs to wait after last improvement
+                 verbose: bool = False # whether to print messages
+                ) -> None:
+        "Early stops the training if validation loss doesn't improve after a given patience"
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
@@ -38,9 +33,7 @@ class EarlyStopping:
         self.val_loss_min = 0
 
     def __call__(self, val_loss: float, model: torch.nn.Module) -> None:
-
         score = -val_loss
-
         if self.best_score is None:
             self.best_score = score
             self.save_checkpoint(val_loss, model)
@@ -62,11 +55,15 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 
-def sigmoid(x: float) -> float:
+def sigmoid(x: float # input value
+          ) -> float: # sigmoid transformed value
+    "Apply sigmoid transformation to input"
     return 1 / (1 + math.exp(-x))
 
 
-def disable_running_stats(model: torch.nn.Module) -> None:
+def disable_running_stats(model: torch.nn.Module # model to disable batch norm
+                       ) -> None:
+    "Disable batch normalization running statistics"
 
     def _disable(module):
         if isinstance(module, torch.nn.BatchNorm1d):
@@ -76,7 +73,9 @@ def disable_running_stats(model: torch.nn.Module) -> None:
     model.apply(_disable)
 
 
-def enable_running_stats(model: torch.nn.Module) -> None:
+def enable_running_stats(model: torch.nn.Module # model to enable batch norm
+                      ) -> None:
+    "Enable batch normalization running statistics"
 
     def _enable(module):
         if isinstance(module, torch.nn.BatchNorm1d) and hasattr(module, "backup_momentum"):
@@ -85,24 +84,17 @@ def enable_running_stats(model: torch.nn.Module) -> None:
     model.apply(_enable)
 
 
-def train_model(model: torch.nn.Module, dataloaders: dict[str, torch.utils.data.DataLoader], criterion: torch.nn.Module,
-                optimizer: torch.optim.Optimizer, scheduler: torch.optim.lr_scheduler._LRScheduler, num_epochs: int = 25,
-                patience: int = 50, mode: str = 'classification', mode2: str = 'multi') -> torch.nn.Module:
-  """trains a deep learning model on predicting glycan properties\n
-  | Arguments:
-  | :-
-  | model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans
-  | dataloaders (PyTorch object): dictionary of dataloader objects with keys 'train' and 'val'
-  | criterion (PyTorch object): PyTorch loss function
-  | optimizer (PyTorch object): PyTorch optimizer
-  | scheduler (PyTorch object): PyTorch learning rate decay
-  | num_epochs (int): number of epochs for training; default:25
-  | patience (int): number of epochs without improvement until early stop; default:50
-  | mode (string): 'classification', 'multilabel', or 'regression'; default:classification
-  | mode2 (string): further specifying classification into 'multi' or 'binary' classification;default:multi\n
-  | Returns:
-  | :-
-  | Returns the best model seen during training"""
+def train_model(model: torch.nn.Module, # graph neural network for analyzing glycans
+               dataloaders: Dict[str, torch.utils.data.DataLoader], # dict with 'train' and 'val' loaders
+               criterion: torch.nn.Module, # PyTorch loss function
+               optimizer: torch.optim.Optimizer, # PyTorch optimizer
+               scheduler: torch.optim.lr_scheduler._LRScheduler, # PyTorch learning rate decay
+               num_epochs: int = 25, # number of epochs for training
+               patience: int = 50, # epochs without improvement until early stop
+               mode: str = 'classification', # 'classification', 'multilabel', or 'regression'
+               mode2: str = 'multi' # 'multi' or 'binary' classification
+              ) -> torch.nn.Module: # best model from training
+  "trains a deep learning model on predicting glycan properties"
   since = time.time()
   early_stopping = EarlyStopping(patience = patience, verbose = True)
   best_model_wts = copy.deepcopy(model.state_dict())
@@ -261,9 +253,14 @@ def train_model(model: torch.nn.Module, dataloaders: dict[str, torch.utils.data.
 
 
 class SAM(torch.optim.Optimizer):
-    # Adapted from https://github.com/davda54/sam
-    def __init__(self, params: list[torch.nn.Parameter],  base_optimizer: type[torch.optim.Optimizer],
-                 rho: float = 0.5, alpha: float = 0.0, adaptive: bool = False, **kwargs) -> None:
+    def __init__(self, params: List[torch.nn.Parameter], # model parameters
+                 base_optimizer: type[torch.optim.Optimizer], # base PyTorch optimizer type
+                 rho: float = 0.5, # size of neighborhood to explore
+                 alpha: float = 0.0, # surrogate gap minimization coefficient
+                 adaptive: bool = False, # whether to use adaptive SAM
+                 **kwargs # additional optimizer arguments
+                ) -> None:
+        "Sharpness-Aware Minimization (SAM) optimizer adapted from https://github.com/davda54/sam"
         assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
         assert alpha >= 0.0, f"Invalid alpha, should be non-negative: {alpha}"
 
@@ -276,7 +273,9 @@ class SAM(torch.optim.Optimizer):
         self.minimize_surrogate_gap = any(group["alpha"] > 0.0 for group in self.param_groups)
 
     @torch.no_grad()
-    def first_step(self, zero_grad: bool = False) -> None:
+    def first_step(self, zero_grad: bool = False # whether to zero gradients after step
+                 ) -> None:
+        "Performs first optimization step to find adversarial weights"
         grad_norm = self._grad_norm()
         for group in self.param_groups:
             scale = group["rho"] / (grad_norm + 1e-12)
@@ -294,7 +293,9 @@ class SAM(torch.optim.Optimizer):
             self.zero_grad()
 
     @torch.no_grad()
-    def second_step(self, zero_grad: bool = False) -> None:
+    def second_step(self, zero_grad: bool = False # whether to zero gradients after step
+                  ) -> None:
+        "Performs second optimization step with regular weights"
         for group in self.param_groups:
             for p in group["params"]:
                 if p.grad is None:
@@ -309,7 +310,7 @@ class SAM(torch.optim.Optimizer):
             self.zero_grad()
 
     @torch.no_grad()
-    def step(self, closure: Callable | None = None) -> None:
+    def step(self, closure: Optional[Callable] = None) -> None:
         assert closure is not None, "Sharpness Aware Minimization requires closure, but it was not provided"
         closure = torch.enable_grad()(closure)  # The closure should do a full forward-backward pass
 
@@ -355,12 +356,12 @@ class SAM(torch.optim.Optimizer):
 
 
 class Poly1CrossEntropyLoss(torch.nn.Module):
-    def __init__(self, num_classes: int, epsilon: float = 1.0, reduction: str = "mean", weight: torch.Tensor | None = None) -> None:
-        """Create instance of Poly1CrossEntropyLoss
-        :param num_classes:
-        :param epsilon:
-        :param reduction: one of none|sum|mean, apply reduction to final loss tensor
-        :param weight: manual rescaling weight for each class, passed to Cross-Entropy loss"""
+    def __init__(self, num_classes: int, # number of classes
+                 epsilon: float = 1.0, # weight of poly1 term
+                 reduction: str = "mean", # reduction method for loss
+                 weight: Optional[torch.Tensor] = None # manual class weights
+                ) -> None:
+        "Polynomial cross entropy loss for improved training stability"
         super(Poly1CrossEntropyLoss, self).__init__()
         self.num_classes = num_classes
         self.epsilon = epsilon
@@ -368,11 +369,10 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
         self.weight = weight
         return
 
-    def forward(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-        """Forward pass
-        :param logits: tensor of shape [N, num_classes]
-        :param labels: tensor of shape [N]
-        :return: poly cross-entropy loss"""
+    def forward(self, logits: torch.Tensor, # predicted class probabilities [N, num_classes]
+               labels: torch.Tensor # ground truth labels [N]
+              ) -> torch.Tensor: # computed loss value
+        "Compute poly cross-entropy loss"
         if len(labels.shape) == 2 and labels.shape[1] == self.num_classes:
             labels_onehot = labels.to(device = logits.device, dtype = logits.dtype)
             labels = torch.argmax(labels, dim = 1)
@@ -393,23 +393,16 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
         return poly1
 
 
-def training_setup(model: torch.nn.Module, lr: float, lr_patience: int = 4, factor: float = 0.2, weight_decay: float = 0.0001,
-                  mode: str = 'multiclass', num_classes: int = 2, gsam_alpha: float = 0.) -> tuple[torch.optim.Optimizer, 
-                                                 torch.optim.lr_scheduler._LRScheduler, torch.nn.Module]:
-    """prepares optimizer, learning rate scheduler, and loss criterion for model training\n
-    | Arguments:
-    | :-
-    | model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans
-    | lr (float): learning rate
-    | lr_patience (int): number of epochs without validation loss improvement before reducing the learning rate;default:4
-    | factor (float): factor by which learning rate is multiplied upon reduction
-    | weight_decay (float): regularization parameter for the optimizer; default:0.001
-    | mode (string): 'multiclass': classification with multiple classes, 'multilabel': predicting several labels at the same time, 'binary':binary classification, 'regression': regression; default:'multiclass'
-    | num_classes (int): number of classes; only used when mode == 'multiclass' or 'multilabel'
-    | gsam_alpha (float): if higher than zero, uses GSAM instead of SAM for the optimizer\n
-    | Returns:
-    | :-
-    | Returns optimizer, learning rate scheduler, and loss criterion objects"""
+def training_setup(model: torch.nn.Module, # graph neural network for analyzing glycans
+                  lr: float, # learning rate
+                  lr_patience: int = 4, # epochs before reducing learning rate
+                  factor: float = 0.2, # factor to multiply lr on reduction
+                  weight_decay: float = 0.0001, # regularization parameter
+                  mode: str = 'multiclass', # type of prediction task
+                  num_classes: int = 2, # number of classes for classification
+                  gsam_alpha: float = 0. # if >0, uses GSAM instead of SAM optimizer
+                 ) -> Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler._LRScheduler, torch.nn.Module]: # optimizer, scheduler, criterion
+    "prepares optimizer, learning rate scheduler, and loss criterion for model training"
     # Choose optimizer & learning rate scheduler
     if mode in {'multiclass', 'multilabel'}:
         optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, alpha = gsam_alpha, lr = lr,
@@ -437,24 +430,18 @@ def training_setup(model: torch.nn.Module, lr: float, lr_patience: int = 4, fact
     return optimizer_ft, scheduler, criterion
 
 
-def train_ml_model(X_train: pd.DataFrame | list, X_test: pd.DataFrame | list, y_train: list, y_test: list, mode: str = 'classification',
-                  feature_calc: bool = False, return_features: bool = False, feature_set: list[str] = ['known', 'exhaustive'],
-                  additional_features_train: pd.DataFrame | None = None,
-                  additional_features_test: pd.DataFrame | None = None) -> xgb.XGBModel | tuple[xgb.XGBModel, pd.DataFrame, pd.DataFrame]:
-    """wrapper function to train standard machine learning models on glycans\n
-    | Arguments:
-    | :-
-    | X_train, X_test (list or dataframe): either lists of glycans (needs feature_calc = True) or motif dataframes such as from annotate_dataset
-    | y_train, y_test (list): lists of labels
-    | mode (string): 'classification' or 'regression'; default:'classification'
-    | feature_calc (bool): set to True for calculating motifs from glycans; default:False
-    | return_features (bool): whether to return calculated features; default:False
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default:['known','exhaustive']; options are: 'known' (hand-crafted glycan features), 'graph' (structural graph features of glycans), and 'exhaustive' (all mono- and disaccharide features)
-    | additional_features_train (dataframe): additional features (apart from glycans) to be used for training. Has to be of the same length as X_train; default:None
-    | additional_features_test (dataframe): additional features (apart from glycans) to be used for evaluation. Has to be of the same length as X_test; default:None\n
-    | Returns:
-    | :-
-    | Returns trained model"""
+def train_ml_model(X_train: Union[pd.DataFrame, List], # training data/glycans
+                  X_test: Union[pd.DataFrame, List], # test data/glycans
+                  y_train: List, # training labels
+                  y_test: List, # test labels
+                  mode: str = 'classification', # 'classification' or 'regression'
+                  feature_calc: bool = False, # calculate motifs from glycans
+                  return_features: bool = False, # return calculated features
+                  feature_set: List[str] = ['known', 'exhaustive'], # feature set for annotations
+                  additional_features_train: Optional[pd.DataFrame] = None, # additional training features
+                  additional_features_test: Optional[pd.DataFrame] = None # additional test features
+                 ) -> Union[xgb.XGBModel, Tuple[xgb.XGBModel, pd.DataFrame, pd.DataFrame]]: # trained model and optionally features
+    "wrapper function to train standard machine learning models on glycans"
     # Choose model type
     if mode == 'classification':
         model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,  max_depth = 3)
@@ -498,11 +485,9 @@ def train_ml_model(X_train: pd.DataFrame | list, X_test: pd.DataFrame | list, y_
         return model
 
 
-def analyze_ml_model(model: xgb.XGBModel) -> None:
-    """plots relevant features for model prediction\n
-    | Arguments:
-    | :-
-    | model (model object): trained machine learning model from train_ml_model"""
+def analyze_ml_model(model: xgb.XGBModel # trained ML model from train_ml_model
+                   ) -> None:
+    "plots relevant features for model prediction"
     # Get important features
     feat_imp = model.get_booster().get_score(importance_type = 'gain')
     feat_imp = pd.DataFrame(feat_imp, index = [0]).T
@@ -521,17 +506,12 @@ def analyze_ml_model(model: xgb.XGBModel) -> None:
     plt.show()
 
 
-def get_mismatch(model: xgb.XGBModel, X_test: pd.DataFrame, y_test: list, n: int = 10) -> list[tuple[Any, float]]:
-    """analyzes misclassifications of trained machine learning model\n
-    | Arguments:
-    | :-
-    | model (model object): trained machine learning model from train_ml_model
-    | X_test (dataframe): motif dataframe used for validating model
-    | y_test (list): list of labels
-    | n (int): number of returned misclassifications; default:10\n
-    | Returns:
-    | :-
-    | Returns tuples of misclassifications and their predicted probability"""
+def get_mismatch(model: xgb.XGBModel, # trained ML model from train_ml_model
+                X_test: pd.DataFrame, # motif dataframe for validation
+                y_test: List, # test labels
+                n: int = 10 # number of returned misclassifications
+               ) -> List[Tuple[Any, float]]: # misclassifications and predicted probabilities
+    "analyzes misclassifications of trained machine learning model"
     # Get predictions
     preds = model.predict(X_test)
     preds_proba = model.predict_proba(X_test)

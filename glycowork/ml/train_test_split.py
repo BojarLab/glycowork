@@ -1,22 +1,17 @@
 from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
+from typing import Dict, List, Tuple, Union, Optional
 import copy
 import random
 import pandas as pd
 
 
-def seed_wildcard_hierarchy(glycans: list[str], labels: list[float | int | str], wildcard_list: list[str],
-                          wildcard_name: str, r: float = 0.1) -> tuple[list[str], list[float | int | str]]:
-  """adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards\n
-  | Arguments:
-  | :-
-  | glycans (list): list of IUPAC-condensed glycan sequences as strings
-  | labels (list): list of labels used for prediction
-  | wildcard_list (list): list which glycoletters a wildcard encompasses
-  | wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature
-  | r (float): rate of replacement, default:0.1 or 10%\n
-  | Returns:
-  | :-
-  | Returns list of glycans (strings) and labels (flexible) where some glycan parts have been replaced with wildcard_name"""
+def seed_wildcard_hierarchy(glycans: List[str], # list of IUPAC-condensed glycans
+                          labels: List[Union[float, int, str]], # list of prediction labels
+                          wildcard_list: List[str], # glycoletters covered by wildcard
+                          wildcard_name: str, # name for wildcard in IUPAC nomenclature
+                          r: float = 0.1 # rate of replacement
+                         ) -> Tuple[List[str], List[Union[float, int, str]]]: # glycans and labels with wildcards
+  "adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards"
   added_glycans_labels = [(glycan.replace(j, wildcard_name), label)
                              for glycan, label in zip(glycans, labels)
                              for j in wildcard_list if j in glycan and random.uniform(0, 1) < r]
@@ -26,27 +21,16 @@ def seed_wildcard_hierarchy(glycans: list[str], labels: list[float | int | str],
   return glycans, labels
 
 
-def hierarchy_filter(df_in: pd.DataFrame, rank: str = 'Domain', min_seq: int = 5, wildcard_seed: bool = False,
-                    wildcard_list: list[str] | None = None, wildcard_name: str | None = None, r: float = 0.1,
-                    col: str = 'glycan') -> tuple[list[str], list[str], list[int], list[int], list[int], list[str], dict[str, int]]:
-  """stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes\n
-  | Arguments:
-  | :-
-  | df_in (dataframe): dataframe of glycan sequences and taxonomic labels
-  | rank (string): which rank should be filtered; default:'domain'
-  | min_seq (int): how many glycans need to be present in class to keep it; default:5
-  | wildcard_seed (bool): set to True if you want to seed wildcard glycoletters; default:False
-  | wildcard_list (list): list which glycoletters a wildcard encompasses
-  | wildcard_name (string): how the wildcard should be named in the IUPAC-condensed nomenclature
-  | r (float): rate of replacement, default:0.1 or 10%
-  | col (string): column name for glycan sequences; default:glycan\n
-  | Returns:
-  | :-
-  | Returns train_x, val_x (lists of glycans (strings) after stratified shuffle split)
-  | train_y, val_y (lists of taxonomic labels (mapped integers))
-  | id_val (taxonomic labels in text form (strings))
-  | class_list (list of unique taxonomic classes (strings))
-  | class_converter (dictionary to map mapped integers back to text labels)"""
+def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and taxonomic labels
+                    rank: str = 'Domain', # taxonomic rank to filter
+                    min_seq: int = 5, # minimum glycans per class
+                    wildcard_seed: bool = False, # seed wildcard glycoletters
+                    wildcard_list: Optional[List[str]] = None, # glycoletters for wildcard
+                    wildcard_name: Optional[str] = None, # wildcard name in IUPAC
+                    r: float = 0.1, # replacement rate
+                    col: str = 'glycan' # column name for glycans
+                   ) -> Tuple[List[str], List[str], List[int], List[int], List[int], List[str], Dict[str, int]]: # train/val splits and mappings
+  "stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes"
   df = copy.deepcopy(df_in)
   # Get all non-selected ranks and drop from df
   rank_list = ['Species', 'Genus', 'Family', 'Order',
@@ -94,32 +78,19 @@ def hierarchy_filter(df_in: pd.DataFrame, rank: str = 'Domain', min_seq: int = 5
   return train_x, val_x, train_y, val_y, id_val, class_list, class_converter
 
 
-def general_split(glycans: list[str], labels: list[float | int | str],
-                 test_size: float = 0.2) -> tuple[list[str], list[str], list[float | int | str], list[float | int | str]]:
-  """splits glycans and labels into train / test sets\n
-  | Arguments:
-  | :-
-  | glycans (list): list of IUPAC-condensed glycan sequences as strings
-  | labels (list): list of labels used for prediction
-  | test_size (float): % size of test set; default:0.2 / 20%\n
-  | Returns:
-  | :-
-  | Returns X_train, X_test, y_train, y_test"""
-  return train_test_split(glycans, labels, shuffle = True,
-                          test_size = test_size, random_state = 42)
+def general_split(glycans: List[str], # list of IUPAC-condensed glycans
+                 labels: List[Union[float, int, str]], # list of prediction labels
+                 test_size: float = 0.2 # size of test set
+                ) -> Tuple[List[str], List[str], List[Union[float, int, str]], List[Union[float, int, str]]]: # train/test splits
+  "splits glycans and labels into train / test sets"
+  return train_test_split(glycans, labels, shuffle = True, test_size = test_size, random_state = 42)
 
 
-def prepare_multilabel(df: pd.DataFrame, rank: str = 'Species', glycan_col: str = 'glycan') -> tuple[list[str], list[list[float]]]:
-  """converts a one row per glycan-species/tissue/disease association file to a format of one glycan - all associations\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe where each row is one glycan - species association
-  | rank (string): which label column should be used; default:Species
-  | glycan_col (string): column name of where the glycan sequences are stored; default:glycan\n
-  | Returns:
-  | :-
-  | (1) list of unique glycans in df
-  | (2) list of lists, where each inner list are all the labels of a glycan"""
+def prepare_multilabel(df: pd.DataFrame, # dataframe with one glycan-association per row
+                      rank: str = 'Species', # label column to use
+                      glycan_col: str = 'glycan' # column with glycan sequences
+                     ) -> Tuple[List[str], List[List[float]]]: # unique glycans and their label vectors
+  "converts a one row per glycan-species/tissue/disease association file to a format of one glycan - all associations"
   glycans = list(set(df[glycan_col].values.tolist()))
   class_list = list(set(df[rank].values.tolist()))
   labels = [[0.]*len(class_list) for k in range(len(glycans))]

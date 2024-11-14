@@ -6,7 +6,7 @@ from pickle import load
 from os import path
 from itertools import chain
 from importlib import resources
-from typing import Any, Dict
+from typing import Any, Dict, List, Union, Optional
 
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)
@@ -85,21 +85,17 @@ modification_map = {'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'},
                     'OS': {'GlcNAc', 'Gal', 'GalNAc'}}
 
 
-def unwrap(nested_list: list) -> list:
-  """converts a nested list into a flat list"""
+def unwrap(nested_list: List[Any] # list to be flattened
+         ) -> List[Any]: # flattened list
+  "converts a nested list into a flat list"
   return list(chain(*nested_list))
 
 
-def find_nth(haystack: str, needle: str, n: int) -> int:
-  """finds n-th instance of motif\n
-  | Arguments:
-  | :-
-  | haystack (string): string to search for motif
-  | needle (string): motif
-  | n (int): n-th occurrence in string (not zero-indexed)\n
-  | Returns:
-  | :-
-  | Returns starting index of n-th occurrence in string"""
+def find_nth(haystack: str, # string to search for motif
+            needle: str, # motif
+            n: int # n-th occurrence in string (not zero-indexed)
+           ) -> int: # starting index of n-th occurrence
+  "finds n-th instance of motif"
   start = haystack.find(needle)
   while start >= 0 and n > 1:
     start = haystack.find(needle, start+len(needle))
@@ -107,7 +103,12 @@ def find_nth(haystack: str, needle: str, n: int) -> int:
   return start
 
 
-def find_nth_reverse(string: str, substring: str, n: int, ignore_branches: bool = False) -> int:
+def find_nth_reverse(string: str, # string to search
+                    substring: str, # substring to find
+                    n: int, # n-th occurrence from end
+                    ignore_branches: bool = False # whether to ignore branches when counting
+                   ) -> int: # position of n-th occurrence from end
+  "finds n-th instance of motif from end of string"
   # Reverse the string and the substring
   reversed_string = string[::-1]
   reversed_substring = substring[::-1]
@@ -141,14 +142,9 @@ def find_nth_reverse(string: str, substring: str, n: int, ignore_branches: bool 
   return original_start_index
 
 
-def remove_unmatched_brackets(s: str) -> str:
-  """Removes all unmatched brackets from the string s.\n
-  | Arguments:
-  | :-
-  | s (string): glycan string in IUPAC-condensed\n
-  | Returns:
-  | :-
-  | Returns glycan without unmatched brackets"""
+def remove_unmatched_brackets(s: str # glycan string in IUPAC-condensed
+                           ) -> str: # glycan without unmatched brackets
+  "Removes all unmatched brackets from the string s"
   while True:
     # Keep track of the indexes of the brackets
     stack = []
@@ -171,45 +167,30 @@ def remove_unmatched_brackets(s: str) -> str:
   return s
 
 
-def reindex(df_new: pd.DataFrame, df_old: pd.DataFrame, out_col: str, ind_col: str, inp_col: str) -> list:
-  """Returns columns values in order of new dataframe rows\n
-  | Arguments:
-  | :-
-  | df_new (pandas dataframe): dataframe with the new row order
-  | df_old (pandas dataframe): dataframe with the old row order
-  | out_col (string): column name of column in df_old that you want to reindex
-  | ind_col (string): column name of column in df_old that will give the index
-  | inp_col (string): column name of column in df_new that indicates the new order; ind_col and inp_col should match\n
-  | Returns:
-  | :-
-  | Returns out_col from df_old in the same order of inp_col in df_new"""
+def reindex(df_new: pd.DataFrame, # dataframe with new row order
+           df_old: pd.DataFrame, # dataframe with old row order
+           out_col: str, # column name in df_old to reindex
+           ind_col: str, # column name in df_old for index
+           inp_col: str # column name in df_new for new order
+          ) -> list: # out_col from df_old reordered to match inp_col in df_new
+  "Returns columns values in order of new dataframe rows"
   if ind_col != inp_col:
     print("Mismatching column names for ind_col and inp_col. Doesn't mean it's wrong but pay attention.")
   return [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
 
 
-def stringify_dict(dicty: dict) -> str:
-  """Converts dictionary into a string\n
-  | Arguments:
-  | :-
-  | dicty (dictionary): dictionary\n
-  | Returns:
-  | :-
-  | Returns string of type key:value for sorted items"""
+def stringify_dict(dicty: Dict[Any, Any] # dictionary to convert
+                 ) -> str: # string of type key:value for sorted items
+  "Converts dictionary into a string"
   dicty = dict(sorted(dicty.items()))
   return ''.join(f"{key}{value}" for key, value in dicty.items())
 
 
-def replace_every_second(string: str, old_char: str, new_char: str) -> str:
-  """function to replace every second occurrence of old_char in string with new_char\n
-  | Arguments:
-  | :-
-  | string (string): a string
-  | old_char (string): a string character to be replaced (every second occurrence)
-  | new_char (string): the string character to replace old_char with\n
-  | Returns:
-  | :-
-  | Returns string with replaced characters"""
+def replace_every_second(string: str, # input string
+                        old_char: str, # character to replace
+                        new_char: str # character to replace with
+                       ) -> str: # modified string
+  "function to replace every second occurrence of old_char in string with new_char"
   count = 0
   result = []
   for char in string:
@@ -221,34 +202,25 @@ def replace_every_second(string: str, old_char: str, new_char: str) -> str:
   return ''.join(result)
 
 
-def multireplace(string: str, remove_dic: dict[str, str]) -> str:
-  """Replaces all occurences of items in a set with a given string\n
-  | Arguments:
-  | :-
-  | string (str): string to perform replacements on
-  | remove_dic (set): dict of form to_replace:replace_with\n
-  | Returns:
-  | :-
-  | (str) modified string"""
+def multireplace(string: str, # string to perform replacements on
+                remove_dic: Dict[str, str] # dict of form to_replace:replace_with
+               ) -> str: # modified string
+  "Replaces all occurences of items in a set with a given string"
   for k, v in remove_dic.items():
     string = string.replace(k, v)
   return string
 
 
-def strip_suffixes(columns: list) -> list[str]:
-  """Strip numerical suffixes like .1, .2, etc., from column names."""
+def strip_suffixes(columns: List[Any] # column names
+                 ) -> List[str]: # column names without numerical suffixes
+  "Strip numerical suffixes like .1, .2, etc., from column names"
   return [re.sub(r"\.\d+$", "", str(name)) for name in columns]
 
 
-def build_custom_df(df: pd.DataFrame, kind: str = 'df_species') -> pd.DataFrame:
-  """creates custom df from df_glycan\n
-  | Arguments:
-  | :-
-  | df (dataframe): df_glycan / sugarbase
-  | kind (string): whether to create 'df_species', 'df_tissue', or 'df_disease' from df_glycan; default:df_species\n
-  | Returns:
-  | :-
-  | Returns custom df in the form of one glycan - species/tissue/disease association per row"""
+def build_custom_df(df: pd.DataFrame, # df_glycan / sugarbase
+                   kind: str = 'df_species' # whether to create 'df_species', 'df_tissue', or 'df_disease'
+                  ) -> pd.DataFrame: # custom df with one glycan - species/tissue/disease association per row
+  "creates custom df from df_glycan"
   kind_to_cols = {
         'df_species': ['glycan', 'Species', 'Genus', 'Family', 'Order', 'Class',
                        'Phylum', 'Kingdom', 'Domain', 'ref'],
@@ -267,8 +239,10 @@ def build_custom_df(df: pd.DataFrame, kind: str = 'df_species') -> pd.DataFrame:
   return df
 
 
-def download_model(file_id: str, local_path: str = 'model_weights.pt') -> None:
-  """Download the model weights file from Google Drive."""
+def download_model(file_id: str, # Google Drive file ID
+                  local_path: str = 'model_weights.pt' # where to save model file
+                 ) -> None:
+  "Download the model weights file from Google Drive"
   file_id = file_id.split('/d/')[1].split('/view')[0]
   url = f'https://drive.google.com/uc?id={file_id}'
   gdown.download(url, local_path, quiet = False)
@@ -325,12 +299,10 @@ class DataFrameSerializer:
       return cell_data['value']
 
   @classmethod
-  def serialize(cls, df: pd.DataFrame, path: str) -> None:
-    """Serialize a DataFrame to JSON with type information.
-
-    Args:
-      df: pandas DataFrame to serialize
-      path: file path to save the serialized data"""
+  def serialize(cls, df: pd.DataFrame, # DataFrame to serialize
+                 path: str # file path to save serialized data
+                ) -> None:
+    "Serialize a DataFrame to JSON with type information"
     data = {
       'columns': list(df.columns),
       'index': list(df.index),
@@ -345,14 +317,9 @@ class DataFrameSerializer:
       json.dump(data, f)
 
   @classmethod
-  def deserialize(cls, path: str) -> pd.DataFrame:
-    """Deserialize a DataFrame from JSON.
-
-    Args:
-      path: file path to load the serialized data from
-
-    Returns:
-      pandas DataFrame with restored data types"""
+  def deserialize(cls, path: str # file path to load serialized data
+                  ) -> pd.DataFrame: # DataFrame with restored data types
+    "Deserialize a DataFrame from JSON"
     with open(path, 'r') as f:
       data = json.load(f)
 

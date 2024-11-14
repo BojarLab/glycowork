@@ -5,7 +5,7 @@ from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, in_lib
 import matplotlib.pyplot as plt
 from io import BytesIO
-from typing import Generator
+from typing import Dict, List, Tuple, Optional, Union, Generator, Any
 import networkx as nx
 import copy
 
@@ -23,17 +23,12 @@ import re
 from math import sin, cos, radians, sqrt, atan, degrees
 
 
-def matches(line: str, opendelim: str = '(', closedelim: str = ')') -> Generator[tuple[int, int, int], None, None]:
-  """Find matching pairs of delimiters in a given string.\n
-  | Arguments:
-  | :-
-  | line (str): The string to search for delimiter pairs.
-  | opendelim (str, optional): The character to use as the opening delimiter. Default: '('.
-  | closedelim (str, optional): The character to use as the closing delimiter. Default: ')'.\n
-  | Returns:
-  | :-
-  | tuple: A tuple containing the start and end positions of the matched delimiter pair, and the current depth of the stack.\n
-  ref: https://stackoverflow.com/questions/5454322/python-how-to-match-nested-parentheses-with-regex"""
+def matches(
+    line: str, # Input string to search
+    opendelim: str = '(', # Opening delimiter
+    closedelim: str = ')' # Closing delimiter
+    ) -> Generator[Tuple[int, int, int], None, None]: # Yields (start pos, end pos, nesting depth)
+  "Finds matching pairs of delimiters in a string, handling nested pairs and returning positions and depth;ref: https://stackoverflow.com/questions/5454322/python-how-to-match-nested-parentheses-with-regex"""
   stack = []
   for m in re.finditer(r'[{}{}]'.format(opendelim, closedelim), line):
       pos = m.start()
@@ -185,13 +180,13 @@ sugar_dict = {
 }
 
 
-def hex_circumference(x_pos: float, y_pos: float, dim: float, col_dict: dict[str, str]) -> None:
-  """Draw a hexagoncircumference at the specified position and dimensions.\n
-  | Arguments:
-  | :-
-  | x_pos (int): X coordinate of the hexagon's center on the drawing canvas.
-  | y_pos (int): Y coordinate of the hexagon's center on the drawing canvas.
-  | dim (int): Arbitrary dimension unit used for scaling the hexagon's size.\n"""
+def hex_circumference(
+    x_pos: float, # X coordinate of hexagon center
+    y_pos: float, # Y coordinate of hexagon center
+    dim: float, # Base dimension for scaling
+    col_dict: Dict[str, str] # Color mapping dictionary
+    ) -> None:
+  "Draws hexagon outline using six connected lines at specified position and scale"
   for i in range(6):
     angle1 = radians(60 * i)
     angle2 = radians(60 * (i + 1))
@@ -205,14 +200,14 @@ def hex_circumference(x_pos: float, y_pos: float, dim: float, col_dict: dict[str
     d.append(p)
 
 
-def hex(x_pos: float, y_pos: float, dim: float, col_dict: dict[str, str], color: str = 'white') -> None:
-  """Draw a hexagon shape at the specified position and dimensions.\n
-  | Arguments:
-  | :-
-  | x_pos (int): X coordinate of the hexagon's center on the drawing canvas.
-  | y_pos (int): Y coordinate of the hexagon's center on the drawing canvas.
-  | dim (int): Arbitrary dimension unit used for scaling the hexagon's size.
-  | color (str): Color of the hexagon. Default is 'white'.\n"""
+def hex(
+    x_pos: float, # X coordinate of hexagon center
+    y_pos: float, # Y coordinate of hexagon center
+    dim: float, # Base dimension for scaling
+    col_dict: Dict[str, str], # Color mapping dictionary
+    color: str = 'white' # Fill color
+    ) -> None:
+  "Draws filled hexagon shape with border at specified position and scale"
   x_base = 0 - x_pos * dim
   y_base = 0 + y_pos * dim
   half_dim = 0.5 * dim
@@ -224,18 +219,21 @@ def hex(x_pos: float, y_pos: float, dim: float, col_dict: dict[str, str], color:
   d.append(draw.Lines(*points, close = True, fill = color, stroke = col_dict['black'], stroke_width = 0.04 * dim))
 
 
-def draw_shape(shape: str, color: str, x_pos: float, y_pos: float, col_dict: dict[str, str], 
-               modification: str = '', dim: float = 50, furanose: bool = False, conf: str = '', 
-               deg: float = 0, text_anchor: str = 'middle', scalar: float = 0) -> None:
-  """draw individual monosaccharides in shapes & colors according to the SNFG nomenclature\n
-  | Arguments:
-  | :-
-  | shape (string): monosaccharide class; shape of icon
-  | color (string): monosaccharide identity; color of icon
-  | x_pos (int): x coordinate of icon on drawing canvas
-  | y_pos (int): y coordinate of icon on drawing canvas
-  | modification (string): icon text annotation; used for post-biosynthetic modifications
-  | dim (int): arbitrary dimention unit; necessary for drawsvg; inconsequential when drawing is exported as svg graphics\n"""
+def draw_shape(
+    shape: str, # SNFG shape designation
+    color: str, # SNFG color designation
+    x_pos: float, # X coordinate of shape center
+    y_pos: float, # Y coordinate of shape center
+    col_dict: Dict[str, str], # Color mapping dictionary
+    modification: str = '', # Text annotation for modifications
+    dim: float = 50, # Base dimension for scaling
+    furanose: bool = False, # Draw furanose indicator
+    conf: str = '', # Ring configuration text
+    deg: float = 0, # Rotation angle in degrees
+    text_anchor: str = 'middle', # Text alignment for postbiosynthetic modifications
+    scalar: float = 0 # Intensity scaling factor for drawsvg output
+    ) -> None:
+  "Draws SNFG glycan symbol with specified shape, color, position and optional annotations"
   x_base = 0 - x_pos * dim
   y_base = 0 + y_pos * dim
   stroke_w = 0.04 * dim
@@ -981,18 +979,17 @@ def draw_shape(shape: str, color: str, x_pos: float, y_pos: float, col_dict: dic
     d.append(draw.Circle(x_base-0.4*dim, y_base, 0.15*dim, fill = 'none', stroke_width = stroke_w, stroke = col_dict['black']))
 
 
-def add_bond(x_start: float, x_stop: float, y_start: float, y_stop: float, label: str = '', dim: float = 50,
-             compact: bool = False, highlight: str = 'show') -> None:
-  """drawing lines (bonds) between start/stop coordinates\n
-  | Arguments:
-  | :-
-  | x_start (int): x1 coordinate
-  | x_stop (int): x2 coordinate
-  | y_start (int): y1 coordinate
-  | y_stop (int): y2 coordinate
-  | label (string): bond text annotation to specify linkage
-  | dim (int): arbitrary dimention unit; necessary for drawsvg; inconsequential when drawing is exported as svg graphics
-  | compact (bool): drawing style; normal or compact\n"""
+def add_bond(
+    x_start: float, # Starting X coordinate
+    x_stop: float, # Ending X coordinate
+    y_start: float, # Starting Y coordinate
+    y_stop: float, # Ending Y coordinate
+    label: str = '', # Bond label text
+    dim: float = 50, # Base dimension for scaling
+    compact: bool = False, # Use compact drawing style
+    highlight: str = 'show' # Highlight state: 'show' or 'hide'
+    ) -> None:
+  "Draws glycosidic bond line with optional label between specified coordinates"
   if highlight == 'hide':
     col_dict = col_dict_transparent
   else:
@@ -1012,17 +1009,20 @@ def add_bond(x_start: float, x_stop: float, y_start: float, y_stop: float, label
   d.append(draw.Text(label, dim*0.4, path = p, text_anchor = 'middle', fill = col_dict['black'], valign = 'middle', line_offset = -0.5))
 
 
-def add_sugar(monosaccharide: str, x_pos: float = 0, y_pos: float = 0, modification: str = '', dim: float = 50,
-              compact: bool = False, conf: str = '', deg: float = 0, text_anchor: str = 'middle', highlight: str = 'show', scalar: float = 0) -> None:
-  """wrapper function for drawing monosaccharide at specified position\n
-  | Arguments:
-  | :-
-  | monosaccharide (string): simplified IUPAC nomenclature
-  | x_pos (int): x coordinate of icon on drawing canvas
-  | y_pos (int): y coordinate of icon on drawing canvas
-  | modification (string): icon text annotation; used for post-biosynthetic modifications
-  | dim (int): arbitrary dimention unit; necessary for drawsvg; inconsequential when drawing is exported as svg graphics
-  | compact (bool): drawing style; normal or compact\n"""
+def add_sugar(
+    monosaccharide: str, # IUPAC monosaccharide name
+    x_pos: float = 0, # X coordinate of sugar center
+    y_pos: float = 0, # Y coordinate of sugar center
+    modification: str = '', # Text annotation for modifications
+    dim: float = 50, # Base dimension for scaling
+    compact: bool = False, # Use compact drawing style
+    conf: str = '', # Ring configuration text
+    deg: float = 0, # Rotation angle in degrees
+    text_anchor: str = 'middle', # Text alignment for postbiosynthetic modifications
+    highlight: str = 'show', # Highlight state: 'show' or 'hide'
+    scalar: float = 0 # Intensity scaling factor
+    ) -> None:
+  "Draws SNFG monosaccharide symbol with specified parameters at given position"
   if highlight == 'hide':
     col_dict = col_dict_transparent
   else:
@@ -1049,14 +1049,10 @@ def add_sugar(monosaccharide: str, x_pos: float = 0, y_pos: float = 0, modificat
     d.append(p)
 
 
-def multiple_branches(glycan: str) -> str:
-  """Reorder multiple branches by linkage on a given glycan\n
-  | Arguments:
-  | :-
-  | glycan (string): Input glycan string.\n
-  | Returns:
-  | :-
-  | str: Modified glycan string."""
+def multiple_branches(
+    glycan: str # IUPAC-condensed glycan sequence
+    ) -> str: # Reordered glycan sequence
+  "Reorders multiple branches in glycan by linkage positions"
   if ']' not in glycan:
     return glycan
   tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
@@ -1076,14 +1072,10 @@ def multiple_branches(glycan: str) -> str:
   return glycan
 
 
-def multiple_branch_branches(glycan: str) -> str:
-  """Reorder nested multiple branches by linkage on a given glycan\n
-  | Arguments:
-  | :-
-  | glycan (str): Input glycan string.\n
-  | Returns:
-  | :-
-  | str: Modified glycan string."""
+def multiple_branch_branches(
+    glycan: str # IUPAC-condensed glycan sequence
+    ) -> str: # Reordered glycan sequence
+  "Reorders nested multiple branches in glycan by linkage positions"
   if ']' not in glycan:
     return glycan
   tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
@@ -1093,14 +1085,11 @@ def multiple_branch_branches(glycan: str) -> str:
   return glycan
 
 
-def reorder_for_drawing(glycan: str, by: str = 'linkage') -> str:
-  """order level 0 branches by linkage, ascending\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns re-ordered glycan"""
+def reorder_for_drawing(
+    glycan: str, # IUPAC-condensed glycan sequence
+    by: str = 'linkage' # Ordering criterion: 'linkage' or 'length'
+    ) -> str: # Reordered glycan sequence
+  "Orders level 0 branches ascending by linkage position or length"
   if ']' not in glycan:
     return glycan
   tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
@@ -1129,14 +1118,11 @@ def reorder_for_drawing(glycan: str, by: str = 'linkage') -> str:
   return glycan
 
 
-def branch_order(glycan: str, by: str = 'linkage') -> str:
-  """order nested branches by linkage, ascending\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns re-ordered glycan"""
+def branch_order(
+    glycan: str, # IUPAC-condensed glycan sequence
+    by: str = 'linkage' # Ordering criterion: 'linkage' or 'length'
+    ) -> str: # Reordered glycan sequence
+  "Orders nested branches ascending by linkage position or length"
   tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
   for openpos, closepos, level in matches(tmp):
     if level == 0 and not re.search(r"^Fuc\S{6}$|^Xyl\S{6}$", tmp[openpos:closepos]):
@@ -1161,16 +1147,11 @@ def branch_order(glycan: str, by: str = 'linkage') -> str:
   return glycan
 
 
-def split_node(G: nx.Graph, node: int) -> nx.Graph:
-  """split graph at node\n
-  | Arguments:
-  | :-
-  | G (networkx object): glycan graph
-  | node (int): where to split the graph object\n
-  | Returns:
-  | :-
-  | glycan graph (networkx object), consisting of two disjointed graphs\n
-  ref: https://stackoverflow.com/questions/65853641/networkx-how-to-split-nodes-into-two-effectively-disconnecting-edges"""
+def split_node(
+    G: nx.Graph, # NetworkX glycan graph
+    node: int # Node to split
+    ) -> nx.Graph: # Modified graph with split node
+  "Splits graph at specified node creating disjoint subgraphs;ref: https://stackoverflow.com/questions/65853641/networkx-how-to-split-nodes-into-two-effectively-disconnecting-edges"""
   edges = G.edges(node, data = True)
   new_edges = []
   new_nodes = []
@@ -1187,39 +1168,26 @@ def split_node(G: nx.Graph, node: int) -> nx.Graph:
   return G
 
 
-def unique(sequence: list) -> list:
-  """remove duplicates but keep order\n
-  | Arguments:
-  | :-
-  | sequence (list): \n
-  | Returns:
-  | :-
-  | deduplicated list, preserving original order\n
-  ref: https://stackoverflow.com/questions/480214/how-do-i-remove-duplicates-from-a-list-while-preserving-order"""
+def unique(
+    sequence: List[Any] # Input sequence with duplicates
+    ) -> List[Any]: # Deduplicated sequence
+  "Removes duplicates while preserving original order;ref: https://stackoverflow.com/questions/480214/how-do-i-remove-duplicates-from-a-list-while-preserving-order"""
   seen = set()
   return [x for x in sequence if not (x in seen or seen.add(x))]
 
 
-def get_indices(x: list, y: list) -> list[list[int | None]]:
-  """for each element in list x, get index (indices if present multiple times) in list y\n
-  | Arguments:
-  | :-
-  | x (list):
-  | y (list) elements can be lists: \n
-  | Returns:
-  | :-
-  | list of list of indices\n"""
+def get_indices(
+    x: List[Any], # Reference list
+    y: List[Any] # Query list
+    ) -> List[List[Optional[int]]]: # Lists of indices or None
+  "Finds indices of elements from y in x, handling multiple occurrences"
   return [([idx for idx, val in enumerate(x) if val == sub] if sub in x else [None]) for sub in y]
 
 
-def process_bonds(linkage_list: list | list[list]) -> list[str] | list[list[str]]:
-  """prepare linkages for printing to figure\n
-  | Arguments:
-  | :-
-  | linkage_list (list): list (or list of lists) of linkages\n
-  | Returns:
-  | :-
-  | processed linkage_list\n"""
+def process_bonds(
+    linkage_list: Union[List[str], List[List[str]]] # Glycosidic linkages
+    ) -> Union[List[str], List[List[str]]]: # Formatted linkage text
+  "Formats glycosidic linkage text for visualization"
   def process_single_linkage(linkage, regex_dict):
     if '?' in linkage[0] and '?' in linkage[-1]:
         return '?'
@@ -1242,17 +1210,10 @@ def process_bonds(linkage_list: list | list[list]) -> list[str] | list[list[str]
     return [process_single_linkage(linkage, regex_dict) for linkage in linkage_list]
 
 
-def split_monosaccharide_linkage(label_list: list | list[list]) -> tuple[list, list, list]:
-  """Split the monosaccharide linkage and extract relevant information from the given label list.\n
-  | Arguments:
-  | :-
-  | label_list (list): List of labels \n
-  | Returns:
-  | :-
-  | Three lists - sugar, sugar_modification, and bond.
-  |   - sugar (list): List of sugars
-  |   - sugar_modification (list): List of sugar modifications
-  |   - bond (list): List of bond information"""
+def split_monosaccharide_linkage(
+    label_list: Union[List[str], List[List[str]]] # List of monosaccharide-linkage labels
+    ) -> Tuple[List[str], List[str], List[str]]: # (sugars, modifications, bonds)
+  "Separates monosaccharides, modifications and linkages from label strings"
   def process_sublist(sub_list):
     sugar = sub_list[::2][::-1]
     mod = [get_modification(k) if k not in additions else '' for k in sugar]
@@ -1266,14 +1227,10 @@ def split_monosaccharide_linkage(label_list: list | list[list]) -> tuple[list, l
     return process_sublist(label_list)
 
 
-def glycan_to_skeleton(glycan_string: str) -> str:
-  """convert glycan to skeleton of node labels according to the respective glycan graph object\n
-  | Arguments:
-  | :-
-  | glycan_string (string): \n
-  | Returns:
-  | :-
-  | node label skeleton of glycan (string)\n"""
+def glycan_to_skeleton(
+    glycan_string: str # IUPAC-condensed glycan sequence
+    ) -> str: # Node label skeleton
+  "Converts glycan to backbone structure with node indices"
   tmp = multireplace(glycan_string, {'(': ',', ')': ',', '[': ',[,', ']': ',],'})
   elements, idx = [], 0
   for k in filter(bool, tmp.split(',')):
@@ -1285,16 +1242,12 @@ def glycan_to_skeleton(glycan_string: str) -> str:
   return multireplace( '-'.join(elements), {'[-': '[', '-]': ']'})
 
 
-def get_highlight_attribute(glycan_graph: nx.Graph, motif_string: str, termini_list: list = []) -> nx.Graph:
-  '''Label nodes in parent glycan (graph) by presence in motif (string)
-  | Arguments:
-  | :-
-  | glycan_graph (networkx object): Glycan as networkx object.
-  | motif_string (string): Glycan as named motif or in IUPAC-condensed format.
-  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
-  | Returns:
-  | :-
-  | Returns networkx object of glycan, annotated with the node attribute 'highlight_labels', labeling nodes that constitute the motif ('show') or not ('hide').'''
+def get_highlight_attribute(
+    glycan_graph: nx.Graph, # NetworkX glycan graph
+    motif_string: str, # Motif to highlight
+    termini_list: List = [] # Terminal position specifications
+    ) -> nx.Graph: # Graph with highlight attributes
+  "Labels nodes in glycan graph based on presence in specified motif"
   g1 = glycan_graph
   g_tmp = copy.deepcopy(g1)
   if not motif_string:
@@ -1339,32 +1292,22 @@ def get_highlight_attribute(glycan_graph: nx.Graph, motif_string: str, termini_l
   return g1
 
 
-def process_repeat(repeat: str) -> str:
-  """prepare input for repeat unit\n
-  | Arguments:
-  | :-
-  | repeat (string): Repeat unit in IUPAC-condensed format, terminating either in linkage connecting units or first monosaccharide of the unit\n
-  | Returns:
-  | :-
-  | processed repeat unit in GlycoDraw-ready IUPAC-condensed format"""
+def process_repeat(
+    repeat: str # Repeating unit specification, terminating either in linkage connecting units or first monosaccharide of the unit
+    ) -> str: # Processed repeat unit
+  "Formats repeating unit glycan sequence for drawing"
   backbone = re.findall(r'.*\((?!.*\()', repeat)[0]
   repeat_connection = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', repeat))
   return 'blank(?1-' + repeat_connection[-1] + ')' + backbone + repeat_connection[:2] + '-?)'
 
 
-def get_coordinates_and_labels(draw_this: str, highlight_motif: str | None, show_linkage: bool = True, 
-                             termini_list: list = []) -> list[list]:
-  """Extract monosaccharide labels and calculate coordinates for drawing\n
-  | Arguments:
-  | :-
-  | draw_this (string): Glycan structure to be drawn.
-  | highlight_motif (string): Glycan as named motif or in IUPAC-condensed format.
-  | show_linkage (bool, optional): Flag indicating whether to show linkages. Default: True.
-  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
-  | Returns:
-  | :-
-  | data_combined (list of lists)
-  | contains lists with monosaccharide label, x position, y position, modification, bond, conformation"""
+def get_coordinates_and_labels(
+    draw_this: str, # IUPAC-condensed glycan sequence
+    highlight_motif: Optional[str], # Motif to highlight
+    show_linkage: bool = True, # Show linkage labels
+    termini_list: List = [] # Terminal position specifications (from 'terminal', 'internal', and 'flexible')
+) -> List[List]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
+  "Calculates drawing coordinates and formats labels for glycan visualization"
   if not draw_this.startswith('['):
     draw_this = multiple_branches(multiple_branch_branches(draw_this))
     draw_this = reorder_for_drawing(draw_this)
@@ -1826,15 +1769,15 @@ def get_coordinates_and_labels(draw_this: str, highlight_motif: str | None, show
   return data_combined
 
 
-def draw_bracket(x: float, y_min_max: list[float], direction: str = 'right', 
-                dim: float = 50, highlight: str = 'show', deg: float = 0) -> None:
-  """Draw a bracket shape at the specified position and dimensions.\n
-  | Arguments:
-  | :-
-  | x (int): X coordinate of the bracket on the drawing canvas.
-  | y_min_max (list): List containing the minimum and maximum Y coordinates for the bracket.
-  | direction (string, optional): Direction of the bracket. Possible values are 'right' and 'left'. Default: 'right'.
-  | dim (int, optional): Arbitrary dimension unit used for scaling the bracket's size. Default: 50.\n"""
+def draw_bracket(
+    x: float, # X coordinate
+    y_min_max: List[float], # [Min Y, Max Y] coordinates
+    direction: str = 'right', # Bracket direction ("left", "right")
+    dim: float = 50, # Base dimension for scaling
+    highlight: str = 'show', # Highlight state
+    deg: float = 0 # Rotation angle in degrees
+    ) -> None:
+  "Draws bracket shape at specified position and dimensions"
   if highlight == 'hide':
     col_dict = col_dict_transparent
   else:
@@ -1865,6 +1808,7 @@ def draw_bracket(x: float, y_min_max: list[float], direction: str = 'right',
 
 
 def is_jupyter() -> bool:
+  "Detects if code is running in Jupyter notebook environment"
   try:
     from IPython import get_ipython
     if 'IPKernelApp' not in get_ipython().config:  # Check if not in IPython kernel
@@ -1874,7 +1818,10 @@ def is_jupyter() -> bool:
   return True
 
 
-def display_svg_with_matplotlib(svg_data: draw.Drawing) -> None:
+def display_svg_with_matplotlib(
+    svg_data: Any # SVG drawing object
+    ) -> None:
+  "Renders SVG using matplotlib for non-Jupyter environments"
   try:
     from cairosvg import svg2png
   except:
@@ -1891,17 +1838,11 @@ def display_svg_with_matplotlib(svg_data: draw.Drawing) -> None:
   plt.show()
 
 
-def process_per_residue(glycan: str, per_residue: list[float]) -> tuple[list[float], list[list[float]], list[list[float]]]:
-  """Given a glycan and per-residue scalars, will output separate scalar mappings for main, side, and branched side chains\n
-  | Arguments:
-  | :-
-  | glycan (string): Glycan in IUPAC-condensed format.
-  | per_residue (list): list of floats (order should be the same as the monosaccharides in glycan string).\n
-  | Returns:
-  | :-
-  | (i) list of per_residue values for main chain monosaccharides
-  | (ii) nested list of per_residue values for each side chain monosaccharides
-  | (iii) nested list of per_residue values for each branched side chain monosaccharides"""
+def process_per_residue(
+    glycan: str, # IUPAC-condensed glycan sequence
+    per_residue: List[float] # Scalar values per residue
+    ) -> Tuple[List[float], List[List[float]], List[List[float]]]: # (main chain values, side chain values, branched side chain values)
+  "Maps per-residue scalar values to main chain, side chains, and branched side chains"
   temp = re.sub(r'\([^)]*\)', 'x', glycan) + 'x'
   temp = re.sub(r'[^x\[\]]', '', temp)
   main_chain_indices = []
@@ -1963,7 +1904,11 @@ chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
         '#C23537']                           # red
 
 
-def get_hit_atoms_and_bonds(mol, smt: str) -> tuple[list[int], list[int]]:
+def get_hit_atoms_and_bonds(
+    mol: Any, # RDKit molecule object
+    smt: str # SMARTS pattern string
+    ) -> Tuple[List[int], List[int]]: # (matching atom indices, matching bond indices)
+  "Identifies atoms and bonds matching SMARTS pattern in molecule"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
   try:
     from rdkit.Chem import MolFromSmarts
@@ -1986,7 +1931,14 @@ def get_hit_atoms_and_bonds(mol, smt: str) -> tuple[list[int], list[int]]:
   return alist, blist
 
 
-def add_colours_to_map(els: list[int], cols: dict[int, list], col_num: int, alpha: bool = True, hex: bool = True) -> None:
+def add_colours_to_map(
+    els: List[int], # Element indices
+    cols: Dict[int, List], # Color map dictionary
+    col_num: int, # Color index
+    alpha: bool = True, # Use alpha-adjusted colors
+    hex: bool = True # Return hex color codes
+    ) -> None:
+  "Adds color assignments to mapping dictionary for chemical structure visualization"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
   from matplotlib.colors import ColorConverter
 
@@ -2004,7 +1956,12 @@ def add_colours_to_map(els: list[int], cols: dict[int, list], col_num: int, alph
         cols[el].append(ColorConverter().to_rgb(COLS[col_num]))
 
 
-def draw_chem2d(draw_this: str, mono_list: list[str], filepath: str | None = None):
+def draw_chem2d(
+    draw_this: str, # IUPAC-condensed glycan sequence
+    mono_list: List[str], # List of monosaccharides to highlight
+    filepath: Optional[str] = None # Output file path
+    ) -> Any: # IPython SVG display object
+  "Creates 2D chemical structure drawing with highlighted monosaccharides using RDKit"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
   try:
     from glycowork.motif.processing import IUPAC_to_SMILES
@@ -2060,10 +2017,15 @@ def draw_chem2d(draw_this: str, mono_list: list[str], filepath: str | None = Non
         svg2pdf(bytestring = data, write_to = filepath)
       except:
         raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-  
+
   return SVG(d.GetDrawingText())
 
-def draw_chem3d(draw_this: str, mono_list: list[str], filepath: str | None = None) -> None:
+def draw_chem3d(
+    draw_this: str, # IUPAC-condensed glycan sequence
+    mono_list: List[str], # List of monosaccharides to highlight
+    filepath: Optional[str] = None # Output file path for PDB
+    ) -> None:
+  "Generates 3D chemical structure model with highlighted monosaccharides using RDKit and py3Dmol"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py and https://github.com/rdkit/rdkit/blob/master/Docs/Book/GettingStartedInPython.rst
   try:
     from glycowork.motif.processing import IUPAC_to_SMILES
@@ -2108,35 +2070,29 @@ def draw_chem3d(draw_this: str, mono_list: list[str], filepath: str | None = Non
       MolToPDBFile(mol, filepath)
     else:
       print("3D structure can only be saved as .pdb file.")
-  
+
   print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
   v.zoomTo()
   v.show()
 
 
 @rescue_glycans
-def GlycoDraw(draw_this: str, vertical: bool = False, compact: bool = False, 
-              show_linkage: bool = True, dim: float = 50, highlight_motif: str | None = None,
-              highlight_termini_list: list = [], repeat: bool | int | str | None = None,
-              repeat_range: list[int] | None = None, draw_method: str | None = None,
-              filepath: str | None = None, suppress: bool = False,
-              per_residue: list = []) -> draw.Drawing:
-  """Draws a glycan structure based on the provided input.\n
-  | Arguments:
-  | :-
-  | draw_this (string): The glycan structure or motif to be drawn.
-  | vertical (bool, optional): Set to True to draw the structure vertically. Default: False.
-  | compact (bool, optional): Set to True to draw the structure in a compact form. Default: False.
-  | show_linkage (bool, optional): Set to False to hide the linkage information. Default: True.
-  | dim (int, optional): The dimension (size) of the individual sugar units in the structure. Default: 50.
-  | highlight_motif (string, optional): Glycan motif to highlight within the parent structure.
-  | highlight_termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
-  | repeat (bool | int | str): If specified, indicate repeat unit by brackets (True: n units, int: # of units, str: range of units)
-  | repeat_range (list of 2 int): List of index integers for the first and last main-chain monosaccharide in repeating unit. Monosaccharides are numbered starting from 0 (invisible placeholder = 0 in case of structure terminating in a linkage) at the reducing end.
-  | draw_method (string, optional): Specify 'chem2d' or 'chem3d' to draw chemical structures; default:None (SNFG figure)
-  | filepath (string, optional): The path to the output file to save as SVG or PDF when drawing SNFG/chem2d figures or PDB when generating 3D conformers. Default: None.
-  | suppress (bool, optional): Whether to suppress the visual display of drawings into the console; default:False
-  | per_residue (list, optional): list of floats (order should be the same as the monosaccharides in glycan string) to quantitatively highlight monosaccharides.\n"""
+def GlycoDraw(
+    draw_this: str, # IUPAC-condensed glycan sequence
+    vertical: bool = False, # Draw vertically
+    compact: bool = False, # Use compact style
+    show_linkage: bool = True, # Show linkage labels
+    dim: float = 50, # Base dimension for scaling
+    highlight_motif: Optional[str] = None, # Motif to highlight
+    highlight_termini_list: List = [], # Terminal positions (from 'terminal', 'internal', and 'flexible')
+    repeat: Optional[Union[bool, int, str]] = None, # Repeat unit specification (True: n units, int: # of units, str: range of units)
+    repeat_range: Optional[List[int]] = None, # Repeat unit range
+    draw_method: Optional[str] = None, # Drawing method: None, 'chem2d', 'chem3d'
+    filepath: Optional[str] = None, # Output file path
+    suppress: bool = False, # Suppress display
+    per_residue: List = [] # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
+    ) -> Any: # Drawing object
+  "Renders glycan structure using SNFG symbols or chemical structure representation"
   if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if draw_this.startswith('Terminal') and draw_this not in motif_list.motif_name.values.tolist():
@@ -2393,40 +2349,30 @@ def GlycoDraw(draw_this: str, vertical: bool = False, compact: bool = False,
   return d2 if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
 
 
-def scale_in_range(listy: list[float], a: float, b: float) -> list[float]:
-  """Normalize list of numbers in range a to b\n
-  | Arguments:
-  | :-
-  | listy (list): list of numbers as integers/floats
-  | a (integer/float): min value in normalized range
-  | b (integer/float): max value in normalized range\n
-  | Returns:
-  | :-
-  | Normalized list of numbers"""
+def scale_in_range(
+    listy: List[float], # Numbers to normalize
+    a: float, # Target minimum
+    b: float # Target maximum
+    ) -> List[float]: # Normalized numbers
+  "Normalizes list of numbers to specified range"
   min_val = min(listy)
   max_val = max(listy)
   range_val = max_val - min_val
   return [(b - a) * ((x - min_val) / range_val) + a for x in listy]
 
 
-def annotate_figure(svg_input: str, scale_range: tuple[int, int] = (25, 80), compact: bool = False, glycan_size: str = 'medium',
-                   filepath: str = '', scale_by_DE_res: pd.DataFrame | None = None, x_thresh: float = 1, y_thresh: float = 0.05,
-                   x_metric: str = 'Log2FC') -> str | None:
-  """Modify matplotlib svg figure to replace text labels with glycan figures\n
-  | Arguments:
-  | :-
-  | svg_input (string): absolute path including full filename for input svg figure
-  | scale_range (tuple): tuple of two integers defining min/max glycan dim; default:(25,80)
-  | compact (bool): if True, draw compact glycan figures; default:False
-  | glycan_size (string): modify glycan size; default:'medium'; options are 'small', 'medium', 'large'
-  | filepath (string): absolute path including full filename allows for saving the plot
-  | scale_by_DE_res (df): result table from motif_analysis.get_differential_expression. Include to scale glycan figure size by -10logp
-  | x_thresh (float): absolute x metric threshold for datapoints included for scaling, set to match get_differential_expression; default:1.0
-  | y_thresh (float): corr p threshhold for datapoints included for scaling, set to match get_differential_expression; default:0.05
-  | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2FC', 'Effect size'\n
-  | Returns:
-  | :-
-  | Modified figure svg code"""
+def annotate_figure(
+    svg_input: str, # Input SVG file path
+    scale_range: Tuple[int, int] = (25, 80), # Min/max glycan dimensions
+    compact: bool = False, # Use compact style
+    glycan_size: str = 'medium', # Glycan size preset ('small', 'medium', 'large')
+    filepath: str = '', # Output file path
+    scale_by_DE_res: Optional[pd.DataFrame] = None, # Differential expression results (motif_analysis.get_differential_expression)
+    x_thresh: float = 1, # X metric threshold
+    y_thresh: float = 0.05, # P-value threshold
+    x_metric: str = 'Log2FC' # X axis metric ('Log2FC', 'Effect size')
+    ) -> Optional[str]: # Modified SVG code
+  "Replaces text labels with glycan drawings in SVG figure"
   glycan_size_dict = {
       'small': 'scale(0.1 0.1)  translate(0, -74)',
       'medium': 'scale(0.2 0.2)  translate(0, -55)',
@@ -2504,19 +2450,14 @@ def annotate_figure(svg_input: str, scale_range: tuple[int, int] = (25, 80), com
     return svg_tmp
 
 
-def plot_glycans_excel(df: pd.DataFrame | str, folder_filepath: str, glycan_col_num: int = 0,
-                       scaling_factor: float = 0.2, compact: bool = False) -> None:
-  """plots SNFG images of glycans into new column in df and saves df as Excel file\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences [alternative: filepath to .csv or .xlsx]
-  | folder_filepath (string): full filepath to the folder you want to save the output to
-  | glycan_col_num (int): index of the column containing glycan sequences; default:0 (first column)
-  | scaling_factor (float): how large the glycans should be; default:0.2
-  | compact (bool, optional): Set to True to draw the structures in a compact form. Default: False.\n
-  | Returns:
-  | :-
-  | Saves the dataframe with glycan images as output.xlsx into folder_filepath"""
+def plot_glycans_excel(
+    df: Union[pd.DataFrame, str], # DataFrame or filepath with glycans
+    folder_filepath: str, # Output folder path
+    glycan_col_num: int = 0, # Glycan column index
+    scaling_factor: float = 0.2, # Image scaling
+    compact: bool = False # Use compact style
+    ) -> None:
+  "Creates Excel file with SNFG glycan images in a new column"
   try:
     from cairosvg import svg2png
   except:
