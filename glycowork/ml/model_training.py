@@ -85,27 +85,19 @@ def enable_running_stats(model: torch.nn.Module # model to enable batch norm
     model.apply(_enable)
 
 
-def train_model(model: torch.nn.Module, dataloaders: dict[str, torch.utils.data.DataLoader], criterion: torch.nn.Module,
-                optimizer: torch.optim.Optimizer, scheduler: torch.optim.lr_scheduler._LRScheduler,
-                num_epochs: int = 25, patience: int = 50, mode: str = 'classification', mode2: str = 'multi',
-                return_metrics: bool = False
-                ) -> Union[torch.nn.Module, tuple[torch.nn.Module, dict[str, dict[str, list[float]]]]]:
-    """trains a deep learning model on predicting glycan properties\n
-    | Arguments:
-    | :-
-    | model (PyTorch object): graph neural network (such as SweetNet) for analyzing glycans
-    | dataloaders (PyTorch object): dictionary of dataloader objects with keys 'train' and 'val'
-    | criterion (PyTorch object): PyTorch loss function
-    | optimizer (PyTorch object): PyTorch optimizer
-    | scheduler (PyTorch object): PyTorch learning rate decay
-    | num_epochs (int): number of epochs for training; default:25
-    | patience (int): number of epochs without improvement until early stop; default:50
-    | mode (string): 'classification', 'multilabel', or 'regression'; default:classification
-    | mode2 (string): further specifying classification into 'multi' or 'binary' classification;default:multi\n
-    | return_metrics (bool): whether to return metrics, if false, plots will be generated; default:False\n
-    | Returns:
-    | :-
-    | Returns the best model seen during training"""
+def train_model(model: torch.nn.Module, # graph neural network for analyzing glycans
+               dataloaders: Dict[str, torch.utils.data.DataLoader], # dict with 'train' and 'val' loaders
+               criterion: torch.nn.Module, # PyTorch loss function
+               optimizer: torch.optim.Optimizer, # PyTorch optimizer, has to be SAM if mode != "regression"
+               scheduler: torch.optim.lr_scheduler._LRScheduler, # PyTorch learning rate decay
+               num_epochs: int = 25, # number of epochs for training
+               patience: int = 50, # epochs without improvement until early stop
+               mode: str = 'classification', # 'classification', 'multilabel', or 'regression'
+               mode2: str = 'multi', # 'multi' or 'binary' classification
+               return_metrics: bool = False, # whether to return metrics
+              ) -> Union[torch.nn.Module, tuple[torch.nn.Module, dict[str, dict[str, list[float]]]]]: # best model from training and the training and validation metrics
+    "trains a deep learning model on predicting glycan properties"
+
     since = time.time()
     early_stopping = EarlyStopping(patience=patience, verbose=True)
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -119,7 +111,7 @@ def train_model(model: torch.nn.Module, dataloaders: dict[str, torch.utils.data.
     else:
         blank_metrics = {"loss": [], "mse": [], "mae": [], "r2": []}
 
-    metrics = {"train": copy.copy(blank_metrics), "val": copy.copy(blank_metrics)}
+    metrics = {"train": copy.deepcopy(blank_metrics), "val": copy.deepcopy(blank_metrics)}
 
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
@@ -131,7 +123,7 @@ def train_model(model: torch.nn.Module, dataloaders: dict[str, torch.utils.data.
             else:
                 model.eval()
 
-            running_metrics = copy.copy(blank_metrics)
+            running_metrics = copy.deepcopy(blank_metrics)
             running_metrics["weights"] = []
 
             for data in dataloaders[phase]:
