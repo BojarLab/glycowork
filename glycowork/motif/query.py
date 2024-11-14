@@ -1,17 +1,16 @@
 import numpy as np
 import pandas as pd
+from typing import List, Optional
 
 from glycowork.glycan_data.loader import motif_list, df_glycan
 from glycowork.motif.graph import compare_glycans
 from glycowork.motif.annotate import annotate_glycan
 
 
-def get_insight(glycan: str, motifs: pd.DataFrame | None = None) -> None:
-    """prints out meta-information about a glycan\n
-    | Arguments:
-    | :-
-    | glycan (string): glycan in IUPAC-condensed format
-    | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list\n"""
+def get_insight(glycan: str, # Glycan in IUPAC-condensed format
+                motifs: Optional[pd.DataFrame] = None # DataFrame of glycan motifs; default:motif_list
+               ) -> None: # Prints glycan meta-information
+    "Print meta-information about a glycan"
     if motifs is None:
         motifs = motif_list
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
@@ -48,15 +47,10 @@ def get_insight(glycan: str, motifs: pd.DataFrame | None = None) -> None:
     print("\nThat's all we can do for you at this point!")
 
 
-def glytoucan_to_glycan(ids: list[str], revert: bool = False) -> list[str]:
-    """interconverts GlyTouCan IDs and glycans in IUPAC-condensed\n
-    | Arguments:
-    | :-
-    | ids (list): list of GlyTouCan IDs as strings (if using glycans instead, change 'revert' to True
-    | revert (bool): whether glycans should be mapped to GlyTouCan IDs or vice versa; default:False\n
-    | Returns:
-    | :-
-    | Returns list of either GlyTouCan IDs or glycans in IUPAC-condensed"""
+def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
+                       revert: bool = False # Whether to map glycans to IDs; default:False
+                      ) -> List[str]: # List of glycans or IDs
+    "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
     if revert:
         ids = [df_glycan.glytoucan_id.values.tolist()[df_glycan.glycan.values.tolist().index(k)[0]] for k in ids]
         if any([k not in df_glycan.glycan.values.tolist() for k in ids]):
