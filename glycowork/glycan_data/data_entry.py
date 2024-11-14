@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import Optional, Union
+from typing import Optional
 from glycowork.motif.processing import check_nomenclature
 from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
 

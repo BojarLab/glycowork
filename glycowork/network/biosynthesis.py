@@ -10,7 +10,7 @@ from collections import defaultdict, Counter
 from scipy.stats import ttest_rel, ttest_ind
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
-from typing import Dict, List, Set, Union, Optional, Tuple, Callable, Any, FrozenSet
+from typing import Dict, List, Set, Union, Optional, Tuple, Any, FrozenSet
 import statsmodels.api as sm
 import networkx as nx
 import numpy as np
@@ -626,8 +626,6 @@ def infer_virtual_nodes(network_a: nx.Graph, # First network
   # Perform network alignment if not provided
   if combined is None:
     combined = network_alignment(network_a, network_b)
-  a_nodes = set(network_a.nodes())
-  b_nodes = set(network_b.nodes())
   # Find virtual nodes in network_a that are observed in network_b and vice versa
   virtual_a = {k for k, v in network_a.nodes(data = True) if v.get('virtual', 0) == 1}
   virtual_b = {k for k, v in network_b.nodes(data = True) if v.get('virtual', 0) == 1}
@@ -972,7 +970,6 @@ def get_max_flow_path(network: nx.Graph, # Biosynthetic network
   current_node = source
   abundance_dict = nx.get_node_attributes(network, 'abundance')
   while current_node != sink:
-    max_metric = 0
     next_node = max(network.neighbors(current_node),
             key = lambda neighbor: flow_dict[current_node][neighbor] * max(abundance_dict.get(neighbor, 0), 0.1),
             default = None)

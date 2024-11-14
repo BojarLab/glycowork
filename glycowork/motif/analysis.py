@@ -22,7 +22,7 @@ from sklearn.feature_selection import SelectFromModel
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-from glycowork.glycan_data.loader import df_species, unwrap, motif_list, strip_suffixes, download_model
+from glycowork.glycan_data.loader import df_species, unwrap, strip_suffixes, download_model
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,

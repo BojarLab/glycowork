@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional, Tuple, Union, Literal
+from typing import Dict, Optional, Tuple, Union, Literal
 
 import numpy as np
 try:

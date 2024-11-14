@@ -1,6 +1,6 @@
 import re
 from copy import deepcopy
-from typing import Dict, List, Tuple, Set, Union, Optional, Callable, Any
+from typing import Dict, List, Tuple, Set, Union, Optional, Callable
 from glycowork.glycan_data.loader import unwrap, modification_map
 from glycowork.motif.processing import min_process_glycans, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, choose_correct_isoform
 import numpy as np

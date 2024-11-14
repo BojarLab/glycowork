@@ -18,7 +18,6 @@ except ImportError:
   raise ImportError("<draw dependencies missing; did you do 'pip install glycowork[draw]'?>")
 import numpy as np
 import pandas as pd
-import sys
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
 

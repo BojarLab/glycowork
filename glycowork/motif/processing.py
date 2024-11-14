@@ -5,7 +5,7 @@ import re
 from random import choice
 from functools import wraps
 from collections import defaultdict
-from typing import Dict, List, Set, Union, Optional, Callable, Any, Tuple
+from typing import Dict, List, Set, Union, Optional, Callable, Tuple
 from glycowork.glycan_data.loader import (unwrap, multireplace,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)

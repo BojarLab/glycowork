@@ -6,7 +6,7 @@ from pickle import load
 from os import path
 from itertools import chain
 from importlib import resources
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict, List, Optional
 
 with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
   motif_list = pd.read_csv(f)

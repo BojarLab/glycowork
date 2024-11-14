@@ -6,7 +6,7 @@ import copy
 from importlib import resources
 from collections import Counter
 from sklearn.cluster import DBSCAN
-from typing import Dict, List, Set, Union, Optional, Any, Tuple
+from typing import Dict, List, Set, Union, Optional, Tuple
 
 from glycowork.glycan_data.loader import lib, unwrap, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions

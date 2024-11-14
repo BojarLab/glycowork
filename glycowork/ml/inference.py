@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import math
 try:
     import torch
-    from torch.utils.data import Dataset
     # Choosing the right computing architecture
     device = "cpu"
     if torch.cuda.is_available():

@@ -121,13 +121,13 @@ class GlycoDrawExcelDialog(simpledialog.Dialog):
                 self.tooltip.destroy()
         widget.bind('<Enter>', enter)
         widget.bind('<Leave>', leave)
-    
+
     def browse_csv(self):
         file_path = filedialog.askopenfilename(filetypes = [("CSV Files", "*.csv"), ("Excel Files", "*.xlsx")])
         if file_path:
             self.csv_entry.delete(0, tk.END)
             self.csv_entry.insert(0, file_path)
-    
+
     def browse_folder(self):
         folder_path = filedialog.askdirectory()
         if folder_path:
@@ -154,7 +154,7 @@ def openGlycoDrawExcelDialog():
 class DifferentialExpressionDialog(simpledialog.Dialog):
     def body(self, master):
         self.title("Differential Expression Input")
-        
+
         # CSV file selection
         tk.Label(master, text="CSV or Excel File:").grid(row = 0, sticky = tk.W)
         self.csv_file_var = tk.StringVar(master)
@@ -176,23 +176,23 @@ class DifferentialExpressionDialog(simpledialog.Dialog):
         self.output_folder_entry.grid(row = 4, column = 1)
         self.output_folder_browse = tk.Button(master, text = "Browse...", command = self.browse_output_folder)
         self.output_folder_browse.grid(row = 4, column = 2)
-        
+
         # Treatment group indices
         tk.Label(master, text = "Treatment Group Columns:").grid(row = 1, sticky = tk.W)
         self.treatment_entry = tk.Entry(master)
         self.treatment_entry.grid(row = 1, column = 1, columnspan = 2, sticky = tk.W+tk.E)
-        
+
         # Control group indices
         tk.Label(master, text = "Control Group Columns:").grid(row = 2, sticky = tk.W)
         self.control_entry = tk.Entry(master)
         self.control_entry.grid(row = 2, column = 1, columnspan = 2, sticky = tk.W+tk.E)
-        
+
         # Motifs option
         tk.Label(master, text="Motif-based analysis:").grid(row = 3, sticky = tk.W)
         self.motifs_var = tk.BooleanVar(master)
         self.motifs_check = tk.Checkbutton(master, variable = self.motifs_var)
         self.motifs_check.grid(row = 3, column = 1, sticky = tk.W)
-        
+
         return self.csv_entry  # to put focus on the csv file entry widget
 
     def create_tooltip(self, widget, text):
@@ -262,7 +262,7 @@ def openDifferentialExpressionDialog():
 class GetHeatmapDialog(simpledialog.Dialog):
     def body(self, master):
         self.title("Get Heatmap Input")
-        
+
         # Input file selection
         tk.Label(master, text = "Select Input CSV or Excel File:").grid(row = 0, sticky = tk.W)
         self.input_file_entry = tk.StringVar(master)
@@ -276,7 +276,7 @@ class GetHeatmapDialog(simpledialog.Dialog):
                             "Ideally, rows are samples and columns are glycans (but the function can deal with the opposite)\n"
                             "Glycans should be ideally in IUPAC-condensed\n"
                             "If you do NOT analyze motifs, the glycan format does not matter at all")
-        
+
         # Motif analysis option
         self.motif_analysis_var = tk.BooleanVar()
         self.motif_analysis_check = tk.Checkbutton(master, text = "Motif Analysis", variable = self.motif_analysis_var)
@@ -291,7 +291,7 @@ class GetHeatmapDialog(simpledialog.Dialog):
         self.show_all_var = tk.BooleanVar()
         self.show_all_check = tk.Checkbutton(master, text = "Show all?", variable = self.show_all_var)
         self.show_all_check.grid(row = 1, column = 2, sticky = tk.W)
-        
+
         # Output PDF file selection
         tk.Label(master, text = "Select Output for Heatmap File:").grid(row = 2, sticky = tk.W)
         self.output_file_entry = tk.StringVar(master)
@@ -360,7 +360,7 @@ def openGetHeatmapDialog():
 class LectinArrayAnalysisDialog(simpledialog.Dialog):
     def body(self, master):
         self.title("Lectin Array Analysis Input")
-        
+
         # CSV or Excel file selection
         tk.Label(master, text="Select CSV or Excel File:").grid(row = 0, sticky = tk.W)
         self.file_entry = tk.Entry(master)
@@ -372,17 +372,17 @@ class LectinArrayAnalysisDialog(simpledialog.Dialog):
         self.create_tooltip(self.help_icon, "CSV Format Help:\n\n"
                             "Format data as samples as rows and lectins as columns (first column = sample names)\n"
                             "Have lectin names in the column names")
-        
+
         # Treatment group indices
         tk.Label(master, text = "Treatment Group Rows (comma-separated):").grid(row = 1, sticky = tk.W)
         self.treatment_entry = tk.Entry(master)
         self.treatment_entry.grid(row = 1, column = 1, columnspan = 2, sticky = tk.W+tk.E)
-        
+
         # Control group indices
         tk.Label(master, text = "Control Group Rows (comma-separated):").grid(row = 2, sticky = tk.W)
         self.control_entry = tk.Entry(master)
         self.control_entry.grid(row = 2, column = 1, columnspan = 2, sticky = tk.W+tk.E)
-        
+
         # Paired analysis option
         tk.Label(master, text = "Paired Analysis:").grid(row = 3, sticky = tk.W)
         self.paired_var = tk.BooleanVar()

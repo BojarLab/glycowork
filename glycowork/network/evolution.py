@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-from typing import Dict, List, Union, Optional, Callable, Any
+from typing import Dict, List, Union, Optional, Callable
 from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
 from glycowork.motif.graph import subgraph_isomorphism

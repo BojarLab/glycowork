@@ -149,7 +149,7 @@ def mahalanobis_variance(x: Union[np.ndarray, pd.DataFrame], # comparison group 
 
 
 def variance_stabilization(data: pd.DataFrame, # dataframe with glycans/motifs as indices and samples as columns
-                         groups: List[List[str]] | None = None # list containing lists of column names of samples from same group for group-specific normalization; otherwise global
+                         groups: Union[List[List[str]], None] = None # list containing lists of column names of samples from same group for group-specific normalization; otherwise global
                         ) -> pd.DataFrame: # normalized dataframe in same format as input
   "performs variance stabilization normalization"
   # Apply log1p transformation
