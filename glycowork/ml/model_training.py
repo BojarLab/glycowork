@@ -169,7 +169,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
 
                 # Collecting relevant metrics
                 running_metrics["loss"].append(loss.item())
-                running_metrics["weights"].append(len(batch))
+                running_metrics["weights"].append(batch.max().cpu() + 1)
 
                 y_det = y.detach().cpu().numpy()
                 pred_det = pred.cpu().detach().numpy()
@@ -210,7 +210,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     best_loss = metrics[phase]["loss"][-1]
                     best_model_wts = copy.deepcopy(model.state_dict())
 
-                    # Extract ACC or MSE of the new best model
+                    # Extract the lead metric (ACC, LRAP, or MSE) of the new best model
                     if mode == 'classification':
                         best_lead_metric = metrics[phase]["acc"][-1]
                     elif mode == 'multilabel':
