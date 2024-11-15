@@ -46,9 +46,9 @@ def expansion_sum(*args: Union[int, float] # numbers to sum
                 ) -> Union[int, List[Union[int, float]]]: # sum as int or list
   "For the expansion sum of floating points"
   g = sorted(args, reverse = True)
-  q, *h = fast_two_sum(np.array(g[0]), np.array(g[1]))
+  q, *h = fast_two_sum(g[0], g[1])
   for val in g[2:]:
-    z = two_sum(q, np.array(val))
+    z = two_sum(q, val)
     q, *extra = z
     if extra:
       h += extra
@@ -270,7 +270,7 @@ def jtkdist(timepoints: Union[int, np.ndarray], # number/array of timepoints wit
   param_dic.update({"GRP_SIZE": tim, "NUM_GRPS": len(tim), "NUM_VALS": nn,
                     "MAX": M, "DIMS": [int(nn * (nn - 1) / 2), 1]})
   if normal:
-    param_dic["VAR"] = (nn ** 2 * (2 * nn + 3) - np.sum(np.fromiter((np.square(t) * (2 * t + 3) for t in tim), dtype = float))) / 72  # Variance of JTK
+    param_dic["VAR"] = (nn ** 2 * (2 * nn + 3) - np.sum(np.fromiter((np.square(tim) * (2 * tim + 3)), dtype = float))) / 72  # Variance of JTK
     param_dic["SDV"] = math.sqrt(param_dic["VAR"])  # Standard deviation of JTK
     param_dic["EXV"] = M / 2  # Expected value of JTK
     param_dic["EXACT"] = False
