@@ -1,5 +1,5 @@
 import os
-from typing import Literal
+from typing import Dict, Optional, Tuple, Union, Literal
 
 import numpy as np
 try:
@@ -16,17 +16,11 @@ from glycowork.glycan_data.loader import lib, download_model
 
 
 class SweetNet(torch.nn.Module):
-    """given glycan graphs as input, predicts properties via a graph neural network\n
-    | Arguments:
-    | :-
-    | lib_size (int): number of unique tokens for graph nodes; usually len(lib)
-    | num_classes (int): number of output classes; only >1 for multilabel classification; default:1\n
-    | Returns:
-    | :-
-    | Returns batch-wise predictions
-    """
-    def __init__(self, lib_size, num_classes: int = 1, hidden_dim: int = 128):
-        super(SweetNet, self).__init__()
+    def __init__(self, lib_size: int, # number of unique tokens for graph nodes
+                 num_classes: int = 1, # number of output classes (>1 for multilabel)
+                 hidden_dim: int = 128 # dimension of hidden layers
+                ) -> None:
+        "given glycan graphs as input, predicts properties via a graph neural network"
 
         # Convolution operations on the graph
         self.conv1 = GraphConv(hidden_dim, hidden_dim)
@@ -44,7 +38,8 @@ class SweetNet(torch.nn.Module):
         self.act1 = torch.nn.LeakyReLU()
         self.act2 = torch.nn.LeakyReLU()
 
-    def forward(self, x, edge_index, batch, inference = False):
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
+                inference: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
 
         # Getting node features
         x = self.item_embedding(x)
@@ -70,12 +65,8 @@ class SweetNet(torch.nn.Module):
 
 
 class NSequonPred(torch.nn.Module):
-    """given an ESM1b representation of N and 20 AA up + downstream, predicts whether it's a sequon\n
-    | Returns:
-    | :-
-    | Returns batch-wise predictions
-    """
-    def __init__(self):
+    def __init__(self) -> None:
+        "given an ESM1b representation of N and 20 AA up + downstream, predicts whether it's a sequon"
         super(NSequonPred, self).__init__()
 
         self.fc1 = torch.nn.Linear(1280, 512)
@@ -87,7 +78,7 @@ class NSequonPred(torch.nn.Module):
         self.bn2 = torch.nn.BatchNorm1d(256)
         self.bn3 = torch.nn.BatchNorm1d(64)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
       x = F.dropout(F.rrelu(self.bn1(self.fc1(x))), p = 0.2, training = self.training)
       x = F.dropout(F.rrelu(self.bn2(self.fc2(x))), p = 0.2, training = self.training)
       x = F.dropout(F.rrelu(self.bn3(self.fc3(x))), p = 0.1, training = self.training)
@@ -95,38 +86,35 @@ class NSequonPred(torch.nn.Module):
       return x
 
 
-def sigmoid_range(x, low, high):
+def sigmoid_range(x: torch.Tensor, # input tensor
+                 low: float, # lower bound of range
+                 high: float # upper bound of range
+                ) -> torch.Tensor: # sigmoid transformed tensor in range (low,high)
     "Sigmoid function with range `(low, high)`"
     return torch.sigmoid(x) * (high - low) + low
 
 
 class SigmoidRange(torch.nn.Module):
-    "Sigmoid module with range `(low, x_max)`"
-
-    def __init__(self, low, high):
+    def __init__(self, low: float, # lower bound of range
+                 high: float # upper bound of range
+                ) -> None:
+      "Sigmoid module with range `(low, high)`"
       super(SigmoidRange, self).__init__()
       self.low, self.high = low, high
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return sigmoid_range(x, self.low, self.high)
 
 
 class LectinOracle(torch.nn.Module):
-  """given glycan graphs and protein representations as input, predicts protein-glycan binding\n
-  | Arguments:
-  | :-
-  | input_size_glyco (int): number of unique tokens for graph nodes; usually len(lib)
-  | hidden_size (int): layer size for the graph convolutions; default:128
-  | num_classes (int): number of output classes; only >1 for multilabel classification; default:1
-  | data_min (float): minimum observed value in training data; default: -11.355
-  | data_max (float): maximum observed value in training data; default: 23.892
-  | input_size_prot (int): dimensionality of protein representations used as input; default:1280\n
-  | Returns:
-  | :-
-  | Returns batch-wise predictions
-  """
-  def __init__(self, input_size_glyco, hidden_size = 128, num_classes = 1, data_min = -11.355,
-               data_max = 23.892, input_size_prot = 1280):
+  def __init__(self, input_size_glyco: int, # number of unique tokens for graph nodes
+                 hidden_size: int = 128, # layer size for graph convolutions
+                 num_classes: int = 1, # number of output classes (>1 for multilabel)
+                 data_min: float = -11.355, # minimum observed value in training data
+                 data_max: float = 23.892, # maximum observed value in training data
+                 input_size_prot: int = 1280 # dimensionality of protein representations
+                ) -> None:
+    "given glycan graphs and protein representations as input, predicts protein-glycan binding"
     super(LectinOracle, self).__init__()
     self.input_size_prot = input_size_prot
     self.input_size_glyco = input_size_glyco
@@ -161,7 +149,8 @@ class LectinOracle(torch.nn.Module):
     self.act1 = torch.nn.LeakyReLU()
     self.sigmoid = SigmoidRange(self.data_min, self.data_max)
 
-  def forward(self, prot, nodes, edge_index, batch, inference = False):
+  def forward(self, prot: torch.Tensor, nodes: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
+              inference: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     # Fully connected part for the protein
     embedded_prot = self.bn_prot1(self.act_prot1(self.dp_prot1(self.prot_encoder1(prot))))
     embedded_prot = self.bn_prot2(self.act_prot2(self.dp_prot2(self.prot_encoder2(embedded_prot))))
@@ -200,21 +189,14 @@ class LectinOracle(torch.nn.Module):
 
 
 class LectinOracle_flex(torch.nn.Module):
-  """given glycan graphs and protein sequences as input, predicts protein-glycan binding\n
-  | Arguments:
-  | :-
-  | input_size_glyco (int): number of unique tokens for graph nodes; usually len(lib)
-  | hidden_size (int): layer size for the graph convolutions; default:128
-  | num_classes (int): number of output classes; only >1 for multilabel classification; default:1
-  | data_min (float): minimum observed value in training data; default: -11.355
-  | data_max (float): maximum observed value in training data; default: 23.892
-  | input_size_prot (int): maximum length of protein sequence for padding/cutting; default:1000\n
-  | Returns:
-  | :-
-  | Returns batch-wise predictions
-  """
-  def __init__(self, input_size_glyco, hidden_size = 128, num_classes = 1, data_min = -11.355,
-               data_max = 23.892, input_size_prot = 1000):
+  def __init__(self, input_size_glyco: int, # number of unique tokens for graph nodes
+                 hidden_size: int = 128, # layer size for graph convolutions
+                 num_classes: int = 1, # number of output classes (>1 for multilabel)
+                 data_min: float = -11.355, # minimum observed value in training data
+                 data_max: float = 23.892, # maximum observed value in training data
+                 input_size_prot: int = 1000 # maximum protein sequence length for padding/cutting
+                ) -> None:
+    "given glycan graphs and protein sequences as input, predicts protein-glycan binding"
     super(LectinOracle_flex, self).__init__()
     self.input_size_prot = input_size_prot
     self.input_size_glyco = input_size_glyco
@@ -260,7 +242,8 @@ class LectinOracle_flex(torch.nn.Module):
     self.act1_n = torch.nn.LeakyReLU()
     self.sigmoid = SigmoidRange(self.data_min, self.data_max)
 
-  def forward(self, prot, nodes, edge_index, batch, inference = False):
+  def forward(self, prot: torch.Tensor, nodes: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
+              inference: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     # ESM-1b mimicking
     prot = self.dp1(self.act1(self.bn1(self.fc1(prot))))
     prot = self.dp2(self.act2(self.bn2(self.fc2(prot))))
@@ -295,14 +278,11 @@ class LectinOracle_flex(torch.nn.Module):
       return out
 
 
-def init_weights(model, mode = 'sparse', sparsity = 0.1):
-    """initializes linear layers of PyTorch model with a weight initialization\n
-    | Arguments:
-    | :-
-    | model (Pytorch object): neural network (such as SweetNet) for analyzing glycans
-    | mode (string): which initialization algorithm; choices are 'sparse','kaiming','xavier';default:'sparse'
-    | sparsity (float): proportion of sparsity after initialization; default:0.1 / 10%
-    """
+def init_weights(model: torch.nn.Module, # neural network for analyzing glycans
+                mode: str = 'sparse', # initialization algorithm: 'sparse', 'kaiming', 'xavier'
+                sparsity: float = 0.1 # proportion of sparsity after initialization
+               ) -> None:
+    "initializes linear layers of PyTorch model with a weight initialization"
     if isinstance(model, torch.nn.Linear):
         if mode == 'sparse':
             torch.nn.init.sparse_(model.weight, sparsity = sparsity)
@@ -314,20 +294,13 @@ def init_weights(model, mode = 'sparse', sparsity = 0.1):
             print("This initialization option is not supported.")
 
 
-def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_flex", "NSequonPred"],
-               num_classes: int, libr=None, trained=False, hidden_dim: int = 128):
-    """wrapper to instantiate model, initialize it, and put it on the GPU\n
-    | Arguments:
-    | :-
-    | model_type (string): string indicating the type of model
-    | num_classes (int): number of unique classes for classification
-    | libr (dict): dictionary of form glycoletter:index\n
-    | trained (bool): whether to use pretrained model; default:False
-    | hidden_dim (int): hidden dimension for the model (currently only for SweetNet); default:128\n
-    | Returns:
-    | :-
-    | Returns PyTorch model object
-    """
+def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_flex", "NSequonPred"], # type of model to create
+              num_classes: int, # number of unique classes for classification
+              libr: Optional[Dict[str, int]] = None, # dictionary of form glycoletter:index
+              trained: bool = False, # whether to use pretrained model
+              hidden_dim: int = 128 # hidden dimension for the model (SweetNet only)
+             ) -> torch.nn.Module: # initialized PyTorch model
+    "wrapper to instantiate model, initialize it, and put it on the GPU"
     if libr is None:
       libr = lib
     if model_type == 'SweetNet':

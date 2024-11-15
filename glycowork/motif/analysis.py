@@ -7,6 +7,7 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 plt.style.use('default')
 from collections import Counter
+from typing import Any, Dict, List, Optional, Tuple, Union
 from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway, spearmanr
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
@@ -21,11 +22,11 @@ from sklearn.feature_selection import SelectFromModel
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-from glycowork.glycan_data.loader import df_species, unwrap, motif_list, strip_suffixes, download_model
+from glycowork.glycan_data.loader import df_species, unwrap, strip_suffixes, download_model
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
-                                         test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
+                                         compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing,
@@ -38,35 +39,23 @@ from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_fi
 from glycowork.motif.graph import subgraph_isomorphism
 
 
-def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
-                    impute = True, min_samples = 0.1, transform = "CLR", gamma = 0.1, custom_scale = 0, custom_motifs = [],
-                    monte_carlo = False):
-  """Preprocesses data for analysis by the functions within .motif.analysis\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | group1 (list): list of column indices or names for the first group of samples, usually the control (or ANOVA-type group labels)
-  | group2 (list): list of column indices or names for the second group of samples
-  | experiment (string): what kind of experiment to process data for, options are: "diff", "anova"; default:"diff"
-  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-  |   and 'chemical' (molecular properties of glycan)
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | impute (bool): replaces zeroes with a Random Forest based model; default:True
-  | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-  | monte_carlo (bool): whether to account for technical variation via Monte Carlo simulations; will be slower and much more conservative; default:False\n
-  | Returns:
-  | :-
-  | (i) transformed and processed dataset
-  | (ii) untransformed but processed dataset
-  | (iii) labels for group1
-  | (iv) labels for group2"""
+def preprocess_data(
+    df: Union[pd.DataFrame, str], # Input dataframe or filepath (.csv/.xlsx)
+    group1: List[Union[str, int]], # Column indices/names for first group
+    group2: List[Union[str, int]], # Column indices/names for second group
+    experiment: str = "diff", # Type of experiment: "diff" or "anova"
+    motifs: bool = False, # Analyze motifs instead of sequences
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    paired: bool = False, # Whether samples are paired
+    impute: bool = True, # Replace zeros with Random Forest model
+    min_samples: float = 0.1, # Min percent of non-zero samples required
+    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
+    gamma: float = 0.1, # Uncertainty parameter for CLR transform
+    custom_scale: Union[float, Dict] = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+    monte_carlo: bool = False # Use Monte Carlo for technical variation
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, List[Union[str, int]], List[Union[str, int]]]: # (transformed df, untransformed df, group1 labels, group2 labels)
+  "Preprocesses glycomics data by handling missing values with Random Forest imputation, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if not isinstance(group1[0], str) and experiment == "diff":
@@ -112,28 +101,19 @@ def preprocess_data(df, group1, group2, experiment = "diff", motifs = False, fea
   return df, df_org, group1, group2
 
 
-def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
-                     zscores = True, thresh = 1.645, sorting = True, feature_set = ['exhaustive'],
-                     multiple_samples = False, motifs = None, custom_motifs = []):
-    """returns enriched motifs based on label data or predicted data\n
-    | Arguments:
-    | :-
-    | df (dataframe): dataframe containing glycan sequences and labels [alternative: filepath to .csv or .xlsx]
-    | glycan_col_name (string): column name for glycan sequences; arbitrary if multiple_samples = True; default:'glycan'
-    | label_col_name (string): column name for labels; arbitrary if multiple_samples = True; default:'target'
-    | zscores (bool): whether data are presented as z-scores or not, will be z-score transformed if False; default:True
-    | thresh (float): threshold value to separate positive/negative; default is 1.645 for Z-scores
-    | sorting (bool): whether p-value dataframe should be sorted ascendingly; default: True
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-    |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-    |   and 'chemical' (molecular properties of glycan)
-    | multiple_samples (bool): set to True if you have multiple samples (rows) with glycan information (columns); default:False
-    | motifs (dataframe): can be used to pass a modified motif_list to the function; default:None
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
-    | Returns:
-    | :-
-    | Returns dataframe with p-values, corrected p-values, and Cohen's d as effect size for every glycan motif"""
+def get_pvals_motifs(
+    df: Union[pd.DataFrame, str], # Input dataframe or filepath (.csv/.xlsx)
+    glycan_col_name: str = 'glycan', # Column name for glycan sequences
+    label_col_name: str = 'target', # Column name for labels
+    zscores: bool = True, # Whether data are z-scores
+    thresh: float = 1.645, # Threshold to separate positive/negative
+    sorting: bool = True, # Sort p-value dataframe
+    feature_set: List[str] = ['exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    multiple_samples: bool = False, # Multiple samples with glycan columns
+    motifs: Optional[pd.DataFrame] = None, # Modified motif_list
+    custom_motifs: List[str] = [] # Custom motifs if using 'custom' feature set
+    ) -> pd.DataFrame: # DataFrame with p-values, FDR-corrected p-values, and Cohen's d effect sizes for glycan motifs
+    "Identifies significantly enriched glycan motifs using Welch's t-test with FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
     if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     # Reformat to allow for proper annotation in all samples
@@ -180,14 +160,10 @@ def get_pvals_motifs(df, glycan_col_name = 'glycan', label_col_name = 'target',
     return out
 
 
-def get_representative_substructures(enrichment_df):
-    """builds minimal glycans that contain enriched motifs from get_pvals_motifs\n
-    | Arguments:
-    | :-
-    | enrichment_df (dataframe): output from get_pvals_motifs\n
-    | Returns:
-    | :-
-    | Returns up to 10 minimal glycans in a list"""
+def get_representative_substructures(
+    enrichment_df: pd.DataFrame # Output from get_pvals_motifs
+    ) -> List[str]: # Up to 10 minimal glycans containing enriched motifs
+    "Constructs minimal glycan structures that represent significantly enriched motifs by optimizing for motif content while minimizing structure size using subgraph isomorphism"
     glycans = list(set(df_species.glycan))
     # Only consider motifs that are significantly enriched
     filtered_df = enrichment_df[enrichment_df.corr_pval < 0.05].reset_index(drop = True)
@@ -213,30 +189,21 @@ def get_representative_substructures(enrichment_df):
     return [k for k in rep_motifs if sum(subgraph_isomorphism(j, k) for j in rep_motifs) <= 1]
 
 
-def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
-                 datatype = 'response', rarity_filter = 0.05, filepath = '', index_col = 'glycan',
-                custom_motifs = [], return_plot = False, show_all = False, **kwargs):
-  """clusters samples based on glycan data (for instance glycan binding etc.)\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe with glycan data, rows are samples and columns are glycans [alternative: filepath to .csv or .xlsx]
-  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-  |   and 'chemical' (molecular properties of glycan)
-  | transform (string): whether to transform the data before plotting, currently the only option is "CLR", recommended for glycomics data; default: no transformation
-  | datatype (string): whether df comes from a dataset with quantitative variable ('response') or from presence_to_matrix ('presence')
-  | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05
-  | filepath (string): absolute path including full filename allows for saving the plot
-  | index_col (string): default column to convert to dataframe index; default:'glycan'
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-  | return_plot (bool): whether to return the plot object for external saving; default:False
-  | show_all (bool): whether to plot all ticklabels, no matter how many there are (this might cause visual overlaps); default:False
-  | **kwargs: keyword arguments that are directly passed on to seaborn clustermap\n                      
-  | Returns:
-  | :-
-  | Prints clustermap"""
+def get_heatmap(
+    df: Union[pd.DataFrame, str], # Input dataframe or filepath (.csv/.xlsx)
+    motifs: bool = False, # Analyze motifs instead of sequences
+    feature_set: List[str] = ['known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    transform: str = '', # Transform data before plotting
+    datatype: str = 'response', # Data type: 'response' or 'presence'
+    rarity_filter: float = 0.05, # Min proportion for non-zero values
+    filepath: str = '', # Path to save plot
+    index_col: str = 'glycan', # Column to use as index
+    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+    return_plot: bool = False, # Return plot object
+    show_all: bool = False, # Show all tick labels
+    **kwargs: Any # Keyword args passed to seaborn clustermap
+    ) -> Optional[Any]: # None or plot object if return_plot=True
+  "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if index_col in df.columns:
@@ -289,20 +256,17 @@ def get_heatmap(df, motifs = False, feature_set = ['known'], transform = '',
     plt.show()
 
 
-def plot_embeddings(glycans, emb = None, label_list = None,
-                    shape_feature = None, filepath = '', alpha = 0.8,
-                    palette = 'colorblind', **kwargs):
-    """plots glycan representations for a list of glycans\n
-    | Arguments:
-    | :-
-    | glycans (list): list of IUPAC-condensed glycan sequences as strings
-    | emb (dictionary): stored glycan representations; default takes them from trained species-level SweetNet model
-    | label_list (list): list of same length as glycans if coloring of the plot is desired
-    | shape_feature (string): monosaccharide/bond used to display alternative shapes for dots on the plot
-    | filepath (string): absolute path including full filename allows for saving the plot
-    | alpha (float): transparency of points in plot; default:0.8
-    | palette (string): color palette to color different classes; default:'colorblind'
-    | **kwargs: keyword arguments that are directly passed on to matplotlib\n"""
+def plot_embeddings(
+   glycans: List[str], # List of IUPAC-condensed glycan sequences
+   emb: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None, # Glycan embeddings dict/DataFrame; defaults to SweetNet embeddings
+   label_list: Optional[List[Any]] = None, # Labels for coloring points
+   shape_feature: Optional[str] = None, # Monosaccharide/bond for point shapes
+   filepath: str = '', # Path to save plot
+   alpha: float = 0.8, # Point transparency
+   palette: str = 'colorblind', # Color palette for groups
+   **kwargs: Any # Keyword args passed to seaborn scatterplot
+   ) -> None:
+    "Visualizes learned glycan embeddings using t-SNE dimensionality reduction with optional group coloring"
     idx = [i for i, g in enumerate(glycans) if '{' not in g]
     glycans = [glycans[i] for i in idx]
     label_list = [label_list[i] for i in idx]
@@ -337,23 +301,18 @@ def plot_embeddings(glycans, emb = None, label_list = None,
     plt.show()
 
 
-def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_name = 'glycan',
-                                rank = None, focus = None, modifications = False, filepath = '', thresh = 10):
-  """for a given monosaccharide/linkage, return typical neighboring linkage/monosaccharide\n
-  | Arguments:
-  | :-
-  | sugar (string): monosaccharide or linkage
-  | df (dataframe): dataframe to use for analysis; default:df_species
-  | mode (string): either 'sugar' (connected monosaccharides), 'bond' (monosaccharides making a provided linkage), or 'sugarbond' (linkages that a provided monosaccharides makes); default:'sugar'
-  | glycan_col_name (string): column name under which glycans can be found; default:'glycan'
-  | rank (string): add column name as string if you want to filter for a group
-  | focus (string): add row value as string if you want to filter for a group
-  | modifications (bool): set to True if you want to consider modified versions of a monosaccharide; default:False
-  | filepath (string): absolute path including full filename allows for saving the plot
-  | thresh (int): threshold count of when to include motifs in plot; default:10 occurrences\n
-  | Returns:
-  | :-
-  | Plots modification distribution and typical neighboring bond/monosaccharide"""
+def characterize_monosaccharide(
+    sugar: str, # Monosaccharide or linkage to analyze
+    df: Optional[pd.DataFrame] = None, # DataFrame with glycan column 'glycan'; defaults to df_species
+    mode: str = 'sugar', # Analysis mode: 'sugar', 'bond', 'sugarbond'
+    glycan_col_name: str = 'glycan', # Column name for glycan sequences
+    rank: Optional[str] = None, # Column name for group filtering
+    focus: Optional[str] = None, # Row value for group filtering
+    modifications: bool = False, # Consider modified monosaccharides
+    filepath: str = '', # Path to save plot
+    thresh: int = 10 # Minimum count threshold for inclusion
+    ) -> None:
+  "Analyzes connectivity and modification patterns of specified monosaccharides/linkages in glycan sequences"
   if df is None:
     df = df_species
   if rank is not None and focus is not None:
@@ -440,15 +399,11 @@ def characterize_monosaccharide(sugar, df = None, mode = 'sugar', glycan_col_nam
   plt.show()
 
 
-def get_coverage(df, filepath = ''):
-  """ Plot glycan coverage across samples, ordered by average intensity\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | filepath (string): absolute path including full filename allows for saving the plot\n
-  | Returns:
-  | :-
-  | Prints the heatmap"""
+def get_coverage(
+    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1), abundances in columns
+    filepath: str = '' # Path to save plot
+    ) -> None:
+  "Visualizes glycan detection frequency across samples with intensity-based ordering"
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   d = df.iloc[:,1:]
@@ -464,31 +419,21 @@ def get_coverage(df, filepath = ''):
   plt.show()
 
 
-def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhaustive'],
-            pc_x = 1, pc_y = 2, color = None, shape = None, filepath = '', custom_motifs = [],
-            transform = None, rarity_filter = 0.05):
-  """ PCA plot from glycomics abundance dataframe\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | groups (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3]); default:None
-  |                     alternatively: design dataframe with 'id' column of samples names and additional columns with meta information
-  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-  |   and 'chemical' (molecular properties of glycan)
-  | pc_x (int): principal component to plot on x axis; default:1
-  | pc_y (int): principal component to plot on y axis; default:2
-  | color (string): if design dataframe is provided: column name for color grouping; default:None
-  | shape (string): if design dataframe is provided: column name for shape grouping; default:None
-  | filepath (string): absolute path including full filename allows for saving the plot
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-  | transform (string): whether to transform the data before plotting, options are "CLR" and "ALR", recommended for glycomics data; default: no transformation
-  | rarity_filter (float): proportion of samples that need to have a non-zero value for a variable to be included; default:0.05\n
-  | Returns:
-  | :-
-  | Prints PCA plot"""
+def get_pca(
+    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1), abundances in columns
+    groups: Optional[Union[List[int], pd.DataFrame]] = None, # Group labels (e.g., [1,1,1,2,2,2,3,3,3]) or metadata DataFrame with 'id' column
+    motifs: bool = False, # Analyze motifs instead of sequences
+    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    pc_x: int = 1, # Principal component for x-axis
+    pc_y: int = 2, # Principal component for y-axis
+    color: Optional[str] = None, # Column in metadata for color grouping
+    shape: Optional[str] = None, # Column in metadata for shape grouping
+    filepath: str = '', # Path to save plot
+    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
+    rarity_filter: float = 0.05 # Min proportion for non-zero values
+    ) -> None:
+  "Performs PCA on glycan/motif abundance data with group-based visualization"
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if transform == "ALR":
@@ -527,19 +472,15 @@ def get_pca(df, groups = None, motifs = False, feature_set = ['known', 'exhausti
   plt.show()
 
 
-def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, grouped_BH = False):
-  """test various means of grouping glycans by domain knowledge, to obtain high intra-group correlation\n
-  | Arguments:
-  | :-
-  | cohort_b (dataframe): dataframe of glycans as rows and samples as columns of the case samples
-  | cohort_a (dataframe): dataframe of glycans as rows and samples as columns of the control samples
-  | glycans (list): list of glycans in IUPAC-condensed nomenclature
-  | p_values (list): list of associated p-values
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False\n 
-  | Returns:
-  | :-
-  | Returns dictionaries of group : glycans and group : p-values (just one big group if no grouping can be found)"""
+def select_grouping(
+    cohort_b: pd.DataFrame, # Case samples dataframe
+    cohort_a: pd.DataFrame, # Control samples dataframe
+    glycans: List[str], # List of glycans in IUPAC-condensed nomenclature
+    p_values: List[float], # Associated p-values from statistical tests
+    paired: bool = False, # Whether samples are paired
+    grouped_BH: bool = False # Use two-stage adaptive Benjamini-Hochberg
+    ) -> Tuple[Dict[str, List[str]], Dict[str, List[float]]]: # (group:glycans dict, group:p-values dict)
+  "Evaluates optimal glycan grouping strategies (by core type, Sia/Fuc content, or N-glycan type) based on intraclass correlation coefficient, enabling group-aware multiple testing correction"
   if not grouped_BH:
     return {"group1": glycans}, {"group1": p_values}
   funcs = {"by_Sia/Fuc": group_glycans_sia_fuc}
@@ -552,7 +493,7 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
     grouped_glycans, grouped_p_values = func(glycans, p_values)
     if any([len(g) < 2 for g in grouped_glycans.values()]):
       continue
-    intra, inter = test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = paired)
+    intra, inter = compare_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = paired)
     out[desc] = ((intra, inter), (grouped_glycans, grouped_p_values))
   if not out:
     return {"group1": glycans}, {"group1": p_values}
@@ -567,50 +508,28 @@ def select_grouping(cohort_b, cohort_a, glycans, p_values, paired = False, group
   return {"group1": glycans}, {"group1": p_values}
 
 
-def get_differential_expression(df, group1, group2,
-                                motifs = False, feature_set = ['exhaustive', 'known'], paired = False,
-                                impute = True, sets = False, set_thresh = 0.9, effect_size_variance = False,
-                                min_samples = 0.1, grouped_BH = False, custom_motifs = [], transform = None,
-                                gamma = 0.1, custom_scale = 0, glycoproteomics = False, level = 'peptide',
-                                monte_carlo = False):
-  """Calculates differentially expressed glycans or motifs from glycomics data\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | group1 (list): list of column indices or names for the first group of samples, usually the control
-  | group2 (list): list of column indices or names for the second group of samples
-  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-  |   and 'chemical' (molecular properties of glycan)
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | impute (bool): replaces zeroes with a Random Forest based model; default:True
-  | sets (bool): whether to identify clusters of highly correlated glycans/motifs to test for differential expression; default:False
-  | set_thresh (float): correlation value used as a threshold for clusters; only used when sets=True; default:0.9
-  | effect_size_variance (bool): whether effect size variance should also be calculated/estimated; default:False
-  | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
-  | grouped_BH (bool): whether to perform two-stage adaptive Benjamini-Hochberg as a grouped multiple testing correction; will SIGNIFICANTLY increase runtime; default:False
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-  | glycoproteomics (bool): whether the analyzed data in df comes from a glycoproteomics experiment; default:False
-  | level (string; only relevant if glycoproteomics=True): whether to analyze glycoform differential expression at the level of 'peptide' or 'protein'; default:'peptide'
-  | monte_carlo (bool): whether to account for technical variation via Monte Carlo simulations; will be slower and much more conservative; default:False\n
-  | Returns:
-  | :-
-  | Returns a dataframe with:
-  | (i) Differentially expressed glycans/motifs/sets
-  | (ii) Their mean abundance across all samples in group1 + group2
-  | (iii) Log2-transformed fold change of group2 vs group1 (i.e., negative = lower in group2)
-  | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
-  | (v) Corrected p-values (Welch's t-test with two-stage Benjamini-Hochberg correction) for difference in mean
-  | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
-  | (vii) Corrected p-values (Levene's test for equality of variances with Benjamini-Hochberg correction) for difference in variance
-  | (viii) Effect size as Cohen's d (sets=False) or Mahalanobis distance (sets=True)
-  | (xi) Corrected p-values of equivalence test to test whether means are significantly equivalent; only done for p-values > 0.05 from (iv)
-  | (x) [only if effect_size_variance=True] Effect size variance"""
+def get_differential_expression(
+    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1) and abundance values in subsequent columns
+    group1: List[Union[str, int]], # Column indices/names for first group
+    group2: List[Union[str, int]], # Column indices/names for second group
+    motifs: bool = False, # Analyze motifs instead of sequences
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    paired: bool = False, # Whether samples are paired
+    impute: bool = True, # Replace zeros with Random Forest model
+    sets: bool = False, # Identify clusters of correlated glycans
+    set_thresh: float = 0.9, # Correlation threshold for clusters
+    effect_size_variance: bool = False, # Calculate effect size variance
+    min_samples: float = 0.1, # Min percent of non-zero samples required
+    grouped_BH: bool = False, # Use two-stage adaptive Benjamini-Hochberg
+    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
+    gamma: float = 0.1, # Uncertainty parameter for CLR transform
+    custom_scale: Union[float, Dict] = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    glycoproteomics: bool = False, # Whether data is from glycoproteomics
+    level: str = 'peptide', # Analysis level for glycoproteomics
+    monte_carlo: bool = False # Use Monte Carlo for technical variation
+    ) -> pd.DataFrame: # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
+  "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs, impute = impute,
                                                min_samples = min_samples, transform = transform, feature_set = feature_set,
                                                paired = paired, gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,
@@ -704,15 +623,11 @@ def get_differential_expression(df, group1, group2,
     return df_out.dropna().sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
 
-def get_pval_distribution(df_res, filepath = ''):
-  """ p-value distribution plot of glycan differential expression result\n
-  | Arguments:
-  | :-
-  | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv]
-  | filepath (string): absolute path including full filename allows for saving the plot\n
-  | Returns:
-  | :-
-  | prints p-value distribution plot"""
+def get_pval_distribution(
+    df_res: Union[pd.DataFrame, str], # Output DataFrame from get_differential_expression
+    filepath: str = '' # Path to save plot
+    ) -> None:
+  "Creates histogram of p-values from differential expression analysis"
   if isinstance(df_res, str):
     df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   # make plot
@@ -724,17 +639,13 @@ def get_pval_distribution(df_res, filepath = ''):
   plt.show()
 
 
-def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
-  """ MA plot of glycan differential expression result\n
-  | Arguments:
-  | :-
-  | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv or .xlsx]
-  | log2fc_thresh (int): absolute Log2FC threshold for highlighting datapoints
-  | sig_thresh (int): significance threshold for highlighting datapoints
-  | filepath (string): absolute path including full filename allows for saving the plot\n
-  | Returns:
-  | :-
-  | prints MA plot"""
+def get_ma(
+    df_res: Union[pd.DataFrame, str], # Output DataFrame from get_differential_expression
+    log2fc_thresh: int = 1, # Log2FC threshold for highlighting
+    sig_thresh: float = 0.05, # Significance threshold for highlighting
+    filepath: str = '' # Path to save plot
+    ) -> None:
+  "Generates MA plot (mean abundance vs log2 fold change) from differential expression results"
   if isinstance(df_res, str):
     df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   # Create masks for significant and non-significant points
@@ -752,23 +663,18 @@ def get_ma(df_res, log2fc_thresh = 1, sig_thresh = 0.05, filepath = ''):
   plt.show()
 
 
-def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed = True,
-                x_metric = 'Log2FC', annotate_volcano = False, filepath = '', **kwargs):
-  """Plots glycan differential expression results in a volcano plot\n
-  | Arguments:
-  | :-
-  | df_res (dataframe): output from get_differential_expression [alternative: filepath to .csv or .xlsx]
-  | y_thresh (float): corr p threshhold for labeling datapoints; default:0.05
-  | x_thresh (float): absolute x metric threshold for labeling datapoints; default:0
-  | n (float): sample size for Bayesian-Adaptive Alpha Adjustment; default = None
-  | label_changed (bool): if True, add text labels to significantly up- and downregulated datapoints; default:True
-  | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2FC', 'Effect size'
-  | annotate_volcano (bool): whether to annotate the dots in the plot with SNFG images; default: False
-  | filepath (string): absolute path including full filename allows for saving the plot
-  | **kwargs: keyword arguments that are directly passed on to seaborn scatterplot\n
-  | Returns:
-  | :-
-  | Prints volcano plot"""
+def get_volcano(
+    df_res: Union[pd.DataFrame, str], # DataFrame from get_differential_expression with columns [Glycan, Log2FC, p-val, corr p-val]
+    y_thresh: float = 0.05, # Corrected p threshold for labeling
+    x_thresh: float = 0, # Absolute x metric threshold for labeling
+    n: Optional[int] = None, # Sample size for Bayesian-Adaptive Alpha
+    label_changed: bool = True, # Add text labels to significant points
+    x_metric: str = 'Log2FC', # x-axis metric: 'Log2FC' or 'Effect size'
+    annotate_volcano: bool = False, # Annotate dots with SNFG images
+    filepath: str = '', # Path to save plot
+    **kwargs: Any # Keyword args passed to seaborn scatterplot
+    ) -> None: # Displays volcano plot
+  "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
   if isinstance(df_res, str):
     df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
   df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
@@ -803,29 +709,20 @@ def get_volcano(df_res, y_thresh = 0.05, x_thresh = 0, n = None, label_changed =
   plt.show()
 
 
-def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exhaustive', 'known'],
-                  min_samples = 0.1, posthoc = True, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0):
-    """Calculate an ANOVA for each glycan (or motif) in the DataFrame\n
-    | Arguments:
-    | :-
-    | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-    | groups (list): a list of group identifiers for each sample (e.g., [1,1,1,2,2,2,3,3,3])
-    | impute (bool): replaces zeroes with with a Random Forest based model; default:True
-    | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-    |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-    |   and 'chemical' (molecular properties of glycan)
-    | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
-    | posthoc (bool): whether to do Tukey's HSD test post-hoc to find out which differences were significant; default:True
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-    | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-    | custom_scale (dict): dictionary of type group_idx : mean(group)/min(mean(groups)) for an informed scale model\n
-    | Returns:
-    | :-
-    | (i) a pandas DataFrame with an F statistic, corrected p-value, indication of its significance, and effect size (Omega squared) for each glycan.
-    | (ii) a dictionary of type glycan : pandas DataFrame, with post-hoc results for each glycan with a significant ANOVA."""
+def get_glycanova(
+    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1) and abundance values in columns
+    groups: List[Any], # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3])
+    impute: bool = True, # Replace zeros with Random Forest model
+    motifs: bool = False, # Analyze motifs instead of sequences
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    min_samples: float = 0.1, # Min percent of non-zero samples required
+    posthoc: bool = True, # Perform Tukey's HSD test post-hoc
+    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
+    gamma: float = 0.1, # Uncertainty parameter for CLR transform
+    custom_scale: float = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    ) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]: # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
+    "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     df, _, groups, _ = preprocess_data(df, groups, [], experiment = "anova", motifs = motifs, impute = impute,
                                       min_samples = min_samples, transform = transform, feature_set = feature_set,
                                       gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs)
@@ -864,20 +761,14 @@ def get_glycanova(df, groups, impute = True, motifs = False, feature_set = ['exh
     return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
 
-def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
-                      study_names = []):
-    """Fixed-effects model or random-effects model for meta-analysis of glycan effect sizes\n
-    | Arguments:
-    | :-
-    | effect_sizes (array-like): Effect sizes (e.g., Cohen's d) from each study
-    | variances (array-like): Corresponding effect size variances from each study
-    | model (string): Whether to use 'fixed' or 'random' effects model
-    | filepath (string): absolute path including full filename allows for saving the Forest plot
-    | study_names (list): list of strings indicating the name of each study\n
-    | Returns:
-    | :-
-    | (1) The combined effect size 
-    | (2) The p-value for the combined effect size"""
+def get_meta_analysis(
+    effect_sizes: Union[np.ndarray, List[float]], # List of Cohen's d/other effect sizes
+    variances: Union[np.ndarray, List[float]], # Associated variance estimates
+    model: str = 'fixed', # 'fixed' or 'random' effects model
+    filepath: str = '', # Path to save Forest plot
+    study_names: List[str] = [] # Names corresponding to each effect size
+    ) -> Tuple[float, float]: # (combined effect size, two-tailed p-value)
+    "Performs fixed/random effects meta-analysis using DerSimonian-Laird method for between-study variance estimation, with optional Forest plot visualization"
     if model not in ['fixed', 'random']:
       raise ValueError("Model must be 'fixed' or 'random'")
     weights = 1 / np.array(variances)
@@ -930,16 +821,11 @@ def get_meta_analysis(effect_sizes, variances, model = 'fixed', filepath = '',
     return combined_effect_size, p_value
 
 
-def get_glycan_change_over_time(data, degree = 1):
-    """Tests if the abundance of a glycan changes significantly over time using an OLS model\n
-    | Arguments:
-    | :-
-    | data (numpy array): a 2D numpy array with two columns (time and glycan abundance) and one row per observation
-    | degree (int): degree of the polynomial for regression, default:1 for linear regression\n
-    | Returns:
-    | :-
-    | (i) slope -- the slope of the regression line (i.e., the rate of change of glycan expression over time)
-    | (ii) p_value -- the p-value of the t-test for the slope"""
+def get_glycan_change_over_time(
+    data: np.ndarray, # 2D array with columns [timepoint, abundance]
+    degree: int = 1 # Polynomial degree for regression
+    ) -> Tuple[Union[float, np.ndarray], float]: # (regression coefficients, t-test/F-test p-value)
+    "Fits polynomial regression (default: linear) to glycan abundance time series data using OLS, testing significance of temporal changes"
     # Extract arrays for time and glycan abundance from the 2D input array
     time, glycan_abundance = data[:, 0], data[:, 1]
     if degree == 1:
@@ -959,32 +845,19 @@ def get_glycan_change_over_time(data, degree = 1):
     return coefficients, p_value
 
 
-def get_time_series(df, impute = True, motifs = False, feature_set = ['known', 'exhaustive'], degree = 1,
-                    min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0):
-    """Analyzes time series data of glycans using an OLS model\n
-    | Arguments:
-    | :-
-    | df (dataframe): dataframe containing sample IDs of style sampleID_UnitTimepoint_replicate (e.g., T1_h5_r1) in first column and glycan relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-    | impute (bool): replaces zeroes with a Random Forest based model; default:True
-    | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-    |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-    |   and 'chemical' (molecular properties of glycan)
-    | degree (int): degree of the polynomial for regression, default:1 for linear regression
-    | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-    | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-    | custom_scale (dict): dictionary of type timepoint : mean(timepoint)/min(mean(timepoints)) for an informed scale model\n
-    | Returns:
-    | :-
-    | Returns a dataframe with:
-    | (i) Glycans/motifs potentially exhibiting significant changes over time
-    | (ii) The slope of their expression curve over time
-    | (iii) Uncorrected p-values (t-test) for testing whether slope is significantly different from zero
-    | (iv) Corrected p-values (t-test with two-stage Benjamini-Hochberg correction) for testing whether slope is significantly different from zero
-    | (v) Significance: True/False whether the corrected p-value lies below the sample size-appropriate significance threshold"""
+def get_time_series(
+    df: Union[pd.DataFrame, str], # DataFrame with sample IDs as 'sampleID_timepoint_replicate' in col 1 (e.g., T1_h5_r1)
+    impute: bool = True, # Replace zeros with Random Forest model
+    motifs: bool = False, # Analyze motifs instead of sequences
+    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    degree: int = 1, # Polynomial degree for regression
+    min_samples: float = 0.1, # Min percent of non-zero samples required
+    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
+    gamma: float = 0.1, # Uncertainty parameter for CLR transform
+    custom_scale: Union[float, Dict] = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    ) -> pd.DataFrame: # DataFrame with regression coefficients and FDR-corrected p-values
+    "Analyzes time series glycomics data using polynomial regression"
     if isinstance(df, str):
       df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
     df = df.fillna(0)
@@ -1025,29 +898,19 @@ def get_time_series(df, impute = True, motifs = False, feature_set = ['known', '
     return df_out.sort_values(by = 'corr p-val')
 
 
-def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = ['known', 'exhaustive', 'terminal'],
-            custom_motifs = [], transform = None, gamma = 0.1, correction_method = "two-stage"):
-    """Detecting rhythmically expressed glycans via the Jonckheere–Terpstra–Kendall (JTK) algorithm\n
-    | Arguments:
-    | :-
-    | df_in (pd.DataFrame): A dataframe containing data for analysis. [alternative: filepath to .csv or .xlsx]
-    |   (column 0 = molecule IDs, then arranged in groups and by ascending timepoints)
-    | timepoints (int): number of timepoints in the experiment (each timepoint must have the same number of replicates).
-    | periods (list): number of timepoints (as int) per cycle.
-    | interval (int): units of time (Arbitrary units) between experimental timepoints.
-    | motifs (bool): a flag for running structural of motif-based analysis (True = run motif analysis); default:False.
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-    |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-    |   and 'chemical' (molecular properties of glycan)
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-    | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-    | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-    | correction_method (string): whether to use "two-stage" or "one-stage" Benjamini-Hochberg for correction; default:"two-stage"\n
-    | Returns:
-    | :-
-    | Returns a pandas dataframe containing the adjusted p-values, and most important waveform parameters for each
-    | molecule in the analysis."""
+def get_jtk(
+   df_in: Union[pd.DataFrame, str], # DataFrame with molecules in rows (col 0), then groups arranged by ascending timepoints
+   timepoints: int, # Number of timepoints (each must have same number of replicates)
+   periods: List[int], # Timepoints per cycle to test
+   interval: int, # Time units between experimental timepoints
+   motifs: bool = False, # Analyze motifs instead of sequences
+   feature_set: List[str] = ['known', 'exhaustive', 'terminal'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+   custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+   transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
+   gamma: float = 0.1, # Uncertainty parameter for CLR transform
+   correction_method: str = "two-stage" # Multiple testing correction method
+   ) -> pd.DataFrame: # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
+    "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
     if isinstance(df_in, str):
       df = pd.read_csv(df_in) if df_in.endswith(".csv") else pd.read_excel(df_in)
     else:
@@ -1084,36 +947,21 @@ def get_jtk(df_in, timepoints, periods, interval, motifs = False, feature_set = 
     return df_out.sort_values("Adjusted_P_value")
 
 
-def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = False, feature_set = ['exhaustive', 'known'],
-                     custom_motifs = [], paired = False, permutations = 999, transform = None, gamma = 0.1, custom_scale = 0):
-  """Calculates diversity indices from glycomics data, similar to alpha/beta diversity etc in microbiome data\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | group1 (list): a list of column identifiers corresponding to samples in group 1
-  | group2 (list): a list of column identifiers corresponding to samples in group 2 (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
-  | metrics (list): which diversity metrics to calculate (alpha, beta); default:['alpha', 'beta']
-  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-  |   and 'chemical' (molecular properties of glycan)
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | permutations (int): number of permutations to perform in ANOSIM and PERMANOVA statistical test; default:999
-  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
-  | Returns:
-  | :-
-  | Returns a dataframe with:
-  | (i) Diversity indices/metrics
-  | (ii) Mean value of diversity metrics in group 1 (only alpha)
-  | (iii) Mean value of diversity metrics in group 2 (only alpha)
-  | (iv) Uncorrected p-values (Welch's t-test) for difference in mean
-  | (v) Corrected p-values (Welch's t-test with two-stage Benjamini-Hochberg correction) for difference in mean
-  | (vi) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold
-  | (vii) Effect size as Cohen's d (ANOSIM R for beta; F statistics for PERMANOVA and Shannon/Simpson (ANOVA))"""
+def get_biodiversity(
+    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1), abundances in columns
+    group1: List[Union[str, int]], # First group column indices or group labels
+    group2: List[Union[str, int]], # Second group indices or additional group labels
+    metrics: List[str] = ['alpha', 'beta'], # Diversity metrics to calculate
+    motifs: bool = False, # Analyze motifs instead of sequences
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+    paired: bool = False, # Whether samples are paired
+    permutations: int = 999, # Number of permutations for ANOSIM/PERMANOVA
+    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
+    gamma: float = 0.1, # Uncertainty parameter for CLR transform
+    custom_scale: Union[float, Dict] = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    ) -> pd.DataFrame: # DataFrame with diversity indices and test statistics
+  "Calculates alpha (Shannon/Simpson) and beta (ANOSIM/PERMANOVA) diversity measures from glycomics data"
   experiment = "diff" if group2 else "anova"
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = False,
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
@@ -1172,26 +1020,17 @@ def get_biodiversity(df, group1, group2, metrics = ['alpha', 'beta'], motifs = F
   return df_out.sort_values(by = 'p-val').sort_values(by = 'corr p-val').reset_index(drop = True)
 
 
-def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], custom_motifs = [],
-               transform = None, gamma = 0.1, partial_correlations = False):
-  """Performs SparCC (Sparse Correlations for Compositional Data) on two (glycomics) datasets. Samples should be in the same order.\n
-  | Arguments:
-  | :-
-  | df1 (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | df2 (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-  |   and 'chemical' (molecular properties of glycan)
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | partial_correlations (bool): whether to use regularized partial correlations instead (enriches for direct effects); default:False\n
-  | Returns:
-  | :-
-  | Returns (i) a dataframe of pairwise correlations (Spearman's rho)
-  | and (ii) a dataframe with corrected p-values (two-stage Benjamini-Hochberg)"""
+def get_SparCC(
+    df1: Union[pd.DataFrame, str], # First DataFrame with glycans in rows (col 1) and abundances in columns
+    df2: Union[pd.DataFrame, str], # Second DataFrame with same format as df1
+    motifs: bool = False, # Analyze motifs instead of sequences
+    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
+    gamma: float = 0.1, # Uncertainty parameter for CLR transform
+    partial_correlations: bool = False # Use regularized partial correlations
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]: # (Spearman correlation matrix, FDR-corrected p-value matrix)
+  "Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)"
   if isinstance(df1, str):
     df1 = pd.read_csv(df1) if df1.endswith(".csv") else pd.read_excel(df1)
     df2 = pd.read_csv(df2) if df2.endswith(".csv") else pd.read_excel(df2)
@@ -1258,20 +1097,13 @@ def get_SparCC(df1, df2, motifs = False, feature_set = ["known", "exhaustive"], 
   return correlation_df, p_value_df
 
 
-def multi_feature_scoring(df, group1, group2, filepath = ''):
-  """Finds the minimal set of glycan features that gives the best model to distinguish conditions\n
-  | Arguments:
-  | :-
-  | df (dataframe): transformed dataframe containing glycan sequences in first column and abundances in subsequent columns
-  | group1 (list): list of column indices or names for the first group of samples, usually the control
-  | group2 (list): list of column indices or names for the second group of samples (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
-  | filepath (string): absolute path including full filename allows for saving the plot, if plot=True\n
-  | Returns:
-  | :-
-  | Prints the identified features and returns:
-  | (i) the trained model to distinguish conditions
-  | (ii) the ROC AUC score of the trained model
-  | (iii) (optionally, if filepath) a saved plot of the ROC curve for the model"""
+def multi_feature_scoring(
+    df: pd.DataFrame, # Transformed dataframe with glycans in rows, abundances in columns
+    group1: List[Union[str, int]], # First group indices/names
+    group2: List[Union[str, int]], # Second group indices/names
+    filepath: str = '' # Path to save ROC plot
+    ) -> Tuple[LogisticRegression, float]: # (L1-regularized logistic regression model, ROC AUC score)
+  "Identifies minimal glycan feature set for group classification using L1-regularized logistic regression"
   if group2:
     y = [0] * len(group1) + [1] * len(group2)
   else:
@@ -1302,32 +1134,23 @@ def multi_feature_scoring(df, group1, group2, filepath = ''):
   return model, roc_auc
 
 
-def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaustive"], paired = False, impute = True,
-            min_samples = 0.1, custom_motifs = [], transform = None, gamma = 0.1, custom_scale = 0, filepath = '',
-            multi_score = False):
-  """Calculates ROC AUC for every feature and, optionally, plots the best\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences in first column and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | group1 (list): list of column indices or names for the first group of samples, usually the control
-  | group2 (list): list of column indices or names for the second group of samples (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
-  | motifs (bool): whether to analyze full sequences (False) or motifs (True); default:False
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-  |   and 'chemical' (molecular properties of glycan)
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | impute (bool): replaces zeroes with a Random Forest based model; default:True
-  | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 10%
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-  | transform (str): transformation to escape Aitchison space; options are CLR and ALR (use ALR if you have many glycans (>100) with low values); default:will be inferred
-  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-  | filepath (string): absolute path including full filename allows for saving the plot, if plot=True
-  | multi_score (bool): whether to find the best glycan risk score, containing multiple glycan features; default:False\n
-  | Returns:
-  | :-
-  | Returns a sorted list of tuples of type (glycan, AUC score) and, optionally, ROC curve for best feature"""
+def get_roc(
+    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1), abundances in columns
+    group1: List[Union[str, int]], # First group indices/names
+    group2: List[Union[str, int]], # Second group indices/names
+    motifs: bool = False, # Analyze motifs instead of sequences
+    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    paired: bool = False, # Whether samples are paired
+    impute: bool = True, # Replace zeros with Random Forest model
+    min_samples: float = 0.1, # Min percent of non-zero samples required
+    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
+    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
+    gamma: float = 0.1, # Uncertainty parameter for CLR transform
+    custom_scale: Union[float, Dict] = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    filepath: str = '', # Path to save ROC plot
+    multi_score: bool = False # Find best multi-glycan score
+    ) -> Union[List[Tuple[str, float]], Dict[Any, Tuple[str, float]], Tuple[LogisticRegression, float]]: # (Feature scores with ROC AUC values)
+  "Calculates ROC curves and AUC scores for glycans/motifs or multi-glycan classifiers"
   experiment = "diff" if group2 else "anova"
   df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = impute,
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
@@ -1399,24 +1222,14 @@ def get_roc(df, group1, group2, motifs = False, feature_set = ["known", "exhaust
   return sorted_auc_scores
 
 
-def get_lectin_array(df, group1, group2, paired = False, transform = ''):
-  """Function for analyzing lectin array data for two or more groups.\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing samples as rows and lectins as columns [alternative: filepath to .csv or .xlsx]
-  | group1 (list): list of indices or names for the first group of samples, usually the control
-  | group2 (list): list of indices or names for the second group of samples (note, if an empty list is provided, group 1 can be used a list of group identifiers for each column - e.g., [1,1,2,2,3,3...])
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | transform (string): optional data-processing, "log2" transforms df with np.log2; default:nothing\n
-  | Returns:
-  | :-
-  | Returns an output dataframe with:
-  | (i) Deduced glycan motifs altered between groups
-  | (ii) human names for features identified in the motifs from (i)
-  | (iii) Lectins supporting the change in (i)
-  | (iv) Direction of the change (e.g., "up" means higher in group2)
-  | (v) Score/Magnitude of the change (remember, if you have more than two groups this reports on any pairwise combination, like an ANOVA)
-  | (vi) Clustering of the scores into highly/moderate/low significance findings"""
+def get_lectin_array(
+    df: Union[pd.DataFrame, str], # DataFrame with samples as rows and lectins as columns, first column containing sample IDs
+    group1: List[Union[str, int]], # First group indices/names
+    group2: List[Union[str, int]], # Second group indices/names
+    paired: bool = False, # Whether samples are paired
+    transform: str = '' # Optional log2 transformation
+    ) -> pd.DataFrame: # DataFrame with altered glycan motifs, supporting lectins, and effect sizes
+  "Analyzes lectin microarray data by mapping lectin binding patterns to glycan motifs, calculating Cohen's d effect sizes between groups and clustering results by significance"
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   df = df.set_index(df.columns[0])
@@ -1468,26 +1281,17 @@ def get_lectin_array(df, group1, group2, paired = False, transform = ''):
   return df_out
 
 
-def get_glycoshift_per_site(df, group1, group2, paired = False, impute = True,
-                            min_samples = 0.2, gamma = 0.1, custom_scale = 0):
-  """Calculates differentially expressed glycans or motifs from glycoproteomics data\n
-  | Arguments:
-  | :-
-  | df (dataframe): glycoproteomics dataset, expects first column to be formatted as protein_site_composition and relative abundances in subsequent columns [alternative: filepath to .csv or .xlsx]
-  | group1 (list): list of column indices or names for the first group of samples, usually the control
-  | group2 (list): list of column indices or names for the second group of samples
-  | paired (bool): whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient); default:False
-  | impute (bool): replaces zeroes with a Random Forest based model; default:True
-  | min_samples (float): Percent of the samples that need to have non-zero values for glycan to be kept; default: 20%
-  | gamma (float): uncertainty parameter to estimate scale uncertainty for CLR transformation; default: 0.1
-  | custom_scale (float or dict): Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)\n
-  | Returns:
-  | :-
-  | Returns a dataframe with:
-  | (for each condition/interaction feature)
-  | (i) Regression coefficient from the GLM (indicating direction of change in the treatment condition)
-  | (ii) Corrected p-values (two-tailed t-test with two-stage Benjamini-Hochberg correction) for testing the coefficient against zero
-  | (iii) Significance: True/False of whether the corrected p-value lies below the sample size-appropriate significance threshold"""
+def get_glycoshift_per_site(
+    df: Union[pd.DataFrame, str], # DataFrame with rows formatted as 'protein_site_composition' in col 1, abundances in remaining cols
+    group1: List[Union[str, int]], # First group indices/names
+    group2: List[Union[str, int]], # Second group indices/names
+    paired: bool = False, # Whether samples are paired
+    impute: bool = True, # Replace zeros with Random Forest model
+    min_samples: float = 0.2, # Min percent of non-zero samples required
+    gamma: float = 0.1, # Uncertainty parameter for CLR transform
+    custom_scale: Union[float, Dict] = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    ) -> pd.DataFrame: # DataFrame with GLM coefficients and FDR-corrected p-values
+  "Analyzes site-specific glycosylation changes in glycoproteomics data using generalized linear models (GLM) with compositional data normalization"
   df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = False, impute = impute,
                                                min_samples = min_samples, transform = "Nothing", paired = paired)
   alpha = get_alphaN(len(group1 + group2))

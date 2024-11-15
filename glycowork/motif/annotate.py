@@ -4,6 +4,7 @@ import numpy as np
 import re
 from collections import defaultdict
 from functools import partial
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from glycowork.glycan_data.loader import linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check
@@ -11,15 +12,10 @@ from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs,
 from glycowork.motif.regex import get_match
 
 
-def link_find(glycan):
-  """finds all disaccharide motifs in a glycan sequence using its isomorphs\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns list of unique disaccharides (strings) for a glycan in IUPAC-condensed
-  """
+def link_find(
+    glycan: str # IUPAC-condensed glycan sequence
+    ) -> List[str]: # List of unique disaccharide motifs
+  "Extracts all disaccharide motifs from a glycan sequence, handling branching and isomorphs"
   if '}' in glycan:
     glycan = glycan[glycan.rindex('}')+1:]
   # Get different string representations of the same glycan
@@ -45,18 +41,13 @@ def link_find(glycan):
   return list(set(coll))
 
 
-def annotate_glycan(glycan, motifs = None, termini_list = [], gmotifs = None):
-  """searches for known motifs in glycan sequence\n
-  | Arguments:
-  | :-
-  | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
-  | motifs (dataframe): dataframe of glycan motifs (name + sequence), can be used with a list of glycans too; default:motif_list
-  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
-  | gmotifs (networkx): precalculated motif graphs for speed-up; default:None\n
-  | Returns:
-  | :-
-  | Returns dataframe with counts of motifs in glycan
-  """
+def annotate_glycan(
+    glycan: Union[str, nx.Graph], # IUPAC-condensed glycan sequence or NetworkX graph
+    motifs: Optional[pd.DataFrame] = None, # Motif dataframe (name + sequence); defaults to motif_list
+    termini_list: List = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
+    gmotifs: Optional[List[nx.Graph]] = None # Precalculated motif graphs for speed
+    ) -> pd.DataFrame: # DataFrame with motif counts for the glycan
+  "Counts occurrences of known motifs in a glycan structure using subgraph isomorphism"
   if motifs is None:
     motifs = motif_list
   # Check whether termini are specified
@@ -77,19 +68,14 @@ def annotate_glycan(glycan, motifs = None, termini_list = [], gmotifs = None):
   return out
 
 
-def annotate_glycan_topology_uncertainty(glycan, feasibles = None, motifs = None, termini_list = [], gmotifs = None):
-  """searches for known motifs in glycan sequence\n
-  | Arguments:
-  | :-
-  | glycan (string or networkx): glycan in IUPAC-condensed format (or as networkx graph) that has to contain a floating substituent
-  | feasibles (set): set of glycans in IUPAC-condensed format that are potentially relevant as full topologies; default: mammalian glycans from df_species
-  | motifs (dataframe): dataframe of glycan motifs (name + sequence), can be used with a list of glycans too; default:motif_list
-  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
-  | gmotifs (networkx): precalculated motif graphs for speed-up; default:None\n
-  | Returns:
-  | :-
-  | Returns dataframe with counts of motifs in glycan
-  """
+def annotate_glycan_topology_uncertainty(
+    glycan: Union[str, nx.Graph], # IUPAC-condensed glycan sequence or NetworkX graph
+    feasibles: Optional[Set[str]] = None, # Set of potential full topology glycans; defaults to mammalian glycans
+    motifs: Optional[pd.DataFrame] = None, # Motif dataframe (name + sequence); defaults to motif_list
+    termini_list: List = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
+    gmotifs: Optional[List[nx.Graph]] = None # Precalculated motif graphs for speed
+    ) -> pd.DataFrame: # DataFrame with motif counts considering topology uncertainty
+  "Annotates glycan motifs while handling uncertain topologies by comparing against physiological structures"
   if motifs is None:
     motifs = motif_list
   if feasibles is None:
@@ -126,17 +112,12 @@ def annotate_glycan_topology_uncertainty(glycan, feasibles = None, motifs = None
   return out
 
 
-def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
-  """given a list of glycans, uses pubchempy to return various molecular parameters retrieved from PubChem\n
-  | Arguments:
-  | :-
-  | glycan_list (list): list of glycans in IUPAC-condensed
-  | verbose (bool): set True to print SMILES not found on PubChem; default:False
-  | placeholder (bool): whether failed requests should return dummy values or be dropped; default:False\n
-  | Returns:
-  | :-
-  | Returns a dataframe with all the molecular parameters retrieved from PubChem
-  """
+def get_molecular_properties(
+    glycan_list: List[str], # List of IUPAC-condensed glycan sequences
+    verbose: bool = False, # Print SMILES not found on PubChem
+    placeholder: bool = False # Return dummy values instead of dropping failed requests
+    ) -> pd.DataFrame: # DataFrame with molecular parameters from PubChem
+  "Retrieves molecular properties from PubChem for a list of glycans using their SMILES representations"
   try:
     import pubchempy as pcp
   except ImportError:
@@ -174,24 +155,15 @@ def get_molecular_properties(glycan_list, verbose = False, placeholder = False):
 
 
 @rescue_glycans
-def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
-                     termini_list = [], condense = False, custom_motifs = []):
-  """wrapper function to annotate motifs in list of glycans\n
-  | Arguments:
-  | :-
-  | glycans (list): list of IUPAC-condensed glycan sequences as strings
-  | motifs (dataframe): dataframe of glycan motifs (name + sequence); default:motif_list
-  | feature_set (list): which feature set to use for annotations, add more to list to expand; default is 'known'; options are: 'known' (hand-crafted glycan features), \
-  |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs of size 1), \
-  |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), \
-  |   and 'chemical' (molecular properties of glycan)
-  | termini_list (list): list of monosaccharide/linkage positions for motifs (from 'terminal', 'internal', and 'flexible')
-  | condense (bool): if True, throws away columns with only zeroes; default:False
-  | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty\n
-  | Returns:
-  | :-                      
-  | Returns dataframe of glycans (rows) and presence/absence of known motifs (columns)
-  """
+def annotate_dataset(
+    glycans: List[str], # List of IUPAC-condensed glycan sequences
+    motifs: Optional[pd.DataFrame] = None, # Motif dataframe (name + sequence); defaults to motif_list
+    feature_set: List[str] = ['known'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical
+    termini_list: List = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
+    condense: bool = False, # Remove columns with only zeros
+    custom_motifs: List = [] # Custom motifs when using 'custom' feature set
+    ) -> pd.DataFrame: # DataFrame mapping glycans to presence/absence of motifs
+  "Comprehensive glycan annotation combining multiple feature types: structural motifs, graph properties, terminal sequences"
   if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive'}
@@ -267,15 +239,10 @@ def annotate_dataset(glycans, motifs = None, feature_set = ['known'],
     return pd.concat(shopping_cart, axis = 1)
 
 
-def clean_up_heatmap(df):
-  """removes redundant motifs from the dataframe\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe with glycan data, rows are glycan motifs and columns are samples\n
-  | Returns:
-  | :-
-  | Returns a cleaned up dataframe of the same format as the input
-  """
+def clean_up_heatmap(
+    df: pd.DataFrame # DataFrame with glycan motifs as rows, samples as columns
+    ) -> pd.DataFrame: # DataFrame with redundant motifs removed
+  "Removes redundant motif entries from glycan abundance data while preserving the most informative labels"
   motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
   df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' '*20 if x in motif_dic else x)
   # Group the DataFrame by identical rows
@@ -289,55 +256,43 @@ def clean_up_heatmap(df):
   return result
 
 
-def quantify_motifs(df, glycans, feature_set, custom_motifs = [], remove_redundant = True):
-    """Extracts and quantifies motifs for a dataset\n
-    | Arguments:
-    | :-
-    | df (dataframe): dataframe containing relative abundances (each sample one column) [alternative: filepath to .csv or .xlsx]
-    | glycans(list): glycans as IUPAC-condensed strings
-    | feature_set (list): which feature set to use for annotations, add more to list to expand; default is ['exhaustive','known']; options are: 'known' (hand-crafted glycan features), \
-    |   'graph' (structural graph features of glycans), 'exhaustive' (all mono- and disaccharide features), 'terminal' (non-reducing end motifs), \
-    |   'terminal2' (non-reducing end motifs of size 2), 'terminal3' (non-reducing end motifs of size 3), 'custom' (specify your own motifs in custom_motifs), and 'chemical' (molecular properties of glycan)
-    | custom_motifs (list): list of glycan motifs, used if feature_set includes 'custom'; default:empty
-    | remove_redundant (bool): whether to remove redundant motifs via clean_up_heatmap; default:True\n
-    | Returns:
-    | :-
-    | Returns a pandas DataFrame with motifs as columns and samples as rows
-    """
-    if isinstance(df, str):
-      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-    # Motif extraction
-    df_motif = annotate_dataset(glycans, feature_set = feature_set,
-                                condense = True, custom_motifs = custom_motifs)
-    collect_dic = {}
-    df = df.T
-    log2 = (df.values < 0).any()
-    # Motif quantification
-    for c, col in enumerate(df_motif.columns):
-      indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
-      temp = df.iloc[:, indices]
-      temp.columns = range(temp.columns.size)
-      if log2:
-        linear_values = np.power(2, temp)
-        weighted_values = (linear_values * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
-        collect_dic[col] = np.log2(weighted_values)
-      else:
-        collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
-    df = pd.DataFrame(collect_dic)
-    return df if not remove_redundant else clean_up_heatmap(df.T)
+def quantify_motifs(
+   df: Union[str, pd.DataFrame], # DataFrame or filepath with samples as columns, abundances as values
+   glycans: List[str], # List of IUPAC-condensed glycan sequences
+   feature_set: List[str], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical
+   custom_motifs: List = [], # Custom motifs when using 'custom' feature set
+   remove_redundant: bool = True # Remove redundant motifs via clean_up_heatmap
+   ) -> pd.DataFrame: # DataFrame with motif abundances (motifs as columns, samples as rows)
+  "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences"
+  if isinstance(df, str):
+    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  # Motif extraction
+  df_motif = annotate_dataset(glycans, feature_set = feature_set,
+                              condense = True, custom_motifs = custom_motifs)
+  collect_dic = {}
+  df = df.T
+  log2 = (df.values < 0).any()
+  # Motif quantification
+  for c, col in enumerate(df_motif.columns):
+    indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
+    temp = df.iloc[:, indices]
+    temp.columns = range(temp.columns.size)
+    if log2:
+      linear_values = np.power(2, temp)
+      weighted_values = (linear_values * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
+      collect_dic[col] = np.log2(weighted_values)
+    else:
+      collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
+  df = pd.DataFrame(collect_dic)
+  return df if not remove_redundant else clean_up_heatmap(df.T)
 
 
-def count_unique_subgraphs_of_size_k(graph, size = 2, terminal = False):
-  """function to count unique, connected subgraphs of size k (default:disaccharides) occurring in a glycan graph\n
-  | Arguments:
-  | :-
-  | graph (networkx): glycan graph as returned by glycan_to_nxGraph
-  | size (int): number of monosaccharides per -saccharide, default:2 (for disaccharides)
-  | terminal (bool): whether to only count terminal subgraphs; default:False\n
-  | Returns:
-  | :-                   
-  | Returns dictionary of type k-saccharide:count
-  """
+def count_unique_subgraphs_of_size_k(
+   graph: nx.Graph, # NetworkX graph of a glycan
+   size: int = 2, # Number of monosaccharides per subgraph
+   terminal: bool = False # Only count terminal subgraphs
+   ) -> Dict[str, float]: # Dictionary mapping k-saccharide sequences to counts
+  "Identifies and counts unique connected subgraphs of specified size from glycan structure"
   size = size + (size-1)
   paths = nx.all_pairs_shortest_path(graph, cutoff = size-1)
   labels = nx.get_node_attributes(graph, 'string_labels')
@@ -369,19 +324,14 @@ def count_unique_subgraphs_of_size_k(graph, size = 2, terminal = False):
 
 
 @rescue_glycans
-def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False, terminal = False):
-  """function to retrieve k-saccharides (default:disaccharides) occurring in a list of glycans\n
-  | Arguments:
-  | :-
-  | glycans (list): list of glycans in IUPAC-condensed nomenclature
-  | size (int): number of monosaccharides per -saccharide, default:2 (for disaccharides)
-  | up_to (bool): in theory: include -saccharides up to size k; in practice: include monosaccharides; default:False
-  | just_motifs (bool): if you only want the motifs as a nested list, no dataframe with counts; default:False
-  | terminal (bool): whether to only count terminal subgraphs; default:False\n
-  | Returns:
-  | :-                 
-  | Returns dataframe with k-saccharide counts (columns) for each glycan (rows)
-  """
+def get_k_saccharides(
+   glycans: List[str], # List of IUPAC-condensed glycan sequences
+   size: int = 2, # Number of monosaccharides per fragment
+   up_to: bool = False, # Include fragments up to size k (adds monosaccharides)
+   just_motifs: bool = False, # Return nested list of motifs instead of count DataFrame
+   terminal: bool = False # Only count terminal fragments
+   ) -> Union[pd.DataFrame, List[List[str]]]: # DataFrame of k-saccharide counts or list of motifs per glycan
+  "Extracts k-saccharide fragments from glycan sequences with options for different fragment sizes and positions"
   if not isinstance(glycans, list):
     raise TypeError("The input has to be a list of glycans")
   if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
@@ -424,17 +374,13 @@ def get_k_saccharides(glycans, size = 2, up_to = False, just_motifs = False, ter
       return out_matrix.fillna(0).astype(int)
 
 
-def get_terminal_structures(glycan, size = 1):
-  """returns terminal structures from all non-reducing ends (monosaccharide+linkage)\n
-  | Arguments:
-  | :-
-  | glycan (string or networkx): glycan in IUPAC-condensed nomenclature or as networkx graph
-  | size (int): how large the extracted motif should be in terms of monosaccharides (for now 1 or 2 are supported; \
-  |   if you want to go higher use get_k_saccharides with terminal = True); default:1\n
-  | Returns:
-  | :-
-  | Returns a list of terminal structures (strings)
-  """
+def get_terminal_structures(
+   glycan: Union[str, nx.Graph], # IUPAC-condensed glycan sequence or NetworkX graph
+   size: int = 1 # Number of monosaccharides in terminal fragment (1 or 2)
+   ) -> List[str]: # List of terminal structures with linkages
+  "Identifies terminal monosaccharide sequences from non-reducing ends of glycan structure"
+  if size > 2:
+    print("Please use get_k_saccharides with terminal = True for larger terminal structures")
   ggraph = ensure_graph(glycan)
   nodeDict = dict(ggraph.nodes(data = True))
   temp =  [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' + \
@@ -444,16 +390,11 @@ def get_terminal_structures(glycan, size = 1):
   return [g.replace('()', '') for g in temp]
 
 
-def create_correlation_network(df, correlation_threshold):
-  """finds clusters of motifs/glycans that correlate to at least the correlation_threshold\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe with samples as rows and glycans/motifs as columns
-  | correlation_threshold (float): correlation value used as a threshold for clusters\n
-  | Returns:
-  | :-
-  | Returns a list of sets, which correspond to the glycans/motifs that are put in a cluster
-  """
+def create_correlation_network(
+   df: pd.DataFrame, # DataFrame with samples as rows, glycans/motifs as columns
+   correlation_threshold: float # Minimum correlation for cluster inclusion
+   ) -> List[Set[str]]: # List of sets containing correlated glycans/motifs
+  "Groups glycans or motifs into clusters based on abundance correlation patterns"
   # Calculate the correlation matrix
   correlation_matrix = df.corr()
   # Create an adjacency matrix based on the correlation threshold
@@ -467,16 +408,11 @@ def create_correlation_network(df, correlation_threshold):
   return clusters
 
 
-def group_glycans_core(glycans, p_values):
-  """group O-glycans based on core structure\n
-  | Arguments:
-  | :-
-  | glycans (list): list of glycans in IUPAC-condensed nomenclature
-  | p_values (list): list of associated p-values\n
-  | Returns:
-  | :-
-  | Returns dictionaries of group : glycans and group : p-values
-  """
+def group_glycans_core(
+   glycans: List[str], # List of IUPAC-condensed O-glycan sequences
+   p_values: List[float] # Statistical test p-values for each glycan
+   ) -> Tuple[Dict[str, List[str]], Dict[str, List[float]]]: # (group:glycans dict, group:p-values dict)
+  "Groups O-glycans by core structure (core1, core2, other) for statistical analysis"
   temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
   grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAcOS(b1-6)GalNAc"]])]
@@ -491,16 +427,11 @@ def group_glycans_core(glycans, p_values):
   return grouped_glycans, grouped_p_values
 
 
-def group_glycans_sia_fuc(glycans, p_values):
-  """group glycans based on whether they contain sialic acid or fucose\n
-  | Arguments:
-  | :-
-  | glycans (list): list of glycans in IUPAC-condensed nomenclature
-  | p_values (list): list of associated p-values\n
-  | Returns:
-  | :-
-  | Returns dictionaries of group : glycans and group : p-values
-  """
+def group_glycans_sia_fuc(
+   glycans: List[str], # List of IUPAC-condensed glycan sequences
+   p_values: List[float] # Statistical test p-values for each glycan
+   ) -> Tuple[Dict[str, List[str]], Dict[str, List[float]]]: # (group:glycans dict, group:p-values dict)
+  "Groups glycans by sialic acid and fucose content for statistical analysis"
   temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
   grouped_glycans["SiaFuc"] = [g for g in glycans if "Neu" in g and "Fuc" in g]
@@ -518,16 +449,11 @@ def group_glycans_sia_fuc(glycans, p_values):
   return grouped_glycans, grouped_p_values
 
 
-def group_glycans_N_glycan_type(glycans, p_values):
-  """group glycans based on complex/hybrid/high-mannose/rest for N-glycans\n
-  | Arguments:
-  | :-
-  | glycans (list): list of glycans in IUPAC-condensed nomenclature
-  | p_values (list): list of associated p-values\n
-  | Returns:
-  | :-
-  | Returns dictionaries of group : glycans and group : p-values
-  """
+def group_glycans_N_glycan_type(
+   glycans: List[str], # List of IUPAC-condensed N-glycan sequences
+   p_values: List[float] # Statistical test p-values for each glycan
+   ) -> Tuple[Dict[str, List[str]], Dict[str, List[float]]]: # (group:glycans dict, group:p-values dict)
+  "Groups N-glycans by type (complex, hybrid, high-mannose, other) for statistical analysis"
   temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
   grouped_glycans, grouped_p_values = {}, {}
   grouped_glycans["complex"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-6)", "GlcNAc(b1-2)Man(a1-?)[GlcNAc(b1-2)Man(a1-?)]Man"]])]
@@ -545,25 +471,17 @@ def group_glycans_N_glycan_type(glycans, p_values):
   return grouped_glycans, grouped_p_values
 
 
-def load_lectin_lib():
-  """create dictionary of lectin specificities for get_lectin_array\n
-  | Returns:
-  | :-
-  | Returns a dictionary of index: Lectin object, with its specificities
-  """
-  from glycowork.glycan_data.loader import lectin_specificity
-  lectin_lib = {}
-  for i, row in enumerate(lectin_specificity.itertuples()):
-    specificity_dict = {"primary": row.specificity_primary, "secondary": row.specificity_secondary, "negative": row.specificity_negative}
-    lectin_lib[i] = Lectin(abbr = row.abbreviation.split(","), name = row.name.split(","), specificity = specificity_dict,
-                           species = row.species, reference = row.reference, notes = row.notes)
-  return lectin_lib
-
-
 class Lectin():
-  def __init__(self, abbr: list, name: list, # A lectin may have multiple names and abbreviations
-                 specificity: dict = {"primary": None, "secondary": None, "negative": None},
-                 species: str = "", reference: str = "", notes: str = ""):
+  def __init__(
+       self,
+       abbr: List[str], # List of lectin abbreviations
+       name: List[str], # List of lectin names
+       specificity: Dict[str, Optional[Dict[str, List[str]]]] = {"primary": None, "secondary": None, "negative": None}, # Binding specificity details
+       species: str = "", # Source species
+       reference: str = "", # Literature reference
+       notes: str = "" # Additional information
+       ) -> None:
+    "Lectin object storing binding specificity and annotation information"
     self.abbr = abbr
     self.name = name
     self.species = species
@@ -571,28 +489,29 @@ class Lectin():
     self.notes = notes
     self.specificity = specificity
 
-  def get_all_binding_motifs_count(self):
+  def get_all_binding_motifs_count(self) -> int: # Total number of binding motifs
+      "Counts total number of primary and secondary binding motifs"
       return len(self.specificity["primary"]) + \
                (len(self.specificity["secondary"]) if self.specificity["secondary"] else 0)
 
-  def get_all_binding_motifs(self):
+  def get_all_binding_motifs(self) -> List[str]: # List of all binding motifs
+      "Returns combined list of primary and secondary binding motifs"
       return list(self.specificity["primary"].keys()) + list(self.specificity["secondary"].keys())
 
-  def show_info(self):
+  def show_info(self) -> None:
+      "Displays formatted lectin information including specificities"
       print(f"Name(s): {'; '.join(self.name)}\n"+\
       f"Abbreviation(s): {'; '.join(self.abbr)}\n"+\
       f"Species: {self.species}\n" + \
-                       ''.join(f"Specificity ({key}): {'; '.join(value) if value else 'no information'}\n" 
+                       ''.join(f"Specificity ({key}): {'; '.join(value) if value else 'no information'}\n"
                                for key, value in self.specificity.items()) + \
                        f"Reference: {self.reference}\nnotes: {self.notes}\n")
 
-  def check_binding(self, glycan: str):
-    """Check whether a glycan binds to this lectin. 
-    Returns an integer. 
-    0: no binding; 
-    1: binds to lectin's primary recognition motif;
-    2: binds to lectin's seconary recognition motif;
-    """
+  def check_binding(
+       self,
+       glycan: str # IUPAC-condensed glycan sequence
+       ) -> int: # Binding level (0:none, 1:primary, 2:secondary)
+    "Evaluates glycan binding to lectin based on motif recognition"
     for key in ["negative", "primary", "secondary"]:
       motifs = self.specificity.get(key, [])
       if motifs:
@@ -602,22 +521,22 @@ class Lectin():
     return 0
 
 
-def create_lectin_and_motif_mappings(lectin_list, lectin_lib):
-  """Create a collection of lectins that can be used for motif scoring and all possible binding motifs.\n
-  | Arguments:
-  | :-
-  | lectin_list (list): list of lectins used in this experiment
-  | lectin_lib (dict): dictionary of type index : Lectin object\n
-  | Returns:
-  | :-
-  | 1. A useable lectin mapping dictionary that maps a user input lectin (string) to the index of a lectin in library --- {lectin: index}.
-  | 2. A motif mapping dictionary that maps a glycan motif to a dictionary of its corresponding lectins, each of which is assigned a weight class that indicates the level of evidence this lectin provides when scoring for this motif --- {motif: {lectin: weight_class}}.
-  | The weight class depends on the match between the motif and the specificity profile of the lectin.
-  | class 0: exact match between motif and primary specificity
-  | class 1: exact match between motif and secondary specificity
-  | class 2: motif encompasses primary specificity but not negative specificity
-  | class 3: motif encompasses secondary specificity but not negative specificity
-  """
+def load_lectin_lib() -> Dict[int, Lectin]: # Dictionary mapping indices to Lectin objects
+  "Loads curated lectin library with binding specificity information"
+  from glycowork.glycan_data.loader import lectin_specificity
+  lectin_lib = {}
+  for i, row in enumerate(lectin_specificity.itertuples()):
+    specificity_dict = {"primary": row.specificity_primary, "secondary": row.specificity_secondary, "negative": row.specificity_negative}
+    lectin_lib[i] = Lectin(abbr = row.abbreviation.split(","), name = row.name.split(","), specificity = specificity_dict,
+                           species = row.species, reference = row.reference, notes = row.notes)
+  return lectin_lib
+
+
+def create_lectin_and_motif_mappings(
+   lectin_list: List[str], # List of lectin names/abbreviations
+   lectin_lib: Dict[int, Lectin] # Library of Lectin objects
+   ) -> Tuple[Dict[str, int], Dict[str, Dict[str, int]]]: # (lectin:index dict, motif:{lectin:weight} dict)
+  "Creates mappings between lectins and their recognized motifs with binding strength weights"
   useable_lectin_mapping = {}
   motif_mapping = {}
   lib_lectin_lookup = {i: set(abbr.lower() for abbr in lib_lectin.abbr) for i, lib_lectin in lectin_lib.items()}
@@ -654,24 +573,17 @@ def create_lectin_and_motif_mappings(lectin_list, lectin_lib):
   return useable_lectin_mapping, motif_mapping
 
 
-def lectin_motif_scoring(useable_lectin_mapping, motif_mapping, lectin_score_dict, lectin_lib, idf,
-                  class_weight_dict = {0: 1, 1: 0.5, 2: 0.5, 3: 0.25}, specificity_weight_dict = {"<3": 1, "3-4": 0.75, ">4": 0.5},
-                  duplicate_lectin_penalty_factor = 0.8):
-  """Scores motifs based on observed lectin binding\n
-  | Arguments:
-  | :-
-  | useable_lectin_mapping (dict): returned from create_lectin_and_motif_mappings()
-  | motif_mapping (dict): returned from create_lectin_and_motif_mappings()
-  | lectin_score_dict (dict): dictionary of type lectin : effect_size
-  | lectin_lib (dict): dictionary of type index : lectin
-  | idf (float): variance of each lectin across groups
-  | class_weight_dict (dict, optional): dictionary of type lectin class : score weighting factor
-  | specificity_weight_dict (dict, optional): dictionary of type binding specificities : penalty weighting factor
-  | duplicate_lectin_penalty_factor (float, optional): penalty for having several of the same lectin; default:0.8\n
-  | Returns:
-  | :-
-  | Returns a dataframe with motifs, supporting lectins, observed change direction, and score
-  """
+def lectin_motif_scoring(
+   useable_lectin_mapping: Dict[str, int], # Lectin to index mapping
+   motif_mapping: Dict[str, Dict[str, int]], # Motif to {lectin:weight} mapping
+   lectin_score_dict: Dict[str, float], # Lectin effect sizes
+   lectin_lib: Dict[int, Lectin], # Library of Lectin objects
+   idf: Dict[str, float], # Lectin variance across groups
+   class_weight_dict: Dict[int, float] = {0: 1, 1: 0.5, 2: 0.5, 3: 0.25}, # Weights for binding classes
+   specificity_weight_dict: Dict[str, float] = {"<3": 1, "3-4": 0.75, ">4": 0.5}, # Weights for binding specificity
+   duplicate_lectin_penalty_factor: float = 0.8 # Penalty for redundant lectins
+   ) -> pd.DataFrame: # DataFrame with scored motifs and supporting evidence
+  "Calculates weighted motif scores from lectin binding data incorporating specificity and redundancy factors"
   output = []
   useable_lectin_count = {k: list(useable_lectin_mapping.values()).count(v) for k, v in useable_lectin_mapping.items()}
   #max_motifs = max([lectin_lib[k].get_all_binding_motifs_count() for k in useable_lectin_mapping.values()]) + 1
