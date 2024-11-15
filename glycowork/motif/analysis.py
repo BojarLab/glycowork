@@ -26,7 +26,7 @@ from glycowork.glycan_data.loader import df_species, unwrap, strip_suffixes, dow
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, variance_based_filtering,
                                          jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
-                                         test_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
+                                         compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation, correct_multiple_testing,
@@ -493,7 +493,7 @@ def select_grouping(
     grouped_glycans, grouped_p_values = func(glycans, p_values)
     if any([len(g) < 2 for g in grouped_glycans.values()]):
       continue
-    intra, inter = test_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = paired)
+    intra, inter = compare_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired = paired)
     out[desc] = ((intra, inter), (grouped_glycans, grouped_p_values))
   if not out:
     return {"group1": glycans}, {"group1": p_values}

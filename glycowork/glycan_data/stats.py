@@ -7,7 +7,7 @@ from collections import defaultdict, Counter
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from scipy.special import gammaln
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel
+from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind
 from scipy.stats.mstats import winsorize
 from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
@@ -28,8 +28,8 @@ def fast_two_sum(a: Union[int, float], # first number (assume abs(a) >= abs(b))
                 b: Union[int, float] # second number
                ) -> List[int]: # list containing sum
   "Assume abs(a) >= abs(b)"
-  x = int(a) + int(b)
-  y = b - (x - int(a))
+  x = a + b
+  y = b - (x - a)
   return [x] if y == 0 else [x, y]
 
 
@@ -37,8 +37,8 @@ def two_sum(a: Union[int, float], # first number
            b: Union[int, float] # second number
           ) -> List[int]: # list containing sum
   "For unknown order of a and b"
-  x = int(a) + int(b)
-  y = (a - (x - int(b))) + (b - (x - int(a)))
+  x = a + b
+  y = (a - (x - b)) + (b - (x - a))
   return [x] if y == 0 else [x, y]
 
 
@@ -58,7 +58,7 @@ def expansion_sum(*args: Union[int, float] # numbers to sum
 def hlm(z: Union[np.ndarray, List[float]] # array of values
        ) -> float: # median estimate
   "Hodges-Lehmann estimator of the median"
-  z = np.array(z)
+  z = np.array(z).flatten()
   zz = np.add.outer(z, z)
   zz = zz[np.tril_indices(len(z))]
   return np.median(zz) / 2
@@ -90,7 +90,8 @@ def cohen_d(x: Union[np.ndarray, List[float]], # comparison group containing num
     diff = np.array(x) - np.array(y)
     diff_std = np.std(diff, ddof = 1)
     if diff_std == 0:
-      return 0, 0
+      d = np.inf if np.mean(diff) > 0 else -np.inf
+      return d, 0
     n = len(diff)
     d = np.mean(diff) / diff_std
     var_d = 1 / n + d**2 / (2 * n)
@@ -193,12 +194,14 @@ class MissForest:
           # Split data into observed and missing for the current column
           observed = X_transform.loc[~missing_idx]
           missing = X_transform.loc[missing_idx]
-          # Use other columns to predict the current column
-          self.regressor.fit(observed.drop(columns = column), observed[column])
-          y_missing_pred = self.regressor.predict(missing.drop(columns = column))
-          # Replace missing values in the current column with predictions
-          total_change += np.sum(np.abs(X_transform.loc[missing_idx, column] - y_missing_pred))
-          X_transform.loc[missing_idx, column] = y_missing_pred
+          features = observed.drop(columns = column)
+          if features.notna().any().any():
+            # Use other columns to predict the current column
+            self.regressor.fit(observed.drop(columns = column), observed[column])
+            y_missing_pred = self.regressor.predict(missing.drop(columns = column))
+            # Replace missing values in the current column with predictions
+            total_change += np.sum(np.abs(X_transform.loc[missing_idx, column] - y_missing_pred))
+            X_transform.loc[missing_idx, column] = y_missing_pred
       # Check for convergence
       if total_change < self.tol:
         break  # Break out of the loop if converged
@@ -207,19 +210,21 @@ class MissForest:
     return X_transform
 
 
-def impute_and_normalize(df: pd.DataFrame, # dataframe with glycan sequences in first col and abundances in subsequent cols
+def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences in first col and abundances in subsequent cols
                         groups: List[List[str]], # nested list of column name lists, one list per group
                         impute: bool = True, # replaces zeroes with predictions from MissForest
                         min_samples: float = 0.1 # percent of samples that need non-zero values for glycan to be kept
                        ) -> pd.DataFrame: # normalized dataframe in same style as input
     "discards rows with too many missings, imputes the rest, and normalizes"
+    df = df_in.copy()
     if min_samples:
-      min_count = max(np.floor(df.shape[1] * min_samples), 2) + 1
+      min_count = max(np.floor(df.shape[1] * min_samples), 1) + 1
       mask = (df != 0).sum(axis = 1) >= min_count
       df = df[mask].reset_index(drop = True)
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
+    df = df.astype(float)
     for group in groups:
       group_data = df[group]
       all_zero_mask = (group_data == 0).all(axis = 1)
@@ -265,7 +270,7 @@ def jtkdist(timepoints: Union[int, np.ndarray], # number/array of timepoints wit
   param_dic.update({"GRP_SIZE": tim, "NUM_GRPS": len(tim), "NUM_VALS": nn,
                     "MAX": M, "DIMS": [int(nn * (nn - 1) / 2), 1]})
   if normal:
-    param_dic["VAR"] = (nn ** 2 * (2 * nn + 3) - np.sum(np.square(tim) * (2 * t + 3) for t in tim)) / 72  # Variance of JTK
+    param_dic["VAR"] = (nn ** 2 * (2 * nn + 3) - np.sum(np.fromiter((np.square(t) * (2 * t + 3) for t in tim), dtype = float))) / 72  # Variance of JTK
     param_dic["SDV"] = math.sqrt(param_dic["VAR"])  # Standard deviation of JTK
     param_dic["EXV"] = M / 2  # Expected value of JTK
     param_dic["EXACT"] = False
@@ -359,13 +364,13 @@ def jtkstat(z: pd.DataFrame, # expression data for a molecule ordered in groups 
   "Determines the JTK statistic and p-values for all model phases, compared to expression data"
   param_dic["CJTK"] = []
   M = param_dic["MAX"]
-  z = np.array(z)
+  z = np.array(z).flatten()
   foosv = np.sign(np.subtract.outer(z, z)).T  # Due to differences in the triangle indexing of R / Python we need to transpose and select upper triangle rather than the lower triangle
   mask = np.triu(np.ones(foosv.shape), k = 1).astype(bool) # Additionally, we need to remove the middle diagonal from the tri index
   mask[np.diag_indices(mask.shape[0])] = False
   foosv = foosv[mask].reshape(param_dic["DIMS"])
   for i in range(param_dic["PERIODS"][0]):
-    cgoosv = param_dic["CGOOSV"][0][:, i]
+    cgoosv = param_dic["CGOOSV"][0][i]
     S = np.nansum(np.diag(foosv * cgoosv))
     jtk = (abs(S) + M) / 2  # Two-tailed JTK statistic for this lag and distribution
     if S == 0:
@@ -514,11 +519,11 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped: Dict[str, List], # dicti
     group_adjusted_p_values = np.maximum(group_adjusted_p_values, group_p_values)
     for identifier, corrected_pval in zip(identifiers_grouped[group], group_adjusted_p_values):
       adjusted_p_values[identifier] = corrected_pval
-      significance_dict[identifier] = corrected_pval < adjusted_alpha
+      significance_dict[identifier] = bool(corrected_pval < adjusted_alpha)
   return adjusted_p_values, significance_dict
 
 
-def test_inter_vs_intra_group(cohort_b: pd.DataFrame, # dataframe of glycans as rows and samples as columns of case samples
+def compare_inter_vs_intra_group(cohort_b: pd.DataFrame, # dataframe of glycans as rows and samples as columns of case samples
                             cohort_a: pd.DataFrame, # dataframe of glycans as rows and samples as columns of control samples
                             glycans: List[str], # list of glycans in IUPAC-condensed nomenclature
                             grouped_glycans: Dict[str, List[str]], # dictionary of type group : glycans
@@ -596,12 +601,13 @@ def replace_outliers_winsorization(full_row: pd.Series, # row from dataframe, wi
   # Apply Winsorization - limits set to match typical IQR outlier detection
   nan_placeholder = row.min() - 1
   row = row.astype(float).fillna(nan_placeholder)
+  limit_value = max(0.05, 1/len(row))
   if cap_side == 'both':
-    limits = [0.05, 0.05]
+    limits = [limit_value, limit_value]
   elif cap_side == 'lower':
-    limits = [0.05, 0]
+    limits = [limit_value, 0]
   elif cap_side == 'upper':
-    limits = [0, 0.05]
+    limits = [0, limit_value]
   else:
     raise ValueError("cap_side must be 'both', 'lower', or 'upper'")
   winsorized_values = winsorize(row, limits = limits)
@@ -768,13 +774,14 @@ def calculate_permanova_stat(df: pd.DataFrame, # square distance matrix
   ss_total = np.sum(squareform(df)) / 2
   ss_within = 0
   for group in unique_groups:
-    group_indices = np.where(group_labels == group)[0]
+    group_mask = np.array(group_labels) == group
+    group_indices = np.arange(len(group_labels))[group_mask]
     group_matrix = df.values[np.ix_(group_indices, group_indices)]
     ss_within += np.sum(squareform(group_matrix)) / 2
   ss_between = ss_total - ss_within
   # Calculate the PERMANOVA test statistic: pseudo-F
-  ms_between = ss_between / (len(unique_groups) - 1)
-  ms_within = ss_within / (n - len(unique_groups))
+  ms_between = ss_between / max(len(unique_groups) - 1, 1e-10)
+  ms_within = ss_within / max(n - len(unique_groups), 1e-10)
   f_stat = ms_between / ms_within
   return f_stat
 
@@ -835,7 +842,7 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
   if isinstance(group1[0], int):
     group1 = [df.columns.tolist()[k] for k in group1]
     group2 = [df.columns.tolist()[k] for k in group2]
-  df = df.iloc[:, 1:]
+  df = df.iloc[:, 1:].astype(float)
   ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale)
   df = np.log2(df)
   if group2:
@@ -885,13 +892,13 @@ def correct_multiple_testing(pvals: Union[List[float], np.ndarray], # list of ra
     pvals = pvals.tolist()
   corrpvals = multipletests(pvals, method = 'fdr_tsbh' if correction_method == "two-stage" else 'fdr_bh')[1]
   corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
-  significance = [p < alpha for p in corrpvals]
+  significance = [bool(p < alpha) for p in corrpvals]
   if sum(significance) > 0.9*len(significance):
     print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value.\
              Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
     res = multipletests(pvals, method = 'bonferroni')
     corrpvals, alpha = res[1], res[3]
-    significance = [p < alpha for p in corrpvals]
+    significance = [bool(p < alpha) for p in corrpvals]
   return corrpvals, significance
 
 
@@ -950,7 +957,7 @@ def process_glm_results(df: pd.DataFrame, # CLR-transformed glycoproteomics data
                        glycan_features: List[str] # extracted glycan features to consider as variables
                       ) -> pd.DataFrame: # regression coefficients, p-values, and significance for each condition/interaction
   "tests for interaction effects of glycan features and the condition on glycoform abundance via a GLM"
-  results = df.groupby('Glycosite').apply(get_glm, glycan_features = glycan_features)
+  results = df.groupby('Glycosite', group_keys = False)[df.columns].apply(lambda x: get_glm(x.reset_index(drop = True), glycan_features = glycan_features))
   all_retained_vars = set()
   for _, retained_vars in results:
     all_retained_vars.update(retained_vars)
@@ -988,7 +995,7 @@ def partial_corr(x: np.ndarray, # typically values from a column or row
   return corr, pval
 
 
-def estimate_technical_variance(df: pd.DataFrame, # dataframe with glycans in first col and abundances in subsequent cols
+def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in cols
                               group1: List[Union[str, int]], # column indices/names for first group of samples
                               group2: List[Union[str, int]], # column indices/names for second group of samples
                               num_instances: int = 128, # number of Monte Carlo instances to sample

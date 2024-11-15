@@ -715,13 +715,10 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
 def check_nomenclature(glycan: str # Glycan string to check
                      ) -> None: # Prints reason if not convertible
   "Check whether glycan has correct nomenclature for glycowork"
-  if '@' in glycan:
-    print("Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around.")
-    return
   if not isinstance(glycan, str):
-    print("You need to format your glycan sequences as strings.")
-    return
-  return
+    raise TypeError("Glycan sequences must be formatted as strings")
+  if '@' in glycan:
+    raise ValueError("Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around.")
 
 
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format

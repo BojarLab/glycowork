@@ -21,10 +21,12 @@ nbdev_install_hooks
 
 ## PR submission guidelines
 
-* Before submitting a PR, run this command locally, that will run all tests and return any errors that may have occurred:
+* Before submitting a PR, run these commands locally, that will run all tests and return any errors that may have occurred:
 
 ```
 nbdev_prepare
+cd tests
+pytest
 ```
 
 * Keep each PR focused. While it's more convenient, do not combine several unrelated fixes together. Create as many branches as needing to keep each PR focused.
@@ -32,6 +34,7 @@ nbdev_prepare
 * Do not add/remove vertical whitespace. Preserve the original style of the file you edit as much as you can.
 * Do not turn an already submitted PR into your development playground. If after you submitted PR, you discovered that more work is needed - close the PR, do the required work and then submit a new PR. Otherwise each of your commits requires attention from maintainers of the project.
 * If, however, you submitted a PR and received a request for changes, you should proceed with commits inside that PR, so that the maintainer can see the incremental fixes and won't need to review the whole PR again. In the exception case where you realize it'll take many many commits to complete the requests, then it's probably best to close the PR, do the work and then submit it again. Use common sense where you'd choose one way over another.
+* If you added functionality, please consider adding corresponding unit tests to tests/test_core_functions.py
 
 ## Do you want to contribute to the documentation?
 

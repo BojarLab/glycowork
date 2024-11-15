@@ -3,6 +3,7 @@ import networkx as nx
 import networkx.algorithms.isomorphism as iso
 import pandas as pd
 import numpy as np
+from scipy import stats
 from glycowork.motif.tokenization import (
     constrain_prot, prot_to_coded, string_to_labels, pad_sequence, mz_to_composition,
     get_core, get_modification, get_stem_lib, stemify_glycan, mask_rare_glycoletters,
@@ -17,10 +18,26 @@ from glycowork.motif.processing import (
     canonicalize_composition, parse_glycoform, find_isomorphs,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, find_matching_brackets_indices,
-    choose_correct_isoform, bracket_removal
+    choose_correct_isoform, bracket_removal, check_nomenclature, IUPAC_to_SMILES
 )
-from glycowork.glycan_data.loader import (Hex, linkages)
-
+from glycowork.glycan_data.loader import (
+    unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets,
+    reindex, stringify_dict, replace_every_second, multireplace,
+    strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages
+)
+from glycowork.glycan_data.stats import (
+    fast_two_sum, two_sum, expansion_sum, hlm, cohen_d,
+    mahalanobis_distance, variance_stabilization, shannon_diversity_index,
+    simpson_diversity_index, get_equivalence_test, sequence_richness,
+    hotellings_t2, calculate_permanova_stat, omega_squared, anosim, alpha_biodiversity_stats, permanova_with_permutation,
+    clr_transformation, alr_transformation, get_procrustes_scores,
+    get_additive_logratio_transformation, get_BF, get_alphaN,
+    pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
+    correct_multiple_testing, process_glm_results, partial_corr,
+    estimate_technical_variance, jtkdist, jtkinit, jtkstat, jtkx, MissForest, impute_and_normalize,
+    variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results, replace_outliers_with_IQR_bounds,
+    replace_outliers_winsorization, perform_tests_monte_carlo
+)
 from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
 
 
@@ -300,9 +317,9 @@ def test_stemify_dataset():
             "Man(a1-3)[Man(a1-6)]Man"
         ]
     })
-    
+
     result = stemify_dataset(df, rarity_filter=1)
-    
+
     # Check modifications are removed
     assert "Neu5Ac(a2-3)Gal(b1-4)GlcNAc" in result['glycan'].values
     assert "6S" not in result['glycan'].str.cat()
@@ -625,7 +642,7 @@ def test_iupac_extended_to_condensed():
     assert iupac_extended_to_condensed("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'Galp(β1→4)GlcpNAc'
     assert iupac_extended_to_condensed("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'Neup5Ac(α2→3)Galp(β1→4)GlcpNAc'
 
-    
+
 def test_get_class():
     assert get_class("GalNAc(b1-3)GalNAc") == "O"
     assert get_class("GlcNAc(b1-4)GlcNAc") == "N"
@@ -698,3 +715,714 @@ def test_bracket_removal():
     assert bracket_removal("Neu5Ac(a2-3)[Neu5Ac(a2-6)[Gal(b1-3)]Gal(b1-4)]GlcNAc") == "Neu5Ac(a2-3)GlcNAc"
     # Test multiple branches
     assert bracket_removal("Gal(b1-4)[Fuc(a1-3)][Man(a1-6)]GlcNAc") == "Gal(b1-4)GlcNAc"
+
+
+def test_check_nomenclature():
+    # Test SMILES format (should print warning)
+    with pytest.raises(ValueError) as exc_info:
+        check_nomenclature("C@C(=O)NC1C(O)OC(CO)C(O)C1O")
+    assert "can only convert IUPAC-->SMILES" in str(exc_info.value)
+    # Test non-string input
+    with pytest.raises(TypeError) as exc_info:
+        check_nomenclature(123)
+    assert "must be formatted as strings" in str(exc_info.value)
+    # Test valid IUPAC format
+    assert check_nomenclature("Gal(b1-4)GlcNAc") is None
+
+
+def test_IUPAC_to_SMILES():
+    try:
+        # Test basic conversion
+        glycans = ["Gal(b1-4)GlcNAc"]
+        smiles = IUPAC_to_SMILES(glycans)
+        assert isinstance(smiles, list)
+        assert len(smiles) == 1
+        assert all('@' in s for s in smiles)  # SMILES should contain stereochemistry
+        # Test multiple glycans
+        glycans = ["Gal(b1-4)GlcNAc", "Man(a1-3)Man"]
+        smiles = IUPAC_to_SMILES(glycans)
+        assert len(smiles) == 2
+        # Test invalid input type
+        with pytest.raises(TypeError):
+            IUPAC_to_SMILES("Gal(b1-4)GlcNAc")  # Should be list
+    except ImportError:
+        pytest.skip("glyles package not installed")
+
+
+def test_unwrap():
+    # Test nested list flattening
+    nested = [[1, 2], [3, 4], [5, 6]]
+    assert unwrap(nested) == [1, 2, 3, 4, 5, 6]
+    # Test with strings
+    nested_str = [['a', 'b'], ['c', 'd']]
+    assert unwrap(nested_str) == ['a', 'b', 'c', 'd']
+    # Test empty lists
+    assert unwrap([[], []]) == []
+    # Test single-level list
+    assert unwrap([[1, 2, 3]]) == [1, 2, 3]
+
+
+def test_find_nth():
+    # Test basic string search
+    assert find_nth("abcabc", "abc", 1) == 0
+    assert find_nth("abcabc", "abc", 2) == 3
+    # Test when pattern doesn't exist
+    assert find_nth("abcabc", "xyz", 1) == -1
+    # Test when n is too large
+    assert find_nth("abcabc", "abc", 3) == -1
+    # Test with glycan-like string
+    glycan = "Gal(b1-4)Gal(b1-4)GlcNAc"
+    assert find_nth(glycan, "Gal", 1) == 0
+    assert find_nth(glycan, "Gal", 2) == 9
+
+
+def test_find_nth_reverse():
+    # Test basic reverse search
+    assert find_nth_reverse("abcabc", "abc", 1) == 3
+    assert find_nth_reverse("abcabc", "abc", 2) == 0
+    # Test with ignore_branches=True
+    glycan = "Gal(b1-4)[Fuc(a1-3)]GlcNAc"
+    assert find_nth_reverse(glycan, "Gal", 1, ignore_branches=True) == 0
+    # Test with nested branches
+    glycan = "Neu5Ac(a2-3)[Neu5Ac(a2-6)[Gal(b1-3)]Gal(b1-4)]GlcNAc"
+    result = find_nth_reverse(glycan, "Gal", 2, ignore_branches=True)
+    assert result >= 0
+
+
+def test_remove_unmatched_brackets():
+    # Test balanced brackets
+    assert remove_unmatched_brackets("[abc]") == "[abc]"
+    # Test unmatched opening bracket
+    assert remove_unmatched_brackets("[abc") == "abc"
+    # Test unmatched closing bracket
+    assert remove_unmatched_brackets("abc]") == "abc"
+    # Test nested brackets
+    assert remove_unmatched_brackets("[a[bc]]") == "[a[bc]]"
+    # Test glycan-like string
+    glycan = "Gal(b1-4)[Fuc(a1-3]GlcNAc"  # Missing closing bracket
+    result = remove_unmatched_brackets(glycan)
+    assert result.count('[') == result.count(']')
+
+
+def test_reindex():
+    # Create test dataframes
+    df_old = pd.DataFrame({
+        'id': ['a', 'b', 'c'],
+        'value': [1, 2, 3]
+    })
+    df_new = pd.DataFrame({
+        'id': ['c', 'a', 'b']
+    })
+    # Test reindexing
+    result = reindex(df_new, df_old, 'value', 'id', 'id')
+    assert result == [3, 1, 2]
+
+
+def test_stringify_dict():
+    # Test basic dictionary
+    d = {'a': 1, 'b': 2, 'c': 3}
+    assert stringify_dict(d) == 'a1b2c3'
+    # Test empty dictionary
+    assert stringify_dict({}) == ''
+    # Test dictionary with various types
+    d = {'Hex': 5, 'HexNAc': 4, 'Neu5Ac': 2}
+    result = stringify_dict(d)
+    assert isinstance(result, str)
+    assert 'Hex5' in result
+
+
+def test_replace_every_second():
+    # Test basic replacement
+    assert replace_every_second("aaa", "a", "b") == "aba"
+    # Test with mixed characters
+    assert replace_every_second("ababa", "a", "c") == "abcba"
+    # Test empty string
+    assert replace_every_second("", "a", "b") == ""
+    # Test no matches
+    assert replace_every_second("xyz", "a", "b") == "xyz"
+
+
+def test_multireplace():
+    # Test basic replacements
+    replacements = {'a': 'x', 'b': 'y'}
+    assert multireplace("abc", replacements) == "xyc"
+    # Test glycan-specific replacements
+    replacements = {'Nac': 'NAc', 'AC': 'Ac'}
+    assert multireplace("GlcNac", replacements) == "GlcNAc"
+    # Test empty string
+    assert multireplace("", {'a': 'b'}) == ""
+    # Test no matches
+    assert multireplace("xyz", {'a': 'b'}) == "xyz"
+
+
+def test_strip_suffixes():
+    # Test numerical suffixes
+    cols = ['name.1', 'value.2', 'data.10']
+    assert strip_suffixes(cols) == ['name', 'value', 'data']
+    # Test mixed columns
+    cols = ['name.1', 'value', 'data.10']
+    assert strip_suffixes(cols) == ['name', 'value', 'data']
+    # Test no suffixes
+    cols = ['name', 'value', 'data']
+    assert strip_suffixes(cols) == ['name', 'value', 'data']
+
+
+def test_build_custom_df():
+    # Create test DataFrame
+    df = pd.DataFrame({
+        'glycan': ['Gal', 'GlcNAc'],
+        'Species': [['Human', 'Mouse'], ['Mouse']],
+        'Genus': [['Homo', 'Mus'], ['Mus']],
+        'Family': [['Hominidae', 'Muridae'], ['Muridae']],
+        'Order': [['Primates', 'Rodentia'], ['Rodentia']],
+        'Class': [['Mammalia', 'Mammalia'], ['Mammalia']],
+        'Phylum': [['Chordata', 'Chordata'], ['Chordata']],
+        'Kingdom': [['Animalia', 'Animalia'], ['Animalia']],
+        'Domain': [['Eukaryota', 'Eukaryota'], ['Eukaryota']],
+        'ref': [['ref1', 'ref2'], ['ref3']]
+    })
+    # Test df_species creation
+    result = build_custom_df(df, 'df_species')
+    assert len(result) > len(df)  # Should expand due to explode
+    assert 'glycan' in result.columns
+    assert 'Species' in result.columns
+
+
+def test_dataframe_serializer():
+    # Create test DataFrame with various types
+    df = pd.DataFrame({
+        'strings': ['a', 'b', 'c'],
+        'lists': [[1, 2], [3, 4], [5, 6]],
+        'dicts': [{'x': 1}, {'y': 2}, {'z': 3}],
+        'nulls': [None, pd.NA, None]
+    })
+    # Test serialization and deserialization
+    serializer = DataFrameSerializer()
+    # Test full cycle
+    with pytest.raises(Exception):  # Should fail without proper file path
+        serializer.serialize(df, "")
+    # Test cell serialization
+    cell = serializer._serialize_cell([1, 2, 3])
+    assert cell['type'] == 'list'
+    assert cell['value'] == ['1', '2', '3']
+    # Test cell deserialization
+    cell_data = {'type': 'list', 'value': ['1', '2', '3']}
+    result = serializer._deserialize_cell(cell_data)
+    assert result == ['1', '2', '3']
+
+
+def test_fast_two_sum():
+    # Test basic addition
+    assert fast_two_sum(5, 3) == [8]
+    # Test with floating points
+    assert fast_two_sum(5.5, 3.3)[0] == 8.8
+    # Test with negative numbers
+    assert fast_two_sum(-5, -3) == [-8]
+
+
+def test_two_sum():
+    # Test basic addition
+    assert two_sum(5, 3) == [8]
+    # Test order doesn't matter
+    assert two_sum(3, 5) == [8]
+    # Test with floating points
+    result = two_sum(5.5, 3.3)
+    assert abs(result[0] - 8.8) < 1e-10
+
+
+def test_expansion_sum():
+    # Test multiple numbers
+    assert expansion_sum(1, 2, 3) == 6
+    # Test floating points
+    result = expansion_sum(1.1, 2.2, 3.3)
+    assert abs((result if isinstance(result, float) else sum(result[0])+result[1]) - 6.6) < 1e-10
+    # Test negative numbers
+    assert expansion_sum(-1, -2, -3) == -6
+
+
+def test_hlm():
+    # Test with simple array
+    data = [1, 2, 3, 4, 5]
+    result = hlm(data)
+    assert 2.5 <= result <= 3.5  # Should be around 3
+    # Test with negative numbers
+    data = [-2, -1, 0, 1, 2]
+    result = hlm(data)
+    assert abs(result) < 1e-10  # Should be around 0
+
+
+def test_cohen_d():
+    # Test with clearly different groups
+    group1 = [1, 2, 3, 4, 5]
+    group2 = [6, 7, 8, 9, 10]
+    d, var = cohen_d(group1, group2)
+    assert d < 0  # Effect size should be negative (group1 < group2)
+    # Test with paired samples
+    d, var = cohen_d(group1, group2, paired=True)
+    assert d < 0  # Should still be negative
+    # Test with identical groups
+    d, var = cohen_d(group1, group1)
+    assert abs(d) < 1e-10  # Effect size should be approximately 0
+
+
+def test_mahalanobis_distance():
+    # Test with 2D data
+    x = np.array([[1, 2], [3, 4], [5, 6]])
+    y = np.array([[7, 8], [9, 10], [11, 12]])
+    dist = mahalanobis_distance(x, y)
+    assert dist > 0  # Distance should be positive
+    # Test with paired data
+    dist_paired = mahalanobis_distance(x, y, paired=True)
+    assert dist_paired >= 0  # Should still be positive
+
+
+def test_variance_stabilization():
+    # Create test data
+    data = pd.DataFrame({
+        'sample1': [1, 2, 3],
+        'sample2': [4, 5, 6],
+        'sample3': [7, 8, 9]
+    })
+    # Test global normalization
+    result = variance_stabilization(data)
+    assert (result.std() - 1).abs().mean() < 0.1  # Should have ~unit variance
+    # Test group-specific normalization
+    groups = [['sample1', 'sample2'], ['sample3']]
+    result = variance_stabilization(data, groups)
+    assert result.shape == data.shape
+
+
+def test_biodiversity_metrics():
+    # Test data
+    counts = np.array([10, 20, 30, 40])
+    # Test sequence richness
+    assert sequence_richness(counts) == 4
+    assert sequence_richness(np.array([1, 0, 3, 0])) == 2
+    # Test Shannon diversity
+    shannon = shannon_diversity_index(counts)
+    assert 0 <= shannon <= np.log(len(counts))
+    # Test Simpson diversity
+    simpson = simpson_diversity_index(counts)
+    assert 0 <= simpson <= 1
+
+
+def test_get_equivalence_test():
+    # Test data
+    group1 = np.array([1, 2, 3, 4, 5])
+    group2 = np.array([1.1, 2.1, 3.1, 4.1, 5.1])
+    # Test unpaired
+    p_val = get_equivalence_test(group1, group2)
+    assert 0 <= p_val <= 1
+    # Test paired
+    p_val_paired = get_equivalence_test(group1, group2, paired=True)
+    assert 0 <= p_val_paired <= 1
+
+
+def test_hotellings_t2():
+    # Create multivariate test data
+    group1 = np.array([[1, 2], [3, 4], [5, 6]])
+    group2 = np.array([[7, 8], [9, 10], [11, 12]])
+    # Test unpaired
+    F_stat, p_val = hotellings_t2(group1, group2)
+    assert F_stat >= 0
+    assert 0 <= p_val <= 1
+    # Test paired
+    F_stat_paired, p_val_paired = hotellings_t2(group1, group2, paired=True)
+    assert F_stat_paired >= 0
+    assert 0 <= p_val_paired <= 1
+
+
+def test_calculate_permanova_stat():
+    # Create distance matrix
+    dist_matrix = pd.DataFrame([
+        [0, 1, 2, 3],
+        [1, 0, 2, 3],
+        [2, 2, 0, 1],
+        [3, 3, 1, 0]
+    ])
+    group_labels = ['A', 'A', 'B', 'B']
+    # Test calculation
+    F_stat = calculate_permanova_stat(dist_matrix, group_labels)
+    assert F_stat >= 0
+
+
+def test_omega_squared():
+    # Create test data
+    data = np.array([1, 2, 3, 4, 5, 6, 7, 8])
+    groups = ['A', 'A', 'A', 'A', 'B', 'B', 'B', 'B']
+    # Calculate effect size
+    omega_sq = omega_squared(data, groups)
+    assert -1 <= omega_sq <= 1  # Omega squared should be between -1 and 1
+
+
+def test_anosim():
+    # Create test distance matrix
+    dist_matrix = pd.DataFrame([
+        [0, 1, 2, 3],
+        [1, 0, 2, 3],
+        [2, 2, 0, 1],
+        [3, 3, 1, 0]
+    ])
+    group_labels = ['A', 'A', 'B', 'B']
+    # Test ANOSIM
+    R, p_val = anosim(dist_matrix, group_labels)
+    assert -1 <= R <= 1  # R should be between -1 and 1
+    assert 0 <= p_val <= 1
+
+
+def test_alpha_biodiversity_stats():
+    # Create test data
+    distances = pd.DataFrame([1.0, 2.0, 1.5, 2.5])
+    group_labels = ['A', 'A', 'B', 'B']
+    # Test statistics
+    result = alpha_biodiversity_stats(distances, group_labels)
+    if result:  # Will be None if groups have only 1 sample
+        F_stat, p_val = result
+        assert F_stat >= 0
+        assert 0 <= p_val <= 1
+
+
+def test_permanova_with_permutation():
+    # Create test distance matrix
+    dist_matrix = pd.DataFrame([
+        [0, 1, 2, 3],
+        [1, 0, 2, 3],
+        [2, 2, 0, 1],
+        [3, 3, 1, 0]
+    ])
+    group_labels = ['A', 'A', 'B', 'B']
+    # Test PERMANOVA
+    F_stat, p_val = permanova_with_permutation(dist_matrix, group_labels, permutations=99)
+    assert F_stat >= 0
+    assert 0 <= p_val <= 1
+
+
+def test_clr_transformation():
+    # Create test data
+    data = pd.DataFrame({
+        'sample1': [1, 2, 3],
+        'sample2': [4, 5, 6],
+        'sample3': [7, 8, 9]
+    })
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3']
+    # Test CLR transformation
+    result = clr_transformation(data, group1, group2)
+    assert result.shape == data.shape
+    # Test with scale model
+    result_scaled = clr_transformation(data, group1, group2, custom_scale=2.0)
+    assert result_scaled.shape == data.shape
+
+
+def test_alr_transformation():
+    # Create test data
+    data = pd.DataFrame({
+        'sample1': [1, 2, 3],
+        'sample2': [4, 5, 6],
+        'sample3': [7, 8, 9]
+    })
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3']
+    # Test ALR transformation
+    result = alr_transformation(data, 0, group1, group2)
+    assert result.shape[0] == data.shape[0] - 1  # One fewer row due to reference
+    # Test with scale model
+    result_scaled = alr_transformation(data, 0, group1, group2, custom_scale=2.0)
+    assert result_scaled.shape[0] == data.shape[0] - 1
+
+
+def test_get_procrustes_scores():
+    # Create test data
+    data = pd.DataFrame({
+        'glycan': ['Gal', 'GlcNAc', 'Man'],
+        'sample1': [1, 2, 3],
+        'sample2': [4, 5, 6],
+        'sample3': [7, 8, 9],
+        'sample4': [10, 11, 12]
+    })
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3', 'sample4']
+    # Test Procrustes analysis
+    scores, corr, var = get_procrustes_scores(data, group1, group2)
+    assert len(scores) == len(corr) == len(var) == data.shape[0]
+
+
+def test_get_additive_logratio_transformation():
+    # Create test data
+    data = pd.DataFrame({
+        'glycan': ['Gal', 'GlcNAc', 'Man'],
+        'sample1': [1, 2, 3],
+        'sample2': [4, 5, 6],
+        'sample3': [7, 8, 9],
+        'sample4': [10, 11, 12]
+    })
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3', 'sample4']
+    # Test ALR transformation with reference selection
+    result = get_additive_logratio_transformation(data, group1, group2)
+    assert 'glycan' in result.columns
+
+
+def test_bayes_factor_functions():
+    # Test get_BF
+    bf = get_BF(n=20, p=0.05)
+    assert bf > 0
+    # Test get_alphaN
+    alpha = get_alphaN(n=20)
+    assert 0 < alpha < 1
+
+
+def test_pi0_tst():
+    # Create test p-values
+    p_values = np.array([0.01, 0.02, 0.03, 0.5, 0.6, 0.7, 0.8, 0.9])
+    # Test pi0 estimation
+    pi0 = pi0_tst(p_values)
+    assert 0 <= pi0 <= 1
+
+
+def test_tst_grouped_benjamini_hochberg():
+    # Create test data
+    identifiers = {
+        'group1': ['g1', 'g2'],
+        'group2': ['g3', 'g4']
+    }
+    p_values = {
+        'group1': [0.01, 0.02],
+        'group2': [0.03, 0.04]
+    }
+    # Test correction
+    adj_pvals, sig_dict = TST_grouped_benjamini_hochberg(identifiers, p_values, 0.05)
+    assert len(adj_pvals) == len(sig_dict) == 4
+    assert all(0 <= p <= 1 for p in adj_pvals.values())
+    assert all(isinstance(s, bool) for s in sig_dict.values())
+
+
+def test_compare_inter_vs_intra_group():
+    # Create test data
+    cohort_a = pd.DataFrame({
+        'sample1': [1, 2, 3],
+        'sample2': [4, 5, 6]
+    })
+    cohort_b = pd.DataFrame({
+        'sample3': [7, 8, 9],
+        'sample4': [10, 11, 12]
+    })
+    glycans = ['Gal', 'GlcNAc', 'Man']
+    grouped_glycans = {'group1': ['Gal'], 'group2': ['GlcNAc', 'Man']}
+    # Test correlation analysis
+    intra, inter = compare_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans)
+    assert -1 <= intra <= 1
+    assert -1 <= inter <= 1
+
+
+def test_correct_multiple_testing():
+    # Create test p-values
+    p_values = [0.01, 0.02, 0.03, 0.04, 0.05]
+    # Test correction
+    corrected_pvals, significance = correct_multiple_testing(p_values, 0.05)
+    assert len(corrected_pvals) == len(significance) == len(p_values)
+    assert all(0 <= p <= 1 for p in corrected_pvals)
+    assert all(isinstance(s, bool) for s in significance)
+
+
+def test_partial_corr():
+    # Create test data
+    x = np.array([1, 2, 3, 4, 5])
+    y = np.array([2, 4, 6, 8, 10])
+    controls = np.array([[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]]).T
+    # Test partial correlation
+    corr, p_val = partial_corr(x, y, controls)
+    assert -1 <= corr <= 1
+    assert 0 <= p_val <= 1
+
+
+def test_estimate_technical_variance():
+    # Create test data
+    data = pd.DataFrame({
+        'sample1': [1, 2, 3],
+        'sample2': [4, 5, 6],
+        'sample3': [7, 8, 9]
+    })
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3']
+    # Test variance estimation
+    result = estimate_technical_variance(data, group1, group2, num_instances=10)
+    assert result.shape[1] == (len(group1) + len(group2)) * 10
+
+
+def test_jtkdist():
+    # Test JTK distribution calculation
+    param_dic = {}
+    result = jtkdist(timepoints=6, param_dic=param_dic)
+    assert "GRP_SIZE" in result
+    assert "NUM_GRPS" in result
+    assert "NUM_VALS" in result
+    assert "MAX" in result
+    assert "DIMS" in result
+    # Test with normal approximation
+    result_normal = jtkdist(timepoints=6, param_dic={}, normal=True)
+    assert "VAR" in result_normal
+    assert "SDV" in result_normal
+    assert "EXV" in result_normal
+    assert "EXACT" in result_normal
+
+
+def test_jtkinit():
+    # Test JTK initialization
+    periods = [24]  # 24-hour period
+    param_dic = {
+        'GRP_SIZE': [1] * 24,
+        'INTERVAL': 1,
+        'NUM_GRPS': 24,  # Match period length
+        'NUM_VALS': 24,
+        'DIMS': [276, 1],  # (24 * 23) / 2 = 276
+        'PERFACTOR': np.ones(24),
+        'CGOOSV': [np.zeros([276, 24])]
+    }
+    result = jtkinit(periods, param_dic, interval=1, replicates=1)
+    assert "INTERVAL" in result
+    assert "PERIODS" in result
+    assert "PERFACTOR" in result
+    assert "SIGNCOS" in result
+    assert "CGOOSV" in result
+
+
+def test_jtkstat():
+    # Test JTK statistics calculation
+    # Create mock expression data
+    z = pd.DataFrame([1, 2, 1, 2, 1, 2])  # Cycling data
+    param_dic = {
+        "MAX": 15,
+        "PERIODS": [6],
+        "DIMS": [15, 1],
+        "CGOOSV": [[np.zeros(15) for _ in range(6)]]
+    }
+    result = jtkstat(z, param_dic)
+    assert "CJTK" in result
+
+
+def test_jtkx():
+    # Test JTK deployent
+    z = pd.Series([1, 2, 1, 2, 1, 2], index=['t1', 't2', 't3', 't4', 't5', 't6'])  # Cycling data
+    param_dic = {"GRP_SIZE": [], "NUM_GRPS": [], "MAX": [], "DIMS": [], "EXACT": bool(True),
+                 "VAR": [], "EXV": [], "SDV": [], "CGOOSV": []}
+    param_dic = jtkdist(6, param_dic, reps=1)
+    param_dic = jtkinit([6], param_dic, interval=1, replicates=1)
+    result = jtkx(z, param_dic)
+    assert len(result) == 4  # Should return p-value, period, lag, and amplitude
+
+
+def test_missforest():
+    # Test MissForest imputation
+    data = pd.DataFrame({
+        'A': [1, np.nan, 3, 4],
+        'B': [np.nan, 2, 3, 4],
+        'C': [1, 2, np.nan, 4]
+    })
+    mf = MissForest()
+    imputed = mf.fit_transform(data)
+    assert not imputed.isnull().any().any()
+    assert imputed.shape == data.shape
+
+
+def test_impute_and_normalize():
+    # Test imputation and normalization
+    data = pd.DataFrame({
+        'glycan': ['Gal', 'GlcNAc', 'Man'],
+        'sample1': [1, 0, 3],
+        'sample2': [0, 2, 0],
+        'sample3': [3, 0, 3]
+    })
+    groups = [['sample1', 'sample2'], ['sample3']]
+    result = impute_and_normalize(data, groups)
+    assert result.shape == data.shape
+    assert not (result.iloc[:, 1:] == 0).any().any()
+    assert abs(result.iloc[:, 1:].sum().sum() - 300) < 1e-5  # Check normalization to 100%
+
+
+def test_variance_based_filtering():
+    # Test variance-based filtering
+    data = pd.DataFrame({
+        'A': [1, 2, 3],
+        'B': [1.1, 1.9, 3.1],
+        'C': [2, 2, 2]  # Low variance
+    }).T
+    filtered, discarded = variance_based_filtering(data, min_feature_variance=0.1)
+    assert len(filtered) + len(discarded) == len(data)
+    assert len(discarded) == 1  # The constant feature should be discarded
+
+
+def test_get_glycoform_diff():
+    # Test glycoform differential expression
+    result_df = pd.DataFrame({
+        'Glycosite': ['Prot1_123_H5N4', 'Prot1_123_H6N5', 'Prot2_456_H4N3'],
+        'corr p-val': [0.01, 0.02, 0.03],
+        'Effect size': [0.5, 0.6, 0.7]
+    })
+    result = get_glycoform_diff(result_df, alpha=0.05, level='peptide')
+    assert 'Glycosite' in result.columns
+    assert 'corr p-val' in result.columns
+    assert 'significant' in result.columns
+    assert 'Effect size' in result.columns
+
+
+def test_get_glm():
+    # Test GLM fitting
+    data = pd.DataFrame({
+        'Glycosite': ['Site1'] * 8 + ['Site2'] * 8,
+        'Abundance': [1.0, 1.2, 0.8, 1.1, 1.3, 0.9, 1.4, 0.7,  # Site1 abundances
+                     2.0, 2.2, 1.8, 2.1, 2.3, 1.9, 2.4, 1.7],  # Site2 abundances
+        'Condition': [0, 0, 0, 0, 1, 1, 1, 1] * 2,
+        'H': [1, 2, 1, 2, 1, 2, 1, 2] * 2,
+        'N': [2, 3, 2, 3, 2, 3, 2, 3] * 2 
+    })
+    model, vars = get_glm(data)
+    if not isinstance(model, str):  # If model fitting succeeded
+        assert hasattr(model, 'params')
+        assert hasattr(model, 'pvalues')
+        assert len(vars) > 0
+
+
+def test_process_glm_results():
+    # Test GLM results processing
+    data = pd.DataFrame({
+        'Glycosite': ['Site1'] * 8 + ['Site2'] * 8,
+        'Abundance': [1.0, 1.2, 0.8, 1.1, 1.3, 0.9, 1.4, 0.7,  # Site1 abundances
+                     2.0, 2.2, 1.8, 2.1, 2.3, 1.9, 2.4, 1.7],  # Site2 abundances
+        'Condition': [0, 0, 0, 0, 1, 1, 1, 1] * 2,
+        'H': [1, 2, 1, 2, 1, 2, 1, 2] * 2,
+        'N': [2, 3, 2, 3, 2, 3, 2, 3] * 2 
+    })
+    result = process_glm_results(data, 0.05, ['H', 'N'])
+    assert 'Condition_coefficient' in result.columns
+    assert 'Condition_corr_pval' in result.columns
+    assert 'Condition_significant' in result.columns
+    assert result.shape[0] == len(['Site1', 'Site2'])
+
+
+def test_replace_outliers_with_iqr_bounds():
+    # Test IQR-based outlier replacement
+    data = pd.Series([1, 2, 3, 10, 2, 3, 1])  # 10 is an outlier
+    result = replace_outliers_with_IQR_bounds(data)
+    assert max(result) < 10  # Outlier should be replaced
+    assert len(result) == len(data)
+
+
+def test_replace_outliers_winsorization():
+    # Test Winsorization-based outlier replacement
+    data = pd.Series([1, 2, 3, 10, 2, 3, 1, 2, 3, 1])  # 10 is an outlier
+    result = replace_outliers_winsorization(data)
+    assert max(result) < 10  # Outlier should be replaced
+    assert len(result) == len(data)
+
+
+def test_perform_tests_monte_carlo():
+    # Test Monte Carlo testing
+    group_a = pd.DataFrame(np.random.normal(0, 1, (5, 100)))
+    group_b = pd.DataFrame(np.random.normal(0.5, 1, (5, 100)))
+    raw_p, adj_p, effect = perform_tests_monte_carlo(
+        group_a, group_b, num_instances=10
+    )
+    assert len(raw_p) == len(adj_p) == len(effect) == 5
+    assert all(0 <= p <= 1 for p in raw_p)
+    assert all(0 <= p <= 1 for p in adj_p)
