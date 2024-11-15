@@ -25,22 +25,22 @@ np.random.seed(0)
 
 def fast_two_sum(a, b):
   """Assume abs(a) >= abs(b)"""
-  x = int(a) + int(b)
-  y = b - (x - int(a))
+  x = a + b
+  y = b - (x - a)
   return [x] if y == 0 else [x, y]
 
 
 def two_sum(a, b):
   """For unknown order of a and b"""
-  x = int(a) + int(b)
-  y = (a - (x - int(b))) + (b - (x - int(a)))
+  x = a + b
+  y = (a - (x - b)) + (b - (x - a))
   return [x] if y == 0 else [x, y]
 
 
 def expansion_sum(*args):
   """For the expansion sum of floating points"""
   g = sorted(args, reverse = True)
-  q, *h = fast_two_sum(np.array(g[0]), np.array(g[1]))
+  q, *h = fast_two_sum(g[0], g[1])
   for val in g[2:]:
     z = two_sum(q, np.array(val))
     q, *extra = z
@@ -294,7 +294,7 @@ def jtkdist(timepoints, param_dic, reps = 1, normal = False):
   param_dic.update({"GRP_SIZE": tim, "NUM_GRPS": len(tim), "NUM_VALS": nn,
                     "MAX": M, "DIMS": [int(nn * (nn - 1) / 2), 1]})
   if normal:
-    param_dic["VAR"] = (nn ** 2 * (2 * nn + 3) - np.sum(np.square(tim) * (2 * t + 3) for t in tim)) / 72  # Variance of JTK
+    param_dic["VAR"] = (nn ** 2 * (2 * nn + 3) - np.sum(np.square(tim) * (2 * tim + 3) )) / 72  # Variance of JTK
     param_dic["SDV"] = math.sqrt(param_dic["VAR"])  # Standard deviation of JTK
     param_dic["EXV"] = M / 2  # Expected value of JTK
     param_dic["EXACT"] = False
