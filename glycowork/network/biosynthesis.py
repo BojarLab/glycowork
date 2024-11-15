@@ -10,7 +10,7 @@ from collections import defaultdict, Counter
 from scipy.stats import ttest_rel, ttest_ind
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
-from typing import Dict, List, Set, Union, Optional, Tuple, Any, FrozenSet
+from typing import Dict, List, Set, Union, Optional, Tuple, FrozenSet
 import statsmodels.api as sm
 import networkx as nx
 import numpy as np

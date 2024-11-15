@@ -878,6 +878,8 @@ def equal_repeats(r1: str, # First glycan sequence
                  r2: str # Second glycan sequence
                 ) -> bool: # True if repeats are shifted versions
   "Check whether two repeat units could stem from the same repeating structure"
+  if r1 == r2:
+    return True
   r1_long = r1[:r1.rindex(')')+1] * 2
   return any(r1_long[i:i + len(r2)] == r2 for i in range(len(r1)))
 
@@ -907,6 +909,9 @@ def parse_glycoform(glycoform: Union[str, Dict[str, int]], # Composition in H5N4
                   ) -> Dict[str, int]: # Dictionary of feature counts
   "Convert composition like H5N4F1A2 into monosaccharide counts"
   if isinstance(glycoform, dict):
+    if not any(f in glycoform.keys() for f in glycan_features):
+      mapping = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G'}
+      glycoform = {mapping.get(k, k): v for k, v in glycoform.items()}
     components = {k: glycoform.get(k, 0) for k in glycan_features}
     return components | infer_features_from_composition(components)
   components = {c: 0 for c in glycan_features}

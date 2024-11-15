@@ -6,7 +6,8 @@ import copy
 from importlib import resources
 from collections import Counter
 from sklearn.cluster import DBSCAN
-from typing import Dict, List, Set, Union, Optional, Tuple
+from functools import reduce
+from typing import Dict, List, Set, Union, Optional
 
 from glycowork.glycan_data.loader import lib, unwrap, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions
@@ -16,7 +17,7 @@ chars = {'A':1, 'B':2, 'C':3, 'D':4, 'E':5, 'F':6, 'G':7, 'H':8, 'I':9, 'J':10, 
          'L':12, 'M':13, 'N':14, 'P':15, 'Q':16, 'R':17, 'S':18, 'T':19,
          'V':20, 'W':21, 'Y':22, 'X':23, 'Z':24, 'z':25}
 
-with resources.open_text("glycowork.motif", "mz_to_composition.csv") as f:
+with resources.files("glycowork.motif").joinpath("mz_to_composition.csv").open(encoding = 'utf-8-sig') as f:
   mapping_file = pd.read_csv(f)
 mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
 
@@ -330,7 +331,7 @@ def compositions_to_structures(composition_list: List[Dict[str, int]], # List of
   print(f"{not_matched_count} compositions could not be matched. Run with verbose = True to see which compositions.")
   if verbose:
     print(not_matched_list)
-  return df_out
+  return df_out if isinstance(df_out, pd.DataFrame) else pd.DataFrame()
 
 
 def mz_to_structures(mz_list: List[float], # List of precursor masses
@@ -365,10 +366,7 @@ def mz_to_structures(mz_list: List[float], # List of precursor masses
   for m, comp in enumerate(compositions):
     out_structures.append(compositions_to_structures(comp, glycan_class = glycan_class,
                                               abundances = abundances.iloc[[m]], kingdom = kingdom, df_use = df_use, verbose = verbose))
-  if out_structures:
-    return pd.concat(out_structures, axis = 0)
-  else:
-    return []
+  return pd.concat(out_structures, axis = 0).reset_index(drop = True) if out_structures else []
 
 
 def mask_rare_glycoletters(glycans: List[str], # List of IUPAC-condensed glycans
@@ -553,4 +551,4 @@ def get_unique_topologies(composition: Dict[str, int], # Composition dictionary 
   df_use = df_use[df_use.glycan_type == glycan_type]
   df_use = df_use[df_use[taxonomy_rank].apply(lambda x: taxonomy_value in x)].glycan.values
   df_use = list(set([structure_to_basic(k) for k in df_use]))
-  return [[g.replace(k, v) for k,v in universal_replacers.items()][0] for g in df_use if '{' not in g]
+  return [reduce(lambda x, kv: x.replace(*kv), universal_replacers.items(), g) for g in df_use if '{' not in g]

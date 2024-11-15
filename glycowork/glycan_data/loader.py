@@ -8,7 +8,7 @@ from itertools import chain
 from importlib import resources
 from typing import Any, Dict, List, Optional
 
-with resources.open_text("glycowork.glycan_data", "glycan_motifs.csv") as f:
+with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
   motif_list = pd.read_csv(f)
 this_dir, this_filename = path.split(__file__)  # Get path of data.pkl
 data_path = path.join(this_dir, 'lib_v11.pkl')
