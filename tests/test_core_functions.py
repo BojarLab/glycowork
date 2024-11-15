@@ -3,7 +3,6 @@ import networkx as nx
 import networkx.algorithms.isomorphism as iso
 import pandas as pd
 import numpy as np
-from scipy import stats
 from glycowork.motif.tokenization import (
     constrain_prot, prot_to_coded, string_to_labels, pad_sequence, mz_to_composition,
     get_core, get_modification, get_stem_lib, stemify_glycan, mask_rare_glycoletters,
@@ -33,12 +32,26 @@ from glycowork.glycan_data.stats import (
     clr_transformation, alr_transformation, get_procrustes_scores,
     get_additive_logratio_transformation, get_BF, get_alphaN,
     pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
-    correct_multiple_testing, process_glm_results, partial_corr,
-    estimate_technical_variance, jtkdist, jtkinit, jtkstat, jtkx, MissForest, impute_and_normalize,
+    correct_multiple_testing, partial_corr, estimate_technical_variance, jtkdist, jtkinit, jtkstat, jtkx, MissForest, impute_and_normalize,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results, replace_outliers_with_IQR_bounds,
     replace_outliers_winsorization, perform_tests_monte_carlo
 )
-from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
+from glycowork.motif.graph import (
+    glycan_to_graph, glycan_to_nxGraph, evaluate_adjacency,
+    compare_glycans, subgraph_isomorphism, generate_graph_features,
+    graph_to_string, largest_subgraph, get_possible_topologies,
+    deduplicate_glycans, neighbor_is_branchpoint, graph_to_string_int, try_string_conversion,
+    subgraph_isomorphism_with_negation, categorical_node_match_wildcard,
+    expand_termini_list, ensure_graph, possible_topology_check
+)
+from glycowork.motif.annotate import (
+    link_find, annotate_glycan, annotate_dataset, get_molecular_properties,
+    get_k_saccharides, get_terminal_structures, create_correlation_network,
+    group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
+    Lectin, load_lectin_lib, create_lectin_and_motif_mappings,
+    lectin_motif_scoring, clean_up_heatmap, quantify_motifs,
+    count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty
+)
 
 
 @pytest.mark.parametrize("glycan", [
@@ -955,13 +968,13 @@ def test_cohen_d():
     # Test with clearly different groups
     group1 = [1, 2, 3, 4, 5]
     group2 = [6, 7, 8, 9, 10]
-    d, var = cohen_d(group1, group2)
+    d, _ = cohen_d(group1, group2)
     assert d < 0  # Effect size should be negative (group1 < group2)
     # Test with paired samples
-    d, var = cohen_d(group1, group2, paired=True)
+    d, _ = cohen_d(group1, group2, paired=True)
     assert d < 0  # Should still be negative
     # Test with identical groups
-    d, var = cohen_d(group1, group1)
+    d, _ = cohen_d(group1, group1)
     assert abs(d) < 1e-10  # Effect size should be approximately 0
 
 
@@ -1376,11 +1389,11 @@ def test_get_glm():
         'H': [1, 2, 1, 2, 1, 2, 1, 2] * 2,
         'N': [2, 3, 2, 3, 2, 3, 2, 3] * 2 
     })
-    model, vars = get_glm(data)
+    model, variables = get_glm(data)
     if not isinstance(model, str):  # If model fitting succeeded
         assert hasattr(model, 'params')
         assert hasattr(model, 'pvalues')
-        assert len(vars) > 0
+        assert len(variables) > 0
 
 
 def test_process_glm_results():
@@ -1426,3 +1439,362 @@ def test_perform_tests_monte_carlo():
     assert len(raw_p) == len(adj_p) == len(effect) == 5
     assert all(0 <= p <= 1 for p in raw_p)
     assert all(0 <= p <= 1 for p in adj_p)
+
+
+def test_evaluate_adjacency():
+    assert evaluate_adjacency("(", 0)
+    assert evaluate_adjacency(")", 0)
+    assert not evaluate_adjacency("(1)[", 0)
+    assert not evaluate_adjacency(")[", 0)
+
+
+def test_glycan_to_graph():
+    glycan = "Gal(b1-4)GlcNAc"
+    node_dict, adj_matrix = glycan_to_graph(glycan)
+    assert len(node_dict) == 3 # Gal, b1-4, GlcNAc
+    assert adj_matrix.shape == (3, 3)
+    assert adj_matrix[0, 1] == 1  # Gal connected to linkage
+    assert adj_matrix[1, 2] == 1  # Linkage connected to GlcNAc
+
+
+def test_glycan_to_nxGraph():
+    glycan = "Gal(b1-4)GlcNAc"
+    graph = glycan_to_nxGraph(glycan)
+    assert len(graph.nodes) == 3
+    assert len(graph.edges) == 2
+    assert all('string_labels' in data for _, data in graph.nodes(data=True))
+
+
+def test_compare_glycans():
+    # Test identical glycans
+    assert compare_glycans("Gal(b1-4)GlcNAc", "Gal(b1-4)GlcNAc")
+    # Test order-specificity of comparison
+    assert not compare_glycans("Gal(b1-4)GlcNAc", "GlcNAc(b1-4)Gal")
+    # Test non-equivalent glycans
+    assert not compare_glycans("Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc")
+    # Test with PTM wildcards
+    assert compare_glycans("Gal6S(b1-4)GlcNAc", "GalOS(b1-4)GlcNAc")
+
+
+def test_subgraph_isomorphism():
+    # Test motif presence
+    assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "GlcNAc")
+    # Test motif count
+    assert subgraph_isomorphism("Gal(b1-4)GlcNAc(b1-4)GlcNAc", "GlcNAc", count=True) == 2
+    # Test with negation
+    assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "!Man(a1-3)GlcNAc")
+    # Test with termini constraints
+    assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "GlcNAc", termini_list=['terminal'])
+
+
+def test_generate_graph_features():
+    glycan = "Gal(b1-4)GlcNAc"
+    features = generate_graph_features(glycan)
+    assert isinstance(features, pd.DataFrame)
+    assert len(features) == 1
+    assert 'diameter' in features.columns
+    assert 'branching' in features.columns
+    assert 'avgDeg' in features.columns
+
+
+def test_largest_subgraph():
+    glycan1 = "Gal(b1-4)GlcNAc(b1-4)GlcNAc"
+    glycan2 = "Man(a1-3)GlcNAc(b1-4)GlcNAc"
+    result = largest_subgraph(glycan1, glycan2)
+    assert "GlcNAc(b1-4)GlcNAc" in result
+
+
+def test_get_possible_topologies():
+    glycan = "{Neu5Ac(a2-?)}Gal(b1-3)GalNAc"
+    topologies = get_possible_topologies(glycan)
+    assert len(topologies) > 0
+    assert all(isinstance(g, nx.Graph) for g in topologies)
+
+
+def test_deduplicate_glycans():
+    glycans = [
+        "Gal(b1-4)[Fuc(a1-3)]GlcNAc",
+        "Fuc(a1-3)[Gal(b1-4)]GlcNAc",
+        "Man(a1-3)GlcNAc"
+    ]
+    result = deduplicate_glycans(glycans)
+    assert len(result) == 2
+
+
+def test_neighbor_is_branchpoint():
+    # Create test graph
+    G = nx.Graph()
+    G.add_nodes_from(range(6))
+    G.add_edges_from([(0,1), (1,2), (2,3), (2,4), (2,5)])
+    assert neighbor_is_branchpoint(G, 1)  # Node 1 connected to branch point 2
+    assert not neighbor_is_branchpoint(G, 3)  # Node 3 is leaf
+
+
+def test_subgraph_isomorphism_with_negation():
+    glycan = "Gal(b1-4)GlcNAc"
+    motif = "!Man(a1-3)GlcNAc"
+    # Should match since glycan doesn't contain Man(a1-3)GlcNAc
+    assert subgraph_isomorphism_with_negation(glycan, motif)
+    # Test with counting
+    result, matches = subgraph_isomorphism_with_negation(glycan, motif, count=True, return_matches=True)
+    assert isinstance(result, int)
+    assert isinstance(matches, list)
+
+
+def test_categorical_node_match_wildcard():
+    narrow_wildcard_list = {"Hex": ["Gal", "Glc", "Man"]}
+    matcher = categorical_node_match_wildcard(
+        'string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'
+    )
+    # Test wildcard matching
+    assert matcher(
+        {'string_labels': 'Hex', 'termini': 'terminal'},
+        {'string_labels': 'Gal', 'termini': 'terminal'}
+    )
+    # Test exact matching
+    assert matcher(
+        {'string_labels': 'GlcNAc', 'termini': 'terminal'},
+        {'string_labels': 'GlcNAc', 'termini': 'terminal'}
+    )
+    # Test flexible position
+    assert matcher(
+        {'string_labels': 'GlcNAc', 'termini': 'flexible'},
+        {'string_labels': 'GlcNAc', 'termini': 'terminal'}
+    )
+
+
+def test_expand_termini_list():
+    motif = "Gal(b1-4)GlcNAc"
+    termini_list = ['t', 'i']  # terminal, internal
+    result = expand_termini_list(motif, termini_list)
+    assert len(result) == 3  # Two monosaccharides + one linkage
+    assert 'terminal' in result
+    assert 'internal' in result
+    assert 'flexible' in result
+
+
+def test_ensure_graph():
+    # Test with string input
+    glycan = "Gal(b1-4)GlcNAc"
+    result = ensure_graph(glycan)
+    assert isinstance(result, nx.Graph)
+    # Test with graph input
+    G = nx.Graph()
+    G.add_node(0, string_labels="Gal")
+    result = ensure_graph(G)
+    assert result is G
+
+
+def test_possible_topology_check():
+    float_glycan = "{Neu5Ac(a2-?)}Gal(b1-4)GlcNAc"
+    glycans = [
+        "Neu5Ac(a2-3)Gal(b1-4)GlcNAc",
+        "Neu5Ac(a2-6)Gal(b1-4)GlcNAc",
+        "Gal(b1-4)GlcNAc"
+    ]
+    matches = possible_topology_check(float_glycan, glycans)
+    assert len(matches) == 2  # Should match first two glycans
+    assert "Gal(b1-4)GlcNAc" not in matches
+
+
+def test_link_find():
+    # Simple glycan
+    glycan = "Gal(b1-4)Gal(b1-4)GlcNAc"
+    result = link_find(glycan)
+    assert "Gal(b1-4)GlcNAc" in result
+    # Branched glycan
+    glycan = "Gal(b1-4)[Fuc(a1-3)]GlcNAc"
+    result = link_find(glycan)
+    assert "Gal(b1-4)GlcNAc" in result
+    assert "Fuc(a1-3)GlcNAc" in result
+
+
+def test_annotate_glycan():
+    glycan = "Gal(b1-4)GlcNAc"
+    result = annotate_glycan(glycan)
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 1
+    assert result.index[0] == glycan
+
+
+def test_annotate_dataset():
+    glycans = ["Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc"]
+    # Test known motifs
+    result = annotate_dataset(glycans, feature_set=['known'])
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 2
+    # Test graph features
+    result = annotate_dataset(glycans, feature_set=['graph'])
+    assert 'diameter' in result.columns
+    assert 'branching' in result.columns
+
+
+def test_get_molecular_properties():
+    try:
+        glycans = ["Gal(b1-4)GlcNAc"]
+        result = get_molecular_properties(glycans, verbose=True, placeholder=True)
+        assert isinstance(result, pd.DataFrame)
+        assert 'molecular_weight' in result.columns
+        assert 'xlogp' in result.columns
+    except ImportError:
+        pytest.skip("Skipping test due to missing dependencies")
+
+
+def test_get_k_saccharides():
+    glycans = ["Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]
+    # Test basic functionality
+    result = get_k_saccharides(glycans, size=2)
+    assert isinstance(result, pd.DataFrame)
+    # Test with up_to=True
+    result = get_k_saccharides(glycans, size=2, up_to=True)
+    assert isinstance(result, pd.DataFrame)
+    assert len(result.columns) > 0
+
+
+def test_get_terminal_structures():
+    glycan = "Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    # Test size=1
+    result = get_terminal_structures(glycan, size=1)
+    assert isinstance(result, list)
+    assert "Man(b1-4)" in result[0]
+    # Test size=2
+    result = get_terminal_structures(glycan, size=2)
+    assert isinstance(result, list)
+    assert "Man(b1-4)GlcNAc(b1-4)" in result
+
+
+def test_create_correlation_network():
+    data = pd.DataFrame({
+        'glycan1': [1, 2, 3],
+        'glycan2': [1, 2, 3],
+        'glycan3': [-1, -2, -3]
+    })
+    clusters = create_correlation_network(data, 0.9)
+    assert isinstance(clusters, list)
+    assert isinstance(clusters[0], set)
+    assert len(clusters) > 0
+
+
+def test_group_glycans_core():
+    glycans = ["GlcNAc(b1-6)GalNAc", "Gal(b1-3)GalNAc"]
+    p_values = [0.01, 0.02]
+    glycan_groups, p_val_groups = group_glycans_core(glycans, p_values)
+    assert "core2" in glycan_groups
+    assert "core1" in glycan_groups
+    assert len(glycan_groups["core2"]) == 1
+    assert len(glycan_groups["core1"]) == 1
+
+
+def test_group_glycans_sia_fuc():
+    glycans = ["Neu5Ac(a2-3)Gal", "Fuc(a1-3)GlcNAc", "Gal(b1-4)GlcNAc"]
+    p_values = [0.01, 0.02, 0.03]
+    glycan_groups, p_val_groups = group_glycans_sia_fuc(glycans, p_values)
+    assert "Sia" in glycan_groups
+    assert "Fuc" in glycan_groups
+    assert "rest" in glycan_groups
+
+
+def test_group_glycans_N_glycan_type():
+    glycans = [
+        "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",  # complex
+        "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",  # high mannose
+        "Man(b1-4)GlcNAc(b1-4)GlcNAc"  # other
+    ]
+    p_values = [0.01, 0.02, 0.03]
+    glycan_groups, p_val_groups = group_glycans_N_glycan_type(glycans, p_values)
+    assert "complex" in glycan_groups
+    assert "high_man" in glycan_groups
+    assert "rest" in glycan_groups
+
+
+def test_Lectin():
+    lectin = Lectin(
+        abbr=["WGA"],
+        name=["Wheat Germ Agglutinin"],
+        specificity={
+            "primary": {"GlcNAc": []},
+            "secondary": None,
+            "negative": None
+        }
+    )
+    
+    # Test basic attributes
+    assert lectin.abbr == ["WGA"]
+    assert lectin.name == ["Wheat Germ Agglutinin"]
+    # Test binding check
+    result = lectin.check_binding("GlcNAc(b1-4)GlcNAc")
+    assert result in [0, 1, 2]
+
+
+def test_load_lectin_lib():
+    lectin_lib = load_lectin_lib()
+    assert isinstance(lectin_lib, dict)
+    assert all(isinstance(v, Lectin) for v in lectin_lib.values())
+
+
+def test_create_lectin_and_motif_mappings():
+    lectin_lib = load_lectin_lib()
+    lectin_list = ["WGA", "ConA"]
+    lectin_mapping, motif_mapping = create_lectin_and_motif_mappings(
+        lectin_list, lectin_lib
+    )
+    assert isinstance(lectin_mapping, dict)
+    assert isinstance(motif_mapping, dict)
+
+def test_lectin_motif_scoring():
+    lectin_lib = load_lectin_lib()
+    lectin_mapping = {"WGA": 0, "ConA": 1}
+    motif_mapping = {"GlcNAc": {"WGA": 0, "ConA": 1}}
+    lectin_scores = {"WGA": 1.0, "ConA": -0.5}
+    idf = {"WGA": 1.0, "ConA": 1.0}
+    result = lectin_motif_scoring(
+        lectin_mapping, motif_mapping, lectin_scores,
+        lectin_lib, idf
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert "motif" in result.columns
+    assert "score" in result.columns
+
+
+def test_clean_up_heatmap():
+    data = pd.DataFrame({
+        'sample1': [1, 1],
+        'sample2': [2, 2]
+    }, index=['motif1', 'motif2'])
+    result = clean_up_heatmap(data)
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) <= len(data)
+
+
+def test_quantify_motifs():
+    df = pd.DataFrame({
+        'sample1': [1, 2],
+        'sample2': [2, 3]
+    })
+    glycans = ["Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc"]
+    result = quantify_motifs(
+        df, glycans, feature_set=['exhaustive'],
+        remove_redundant=True
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert len(result.columns) > 0
+
+
+def test_count_unique_subgraphs_of_size_k():
+    glycan = "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    graph = glycan_to_nxGraph(glycan)
+    # Test size 2
+    result = count_unique_subgraphs_of_size_k(graph, size=2)
+    assert isinstance(result, dict)
+    assert len(result) > 0
+    # Test terminal only
+    result = count_unique_subgraphs_of_size_k(graph, size=2, terminal=True)
+    assert isinstance(result, dict)
+
+
+def test_annotate_glycan_topology_uncertainty():
+    glycan = "{Neu5Ac(a2-?)}Fuc(a1-3)[Gal(b1-4)]GlcNAc"
+    result = annotate_glycan_topology_uncertainty(glycan)
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 1
+    assert result.index[0] == glycan

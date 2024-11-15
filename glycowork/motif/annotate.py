@@ -6,7 +6,7 @@ from collections import defaultdict
 from functools import partial
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-from glycowork.glycan_data.loader import linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets
+from glycowork.glycan_data.loader import linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets, df_species
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, rescue_glycans
 from glycowork.motif.regex import get_match
@@ -248,7 +248,7 @@ def clean_up_heatmap(
   # Group the DataFrame by identical rows
   grouped = df.groupby(list(df.columns))
   # Find the row with the longest string index within each group and return a new DataFrame
-  max_idx_series = grouped.apply(lambda group: group.index.to_series().str.len().idxmax())
+  max_idx_series = grouped.apply(lambda group: group.index.to_series().str.len().idxmax(), include_groups = False)
   result = df.loc[max_idx_series].drop_duplicates()
   result.index = result.index.str.strip()
   motif_dic = {value: key for key, value in motif_dic.items()}

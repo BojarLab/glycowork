@@ -17,12 +17,12 @@ lib = load(open(data_path, 'rb'))
 
 def __getattr__(name):
   if name == "glycan_binding":
-    with resources.open_text("glycowork.glycan_data", "glycan_binding.csv") as f:
+    with resources.files("glycowork.glycan_data").joinpath("glycan_binding.csv").open(encoding = 'utf-8-sig') as f:
       glycan_binding = pd.read_csv(f)
     globals()[name] = glycan_binding  # Cache it to avoid reloading
     return glycan_binding
   elif name == "df_species":
-    with resources.open_text("glycowork.glycan_data", "v11_df_species.csv") as f:
+    with resources.files("glycowork.glycan_data").joinpath("v11_df_species.csv").open(encoding = 'utf-8-sig') as f:
       df_species = pd.read_csv(f)
     globals()[name] = df_species  # Cache it to avoid reloading
     return df_species

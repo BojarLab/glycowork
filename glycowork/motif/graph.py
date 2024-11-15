@@ -190,13 +190,21 @@ def compare_glycans(glycan_a: Union[str, nx.Graph], # First glycan to compare
   narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in proc
                           if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
   if narrow_wildcard_list:
-    return nx.is_isomorphic(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
+    matcher = nx.isomorphism.GraphMatcher(g1, g2, categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
+    for m in matcher.isomorphisms_iter():
+      inverse_mapping = {v: k for k, v in m.items()}
+      if all(inverse_mapping[node] < inverse_mapping[neighbor] for node, neighbor in g2.edges()):
+        return True
+    return False
   else:
     # First check whether components of both glycan graphs are identical, then check graph isomorphism (costly)
     if sorted(nx.get_node_attributes(g1, "string_labels").values()) == sorted(nx.get_node_attributes(g2, "string_labels").values()):
-      return nx.is_isomorphic(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-    else:
-      return False
+      matcher = nx.isomorphism.GraphMatcher(g1, g2, nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
+      for m in matcher.isomorphisms_iter():
+        inverse_mapping = {v: k for k, v in m.items()}
+        if all(inverse_mapping[node] < inverse_mapping[neighbor] for node, neighbor in g2.edges()):
+          return True
+    return False
 
 
 def expand_termini_list(motif: Union[str, nx.Graph], # Glycan motif sequence or graph
