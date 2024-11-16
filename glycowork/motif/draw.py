@@ -29,7 +29,7 @@ def matches(
     ) -> Generator[Tuple[int, int, int], None, None]: # Yields (start pos, end pos, nesting depth)
   "Finds matching pairs of delimiters in a string, handling nested pairs and returning positions and depth;ref: https://stackoverflow.com/questions/5454322/python-how-to-match-nested-parentheses-with-regex"""
   stack = []
-  for m in re.finditer(r'[{}{}]'.format(opendelim, closedelim), line):
+  for m in re.finditer(r'[\[\]]', line) if opendelim == '[' else re.finditer(r'[{}{}]'.format(opendelim, closedelim), line):
       pos = m.start()
       if line[pos-1] == '\\':
           # Skip escape sequence
@@ -2356,7 +2356,7 @@ def scale_in_range(
   "Normalizes list of numbers to specified range"
   min_val = min(listy)
   max_val = max(listy)
-  range_val = max_val - min_val
+  range_val = max(max_val - min_val, 1e-6)
   return [(b - a) * ((x - min_val) / range_val) + a for x in listy]
 
 

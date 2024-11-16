@@ -723,6 +723,8 @@ def get_glycanova(
     custom_scale: float = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     ) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]: # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
+    if len(set(groups)) < 3:
+      raise ValueError("You have fewer than three groups. We suggest get_differential_expression for those cases. ANOVA is for >= three groups.")
     df, _, groups, _ = preprocess_data(df, groups, [], experiment = "anova", motifs = motifs, impute = impute,
                                       min_samples = min_samples, transform = transform, feature_set = feature_set,
                                       gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs)
@@ -982,10 +984,17 @@ def get_biodiversity(
       mean_a, mean_b = [np.mean(row_a) for row_a in df_a.values], [np.mean(row_b) for row_b in df_b.values]
       if paired:
         assert len(df_a) == len(df_b), "For paired samples, the size of group1 and group2 should be the same"
-      pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for
-                     row_a, row_b in zip(df_a.values, df_b.values)]
-      pvals = [p if p > 0 and p < 1 else 1.0 for p in pvals]
-      effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
+      pvals = []
+      effect_sizes = []
+      for row_a, row_b in zip(df_a.values, df_b.values):
+        if np.allclose(row_a, row_b, rtol = 1e-5, atol = 1e-8):
+          pvals.append(1.0)
+          effect_sizes.append(0.0)
+        else:
+          pval = ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1]
+          pvals.append(pval if (pval > 0 and pval < 1) else 1.0)
+          effect, _ = cohen_d(row_b, row_a, paired = paired)
+          effect_sizes.append(effect)
       a_df_stats = pd.DataFrame(list(zip(a_df.index.tolist(), mean_a, mean_b, pvals, effect_sizes)),
                                columns = ["Metric", "Group1 mean", "Group2 mean", "p-val", "Effect size"])
       shopping_cart.append(a_df_stats)
@@ -1250,9 +1259,9 @@ def get_lectin_array(
   lectin_lib = load_lectin_lib()
   useable_lectin_mapping, motif_mapping = create_lectin_and_motif_mappings(lectin_list, lectin_lib)
   if group2:
-    mean_scores_per_condition = df[group1 + group2].groupby([0] * len(group1) + [1] * len(group2), axis = 1).mean()
+    mean_scores_per_condition = df[group1 + group2].T.groupby([0] * len(group1) + [1] * len(group2)).mean().T
   else:
-    mean_scores_per_condition = df.groupby(group1, axis = 1).mean()
+    mean_scores_per_condition = df.T.groupby(group1).mean().T
   lectin_variance = mean_scores_per_condition.var(axis = 1)
   idf = np.sqrt(lectin_variance)
   if group2:

@@ -40,7 +40,7 @@ from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph, evaluate_adjacency,
     compare_glycans, subgraph_isomorphism, generate_graph_features,
     graph_to_string, largest_subgraph, get_possible_topologies,
-    deduplicate_glycans, neighbor_is_branchpoint, graph_to_string_int, try_string_conversion,
+    deduplicate_glycans, neighbor_is_branchpoint, try_string_conversion,
     subgraph_isomorphism_with_negation, categorical_node_match_wildcard,
     expand_termini_list, ensure_graph, possible_topology_check
 )
@@ -52,6 +52,23 @@ from glycowork.motif.annotate import (
     lectin_motif_scoring, clean_up_heatmap, quantify_motifs,
     count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty
 )
+from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process_occurrence,
+                  expand_pattern, convert_pattern_component, reformat_glycan_string,
+                  motif_to_regex, get_match, process_question_mark, calculate_len_matches_comb,
+                  process_main_branch, check_negative_look,
+                  filter_matches_by_location, parse_pattern)
+from glycowork.motif.draw import (matches, process_bonds, split_monosaccharide_linkage,
+                 scale_in_range, glycan_to_skeleton, process_per_residue,
+                 get_hit_atoms_and_bonds, add_colours_to_map, unique)
+from glycowork.motif.analysis import (preprocess_data, get_heatmap,
+                     get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
+                     get_biodiversity, get_time_series, get_SparCC, get_roc,
+                     get_representative_substructures, get_lectin_array)
+from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighbors, create_neighbors,
+                         find_diff, find_path, construct_network, prune_network, estimate_weights,
+                         extend_glycans, highlight_network, infer_roots, deorphanize_nodes, get_edge_weight_by_abundance,
+                         find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
+                         deorphanize_edge_labels)
 
 
 @pytest.mark.parametrize("glycan", [
@@ -1387,7 +1404,7 @@ def test_get_glm():
                      2.0, 2.2, 1.8, 2.1, 2.3, 1.9, 2.4, 1.7],  # Site2 abundances
         'Condition': [0, 0, 0, 0, 1, 1, 1, 1] * 2,
         'H': [1, 2, 1, 2, 1, 2, 1, 2] * 2,
-        'N': [2, 3, 2, 3, 2, 3, 2, 3] * 2 
+        'N': [2, 3, 2, 3, 2, 3, 2, 3] * 2
     })
     model, variables = get_glm(data)
     if not isinstance(model, str):  # If model fitting succeeded
@@ -1404,7 +1421,7 @@ def test_process_glm_results():
                      2.0, 2.2, 1.8, 2.1, 2.3, 1.9, 2.4, 1.7],  # Site2 abundances
         'Condition': [0, 0, 0, 0, 1, 1, 1, 1] * 2,
         'H': [1, 2, 1, 2, 1, 2, 1, 2] * 2,
-        'N': [2, 3, 2, 3, 2, 3, 2, 3] * 2 
+        'N': [2, 3, 2, 3, 2, 3, 2, 3] * 2
     })
     result = process_glm_results(data, 0.05, ['H', 'N'])
     assert 'Condition_coefficient' in result.columns
@@ -1678,7 +1695,7 @@ def test_create_correlation_network():
 def test_group_glycans_core():
     glycans = ["GlcNAc(b1-6)GalNAc", "Gal(b1-3)GalNAc"]
     p_values = [0.01, 0.02]
-    glycan_groups, p_val_groups = group_glycans_core(glycans, p_values)
+    glycan_groups, _ = group_glycans_core(glycans, p_values)
     assert "core2" in glycan_groups
     assert "core1" in glycan_groups
     assert len(glycan_groups["core2"]) == 1
@@ -1688,7 +1705,7 @@ def test_group_glycans_core():
 def test_group_glycans_sia_fuc():
     glycans = ["Neu5Ac(a2-3)Gal", "Fuc(a1-3)GlcNAc", "Gal(b1-4)GlcNAc"]
     p_values = [0.01, 0.02, 0.03]
-    glycan_groups, p_val_groups = group_glycans_sia_fuc(glycans, p_values)
+    glycan_groups, _ = group_glycans_sia_fuc(glycans, p_values)
     assert "Sia" in glycan_groups
     assert "Fuc" in glycan_groups
     assert "rest" in glycan_groups
@@ -1701,7 +1718,7 @@ def test_group_glycans_N_glycan_type():
         "Man(b1-4)GlcNAc(b1-4)GlcNAc"  # other
     ]
     p_values = [0.01, 0.02, 0.03]
-    glycan_groups, p_val_groups = group_glycans_N_glycan_type(glycans, p_values)
+    glycan_groups, _ = group_glycans_N_glycan_type(glycans, p_values)
     assert "complex" in glycan_groups
     assert "high_man" in glycan_groups
     assert "rest" in glycan_groups
@@ -1717,7 +1734,7 @@ def test_Lectin():
             "negative": None
         }
     )
-    
+
     # Test basic attributes
     assert lectin.abbr == ["WGA"]
     assert lectin.name == ["Wheat Germ Agglutinin"]
@@ -1798,3 +1815,957 @@ def test_annotate_glycan_topology_uncertainty():
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
     assert result.index[0] == glycan
+
+
+def test_preprocess_pattern():
+    # Test basic pattern splitting
+    assert preprocess_pattern("Hex-HexNAc") == ["Hex-HexNAc"]
+    # Test pattern with quantifiers
+    assert preprocess_pattern("Hex-[HexNAc|Fuc]{1,2}-Gal") == ["Hex", "[HexNAc|Fuc]{1,2}", "Gal"]
+    # Test wildcard replacement
+    assert preprocess_pattern("Hex-.-Gal") == ['Hex-Monosaccharide-Gal']
+    # Test empty pattern
+    assert preprocess_pattern("") == []
+
+
+def test_specify_linkages():
+    # Test basic linkage conversion
+    assert specify_linkages("Gala6(?1-?)Gal") == "Gal(a1-6)Gal"
+    assert specify_linkages("Manb4(?1-?)GlcNAc") == "Man(b1-4)GlcNAc"
+    # Test sialic acid special cases
+    assert specify_linkages("Neu5Ac(a1-?)Gal") == "Neu5Ac(a2-?)Gal"
+    assert specify_linkages("Sia(a1-?)Gal") == "Sia(a2-?)Gal"
+    # Test no modification needed
+    assert specify_linkages("Gal(b1-4)GlcNAc") == "Gal(b1-4)GlcNAc"
+    assert specify_linkages("Man(a1-6)Man") == "Man(a1-6)Man"
+
+
+def test_process_occurrence():
+    # Test single number
+    assert process_occurrence("2") == [2, 2]
+    # Test range
+    assert process_occurrence("1,3") == [1, 3]
+    # Test open-ended range
+    assert process_occurrence(",3") == [0, 3]
+    assert process_occurrence("2,") == [2, 5]
+
+
+def test_expand_pattern():
+    # Test pattern with ambiguous linkage
+    assert expand_pattern("Galb3/4GlcNAc") == ["Galb3GlcNAc", "Galb4GlcNAc"]
+    # Test pattern without ambiguous linkage
+    assert expand_pattern("Galb4GlcNAc") == ["Galb4GlcNAc"]
+    # Test multiple ambiguous linkages (if supported)
+    pattern = "Galb3/4GlcNAca3/6"
+    result = expand_pattern(pattern)
+    assert len(result) == 2  # Should handle first ambiguity
+
+
+def test_convert_pattern_component():
+    # Test simple component
+    result = convert_pattern_component("Hex")
+    assert isinstance(result, str)
+    # Test component with alternatives
+    result = convert_pattern_component("[Hex|Fuc]{1}")
+    assert isinstance(result, dict)
+    assert all(isinstance(k, str) for k in result.keys())
+    assert all(isinstance(v, list) for v in result.values())
+    # Test component with quantifier
+    result = convert_pattern_component("[Hex|Fuc]{1,2}")
+    assert isinstance(result, dict)
+    assert list(result.values())[0] == [1, 2]
+
+
+def test_reformat_glycan_string():
+    # Test basic reformatting
+    assert reformat_glycan_string("Gal(b1-4)GlcNAc") == "Galb4-GlcNAc"
+    # Test with branch
+    input_glycan = "Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-6)]Man"
+    result = reformat_glycan_string(input_glycan)
+    assert "([" in result and "]){1}" in result
+    # Test with uncertain linkage
+    assert reformat_glycan_string("Gal(b1-?)GlcNAc") == "Galb?-GlcNAc"
+
+
+def test_get_match():
+    # Test exact match
+    pattern = "Hex-HexNAc"
+    glycan = "Gal(b1-4)GlcNAc"
+    assert get_match(pattern, glycan, return_matches=False) is True
+    # Test no match
+    pattern = "Hex-Hex-Hex"
+    glycan = "Gal(b1-4)GlcNAc"
+    assert get_match(pattern, glycan, return_matches=False) is False
+    # Test pattern with quantifier
+    pattern = "Hex-[HexNAc]{1,2}"
+    glycan = "Gal(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert get_match(pattern, glycan, return_matches=False) is True
+
+
+def test_motif_to_regex():
+    # Test simple motif conversion
+    motif = "Gal(b1-4)GlcNAc"
+    pattern = motif_to_regex(motif)
+    assert isinstance(pattern, str)
+    assert get_match(pattern, motif, return_matches=False) is True
+    # Test motif with branch
+    motif = "Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-6)]Man"
+    pattern = motif_to_regex(motif)
+    assert isinstance(pattern, str)
+    assert get_match(pattern, motif, return_matches=False) is True
+
+
+def test_process_question_mark():
+    # Test basic lookahead
+    result, pattern = process_question_mark("(?=Hex)", "Hex")
+    assert result == [1]
+    assert pattern == ["Hex"]
+    # Test lookbehind
+    result, pattern = process_question_mark("(?<=Hex)", "Hex")
+    assert result == [1]
+    assert pattern == ["Hex"]
+    # Test simple question mark
+    result, pattern = process_question_mark("Hex?", "Hex")
+    assert result == [0, 1]
+    assert pattern == ["Hex"]
+
+
+def test_calculate_len_matches_comb():
+    # Test single list of matches
+    len_matches = [[2, 3]]
+    result = calculate_len_matches_comb(len_matches)
+    assert 0 in result
+    assert 2 in result
+    assert 3 in result
+    # Test multiple lists
+    len_matches = [[2], [3]]
+    result = calculate_len_matches_comb(len_matches)
+    assert 2 in result
+    assert 3 in result
+    assert 5 in result  # Combined length
+
+
+def test_process_main_branch():
+    glycan = "Gal(b1-4)GlcNAc(b1-2)[GlcNAc(b1-4)]Man"
+    glycan_parts = min_process_glycans(["Gal(b1-4)GlcNAc(b1-2)Man"])[0]
+    result = process_main_branch(glycan, glycan_parts)
+    assert len(result) == len(glycan_parts)
+    assert all(isinstance(x, str) for x in result)
+
+
+def test_check_negative_look():
+    # Test negative lookahead
+    matches = [[0, 2, 4]]
+    pattern = "(?!Hex)"
+    glycan = "Gal(b1-4)GlcNAc(b1-2)Man"
+    result = check_negative_look(matches, pattern, glycan)
+    assert isinstance(result, list)
+    # Test negative lookbehind
+    pattern = "(?<!Hex)"
+    result = check_negative_look(matches, pattern, glycan)
+    assert isinstance(result, list)
+
+
+def test_filter_matches_by_location():
+    # Create a simple test graph
+    ggraph = glycan_to_nxGraph("Fuc(a1-2)Gal(b1-4)Glc")
+    # Test start location
+    matches = [[0, 1], [1, 2]]
+    result = filter_matches_by_location(matches, ggraph, "start")
+    assert len(result) == 1
+    assert result[0] == [0, 1]
+    # Test end location
+    result = filter_matches_by_location(matches, ggraph, "end")
+    assert len(result) == 0  # None of the matches end at the last node
+    # Test internal location
+    matches = [[1, 2]]
+    result = filter_matches_by_location(matches, ggraph, "internal")
+    assert len(result) == 1
+    assert result[0] == [1, 2]
+
+
+def test_parse_pattern():
+    # Test exact occurrence
+    pattern = "Hex{2}"
+    min_occur, max_occur = parse_pattern(pattern)
+    assert min_occur == 2
+    assert max_occur == 2
+    # Test range occurrence
+    pattern = "Hex{1,3}"
+    min_occur, max_occur = parse_pattern(pattern)
+    assert min_occur == 1
+    assert max_occur == 3
+    # Test wildcard
+    pattern = "Hex*"
+    min_occur, max_occur = parse_pattern(pattern)
+    assert min_occur == 0
+    assert max_occur == 8
+    # Test plus
+    pattern = "Hex+"
+    min_occur, max_occur = parse_pattern(pattern)
+    assert min_occur == 1
+    assert max_occur == 8
+    # Test question mark
+    pattern = "Hex?"
+    min_occur, max_occur = parse_pattern(pattern)
+    assert min_occur == 0
+    assert max_occur == 1
+
+
+def test_matches():
+    # Test nested parentheses matching
+    result = list(matches("(a(b)c)", "(", ")"))
+    assert len(result) == 2
+    assert result[0][2] == 1  # Nested level
+    assert result[1][2] == 0  # Outer level
+    # Test square brackets
+    result = list(matches("[a[b]c]", "[", "]"))
+    assert len(result) == 2
+    assert result[0][2] == 1  # Nested level
+    assert result[1][2] == 0  # Outer level
+    # Test empty string
+    result = list(matches("", "(", ")"))
+    assert len(result) == 0
+
+
+def test_process_bonds():
+    # Test basic linkages
+    assert process_bonds(["a1-2"]) == ["α 2"]
+    assert process_bonds(["b1-4"]) == ["β 4"]
+    # Test uncertain linkages
+    assert process_bonds(["?1-?"]) == ["?"]
+    assert process_bonds(["b1-2"]) == ["β 2"]
+    assert process_bonds(["a1-?"]) == ["α"]
+    # Test multiple bonds
+    result = process_bonds([["a1-2", "b1-4"]])
+    assert result == [["α 2", "β 4"]]
+
+
+def test_split_monosaccharide_linkage():
+    # Test basic splitting
+    sugars, mods, bonds = split_monosaccharide_linkage(["GlcNAc", "b1-2", "Man"])
+    assert sorted(sugars) == sorted(["Man", "GlcNAc"])
+    assert all(m == "" for m in mods)
+    assert bonds == ["b1-2"]
+    # Test with modifications
+    sugars, mods, bonds = split_monosaccharide_linkage(["Gal6S", "b1-4", "Glc"])
+    assert sorted(sugars) == sorted(["Gal", "Glc"])
+    assert "6S" in mods
+    assert bonds == ["b1-4"]
+    # Test multiple entries
+    sugars, mods, bonds = split_monosaccharide_linkage([["GlcNAc", "b1-2", "Man"], ["Gal6S", "b1-4", "Glc"]])
+    assert len(sugars) == 2
+    assert all(isinstance(s, list) for s in sugars)
+
+
+def test_scale_in_range():
+    # Test basic scaling
+    result = scale_in_range([1, 2, 3], 0, 1)
+    assert result[0] == 0  # Min value
+    assert result[-1] == 1  # Max value
+    assert 0 < result[1] < 1  # Middle value
+    # Test with negative numbers
+    result = scale_in_range([-2, 0, 2], 0, 10)
+    assert result[0] == 0
+    assert result[1] == 5
+    assert result[2] == 10
+    # Test single value
+    result = scale_in_range([5, 5, 5], 0, 1)
+    assert all(x == 0 for x in result)  # All values map to min when input range is 0
+
+
+def test_glycan_to_skeleton():
+    # Test simple glycan
+    result = glycan_to_skeleton("Gal(b1-4)GlcNAc")
+    assert "0-1" in result
+    # Test branched glycan
+    result = glycan_to_skeleton("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man")
+    assert "[" in result and "]" in result
+    # Test empty string
+    result = glycan_to_skeleton("")
+    assert result == ""
+
+
+def test_process_per_residue():
+    # Test linear glycan
+    values = [1, 2, 3]
+    main, side, branched = process_per_residue("Gal(b1-4)GlcNAc(b1-2)Man", values)
+    assert len(main) == 3
+    assert len(side) == 0
+    assert len(branched) == 0
+    # Test branched glycan
+    values = [1, 2, 3, 4]
+    main, side, branched = process_per_residue("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man", values)
+    assert len(main) > 0
+    assert len(side) > 0
+    assert isinstance(side[0], list)
+
+
+def test_unique():
+    # Test basic deduplication
+    result = unique([1, 2, 2, 3, 3, 1])
+    assert result == [1, 2, 3]
+    # Test order preservation
+    result = unique([3, 1, 2, 1, 2, 3])
+    assert result == [3, 1, 2]
+    # Test with strings
+    result = unique(["a", "b", "a", "c"])
+    assert result == ["a", "b", "c"]
+
+
+try:
+    import rdkit
+    RDKIT_AVAILABLE = True
+except ImportError:
+    RDKIT_AVAILABLE = False
+
+
+@pytest.mark.skipif(not RDKIT_AVAILABLE, reason="RDKit not installed")
+def test_get_hit_atoms_and_bonds():
+    from rdkit import Chem
+    # Create a simple molecule
+    mol = Chem.MolFromSmiles("CC(=O)O")
+    atoms, bonds = get_hit_atoms_and_bonds(mol, "CC(=O)O")
+    assert isinstance(atoms, list)
+    assert isinstance(bonds, list)
+
+
+@pytest.mark.skipif(not RDKIT_AVAILABLE, reason="RDKit not installed")
+def test_add_colours_to_map():
+    # Test color assignment
+    cols = {}
+    els = [1, 2, 3]
+    add_colours_to_map(els, cols, 0, alpha=True)
+    assert len(cols) == 3
+    assert all(isinstance(v, list) for v in cols.values())
+
+
+def test_preprocess_data():
+    # Create test dataframe
+    df = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man'],
+        'sample1': [10, 20],
+        'sample2': [15, 25],
+        'sample3': [12, 22],
+        'sample4': [18, 28]
+    })
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3', 'sample4']
+    # Test basic preprocessing
+    df_trans, df_org, g1, g2 = preprocess_data(df, group1, group2, impute=False)
+    assert isinstance(df_trans, pd.DataFrame)
+    assert isinstance(df_org, pd.DataFrame)
+    assert g1 == group1
+    assert g2 == group2
+    # Test with motifs
+    df_trans, df_org, g1, g2 = preprocess_data(df, group1, group2, motifs=True)
+    assert 'Terminal_LacNAc_type2' in df_trans.index
+    assert 'Man' in df_trans.index
+
+
+def test_get_pvals_motifs():
+    # Create test data with multiple glycans and varied z-scores
+    glycans = [
+        'Gal(b1-4)GlcNAc',
+        'Man(a1-6)Man',
+        'Neu5Ac(a2-6)Gal(b1-4)GlcNAc',
+        'Fuc(a1-3)GlcNAc',
+        'GalNAc(b1-4)GlcNAc',
+        'Man(a1-3)[Man(a1-6)]Man',
+        'Gal(b1-4)GlcNAc(b1-2)Man',
+        'Fuc(a1-2)Gal(b1-4)GlcNAc'
+    ]
+    # Create z-scores with clear separation for testing
+    np.random.seed(42)  # For reproducibility
+    n_samples = len(glycans) * 4  # Total number of rows needed
+    n_high = n_samples // 2
+    n_low = n_samples - n_high
+    high_scores = np.random.normal(2.5, 0.5, n_high)  # Above threshold
+    low_scores = np.random.normal(-2.5, 0.5, n_low)   # Below threshold
+    # Create multiple samples per glycan
+    df = pd.DataFrame({
+        'glycan': glycans * 4,  # Replicate each glycan 4 times
+        'target': np.concatenate([high_scores, low_scores])  # Mix high and low z-scores
+    })
+    # Test basic functionality with default parameters
+    results = get_pvals_motifs(df, zscores=True)
+    # Check results structure
+    assert isinstance(results, pd.DataFrame)
+    assert 'motif' in results.columns
+    assert 'pval' in results.columns
+    assert 'corr_pval' in results.columns
+    assert 'effect_size' in results.columns
+    # Should find some significant motifs
+    assert len(results) > 0
+    assert any(results['corr_pval'] < 0.05)
+    # Effect sizes should be non-zero
+    assert not all(results['effect_size'] == 0)
+    # Test with different feature sets
+    results_known = get_pvals_motifs(df, feature_set=['known'])
+    assert len(results_known) > 0
+    results_terminal = get_pvals_motifs(df, feature_set=['terminal1'])
+    assert len(results_terminal) > 0
+    # Test with different threshold
+    results_thresh = get_pvals_motifs(df, thresh=1.0)
+    assert isinstance(results_thresh, pd.DataFrame)
+    assert len(results_thresh) > 0
+
+
+def test_get_differential_expression():
+    df = pd.DataFrame({
+        'glycan': [
+            'Gal(b1-4)GlcNAc',
+            'Man(a1-6)Man',
+            'Neu5Ac(a2-6)Gal(b1-4)GlcNAc',
+            'Fuc(a1-3)GlcNAc'
+        ],
+        'sample1': [100, 200, 150, 300],
+        'sample2': [110, 220, 140, 280],
+        'sample3': [120, 210, 160, 290],  # Group 1
+        'sample4': [500, 200, 140, 700],
+        'sample5': [480, 205, 155, 680],
+        'sample6': [520, 195, 160, 720]   # Group 2 - clearly different
+    })
+    group1 = ['sample1', 'sample2', 'sample3']
+    group2 = ['sample4', 'sample5', 'sample6']
+    # Test basic functionality
+    results = get_differential_expression(df, group1, group2, impute=False)
+    assert isinstance(results, pd.DataFrame)
+    assert 'Glycan' in results.columns
+    assert 'p-val' in results.columns
+    assert 'Effect size' in results.columns
+    assert 'corr p-val' in results.columns
+    assert 'significant' in results.columns
+    # At least some results should be significant
+    assert any(results['significant'])
+    # Effect sizes should be reasonable
+    assert all(abs(x) > 0.5 for x in results['Effect size'])
+    # Test with motifs
+    results_motifs = get_differential_expression(df, group1, group2, motifs=True, impute=False)
+    assert isinstance(results_motifs, pd.DataFrame)
+    assert len(results_motifs) > 0
+    assert any(results_motifs['significant'])  # Should find some significant motifs
+    # Test with paired samples
+    group1_paired = ['sample1', 'sample2']
+    group2_paired = ['sample4', 'sample5']
+    results_paired = get_differential_expression(df[['glycan'] + group1_paired + group2_paired],
+                                              group1_paired, group2_paired,
+                                              paired=True, impute=False)
+    assert isinstance(results_paired, pd.DataFrame)
+
+
+def test_get_glycanova():
+    # Create test data with THREE groups
+    df = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Fuc(a1-2)Gal', 'Neu5Ac(a2-6)Gal'],
+        'sample1': [100, 200, 150, 300],
+        'sample2': [150, 250, 120, 280],  # Group 1
+        'sample3': [120, 220, 140, 290],
+        'sample4': [180, 280, 200, 350],
+        'sample5': [200, 300, 180, 330],  # Group 2
+        'sample6': [190, 290, 190, 340],
+        'sample7': [220, 310, 210, 360],
+        'sample8': [240, 330, 230, 380],  # Group 3
+        'sample9': [230, 320, 220, 370]
+    })
+    # Three groups with three samples each
+    groups = [1, 1, 1, 2, 2, 2, 3, 3, 3]
+    # Test basic functionality
+    results, posthoc = get_glycanova(df, groups, impute=False)
+    # Check results structure
+    assert isinstance(results, pd.DataFrame)
+    assert 'Glycan' in results.columns
+    assert 'F statistic' in results.columns
+    assert 'p-val' in results.columns
+    assert 'corr p-val' in results.columns
+    assert 'significant' in results.columns
+    assert 'Effect size' in results.columns
+    # Check posthoc results for all pairwise comparisons
+    assert isinstance(posthoc, dict)
+    if len(posthoc) > 0:  # If any significant differences found
+        for glycan, result in posthoc.items():
+            assert isinstance(result, pd.DataFrame)
+            # Should have pairwise comparisons between groups
+            assert len(result) == 3  # Number of pairwise comparisons for 3 groups = 3
+    # Test with motifs enabled
+    results_motifs, posthoc_motifs = get_glycanova(df, groups, motifs=True, impute=False)
+    assert isinstance(results_motifs, pd.DataFrame)
+    assert len(results_motifs) > 0  # Should find some motifs
+    # Test without posthoc
+    results_no_posthoc, posthoc_empty = get_glycanova(df, groups, posthoc=False, impute=False)
+    assert isinstance(results_no_posthoc, pd.DataFrame)
+    assert posthoc_empty == {}  # Should be empty dict when posthoc=False
+
+
+def test_select_grouping():
+    # Create test data
+    cohort_a = pd.DataFrame({
+        'sample1': [10, 20],
+        'sample2': [15, 25]
+    })
+    cohort_b = pd.DataFrame({
+        'sample3': [12, 22],
+        'sample4': [18, 28]
+    })
+    glycans = ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man']
+    p_values = [0.04, 0.02]
+    # Test without grouped BH
+    glycan_groups, pval_groups = select_grouping(cohort_b, cohort_a, glycans, p_values, grouped_BH=False)
+    assert len(glycan_groups) == 1
+    assert "group1" in glycan_groups
+    assert len(glycan_groups["group1"]) == len(glycans)
+    # Test with grouped BH
+    glycan_groups, pval_groups = select_grouping(cohort_b, cohort_a, glycans, p_values, grouped_BH=True)
+    assert isinstance(glycan_groups, dict)
+    assert isinstance(pval_groups, dict)
+
+
+def test_get_biodiversity():
+    # Create more realistic glycan compositions based on biological patterns
+    np.random.seed(42)  # For reproducibility
+    # Helper function to generate realistic glycan proportions
+    def generate_group_data(base_proportions, n_samples=3, noise_scale=0.15):
+        samples = []
+        for _ in range(n_samples):
+            # Add multiplicative noise to preserve positivity
+            noise = np.random.normal(1, noise_scale, len(base_proportions))
+            noisy = base_proportions * noise
+            # Normalize to sum to 100
+            normalized = 100 * noisy / noisy.sum()
+            samples.append(normalized)
+        return np.array(samples)
+    # Define realistic base proportions for two distinct glycan profiles
+    # Based on patterns seen in real data where some glycans are dominant
+    group1_base = np.array([35, 25, 15, 10, 8, 7])  # More even distribution
+    group2_base = np.array([45, 30, 10, 8, 4, 3])   # More dominated by top glycans
+    # Generate sample data
+    group1_data = generate_group_data(group1_base, n_samples=3)
+    group2_data = generate_group_data(group2_base, n_samples=3)
+    # Create DataFrame with realistic glycan names
+    df = pd.DataFrame({
+        'glycan': [
+            'Neu5Ac(a2-3)Gal(b1-3)GalNAc',
+            'Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc',
+            'Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc',
+            'Neu5Ac(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc',
+            'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc',
+            'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc'
+        ]
+    })
+    # Add sample columns
+    for i in range(3):
+        df[f'sample1_{i+1}'] = group1_data[i]
+        df[f'sample2_{i+1}'] = group2_data[i]
+    # Define groups for testing
+    group1 = [f'sample1_{i+1}' for i in range(3)]
+    group2 = [f'sample2_{i+1}' for i in range(3)]
+    # Run biodiversity analysis
+    results = get_biodiversity(df, group1, group2, metrics=['alpha', 'beta'])
+    # Basic assertions
+    assert isinstance(results, pd.DataFrame), "Results should be a DataFrame"
+    assert 'Metric' in results.columns, "Results should have a Metric column"
+    assert 'p-val' in results.columns, "Results should have a p-val column"
+    # Additional assertions to verify realistic results
+    assert len(results) >= 2, "Should have at least alpha and beta diversity results"
+    assert all(0 <= p <= 1 for p in results['p-val']), "p-values should be between 0 and 1"
+    # Optional: Check if the differences are detectable
+    # The groups are designed to be different, so p-values should be < 0.05
+    assert any(p < 0.05 for p in results['p-val']), "Should detect differences between groups"
+
+
+def test_get_time_series():
+    df = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal'],
+        'T1_h0_r1': [100, 200, 150],
+        'T1_h0_r2': [110, 220, 140],
+        'T1_h4_r1': [120, 210, 160],
+        'T1_h4_r2': [500, 600, 450],
+        'T1_h8_r1': [480, 580, 470],
+        'T1_h8_r2': [520, 620, 430]
+    })
+    results = get_time_series(df, impute=False)
+    assert isinstance(results, pd.DataFrame)
+    assert 'Glycan' in results.columns
+    assert 'p-val' in results.columns
+
+
+def test_get_SparCC():
+    df1 = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal'],
+        'sample1': [100, 200, 150],
+        'sample2': [110, 220, 140],
+        'sample3': [120, 210, 160]
+    })
+    df2 = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal'],
+        'sample1': [500, 600, 450],
+        'sample2': [480, 580, 470],
+        'sample3': [520, 620, 430]
+    })
+    corr, pvals = get_SparCC(df1, df2)
+    assert isinstance(corr, pd.DataFrame)
+    assert isinstance(pvals, pd.DataFrame)
+
+
+def test_get_roc():
+    df = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal', 'Fuc(a1-3)GlcNAc'],
+        'sample1': [100, 200, 150, 300],
+        'sample2': [110, 220, 140, 280],
+        'sample3': [120, 210, 160, 290],
+        'sample4': [500, 600, 450, 700],
+        'sample5': [480, 580, 470, 680],
+        'sample6': [520, 620, 430, 720]
+    })
+    group1 = ['sample1', 'sample2', 'sample3']
+    group2 = ['sample4', 'sample5', 'sample6']
+    results = get_roc(df, group1, group2)
+    assert isinstance(results, list)
+    assert all(isinstance(x, tuple) for x in results)
+
+
+def test_get_representative_substructures():
+    # Create test data with both monosaccharides and disaccharides
+    enrichment_df = pd.DataFrame({
+        'motif': [
+            'Gal',  # Monosaccharides
+            'GlcNAc',
+            'Neu5Ac',
+            'Gal(b1-3)GalNAc',  # Disaccharides
+            'Gal(b1-4)GlcNAc',
+            'Neu5Ac(a2-6)Gal'
+        ],
+        'pval': [0.01, 0.015, 0.02, 0.03, 0.04, 0.045],
+        'corr_pval': [0.02, 0.025, 0.03, 0.04, 0.045, 0.049],
+        'effect_size': [2.0, 1.8, 1.5, 1.3, 1.2, 1.1]
+    })
+    results = get_representative_substructures(enrichment_df)
+    assert isinstance(results, list)
+    assert all(isinstance(x, str) for x in results)
+    assert len(results) <= 10  # Function should return up to 10 structures
+
+
+def test_get_lectin_array():
+    df = pd.DataFrame({
+        'sample_id': ['sample1', 'sample2', 'sample3', 'sample4', 'sample5', 'sample6'],
+        'ConA': [100, 110, 120, 500, 480, 520],
+        'WGA': [200, 220, 210, 600, 580, 620],
+        'SNA': [150, 140, 160, 450, 470, 430]
+    })
+    group1 = ['sample1', 'sample2', 'sample3']
+    group2 = ['sample4', 'sample5', 'sample6']
+    results = get_lectin_array(df, group1, group2)
+    assert isinstance(results, pd.DataFrame)
+    assert 'score' in results.columns
+
+
+@pytest.fixture
+def simple_glycans():
+    return [
+        "Gal(b1-4)Glc-ol",
+        "Gal(b1-4)GlcNAc-ol",
+        "Neu5Ac(a2-3)[Neu5Ac(a2-6)]Gal(b1-4)Glc-ol",
+        "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
+    ]
+
+
+@pytest.fixture
+def simple_network():
+    # Create a simple directed network
+    G = nx.DiGraph()
+    G.add_edge("Gal(b1-4)Glc-ol", "GlcNAc(b1-3)Gal(b1-4)Glc-ol", diffs="GlcNAc(b1-3)")
+    G.add_edge("GlcNAc(b1-3)Gal(b1-4)GlcNAc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", diffs="Gal(b1-4)")
+    nx.set_node_attributes(G, {
+        "Gal(b1-4)Glc-ol": {"virtual": 0},
+        "Gal(b1-4)GlcNAc-ol": {"virtual": 0},
+        "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol": {"virtual": 0}
+    })
+    return G
+
+
+def test_safe_compare():
+    g1 = glycan_to_nxGraph("Gal(b1-4)Glc-ol")
+    g2 = glycan_to_nxGraph("Gal(b1-4)Glc-ol")
+    g3 = glycan_to_nxGraph("Gal(b1-4)GlcNAc-ol")
+    assert safe_compare(g1, g2) == True
+    assert safe_compare(g1, g3) == False
+    assert safe_compare(g1, None) == False
+
+
+def test_safe_index():
+    glycan = "Gal(b1-4)Glc-ol"
+    graph_dic = {}
+    result = safe_index(glycan, graph_dic)
+    assert isinstance(result, nx.Graph)
+    assert glycan in graph_dic
+    assert graph_dic[glycan] == result
+
+
+def test_get_neighbors(simple_glycans):
+    ggraph = glycan_to_nxGraph("GlcNAc(b1-3)Gal(b1-4)Glc-ol")
+    graphs = [glycan_to_nxGraph(g) for g in simple_glycans]
+    neighbors, indices = get_neighbors(ggraph, simple_glycans, graphs)
+    assert len(neighbors) > 0
+    assert all(isinstance(n, str) for n in neighbors)
+    assert all(isinstance(idx, list) for idx in indices)
+
+
+def test_create_neighbors():
+    glycan = "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
+    ggraph = glycan_to_nxGraph(glycan)
+    neighbors = create_neighbors(ggraph)
+    assert len(neighbors) > 0
+    assert all(isinstance(n, nx.Graph) for n in neighbors)
+    assert len(neighbors[0].nodes()) < len(ggraph.nodes())
+
+
+def test_find_diff():
+    graph_dic = {}
+    glycan_a = "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
+    glycan_b = "Gal(b1-4)Glc-ol"
+    diff = find_diff(glycan_a, glycan_b, graph_dic)
+    assert isinstance(diff, str)
+    assert "GlcNAc" in diff
+    assert find_diff(glycan_a, glycan_a, graph_dic) == ""
+
+
+def test_find_path():
+    graph_dic = {}
+    glycan_a = "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
+    glycan_b = "Gal(b1-4)Glc-ol"
+    edges, labels = find_path(glycan_a, glycan_b, graph_dic)
+    assert isinstance(edges, list)
+    assert isinstance(labels, dict)
+    assert len(edges) > 0
+    assert all(isinstance(e, tuple) for e in edges)
+
+
+def test_construct_network(simple_glycans):
+    network = construct_network(simple_glycans)
+    assert isinstance(network, nx.DiGraph)
+    assert len(network.nodes()) >= len(simple_glycans)
+    assert len(network.edges()) > 0
+    assert all("diffs" in data for _, _, data in network.edges(data=True))
+
+
+def test_prune_network(simple_glycans):
+    net = construct_network(simple_glycans)
+    nx.set_node_attributes(net, {
+        "Gal(b1-4)Glc-ol": {"abundance": 0.5},
+        "Neu5Ac(a2-6)Gal(b1-4)Glc-ol": {"abundance": 0.0},
+        "Neu5Ac(a2-3)Gal(b1-4)Glc-ol": {"abundance": 0.5},
+        "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol": {"abundance": 0.8}
+    })
+    pruned = prune_network(net, threshold=0.1)
+    assert isinstance(pruned, nx.DiGraph)
+    assert len(pruned.nodes()) < len(net.nodes())
+    assert "Neu5Ac(a2-6)Gal(b1-4)Glc-ol" not in pruned.nodes()
+
+
+def test_extend_glycans():
+    glycans = {"Gal(b1-4)Glc-ol"}
+    reactions = {"Fuc(a1-3)", "GlcNAc(b1-3)"}
+    new_glycans = extend_glycans(glycans, reactions)
+    assert isinstance(new_glycans, set)
+    assert len(new_glycans) > 0
+    assert all(isinstance(g, str) for g in new_glycans)
+    assert all(g.endswith('Glc-ol') for g in new_glycans)
+
+
+def test_highlight_network_motif(simple_network):
+    motif = "Gal(b1-4)Glc"
+    highlighted = highlight_network(simple_network, highlight="motif", motif=motif)
+    assert isinstance(highlighted, nx.DiGraph)
+    assert all("origin" in data for _, data in highlighted.nodes(data=True))
+    assert all(data["origin"] in ["limegreen", "darkviolet"]
+              for _, data in highlighted.nodes(data=True))
+
+
+def test_highlight_network_abundance(simple_network):
+    abundance_df = pd.DataFrame({
+        "glycan": list(simple_network.nodes()),
+        "rel_intensity": [0.5] * len(simple_network)
+    })
+    highlighted = highlight_network(simple_network, highlight="abundance",
+                                  abundance_df=abundance_df)
+    assert isinstance(highlighted, nx.DiGraph)
+    assert all("abundance" in data for _, data in highlighted.nodes(data=True))
+    assert all(isinstance(data["abundance"], (int, float))
+              for _, data in highlighted.nodes(data=True))
+
+
+@pytest.fixture
+def sample_network():
+    G = nx.DiGraph()
+    # Create a diamond-like structure
+    G.add_edge("Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)Glc-ol", diffs="Neu5Ac(a2-3)")
+    G.add_edge("Gal(b1-4)Glc-ol", "Neu5Ac(a2-6)Gal(b1-4)Glc-ol", diffs="Neu5Ac(a2-6)")
+    G.add_edge("Neu5Ac(a2-3)Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)[Neu5Ac(a2-6)]Gal(b1-4)Glc-ol", diffs="Neu5Ac(a2-6)")
+    G.add_edge("Neu5Ac(a2-6)Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)[Neu5Ac(a2-6)]Gal(b1-4)Glc-ol", diffs="Neu5Ac(a2-3)")
+    G.add_edge("Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)Glc-ol", diffs="Fuc(a1-2)")
+    G.add_edge("Fuc(a1-2)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]Glc-ol", diffs="Fuc(a1-3)")
+    # Set node attributes
+    nx.set_node_attributes(G, {
+        "Gal(b1-4)Glc-ol": {"virtual": 0, "abundance": 10.0},
+        "Neu5Ac(a2-3)Gal(b1-4)Glc-ol": {"virtual": 0, "abundance": 5.0},
+        "Neu5Ac(a2-6)Gal(b1-4)Glc-ol": {"virtual": 1, "abundance": 3.0},
+        "Neu5Ac(a2-3)[Neu5Ac(a2-6)]Gal(b1-4)Glc-ol": {"virtual": 0, "abundance": 7.0},
+        "Fuc(a1-2)Gal(b1-4)Glc-ol": {"virtual": 0, "abundance": 1.0},
+        "Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]Glc-ol": {"virtual": 0, "abundance": 0.5}
+    })
+    return G
+
+
+@pytest.fixture
+def abundance_data():
+    return pd.DataFrame({
+        'glycan': ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol",
+                  "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"],
+        'sample1': [10.0, 5.0, 7.0],
+        'sample2': [8.0, 6.0, 8.0],
+        'sample3': [9.0, 4.0, 6.0],
+        'sample4': [11.0, 7.0, 9.0]
+    })
+
+
+def test_infer_roots():
+    # Test O-linked glycans
+    o_glycans = {"GalNAc(b1-3)Gal", "Fuc(a1-2)GalNAc"}
+    roots = infer_roots(frozenset(o_glycans))
+    assert "GalNAc" in roots
+    assert "Fuc" in roots
+    # Test free glycans
+    free_glycans = {"Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc-ol"}
+    roots = infer_roots(frozenset(free_glycans))
+    assert "Gal(b1-4)Glc-ol" in roots
+    assert "Gal(b1-4)GlcNAc-ol" in roots
+
+
+def test_deorphanize_nodes(sample_network):
+    # Add an orphaned node
+    sample_network.add_node("GlcNAc(b1-3)Gal(b1-4)Glc-ol", virtual=0)
+    deorphanized = deorphanize_nodes(sample_network, {})
+    assert isinstance(deorphanized, nx.DiGraph)
+    assert len(deorphanized.edges()) > len(sample_network.edges())
+    # Check if orphaned node is now connected
+    assert deorphanized.degree("GlcNAc(b1-3)Gal(b1-4)Glc-ol") > 0
+
+
+def test_get_edge_weight_by_abundance(sample_network):
+    weighted = get_edge_weight_by_abundance(sample_network)
+    assert isinstance(weighted, nx.DiGraph)
+    assert all("capacity" in data for _, _, data in weighted.edges(data=True))
+    assert all(isinstance(data["capacity"], (int, float))
+              for _, _, data in weighted.edges(data=True))
+
+
+def test_find_diamonds(simple_glycans):
+    diamonds = find_diamonds(construct_network(simple_glycans))
+    assert isinstance(diamonds, list)
+    assert len(diamonds) > 0
+    assert all(isinstance(d, dict) for d in diamonds)
+    assert all(len(d) >= 4 for d in diamonds)  # Diamond should have at least 4 nodes
+
+
+def test_trace_diamonds(simple_glycans):
+    net = construct_network(simple_glycans)
+    species_list = ["species1"]
+    network_dic = {"species1": net}
+    results = trace_diamonds(net, species_list, network_dic)
+    assert isinstance(results, pd.DataFrame)
+    assert "probability" in results.columns
+    assert len(results) > 0
+
+
+def test_get_maximum_flow(sample_network):
+    sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
+    flow_results = get_maximum_flow(sample_network,
+                                  source="Gal(b1-4)Glc-ol")
+    assert isinstance(flow_results, dict)
+    assert all("flow_value" in data for data in flow_results.values())
+    assert all("flow_dict" in data for data in flow_results.values())
+    assert all(isinstance(data["flow_value"], (int, float))
+              for data in flow_results.values())
+
+
+def test_get_reaction_flow(sample_network):
+    sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
+    flow_results = get_maximum_flow(sample_network,
+                                  source="Gal(b1-4)Glc-ol")
+    reaction_flows = get_reaction_flow(sample_network, flow_results,
+                                     aggregate="sum")
+    assert isinstance(reaction_flows, dict)
+    assert len(reaction_flows) > 0
+    assert all(isinstance(v, (int, float)) for v in reaction_flows.values())
+
+
+def test_process_ptm():
+    glycans = ["Gal(b1-4)Glc3S-ol", "Gal(b1-4)Glc-ol"]
+    stem_lib = get_stem_lib(get_lib(glycans))
+    edges, labels = process_ptm(glycans, {}, stem_lib)
+    if edges:  # If PTMs were found
+        assert len(edges) == len(labels)
+        assert all(isinstance(e, tuple) for e in edges)
+        assert all(isinstance(l, str) for l in labels)
+
+
+def test_get_differential_biosynthesis(abundance_data):
+    results = get_differential_biosynthesis(
+        abundance_data,
+        group1=['sample1', 'sample2'],
+        group2=['sample3', 'sample4'],
+        analysis="reaction"
+    )
+    assert isinstance(results, pd.DataFrame)
+    assert "Log2FC" in results.columns
+    assert "p-val" in results.columns
+    assert "significant" in results.columns
+    assert len(results) > 0
+
+
+def test_deorphanize_edge_labels(sample_network):
+    # Remove some edge labels
+    edge_list = list(sample_network.edges())[0:2]
+    for edge in edge_list:
+        del sample_network.edges[edge]["diffs"]
+    labeled = deorphanize_edge_labels(sample_network, {})
+    assert isinstance(labeled, nx.DiGraph)
+    assert all("diffs" in data for _, _, data in labeled.edges(data=True))
+
+
+def test_get_differential_biosynthesis_longitudinal(abundance_data):
+    # Add ID column for longitudinal analysis
+    abundance_data = abundance_data.copy().set_index('glycan').T
+    abundance_data['ID'] = ['p1_t1_1', 'p1_t2_1', 'p2_t1_1', 'p2_t2_1']
+    results = get_differential_biosynthesis(
+        abundance_data,
+        group1=['t1', 't2'],
+        longitudinal=True,
+        id_column='ID'
+    )
+    assert isinstance(results, pd.DataFrame)
+    assert "F-statistic" in results.columns
+    assert "Direction" in results.columns
+    assert "Average Slope" in results.columns
+    assert len(results) > 0
+
+
+def test_process_ptm_with_multiple_ptms():
+    glycans = ["Gal(b1-4)Glc3S6S-ol", "Gal(b1-4)Glc-ol", "Gal(b1-4)Glc6S-ol"]
+    stem_lib = get_stem_lib(get_lib(glycans))
+    edges, labels = process_ptm(glycans, {}, stem_lib)
+    if edges:
+        assert len(edges) > 1  # Should find multiple PTM edges
+        assert all(isinstance(e, tuple) for e in edges)
+        assert all(isinstance(l, str) for l in labels)
+
+
+def test_get_maximum_flow_with_no_path(sample_network):
+    # Add isolated node with no path from source
+    sample_network.add_node("IsolatedGlycan", virtual=0, abundance=1.0)
+    sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
+    flow_results = get_maximum_flow(sample_network,
+                                  source="Gal(b1-4)Glc-ol",
+                                  sinks=["IsolatedGlycan"])
+    assert isinstance(flow_results, dict)
+    assert len(flow_results) == 0  # Should return empty dict for unreachable sink

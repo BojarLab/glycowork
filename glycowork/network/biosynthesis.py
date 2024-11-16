@@ -945,8 +945,8 @@ def get_maximum_flow(network: nx.Graph, # Biosynthetic network
   # Dictionary to store flow values and paths for each sink
   flow_results = {}
   for sink in sinks:
-    path_length = nx.shortest_path_length(network, source = source, target = sink)
     try:
+      path_length = nx.shortest_path_length(network, source = source, target = sink)
       try:
         flow_value, flow_dict = nx.maximum_flow(network, source, sink)
       except:
@@ -955,7 +955,7 @@ def get_maximum_flow(network: nx.Graph, # Biosynthetic network
           'flow_value': flow_value * path_length,
           'flow_dict': flow_dict
           }
-    except nx.NetworkXError:
+    except (nx.NetworkXError, nx.NetworkXNoPath):
       print(f"{sink} cannot be reached.")
   return flow_results
 
