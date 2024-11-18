@@ -24,7 +24,7 @@ setuptools.setup(
     install_requires=["scikit-learn", "regex", "networkx>=3.0",
                       "statsmodels", "scipy", "gdown",
                       "seaborn", "xgboost", "mpld3",
-                      "pandas>=1.3", "matplotlib-inline"],
+                      "pandas>=1.3", "matplotlib-inline", "setuptools>=64.0"],
     extras_require={'all':["torch_geometric", "torch", "CairoSVG",
                            "drawSvg~=2.0", "glyles", "pubchempy", "requests",
                            "Pillow", "openpyxl", "py3Dmol", "gdown"],

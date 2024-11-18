@@ -31,10 +31,10 @@ def get_insight(glycan: str, # Glycan in IUPAC-condensed format
         print("\nThis glycan contains the following motifs: " + str(found_motifs))
     if isinstance(df_glycan.glytoucan_id.values.tolist()[idx], str):
         print("\nThis is the GlyTouCan ID for this glycan: " + str(df_glycan.glytoucan_id.values.tolist()[idx]))
-    if len(df_glycan.tissue_sample.values.tolist()[idx]) > 2:
+    if len(df_glycan.tissue_sample.values.tolist()[idx]) > 0:
         tissue = df_glycan.tissue_sample.values.tolist()[idx]
         print("\nThis glycan has been reported to be expressed in: " + str(sorted(tissue)))
-    if len(df_glycan.disease_association.values.tolist()[idx]) > 2:
+    if len(df_glycan.disease_association.values.tolist()[idx]) > 0:
         disease = df_glycan.disease_association.values.tolist()[idx]
         direction = df_glycan.disease_direction.values.tolist()[idx]
         disease_sample = df_glycan.disease_sample.values.tolist()[idx]
@@ -52,12 +52,12 @@ def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
                       ) -> List[str]: # List of glycans or IDs
     "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
     if revert:
-        ids = [df_glycan.glytoucan_id.values.tolist()[df_glycan.glycan.values.tolist().index(k)[0]] for k in ids]
+        ids = [df_glycan.glytoucan_id.values.tolist()[np.where(df_glycan.glycan.values == k)[0][0]] if k in df_glycan.glycan.values else k for k in ids]
         if any([k not in df_glycan.glycan.values.tolist() for k in ids]):
             print('These glycans are not in our database: ' + str([k for k in ids if k not in df_glycan.glycan]))
         return ids
     else:
-        glycans = [df_glycan.glycan.values.tolist()[df_glycan.glytoucan_id.values.tolist().index(k)] if k in df_glycan.glytoucan_id.values else k for k in ids]
+        glycans = [df_glycan.glycan.values.tolist()[np.where(df_glycan.glytoucan_id.values == k)[0][0]] if k in df_glycan.glytoucan_id.values else k for k in ids]
         if any([k not in df_glycan.glytoucan_id.values for k in ids]):
             print('These IDs are not in our database: ' + str([k for k in ids if k not in df_glycan.glytoucan_id]))
         return glycans

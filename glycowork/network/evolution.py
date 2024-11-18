@@ -57,8 +57,10 @@ def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) a
   # Retrieve and average embeddings for all glycans
   embeddings_filtered = embeddings.loc[df_filtered.index]
   grouped = df_filtered.groupby(rank)
-  avg_embeddings = grouped.apply(lambda g: embeddings_filtered.loc[g.index].agg(averaging)).reset_index()
-  avg_values = np.vstack(avg_embeddings[0].values)
+  avg_embeddings = grouped.apply(lambda g: embeddings_filtered.loc[g.index].agg(averaging), include_groups = False).reset_index()
+  if isinstance(avg_embeddings.iloc[0, 0], str):
+    avg_embeddings = avg_embeddings.set_index(avg_embeddings.columns[0])
+  avg_values = np.vstack(avg_embeddings.values)
   # Get the distance matrix
   return calculate_distance_matrix(avg_values, cosine, label_list = valid_ranks)
 

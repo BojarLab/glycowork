@@ -3,6 +3,10 @@ import networkx as nx
 import networkx.algorithms.isomorphism as iso
 import pandas as pd
 import numpy as np
+import torch
+from torch_geometric.data import Data
+from glycowork.glycan_data.data_entry import check_presence
+from glycowork.motif.query import get_insight, glytoucan_to_glycan
 from glycowork.motif.tokenization import (
     constrain_prot, prot_to_coded, string_to_labels, pad_sequence, mz_to_composition,
     get_core, get_modification, get_stem_lib, stemify_glycan, mask_rare_glycoletters,
@@ -60,7 +64,7 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process
 from glycowork.motif.draw import (matches, process_bonds, split_monosaccharide_linkage,
                  scale_in_range, glycan_to_skeleton, process_per_residue,
                  get_hit_atoms_and_bonds, add_colours_to_map, unique)
-from glycowork.motif.analysis import (preprocess_data, get_heatmap,
+from glycowork.motif.analysis import (preprocess_data,
                      get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc,
                      get_representative_substructures, get_lectin_array)
@@ -69,6 +73,14 @@ from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighb
                          extend_glycans, highlight_network, infer_roots, deorphanize_nodes, get_edge_weight_by_abundance,
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
                          deorphanize_edge_labels)
+from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
+                      jaccard, distance_from_metric, check_conservation,
+                      get_communities)
+from glycowork.ml.train_test_split import (seed_wildcard_hierarchy, hierarchy_filter,
+                            general_split, prepare_multilabel)
+from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset,
+                       dataset_to_graphs, dataset_to_dataloader,
+                       split_data_to_train)
 
 
 @pytest.mark.parametrize("glycan", [
@@ -2114,7 +2126,7 @@ def test_unique():
 
 
 try:
-    import rdkit
+    from rdkit import Chem
     RDKIT_AVAILABLE = True
 except ImportError:
     RDKIT_AVAILABLE = False
@@ -2122,7 +2134,6 @@ except ImportError:
 
 @pytest.mark.skipif(not RDKIT_AVAILABLE, reason="RDKit not installed")
 def test_get_hit_atoms_and_bonds():
-    from rdkit import Chem
     # Create a simple molecule
     mol = Chem.MolFromSmiles("CC(=O)O")
     atoms, bonds = get_hit_atoms_and_bonds(mol, "CC(=O)O")
@@ -2283,12 +2294,12 @@ def test_get_glycanova():
     # Check posthoc results for all pairwise comparisons
     assert isinstance(posthoc, dict)
     if len(posthoc) > 0:  # If any significant differences found
-        for glycan, result in posthoc.items():
+        for _, result in posthoc.items():
             assert isinstance(result, pd.DataFrame)
             # Should have pairwise comparisons between groups
             assert len(result) == 3  # Number of pairwise comparisons for 3 groups = 3
     # Test with motifs enabled
-    results_motifs, posthoc_motifs = get_glycanova(df, groups, motifs=True, impute=False)
+    results_motifs, _ = get_glycanova(df, groups, motifs=True, impute=False)
     assert isinstance(results_motifs, pd.DataFrame)
     assert len(results_motifs) > 0  # Should find some motifs
     # Test without posthoc
@@ -2769,3 +2780,669 @@ def test_get_maximum_flow_with_no_path(sample_network):
                                   sinks=["IsolatedGlycan"])
     assert isinstance(flow_results, dict)
     assert len(flow_results) == 0  # Should return empty dict for unreachable sink
+
+
+@pytest.fixture
+def sample_objects():
+    return {
+        'obj1': [1, 2, 3, 4],
+        'obj2': [2, 3, 4, 5],
+        'obj3': [3, 4, 5, 6]
+    }
+
+
+@pytest.fixture
+def sample_taxonomy_data():
+    return pd.DataFrame({
+        'glycan': [
+            'Gal(b1-4)Glc-ol',
+            'Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol',
+            'Fuc(a1-2)Gal(b1-4)Glc-ol',
+            'Gal(b1-4)Glc-ol',
+            'GalNAc(b1-3)Gal(b1-4)Glc-ol',
+            'Neu5Ac(a2-3)Gal(b1-4)Glc-ol'
+        ],
+        'Species': ['Species1', 'Species1', 'Species1', 'Species2', 'Species2', 'Species2'],
+        'Order': ['Order1', 'Order1', 'Order1', 'Order2', 'Order2', 'Order2'],
+        'Class': ['Class1', 'Class1', 'Class1', 'Class2', 'Class2', 'Class2']
+    }).set_index('glycan')
+
+
+@pytest.fixture
+def sample_networks():
+    # Create network for Species1
+    G1 = nx.DiGraph()
+    G1.add_edge('Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol', diffs='GlcNAc(b1-3)')
+    G1.add_edge('GlcNAc(b1-3)Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol', diffs='Gal(b1-4)')
+    G1.add_edge('Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol', diffs='Fuc(a1-2)')
+    nx.set_node_attributes(G1, {node: {'virtual': 0} for node in G1.nodes()})
+
+    # Create network for Species2
+    G2 = nx.DiGraph()
+    G2.add_edge('Gal(b1-4)Glc-ol', 'GalNAc(b1-3)Gal(b1-4)Glc-ol', diffs='GalNAc(b1-3)')
+    G2.add_edge('Gal(b1-4)Glc-ol', 'Neu5Ac(a2-3)Gal(b1-4)Glc-ol', diffs='Neu5Ac(a2-3)')
+    nx.set_node_attributes(G2, {node: {'virtual': 0} for node in G2.nodes()})
+
+    return [G1, G2]
+
+
+@pytest.fixture
+def network_dict(sample_networks):
+    return {
+        'Species1': sample_networks[0],
+        'Species2': sample_networks[1]
+    }
+
+
+@pytest.fixture
+def sample_embeddings():
+    return pd.DataFrame({
+        'dim1': [0.1, 0.2, 0.3, 0.1, 0.2, 0.3],
+        'dim2': [0.4, 0.5, 0.6, 0.4, 0.5, 0.6],
+        'dim3': [0.7, 0.8, 0.9, 0.7, 0.8, 0.9]
+    }, index=[
+        'Gal(b1-4)Glc-ol',
+        'Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol',
+        'Fuc(a1-2)Gal(b1-4)Glc-ol',
+        'Gal(b1-4)Glc-ol',
+        'GalNAc(b1-3)Gal(b1-4)Glc-ol',
+        'Neu5Ac(a2-3)Gal(b1-4)Glc-ol'
+    ])
+
+
+def test_calculate_distance_matrix(sample_objects):
+    # Test with dictionary input
+    dm = calculate_distance_matrix(sample_objects, lambda x, y: abs(sum(x) - sum(y)))
+    assert isinstance(dm, pd.DataFrame)
+    assert list(dm.columns) == list(sample_objects.keys())
+    assert dm.shape == (3, 3)
+    assert (dm.values >= 0).all()
+    assert (dm.values == dm.values.T).all()  # Symmetry
+    assert np.all(np.diag(dm) == 0)  # Zero diagonal
+
+
+def test_calculate_distance_matrix_with_list():
+    # Test with list input
+    objects = [[1, 2], [2, 3], [3, 4]]
+    dm = calculate_distance_matrix(objects, lambda x, y: abs(sum(x) - sum(y)))
+    assert isinstance(dm, pd.DataFrame)
+    assert dm.shape == (3, 3)
+    assert list(dm.columns) == [0, 1, 2]
+
+
+def test_jaccard():
+    list1 = [1, 2, 3]
+    list2 = [2, 3, 4]
+    distance = jaccard(list1, list2)
+    assert isinstance(distance, float)
+    assert 0 <= distance <= 1
+    assert jaccard(list1, list1) == 0  # Identity
+    # Test with networks
+    G1 = nx.Graph([(1, 2), (2, 3)])
+    G2 = nx.Graph([(2, 3), (3, 4)])
+    net_distance = jaccard(G1.nodes(), G2.nodes())
+    assert isinstance(net_distance, float)
+    assert 0 <= net_distance <= 1
+
+
+def test_distance_from_metric(sample_taxonomy_data, sample_networks):
+    dm = distance_from_metric(
+        sample_taxonomy_data,
+        sample_networks,
+        metric="Jaccard",
+        cut_off=1,
+        rank="Species"
+    )
+    assert isinstance(dm, pd.DataFrame)
+    assert dm.shape[0] == dm.shape[1]  # Square matrix
+    assert (dm.values >= 0).all()
+    assert (dm.values == dm.values.T).all()  # Symmetry
+
+
+def test_distance_from_embeddings(sample_taxonomy_data, sample_embeddings):
+    dm = distance_from_embeddings(
+        sample_taxonomy_data,
+        sample_embeddings,
+        cut_off=1,
+        rank="Species",
+        averaging="median"
+    )
+    assert isinstance(dm, pd.DataFrame)
+    assert dm.shape[0] == dm.shape[1]
+    assert (dm.values >= 0).all()
+    assert (dm.values == dm.values.T).all()
+
+
+def test_distance_from_embeddings_invalid_averaging(sample_taxonomy_data, sample_embeddings):
+    result = distance_from_embeddings(
+        sample_taxonomy_data,
+        sample_embeddings,
+        averaging="invalid"
+    )
+    assert result is None
+
+
+def test_check_conservation():
+    # Create sample data
+    df = pd.DataFrame({
+        'Species': ['Species1', 'Species1', 'Species2', 'Species2'],
+        'Order': ['Order1', 'Order1', 'Order1', 'Order1'],
+        'glycan': ['Gal(b1-4)Glc-ol'] * 4
+    })
+    # Create sample networks
+    network_dic = {
+        'Species1': nx.Graph([('Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol')]),
+        'Species2': nx.Graph([('Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol')])
+    }
+    conservation = check_conservation(
+        'Gal(b1-4)Glc-ol',
+        df,
+        network_dic,
+        threshold=1
+    )
+    assert isinstance(conservation, dict)
+    assert all(0 <= v <= 1 for v in conservation.values())
+    # Test motif search
+    conservation_motif = check_conservation(
+        'Gal(b1-4)Glc',
+        df,
+        network_dic,
+        threshold=1,
+        motif=True
+    )
+    assert isinstance(conservation_motif, dict)
+    assert all(0 <= v <= 1 for v in conservation_motif.values())
+
+
+def test_get_communities(sample_networks):
+    communities = get_communities(sample_networks, ['net1', 'net2', 'net3'])
+    assert isinstance(communities, dict)
+    assert len(communities) > 0
+    assert all(isinstance(v, list) for v in communities.values())
+    assert all('_' in k for k in communities.keys())
+    # Test without labels
+    communities_no_labels = get_communities(sample_networks)
+    assert isinstance(communities_no_labels, dict)
+    assert len(communities_no_labels) > 0
+
+
+def test_check_conservation_threshold():
+    df = pd.DataFrame({
+        'Species': ['Species1'] * 3,
+        'Order': ['Order1'] * 3,
+        'glycan': ['Gal(b1-4)Glc-ol'] * 3
+    })
+    network_dic = {
+        'Species1': nx.Graph([('Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol')])
+    }
+    # Test with threshold higher than available glycans
+    conservation = check_conservation(
+        'Gal(b1-4)Glc-ol',
+        df,
+        network_dic,
+        threshold=5
+    )
+    assert len(conservation) == 0
+
+
+def test_get_communities_single_node():
+    # Test with single-node networks
+    single_node_networks = [nx.Graph([('A', 'A')]), nx.Graph([('B', 'B')])]
+    communities = get_communities(single_node_networks)
+    assert isinstance(communities, dict)
+    assert len(communities) > 0
+    assert all(isinstance(v, list) for v in communities.values())
+
+
+@pytest.fixture
+def sample_glycan_df():
+    df = pd.DataFrame({
+        'glycan': [
+            'Gal(b1-4)Glc-ol',
+            'Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol',
+            'Fuc(a1-2)Gal(b1-4)Glc-ol'
+        ],
+        'Species': [['Homo_sapiens'], ['Homo_sapiens'], ['Mus_musculus']],
+        'Phylum': [['Chordata'], ['Chordata'], ['Chordata']],
+        'tissue_sample': [['blood'], ['blood', 'liver'], ['brain']],
+        'disease_association': [[], ['cancer'], []],
+        'disease_direction': [[], ['up'], []],
+        'disease_sample': [[], ['tumor'], []],
+        'glytoucan_id': ['G00001', 'G00002', 'G00003']
+    })
+    # Add graph attribute for fast comparison
+    df['graph'] = [glycan_to_nxGraph(g) for g in df['glycan']]
+    return df
+
+
+@pytest.fixture
+def sample_motif_df():
+    return pd.DataFrame({
+        'motif_name': [
+            'Terminal_LewisX',
+            'Internal_LewisX',
+            'LewisY'
+        ],
+        'motif': [
+            'Gal(b1-4)[Fuc(a1-3)]GlcNAc',
+            'Gal(b1-4)[Fuc(a1-3)]GlcNAc',
+            'Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc'
+        ],
+        'termini_spec': [
+            "['terminal', 'terminal', 'flexible']",
+            "['internal', 'terminal', 'flexible']",
+            "['terminal', 'flexible', 'terminal', 'flexible']"
+        ]
+    })
+
+
+def test_check_presence_existing_glycan(sample_glycan_df, capsys):
+    check_presence('Gal(b1-4)Glc-ol', sample_glycan_df)
+    captured = capsys.readouterr()
+    assert "Glycan already in dataset." in captured.out
+
+
+def test_check_presence_new_glycan(sample_glycan_df, capsys):
+    check_presence('Neu5Ac(a2-3)Gal(b1-4)Glc-ol', sample_glycan_df)
+    captured = capsys.readouterr()
+    assert "It's your lucky day, this glycan is new!" in captured.out
+
+
+def test_check_presence_with_species(sample_glycan_df, capsys):
+    check_presence('Gal(b1-4)Glc-ol', sample_glycan_df, name='Mus_musculus')
+    captured = capsys.readouterr()
+    assert "It's your lucky day, this glycan is new!" in captured.out
+
+
+def test_check_presence_invalid_species(sample_glycan_df, capsys):
+    check_presence('Gal(b1-4)Glc-ol', sample_glycan_df, name='Invalid_species')
+    captured = capsys.readouterr()
+    assert "Invalid_species is not in dataset" in captured.out
+
+
+def test_check_presence_fast_mode(sample_glycan_df, capsys):
+    check_presence('Gal(b1-4)Glc-ol', sample_glycan_df, fast=True)
+    captured = capsys.readouterr()
+    assert "Glycan already in dataset." in captured.out
+
+
+def test_get_insight_basic(sample_glycan_df, sample_motif_df, monkeypatch, capsys):
+    # Mock df_glycan global variable
+    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
+    get_insight('Gal(b1-4)Glc-ol', motifs=sample_motif_df)
+    captured = capsys.readouterr()
+    assert "Let's get rolling!" in captured.out
+    assert "Homo_sapiens" in captured.out
+    assert "G00001" in captured.out
+    assert "blood" in captured.out
+
+
+def test_get_insight_with_disease(sample_glycan_df, sample_motif_df, monkeypatch, capsys):
+    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
+    get_insight('Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', motifs=sample_motif_df)
+    captured = capsys.readouterr()
+    assert "cancer" in captured.out
+    assert "up" in captured.out
+    assert "tumor" in captured.out
+
+
+def test_glytoucan_to_glycan_forward(sample_glycan_df, monkeypatch):
+    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
+    result = glytoucan_to_glycan(['G00001', 'G00002'])
+    assert len(result) == 2
+    assert 'Gal(b1-4)Glc-ol' in result
+    assert 'Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol' in result
+
+
+def test_glytoucan_to_glycan_reverse(sample_glycan_df, monkeypatch):
+    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
+    result = glytoucan_to_glycan(['Gal(b1-4)Glc-ol', 'Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol'], revert=True)
+    assert len(result) == 2
+    assert 'G00001' in result
+    assert 'G00002' in result
+
+
+def test_glytoucan_to_glycan_missing_id(sample_glycan_df, monkeypatch, capsys):
+    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
+    glytoucan_to_glycan(['G00001', 'MISSING'])
+    captured = capsys.readouterr()
+    assert 'These IDs are not in our database: ' in captured.out
+    assert 'MISSING' in captured.out
+
+
+def test_glytoucan_to_glycan_missing_glycan(sample_glycan_df, monkeypatch, capsys):
+    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
+    glytoucan_to_glycan(['Gal(b1-4)Glc-ol', 'MISSING'], revert=True)
+    captured = capsys.readouterr()
+    assert 'These glycans are not in our database: ' in captured.out
+    assert 'MISSING' in captured.out
+
+
+def test_seed_wildcard_hierarchy_basic():
+    glycans = ["GalNAc", "GlcNAc", "Man"]
+    labels = [1, 2, 3]
+    wildcard_list = ["Gal", "Glc"]
+    wildcard_name = "Hex"
+    # Set random seed for reproducibility
+    np.random.seed(42)
+    new_glycans, new_labels = seed_wildcard_hierarchy(
+        glycans, labels, wildcard_list, wildcard_name, r=1.0
+    )
+    assert len(new_glycans) >= len(glycans)
+    assert len(new_glycans) == len(new_labels)
+    assert all(label in labels for label in new_labels)
+
+
+def test_seed_wildcard_hierarchy_no_matches():
+    glycans = ["XXX", "YYY", "ZZZ"]
+    labels = [1, 2, 3]
+    wildcard_list = ["Gal", "Glc"]
+    wildcard_name = "Hex"
+    new_glycans, new_labels = seed_wildcard_hierarchy(
+        glycans, labels, wildcard_list, wildcard_name
+    )
+    assert new_glycans == glycans
+    assert new_labels == labels
+
+
+def test_hierarchy_filter_basic():
+    data = {
+        'glycan': ['GalNAc1', 'GlcNAc1', 'Man1', 'GalNAc2', 'GlcNAc2',
+                   'Man2', 'GalNAc3', 'GlcNAc3', 'Man3', 'GalNAc4'],
+        'Species': ['sp1']*5 + ['sp2']*5,
+        'Genus': ['g1']*5 + ['g2']*5,
+        'Family': ['f1']*5 + ['f2']*5,
+        'Order': ['o1']*5 + ['o2']*5,
+        'Class': ['c1']*5 + ['c2']*5,
+        'Phylum': ['p1']*5 + ['p2']*5,
+        'Kingdom': ['k1']*5 + ['k2']*5,
+        'Domain': ['d1']*5 + ['d2']*5
+    }
+    df = pd.DataFrame(data)
+    train_x, val_x, train_y, val_y, id_val, class_list, class_converter = hierarchy_filter(
+        df, rank='Domain', min_seq=1
+    )
+    assert len(train_x) + len(val_x) == len(set(df['glycan']))  # Check for duplicates removal
+    assert len(train_y) == len(train_x)
+    assert len(val_y) == len(val_x)
+    assert all(isinstance(y, int) for y in train_y + val_y)
+    assert len(class_list) == len(set(df['Domain']))
+    assert len(class_converter) == len(class_list)
+
+
+def test_hierarchy_filter_min_seq():
+    data = {
+        'glycan': ['GalNAc1', 'GlcNAc1', 'Man1', 'GalNAc2', 'GlcNAc2',
+                   'Man2', 'GalNAc3', 'GlcNAc3', 'Man3', 'GalNAc4',
+                   'GlcNAc4', 'Man4', 'GalNAc5', 'GlcNAc5', 'Man5'],
+        'Domain': ['d1']*2 + ['d2']*13,  # d1 has 2 samples, d2 has 13
+        'Kingdom': ['k1']*2 + ['k2']*13,
+        'Phylum': ['p1']*2 + ['p2']*13,
+        'Class': ['c1']*2 + ['c2']*13,
+        'Order': ['o1']*2 + ['o2']*13,
+        'Family': ['f1']*2 + ['f2']*13,
+        'Genus': ['g1']*2 + ['g2']*13,
+        'Species': ['s1']*2 + ['s2']*13
+    }
+    df = pd.DataFrame(data)
+    train_x, val_x, train_y, val_y, id_val, class_list, class_converter = hierarchy_filter(
+        df, rank='Domain', min_seq=3
+    )
+    # Only d2 should remain as it's the only one with 3 or more sequences
+    assert len(class_list) == 1
+    assert class_list[0] == 'd2'
+    assert len(train_x) + len(val_x) < len(df)  # Some samples should be filtered out
+    assert all(y == 0 for y in train_y + val_y)  # All should be mapped to 0 as only one class remains
+
+
+def test_general_split_basic():
+    glycans = ['G1', 'G2', 'G3', 'G4', 'G5']
+    labels = [1, 2, 3, 4, 5]
+    train_x, test_x, train_y, test_y = general_split(glycans, labels, test_size=0.2)
+    assert len(train_x) == 4  # 80% of 5
+    assert len(test_x) == 1   # 20% of 5
+    assert len(train_y) == len(train_x)
+    assert len(test_y) == len(test_x)
+    assert set(train_y + test_y) == set(labels)
+
+
+def test_general_split_reproducibility():
+    glycans = ['G1', 'G2', 'G3', 'G4', 'G5']
+    labels = [1, 2, 3, 4, 5]
+    train_x1, test_x1, train_y1, test_y1 = general_split(glycans, labels)
+    train_x2, test_x2, train_y2, test_y2 = general_split(glycans, labels)
+    assert train_x1 == train_x2
+    assert test_x1 == test_x2
+    assert train_y1 == train_y2
+    assert test_y1 == test_y2
+
+
+def test_prepare_multilabel_basic():
+    data = {
+        'glycan': ['G1', 'G1', 'G2', 'G2', 'G3'],
+        'Species': ['sp1', 'sp2', 'sp1', 'sp3', 'sp2']
+    }
+    df = pd.DataFrame(data)
+    glycans, labels = prepare_multilabel(df, rank='Species')
+    assert len(glycans) == 3  # unique glycans
+    assert len(labels) == len(glycans)
+    assert all(len(label) == 3 for label in labels)  # 3 unique species
+    assert all(isinstance(label, list) for label in labels)
+    assert all(all(isinstance(v, float) for v in label) for label in labels)
+
+
+def test_prepare_multilabel_single_association():
+    data = {
+        'glycan': ['G1', 'G2', 'G3'],
+        'Species': ['sp1', 'sp2', 'sp3']
+    }
+    df = pd.DataFrame(data)
+    glycans, labels = prepare_multilabel(df)
+    assert len(glycans) == 3
+    assert len(labels) == 3
+    assert all(sum(label) == 1.0 for label in labels)  # each glycan has exactly one association
+
+
+def test_hierarchy_filter_with_wildcards():
+    data = {
+        'glycan': ['GalNAc', 'GlcNAc', 'Man', 'GalNAc(b1-4)Gal', 'GlcNAc(b1-4)GlcNAc',
+                   'Man(a1-2)Man', 'GalNAc(a1-3)Gal', 'GlcNAc(b1-2)Glc', 'Man(a1-3)Man', 'GalNAc(b1-4)GlcNAc',
+                   'GlcNAc(b1-3)Gal', 'Man(a1-6)Man', 'GalNAc(b1-3)GlcNAc', 'GlcNAc(a1-3)Gal', 'Man(b1-4)GlcNAc'],
+        'Domain': ['d1']*8 + ['d2']*7,
+        'Kingdom': ['k1']*8 + ['k2']*7,
+        'Phylum': ['p1']*8 + ['p2']*7,
+        'Class': ['c1']*8 + ['c2']*7,
+        'Order': ['o1']*8 + ['o2']*7,
+        'Family': ['f1']*8 + ['f2']*7,
+        'Genus': ['g1']*8 + ['g2']*7,
+        'Species': ['s1']*8 + ['s2']*7
+    }
+    df = pd.DataFrame(data)
+    train_x, val_x, train_y, val_y, id_val, class_list, class_converter = hierarchy_filter(
+        df,
+        rank='Domain',
+        min_seq=1,
+        wildcard_seed=True,
+        wildcard_list=['Gal', 'Glc'],
+        wildcard_name='Hex',
+        r=1.0
+    )
+    assert len(train_x) >= len(set(df['glycan']))  # Should have additional entries due to wildcards
+    assert len(train_y) == len(train_x)
+    assert len(val_y) == len(val_x)
+    assert all(y in [0, 1] for y in train_y + val_y)  # Check labels are properly converted
+
+
+@pytest.fixture
+def mock_glycan_data():
+    """Create a mock PyG Data object representing a glycan"""
+    data = Data(
+        x=torch.tensor([[0], [1], [2], [3], [4]], dtype=torch.float),
+        edge_index=torch.tensor([[0, 1], [1, 2], [2, 3], [3, 4]], dtype=torch.long).t(),
+        string_labels=['Gal', 'b1-4', 'GlcNAc', 'b1-2', 'Man'],
+        labels=[0, 5, 1, 8, 2]
+    )
+    return data
+
+
+@pytest.fixture
+def mock_library():
+    """Create a mock glycoletter library"""
+    return {
+        'Gal': 0,
+        'GlcNAc': 1,
+        'Man': 2,
+        'Hex': 3,
+        'HexNAc': 4,
+        'b1-4': 5,
+        'a1-3': 6,
+        'a1-6': 7,
+        'b1-2': 8
+    }
+
+@pytest.fixture
+def mock_glycan_dataset():
+    """Create a list of mock glycans and labels"""
+    glycans = [
+        "Gal(b1-4)GlcNAc",
+        "Man(a1-3)[Man(a1-6)]Man",
+        "Gal(b1-4)GlcNAc(b1-2)Man"
+    ]
+    labels = [0, 1, 0]
+    return glycans, labels
+
+
+def test_augment_glycan(mock_glycan_data, mock_library):
+    np.random.seed(42)
+    torch.manual_seed(42)
+    augmented = augment_glycan(
+        mock_glycan_data,
+        mock_library,
+        generalization_prob=1.0  # Force augmentation
+    )
+    assert isinstance(augmented, Data)
+    assert len(augmented.string_labels) == len(mock_glycan_data.string_labels)
+    assert augmented.string_labels != mock_glycan_data.string_labels
+    assert all(label in mock_library or label in ['Hex', 'HexNAc'] or '-' in label
+              for label in augmented.string_labels)
+
+
+def test_augmented_glycan_dataset(mock_glycan_data, mock_library):
+    np.random.seed(42)
+    torch.manual_seed(42)
+    dataset = [mock_glycan_data]
+    augmented_dataset = AugmentedGlycanDataset(
+        dataset,
+        mock_library,
+        augment_prob=1.0,  # Force augmentation
+        generalization_prob=1.0  # Force wildcarding
+    )
+    assert len(augmented_dataset) == len(dataset)
+    item = augmented_dataset[0]
+    assert isinstance(item, Data)
+    assert item.string_labels != mock_glycan_data.string_labels
+
+
+def test_dataset_to_graphs(mock_glycan_dataset, mock_library):
+    glycans, labels = mock_glycan_dataset
+    data_list = dataset_to_graphs(
+        glycans,
+        labels,
+        libr=mock_library,
+        label_type=torch.long
+    )
+    assert len(data_list) == len(glycans)
+    assert all(isinstance(data, Data) for data in data_list)
+    assert all(hasattr(data, 'y') for data in data_list)
+    assert all(data.y.dtype == torch.long for data in data_list)
+
+
+def test_dataset_to_dataloader(mock_glycan_dataset, mock_library):
+    glycans, labels = mock_glycan_dataset
+    extra_features = [0.5] * len(glycans)
+
+    dataloader = dataset_to_dataloader(
+        glycans,
+        labels,
+        libr=mock_library,
+        batch_size=2,
+        extra_feature=extra_features,
+        augment_prob=0.5
+    )
+    assert isinstance(dataloader, torch.utils.data.DataLoader)
+    assert dataloader.batch_size == 2
+    # Check first batch
+    batch = next(iter(dataloader))
+    assert hasattr(batch, 'y')
+    assert hasattr(batch, 'train_idx')
+
+
+def test_split_data_to_train(mock_glycan_dataset, mock_library):
+    glycans, labels = mock_glycan_dataset
+    # Split data for test
+    train_glycans = glycans[:2]
+    val_glycans = glycans[2:]
+    train_labels = labels[:2]
+    val_labels = labels[2:]
+    extra_train = [0.5] * len(train_glycans)
+    extra_val = [0.5] * len(val_glycans)
+    loaders = split_data_to_train(
+        train_glycans,
+        val_glycans,
+        train_labels,
+        val_labels,
+        libr=mock_library,
+        batch_size=1,
+        extra_feature_train=extra_train,
+        extra_feature_val=extra_val,
+        augment_prob=0.5
+    )
+    assert 'train' in loaders
+    assert 'val' in loaders
+    assert isinstance(loaders['train'], torch.utils.data.DataLoader)
+    assert isinstance(loaders['val'], torch.utils.data.DataLoader)
+    # Check validation loader has no augmentation
+    val_batch = next(iter(loaders['val']))
+    assert hasattr(val_batch, 'y')
+    assert hasattr(val_batch, 'train_idx')
+
+
+def test_dataset_to_graphs_caching(mock_glycan_dataset, mock_library):
+    glycans, labels = mock_glycan_dataset
+    # Add duplicate glycan
+    glycans = glycans + [glycans[0]]
+    labels = labels + [labels[0]]
+    data_list = dataset_to_graphs(
+        glycans,
+        labels,
+        libr=mock_library
+    )
+    assert len(data_list) == len(glycans)
+    # Check that duplicate glycans have same structure but different objects
+    assert torch.equal(data_list[0].labels, data_list[-1].labels)
+    assert torch.equal(data_list[0].edge_index, data_list[-1].edge_index)
+    assert id(data_list[0]) != id(data_list[-1])
+
+
+def test_augment_glycan_no_change(mock_glycan_data, mock_library):
+    augmented = augment_glycan(
+        mock_glycan_data,
+        mock_library,
+        generalization_prob=0.0  # Prevent augmentation
+    )
+    assert augmented.string_labels == mock_glycan_data.string_labels
+    assert augmented.labels == mock_glycan_data.labels
+
+
+def test_dataset_to_dataloader_batch_size(mock_glycan_dataset, mock_library):
+    glycans, labels = mock_glycan_dataset
+    # Test with different batch sizes
+    for batch_size in [1, 2, len(glycans)]:
+        dataloader = dataset_to_dataloader(
+            glycans,
+            labels,
+            libr=mock_library,
+            batch_size=batch_size
+        )
+        assert dataloader.batch_size == batch_size
+        first_batch = next(iter(dataloader))
