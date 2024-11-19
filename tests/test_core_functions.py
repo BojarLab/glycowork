@@ -3,7 +3,12 @@ import networkx as nx
 import networkx.algorithms.isomorphism as iso
 import pandas as pd
 import numpy as np
+import xgboost as xgb
+import seaborn as sns
 import torch
+import torch.nn as nn
+import matplotlib.pyplot as plt
+from unittest.mock import Mock, patch, MagicMock
 from torch_geometric.data import Data
 from glycowork.glycan_data.data_entry import check_presence
 from glycowork.motif.query import get_insight, glytoucan_to_glycan
@@ -66,8 +71,9 @@ from glycowork.motif.draw import (matches, process_bonds, split_monosaccharide_l
                  get_hit_atoms_and_bonds, add_colours_to_map, unique)
 from glycowork.motif.analysis import (preprocess_data,
                      get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
-                     get_biodiversity, get_time_series, get_SparCC, get_roc,
-                     get_representative_substructures, get_lectin_array)
+                     get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
+                     get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings,
+                     characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site)
 from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighbors, create_neighbors,
                          find_diff, find_path, construct_network, prune_network, estimate_weights,
                          extend_glycans, highlight_network, infer_roots, deorphanize_nodes, get_edge_weight_by_abundance,
@@ -81,6 +87,10 @@ from glycowork.ml.train_test_split import (seed_wildcard_hierarchy, hierarchy_fi
 from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset,
                        dataset_to_graphs, dataset_to_dataloader,
                        split_data_to_train)
+from glycowork.ml.model_training import (EarlyStopping, sigmoid, disable_running_stats,
+                          enable_running_stats, train_model, SAM,
+                          Poly1CrossEntropyLoss, training_setup,
+                          train_ml_model, analyze_ml_model, get_mismatch)
 
 
 @pytest.mark.parametrize("glycan", [
@@ -2480,6 +2490,484 @@ def simple_glycans():
     ]
 
 
+# Mock plt.show() to avoid displaying plots during tests
+@pytest.fixture(autouse=True)
+def mock_show():
+    with patch('matplotlib.pyplot.show'):
+        yield
+
+
+# Sample data fixtures
+@pytest.fixture
+def sample_df():
+    data = {
+        'glycan': ['Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                   'Man(a1-2)Man(a1-3)[Man(a1-6)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                   'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'],
+        'sample1': [10, 20, 30],
+        'sample2': [15, 25, 35],
+        'sample3': [12, 22, 32]
+    }
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def sample_abundance_df():
+    data = {
+        'sample1': [0.2, 0.3, 0.5],
+        'sample2': [0.25, 0.35, 0.4],
+        'sample3': [0.3, 0.3, 0.4]
+    }
+    index = ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2']
+    return pd.DataFrame(data, index=index)
+
+
+@pytest.fixture
+def sample_diff_expr_results():
+    data = {
+        'Glycan': ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2'],
+        'Mean abundance': [0.3, 0.35, 0.4],
+        'Log2FC': [1.5, -0.5, 0.8],
+        'Effect size': [0.6, -0.3, 0.4],
+        'p-val': [0.01, 0.04, 0.002],
+        'corr p-val': [0.03, 0.06, 0.006]
+    }
+    return pd.DataFrame(data)
+
+
+def test_get_coverage_basic(sample_df):
+    """Test basic functionality of get_coverage"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_coverage(sample_df)
+        mock_savefig.assert_not_called()
+
+
+def test_get_coverage_with_filepath(sample_df):
+    """Test get_coverage with filepath saving"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_coverage(sample_df, filepath='test.png')
+        mock_savefig.assert_called_once()
+
+
+def test_get_ma_basic(sample_diff_expr_results):
+    """Test basic functionality of get_ma"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_ma(sample_diff_expr_results)
+        mock_savefig.assert_not_called()
+
+
+def test_get_ma_with_filepath(sample_diff_expr_results):
+    """Test get_ma with filepath saving"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_ma(sample_diff_expr_results, filepath='test.png')
+        mock_savefig.assert_called_once()
+
+
+def test_get_ma_with_custom_thresholds(sample_diff_expr_results):
+    """Test get_ma with custom thresholds"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_ma(sample_diff_expr_results, log2fc_thresh=2, sig_thresh=0.01)
+        mock_savefig.assert_not_called()
+
+
+def test_get_volcano_basic(sample_diff_expr_results):
+    """Test basic functionality of get_volcano"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_volcano(sample_diff_expr_results)
+        mock_savefig.assert_not_called()
+
+
+def test_get_volcano_with_filepath(sample_diff_expr_results):
+    """Test get_volcano with filepath saving"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_volcano(sample_diff_expr_results, filepath='test.png')
+        mock_savefig.assert_called_once()
+
+
+def test_get_volcano_with_custom_thresholds(sample_diff_expr_results):
+    """Test get_volcano with custom thresholds"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_volcano(sample_diff_expr_results, y_thresh=0.01, x_thresh=1.0)
+        mock_savefig.assert_not_called()
+
+
+def test_get_volcano_with_effect_size(sample_diff_expr_results):
+    """Test get_volcano using effect size instead of Log2FC"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_volcano(sample_diff_expr_results, x_metric='Effect size')
+        mock_savefig.assert_not_called()
+
+
+def test_get_meta_analysis_fixed():
+    """Test meta-analysis with fixed effects model"""
+    effect_sizes = [0.5, 0.3, 0.7]
+    variances = [0.1, 0.15, 0.08]
+    combined_effect, p_value = get_meta_analysis(effect_sizes, variances, model='fixed')
+    assert isinstance(combined_effect, float)
+    assert isinstance(p_value, float)
+    assert 0 <= p_value <= 1
+
+
+def test_get_meta_analysis_random():
+    """Test meta-analysis with random effects model"""
+    effect_sizes = [0.5, 0.3, 0.7]
+    variances = [0.1, 0.15, 0.08]
+    combined_effect, p_value = get_meta_analysis(effect_sizes, variances, model='random')
+    assert isinstance(combined_effect, float)
+    assert isinstance(p_value, float)
+    assert 0 <= p_value <= 1
+
+
+def test_get_meta_analysis_with_study_names():
+    """Test meta-analysis with study names"""
+    effect_sizes = [0.5, 0.3, 0.7]
+    variances = [0.1, 0.15, 0.08]
+    study_names = ['Study1', 'Study2', 'Study3']
+    with patch('matplotlib.pyplot.subplots') as mock_subplots:
+        mock_fig = MagicMock()
+        mock_ax = MagicMock()
+        mock_subplots.return_value = (mock_fig, mock_ax)
+        with patch('matplotlib.pyplot.savefig') as mock_savefig:
+            get_meta_analysis(effect_sizes, variances, study_names=study_names, filepath='test.png')
+            mock_savefig.assert_called_once()
+
+
+def test_get_meta_analysis_invalid_model():
+    """Test meta-analysis with invalid model specification"""
+    effect_sizes = [0.5, 0.3, 0.7]
+    variances = [0.1, 0.15, 0.08]
+    with pytest.raises(ValueError):
+        get_meta_analysis(effect_sizes, variances, model='invalid')
+
+
+def test_get_meta_analysis_mismatched_lengths():
+    """Test meta-analysis with mismatched effect sizes and variances"""
+    effect_sizes = [0.5, 0.3, 0.7]
+    variances = [0.1, 0.15]
+    with pytest.raises(ValueError):
+        get_meta_analysis(effect_sizes, variances)
+
+
+def test_plot_embeddings_basic():
+    """Test basic functionality of plot_embeddings"""
+    glycans = ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2']
+    emb = pd.DataFrame(np.random.rand(3, 10))
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        plot_embeddings(glycans, emb)
+        mock_savefig.assert_not_called()
+
+
+def test_plot_embeddings_with_labels():
+    """Test plot_embeddings with group labels"""
+    glycans = ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2']
+    emb = pd.DataFrame(np.random.rand(3, 10))
+    labels = ['A', 'B', 'A']
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        plot_embeddings(glycans, emb, label_list=labels)
+        mock_savefig.assert_not_called()
+
+
+def test_plot_embeddings_with_shape_feature():
+    """Test plot_embeddings with shape feature"""
+    glycans = ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2']
+    emb = pd.DataFrame(np.random.rand(3, 10))
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        plot_embeddings(glycans, emb, shape_feature='Man')
+        mock_savefig.assert_not_called()
+
+
+def test_plot_embeddings_with_filepath(tmp_path):
+    """Test plot_embeddings with file saving"""
+    glycans = ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2']
+    emb = pd.DataFrame(np.random.rand(3, 10))
+    filepath = tmp_path / "test.png"
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        plot_embeddings(glycans, emb, filepath=str(filepath))
+        mock_savefig.assert_called_once()
+
+
+@pytest.fixture
+def sample_time_series_df():
+    data = {
+        'glycan': ['Man3GlcNAc2', 'Man5GlcNAc2', 'Man9GlcNAc2'],
+        'T1_h0_r1': [10, 20, 30],
+        'T1_h4_r1': [15, 25, 35],
+        'T1_h8_r1': [12, 22, 32],
+        'T1_h0_r2': [11, 21, 31],
+        'T1_h4_r2': [14, 24, 34],
+        'T1_h8_r2': [13, 23, 33]
+    }
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def sample_glycoshift_df():
+    data = {
+        'protein_site_composition': ['ProtA_123_Man3GlcNAc2', 'ProtA_123_Man5GlcNAc2', 'ProtB_456_Man3GlcNAc2'],
+        'sample1': [10, 20, 30],
+        'sample2': [15, 25, 35],
+        'sample3': [12, 22, 32],
+        'sample4': [11, 21, 31]
+    }
+    return pd.DataFrame(data)
+
+
+def test_characterize_monosaccharide_basic():
+    """Test basic functionality of characterize_monosaccharide"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        characterize_monosaccharide('Man')
+        mock_savefig.assert_not_called()
+
+
+def test_characterize_monosaccharide_with_custom_df(sample_df):
+    """Test characterize_monosaccharide with custom DataFrame"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        characterize_monosaccharide('Man', df=sample_df, thresh=1)
+        mock_savefig.assert_not_called()
+
+
+def test_characterize_monosaccharide_with_bond_mode():
+    """Test characterize_monosaccharide in bond mode"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        characterize_monosaccharide('a1-3', mode='bond')
+        mock_savefig.assert_not_called()
+
+
+def test_characterize_monosaccharide_with_modifications():
+    """Test characterize_monosaccharide with modifications enabled"""
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        characterize_monosaccharide('Man', modifications=True)
+        mock_savefig.assert_not_called()
+
+
+@pytest.fixture
+def mock_clustermap():
+    mock_fig = MagicMock()
+    mock_fig.figure = plt.figure()
+    mock_clustermap = MagicMock()
+    mock_clustermap.fig = mock_fig.figure
+    return mock_clustermap
+
+
+def test_get_heatmap_basic(sample_df):
+    """Test basic functionality of get_heatmap"""
+    with patch.object(sns, 'clustermap', return_value=mock_clustermap):
+        get_heatmap(sample_df)
+
+
+def test_get_heatmap_with_motifs(sample_df):
+    """Test get_heatmap with motif analysis"""
+    with patch.object(sns, 'clustermap', return_value=mock_clustermap):
+        get_heatmap(sample_df, motifs=True)
+
+
+def test_get_heatmap_with_transform(sample_df):
+    """Test get_heatmap with data transformation"""
+    with patch.object(sns, 'clustermap', return_value=mock_clustermap):
+        get_heatmap(sample_df, transform='CLR')
+
+
+def test_get_heatmap_with_custom_feature_set(sample_df):
+    """Test get_heatmap with custom feature set"""
+    with patch.object(sns, 'clustermap', return_value=mock_clustermap):
+        get_heatmap(sample_df, motifs=True, feature_set=['known'])
+
+
+def test_get_pca_basic(sample_df):
+    """Test basic functionality of get_pca"""
+    groups = [1, 1, 1]
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_pca(sample_df, groups)
+        mock_savefig.assert_not_called()
+
+
+def test_get_pca_with_metadata(sample_df):
+    """Test get_pca with metadata DataFrame"""
+    metadata = pd.DataFrame({'id': ['sample1', 'sample2', 'sample3'],
+                           'group': ['A', 'A', 'B']})
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_pca(sample_df, metadata)
+        mock_savefig.assert_not_called()
+
+
+def test_get_pca_with_motifs(sample_df):
+    """Test get_pca with motif analysis"""
+    groups = [1, 1, 1]
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_pca(sample_df, groups, motifs=True)
+        mock_savefig.assert_not_called()
+
+
+def test_get_pca_with_custom_components(sample_df):
+    """Test get_pca with custom principal components"""
+    groups = [1, 1, 1]
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_pca(sample_df, groups, pc_x=2, pc_y=3)
+        mock_savefig.assert_not_called()
+
+
+@pytest.fixture
+def sample_jtk_df():
+    """
+    Creates a test dataset for JTK analysis with:
+    - 24h coverage with 4h intervals (0,4,8,12,16,20)
+    - 2 replicates per timepoint
+    - 3 glycans with different rhythmic patterns:
+      - Man3GlcNAc2: Strong 24h rhythm
+      - Man5GlcNAc2: Weak 12h rhythm
+      - Man9GlcNAc2: No rhythm (control)
+    """
+    # Generate timepoints every 4 hours for 24 hours
+    timepoints = [0, 4, 8, 12, 16, 20]
+    columns = ['glycan'] + [f'T_h{t}_r{r}' for t in timepoints for r in [1, 2]]
+    # Create rhythmic patterns
+    # Man3GlcNAc2: 24h cycle (peak at 12h)
+    h24_pattern = [10, 15, 25, 30, 25, 15]  # Base values for 24h rhythm
+    # Man5GlcNAc2: 12h cycle (peaks at 4h and 16h)
+    h12_pattern = [15, 25, 15, 20, 25, 15]  # Base values for 12h rhythm
+    # Man9GlcNAc2: No rhythm (random variation around mean)
+    no_rhythm = [20, 21, 19, 22, 20, 21]    # Stable values with small variation
+    # Add some noise to replicates (±10% variation)
+    data = {
+        'glycan': ['Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                   'Man(a1-2)Man(a1-3)[Man(a1-6)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                   'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc']
+    }
+    # Add two replicates for each timepoint with small random variation
+    np.random.seed(42)  # For reproducibility
+    for t_idx, t in enumerate(timepoints):
+        for r in [1, 2]:
+            col = f'T_h{t}_r{r}'
+            base_values = [h24_pattern[t_idx], h12_pattern[t_idx], no_rhythm[t_idx]]
+            # Add 5% random noise
+            noise = np.random.normal(0, 0.05, 3) * np.array(base_values)
+            data[col] = np.array(base_values) + noise
+    return pd.DataFrame(data)
+
+
+def test_get_jtk_basic(sample_jtk_df):
+    """Test basic functionality of get_jtk"""
+    periods = [12, 24]
+    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods, interval=4)
+    assert isinstance(result, pd.DataFrame)
+    assert 'Adjusted_P_value' in result.columns
+    assert 'Period_Length' in result.columns
+
+
+def test_get_jtk_with_motifs(sample_jtk_df):
+    """Test get_jtk with motif analysis"""
+    periods = [12, 24]
+    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods,
+                     interval=4, motifs=True)
+    assert isinstance(result, pd.DataFrame)
+    assert 'Adjusted_P_value' in result.columns
+
+
+def test_get_jtk_with_transform(sample_jtk_df):
+    """Test get_jtk with data transformation"""
+    periods = [12, 24]
+    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods,
+                     interval=4, transform='CLR')
+    assert isinstance(result, pd.DataFrame)
+
+
+def test_multi_feature_scoring_basic(sample_df):
+    """Test basic functionality of multi_feature_scoring"""
+    np.random.seed(42)
+    n_features = 5
+    n_samples = 10
+    data = np.random.rand(n_features, n_samples)
+    # Make the first feature strongly predictive
+    data[0, :5] = 0.1  # Clear signal for group 1
+    data[0, 5:] = 0.9  # Clear signal for group 2
+    # Make the second feature moderately predictive
+    data[1, :5] = 0.3
+    data[1, 5:] = 0.7
+    df_transformed = pd.DataFrame(data)
+    group1 = [0, 1, 2, 3, 4]
+    group2 = [5, 6, 7, 8, 9]
+    model, roc_auc = multi_feature_scoring(df_transformed, group1, group2)
+    assert hasattr(model, 'predict')
+    assert 0 <= roc_auc <= 1
+    assert roc_auc > 0.5
+
+
+def test_multi_feature_scoring_with_filepath(sample_df):
+    """Test multi_feature_scoring with file saving"""
+    np.random.seed(42)
+    n_features = 5
+    n_samples = 10
+    data = np.random.rand(n_features, n_samples)
+    # Make the first feature strongly predictive
+    data[0, :5] = 0.1
+    data[0, 5:] = 0.9
+    df_transformed = pd.DataFrame(data)
+    group1 = [0, 1, 2, 3, 4]
+    group2 = [5, 6, 7, 8, 9]
+    with patch('matplotlib.pyplot.subplots') as mock_subplots:
+        mock_fig = MagicMock()
+        mock_ax = MagicMock()
+        mock_subplots.return_value = (mock_fig, mock_ax)
+        with patch('matplotlib.pyplot.savefig') as mock_savefig:
+            multi_feature_scoring(df_transformed, group1, group2, filepath='test.png')
+            mock_savefig.assert_called_once()
+
+
+def test_multi_feature_scoring_imbalanced_groups(sample_df):
+    """Test multi_feature_scoring with imbalanced groups"""
+    np.random.seed(42)
+    n_features = 5
+    n_samples = 10
+    data = np.random.rand(n_features, n_samples)
+    # Make the first feature strongly predictive
+    data[0, :4] = 0.1  # Group 1 (4 samples)
+    data[0, 4:] = 0.9  # Group 2 (6 samples)
+    df_transformed = pd.DataFrame(data)
+    group1 = [0, 1, 2, 3]
+    group2 = [4, 5, 6, 7, 8, 9]
+    with patch('matplotlib.pyplot.figure'):
+        model, roc_auc = multi_feature_scoring(df_transformed, group1, group2)
+    assert hasattr(model, 'predict')
+    assert 0 <= roc_auc <= 1
+    assert roc_auc > 0.5
+
+
+def test_get_glycoshift_per_site_basic(sample_glycoshift_df):
+    """Test basic functionality of get_glycoshift_per_site"""
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3', 'sample4']
+    result = get_glycoshift_per_site(sample_glycoshift_df, group1, group2)
+    assert isinstance(result, pd.DataFrame)
+    assert 'Condition_corr_pval' in result.columns
+
+
+def test_get_glycoshift_per_site_with_custom_params(sample_glycoshift_df):
+    """Test get_glycoshift_per_site with custom parameters"""
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3', 'sample4']
+    result = get_glycoshift_per_site(sample_glycoshift_df, group1, group2,
+                                    min_samples=0.3, gamma=0.2)
+    assert isinstance(result, pd.DataFrame)
+
+
+def test_get_glycoshift_per_site_paired(sample_glycoshift_df):
+    """Test get_glycoshift_per_site with paired samples"""
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3', 'sample4']
+    result = get_glycoshift_per_site(sample_glycoshift_df, group1, group2,
+                                    paired=True)
+    assert isinstance(result, pd.DataFrame)
+
+
+def test_get_glycoshift_per_site_no_imputation(sample_glycoshift_df):
+    """Test get_glycoshift_per_site without imputation"""
+    group1 = ['sample1', 'sample2']
+    group2 = ['sample3', 'sample4']
+    result = get_glycoshift_per_site(sample_glycoshift_df, group1, group2,
+                                    impute=False)
+    assert isinstance(result, pd.DataFrame)
+
+
 @pytest.fixture
 def simple_network():
     # Create a simple directed network
@@ -3159,7 +3647,7 @@ def test_hierarchy_filter_basic():
         'Domain': ['d1']*5 + ['d2']*5
     }
     df = pd.DataFrame(data)
-    train_x, val_x, train_y, val_y, id_val, class_list, class_converter = hierarchy_filter(
+    train_x, val_x, train_y, val_y, _, class_list, class_converter = hierarchy_filter(
         df, rank='Domain', min_seq=1
     )
     assert len(train_x) + len(val_x) == len(set(df['glycan']))  # Check for duplicates removal
@@ -3445,4 +3933,334 @@ def test_dataset_to_dataloader_batch_size(mock_glycan_dataset, mock_library):
             batch_size=batch_size
         )
         assert dataloader.batch_size == batch_size
-        first_batch = next(iter(dataloader))
+        _ = next(iter(dataloader))
+
+
+@pytest.fixture(params=[
+    'regression',
+    'classification',
+    'multilabel'
+])
+def mode(request):
+    return request.param
+
+
+@pytest.fixture
+def expected_metrics(mode):
+    metrics_map = {
+        'regression': ['loss', 'mse', 'mae', 'r2'],
+        'classification': ['loss', 'acc', 'mcc', 'auroc'],
+        'multilabel': ['loss', 'acc', 'mcc', 'lrap', 'ndcg']
+    }
+    return metrics_map[mode]
+
+
+@pytest.fixture
+def mock_model(mode):
+    """Create a mock model that adapts its output size based on the mode"""
+    class SimpleModel(nn.Module):
+        def __init__(self, output_size):
+            super().__init__()
+            self.embedding = nn.Embedding(10, 32)
+            self.fc = nn.Linear(32, output_size)
+            self.bn = nn.BatchNorm1d(32)
+
+        def forward(self, x, edge_index, batch):
+            x = self.embedding(x)
+            x = self.bn(x)
+            graph_embed = torch.zeros(batch.max().item() + 1, x.size(1),
+                                    device=x.device)
+            graph_embed.index_add_(0, batch, x)
+            out = self.fc(graph_embed)
+            return out
+    output_sizes = {
+        'regression': 1,
+        'classification': 2,
+        'multilabel': 2
+    }
+    return SimpleModel(output_sizes[mode])
+
+
+@pytest.fixture
+def mock_dataloader(mode):
+    class MockData:
+        def __init__(self, mode):
+            # Node features for 6 nodes across 2 graphs
+            self.labels = torch.tensor([0, 1, 0, 1, 0, 1], dtype=torch.long)
+            # Edge connections
+            self.edge_index = torch.tensor([[0, 1, 2, 3, 4, 5],
+                                          [1, 2, 0, 4, 5, 3]], dtype=torch.long)
+            # Batch assignments: first 3 nodes to first graph, last 3 to second
+            self.batch = torch.tensor([0, 0, 0, 1, 1, 1], dtype=torch.long)
+            # Adapt y based on mode
+            if mode == 'regression':
+                self.y = torch.tensor([0.5, 1.5], dtype=torch.float)
+            elif mode == 'classification':
+                self.y = torch.tensor([0, 1], dtype=torch.long)
+            else:  # multilabel
+                self.y = torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float)
+    class MockLoader:
+        def __init__(self, data_list):
+            self.data_list = data_list
+        def __iter__(self):
+            return iter(self.data_list)
+        def __len__(self):
+            return len(self.data_list)
+    mock_data_list = [MockData(mode=mode) for _ in range(3)]
+    loader = MockLoader(mock_data_list)
+    return {'train': loader, 'val': loader}
+
+
+@pytest.fixture
+def mock_xgb_data():
+    X_train = pd.DataFrame({
+        'feature1': [1, 2, 3],
+        'feature2': [4, 5, 6]
+    })
+    X_test = pd.DataFrame({
+        'feature1': [7, 8, 9],
+        'feature2': [10, 11, 12]
+    })
+    y_train = [0, 1, 0]
+    y_test = [1, 0, 1]
+    return X_train, X_test, y_train, y_test
+
+
+def test_early_stopping():
+    early_stopping = EarlyStopping(patience=2, verbose=True)
+    model = Mock()
+    # Should not stop after first higher loss
+    early_stopping(0.5, model)
+    early_stopping(0.6, model)
+    assert not early_stopping.early_stop
+    # Should stop after patience exceeded
+    early_stopping(0.7, model)
+    assert early_stopping.early_stop
+    # Should reset counter on improvement
+    early_stopping = EarlyStopping(patience=2)
+    early_stopping(0.5, model)
+    early_stopping(0.4, model)  # Improvement
+    early_stopping(0.45, model)  # Worse
+    assert not early_stopping.early_stop  # Counter should have reset
+
+
+def test_sigmoid():
+    assert abs(sigmoid(0) - 0.5) < 1e-6
+    assert sigmoid(100) > 0.99
+    assert sigmoid(-100) < 0.01
+
+
+def test_batch_norm_stats(mock_model):
+    # Test disabling
+    disable_running_stats(mock_model)
+    assert mock_model.bn.momentum == 0
+    assert hasattr(mock_model.bn, 'backup_momentum')
+    # Test enabling
+    enable_running_stats(mock_model)
+    assert mock_model.bn.momentum == mock_model.bn.backup_momentum
+
+
+@patch('torch.cuda.is_available', return_value=False)
+def test_poly1_cross_entropy_loss(_):
+    criterion = Poly1CrossEntropyLoss(num_classes=3, epsilon=1.0)
+    logits = torch.tensor([[2.0, 1.0, 0.0], [0.0, 2.0, 1.0]])
+    labels = torch.tensor([0, 1])
+    loss = criterion(logits, labels)
+    assert isinstance(loss, torch.Tensor)
+    assert loss.ndim == 0  # Scalar tensor
+
+
+def test_sam_optimizer(mock_model, mode):
+    if mode == "classification":
+        # Create a dummy input and target
+        x = torch.randint(0, 10, (6,))  # 6 nodes with features in range [0, 10)
+        edge_index = torch.tensor([[0, 1, 2], [1, 2, 0]], dtype=torch.long)  # Some edges
+        batch = torch.tensor([0, 0, 0, 1, 1, 1])  # Two graphs
+        target = torch.tensor([0, 1])  # Labels for the two graphs
+        # Create optimizer
+        sam = SAM(
+            mock_model.parameters(),
+            base_optimizer=torch.optim.SGD,
+            rho=0.5,
+            adaptive=True,
+            lr=0.1
+        )
+        # Forward pass
+        output = mock_model(x, edge_index, batch)
+        loss = torch.nn.functional.cross_entropy(output, target)
+        # Backward pass to create gradients
+        loss.backward()
+        # Now test SAM steps
+        sam.first_step(zero_grad=True)
+        # Another forward-backward pass
+        output = mock_model(x, edge_index, batch)
+        loss = torch.nn.functional.cross_entropy(output, target)
+        loss.backward()
+        sam.second_step(zero_grad=True)
+        # Verify state
+        assert hasattr(sam, 'base_optimizer')
+        assert isinstance(sam.base_optimizer, torch.optim.SGD)
+
+
+def test_sam_optimizer_state():
+    # Create a simple model for testing
+    model = torch.nn.Linear(2, 2)
+    # Create dummy data
+    x = torch.randn(4, 2)
+    y = torch.tensor([0, 1, 0, 1])
+    # Initialize SAM
+    sam = SAM(
+        model.parameters(),
+        base_optimizer=torch.optim.SGD,
+        rho=0.5,
+        adaptive=True,
+        lr=0.1
+    )
+    # Initial parameter values
+    initial_params = {name: param.clone() for name, param in model.named_parameters()}
+    # Forward pass
+    output = model(x)
+    loss = torch.nn.functional.cross_entropy(output, y)
+    loss.backward()
+    # First step
+    sam.first_step(zero_grad=True)
+    # Check parameters were updated
+    for name, param in model.named_parameters():
+        assert not torch.equal(param, initial_params[name]), f"Parameters {name} were not updated in first step"
+    # Store parameters after first step
+    params_after_first = {name: param.clone() for name, param in model.named_parameters()}
+    # Another forward-backward pass
+    output = model(x)
+    loss = torch.nn.functional.cross_entropy(output, y)
+    loss.backward()
+    # Second step
+    sam.second_step(zero_grad=True)
+    # Check parameters were updated again
+    for name, param in model.named_parameters():
+        assert not torch.equal(param, params_after_first[name]), f"Parameters {name} were not updated in second step"
+
+
+def test_sam_optimizer_zero_grad():
+    model = torch.nn.Linear(2, 2)
+    x = torch.randn(4, 2)
+    y = torch.tensor([0, 1, 0, 1])
+    sam = SAM(
+        model.parameters(),
+        base_optimizer=torch.optim.SGD,
+        rho=0.5,
+        adaptive=True,
+        lr=0.1
+    )
+    # Forward and backward pass
+    output = model(x)
+    loss = torch.nn.functional.cross_entropy(output, y)
+    loss.backward()
+    # Check gradients exist
+    assert all(p.grad is not None for p in model.parameters())
+    # Test zero_grad
+    sam.zero_grad()
+    assert all(p.grad is None or torch.all(p.grad == 0) for p in model.parameters())
+
+
+@patch('torch.cuda.is_available', return_value=False)
+def test_training_setup(_, mock_model):
+    optimizer, scheduler, criterion = training_setup(
+        mock_model,
+        lr=0.001,
+        mode='multiclass',
+        num_classes=3
+    )
+    assert isinstance(optimizer, SAM)
+    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+    assert isinstance(criterion, Poly1CrossEntropyLoss)
+
+
+def test_train_ml_model(mock_xgb_data):
+    X_train, X_test, y_train, y_test = mock_xgb_data
+    # Test classification
+    model = train_ml_model(
+        X_train, X_test, y_train, y_test,
+        mode='classification',
+        feature_calc=False
+    )
+    assert isinstance(model, xgb.XGBClassifier)
+    # Test regression
+    model = train_ml_model(
+        X_train, X_test, y_train, y_test,
+        mode='regression',
+        feature_calc=False
+    )
+    assert isinstance(model, xgb.XGBRegressor)
+
+
+@patch('matplotlib.pyplot.show')
+def test_analyze_ml_model(mock_show, mock_xgb_data):
+    X_train, X_test, y_train, y_test = mock_xgb_data
+    model = train_ml_model(X_train, X_test, y_train, y_test, mode='classification')
+    analyze_ml_model(model)
+    mock_show.assert_called_once()
+
+
+def test_get_mismatch(mock_xgb_data):
+    X_train, X_test, y_train, y_test = mock_xgb_data
+    model = train_ml_model(X_train, X_test, y_train, y_test, mode='classification')
+    mismatches = get_mismatch(model, X_test, y_test, n=2)
+    assert isinstance(mismatches, list)
+    assert all(isinstance(m, tuple) and len(m) == 2 for m in mismatches)
+    assert len(mismatches) <= 2
+
+
+def verify_mock_data(data):
+    """Helper function to verify mock data structure"""
+    assert hasattr(data, 'labels')
+    assert hasattr(data, 'y')
+    assert hasattr(data, 'edge_index')
+    assert hasattr(data, 'batch')
+    assert isinstance(data.labels, torch.Tensor)
+    assert isinstance(data.y, torch.Tensor)
+    assert isinstance(data.edge_index, torch.Tensor)
+    assert isinstance(data.batch, torch.Tensor)
+    assert data.batch.max() == 1  # Should have exactly 2 graphs
+    assert len(data.y) == 2  # Should have 2 labels (one per graph)
+    assert len(data.labels) == 6  # Should have 6 nodes
+    assert (data.batch == 0).sum() == 3  # 3 nodes in first graph
+    assert (data.batch == 1).sum() == 3  # 3 nodes in second graph
+
+
+@patch('torch.cuda.is_available', return_value=False)
+def test_train_model_all_modes(mock_cuda, mode, expected_metrics, mock_model, mock_dataloader):
+    # Configure based on mode
+    if mode == 'regression':
+        criterion = nn.MSELoss()
+        optimizer = torch.optim.Adam(mock_model.parameters(), lr=0.1)
+    elif mode == 'classification':
+        criterion = nn.CrossEntropyLoss()
+        optimizer = SAM(mock_model.parameters(), torch.optim.SGD, lr=0.1)
+    else:  # multilabel
+        criterion = nn.BCEWithLogitsLoss()
+        optimizer = SAM(mock_model.parameters(), torch.optim.SGD, lr=0.1)
+    scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer.base_optimizer if isinstance(optimizer, SAM) else optimizer,
+        step_size=1
+    )
+    # Run training
+    _, metrics = train_model(
+        mock_model,
+        mock_dataloader,
+        criterion,
+        optimizer,
+        scheduler,
+        num_epochs=2,
+        mode=mode,
+        mode2='multi' if mode != 'regression' else 'binary',
+        return_metrics=True
+    )
+    # Verify metrics structure
+    assert isinstance(metrics, dict)
+    assert 'train' in metrics and 'val' in metrics
+    for phase in ['train', 'val']:
+        assert all(key in metrics[phase] for key in expected_metrics)
+        for metric in metrics[phase].values():
+            assert len(metric) == 2  # Two epochs
+            assert all(isinstance(v, float) for v in metric)
+            assert all(not np.isnan(v) for v in metric)

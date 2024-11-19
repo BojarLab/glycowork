@@ -59,7 +59,7 @@ class EarlyStopping:
 def sigmoid(x: float # input value
           ) -> float: # sigmoid transformed value
     "Apply sigmoid transformation to input"
-    return 1 / (1 + math.exp(-x))
+    return 1 / (1 + np.exp(-x))
 
 
 def disable_running_stats(model: torch.nn.Module # model to disable batch norm
@@ -127,17 +127,17 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
             running_metrics["weights"] = []
 
             for data in dataloaders[phase]:
-                # Get all relevant node attributes; top LectinOracle-style models, bottom SweetNet-style models
-                try:
-                    x, y, edge_index, prot, batch = data.labels, data.y, data.edge_index, data.train_idx, data.batch
+                # Get all relevant node attributes
+                x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
+                prot = getattr(data, 'train_idx', None)
+                if prot is not None:
                     prot = prot.view(max(batch) + 1, -1).to(device)
-                except:
-                    x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
                 x = x.to(device)
                 if mode == 'multilabel':
                     y = y.view(max(batch) + 1, -1).to(device)
                 else:
                     y = y.to(device)
+                y = y.view(-1, 1) if mode == 'regression' else y
                 edge_index = edge_index.to(device)
                 batch = batch.to(device)
                 optimizer.zero_grad()
@@ -146,24 +146,18 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     # First forward pass
                     if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
                         enable_running_stats(model)
-                    try:
-                        pred = model(prot, x, edge_index, batch)
-                        loss = criterion(pred, y.view(-1, 1))
-                    except:
-                        pred = model(x, edge_index, batch)
-                        loss = criterion(pred, y)
+                    pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
+                    loss = criterion(pred, y)
 
                     if phase == 'train':
                         loss.backward()
                         if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
-                            optimizer.first_step(zero_grad=True)
+                            optimizer.first_step(zero_grad = True)
                             # Second forward pass
                             disable_running_stats(model)
-                            try:
-                                criterion(model(prot, x, edge_index, batch), y.view(-1, 1)).backward()
-                            except:
-                                criterion(model(x, edge_index, batch), y).backward()
-                            optimizer.second_step(zero_grad=True)
+                            second_pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
+                            criterion(second_pred, y).backward()
+                            optimizer.second_step(zero_grad = True)
                         else:
                             optimizer.step()
 
@@ -175,17 +169,21 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                 pred_det = pred.cpu().detach().numpy()
                 if mode == 'classification':
                     if mode2 == 'multi':
-                        pred2 = np.argmax(pred_det, axis=1)
+                        pred_proba = np.exp(pred_det) / np.sum(np.exp(pred_det), axis = 1, keepdims = True)  # numpy softmax
+                        pred2 = np.argmax(pred_det, axis = 1)
                     else:
-                        pred2 = [np.round(sigmoid(x)) for x in pred_det]
+                        pred_proba = sigmoid(pred_det)
+                        pred2 = (pred_proba >= 0.5).astype(int)
                     running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
                     running_metrics["mcc"].append(matthews_corrcoef(y_det, pred2))
-                    running_metrics["auroc"].append(roc_auc_score(y_det.astype(int), pred2))
+                    running_metrics["auroc"].append(roc_auc_score(y_det.astype(int), pred_proba if mode2 == 'binary' else pred_proba[:, 1]))
                 elif mode == 'multilabel':
-                    running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred_det))
-                    running_metrics["mcc"].append(matthews_corrcoef(y_det, pred_det))
-                    running_metrics["lrap"].append(label_ranking_average_precision_score(y_det.astype(int), pred_det))
-                    running_metrics["ndcg"].append(ndcg_score(y_det.astype(int), pred_det))
+                    pred_proba = sigmoid(pred_det)
+                    pred2 = (pred_proba >= 0.5).astype(int)
+                    running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
+                    running_metrics["mcc"].append(matthews_corrcoef(y_det.flatten(), pred2.flatten()))
+                    running_metrics["lrap"].append(label_ranking_average_precision_score(y_det.astype(int), pred_proba))
+                    running_metrics["ndcg"].append(ndcg_score(y_det.astype(int), pred_proba))
                 else:
                     running_metrics["mse"].append(mean_squared_error(y_det, pred_det))
                     running_metrics["mae"].append(mean_absolute_error(y_det, pred_det))
@@ -195,7 +193,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
             for key in running_metrics:
                 if key == "weights":
                     continue
-                metrics[phase][key].append(np.average(running_metrics[key], weights=running_metrics["weights"]))
+                metrics[phase][key].append(np.average(running_metrics[key], weights = running_metrics["weights"]))
 
             if mode == 'classification':
                 print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["acc"][-1], metrics[phase]["mcc"][-1]))
@@ -220,9 +218,9 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
 
                 # Check Early Stopping & adjust learning rate if needed
                 early_stopping(metrics[phase]["loss"][-1], model)
-                try:
+                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     scheduler.step(metrics[phase]["loss"][-1])
-                except:
+                else:
                     scheduler.step()
 
         if early_stopping.early_stop:

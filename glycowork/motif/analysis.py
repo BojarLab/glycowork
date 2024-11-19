@@ -269,31 +269,33 @@ def plot_embeddings(
     "Visualizes learned glycan embeddings using t-SNE dimensionality reduction with optional group coloring"
     idx = [i for i, g in enumerate(glycans) if '{' not in g]
     glycans = [glycans[i] for i in idx]
-    label_list = [label_list[i] for i in idx]
+    if label_list is not None:
+      label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
       if not os.path.exists('glycan_representations_v1_4.pkl'):
           download_model("https://drive.google.com/file/d/1--tf0kyea9jFLfffUtICKkyIw36E9hJ3/view?usp=sharing", local_path = 'glycan_representations_v1_4.pkl')
       emb = pickle.load(open('glycan_representations_v1_4.pkl', 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
-    if isinstance(emb, pd.DataFrame):
-      emb = {g: emb.iloc[i, :] for i, g in enumerate(glycans)}
-    embs = np.vstack([emb[g] for g in glycans])
+    embs = emb.values if isinstance(emb, pd.DataFrame) else np.vstack([emb[g] for g in glycans])
     # Calculate t-SNE of embeddings
-    embs = TSNE(random_state = 42,
+    n_samples = embs.shape[0]
+    perplexity = min(30, n_samples - 1)
+    embs = TSNE(random_state = 42, perplexity = perplexity,
                 init = 'pca', learning_rate = 'auto').fit_transform(embs)
     # Plot the t-SNE
     markers = None
     if shape_feature is not None:
       markers = {shape_feature: "X", "Absent": "o"}
       shape_feature = [shape_feature if shape_feature in g else 'Absent' for g in glycans]
-    sns.scatterplot(x = embs[:, 0], y = embs[:, 1], hue = label_list,
-                    palette = palette, style = shape_feature, markers = markers,
-                    alpha = alpha, **kwargs)
+    sns.scatterplot(x = embs[:, 0], y = embs[:, 1], hue = label_list if label_list is not None else None,
+                    palette = palette if label_list is not None else None, style = shape_feature,
+                    markers = markers, alpha = alpha, **kwargs)
     sns.despine(left = True, bottom = True)
     plt.xlabel('Dim1')
     plt.ylabel('Dim2')
-    plt.legend(bbox_to_anchor = (1.05, 1), loc = 2, borderaxespad = 0.)
+    if label_list is not None:
+      plt.legend(bbox_to_anchor = (1.05, 1), loc = 2, borderaxespad = 0.)
     plt.tight_layout()
     if filepath:
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
@@ -773,7 +775,8 @@ def get_meta_analysis(
     "Performs fixed/random effects meta-analysis using DerSimonian-Laird method for between-study variance estimation, with optional Forest plot visualization"
     if model not in ['fixed', 'random']:
       raise ValueError("Model must be 'fixed' or 'random'")
-    weights = 1 / np.array(variances)
+    variances = np.array(variances)
+    weights = 1 / variances
     total_weight = np.sum(weights)
     combined_effect_size = np.dot(weights, effect_sizes) / total_weight
     if model == 'random':
@@ -783,7 +786,7 @@ def get_meta_analysis(
       c = total_weight - np.sum(weights**2) / total_weight
       tau_squared = max((q - df) / (c + 1e-8), 0)
       # Update weights for tau_squared
-      weights /= (variances + tau_squared)
+      weights = 1 / (variances + tau_squared)
       total_weight = np.sum(weights)
       # Recalculate combined effect size
       combined_effect_size = np.dot(weights, effect_sizes) / (total_weight + 1e-8)

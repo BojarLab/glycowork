@@ -2,7 +2,7 @@ import re
 import copy
 import networkx as nx
 from itertools import product, combinations, chain
-from typing import Dict, List, Union, Optional, Tuple, Any
+from typing import Dict, List, Union, Optional, Tuple
 from glycowork.glycan_data.loader import replace_every_second, unwrap
 from glycowork.motif.processing import min_process_glycans, bracket_removal, canonicalize_iupac
 from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, compare_glycans, glycan_to_nxGraph
