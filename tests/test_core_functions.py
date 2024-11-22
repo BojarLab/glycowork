@@ -5,11 +5,19 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import seaborn as sns
+import sys
+import shutil
 import torch
 import torch.nn as nn
+import drawsvg as draw
+import matplotlib
+matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
 import matplotlib.pyplot as plt
-from unittest.mock import Mock, patch, MagicMock
+from matplotlib.collections import PathCollection, LineCollection
+from matplotlib.patches import FancyArrowPatch
+from unittest.mock import Mock, patch, MagicMock, mock_open
 from torch_geometric.data import Data
+from collections import Counter
 from glycowork.glycan_data.data_entry import check_presence
 from glycowork.motif.query import get_insight, glytoucan_to_glycan
 from glycowork.motif.tokenization import (
@@ -65,32 +73,41 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process
                   expand_pattern, convert_pattern_component, reformat_glycan_string,
                   motif_to_regex, get_match, process_question_mark, calculate_len_matches_comb,
                   process_main_branch, check_negative_look,
-                  filter_matches_by_location, parse_pattern)
-from glycowork.motif.draw import (matches, process_bonds, split_monosaccharide_linkage,
-                 scale_in_range, glycan_to_skeleton, process_per_residue,
-                 get_hit_atoms_and_bonds, add_colours_to_map, unique)
-from glycowork.motif.analysis import (preprocess_data,
-                     get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
+                  filter_matches_by_location, parse_pattern
+)
+from glycowork.motif.draw import (matches, process_bonds, split_monosaccharide_linkage, draw_hex, split_node,
+                 scale_in_range, glycan_to_skeleton, process_per_residue, hex_circumference, col_dict_base,
+                 get_hit_atoms_and_bonds, add_colours_to_map, unique, is_jupyter, process_repeat, draw_bracket,
+                 display_svg_with_matplotlib, multiple_branch_branches,
+                 get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
+                 process_bonds, draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, get_indices
+)
+from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
                      get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings,
-                     characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site)
+                     characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site
+)
 from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighbors, create_neighbors,
-                         find_diff, find_path, construct_network, prune_network, estimate_weights,
+                         find_diff, find_path, construct_network, prune_network, estimate_weights, network_alignment,
                          extend_glycans, highlight_network, infer_roots, deorphanize_nodes, get_edge_weight_by_abundance,
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
-                         deorphanize_edge_labels)
+                         deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme,
+                         get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
+                         plot_network
+)
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
-                      jaccard, distance_from_metric, check_conservation,
-                      get_communities)
+                      jaccard, distance_from_metric, check_conservation, get_communities
+)
 from glycowork.ml.train_test_split import (seed_wildcard_hierarchy, hierarchy_filter,
-                            general_split, prepare_multilabel)
+                            general_split, prepare_multilabel
+)
 from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset,
-                       dataset_to_graphs, dataset_to_dataloader,
-                       split_data_to_train)
+                       dataset_to_graphs, dataset_to_dataloader, split_data_to_train
+)
 from glycowork.ml.model_training import (EarlyStopping, sigmoid, disable_running_stats,
-                          enable_running_stats, train_model, SAM,
-                          Poly1CrossEntropyLoss, training_setup,
-                          train_ml_model, analyze_ml_model, get_mismatch)
+                          enable_running_stats, train_model, SAM, Poly1CrossEntropyLoss, training_setup,
+                          train_ml_model, analyze_ml_model, get_mismatch
+)
 
 
 @pytest.mark.parametrize("glycan", [
@@ -2063,6 +2080,163 @@ def test_process_bonds():
     assert result == [["α 2", "β 4"]]
 
 
+def test_draw_chem2d():
+    try:
+        from rdkit.Chem import MolFromSmiles
+        from rdkit.Chem.Draw import PrepareMolForDrawing
+        from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
+    except ImportError:
+        pytest.skip("RDKit not installed")
+    with patch('IPython.display.SVG', return_value="SVG Object"):
+        # Test basic 2D drawing
+        result = draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"])
+        assert result == "SVG Object"
+        # Test with filepath
+        with patch('builtins.open', mock_open()) as mock_file:
+            draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath="test.svg")
+            mock_file.assert_called_once_with('test.svg', 'w')
+        # Test with unsupported glycan
+        with patch('glycowork.motif.processing.IUPAC_to_SMILES', side_effect=Exception), pytest.raises(Exception):
+            draw_chem2d("InvalidGlycan", ["GlcNAc"])
+
+
+def test_draw_chem3d():
+    try:
+        from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile
+        from rdkit.Chem.AllChem import EmbedMolecule, MMFFOptimizeMolecule
+        import py3Dmol
+    except ImportError:
+        pytest.skip("RDKit and/or py3Dmol not installed")
+    with patch('IPython.display.display') as mock_display:
+        # Test basic 3D drawing
+        draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"])
+        # Test with filepath
+        draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath="test.pdb")
+        # Test with non-PDB filepath
+        with patch('builtins.print') as mock_print:
+            draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath="test.svg")
+
+
+def test_glycodraw():
+    # Test basic drawing
+    result = GlycoDraw("GlcNAc(b1-4)GlcA", suppress=True)
+    assert result is not None
+    # Test vertical orientation
+    result = GlycoDraw("GlcNAc(b1-4)GlcA", vertical=True, suppress=True)
+    assert result is not None
+    # Test compact mode
+    result = GlycoDraw("GlcNAc(b1-4)GlcA", compact=True, suppress=True)
+    assert result is not None
+    # Test with highlighting
+    result = GlycoDraw("GlcNAc(b1-4)GlcA", highlight_motif="GlcNAc", suppress=True)
+    assert result is not None
+    # Test with repeat unit
+    result = GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat=True, suppress=True)
+    assert result is not None
+    # Test invalid glycan
+    with pytest.raises(Exception):
+        GlycoDraw("InvalidGlycan")
+
+
+def test_plot_glycans_excel(tmp_path):
+    # Create test directory
+    test_dir = tmp_path / "test_folder"
+    test_dir.mkdir()
+    # Create test DataFrame
+    df = pd.DataFrame({
+        'Glycans': ['GlcNAc(b1-4)GlcA', 'Man(a1-3)Man'],
+        'Values': [1, 2]
+    })
+    # Make sure cairosvg and PIL.Image are available
+    try:
+        from cairosvg import svg2png
+        from PIL import Image
+    except ImportError:
+        pytest.skip("cairosvg or PIL not installed")
+    # Run the actual function to plot glycans and save to Excel
+    plot_glycans_excel(df, str(test_dir))
+    # Assert that the output file exists
+    output_file = test_dir / "output.xlsx"
+    assert output_file.exists(), f"Expected output file {output_file} to be created."
+    # Load the output Excel file and check if image was inserted
+    from openpyxl import load_workbook
+    # Load workbook
+    wb = load_workbook(output_file)
+    sheet = wb.active
+    # Check if the image is inserted by checking for a non-empty cell
+    # This assumes the image is inserted in the third column and second row
+    cell = sheet.cell(row=2, column=3)
+    assert cell.value is None, "Expected an image to be inserted into the Excel sheet."
+    # Test with different scaling
+    plot_glycans_excel(df, str(test_dir), scaling_factor=0.5)
+    # Test with compact mode
+    plot_glycans_excel(df, str(test_dir), compact=True)
+    # Test with CSV input
+    csv_path = test_dir / "test.csv"
+    df.to_csv(csv_path, index = False)
+    plot_glycans_excel(str(csv_path), str(test_dir))
+    # Test with Excel input
+    excel_path = test_dir / "test.xlsx"
+    df.to_excel(excel_path, index = False)
+    plot_glycans_excel(str(excel_path), str(test_dir))
+    # Test with different glycan column
+    df2 = pd.DataFrame({
+            'Other': ['GlcNAc(b1-4)GlcA', 'Man(a1-3)Man'],
+            'Values': [1, 2]
+    })
+    plot_glycans_excel(df2, str(test_dir), glycan_col_num=0)
+    # Clean up the test folder after the test
+    shutil.rmtree(test_dir)
+
+
+@pytest.fixture
+def mock_svg_file():
+    return """<?xml version="1.0" encoding="UTF-8"?>
+    <svg>
+        <!-- GlcNAc -->
+        <g transform="scale(0.1 -0.1)">
+            <text>GlcNAc</text>
+        </g>
+    </svg>"""
+
+
+def test_annotate_figure(mock_svg_file):
+    with patch('builtins.open', Mock(return_value=Mock(read=Mock(return_value=mock_svg_file)))):
+        # Test basic annotation
+        result = annotate_figure("input.svg")
+        assert isinstance(result, str)
+        assert "svg" in result
+        # Test with glycan size
+        result = annotate_figure("input.svg", glycan_size="small")
+        assert isinstance(result, str)
+        # Test with compact mode
+        result = annotate_figure("input.svg", compact=True)
+        assert isinstance(result, str)
+        # Test with differential expression results
+        de_results = pd.DataFrame({
+            'Glycan': ['GlcNAc'],
+            'Log2FC': [2.0],
+            'corr p-val': [0.01]
+        })
+        result = annotate_figure("input.svg", scale_by_DE_res=de_results)
+        assert isinstance(result, str)
+
+
+def test_get_indices():
+    # Test basic index finding
+    x = ['a', 'b', 'c', 'b']
+    y = ['b', 'c']
+    result = get_indices(x, y)
+    assert result == [[1, 3], [2]]
+    # Test with missing elements
+    y = ['b', 'd']
+    result = get_indices(x, y)
+    assert result == [[1, 3], [None]]
+    # Test with empty lists
+    assert get_indices([], ['a']) == [[None]]
+    assert get_indices(['a'], []) == []
+
+
 def test_split_monosaccharide_linkage():
     # Test basic splitting
     sugars, mods, bonds = split_monosaccharide_linkage(["GlcNAc", "b1-2", "Man"])
@@ -2159,6 +2333,276 @@ def test_add_colours_to_map():
     add_colours_to_map(els, cols, 0, alpha=True)
     assert len(cols) == 3
     assert all(isinstance(v, list) for v in cols.values())
+
+
+def get_clean_drawing():
+    return draw.Drawing(200, 200)
+
+
+def test_hex_circumference():
+    # Test basic hexagon outline drawing
+    mock_drawing = get_clean_drawing()
+    hex_circumference(1.0, 1.0, 50, col_dict_base, mock_drawing)
+    # Verify drawing object has 6 paths (6 sides of hexagon)
+    assert len(mock_drawing.all_elements()) == 6
+    # Test with different dimensions
+    mock_drawing = get_clean_drawing()
+    hex_circumference(2.0, 2.0, 100, col_dict_base, mock_drawing)
+    assert len(mock_drawing.all_elements()) == 6
+
+
+def test_draw_hex():
+    # Test basic hexagon drawing
+    mock_drawing = get_clean_drawing()
+    draw_hex(1.0, 1.0, 50, col_dict_base, mock_drawing)
+    # Verify drawing has 1 element (the filled hexagon)
+    assert len(mock_drawing.all_elements()) == 1
+    # Test with custom color
+    mock_drawing = get_clean_drawing()
+    draw_hex(1.0, 1.0, 50, col_dict_base, mock_drawing, color='snfg_red')
+    assert len(mock_drawing.all_elements()) == 1
+
+
+def test_split_node():
+    # Create test graph
+    G = nx.Graph()
+    G.add_edges_from([(1, 2), (2, 3), (2, 4)])
+    # Split node 2
+    G_split = split_node(G, 2)
+    # Check that node 2 was split
+    assert 2 not in G_split.nodes()
+    assert '2_0' in G_split.nodes()
+    assert '2_1' in G_split.nodes()
+    assert '2_2' in G_split.nodes()
+    # Check that edges were preserved
+    edges = list(G_split.edges())
+    assert ('2_0', 1) in edges or (1, '2_0') in edges
+    assert ('2_1', 3) in edges or (3, '2_1') in edges
+    assert ('2_2', 4) in edges or (4, '2_2') in edges
+
+
+def test_is_jupyter():
+    # Test basic functionality
+    result = is_jupyter()
+    assert isinstance(result, bool)
+    # Mock IPython environment
+    class MockIPython:
+        class Config:
+            def __contains__(self, item):
+                return item == 'IPKernelApp'
+        config = Config()
+    def mock_get_ipython():
+        return MockIPython()
+    # Test with mocked IPython
+    import builtins
+    old_import = builtins.__import__
+    def mock_import(name, *args):
+        if name == 'IPython':
+            module = type('module', (), {})()
+            module.get_ipython = mock_get_ipython
+            return module
+        return old_import(name, *args)
+    builtins.__import__ = mock_import
+    assert is_jupyter() == True
+    builtins.__import__ = old_import
+
+
+def test_process_repeat():
+    # Test basic repeat unit processing
+    input_str = "GlcNAc(b1-4)GlcA(b1-3)"
+    expected = "blank(?1-3)GlcNAc(b1-4)GlcA(b1-?)"
+    assert process_repeat(input_str) == expected
+    # Test with different linkage
+    input_str = "GlcNAc(b1-4)Glc(a1-6)"
+    expected = "blank(?1-6)GlcNAc(b1-4)Glc(a1-?)"
+    assert process_repeat(input_str) == expected
+
+
+def test_draw_bracket():
+    # Test basic bracket drawing
+    mock_drawing = get_clean_drawing()
+    draw_bracket(1.0, [0.0, 2.0], mock_drawing, 'right', 50, 'show')
+    # Verify drawing has expected elements (vertical line + 2 horizontal lines)
+    assert len(mock_drawing.all_elements()) == 1
+    # Test left-facing bracket
+    mock_drawing = get_clean_drawing()
+    draw_bracket(1.0, [0.0, 2.0], mock_drawing, 'left', 50, 'show')
+    assert len(mock_drawing.all_elements()) == 1
+    # Test with rotation
+    mock_drawing = get_clean_drawing()
+    draw_bracket(1.0, [0.0, 2.0], mock_drawing, 'right', 50, 'show', 45)
+    assert len(mock_drawing.all_elements()) == 1
+
+
+def test_display_svg_with_matplotlib():
+    # Create simple SVG
+    test_svg = draw.Drawing(100, 100)
+    test_svg.append(draw.Circle(50, 50, 20))
+    # Test without cairosvg
+    sys.modules['cairosvg'] = None
+    result = display_svg_with_matplotlib(test_svg)
+    assert result == test_svg
+    # Test with mocked matplotlib
+    class MockPlt:
+        @staticmethod
+        def imread(*args, **kwargs):
+            return np.zeros((100, 100))
+        @staticmethod
+        def imshow(*args, **kwargs):
+            pass
+        @staticmethod
+        def axis(*args, **kwargs):
+            pass
+        @staticmethod
+        def show():
+            pass
+    import matplotlib.pyplot as plt
+    old_plt = plt
+    plt = MockPlt()
+    display_svg_with_matplotlib(test_svg)
+    plt = old_plt
+
+
+def test_multiple_branch_branches():
+    # Test nested branch reordering
+    input_str = "GlcNAc(b1-4)[Fuc(a1-2)[Fuc(a1-3)]Fuc(a1-6)]GlcNAc"
+    result = multiple_branch_branches(input_str)
+    assert "[Fuc(a1-3)]" in result
+    # Test multiple nested branches
+    input_str = "GlcNAc(b1-4)[Fuc(a1-2)[Fuc(a1-3)][Fuc(a1-6)]Fuc(a1-6)]GlcNAc"
+    result = multiple_branch_branches(input_str)
+    assert "[Fuc(a1-6)]" in result
+    assert "[Fuc(a1-3)]" in result
+
+
+def test_draw_shape_hex():
+    # Test basic hexose drawing
+    mock_drawing = get_clean_drawing()
+    draw_shape('Hex', 'snfg_white', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
+    elements = mock_drawing.all_elements()
+    # Should have: circle + text path + text for modification
+    assert len(elements) == 5
+    # Test with modification
+    mock_drawing = get_clean_drawing()
+    draw_shape('Hex', 'snfg_white', 1.0, 1.0, col_dict_base, mock_drawing,
+               modification='2S', dim=50)
+    assert len(mock_drawing.all_elements()) == 5
+    # Test with furanose
+    mock_drawing = get_clean_drawing()
+    draw_shape('Hex', 'snfg_white', 1.0, 1.0, col_dict_base, mock_drawing,
+               furanose=True, dim=50)
+    # Should have additional text elements for furanose indicator
+    assert len(mock_drawing.all_elements()) == 7
+
+
+def test_draw_shape_hexnac():
+    # Test HexNAc drawing (square shape)
+    mock_drawing = get_clean_drawing()
+    draw_shape('HexNAc', 'snfg_yellow', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
+    elements = mock_drawing.all_elements()
+    # Should have: rectangle + text path + text for modification
+    assert len(elements) == 5
+    # Test with configuration
+    mock_drawing = get_clean_drawing()
+    draw_shape('HexNAc', 'snfg_yellow', 1.0, 1.0, col_dict_base, mock_drawing,
+               conf='α', dim=50)
+    assert len(mock_drawing.all_elements()) == 5
+
+
+def test_draw_shape_hexn():
+    # Test HexN drawing (crossed square)
+    mock_drawing = get_clean_drawing()
+    draw_shape('HexN', 'snfg_green', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
+    elements = mock_drawing.all_elements()
+    # Should have: square + diagonal lines + borders
+    assert len(elements) >= 5
+
+
+def test_add_sugar():
+    # Test basic sugar addition
+    mock_drawing = get_clean_drawing()
+    add_sugar('Glc', mock_drawing, 1.0, 1.0, dim=50)
+    assert len(mock_drawing.all_elements()) > 0
+    # Test with modification
+    mock_drawing = get_clean_drawing()
+    add_sugar('GlcNAc', mock_drawing, 1.0, 1.0, modification='3S', dim=50)
+    assert len(mock_drawing.all_elements()) > 0
+    # Test with highlight
+    mock_drawing = get_clean_drawing()
+    add_sugar('Man', mock_drawing, 1.0, 1.0, highlight='show', dim=50)
+    assert len(mock_drawing.all_elements()) > 0
+    # Test unknown sugar
+    mock_drawing = get_clean_drawing()
+    add_sugar('UnknownSugar', mock_drawing, 1.0, 1.0, dim=50)
+    # Should draw X shape for unknown sugars
+    assert len(mock_drawing.all_elements()) == 2
+
+
+def test_get_highlight_attribute():
+    # Create test glycan graph
+    G = glycan_to_nxGraph("Gal(b1-4)GlcNAc(b1-2)Man")
+    # Test with no motif
+    result = get_highlight_attribute(G, '')
+    attrs = nx.get_node_attributes(result, 'highlight_labels')
+    assert all(v == 'show' for v in attrs.values())
+    # Test with specific motif
+    result = get_highlight_attribute(G, 'GlcNAc(b1-2)Man')
+    attrs = nx.get_node_attributes(result, 'highlight_labels')
+    assert attrs[0] == 'hide'  # Gal should not be highlighted
+    assert attrs[2] == 'show'  # GlcNAc should be highlighted
+    assert attrs[4] == 'show'  # Man should be highlighted
+
+
+def test_get_coordinates_and_labels():
+    # Test basic linear glycan
+    glycan = "GlcNAc(b1-4)GlcA"
+    result = get_coordinates_and_labels(glycan, None)
+    assert len(result) == 4  # Should return main chain and branch data
+    # Check main chain data structure
+    main_data = result[0]
+    assert len(main_data) == 8  # Should have 8 components
+    assert main_data[0] == ['GlcA', 'GlcNAc']  # Sugars
+    assert len(main_data[1]) == 2  # x positions
+    assert len(main_data[2]) == 2  # y positions
+    # Test branched glycan
+    glycan = "GlcNAc(b1-4)[Fuc(a1-3)]GlcA"
+    result = get_coordinates_and_labels(glycan, None)
+    assert len(result[1][0]) > 0  # Should have branch data
+    # Test with highlight motif
+    result = get_coordinates_and_labels(glycan, "Fuc(a1-3)GlcA")
+    assert 'show' in result[0][-2]  # Check highlight attributes
+
+
+def test_add_bond():
+    # Test basic bond
+    mock_drawing = get_clean_drawing()
+    add_bond(0, 1, 0, 0, mock_drawing, dim=50)
+    assert len(mock_drawing.all_elements()) == 2  # Line + text path
+    # Test with label
+    mock_drawing = get_clean_drawing()
+    add_bond(0, 1, 0, 0, mock_drawing, label='β1-4', dim=50)
+    assert len(mock_drawing.all_elements()) == 2
+    # Test with highlight
+    mock_drawing = get_clean_drawing()
+    add_bond(0, 1, 0, 0, mock_drawing, highlight='hide', dim=50)
+    assert len(mock_drawing.all_elements()) == 2
+    # Test compact mode
+    mock_drawing = get_clean_drawing()
+    add_bond(0, 1, 0, 0, mock_drawing, compact=True, dim=50)
+    assert len(mock_drawing.all_elements()) == 2
+
+
+def test_process_bonds():
+    # Test alpha linkages
+    assert process_bonds(['a1']) == ['α 1']
+    # Test beta linkages
+    assert process_bonds(['b1']) == ['β 1']
+    # Test unknown linkages
+    assert process_bonds(['?1']) == [' 1']
+    # Test multiple linkages
+    assert process_bonds(['a1', 'b2']) == ['α 1', 'β 2']
+    # Test nested linkages
+    assert process_bonds([['a1', 'b2'], ['a3']]) == [['α 1', 'β 2'], ['α 3']]
 
 
 def test_preprocess_data():
@@ -2886,10 +3330,14 @@ def test_multi_feature_scoring_basic(sample_df):
     df_transformed = pd.DataFrame(data)
     group1 = [0, 1, 2, 3, 4]
     group2 = [5, 6, 7, 8, 9]
-    model, roc_auc = multi_feature_scoring(df_transformed, group1, group2)
-    assert hasattr(model, 'predict')
-    assert 0 <= roc_auc <= 1
-    assert roc_auc > 0.5
+    with patch('matplotlib.pyplot.subplots') as mock_subplots:
+        mock_fig = MagicMock()
+        mock_ax = MagicMock()
+        mock_subplots.return_value = (mock_fig, mock_ax)
+        model, roc_auc = multi_feature_scoring(df_transformed, group1, group2)
+        assert hasattr(model, 'predict')
+        assert 0 <= roc_auc <= 1
+        assert roc_auc > 0.5
 
 
 def test_multi_feature_scoring_with_filepath(sample_df):
@@ -3271,6 +3719,444 @@ def test_get_maximum_flow_with_no_path(sample_network):
 
 
 @pytest.fixture
+def simple_networks():
+    # Create two simple test networks
+    network_a = nx.Graph()
+    network_a.add_nodes_from(['A', 'B', 'C'], virtual=0)
+    network_a.add_edges_from([('A', 'B'), ('B', 'C')])
+    network_b = nx.Graph()
+    network_b.add_nodes_from(['B', 'C', 'D'], virtual=0)
+    network_b.add_edges_from([('B', 'C'), ('C', 'D')])
+    return network_a, network_b
+
+
+@pytest.fixture
+def networks_with_virtuals():
+    # Create networks with virtual nodes
+    network_a = nx.Graph()
+    network_a.add_nodes_from(['A', 'B', 'V1', 'V3'])
+    network_a.add_edges_from([('A', 'V1'), ('V1', 'B'), ('V3', 'V1')])
+    nx.set_node_attributes(network_a, {'A': 0, 'B': 0, 'V1': 1, 'V3': 0}, 'virtual')
+    network_b = nx.Graph()
+    network_b.add_nodes_from(['B', 'C', 'V1', 'V2', 'V3'])
+    network_b.add_edges_from([('B', 'V1'), ('V1', 'C'), ('C', 'V2'), ('V3', 'V1')])
+    nx.set_node_attributes(network_b, {'B': 0, 'C': 0, 'V1': 1, 'V2': 1, 'V3': 1}, 'virtual')
+    return network_a, network_b
+
+
+@pytest.fixture
+def mock_df_enzyme():
+    # Create mock enzyme mapping data
+    data = {
+        'monolink': ['Gal(b1-4)', 'GlcNAc(b1-3)', 'Fuc(a1-2)'],
+        'glycoenzyme': ['B4GALT1', 'B3GNT2', 'FUT2'],
+        'glycoclass': ['B4GALT', 'B3GNT', 'FUT']
+    }
+    return pd.DataFrame(data)
+
+
+def test_network_alignment_basic(simple_networks):
+    network_a, network_b = simple_networks
+    combined = network_alignment(network_a, network_b)
+    # Test node presence
+    assert set(combined.nodes()) == {'A', 'B', 'C', 'D'}
+    # Test edge presence
+    assert ('A', 'B') in combined.edges()
+    assert ('B', 'C') in combined.edges()
+    assert ('C', 'D') in combined.edges()
+    # Test node colors
+    node_colors = nx.get_node_attributes(combined, 'origin')
+    assert node_colors['A'] == 'cornflowerblue'  # only in network_a
+    assert node_colors['B'] == 'saddlebrown'     # in both networks
+    assert node_colors['D'] == 'darkorange'      # only in network_b
+
+
+def test_network_alignment_empty():
+    empty_network = nx.Graph()
+    network = nx.Graph()
+    network.add_nodes_from(['A', 'B'])
+    network.add_edge('A', 'B')
+    combined = network_alignment(empty_network, network)
+    assert set(combined.nodes()) == {'A', 'B'}
+    assert ('A', 'B') in combined.edges()
+
+
+def test_infer_virtual_nodes_basic(networks_with_virtuals):
+    network_a, network_b = networks_with_virtuals
+    inferred_a, inferred_b = infer_virtual_nodes(network_a, network_b)
+    # Test structure of returned tuples
+    assert len(inferred_a) == 2  # (inferred nodes, supported nodes)
+    assert len(inferred_b) == 2
+    # Test virtual node inference
+    assert 'V1' in inferred_a[1]  # V1 is shared virtual between networks
+    assert 'V3' in inferred_b[0]  # V3 is virtual in network_b and observed in network_a
+
+
+def test_retrieve_inferred_nodes():
+    network = nx.Graph()
+    network.add_nodes_from(['A', 'B', 'V1', 'V2'])
+    nx.set_node_attributes(network, {'A': 0, 'B': 0, 'V1': 2, 'V2': 2}, 'virtual')
+    # Test without species parameter
+    inferred = retrieve_inferred_nodes(network)
+    assert set(inferred) == {'V1', 'V2'}
+    # Test with species parameter
+    inferred_with_species = retrieve_inferred_nodes(network, species='test_species')
+    assert isinstance(inferred_with_species, dict)
+    assert 'test_species' in inferred_with_species
+    assert set(inferred_with_species['test_species']) == {'V1', 'V2'}
+
+
+def test_monolink_to_glycoenzyme(mock_df_enzyme):
+    # Test condensed mode
+    assert monolink_to_glycoenzyme('Gal(b1-4)', mock_df_enzyme, mode='condensed') == 'B4GALT'
+    assert monolink_to_glycoenzyme('GlcNAc(b1-3)', mock_df_enzyme, mode='condensed') == 'B3GNT'
+    # Test full mode
+    assert monolink_to_glycoenzyme('Gal(b1-4)', mock_df_enzyme, mode='full') == 'B4GALT1'
+    assert monolink_to_glycoenzyme('Fuc(a1-2)', mock_df_enzyme, mode='full') == 'FUT2'
+    # Test unknown monolink
+    assert monolink_to_glycoenzyme('Unknown(x1-1)', mock_df_enzyme) == 'Unknown(x1-1)'
+
+
+def test_monolink_to_glycoenzyme_empty_df():
+    empty_df = pd.DataFrame(columns=['monolink', 'glycoenzyme', 'glycoclass'])
+    edge_label = 'Gal(b1-4)'
+    assert monolink_to_glycoenzyme(edge_label, empty_df) == edge_label
+
+
+@pytest.fixture
+def flow_network():
+    """Create a simple directed network with capacities for flow testing"""
+    network = nx.DiGraph()
+    # Add nodes
+    nodes = ['A', 'B', 'C', 'D', 'E']
+    network.add_nodes_from(nodes)
+    # Add edges with capacities
+    edges_with_capacity = [
+        ('A', 'B', {'capacity': 5.0}),
+        ('A', 'C', {'capacity': 3.0}),
+        ('B', 'D', {'capacity': 4.0}),
+        ('C', 'D', {'capacity': 2.0}),
+        ('C', 'E', {'capacity': 2.0}),
+        ('D', 'E', {'capacity': 3.0})
+    ]
+    network.add_edges_from(edges_with_capacity)
+    # Add abundance attributes
+    nx.set_node_attributes(network, {
+        'A': 10.0, 'B': 5.0, 'C': 3.0, 'D': 4.0, 'E': 2.0
+    }, 'abundance')
+    return network
+
+
+@pytest.fixture
+def glycan_extension_data():
+    """Create test data for glycan extension functions"""
+    # Sample glycans and their graph representations
+    test_glycans = {
+        "Gal(b1-4)Glc": glycan_to_nxGraph("Gal(b1-4)Glc"),
+        "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc": glycan_to_nxGraph("Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"),
+        "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc": glycan_to_nxGraph("Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc")
+    }
+    leaf_glycans = {"Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"}
+    new_glycans = {"Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"}
+    return test_glycans, leaf_glycans, new_glycans
+
+
+def test_get_max_flow_path_basic(flow_network):
+    """Test basic path finding in a flow network"""
+    flow_dict = {
+        'A': {'B': 4.0, 'C': 2.0},
+        'B': {'D': 4.0},
+        'C': {'D': 1.0, 'E': 1.0},
+        'D': {'E': 2.0}
+    }
+    path = get_max_flow_path(flow_network, flow_dict, sink='E', source='A')
+    # Should choose path A->B->D->E due to higher capacities
+    assert path == [('A', 'B'), ('B', 'D'), ('D', 'E')]
+
+
+def test_get_max_flow_path_no_path(flow_network):
+    """Test behavior when no path exists"""
+    flow_dict = {
+        'A': {'B': 0.0, 'C': 0.0},
+        'B': {'D': 0.0},
+        'C': {'D': 0.0, 'E': 0.0},
+        'D': {'E': 0.0}
+    }
+    flow_network.remove_edge('B', 'D')
+    with pytest.raises(ValueError, match="No path found"):
+        get_max_flow_path(flow_network, flow_dict, sink='E', source='A')
+
+
+def test_edges_for_extension(glycan_extension_data):
+    """Test creation of edges between leaf and extended glycans"""
+    graphs, leaf_glycans, new_glycans = glycan_extension_data
+    edges, labels = edges_for_extension(leaf_glycans, new_glycans, graphs)
+    # Should create edge from Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc to Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc
+    assert len(edges) == 1
+    assert edges[0][0] == "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"
+    assert edges[0][1] == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"
+    # Check edge label (should be Fuc(a1-2))
+    assert len(labels) == 1
+    assert "Fuc(a1-2)" in labels[0]
+
+
+def test_edges_for_extension_no_connections(glycan_extension_data):
+    """Test behavior when no valid connections exist"""
+    graphs, leaf_glycans, _ = glycan_extension_data
+    # Try to connect to incompatible glycans
+    incompatible_glycans = {"GalNAc(a1-3)GlcNAc"}
+    edges, labels = edges_for_extension(leaf_glycans, incompatible_glycans, graphs)
+    assert len(edges) == 0
+    assert len(labels) == 0
+
+
+def test_choose_leaves_to_extend_exact_match():
+    """Test selection of leaves when exact composition match exists"""
+    leaf_glycans = {
+        "Gal(b1-4)Glc",
+        "GlcNAc(b1-3)Gal(b1-4)Glc",
+        "Fuc(a1-2)Gal(b1-4)Glc"
+    }
+    target_composition = {"Hex": 2, "HexNAc": 1}
+    selected_leaves = choose_leaves_to_extend(leaf_glycans, target_composition)
+    assert "GlcNAc(b1-3)Gal(b1-4)Glc" in selected_leaves
+    assert len(selected_leaves) == 1
+
+
+def test_choose_leaves_to_extend_closest_match():
+    """Test selection of leaves closest to target composition"""
+    leaf_glycans = {
+        "Gal(b1-4)Glc",  # 2 Hex
+        "GlcNAc(b1-3)Gal(b1-4)Glc"  # 2 Hex, 1 HexNAc
+    }
+    target_composition = {"Hex": 2, "HexNAc": 2}
+    selected_leaves = choose_leaves_to_extend(leaf_glycans, target_composition)
+    # Should select the glycan with HexNAc as it's closer to target
+    assert "GlcNAc(b1-3)Gal(b1-4)Glc" in selected_leaves
+    assert len(selected_leaves) == 1
+
+
+def test_choose_leaves_to_extend_invalid_composition():
+    """Test behavior with incompatible target composition"""
+    leaf_glycans = {"Gal(b1-4)Glc"}
+    target_composition = {"NeuAc": 1}  # Not present in any leaf
+    selected_leaves = choose_leaves_to_extend(leaf_glycans, target_composition)
+    assert len(selected_leaves) == 0
+
+
+def test_choose_leaves_to_extend_multiple_equal():
+    """Test selection when multiple leaves are equally close to target"""
+    leaf_glycans = {
+        "GlcNAc(b1-3)Gal(b1-4)Glc",
+        "GlcNAc(b1-6)Gal(b1-4)Glc"
+    }
+    target_composition = {"Hex": 2, "HexNAc": 2}
+    selected_leaves = choose_leaves_to_extend(leaf_glycans, target_composition)
+    # Both glycans should be selected as they're equally close to target
+    assert len(selected_leaves) == 2
+
+
+@pytest.fixture
+def evo_test_networks():
+    """Create test networks for evolutionary pruning"""
+    # Create main network
+    glycans = ['Gal(b1-4)Glc-ol', "GlcNAc(b1-3)[GlcNAc(b1-6)]Gal(b1-4)Glc-ol", 'Fuc(a1-2)Gal(b1-4)Glc-ol']
+    abundances = [100.0, 30.0, 50.0]
+    main_net = construct_network(glycans, abundances = abundances)
+    # Create comparison networks
+    network_dic = {
+        'species1': main_net.copy(),
+        'species2': main_net.copy(),
+        'species3': main_net.copy()
+    }
+    return main_net, network_dic
+
+
+@pytest.fixture
+def extension_test_network():
+    """Create test network for extension"""
+    glycans = ['Gal(b1-4)Glc-ol', "GlcNAc(b1-3)Gal(b1-4)Glc-ol", 'Fuc(a1-2)Gal(b1-4)Glc-ol']
+    network = construct_network(glycans)
+    return network
+
+
+def test_evoprune_network_basic(evo_test_networks):
+    """Test basic evolutionary pruning functionality"""
+    main_net, network_dic = evo_test_networks
+    pruned_net = evoprune_network(
+        main_net,
+        network_dic=network_dic,
+        species_list=['species1', 'species2', 'species3'],
+        threshold=0.01
+    )
+    # Check that network is still connected
+    assert nx.is_weakly_connected(pruned_net)
+    # Check that root node is preserved
+    assert 'Gal(b1-4)Glc-ol' in pruned_net.nodes()
+    # Check virtual node attributes
+    virtual_nodes = [n for n, d in pruned_net.nodes(data=True) if d.get('virtual') == 1]
+    for vnode in virtual_nodes:
+        assert pruned_net.nodes[vnode].get('abundance', 0) > 0
+
+
+def test_evoprune_network_threshold(evo_test_networks):
+    """Test threshold-based pruning"""
+    main_net, network_dic = evo_test_networks
+    # Set high threshold to force pruning
+    pruned_net = evoprune_network(
+        main_net,
+        network_dic=network_dic,
+        threshold=0.5
+    )
+    # Check that low-abundance virtual nodes are removed
+    virtual_nodes = [n for n, d in pruned_net.nodes(data=True) if d.get('virtual') == 1]
+    assert len(virtual_nodes) < len([n for n, d in main_net.nodes(data=True) if d.get('virtual') == 1])
+
+
+def test_extend_network_basic(extension_test_network):
+    """Test basic network extension"""
+    extended_net, new_glycans = extend_network(
+        extension_test_network,
+        steps=1,
+        to_extend="all"
+    )
+    # Check that network grew
+    assert len(extended_net.nodes()) > len(extension_test_network.nodes())
+    assert len(new_glycans) > 0
+    # Check that new glycans are connected to existing ones
+    for new_glycan in new_glycans:
+        paths = nx.single_source_shortest_path(extended_net, 'Gal(b1-4)Glc-ol')
+        assert any(new_glycan in path for path in paths.values())
+
+
+def test_extend_network_specific_target(extension_test_network):
+    """Test network extension toward specific target"""
+    target_composition = {"Hex": 2, "HexNAc": 2}
+    extended_net, new_glycans = extend_network(
+        extension_test_network,
+        steps=1,
+        to_extend=target_composition
+    )
+    # Check that at least one new glycan moves closer to target composition
+    assert any(
+        sum((Counter(target_composition) - Counter(glycan_to_composition(g))).values()) <
+        sum((Counter(target_composition) - Counter(glycan_to_composition('Gal(b1-4)Glc-ol'))).values())
+        for g in new_glycans
+    )
+
+
+def test_extend_network_specific_leaf(extension_test_network):
+    """Test network extension from specific leaf"""
+    leaf_to_extend = 'GlcNAc(b1-3)Gal(b1-4)Glc-ol'
+    extended_net, new_glycans = extend_network(
+        extension_test_network,
+        steps=1,
+        to_extend=leaf_to_extend
+    )
+    # Check that new glycans are extensions of specified leaf
+    for new_glycan in new_glycans:
+        assert subgraph_isomorphism(new_glycan, leaf_to_extend)
+
+
+def get_network_elements(ax):
+    """Helper function to get network visualization elements"""
+    # Get nodes (these are always PathCollections)
+    nodes = [c for c in ax.collections if isinstance(c, PathCollection)]
+    # Get edges - these can be:
+    # 1. LineCollection in ax.collections
+    # 2. FancyArrowPatch objects in ax.patches (for directed graphs)
+    edges_collections = [c for c in ax.collections if isinstance(c, LineCollection)]
+    edges_arrows = [p for p in ax.patches if isinstance(p, FancyArrowPatch)]
+    edges = edges_collections + edges_arrows
+    # Get text elements (edge labels, etc)
+    texts = [child for child in ax.get_children() if isinstance(child, plt.Text)]
+    return nodes, edges, texts
+
+
+@patch('mpld3.enable_notebook')
+@patch('matplotlib.pyplot.show')
+def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
+    """Test basic network plotting functionality"""
+    main_net, _ = evo_test_networks
+    plot_network(main_net, plot_format='kamada_kawai')
+    # Check that plot was created
+    assert plt.gcf() is not None
+    ax = plt.gca()
+    nodes, edges, _ = get_network_elements(ax)
+    # Check that nodes and edges are present
+    assert len(nodes) == 1  # One PathCollection for all nodes
+    assert len(edges) == len(main_net.edges())  # FancyArrowPatch for every edges
+    # Clean up
+    plt.close()
+
+
+@patch('mpld3.enable_notebook')
+@patch('matplotlib.pyplot.show')
+def test_plot_network_with_edge_labels(mock_show, mock_enable, evo_test_networks):
+    """Test network plotting with edge labels"""
+    main_net, _ = evo_test_networks
+    plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True)
+    # Check for edge labels
+    ax = plt.gca()
+    nodes, edges, texts = get_network_elements(ax)
+    # Check for edge labels (should be one for each edge)
+    assert len(texts) > 0
+    assert any('Fuc(a1-2)' in text.get_text() for text in texts)
+    assert any('GlcNAc(b1-3)' in text.get_text() for text in texts)
+    # Clean up
+    plt.close()
+
+
+@patch('mpld3.enable_notebook')
+@patch('matplotlib.pyplot.show')
+def test_plot_network_with_lfc(mock_show, mock_enable, evo_test_networks):
+    """Test network plotting with log fold change data"""
+    lfc_dict = {'Fuc(a1-2)': 1.5, 'GlcNAc(b1-3)': -0.5}
+    main_net, _ = evo_test_networks
+    plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True, lfc_dict=lfc_dict)
+    ax = plt.gca()
+    nodes, edges, texts = get_network_elements(ax)
+    # Verify all elements are present
+    assert len(nodes) == 1   # Should have nodes
+    assert len(edges) > 0    # Should have edges
+    assert len(texts) > 0    # Should have edge labels
+    # Check edge properties
+    for edge in edges:
+        assert sum(edge.get_edgecolor()) > 1 and sum(edge.get_edgecolor()) < 4
+    # Clean up
+    plt.close()
+
+
+def test_plot_network_layouts(evo_test_networks):
+    """Test different layout options with fallback handling"""
+    # Test kamada_kawai and spring layouts which don't require external dependencies
+    safe_layouts = ['kamada_kawai', 'spring']
+    main_net, _ = evo_test_networks
+    for layout in safe_layouts:
+        with patch('mpld3.enable_notebook'), patch('matplotlib.pyplot.show'):
+            plot_network(main_net, plot_format=layout)
+            assert plt.gcf() is not None
+            plt.close()
+    # Test pydot2 layout with proper error handling
+    try:
+        with patch('mpld3.enable_notebook'), patch('matplotlib.pyplot.show'):
+            plot_network(main_net, plot_format='pydot2')
+    except (ImportError, FileNotFoundError):
+        print("Graphviz not installed, skipping pydot2 layout test")
+        plt.close()
+
+
+def test_plot_network_no_notebook(evo_test_networks):
+    """Test fallback behavior when not in notebook"""
+    main_net, _ = evo_test_networks
+    with patch('mpld3.enable_notebook', side_effect=Exception):
+        with patch('matplotlib.pyplot.show') as mock_show:
+            plot_network(main_net, plot_format='kamada_kawai')
+            assert mock_show.called
+            plt.close()
+
+
+@pytest.fixture
 def sample_objects():
     return {
         'obj1': [1, 2, 3, 4],
@@ -3304,13 +4190,11 @@ def sample_networks():
     G1.add_edge('GlcNAc(b1-3)Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol', diffs='Gal(b1-4)')
     G1.add_edge('Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol', diffs='Fuc(a1-2)')
     nx.set_node_attributes(G1, {node: {'virtual': 0} for node in G1.nodes()})
-
     # Create network for Species2
     G2 = nx.DiGraph()
     G2.add_edge('Gal(b1-4)Glc-ol', 'GalNAc(b1-3)Gal(b1-4)Glc-ol', diffs='GalNAc(b1-3)')
     G2.add_edge('Gal(b1-4)Glc-ol', 'Neu5Ac(a2-3)Gal(b1-4)Glc-ol', diffs='Neu5Ac(a2-3)')
     nx.set_node_attributes(G2, {node: {'virtual': 0} for node in G2.nodes()})
-
     return [G1, G2]
 
 

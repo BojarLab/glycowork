@@ -5,6 +5,7 @@ import re
 from random import choice
 from functools import wraps
 from collections import defaultdict
+from itertools import permutations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple
 from glycowork.glycan_data.loader import (unwrap, multireplace,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
@@ -123,6 +124,23 @@ def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
   # Double branch swap
   temp = {re.sub(r'\[([^[\]]+)\]\[([^[\]]+)\]', r'[\2][\1]', k) for k in out_list if '][' in k}
   out_list.update(temp)
+  # Triple branch handling
+  temp = set()
+  for k in out_list:
+    if k.count('[') >= 3 and k.count('][') >= 2:
+      m = re.search(r'^(.*?)\[(.*?)\]\[(.*?)\]\[(.*?)\](.*?)$', k)
+      if m and not bool(re.search(r'\[[^\]]+\[', k)):
+        main, b1, b2, b3, rest = m.groups()
+        branches = [main, b1, b2, b3]
+        # Generate all 24 permutations
+        for p in permutations(range(4)):
+          # First element is main chain (no brackets), rest get brackets
+          result = branches[p[0]]
+          for idx in p[1:]:
+            result += f"[{branches[idx]}]"
+          result += rest
+          temp.add(result)
+  out_list.update(temp)
   temp = set()
   # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
   for k in out_list:
@@ -167,10 +185,13 @@ def find_matching_brackets_indices(s: str # String containing brackets
     return matching_indices
 
 
-def choose_correct_isoform(glycans: List[str], # Glycans in IUPAC-condensed nomenclature
-                         reverse: bool = False # Return non-correct isomers instead; default:False
+def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-condensed nomenclature
+                         reverse: bool = False, # Return non-correct isomers instead
+                         order_by: str = 'length' # Order criterion for branches: 'length' or 'linkage'
                         ) -> Union[str, List[str]]: # Correct isomer (str) or non-correct isomers (List[str])
   "Given a list of glycan branch isomers, returns the correct isomer"
+  if isinstance(glycans, str):
+    glycans = find_isomorphs(glycans)
   glycans = list(set(glycans))
   if '?' in ''.join(glycans) and not reverse:
     min_questions = min(glycan.count('?') for glycan in glycans)
@@ -183,30 +204,61 @@ def choose_correct_isoform(glycans: List[str], # Glycans in IUPAC-condensed nome
   if '{' in glycans[0]:
     floaty = glycans[0][:glycans[0].rindex('}')+1]
     glycans = [k[k.rindex('}')+1:] for k in glycans]
-  # Heuristic: main chain should contain the most monosaccharides of all chains
-  mains = [bracket_removal(g).count('(') for g in glycans]
-  max_mains = max(mains)
-  glycans2 = [g for k, g in enumerate(glycans) if mains[k] == max_mains]
+  if order_by == 'length':
+    # Heuristic: main chain should contain the most monosaccharides of all chains
+    mains = [bracket_removal(g).count('(') for g in glycans]
+    max_mains = max(mains)
+    glycans2 = [g for k, g in enumerate(glycans) if mains[k] == max_mains]
+  else:  # order_by == 'linkage'
+    glycans2 = glycans.copy()
   # Handle neighboring branches
   kill_list = set()
   for g in glycans2:
     if '][' in g:
-      try:
-        match = re.search(r'\[([^[\]]+)\]\[([^[\]]+)\]', g)
-        count1, count2 = match.group(1).count('('), match.group(2).count('(')
-        if count1 < count2:
-          kill_list.add(g)
-        elif count1 == count2 and int(match.group(1)[-2]) > int(match.group(2)[-2]):
-          kill_list.add(g)
-      except:
-        pass
+      # First try triple branches
+      triple_match = re.search(r'\[([^[\]]+)\]\[([^[\]]+)\]\[([^[\]]+)\]', g)
+      if triple_match:
+        if order_by == 'length':
+          counts = [m.count('(') for m in triple_match.groups()]
+          positions = [int(m[-2]) if m[-2].isdigit() else 9 for m in triple_match.groups()]
+          # Check if branches are not in descending order by length
+          for i in range(len(counts)-1):
+            if counts[i] < counts[i+1]:
+              kill_list.add(g)
+              break
+            # If equal lengths, check positions
+            elif counts[i] == counts[i+1] and positions[i] > positions[i+1]:
+              kill_list.add(g)
+              break
+        else:  # order_by == 'linkage'
+          positions = [int(m[-2]) if m[-2].isdigit() else 9 for m in triple_match.groups()]
+          if not all(positions[i] <= positions[i+1] for i in range(len(positions)-1)):
+            kill_list.add(g)
+      else:
+        # Fall back to pair checking
+        pair_match = re.search(r'\[([^[\]]+)\]\[([^[\]]+)\]', g)
+        if pair_match:
+          if order_by == 'length':
+            count1, count2 = pair_match.group(1).count('('), pair_match.group(2).count('(')
+            if count1 < count2:
+              kill_list.add(g)
+            elif count1 == count2 and int(pair_match.group(1)[-2] if pair_match.group(1)[-2].isdigit() else '9') > int(pair_match.group(2)[-2] if pair_match.group(2)[-2].isdigit() else '9'):
+              kill_list.add(g)
+          else:  # order_by == 'linkage'
+            pos1 = int(pair_match.group(1)[-2] if pair_match.group(1)[-2].isdigit() else '9')
+            pos2 = int(pair_match.group(2)[-2] if pair_match.group(2)[-2].isdigit() else '9')
+            if pos1 > pos2:
+              kill_list.add(g)
   glycans2 = [k for k in glycans2 if k not in kill_list]
   # Choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(glycans2) > 1:
     candidates = {k: find_matching_brackets_indices(k) for k in glycans2}
-    prefix = [min_process_glycans([k[j[0]+1:j[1]] for j in candidates[k]]) for k in candidates.keys()]
-    prefix = [np.argmax([len(j) for j in k]) for k in prefix]
-    prefix = min_process_glycans([k[:candidates[k][prefix[i]][0]] for i, k in enumerate(candidates.keys())])
+    if order_by == 'length':
+      prefix = [min_process_glycans([k[j[0]+1:j[1]] for j in candidates[k]]) for k in candidates.keys()]
+      prefix = [np.argmax([len(j) for j in k]) for k in prefix]
+      prefix = min_process_glycans([k[:candidates[k][prefix[i]][0]] for i, k in enumerate(candidates.keys())])
+    else:  # order_by == 'linkage'
+      prefix = min_process_glycans([k[:candidates[k][0][0]] for k in candidates.keys()])
     branch_endings = [k[-1][-1] if k[-1][-1].isdigit() else 10 for k in prefix]
     if len(set(branch_endings)) == 1:
       branch_endings = [ord(k[0][0]) for k in prefix]
@@ -828,8 +880,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = multireplace(glycan, post_process)
   # Canonicalize branch ordering
   if '[' in glycan:
-    isos = find_isomorphs(glycan)
-    glycan = choose_correct_isoform(isos)
+    glycan = choose_correct_isoform(glycan)
   if '{' in glycan:
     floating_bits = re.findall(r'\{.*?\}', glycan)
     sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))

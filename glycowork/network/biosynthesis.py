@@ -608,6 +608,7 @@ def network_alignment(network_a: nx.Graph, # First network
   node_origin.update({node: 'saddlebrown' for node in both})
   all_nodes = list(network_a.nodes(data = True)) + list(network_b.nodes(data = True))
   U.add_nodes_from(all_nodes)
+  nx.set_node_attributes(U, {node: 1 if network_a.nodes[node]['virtual'] == 1 and network_b.nodes[node]['virtual'] == 1 else 0 for node in both}, 'virtual')
   # Get combined edges
   all_edges = list(network_a.edges(data = True)) + list(network_b.edges(data = True))
   U.add_edges_from(all_edges)
@@ -1186,6 +1187,9 @@ def choose_leaves_to_extend(leaf_glycans: Set[str], # Terminal glycans in a netw
   min_score = min(score for _, score in scored_glycans)
   if min_score == 0:
     print("Target composition found in leaf nodes")
+  if min_score == float("inf"):
+    print("Target composition cannot be reached from any leaf node")
+    return {}
   return {glycan for glycan, score in scored_glycans if score == min_score}
 
 
