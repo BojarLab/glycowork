@@ -1920,7 +1920,7 @@ def add_colours_to_map(
     cols: Dict[int, List], # Color map dictionary
     col_num: int, # Color index
     alpha: bool = True, # Use alpha-adjusted colors
-    hex: bool = True # Return hex color codes
+    hex_codes: bool = True # Return hex color codes
     ) -> None:
   "Adds color assignments to mapping dictionary for chemical structure visualization"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
@@ -1970,8 +1970,8 @@ def draw_chem2d(
   for i, smt in enumerate(smarts_list):
     alist, blist = get_hit_atoms_and_bonds(mol, smt)
     col = i
-    add_colours_to_map(alist, acols, col, hex = False, alpha = True)
-    add_colours_to_map(blist, bcols, col, hex = False, alpha = True)
+    add_colours_to_map(alist, acols, col, hex_codes = False, alpha = True)
+    add_colours_to_map(blist, bcols, col, hex_codes = False, alpha = True)
 
   for k in list(acols.keys()):
     if len(acols[k]) > 1:
@@ -2029,8 +2029,8 @@ def draw_chem3d(
   for i, smt in enumerate(smarts_list):
       alist, blist = get_hit_atoms_and_bonds(mol, smt)
       col = i
-      add_colours_to_map(alist, acols, col, alpha = False, hex = True)
-      add_colours_to_map(blist, bcols, col, alpha = False, hex = True)
+      add_colours_to_map(alist, acols, col, alpha = False, hex_codes = True)
+      add_colours_to_map(blist, bcols, col, alpha = False, hex_codes = True)
 
   for k in acols.keys():
     if len(acols[k]) > 1:

@@ -2085,6 +2085,10 @@ def test_draw_chem2d():
         from rdkit.Chem import MolFromSmiles
         from rdkit.Chem.Draw import PrepareMolForDrawing
         from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
+        try:
+            import IPython.display
+        except ImportError:
+            pytest.skip("IPython not installed")
     except ImportError:
         pytest.skip("RDKit not installed")
     with patch('IPython.display.SVG', return_value="SVG Object"):
@@ -2105,6 +2109,10 @@ def test_draw_chem3d():
         from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile
         from rdkit.Chem.AllChem import EmbedMolecule, MMFFOptimizeMolecule
         import py3Dmol
+        try:
+            import IPython.display
+        except ImportError:
+            pytest.skip("IPython not installed")
     except ImportError:
         pytest.skip("RDKit and/or py3Dmol not installed")
     with patch('IPython.display.display') as mock_display:
