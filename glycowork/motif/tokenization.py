@@ -3,6 +3,7 @@ import numpy as np
 import networkx as nx
 import re
 import copy
+from random import sample
 from importlib import resources
 from collections import Counter
 from sklearn.cluster import DBSCAN
@@ -474,7 +475,7 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
     return dict(composition)
 
 
-def calculate_adduct_mass(adduct: str, # Chemical formula of adduct (e.g. "C2H4O2")
+def calculate_adduct_mass(adduct: str, # Chemical formula of adduct (e.g., "C2H4O2")
                          mass_value: str = 'monoisotopic' # Mass type: monoisotopic/average
                         ) -> float: # Adduct mass
   "Calculate mass of adduct from chemical formula"
@@ -505,7 +506,7 @@ def calculate_adduct_mass(adduct: str, # Chemical formula of adduct (e.g. "C2H4O
 def composition_to_mass(dict_comp_in: Dict[str, int], # Composition dictionary of monosaccharide:count
                        mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                        sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
-                       adduct: Optional[str] = None # Chemical formula of adduct (e.g. "C2H4O2")
+                       adduct: Optional[str] = None # Chemical formula of adduct (e.g., "C2H4O2")
                       ) -> float: # Theoretical mass
   "Calculate theoretical mass from composition"
   dict_comp = dict_comp_in.copy()
@@ -525,7 +526,7 @@ def glycan_to_mass(glycan: str, # Glycan in IUPAC-condensed format
                    mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                    sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                    stem_libr: Optional[Dict[str, str]] = None, # Modified to core monosaccharide mapping
-                   adduct: Optional[str] = None # Chemical formula of adduct (e.g. "C2H4O2")
+                   adduct: Optional[str] = None # Chemical formula of adduct (e.g., "C2H4O2")
                   ) -> float: # Theoretical mass
   "Calculate theoretical mass from glycan"
   if stem_libr is None:
@@ -552,3 +553,14 @@ def get_unique_topologies(composition: Dict[str, int], # Composition dictionary 
   df_use = df_use[df_use[taxonomy_rank].apply(lambda x: taxonomy_value in x)].glycan.values
   df_use = list(set([structure_to_basic(k) for k in df_use]))
   return [reduce(lambda x, kv: x.replace(*kv), universal_replacers.items(), g) for g in df_use if '{' not in g]
+
+
+def get_random_glycan(n: int = 1, # How many random glycans to sample
+                      glycan_class: str = 'all', # Glycan class: N/O/lipid/free/all
+                      kingdom: str = 'Animalia' # Taxonomic kingdom filter for choosing a subset of glycans to consider
+                      ) -> Union[str, List[str]]: # Returns a random glycan or list of glycans if n > 1
+  if glycan_class == "all":
+    df_use = df_glycan[df_glycan.Kingdom.apply(lambda x: kingdom in x)].glycan.values.tolist()
+  else:
+    df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))].glycan.values.tolist()
+  return sample(df_use, n)[0] if n == 1 else sample(df_use, n)

@@ -25,7 +25,8 @@ from glycowork.motif.tokenization import (
     get_core, get_modification, get_stem_lib, stemify_glycan, mask_rare_glycoletters,
     glycan_to_composition, calculate_adduct_mass, structure_to_basic, map_to_basic,
     compositions_to_structures, match_composition_relaxed, stemify_dataset, composition_to_mass,
-    condense_composition_matching, get_unique_topologies, mz_to_structures, glycan_to_mass
+    condense_composition_matching, get_unique_topologies, mz_to_structures, glycan_to_mass,
+    get_random_glycan
 )
 from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages,
@@ -107,6 +108,12 @@ from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset,
 from glycowork.ml.model_training import (EarlyStopping, sigmoid, disable_running_stats,
                           enable_running_stats, train_model, SAM, Poly1CrossEntropyLoss, training_setup,
                           train_ml_model, analyze_ml_model, get_mismatch
+)
+from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRange, LectinOracle,
+                          init_weights, prep_model, LectinOracle_flex
+)
+from glycowork.ml.inference import (SimpleDataset, sigmoid, glycans_to_emb, get_multi_pred, get_lectin_preds,
+                          get_esm1b_representations, get_Nsequon_preds
 )
 
 
@@ -515,6 +522,25 @@ def test_rescue_compositions():
     assert abs(result - 530) < 0.5
     result = composition_to_mass('H1N1F1') + 1.0078
     assert abs(result - 530) < 0.5
+
+
+# Test for get_random_glycan
+@pytest.mark.parametrize("n,glycan_class,kingdom,expected_type", [
+    (1, "all", "Animalia", str),
+    (3, "N", "Animalia", list),
+    (2, "O", "Bacteria", list),
+    (1, "lipid", "Fungi", str),
+])
+def test_get_random_glycan(n, glycan_class, kingdom, expected_type):
+    # Mock the DataFrame and sample function
+    mock_df = Mock()
+    mock_df.glycan.values.tolist.return_value = ["Glycan1", "Glycan2", "Glycan3", "Glycan4"]
+    with patch("glycowork.glycan_data.loader.df_glycan", mock_df):
+        with patch("random.sample", lambda x, n: x[:n]):
+            result = get_random_glycan(n, glycan_class, kingdom)
+            assert isinstance(result, expected_type)
+            if n > 1:
+                assert len(result) == n
 
 
 def test_min_process_glycans():
@@ -2490,6 +2516,11 @@ def test_draw_shape_hex():
     elements = mock_drawing.all_elements()
     # Should have: circle + text path + text for modification
     assert len(elements) == 5
+    # Test with scalar
+    mock_drawing = get_clean_drawing()
+    draw_shape('Hex', 'snfg_white', 1.0, 1.0, col_dict_base, mock_drawing, dim=50, scalar=10)
+    elements = mock_drawing.all_elements()
+    assert len(elements) == 6
     # Test with modification
     mock_drawing = get_clean_drawing()
     draw_shape('Hex', 'snfg_white', 1.0, 1.0, col_dict_base, mock_drawing,
@@ -2510,6 +2541,11 @@ def test_draw_shape_hexnac():
     elements = mock_drawing.all_elements()
     # Should have: rectangle + text path + text for modification
     assert len(elements) == 5
+    # Test furanose
+    mock_drawing = get_clean_drawing()
+    draw_shape('HexNAc', 'snfg_yellow', 1.0, 1.0, col_dict_base, mock_drawing, dim=50, furanose=True)
+    elements = mock_drawing.all_elements()
+    assert len(elements) == 7
     # Test with configuration
     mock_drawing = get_clean_drawing()
     draw_shape('HexNAc', 'snfg_yellow', 1.0, 1.0, col_dict_base, mock_drawing,
@@ -2517,13 +2553,78 @@ def test_draw_shape_hexnac():
     assert len(mock_drawing.all_elements()) == 5
 
 
-def test_draw_shape_hexn():
-    # Test HexN drawing (crossed square)
+def test_draw_shape_dHex():
+    # Test dHex drawing (triangle)
     mock_drawing = get_clean_drawing()
-    draw_shape('HexN', 'snfg_green', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
+    draw_shape('dHex', 'snfg_red', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
     elements = mock_drawing.all_elements()
-    # Should have: square + diagonal lines + borders
-    assert len(elements) >= 5
+    # Should have: triangle + text path + text for modification
+    assert len(elements) == 5
+    # Test furanose
+    mock_drawing = get_clean_drawing()
+    draw_shape('dHex', 'snfg_red', 1.0, 1.0, col_dict_base, mock_drawing, dim=50, furanose=True)
+    elements = mock_drawing.all_elements()
+    assert len(elements) == 7
+
+
+def test_draw_shape_Pen():
+    # Test Pentose drawing (star)
+    mock_drawing = get_clean_drawing()
+    draw_shape('Pen', 'snfg_red', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
+    elements = mock_drawing.all_elements()
+    # Should have: star + text path + text for modification
+    assert len(elements) == 5
+    # Test furanose
+    mock_drawing = get_clean_drawing()
+    draw_shape('Pen', 'snfg_red', 1.0, 1.0, col_dict_base, mock_drawing, dim=50, furanose=True)
+    elements = mock_drawing.all_elements()
+    assert len(elements) == 7
+
+
+# Test cases structured as: (shape_name, color, expected_elements, description)
+TEST_CASES = [
+    ('HexN', 'snfg_green', 9, 'crossed square'),
+    ('HexA_2', 'snfg_yellow', 9, 'divided diamond'),
+    ('dHexNAc', 'snfg_yellow', 9, 'divided triangle'),
+    ('ddHex', 'snfg_yellow', 5, 'flat rectangle'),
+    ('dNon', 'snfg_red', 5, 'diamond'),
+    ('ddNon', 'snfg_red', 5, 'flat diamond'),
+    ('Unknown', 'snfg_red', 5, 'flat hexagon'),
+    ('Assigned', 'snfg_red', 5, 'pentagon'),
+    ('red_end', 'snfg_red', 2, 'reducing end'),
+    ('free', 'snfg_red', 1, 'free end'),
+    # Fragment drawings
+    ('04X', 'snfg_red', 10, 'fragment'),
+    ('15A', 'snfg_red', 10, 'fragment'),
+    ('02A', 'snfg_red', 10, 'fragment'),
+    ('13X', 'snfg_red', 10, 'fragment'),
+    ('24X', 'snfg_red', 10, 'fragment'),
+    ('35X', 'snfg_red', 10, 'fragment'),
+    ('04A', 'snfg_red', 10, 'fragment'),
+    ('15X', 'snfg_red', 10, 'fragment'),
+    ('02X', 'snfg_red', 10, 'fragment'),
+    ('13A', 'snfg_red', 10, 'fragment'),
+    ('24A', 'snfg_red', 10, 'fragment'),
+    ('35A', 'snfg_red', 10, 'fragment'),
+    ('25A', 'snfg_red', 9, 'fragment'),
+    ('03A', 'snfg_red', 9, 'fragment'),
+    ('14X', 'snfg_red', 9, 'fragment'),
+    ('25X', 'snfg_red', 9, 'fragment'),
+    ('03X', 'snfg_red', 9, 'fragment'),
+    ('14A', 'snfg_red', 9, 'fragment'),
+    ('Z', 'snfg_red', 1, 'fragment'),
+    ('Y', 'snfg_red', 1, 'fragment'),
+    ('B', 'snfg_red', 2, 'fragment'),
+    ('C', 'snfg_red', 3, 'fragment'),
+]
+
+
+@pytest.mark.parametrize("shape, color, expected_elements, description", TEST_CASES)
+def test_draw_shape_simple(shape, color, expected_elements, description):
+    mock_drawing = get_clean_drawing()
+    draw_shape(shape, color, 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
+    elements = mock_drawing.all_elements()
+    assert len(elements) == expected_elements, f"Shape {shape} ({description}) should have exactly {expected_elements} elements"
 
 
 def test_add_sugar():
@@ -5100,6 +5201,333 @@ def test_get_mismatch(mock_xgb_data):
     assert isinstance(mismatches, list)
     assert all(isinstance(m, tuple) and len(m) == 2 for m in mismatches)
     assert len(mismatches) <= 2
+
+
+# Tests for SweetNet
+def test_sweetnet_initialization():
+    model = SweetNet(lib_size=100, num_classes=2, hidden_dim=64)
+    assert isinstance(model, torch.nn.Module)
+    assert model.lin3.out_features == 2
+    assert model.item_embedding.num_embeddings == 101  # lib_size + 1
+
+
+def test_sweetnet_forward():
+    model = SweetNet(lib_size=100, num_classes=1, hidden_dim=64)
+    batch_size = 3
+    num_nodes = 5
+    # Create dummy inputs
+    x = torch.randint(0, 100, (num_nodes,))
+    edge_index = torch.tensor([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=torch.long)
+    batch = torch.tensor([0, 0, 1, 1, 2])  # Assign nodes to 3 different graphs
+    # Test normal forward pass
+    output = model(x, edge_index, batch)
+    assert output.shape == (batch_size,)
+    # Test inference mode
+    output, embedding = model(x, edge_index, batch, inference=True)
+    assert isinstance(output, torch.Tensor)
+    assert isinstance(embedding, torch.Tensor)
+
+
+# Tests for NSequonPred
+def test_nsequon_pred_initialization():
+    model = NSequonPred()
+    assert isinstance(model, torch.nn.Module)
+    assert model.fc4.out_features == 1
+
+
+def test_nsequon_pred_forward():
+    model = NSequonPred()
+    batch_size = 2
+    input_dim = 1280
+    x = torch.randn(batch_size, input_dim)
+    output = model(x)
+    assert output.shape == (batch_size, 1)
+
+
+# Tests for sigmoid_range and SigmoidRange
+def test_sigmoid_range():
+    x = torch.tensor([0.0, 1.0, 2.0])
+    low, high = -1.0, 1.0
+    result = sigmoid_range(x, low, high)
+    assert torch.all(result >= low)
+    assert torch.all(result <= high)
+
+
+def test_sigmoid_range_module():
+    module = SigmoidRange(-1.0, 1.0)
+    x = torch.tensor([0.0, 1.0, 2.0])
+    result = module(x)
+    assert torch.all(result >= -1.0)
+    assert torch.all(result <= 1.0)
+
+
+# Tests for LectinOracle
+def test_lectin_oracle_initialization():
+    model = LectinOracle(input_size_glyco=100)
+    assert isinstance(model, torch.nn.Module)
+    assert model.num_classes == 1
+    assert model.input_size_glyco == 100
+
+
+def test_lectin_oracle_forward():
+    model = LectinOracle(input_size_glyco=100)
+    batch_size = 2
+    num_nodes = 4
+    # Create dummy inputs
+    prot = torch.randn(batch_size, 1280)
+    nodes = torch.randint(0, 100, (num_nodes,))
+    edge_index = torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.long)
+    batch = torch.tensor([0, 0, 1, 1])
+    # Test normal forward pass
+    output = model(prot, nodes, edge_index, batch)
+    assert output.shape == (batch_size, 1)
+    # Test inference mode
+    output, prot_emb, glyco_emb = model(prot, nodes, edge_index, batch, inference=True)
+    assert isinstance(output, torch.Tensor)
+    assert isinstance(prot_emb, torch.Tensor)
+    assert isinstance(glyco_emb, torch.Tensor)
+
+
+# Tests for init_weights
+def test_init_weights():
+    model = torch.nn.Linear(10, 5)
+    # Test sparse initialization
+    init_weights(model, mode='sparse', sparsity=0.1)
+    assert torch.sum(model.weight == 0) > 0
+    # Test kaiming initialization
+    init_weights(model, mode='kaiming')
+    assert not torch.all(model.weight == 0)
+    # Test xavier initialization
+    init_weights(model, mode='xavier')
+    assert not torch.all(model.weight == 0)
+
+
+# Tests for prep_model
+@pytest.mark.parametrize("model_type,num_classes,expected_class", [
+    ("SweetNet", 1, SweetNet),
+    ("LectinOracle", 2, LectinOracle),
+    ("LectinOracle_flex", 1, LectinOracle_flex),
+    ("NSequonPred", 1, NSequonPred),
+])
+
+
+def test_prep_model(model_type: str, num_classes: int, expected_class: type):
+    mock_lib = {"A": 0, "B": 1, "C": 2}
+    model = prep_model(model_type, num_classes, libr=mock_lib, trained=False)
+    assert isinstance(model, expected_class)
+    device = next(model.parameters()).device
+    assert str(device).startswith("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def test_prep_model_trained():
+    mock_state_dict = {
+        "conv1.lin_rel.weight": torch.randn(128, 128),
+        "conv1.lin_rel.bias": torch.randn(128),
+        "conv1.lin_root.weight": torch.randn(128, 128),
+        "conv2.lin_rel.weight": torch.randn(128, 128),
+        "conv2.lin_rel.bias": torch.randn(128),
+        "conv2.lin_root.weight": torch.randn(128, 128),
+        "conv3.lin_rel.weight": torch.randn(128, 128),
+        "conv3.lin_rel.bias": torch.randn(128),
+        "conv3.lin_root.weight": torch.randn(128, 128),
+        "item_embedding.weight": torch.randn(2596, 128),  # lib_size + 1, hidden_dim
+        "lin1.weight": torch.randn(1024, 128),
+        "lin1.bias": torch.randn(1024),
+        "lin2.weight": torch.randn(128, 1024),
+        "lin2.bias": torch.randn(128),
+        "lin3.weight": torch.randn(1, 128),
+        "lin3.bias": torch.randn(1),
+        "bn1.weight": torch.randn(1024),
+        "bn1.bias": torch.randn(1024),
+        "bn1.running_mean": torch.randn(1024),
+        "bn1.running_var": torch.randn(1024),
+        "bn2.weight": torch.randn(128),
+        "bn2.bias": torch.randn(128),
+        "bn2.running_mean": torch.randn(128),
+        "bn2.running_var": torch.randn(128),
+    }
+    with patch("os.path.exists", return_value=True), \
+         patch("torch.load", return_value=mock_state_dict):
+        model = prep_model("SweetNet", num_classes=1, trained=True)
+        assert isinstance(model, SweetNet)
+
+
+@pytest.mark.parametrize("invalid_input", [
+    {"model_type": "InvalidModel", "num_classes": 1},
+    {"model_type": "SweetNet", "num_classes": 1, "hidden_dim": 64, "trained": True},
+])
+
+
+def test_prep_model_invalid_inputs(invalid_input):
+    with pytest.raises((ValueError, Exception)):
+        prep_model(**invalid_input)
+
+
+@pytest.fixture
+def sample_data():
+    glycans = ["Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Ac(a2-3)Gal(b1-3)GalNAc"]
+    protein = "MAEGEITTFTALTEKFNLPPGNYKKPKLLYCSNGGHFLRILPDGTVDGTRDRSDQHIQLQLSAESVGEVYIKSTETGQYLAMDTDGLLYGSQTPNEECLFLERLEENHYNTYISKKHAEKNWFVGLKKNGSCKRGPRTHYGQKAILFLPLPV"
+    mock_embeddings = np.random.rand(1280).tolist()
+    prot_dict = {protein: mock_embeddings}
+    return {
+        'glycans': glycans,
+        'protein': protein,
+        'prot_dict': prot_dict,
+        'mock_embeddings': mock_embeddings
+    }
+
+
+@pytest.fixture
+def mock_models():
+    class MockSweetNet(torch.nn.Module):
+        def forward(self, x, edge_index, batch, inference=False):
+            batch_size = max(batch).item() + 1
+            if inference:
+                return torch.randn(batch_size, 2), torch.randn(batch_size, 128)
+            return torch.randn(batch_size, 2)
+    class MockLectinOracle(torch.nn.Module):
+        def forward(self, prot, x, edge_index, batch, inference=False):
+            batch_size = max(batch).item() + 1
+            return torch.tensor([[float(i)] for i in range(batch_size)], dtype=torch.float64)
+    class MockNSequonPred(torch.nn.Module):
+        def forward(self, x):
+            return torch.randn(x.shape[0], 1)
+    return {
+        'sweetnet': MockSweetNet().eval(),
+        'lectin_oracle': MockLectinOracle().eval(),
+        'nsequon_pred': MockNSequonPred().eval()
+    }
+
+
+def test_simple_dataset():
+    x = [[1.0, 2.0], [3.0, 4.0]]
+    y = [0.5, 1.5]
+    dataset = SimpleDataset(x, y)
+    assert len(dataset) == 2
+    x_tensor, y_tensor = dataset[0]
+    assert isinstance(x_tensor, torch.FloatTensor)
+    assert isinstance(y_tensor, torch.FloatTensor)
+    assert torch.equal(x_tensor, torch.FloatTensor([1.0, 2.0]))
+    assert torch.equal(y_tensor, torch.FloatTensor([0.5]))
+
+
+def test_sigmoid():
+    # Test basic sigmoid functionality
+    assert abs(sigmoid(0) - 0.5) < 1e-6
+    assert sigmoid(100) > 0.99999
+    assert sigmoid(-100) < 0.00001
+    # Test with different inputs
+    test_values = [-1.0, 0.0, 1.0, 2.0, -2.0]
+    for x in test_values:
+        y = sigmoid(x)
+        assert 0 <= y <= 1
+
+
+def test_glycans_to_emb(sample_data, mock_models):
+    glycans = sample_data['glycans']
+    model = mock_models['sweetnet']
+    # Test representation mode
+    rep_df = glycans_to_emb(glycans, model, rep=True)
+    assert isinstance(rep_df, pd.DataFrame)
+    assert len(rep_df) == len(glycans)
+    # Test prediction mode
+    class_list = ['class1', 'class2']
+    preds = glycans_to_emb(glycans, model, rep=False, class_list=class_list)
+    assert isinstance(preds, list)
+    assert len(preds) == len(glycans)
+    assert all(p in class_list for p in preds)
+
+
+def test_get_multi_pred(sample_data, mock_models):
+    model = mock_models['lectin_oracle']
+    results = get_multi_pred(
+        prot=sample_data['protein'],
+        glycans=sample_data['glycans'],
+        model=model,
+        prot_dic=sample_data['prot_dict']
+    )
+    assert isinstance(results, list)
+    assert len(results) == len(sample_data['glycans'])
+    # Test with background correction
+    correction_df = pd.DataFrame({
+        'motif': sample_data['glycans'],
+        'pred': pd.Series([0.1, 0.2], dtype=np.float64)
+    })
+    results_corrected = get_multi_pred(
+        prot=sample_data['protein'],
+        glycans=sample_data['glycans'],
+        model=model,
+        prot_dic=sample_data['prot_dict'],
+        background_correction=True,
+        correction_df=correction_df
+    )
+    assert len(results_corrected) == len(sample_data['glycans'])
+
+
+def test_get_lectin_preds(sample_data, mock_models):
+    model = mock_models['lectin_oracle']
+    # Test basic functionality
+    df = get_lectin_preds(
+        prot=sample_data['protein'],
+        glycans=sample_data['glycans'],
+        model=model,
+        prot_dic=sample_data['prot_dict']
+    )
+    assert isinstance(df, pd.DataFrame)
+    assert 'motif' in df.columns
+    assert 'pred' in df.columns
+    assert len(df) == len(sample_data['glycans'])
+    # Test with background correction
+    correction_df = pd.DataFrame({
+        'motif': sample_data['glycans'],
+        'pred': pd.Series([0.1, 0.2], dtype=np.float64)
+    })
+    df_corrected = get_lectin_preds(
+        prot=sample_data['protein'],
+        glycans=sample_data['glycans'],
+        model=model,
+        prot_dic=sample_data['prot_dict'],
+        background_correction=True,
+        correction_df=correction_df
+    )
+    assert len(df_corrected) == len(sample_data['glycans'])
+
+
+def test_get_esm1b_representations(sample_data):
+    class MockESM1b(torch.nn.Module):
+        def forward(self, tokens, repr_layers, return_contacts):
+            return {"representations": {33: torch.randn(tokens.shape[0], tokens.shape[1], 1280)}}
+    class MockAlphabet:
+        def get_batch_converter(self):
+            def converter(data_list):
+                return None, None, torch.zeros(len(data_list), 1000)
+            return converter
+    model = MockESM1b()
+    alphabet = MockAlphabet()
+    proteins = [sample_data['protein']]
+    result = get_esm1b_representations(proteins, model, alphabet)
+    assert isinstance(result, dict)
+    assert len(result) == len(set(proteins))
+    assert all(isinstance(v, list) for v in result.values())
+    assert all(len(v) == 1280 for v in result.values())
+
+
+def test_get_Nsequon_preds(sample_data, mock_models):
+    model = mock_models['nsequon_pred']
+    sequences = [
+        "zzzzzzzzzzzzzzzzzzzNGSzzzzzzzzzzzzzzzzzz",
+        "zzzzzzzzzzzzzzzzzzzNATzzzzzzzzzzzzzzzzzz"
+    ]
+    df = get_Nsequon_preds(
+        prots=sequences,
+        model=model,
+        prot_dic={seq: sample_data['mock_embeddings'] for seq in sequences}
+    )
+    assert isinstance(df, pd.DataFrame)
+    assert 'seq' in df.columns
+    assert 'glycosylated' in df.columns
+    assert len(df) == len(sequences)
+    assert all(0 <= p <= 1 for p in df['glycosylated'])
 
 
 def verify_mock_data(data):

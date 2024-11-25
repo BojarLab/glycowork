@@ -45,7 +45,6 @@ def matches(
           else:
               # Error
               print(f"Encountered extraneous closing quote at pos {pos}: '{line[pos:]}'")
-              pass
 
   if stack:
       for pos in stack:
@@ -54,44 +53,28 @@ def matches(
 
 # Adjusted SNFG color palette
 col_dict_base = {
-    'snfg_white'     : '#FFFFFF',
-    'snfg_alt_blue'  : '#0385AE',
-    'snfg_green'     : '#058F60',
-    'snfg_yellow'    : '#FCC326',
-    'snfg_light_blue': '#91D3E3',
-    'snfg_pink'      : '#F39EA0',
-    'snfg_purple'    : '#A15989',
-    'snfg_brown'     : '#9F6D55',
-    'snfg_orange'    : '#EF6130',
-    'snfg_red'       : '#C23537',
-    'black'          : '#000000',
-    'grey'           : '#7F7F7F'
+    'snfg_white'     : '#FFFFFF', 'snfg_alt_blue'  : '#0385AE',
+    'snfg_green'     : '#058F60', 'snfg_yellow'    : '#FCC326',
+    'snfg_light_blue': '#91D3E3', 'snfg_pink'      : '#F39EA0',
+    'snfg_purple'    : '#A15989', 'snfg_brown'     : '#9F6D55',
+    'snfg_orange'    : '#EF6130', 'snfg_red'       : '#C23537',
+    'black'          : '#000000', 'grey'           : '#7F7F7F'
 }
 
 col_dict_transparent = {
-    'snfg_white'     : '#FFFFFF',
-    'snfg_alt_blue'  : '#CDE7EF',
-    'snfg_green'     : '#CDE9DF',
-    'snfg_yellow'    : '#FFF6DE',
-    'snfg_light_blue': '#EEF8FB',
-    'snfg_pink'      : '#FDF0F1',
-    'snfg_purple'    : '#F1E6ED',
-    'snfg_brown'     : '#F1E9E5',
-    'snfg_orange'    : '#FDE7E0',
-    'snfg_red'       : '#F7E0E0',
-    'black'          : '#D9D9D9',
-    'grey'           : '#ECECEC'
+    'snfg_white'     : '#FFFFFF', 'snfg_alt_blue'  : '#CDE7EF',
+    'snfg_green'     : '#CDE9DF', 'snfg_yellow'    : '#FFF6DE',
+    'snfg_light_blue': '#EEF8FB', 'snfg_pink'      : '#FDF0F1',
+    'snfg_purple'    : '#F1E6ED', 'snfg_brown'     : '#F1E9E5',
+    'snfg_orange'    : '#FDE7E0', 'snfg_red'       : '#F7E0E0',
+    'black'          : '#D9D9D9', 'grey'           : '#ECECEC'
 }
 
 # Extensions for draw_lib
-additions = ['-', 'blank', 'red_end', 'free',
-             '04X', '15A', '02A', '13X',
-             '24X', '35X', '04A', '15X',
-             '02X', '13A', '24A', '35A',
-             '25A', '03A', '14X', '25X',
-             '03X', '14A', 'Z', 'Y',
-             'B', 'C', 'text', 'non_glycan',
-             'show', 'hide']
+additions = ['-', 'blank', 'red_end', 'free', '04X', '15A', '02A', '13X',
+             '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A',
+             '25A', '03A', '14X', '25X', '03X', '14A', 'Z', 'Y',
+             'B', 'C', 'text', 'non_glycan', 'show', 'hide']
 
 # Shape-color mapping
 sugar_dict = {
@@ -1153,7 +1136,7 @@ def split_node(
   new_nodes = []
   H = G.__class__()
   H.add_nodes_from(G.subgraph(node))
-  for i, (s, t, data) in enumerate(edges):
+  for i, (_, t, data) in enumerate(edges):
       new_node = f"{node}_{i}"
       Ix = nx.relabel_nodes(H, {node: new_node})
       new_nodes += list(Ix.nodes(data = True))
@@ -1608,7 +1591,7 @@ def get_coordinates_and_labels(
     for pair in pairwise_node_crawl:
       idx_A = [k for k in get_indices(node_list, [str(k) for k in pair[0]]) if k != [None]]
       idx_B = [k for k in get_indices(node_list, [str(k) for k in pair[1]]) if k != [None]]
-      upper, lower = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
+      upper, _ = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
       upper_min = min(y_list[k[0]] for k in (idx_A if upper == pair[0] else idx_B))
       lower_max = max(y_list[k[0]] for k in (idx_B if upper == pair[0] else idx_A))
 
@@ -1705,7 +1688,7 @@ def get_coordinates_and_labels(
     for pair in pairwise_node_crawl:
       idx_A = [k for k in get_indices(node_list, [str(k) for k in pair[0]]) if k != [None]]
       idx_B = [k for k in get_indices(node_list, [str(k) for k in pair[1]]) if k != [None]]
-      upper, lower = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
+      upper, _ = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
       upper_min = min(y_list[k[0]] for k in (idx_A if upper == pair[0] else idx_B))
       lower_max = max(y_list[k[0]] for k in (idx_B if upper == pair[0] else idx_A))
 
@@ -1721,7 +1704,7 @@ def get_coordinates_and_labels(
         if x_cor in list(set(lower_x)):
           min_y_upper = min([upper_y[k] for k in unwrap(get_indices(upper_x, [x_cor]))])
           max_y_lower = max([lower_y[k] for k in unwrap(get_indices(lower_x, [x_cor]))])
-          diff_to_fix.append(2 - (min_y_upper-max_y_lower))
+          diff_to_fix.append(2 - (min_y_upper - max_y_lower))
       if diff_to_fix:
         to_add = max(diff_to_fix)
 
@@ -1842,7 +1825,7 @@ def process_per_residue(
   branched_side_chain_indices = []
   side_chain_stack = []
   idx = 0
-  for index, char in enumerate(temp):
+  for char in temp:
     if char == '[':
       side_chain_stack.append([])
     elif char == ']':
@@ -1923,21 +1906,12 @@ def add_colours_to_map(
     hex_codes: bool = True # Return hex color codes
     ) -> None:
   "Adds color assignments to mapping dictionary for chemical structure visualization"
-  # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
   from matplotlib.colors import ColorConverter
-
-  if alpha:
-    COLS = chem_cols
-  else:
-    COLS = chem_cols_alpha
+  color = chem_cols_alpha[col_num] if alpha else chem_cols[col_num]
+  color = color if hex_codes else ColorConverter().to_rgb(color)
   for el in els:
-    if el not in cols:
-      cols[el] = []
-    if COLS[col_num] not in cols[el]:
-      if hex:
-        cols[el].append(COLS[col_num])
-      else:
-        cols[el].append(ColorConverter().to_rgb(COLS[col_num]))
+    cols.setdefault(el, [])
+    if color not in cols[el]: cols[el].append(color)
 
 
 def draw_chem2d(
@@ -2107,7 +2081,7 @@ def GlycoDraw(
 
   # Handle floaty bits if present
   floaty_bits = []
-  for openpos, closepos, level in matches(draw_this, opendelim = '{', closedelim = '}'):
+  for openpos, closepos, _ in matches(draw_this, opendelim = '{', closedelim = '}'):
       floaty_bits.append(draw_this[openpos:closepos]+'blank')
       draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')

@@ -36,6 +36,8 @@ class SimpleDataset:
 def sigmoid(x: float # input value
           ) -> float: # sigmoid transformed value
   "Apply sigmoid transformation to input"
+  if hasattr(x, 'item') or hasattr(x, 'dtype'):
+      x = x.item()
   return 1 / (1 + math.exp(-x))
 
 
@@ -132,7 +134,7 @@ def get_lectin_preds(prot: str, # protein amino acid sequence
   if libr is None:
     libr = lib
   if correction_df is None:
-    with resources.open_text("glycowork.ml", "glycowork_lectinoracle_background_correction.csv") as f:
+    with resources.files("glycowork.ml").joinpath("glycowork_lectinoracle_background_correction.csv").open(encoding = 'utf-8-sig') as f:
         correction_df = pd.read_csv(f)
   if prot_dic is None and not flex:
     print("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")

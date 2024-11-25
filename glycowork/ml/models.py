@@ -21,7 +21,7 @@ class SweetNet(torch.nn.Module):
                  hidden_dim: int = 128 # dimension of hidden layers
                 ) -> None:
         "given glycan graphs as input, predicts properties via a graph neural network"
-
+        super(SweetNet, self).__init__()
         # Convolution operations on the graph
         self.conv1 = GraphConv(hidden_dim, hidden_dim)
         self.conv2 = GraphConv(hidden_dim, hidden_dim)
@@ -40,7 +40,6 @@ class SweetNet(torch.nn.Module):
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
                 inference: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-
         # Getting node features
         x = self.item_embedding(x)
         x = x.squeeze(1)
@@ -68,12 +67,10 @@ class NSequonPred(torch.nn.Module):
     def __init__(self) -> None:
         "given an ESM1b representation of N and 20 AA up + downstream, predicts whether it's a sequon"
         super(NSequonPred, self).__init__()
-
         self.fc1 = torch.nn.Linear(1280, 512)
         self.fc2 = torch.nn.Linear(512, 256)
         self.fc3 = torch.nn.Linear(256, 64)
         self.fc4 = torch.nn.Linear(64, 1)
-
         self.bn1 = torch.nn.BatchNorm1d(512)
         self.bn2 = torch.nn.BatchNorm1d(256)
         self.bn3 = torch.nn.BatchNorm1d(64)
