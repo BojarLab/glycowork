@@ -122,26 +122,21 @@ def get_molecular_properties(
     import pubchempy as pcp
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
-  smiles_list = IUPAC_to_SMILES(glycan_list)
   if placeholder:
     dummy = IUPAC_to_SMILES(['Glc'])[0]
   compounds_list, failed_requests = [], []
-  for s in smiles_list:
+  for s in IUPAC_to_SMILES(glycan_list):
     try:
       c = pcp.get_compounds(s, 'smiles')[0]
       if c.cid is None:
-        if placeholder:
-          compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0])
-        else:
-          failed_requests.append(s)
+        compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0]) if placeholder else failed_requests.append(s)
       else:
         compounds_list.append(c)
     except:
       failed_requests.append(s)
   if verbose and len(failed_requests) >= 1:
-    print('The following SMILES were not found on PubChem:')
-    for failed in failed_requests:
-      print(failed)
+    print('The following SMILES were not found on PubChem:\n')
+    print(failed_requests)
   df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight', 'xlogp',
                                                             'charge', 'exact_mass', 'monoisotopic_mass', 'tpsa', 'complexity',
                                                             'h_bond_donor_count', 'h_bond_acceptor_count',
@@ -362,15 +357,9 @@ def get_k_saccharides(
   out_matrix = out_matrix.T.groupby(by = out_matrix.columns).sum().T
   if up_to:
     combined_df= pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
-    if just_motifs:
-      return combined_df.apply(lambda x: list(combined_df.columns[x > 0]), axis = 1).tolist()
-    else:
-      return combined_df
+    return combined_df.apply(lambda x: list(combined_df.columns[x > 0]), axis = 1).tolist() if just_motifs else combined_df
   else:
-    if just_motifs:
-      return out_matrix.apply(lambda x: list(out_matrix.columns[x > 0]), axis = 1).tolist()
-    else:
-      return out_matrix.fillna(0).astype(int)
+    return out_matrix.apply(lambda x: list(out_matrix.columns[x > 0]), axis = 1).tolist() if just_motifs else out_matrix.fillna(0).astype(int)
 
 
 def get_terminal_structures(

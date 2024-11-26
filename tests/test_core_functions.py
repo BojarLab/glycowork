@@ -39,7 +39,7 @@ from glycowork.motif.processing import (
 )
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets,
-    reindex, stringify_dict, replace_every_second, multireplace,
+    reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages
 )
 from glycowork.glycan_data.stats import (
@@ -79,8 +79,7 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process
 from glycowork.motif.draw import (matches, process_bonds, split_monosaccharide_linkage, draw_hex, split_node,
                  scale_in_range, glycan_to_skeleton, process_per_residue, col_dict_base,
                  get_hit_atoms_and_bonds, add_colours_to_map, unique, is_jupyter, process_repeat, draw_bracket,
-                 display_svg_with_matplotlib, multiple_branch_branches,
-                 get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
+                 display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
                  process_bonds, draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, get_indices
 )
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
@@ -1007,6 +1006,35 @@ def test_dataframe_serializer():
     cell_data = {'type': 'list', 'value': ['1', '2', '3']}
     result = serializer._deserialize_cell(cell_data)
     assert result == ['1', '2', '3']
+
+
+def test_count_nested_brackets():
+    # Basic cases
+    assert count_nested_brackets('') == 0
+    assert count_nested_brackets('[]') == 0
+    assert count_nested_brackets('[a]') == 0
+    assert count_nested_brackets('[[]]') == 1
+    assert count_nested_brackets('[[][]]') == 2
+    assert count_nested_brackets('[a][b]') == 0  # Parallel brackets don't count
+    # Complex nested cases
+    assert count_nested_brackets('[a[b][c]]') == 2
+    assert count_nested_brackets('[a[b[c]]]') == 2
+    assert count_nested_brackets('[a][b[c][d]]') == 2
+    # Real glycan examples
+    glycan1 = '[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc]'
+    assert count_nested_brackets(glycan1) == 1
+    glycan2 = '[a[b[c]][d[e]]]'
+    assert count_nested_brackets(glycan2) == 4
+    # Edge cases
+    assert count_nested_brackets('[][][]') == 0
+    assert count_nested_brackets('[[[][]]]') == 3
+
+
+def test_real_glycan_structures():
+    s1 = 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
+    s2 = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    # These should have different nested bracket counts
+    assert count_nested_brackets(s1) != count_nested_brackets(s2)
 
 
 def test_fast_two_sum():
@@ -2492,18 +2520,6 @@ def test_display_svg_with_matplotlib():
     plt = MockPlt()
     display_svg_with_matplotlib(test_svg)
     plt = old_plt
-
-
-def test_multiple_branch_branches():
-    # Test nested branch reordering
-    input_str = "GlcNAc(b1-4)[Fuc(a1-2)[Fuc(a1-3)]Fuc(a1-6)]GlcNAc"
-    result = multiple_branch_branches(input_str)
-    assert "[Fuc(a1-3)]" in result
-    # Test multiple nested branches
-    input_str = "GlcNAc(b1-4)[Fuc(a1-2)[Fuc(a1-3)][Fuc(a1-6)]Fuc(a1-6)]GlcNAc"
-    result = multiple_branch_branches(input_str)
-    assert "[Fuc(a1-6)]" in result
-    assert "[Fuc(a1-3)]" in result
 
 
 def test_draw_shape_hex():

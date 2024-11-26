@@ -523,104 +523,6 @@ def add_sugar(
     drawing.append(p)
 
 
-def multiple_branches(
-    glycan: str # IUPAC-condensed glycan sequence
-    ) -> str: # Reordered glycan sequence
-  "Reorders multiple branches in glycan by linkage positions"
-  if ']' not in glycan:
-    return glycan
-  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-  open_close = [(openpos, closepos) for openpos, closepos, level in matches(tmp) if level == 0 and not re.search(r"^Fuc\S{6}$", tmp[openpos:closepos])]
-  for k in range(len(open_close)-1):
-    if open_close[k + 1][0] - open_close[k][1] != 2:
-      continue
-    branch1, branch2 = glycan[open_close[k][0]:open_close[k][1]], glycan[open_close[k + 1][0]:open_close[k + 1][1]]
-    tmp1, tmp2 = branch1[-2], branch2[-2]
-    if tmp1 == tmp2 == '?':
-      if len(branch1) > len(branch2):
-        tmp1, tmp2 = [1, 2]
-      else:
-        tmp1, tmp2 = [2, 1]
-    if tmp1 > tmp2:
-      glycan = f"{glycan[:open_close[k][0]]}{branch2}][{branch1}{glycan[open_close[k + 1][1]:]}"
-  return glycan
-
-
-def multiple_branch_branches(
-    glycan: str # IUPAC-condensed glycan sequence
-    ) -> str: # Reordered glycan sequence
-  "Reorders nested multiple branches in glycan by linkage positions"
-  if ']' not in glycan:
-    return glycan
-  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-  for openpos, closepos, level in matches(tmp):
-    if level == 0 and not re.search(r"^Fuc\S{6}$", tmp[openpos:closepos]):
-        glycan = glycan[:openpos] + multiple_branches(glycan[openpos:closepos]) + glycan[closepos:]
-  return glycan
-
-
-def reorder_for_drawing(
-    glycan: str, # IUPAC-condensed glycan sequence
-    by: str = 'linkage' # Ordering criterion: 'linkage' or 'length'
-    ) -> str: # Reordered glycan sequence
-  "Orders level 0 branches ascending by linkage position or length"
-  if ']' not in glycan:
-    return glycan
-  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-  for openpos, closepos, level in matches(tmp):
-    if level == 0 and not re.search(r"^Fuc\S{6}$|^Xyl\S{6}$", tmp[openpos:closepos]):
-      # Nested branches
-      glycan = glycan[:openpos] + branch_order(glycan[openpos:closepos]) + glycan[closepos:]
-      # Branches
-      group1 = glycan[:openpos-1]
-      group2 = glycan[openpos:closepos]
-      branch_end = [j[-2] for j in [group1, group2]]
-      if by == 'length':
-        branch_len = [len(k) for k in min_process_glycans([group1, group2])]
-        if branch_len[0] == branch_len[1]:
-          if branch_end[0] == branch_end[1]:
-            glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-          else:
-            glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
-        else:
-          glycan = [group1, group2][np.argmax(branch_len)] + '[' + [group1, group2][np.argmin(branch_len)] + ']' + glycan[closepos+1:]
-      elif by == 'linkage':
-        if branch_end[0] == branch_end[1]:
-          glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-        else:
-          glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
-  return glycan
-
-
-def branch_order(
-    glycan: str, # IUPAC-condensed glycan sequence
-    by: str = 'linkage' # Ordering criterion: 'linkage' or 'length'
-    ) -> str: # Reordered glycan sequence
-  "Orders nested branches ascending by linkage position or length"
-  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-  for openpos, closepos, level in matches(tmp):
-    if level == 0 and not re.search(r"^Fuc\S{6}$|^Xyl\S{6}$", tmp[openpos:closepos]):
-      group1 = glycan[:openpos-1]
-      group2 = glycan[openpos:closepos]
-      branch_end = [j[-2] for j in [group1, group2]]
-      branch_end = [k.replace('z', '9') for k in branch_end]
-      if by == 'length':
-        branch_len = [len(k) for k in min_process_glycans([group1, group2])]
-        if branch_len[0] == branch_len[1]:
-          if branch_end[0] == branch_end[1]:
-            glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-          else:
-            glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
-        else:
-          glycan = [group1, group2][np.argmax(branch_len)] + '[' + [group1, group2][np.argmin(branch_len)] + ']' + glycan[closepos+1:]
-      elif by == 'linkage':
-        if branch_end[0] == branch_end[1]:
-          glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-        else:
-          glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
-  return glycan
-
-
 def split_node(
     G: nx.Graph, # NetworkX glycan graph
     node: int # Node to split
@@ -744,11 +646,7 @@ def get_coordinates_and_labels(
 ) -> List[List]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
   "Calculates drawing coordinates and formats labels for glycan visualization"
   if not draw_this.startswith('['):
-    #draw_this = choose_correct_isoform(draw_this, order_by = "linkage")  # one day
-    draw_this = multiple_branches(multiple_branch_branches(draw_this))
-    if not ('[GlcNAc(b1-4)]' in draw_this and not 'Man(a1-3)' in draw_this):
-      draw_this = reorder_for_drawing(draw_this)
-      draw_this = multiple_branch_branches(multiple_branches(draw_this))
+    draw_this = choose_correct_isoform(draw_this, order_by = "linkage")
 
   graph = glycan_to_nxGraph(draw_this, termini = 'calc') if termini_list else glycan_to_nxGraph(draw_this)
   graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list)

@@ -335,3 +335,15 @@ class DataFrameSerializer:
     )
 
 serializer = DataFrameSerializer()
+
+def count_nested_brackets(s):
+  count = 0
+  depth = 0
+  for c in s:
+    if c == '[':
+      if depth > 0:  # Only count if we're already inside brackets
+        count += 1
+      depth += 1
+    elif c == ']':
+      depth -= 1
+  return count
