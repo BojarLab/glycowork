@@ -183,7 +183,6 @@ def annotate_dataset(
     # Counts literature-annotated motifs in each glycan
     partial_annotate = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
     if '{' in ''.join(glycans):
-      from glycowork.glycan_data.loader import df_species
       feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
       partial_annotate_topology_uncertainty = partial(annotate_glycan_topology_uncertainty, feasibles = feasibles, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
     else:

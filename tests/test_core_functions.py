@@ -77,7 +77,7 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process
                   filter_matches_by_location, parse_pattern
 )
 from glycowork.motif.draw import (matches, process_bonds, split_monosaccharide_linkage, draw_hex, split_node,
-                 scale_in_range, glycan_to_skeleton, process_per_residue, hex_circumference, col_dict_base,
+                 scale_in_range, glycan_to_skeleton, process_per_residue, col_dict_base,
                  get_hit_atoms_and_bonds, add_colours_to_map, unique, is_jupyter, process_repeat, draw_bracket,
                  display_svg_with_matplotlib, multiple_branch_branches,
                  get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
@@ -117,7 +117,7 @@ from glycowork.ml.inference import (SimpleDataset, sigmoid, glycans_to_emb, get_
 )
 
 
-@pytest.mark.parametrize("glycan", [
+GLYCAN_TEST_CASES = [
     # linear glycans
     "Rha(a1-2)Glc(b1-2)GlcAOBut",
     "ManNAc1PP(a1-5)Ribf1N",
@@ -189,7 +189,10 @@ from glycowork.ml.inference import (SimpleDataset, sigmoid, glycans_to_emb, get_
     "{Fuc(a1-?)}{GlcNAc(b1-?)}{Hex(?1-?)}{Neu5Gc(a2-?)}GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc",
     "{Neu5Ac(a2-?)}Gal(b1-?)GlcNAc(b1-2)[Gal(b1-?)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-?)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
     "{Fuc(a1-?)}{Neu5Ac(a2-?)}Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc",
-])
+]
+
+
+@pytest.mark.parametrize("glycan", GLYCAN_TEST_CASES)
 def test_graph_to_string_int(glycan: str):
     """This test assumes that the function gylcan_to_graph_int is correct."""
     label = glycan_to_nxGraph(glycan)
@@ -2172,6 +2175,12 @@ def test_glycodraw():
         GlycoDraw("InvalidGlycan")
 
 
+@pytest.mark.parametrize("glycan", GLYCAN_TEST_CASES)
+def test_glycodraw_complex(glycan):
+    result = GlycoDraw(glycan, suppress=True)
+    assert result is not None
+
+
 def test_plot_glycans_excel(tmp_path):
     # Create test directory
     test_dir = tmp_path / "test_folder"
@@ -2373,18 +2382,6 @@ def get_clean_drawing():
     return draw.Drawing(200, 200)
 
 
-def test_hex_circumference():
-    # Test basic hexagon outline drawing
-    mock_drawing = get_clean_drawing()
-    hex_circumference(1.0, 1.0, 50, col_dict_base, mock_drawing)
-    # Verify drawing object has 6 paths (6 sides of hexagon)
-    assert len(mock_drawing.all_elements()) == 6
-    # Test with different dimensions
-    mock_drawing = get_clean_drawing()
-    hex_circumference(2.0, 2.0, 100, col_dict_base, mock_drawing)
-    assert len(mock_drawing.all_elements()) == 6
-
-
 def test_draw_hex():
     # Test basic hexagon drawing
     mock_drawing = get_clean_drawing()
@@ -2515,23 +2512,23 @@ def test_draw_shape_hex():
     draw_shape('Hex', 'snfg_white', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
     elements = mock_drawing.all_elements()
     # Should have: circle + text path + text for modification
-    assert len(elements) == 5
+    assert len(elements) == 3
     # Test with scalar
     mock_drawing = get_clean_drawing()
     draw_shape('Hex', 'snfg_white', 1.0, 1.0, col_dict_base, mock_drawing, dim=50, scalar=10)
     elements = mock_drawing.all_elements()
-    assert len(elements) == 6
+    assert len(elements) == 4
     # Test with modification
     mock_drawing = get_clean_drawing()
     draw_shape('Hex', 'snfg_white', 1.0, 1.0, col_dict_base, mock_drawing,
                modification='2S', dim=50)
-    assert len(mock_drawing.all_elements()) == 5
+    assert len(mock_drawing.all_elements()) == 3
     # Test with furanose
     mock_drawing = get_clean_drawing()
     draw_shape('Hex', 'snfg_white', 1.0, 1.0, col_dict_base, mock_drawing,
                furanose=True, dim=50)
     # Should have additional text elements for furanose indicator
-    assert len(mock_drawing.all_elements()) == 7
+    assert len(mock_drawing.all_elements()) == 5
 
 
 def test_draw_shape_hexnac():
@@ -2540,12 +2537,12 @@ def test_draw_shape_hexnac():
     draw_shape('HexNAc', 'snfg_yellow', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
     elements = mock_drawing.all_elements()
     # Should have: rectangle + text path + text for modification
-    assert len(elements) == 5
+    assert len(elements) == 3
     # Test furanose
     mock_drawing = get_clean_drawing()
     draw_shape('HexNAc', 'snfg_yellow', 1.0, 1.0, col_dict_base, mock_drawing, dim=50, furanose=True)
     elements = mock_drawing.all_elements()
-    assert len(elements) == 7
+    assert len(elements) == 5
     # Test with configuration
     mock_drawing = get_clean_drawing()
     draw_shape('HexNAc', 'snfg_yellow', 1.0, 1.0, col_dict_base, mock_drawing,
@@ -2559,12 +2556,12 @@ def test_draw_shape_dHex():
     draw_shape('dHex', 'snfg_red', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
     elements = mock_drawing.all_elements()
     # Should have: triangle + text path + text for modification
-    assert len(elements) == 5
+    assert len(elements) == 3
     # Test furanose
     mock_drawing = get_clean_drawing()
     draw_shape('dHex', 'snfg_red', 1.0, 1.0, col_dict_base, mock_drawing, dim=50, furanose=True)
     elements = mock_drawing.all_elements()
-    assert len(elements) == 7
+    assert len(elements) == 5
 
 
 def test_draw_shape_Pen():
@@ -2573,24 +2570,24 @@ def test_draw_shape_Pen():
     draw_shape('Pen', 'snfg_red', 1.0, 1.0, col_dict_base, mock_drawing, dim=50)
     elements = mock_drawing.all_elements()
     # Should have: star + text path + text for modification
-    assert len(elements) == 5
+    assert len(elements) == 3
     # Test furanose
     mock_drawing = get_clean_drawing()
     draw_shape('Pen', 'snfg_red', 1.0, 1.0, col_dict_base, mock_drawing, dim=50, furanose=True)
     elements = mock_drawing.all_elements()
-    assert len(elements) == 7
+    assert len(elements) == 5
 
 
 # Test cases structured as: (shape_name, color, expected_elements, description)
 TEST_CASES = [
-    ('HexN', 'snfg_green', 9, 'crossed square'),
-    ('HexA_2', 'snfg_yellow', 9, 'divided diamond'),
-    ('dHexNAc', 'snfg_yellow', 9, 'divided triangle'),
-    ('ddHex', 'snfg_yellow', 5, 'flat rectangle'),
-    ('dNon', 'snfg_red', 5, 'diamond'),
-    ('ddNon', 'snfg_red', 5, 'flat diamond'),
-    ('Unknown', 'snfg_red', 5, 'flat hexagon'),
-    ('Assigned', 'snfg_red', 5, 'pentagon'),
+    ('HexN', 'snfg_green', 7, 'crossed square'),
+    ('HexA_2', 'snfg_yellow', 7, 'divided diamond'),
+    ('dHexNAc', 'snfg_yellow', 7, 'divided triangle'),
+    ('ddHex', 'snfg_yellow', 3, 'flat rectangle'),
+    ('dNon', 'snfg_red', 3, 'diamond'),
+    ('ddNon', 'snfg_red', 3, 'flat diamond'),
+    ('Unknown', 'snfg_red', 3, 'flat hexagon'),
+    ('Assigned', 'snfg_red', 3, 'pentagon'),
     ('red_end', 'snfg_red', 2, 'reducing end'),
     ('free', 'snfg_red', 1, 'free end'),
     # Fragment drawings
@@ -2660,6 +2657,14 @@ def test_get_highlight_attribute():
     assert attrs[0] == 'hide'  # Gal should not be highlighted
     assert attrs[2] == 'show'  # GlcNAc should be highlighted
     assert attrs[4] == 'show'  # Man should be highlighted
+    # Test with multiple matches
+    G = glycan_to_nxGraph("Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-6)]Man")
+    result = get_highlight_attribute(G, 'GlcNAc(b1-?)Man')
+    attrs = nx.get_node_attributes(result, 'highlight_labels')
+    assert attrs[0] == 'hide'  # Gal should not be highlighted
+    assert attrs[2] == 'show'  # 1st GlcNAc should be highlighted
+    assert attrs[6] == 'show'  # 2nd GlcNAc should be highlighted
+    assert attrs[8] == 'show'  # Man should be highlighted
 
 
 def test_get_coordinates_and_labels():
@@ -2686,19 +2691,19 @@ def test_add_bond():
     # Test basic bond
     mock_drawing = get_clean_drawing()
     add_bond(0, 1, 0, 0, mock_drawing, dim=50)
-    assert len(mock_drawing.all_elements()) == 2  # Line + text path
+    assert len(mock_drawing.all_elements()) == 1  # Line
     # Test with label
     mock_drawing = get_clean_drawing()
     add_bond(0, 1, 0, 0, mock_drawing, label='β1-4', dim=50)
-    assert len(mock_drawing.all_elements()) == 2
+    assert len(mock_drawing.all_elements()) == 2  # Line + text path
     # Test with highlight
     mock_drawing = get_clean_drawing()
     add_bond(0, 1, 0, 0, mock_drawing, highlight='hide', dim=50)
-    assert len(mock_drawing.all_elements()) == 2
+    assert len(mock_drawing.all_elements()) == 1
     # Test compact mode
     mock_drawing = get_clean_drawing()
     add_bond(0, 1, 0, 0, mock_drawing, compact=True, dim=50)
-    assert len(mock_drawing.all_elements()) == 2
+    assert len(mock_drawing.all_elements()) == 1
 
 
 def test_process_bonds():

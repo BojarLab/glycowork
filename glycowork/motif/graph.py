@@ -103,6 +103,8 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
                       termini_list: Optional[List[str]] = None # List of positions from terminal/internal/flexible
                      ) -> nx.Graph: # NetworkX graph object of glycan
   "Wrapper for converting glycans into networkx graphs; also works with floating substituents"
+  if not glycan:
+    return nx.Graph()
   if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if termini_list:

@@ -66,15 +66,8 @@ def glycans_to_emb(glycans: List[str], # list of glycans in IUPAC-condensed
         batch = batch.to(device)
         pred, out = model(x, edge_index, batch, inference = True)
         # Unpacking and combining predictions
-        if rep:
-            res.extend(out.detach().cpu().numpy())
-        else:
-            res.extend(pred.detach().cpu().numpy())
-    if rep:
-        return pd.DataFrame(res)
-    else:
-        preds = [class_list[k] for k in np.argmax(res, axis = 1)]
-        return preds
+        res.extend(out.detach().cpu().numpy()) if rep else res.extend(pred.detach().cpu().numpy())
+    return pd.DataFrame(res) if rep else [class_list[k] for k in np.argmax(res, axis = 1)]
 
 
 def get_multi_pred(prot: str, # protein amino acid sequence
@@ -98,7 +91,7 @@ def get_multi_pred(prot: str, # protein amino acid sequence
       rep = prot_dic.get(prot, "new protein, no stored embedding")
       feature = [rep] * len(glycans)
   train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
-                                         libr = libr, batch_size = batch_size,
+                                         libr = libr, batch_size = batch_size, label_type = torch.float,
                                          shuffle = False, extra_feature = feature)
   model = model.eval()
   res = []
