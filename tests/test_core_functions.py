@@ -10,6 +10,7 @@ import shutil
 import torch
 import torch.nn as nn
 import drawsvg as draw
+import warnings
 import matplotlib
 matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
 import matplotlib.pyplot as plt
@@ -18,6 +19,7 @@ from matplotlib.patches import FancyArrowPatch
 from unittest.mock import Mock, patch, MagicMock, mock_open
 from torch_geometric.data import Data
 from collections import Counter
+from contextlib import contextmanager
 from glycowork.glycan_data.data_entry import check_presence
 from glycowork.motif.query import get_insight, glytoucan_to_glycan
 from glycowork.motif.tokenization import (
@@ -114,6 +116,23 @@ from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRa
 from glycowork.ml.inference import (SimpleDataset, sigmoid, glycans_to_emb, get_multi_pred, get_lectin_preds,
                           get_esm1b_representations, get_Nsequon_preds
 )
+
+
+@contextmanager
+def suppress_pydot_warnings():
+    """Context manager to suppress specific pydot-related deprecation warnings"""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="nx.nx_pydot.pydot_layout depends on the pydot package",
+            category=DeprecationWarning
+        )
+        warnings.filterwarnings(
+            "ignore", 
+            message="nx.nx_pydot.to_pydot depends on the pydot package",
+            category=DeprecationWarning
+        )
+        yield
 
 
 GLYCAN_TEST_CASES = [
@@ -618,6 +637,10 @@ def test_find_isomorphs():
     glycan = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"
     isomorphs = find_isomorphs(glycan)
     assert len(isomorphs) > 1
+    isomorphs = find_isomorphs("Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc")
+    assert "Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)]GalNAc" in isomorphs
+    isomorphs = find_isomorphs("Gal(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc")
+    assert "Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)]GalNAc" in isomorphs
     # Test with floating parts
     glycan = "{Neu5Ac(a2-3)}Gal(b1-4)[Fuc(a1-3)]GlcNAc"
     isomorphs = find_isomorphs(glycan)
@@ -631,7 +654,11 @@ def test_canonicalize_iupac():
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     # Test modification handling
+    assert canonicalize_iupac("Neu5,9Ac2a2-6Galb1-4GlcNAcb-Sp8") == "Neu5Ac9Ac(a2-6)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Neu4,5Ac2a2-6Galb1-4GlcNAcb-Sp8") == "Neu4Ac5Ac(a2-6)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("6SGal(b1-4)GlcNAc") == "Gal6S(b1-4)GlcNAc"
+    assert canonicalize_iupac("(6S)Galb1-4GlcNAcb-Sp0") == "Gal6S(b1-4)GlcNAc"
+    assert canonicalize_iupac("(6S)(4S)Galb1-4GlcNAcb-Sp0") == "Gal4S6S(b1-4)GlcNAc"
 
 
 def test_glycoct_to_iupac():
@@ -803,6 +830,11 @@ def test_choose_correct_isoform():
     # Should choose the more specific form
     result = choose_correct_isoform(glycans_with_wildcards)
     assert result == "Gal(b1-4)[Fuc(a1-3)]GlcNAc"
+    # Complex cases
+    result = choose_correct_isoform("Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc")
+    assert result == "Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)]GalNAc"
+    result = choose_correct_isoform("Gal(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc")
+    assert result == "Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)]GalNAc"
 
 
 def test_bracket_removal():
@@ -2138,16 +2170,19 @@ def test_process_bonds():
 
 
 def test_draw_chem2d():
+    missing_deps = []
     try:
         from rdkit.Chem import MolFromSmiles
         from rdkit.Chem.Draw import PrepareMolForDrawing
         from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
-        try:
-            import IPython.display
-        except ImportError:
-            pytest.skip("IPython not installed")
     except ImportError:
-        pytest.skip("RDKit not installed")
+        missing_deps.append("RDKit")
+    try:
+        import IPython.display
+    except ImportError:
+        missing_deps.append("IPython")
+    if missing_deps:
+        pytest.skip(f"Required dependencies not installed: {', '.join(missing_deps)}")
     with patch('IPython.display.SVG', return_value="SVG Object"):
         # Test basic 2D drawing
         result = draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"])
@@ -2162,16 +2197,22 @@ def test_draw_chem2d():
 
 
 def test_draw_chem3d():
+    missing_deps = []
     try:
         from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile
         from rdkit.Chem.AllChem import EmbedMolecule, MMFFOptimizeMolecule
-        import py3Dmol
-        try:
-            import IPython.display
-        except ImportError:
-            pytest.skip("IPython not installed")
     except ImportError:
-        pytest.skip("RDKit and/or py3Dmol not installed")
+        missing_deps.append("RDKit")
+    try:
+        import py3Dmol
+    except ImportError:
+        missing_deps.append("py3Dmol")
+    try:
+        import IPython.display
+    except ImportError:
+        missing_deps.append("IPython")
+    if missing_deps:
+        pytest.skip(f"Required dependencies not installed: {', '.join(missing_deps)}")
     with patch('IPython.display.display') as mock_display:
         # Test basic 3D drawing
         draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"])
@@ -4269,8 +4310,9 @@ def test_plot_network_layouts(evo_test_networks):
             plt.close()
     # Test pydot2 layout with proper error handling
     try:
-        with patch('mpld3.enable_notebook'), patch('matplotlib.pyplot.show'):
-            plot_network(main_net, plot_format='pydot2')
+        with suppress_pydot_warnings():
+            with patch('mpld3.enable_notebook'), patch('matplotlib.pyplot.show'):
+                plot_network(main_net, plot_format='pydot2')
     except (ImportError, FileNotFoundError):
         print("Graphviz not installed, skipping pydot2 layout test")
         plt.close()

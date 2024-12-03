@@ -32,8 +32,8 @@ def __getattr__(name):
     globals()[name] = df_glycan  # Cache it to avoid reloading
     return df_glycan
   elif name == "lectin_specificity":
-    data_path = path.join(this_dir, 'lectin_specificity.pkl')
-    lectin_specificity = load(open(data_path, 'rb'))
+    data_path = path.join(this_dir, 'lectin_specificity.json')
+    lectin_specificity = serializer.deserialize(data_path)
     globals()[name] = lectin_specificity  # Cache it to avoid reloading
     return lectin_specificity
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -262,8 +262,14 @@ class DataFrameSerializer:
         'value': [str(item) for item in value]
       }
     elif isinstance(value, dict):
+      # Check if it's a dictionary containing lists
+      if all(isinstance(k, str) and isinstance(v, list) for k, v in value.items()):
+        return {
+          'type': 'str_list_dict',
+          'value': {str(k): [str(item) for item in v] for k, v in value.items()}
+        }
       # Check if it's a string:int dictionary
-      if all(isinstance(k, str) and isinstance(v, int) for k, v in value.items()):
+      elif all(isinstance(k, str) and isinstance(v, int) for k, v in value.items()):
         return {
           'type': 'str_int_dict',
           'value': {str(k): int(v) for k, v in value.items()}
@@ -289,6 +295,8 @@ class DataFrameSerializer:
     """Convert a serialized cell back to its original type."""
     if cell_data['type'] == 'list':
       return cell_data['value']
+    elif cell_data['type'] == 'str_list_dict':
+      return {str(k): list(v) for k, v in cell_data['value'].items()}
     elif cell_data['type'] == 'str_int_dict':
       return {str(k): int(v) for k, v in cell_data['value'].items()}
     elif cell_data['type'] == 'dict':
