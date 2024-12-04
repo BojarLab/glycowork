@@ -243,6 +243,8 @@ def get_heatmap(
   ticklabels = {'yticklabels': True, 'xticklabels': True} if show_all else {}
   combined_kwargs = {**ticklabels, **kwargs}
   g = sns.clustermap(df, center = center, **combined_kwargs)
+  if max(len(str(label)) for label in df.index) > 100:
+    g.ax_heatmap.set_yticklabels(g.ax_heatmap.get_yticklabels(), fontsize = 6)
   plt.xlabel('Samples')
   plt.ylabel('Glycans' if not motifs else 'Motifs')
   plt.tight_layout()

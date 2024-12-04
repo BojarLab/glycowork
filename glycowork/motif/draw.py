@@ -1145,15 +1145,30 @@ def display_svg_with_matplotlib(
   "Renders SVG using matplotlib for non-Jupyter environments"
   try:
     from cairosvg import svg2png
-  except:
+  except ImportError:
     return svg_data
-  # Convert SVG data to PNG
-  png_output = svg2png(bytestring = svg_data.as_svg(), dpi = 600)
-  # Convert PNG output to a format that can be read by matplotlib (a BytesIO stream) and load
-  img = plt.imread(BytesIO(png_output), format = 'png')
-  # Display the image using matplotlib
-  plt.imshow(img, interpolation = 'lanczos')
-  plt.axis('off')  # Turn off axis numbers and ticks
+  # Get original SVG dimensions and scale them up
+  size_multiplier = 4  # Make everything 4x bigger
+  width = svg_data.width if hasattr(svg_data, 'width') else 800
+  height = svg_data.height if hasattr(svg_data, 'height') else 800
+  # Convert to PNG with larger dimensions
+  png_output = svg2png(bytestring = svg_data.as_svg(), output_width = width * size_multiplier,
+                      output_height = height * size_multiplier, scale = 2.0)
+  # Use PIL to crop aggressively
+  img = Image.open(BytesIO(png_output))
+  bbox = img.convert('RGBA').getbbox()
+  if bbox:
+    # Add minimal padding - just enough to not cut off edges
+    padding = int(10 * size_multiplier)
+    bbox = (max(0, bbox[0] - padding), max(0, bbox[1] - padding),
+            min(img.width, bbox[2] + padding), min(img.height, bbox[3] + padding))
+  img_cropped = img.crop(bbox).convert('RGBA')
+  # Display with appropriate figure size
+  dpi = plt.rcParams['figure.dpi']
+  figsize = (img_cropped.width / dpi, img_cropped.height / dpi)
+  plt.figure(figsize = figsize)
+  plt.imshow(img_cropped)
+  plt.axis('off')
   plt.show()
 
 
@@ -1581,8 +1596,8 @@ def GlycoDraw(
         bracket_y_open = (np.mean(main_sugar_y_pos[-2:]), np.mean(main_sugar_y_pos[-2:])) if not compact else (((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)+0.3, ((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)-0.3)
         bracket_y_close = (main_sugar_y_pos[0], main_sugar_y_pos[0]) if not compact else (((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)+0.3, ((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)-0.3)
       bracket_close = np.mean([k*2 for k in main_sugar_x_pos][:2])-0.2 if not compact else np.mean([k*1.2 for k in main_sugar_x_pos][:2])-0.15
-      text_x = bracket_close-(0.42) if not compact else bracket_close-(0.13)
-      text_y = main_sugar_y_pos[0]+1.05 if not compact else (main_sugar_y_pos[0]+1.03)/0.6
+      text_x = bracket_close - (0.42) if not compact else bracket_close - (0.13)
+      text_y = main_sugar_y_pos[0] + 1.05 if not compact else (main_sugar_y_pos[0] + 1.03)/0.6
       draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = open_deg)
       draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
       add_sugar('text', d, text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
@@ -1718,7 +1733,7 @@ def plot_glycans_excel(
   "Creates Excel file with SNFG glycan images in a new column"
   try:
     from cairosvg import svg2png
-  except:
+  except ImportError:
     raise ImportError("You're missing some draw dependencies. If you want to use this function, head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
@@ -1732,20 +1747,32 @@ def plot_glycans_excel(
   # Load the workbook and get the active sheet
   workbook = writer.book
   sheet = writer.sheets["Sheet1"]
+  min_padding = 5  # Minimum padding in pixels
   for i, glycan_structure in enumerate(df.iloc[:, glycan_col_num]):
     if glycan_structure and glycan_structure[0]:
       if not isinstance(glycan_structure[0], str):
         glycan_structure = glycan_structure[0][0]
       # Generate glycan image using GlycoDraw
       svg_data = GlycoDraw(glycan_structure, compact = compact, suppress = True).as_svg()
+      # Get SVG dimensions and scale them
+      width = svg_data.width if hasattr(svg_data, 'width') else 800
+      height = svg_data.height if hasattr(svg_data, 'height') else 800
       # Convert SVG data to image
       temp_bytes = BytesIO()
-      svg2png(bytestring = svg_data.encode('utf-8'), write_to = temp_bytes, dpi = 300)
+      svg2png(bytestring = svg_data.encode('utf-8'), write_to = temp_bytes, output_width = width,
+              output_height = height, scale = 2.0)
       temp_bytes.seek(0)
+      # Load and crop image
       img = Image.open(temp_bytes)
-      # Set the size of the image
+      bbox = img.convert('RGBA').getbbox()
+      if bbox:
+        # Add minimal padding
+        bbox = (max(0, bbox[0] - min_padding), max(0, bbox[1] - min_padding),
+               min(img.width, bbox[2] + min_padding), min(img.height, bbox[3] + min_padding))
+        img = img.crop(bbox).convert('RGBA')
+      # Apply user scaling factor
       img_width, img_height = img.size
-      img = img.resize((int(img_width * scaling_factor), int(img_height * scaling_factor)), Image.LANCZOS)
+      img = img.resize((int(img_width * scaling_factor), int(img_height * scaling_factor)), Image.BICUBIC)
       # Save the image to a BytesIO object
       img_stream = BytesIO()
       img.save(img_stream, format = 'PNG')

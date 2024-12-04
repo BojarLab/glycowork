@@ -844,7 +844,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Canonicalize usage of monosaccharides and linkages
   replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                  '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',
-                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P',
+                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'αα': 'a',
                  '–': '-', ' ': '', ',': '-', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)'}
@@ -988,19 +988,15 @@ def equal_repeats(r1: str, # First glycan sequence
 def infer_features_from_composition(comp: Dict[str, int] # Composition dictionary of monosaccharide:count
                                  ) -> Dict[str, int]: # Dictionary of features and presence/absence
   "Extract higher-order glycan features from a composition"
-  feature_dic = {}
+  feature_dic = {'complex': 0, 'high_Man': 0, 'hybrid': 0, 'antennary_Fuc': 0}
   if comp.get('A', 0) + comp.get('G', 0) > 1 or comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) > 1:
     feature_dic['complex'] = 1
-  else:
-    feature_dic['complex'] = 0
   if (comp.get('H', 0) > 5 and comp.get('N', 0) == 2) or (comp.get('Hex', 0) > 5 and comp.get('HexNAc', 0) == 2):
     feature_dic['high_Man'] = 1
-  else:
-    feature_dic['high_Man'] = 0
   if (comp.get('A', 0) + comp.get('G', 0) < 2 and comp.get('H', 0) > 4) or (comp.get('Neu5Ac', 0) + comp.get('Neu5Gc', 0) < 2 and comp.get('Hex', 0) > 4):
     feature_dic['hybrid'] = 1
-  else:
-    feature_dic['hybrid'] = 0
+  if comp.get('dHex', 0) > 1 or comp.get('F', 0) > 1:
+    feature_dic['antennary_Fuc'] = 1
   return feature_dic
 
 

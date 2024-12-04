@@ -155,3 +155,6 @@ FG,Fuc(a1-2)Gal(b1-2)Xyl(a1-6)Glc(b1-4)Glc,"['flexible', 'flexible', 'flexible',
 XX,Xyl(a1-6)Glc(b1-4)[Xyl(a1-6)]Glc,"['flexible', 'flexible', 'flexible', 'flexible']"
 Difucosylated_core,Fuc(a1-3)[Fuc(a1-6)]GlcNAc,"['flexible', 'flexible', 'flexible']"
 GalFuc_core,Gal(b1-4)Fuc(a1-6)GlcNAc,"['flexible', 'flexible', 'flexible']"
+DisialylLewisC,Sia(a2-3)Gal(b1-3)[Sia(a2-6)]GlcNAc,"['terminal', 'flexible', 'terminal', 'flexible']"
+RM2,Sia(a2-3)[GalNAc(b1-4)]Gal(b1-3)[Sia(a2-6)]GlcNAc,"['terminal', 'flexible', 'flexible', 'terminal', 'flexible']"
+DisialylLewisA,Sia(a2-3)Gal(b1-3)[Fuc(a1-4)][Sia(a2-6)]GlcNAc,"['terminal', 'flexible', 'terminal', 'terminal', 'flexible']"

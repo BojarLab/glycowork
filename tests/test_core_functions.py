@@ -128,7 +128,7 @@ def suppress_pydot_warnings():
             category=DeprecationWarning
         )
         warnings.filterwarnings(
-            "ignore", 
+            "ignore",
             message="nx.nx_pydot.to_pydot depends on the pydot package",
             category=DeprecationWarning
         )
@@ -629,6 +629,10 @@ def test_de_wildcard_glycoletter():
 
 
 def test_find_isomorphs():
+    # Test quick return
+    glycan = "GalNAc(b1-4)Gal(b1-4)Glc"
+    isomorphs = find_isomorphs(glycan)
+    assert len(isomorphs) == 1
     # Test branch swapping
     glycan = "Gal(b1-4)[Fuc(a1-3)]GlcNAc"
     isomorphs = find_isomorphs(glycan)
@@ -651,14 +655,22 @@ def test_find_isomorphs():
 def test_canonicalize_iupac():
     # Test basic cleanup
     assert canonicalize_iupac("Galb4GlcNAc") == "Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("{Gal(b1-4)}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc") == "{Neu5Ac(a2-3)}{Gal(b1-4)}Gal(b1-4)GlcNAc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
+    assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-?)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Gal+Gal(b1-4)GlcNAc") == "{Gal(?1-?)}Gal(b1-4)GlcNAc"
     # Test modification handling
     assert canonicalize_iupac("Neu5,9Ac2a2-6Galb1-4GlcNAcb-Sp8") == "Neu5Ac9Ac(a2-6)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("Neu4,5Ac2a2-6Galb1-4GlcNAcb-Sp8") == "Neu4Ac5Ac(a2-6)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("6SGal(b1-4)GlcNAc") == "Gal6S(b1-4)GlcNAc"
     assert canonicalize_iupac("(6S)Galb1-4GlcNAcb-Sp0") == "Gal6S(b1-4)GlcNAc"
     assert canonicalize_iupac("(6S)(4S)Galb1-4GlcNAcb-Sp0") == "Gal4S6S(b1-4)GlcNAc"
+    # Test other nomenclatures
+    assert canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("M3") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
 
 
 def test_glycoct_to_iupac():
@@ -720,6 +732,16 @@ def test_canonicalize_composition():
     assert result["HexNAc"] == 4
     assert result["dHex"] == 1
     assert result["Neu5Ac"] == 2
+    # Test 9_2_0_0 format
+    result = canonicalize_composition("9_2_0_0")
+    assert result["Hex"] == 9
+    assert result["HexNAc"] == 2
+    result = canonicalize_composition("9200")
+    assert result["Hex"] == 9
+    assert result["HexNAc"] == 2
+    result = canonicalize_composition("9 2 0 0")
+    assert result["Hex"] == 9
+    assert result["HexNAc"] == 2
 
 
 def test_parse_glycoform():
@@ -729,6 +751,10 @@ def test_parse_glycoform():
     assert result["N"] == 4
     assert result["F"] == 1
     assert result["A"] == 2
+    result = parse_glycoform("H9N2")
+    assert result["high_Man"] == 1
+    result = parse_glycoform("H5N4F2A2")
+    assert result["antennary_Fuc"] == 1
     # Test dict input
     result = parse_glycoform({"Hex": 5, "HexNAc": 4, "dHex": 1, "Neu5Ac": 2})
     print(result)
@@ -835,6 +861,8 @@ def test_choose_correct_isoform():
     assert result == "Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)]GalNAc"
     result = choose_correct_isoform("Gal(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc")
     assert result == "Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)]GalNAc"
+    result = choose_correct_isoform("Xyl(b1-2)[Man(a1-3)][Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert result == "Xyl(b1-2)[Man(a1-3)][GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
 
 
 def test_bracket_removal():
@@ -3355,37 +3383,28 @@ def test_characterize_monosaccharide_with_modifications():
         mock_savefig.assert_not_called()
 
 
-@pytest.fixture
-def mock_clustermap():
-    mock_fig = MagicMock()
-    mock_fig.figure = plt.figure()
-    mock_clustermap = MagicMock()
-    mock_clustermap.fig = mock_fig.figure
-    return mock_clustermap
-
-
 def test_get_heatmap_basic(sample_df):
     """Test basic functionality of get_heatmap"""
-    with patch.object(sns, 'clustermap', return_value=mock_clustermap):
-        get_heatmap(sample_df)
+    result = get_heatmap(sample_df)
+    plt.close('all') 
 
 
 def test_get_heatmap_with_motifs(sample_df):
     """Test get_heatmap with motif analysis"""
-    with patch.object(sns, 'clustermap', return_value=mock_clustermap):
-        get_heatmap(sample_df, motifs=True)
+    result = get_heatmap(sample_df, motifs=True)
+    plt.close('all')
 
 
 def test_get_heatmap_with_transform(sample_df):
     """Test get_heatmap with data transformation"""
-    with patch.object(sns, 'clustermap', return_value=mock_clustermap):
-        get_heatmap(sample_df, transform='CLR')
+    result = get_heatmap(sample_df, transform='CLR')
+    plt.close('all')
 
 
 def test_get_heatmap_with_custom_feature_set(sample_df):
     """Test get_heatmap with custom feature set"""
-    with patch.object(sns, 'clustermap', return_value=mock_clustermap):
-        get_heatmap(sample_df, motifs=True, feature_set=['known'])
+    result = get_heatmap(sample_df, motifs=True, feature_set=['known'])
+    plt.close('all')
 
 
 def test_get_pca_basic(sample_df):
