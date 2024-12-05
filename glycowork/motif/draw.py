@@ -157,22 +157,52 @@ def draw_hex(
   half_dim = 0.5 * dim
   stroke_width = 0.04 * dim
   points = []
-  for angle in range(0, 360, 60):
+  for angle in (0, 60, 120, 180, 240, 300):
     rad = radians(angle)
-    x = x_base + half_dim * cos(rad)
-    y = y_base + half_dim * sin(rad)
-    points.extend([x, y])
+    points.extend([x_base + half_dim * cos(rad), y_base + half_dim * sin(rad)])
   if outline_only:
-    # Draw individual lines for outline
-    for i in range(0, len(points), 2):
-      p = draw.Path(stroke_width = stroke_width, stroke = col_dict['black'])
-      p.M(points[i], points[i+1])
-      next_i = (i + 2) % len(points)
-      p.L(points[next_i], points[next_i+1])
-      drawing.append(p)
+    p = draw.Path(stroke_width = stroke_width, stroke = col_dict['black'], fill = 'none')
+    p.M(points[0], points[1])  # Move to first point
+    for i in range(2, len(points), 2):  # Line to subsequent points
+      p.L(points[i], points[i+1])
+    p.Z()  # Close path
+    drawing.append(p)
   else:
     # Draw filled hexagon with border
     drawing.append(draw.Lines(*points, close = True, fill = color, stroke = col_dict['black'], stroke_width = stroke_width))
+
+
+def add_customization(
+    drawing, # Drawing object to modify
+    x_base: float, # X coordinate of base position
+    y_base: float, # Y coordinate of base position  
+    dim: float, # Base dimension for scaling
+    modification: str, # Text annotation for modifications
+    col_dict: Dict[str, str], # Color mapping dictionary
+    conf: str = None, # Ring configuration text
+    furanose: bool = False, # Draw furanose indicator
+    text_anchor: str = 'middle' # Text alignment
+    ) -> None:
+  "Adds text annotations and indicators to glycan symbol"
+  half_dim = dim / 2
+  # Text annotation
+  p = draw.Path(stroke_width = 0)
+  p.M(x_base-dim, y_base+half_dim)
+  p.L(x_base+dim, y_base+half_dim)
+  drawing.append(p)
+  drawing.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = text_anchor, line_offset = -3.15))
+  if furanose:
+    p = draw.Path(stroke_width = 0)
+    p.M(x_base-dim, y_base)
+    p.L(x_base+dim, y_base)
+    drawing.append(p)
+    drawing.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = text_anchor, center = True))
+  if conf:
+    p = draw.Path(stroke_width = 0)
+    p.M(x_base-dim, y_base)
+    p.L(x_base+dim, y_base)
+    drawing.append(p)
+    drawing.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
 
 
 def draw_shape(
@@ -203,38 +233,13 @@ def draw_shape(
     gradient.add_stop(1, 'white', opacity = 0)
     drawing.append(draw.Circle(x_base, y_base, half_dim * 2, fill = gradient))
 
-  def add_customization(drawing, x_base, y_base, dim, modification, conf = None,
-                        furanose = False, text_anchor = 'middle'):
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    drawing.append(p)
-    drawing.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = text_anchor, line_offset = -3.15))
-    if furanose:
-        p = draw.Path(stroke_width = 0)
-        p.M(x_base-dim, y_base)
-        p.L(x_base+dim, y_base)
-        drawing.append(p)
-        drawing.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = text_anchor, center = True))
-    if conf:
-        p = draw.Path(stroke_width = 0)
-        p.M(x_base-dim, y_base)
-        p.L(x_base+dim, y_base)
-        drawing.append(p)
-        drawing.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
-
   if shape == 'Hex':
     # Hexose - circle
     drawing.append(draw.Circle(x_base, y_base, half_dim, fill = col_dict[color], stroke_width = stroke_w, stroke = col_dict['black']))
-    add_customization(drawing, x_base, y_base, dim, modification, conf, furanose)
-
-  if shape == 'HexNAc':
+  elif shape == 'HexNAc':
     # HexNAc - square
     drawing.append(draw.Rectangle(x_base-half_dim, y_base-half_dim, dim, dim, fill = col_dict[color], stroke_width = stroke_w, stroke = col_dict['black']))
-    add_customization(drawing, x_base, y_base, dim, modification, conf, furanose)
-
-  if shape == 'HexN':
+  elif shape == 'HexN':
     # Hexosamine - crossed square
     drawing.append(draw.Rectangle(x_base-half_dim, y_base-half_dim, dim, dim, fill = 'white', stroke_width = stroke_w, stroke = col_dict['black']))
     drawing.append(draw.Lines(x_base-half_dim, y_base-half_dim,
@@ -242,57 +247,40 @@ def draw_shape(
                         x_base+half_dim, y_base+half_dim,
                         x_base-half_dim, y_base-half_dim,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
     p.M(x_base-half_dim, y_base-half_dim)
     p.L(x_base+half_dim, y_base-half_dim)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
     p.M(x_base+half_dim, y_base-half_dim)
     p.L(x_base+half_dim, y_base+half_dim)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
     p.M(x_base+half_dim, y_base+half_dim)
     p.L(x_base-half_dim, y_base-half_dim)
     drawing.append(p)
-    add_customization(drawing, x_base, y_base, dim, modification, conf)
-
   elif shape in ['HexA_2', 'HexA']:
-    # Hexuronate - divided diamond
-    # AltA / IdoA for HexA_2 and flipped colors for HexA
+    # Hexuronate - divided diamond;  AltA / IdoA for HexA_2 and flipped colors for HexA
     drawing.append(draw.Lines(x_base,         y_base+half_dim,
                         x_base+half_dim, y_base,
                         x_base,         y_base-half_dim,
                         x_base-half_dim, y_base,
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width =stroke_w))
+                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = stroke_w))
     y_direction = half_dim if shape == 'HexA_2' else -half_dim
     drawing.append(draw.Lines(x_base-half_dim, y_base,
                         x_base, y_base+y_direction,
                         x_base+half_dim, y_base,
                         x_base-half_dim, y_base,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
     p.M(x_base-half_dim, y_base)
     p.L(x_base, y_base+y_direction)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base, y_base+y_direction)
     p.L(x_base+half_dim, y_base)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base+half_dim, y_base)
     p.L(x_base-half_dim, y_base)
     drawing.append(p)
-    add_customization(drawing, x_base, y_base, dim, modification, conf)
-
-  if shape == 'dHex':
+  elif shape == 'dHex':
     # Deoxyhexose - triangle
     drawing.append(draw.Lines(x_base- half_dim, y_base+inside_hex_dim,  # -(dim*1/3)
                         x_base, y_base-inside_hex_dim,
                         x_base+half_dim, y_base+inside_hex_dim,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    add_customization(drawing, x_base, y_base, dim, modification, conf, furanose)
-
-  if shape == 'dHexNAc':
+  elif shape == 'dHexNAc':
     # Deoxyhexnac - divided triangle
     drawing.append(draw.Lines(x_base-half_dim, y_base+inside_hex_dim,  # -(dim*1/3) for center of triangle
                         x_base, y_base-inside_hex_dim,  # -(dim*1/3) for bottom alignment
@@ -305,42 +293,36 @@ def draw_shape(
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
     p.M(x_base, y_base+inside_hex_dim)
     p.L(x_base, y_base-inside_hex_dim)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base, y_base-inside_hex_dim)
     p.L(x_base+half_dim, y_base+inside_hex_dim)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base+half_dim, y_base+inside_hex_dim)
     p.L(x_base, y_base+inside_hex_dim)
     drawing.append(p)
-    add_customization(drawing, x_base, y_base, dim, modification, conf)
-
-  if shape == 'ddHex':
+  elif shape == 'ddHex':
     # Dideoxyhexose - flat rectangle
     drawing.append(draw.Lines(x_base-half_dim,         y_base+(dim*7/12*0.5),  # -(dim*0.5/12)
                         x_base+half_dim,         y_base+(dim*7/12*0.5),
                         x_base+half_dim,         y_base-(dim*7/12*0.5),
                         x_base-half_dim,         y_base-(dim*7/12*0.5),
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    add_customization(drawing, x_base, y_base, dim, modification, conf)
-
-  if shape == 'Pen':
+  elif shape == 'Pen':
     # Pentose - star
-    drawing.append(draw.Lines(x_base,         y_base-half_dim/cos(radians(18)),
-                        x_base+((0.25*dim)/cos(radians(18)))*cos(radians(54)),         y_base-((0.25*dim)/cos(radians(18)))*sin(radians(54)),
-                        x_base+(half_dim/cos(radians(18)))*cos(radians(18)),         y_base-(half_dim/cos(radians(18)))*sin(radians(18)),
-                        x_base+((0.25*dim)/cos(radians(18)))*cos(radians(18)),         y_base+((0.25*dim)/cos(radians(18)))*sin(radians(18)),
-                        x_base+(half_dim/cos(radians(18)))*cos(radians(54)),         y_base+(half_dim/cos(radians(18)))*sin(radians(54)),
-                        x_base,         y_base+(0.25*dim)/cos(radians(18)),
-                        x_base-(half_dim/cos(radians(18)))*cos(radians(54)),         y_base+(half_dim/cos(radians(18)))*sin(radians(54)),
-                        x_base-((0.25*dim)/cos(radians(18)))*cos(radians(18)),         y_base+((0.25*dim)/cos(radians(18)))*sin(radians(18)),
-                        x_base-(half_dim/cos(radians(18)))*cos(radians(18)),         y_base-(half_dim/cos(radians(18)))*sin(radians(18)),
-                        x_base-((0.25*dim)/cos(radians(18)))*cos(radians(54)),         y_base-((0.25*dim)/cos(radians(18)))*sin(radians(54)),
-                        close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    add_customization(drawing, x_base, y_base, dim, modification, conf, furanose)
-
-  if shape in ['dNon', 'ddNon']:
+    cos18 = cos(radians(18))
+    cos54 = cos(radians(54))
+    sin18 = sin(radians(18))
+    sin54 = sin(radians(54))
+    base_r = half_dim/cos18
+    small_r = (0.25*dim)/cos18
+    drawing.append(draw.Lines(x_base, y_base-base_r,
+                    x_base+small_r*cos54, y_base-small_r*sin54,
+                    x_base+base_r*cos18, y_base-base_r*sin18,
+                    x_base+small_r*cos18, y_base+small_r*sin18,
+                    x_base+base_r*cos54, y_base+base_r*sin54,
+                    x_base, y_base+small_r,
+                    x_base-base_r*cos54, y_base+base_r*sin54,
+                    x_base-small_r*cos18, y_base+small_r*sin18,
+                    x_base-base_r*cos18, y_base-base_r*sin18,
+                    x_base-small_r*cos54, y_base-small_r*sin54,
+                   close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
+  elif shape in ['dNon', 'ddNon']:
     # Deoxynonulosonate - diamond or Dideoxynonulosonate - flat diamond
     diamond_adjust = 0 if shape == 'dNon' else dim*1/8
     drawing.append(draw.Lines(x_base,         y_base+half_dim-diamond_adjust,
@@ -348,37 +330,35 @@ def draw_shape(
                         x_base,         y_base-half_dim+diamond_adjust,
                         x_base-half_dim-diamond_adjust, y_base,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    add_customization(drawing, x_base, y_base, dim, modification, conf)
-
-  if shape == 'Unknown':
+  elif shape == 'Unknown':
     # Unknown - flat hexagon
-    drawing.append(draw.Lines(x_base-half_dim+(dim*1/8),         y_base+half_dim-(dim*1/8),
-                        x_base+half_dim-(dim*1/8),         y_base+half_dim-(dim*1/8),
-                        x_base+half_dim-(dim*1/8)+(dim*0.2),         y_base,
-                        x_base+half_dim-(dim*1/8),         y_base-half_dim+(dim*1/8),
-                        x_base-half_dim+(dim*1/8),         y_base-half_dim+(dim*1/8),
-                        x_base-half_dim+(dim*1/8)-(dim*0.2),         y_base,
+    flat_adjust = dim*1/8
+    extra = dim*0.2
+    drawing.append(draw.Lines(x_base-half_dim+flat_adjust, y_base+half_dim-flat_adjust,
+                        x_base+half_dim-flat_adjust, y_base+half_dim-flat_adjust,
+                        x_base+half_dim-flat_adjust+extra, y_base,
+                        x_base+half_dim-flat_adjust, y_base-half_dim+flat_adjust,
+                        x_base-half_dim+flat_adjust, y_base-half_dim+flat_adjust,
+                        x_base-half_dim+flat_adjust-extra, y_base,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    add_customization(drawing, x_base, y_base, dim, modification, conf)
-
-  if shape == 'Assigned':
+  elif shape == 'Assigned':
     # Assigned - pentagon
-    drawing.append(draw.Lines(x_base,         y_base-half_dim/cos(radians(18)),
-                        x_base+(half_dim/cos(radians(18)))*cos(radians(18)),         y_base-(half_dim/cos(radians(18)))*sin(radians(18)),
-                        x_base+(half_dim/cos(radians(18)))*cos(radians(54)),         y_base+(half_dim/cos(radians(18)))*sin(radians(54)),
-                        x_base-(half_dim/cos(radians(18)))*cos(radians(54)),         y_base+(half_dim/cos(radians(18)))*sin(radians(54)),
-                        x_base-(half_dim/cos(radians(18)))*cos(radians(18)),         y_base-(half_dim/cos(radians(18)))*sin(radians(18)),
+    cos18 = cos(radians(18))
+    cos54 = cos(radians(54))
+    sin18 = sin(radians(18))
+    sin54 = sin(radians(54))
+    base_r = half_dim/cos18
+    drawing.append(draw.Lines(x_base, y_base-base_r,
+                        x_base+base_r*cos18, y_base-base_r*sin18,
+                        x_base+base_r*cos54, y_base+base_r*sin54,
+                        x_base-base_r*cos54, y_base+base_r*sin54,
+                        x_base-base_r*cos18, y_base-base_r*sin18,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    add_customization(drawing, x_base, y_base, dim, modification, conf)
-
-  if shape == 'empty':
+  elif shape == 'empty':
     drawing.append(draw.Circle(x_base, y_base, dim/2, fill = 'none', stroke_width = stroke_w, stroke = 'none'))
-    add_customization(drawing, x_base, y_base, dim, modification)
-
-  if shape == 'text':
+  elif shape == 'text':
     drawing.append(draw.Text(modification, dim*0.35, x_base, y_base, text_anchor = text_anchor, fill = col_dict['black']))
-
-  if shape in ['red_end', 'free']:
+  elif shape in ['red_end', 'free']:
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
     p.M((x_base+0.1*dim), (y_base-0.4*dim))  # Start path at point (-10, 20)
     p.C((x_base-0.3*dim), (y_base-0.1*dim),
@@ -388,21 +368,16 @@ def draw_shape(
     if shape == 'red_end':
       drawing.append(draw.Circle(x_base, y_base, 0.15 * dim, fill = 'white',
                                  stroke_width = stroke_w, stroke = col_dict['black']))
-
   # Handle segmented Hex shapes (04X, 15A, etc.)
-  if any(x in shape for x in ['04', '15', '02', '13', '24', '35', '25', '03', '14']):
+  elif any(x in shape for x in ['04', '15', '02', '13', '24', '35', '25', '03', '14']):
     use_grey_base = shape in ['04A', '15X', '02X', '13A', '24A', '35A', '14A']
     segment_fill = 'white' if use_grey_base else col_dict['grey']
     # Define angle pairs for each shape type
     angles = {
-      '04': (30, 150, [60, 120]),
-      '15': (90, 330, [60, 0]),
-      '02': (30, 270, [0, 300]),
-      '13': (330, 210, [300, 240]),
-      '24': (270, 150, [240, 180]),
-      '35': (210, 90, [180, 120]),
-      '25': (90, 270, [60, 0, 300]),
-      '03': (30, 210, [0, 300, 240]),
+      '04': (30, 150, [60, 120]), '15': (90, 330, [60, 0]),
+      '02': (30, 270, [0, 300]), '13': (330, 210, [300, 240]),
+      '24': (270, 150, [240, 180]), '35': (210, 90, [180, 120]),
+      '25': (90, 270, [60, 0, 300]), '03': (30, 210, [0, 300, 240]),
       '14': (330, 150, [300, 240, 180])
     }
     start_angle, end_angle, mid_angles = angles[shape[:2]]
@@ -428,35 +403,31 @@ def draw_shape(
         drawing.append(p)
     # Draw outline
     draw_hex(x_pos, y_pos, dim, col_dict, drawing, outline_only = True)
-
-  if shape in ['Z', 'Y']:
+  elif shape in ['Z', 'Y']:
     rot = f'rotate({deg} {-abs(x_pos)*dim} {-abs(y_pos)*dim})'
     g = draw.Group(transform = rot)
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,            y_base-half_dim)
-    p.L(x_base,            y_base+half_dim)
-    g.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base-0.02*dim,            y_base-half_dim)
-    p.L(x_base+0.4*dim,            y_base-half_dim)
+    p.M(x_base, y_base-half_dim)
+    p.L(x_base, y_base+half_dim)
+    p.M(x_base-0.02*dim, y_base-half_dim)
+    p.L(x_base+0.4*dim, y_base-half_dim)
     g.append(p)
     if shape == 'Y':
       g.append(draw.Circle(x_base + 0.4 * dim, y_base, 0.15 * dim, fill = 'none',
                            stroke_width = stroke_w, stroke = col_dict['black']))
     drawing.append(g)
-
-  if shape in ['B', 'C']:
+  elif shape in ['B', 'C']:
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,            y_base-half_dim)
-    p.L(x_base,            y_base+half_dim)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base+0.02*dim,            y_base+half_dim)
-    p.L(x_base-0.4*dim,            y_base+half_dim)
+    p.M(x_base, y_base-half_dim)
+    p.L(x_base, y_base+half_dim)
+    p.M(x_base+0.02*dim, y_base+half_dim)
+    p.L(x_base-0.4*dim, y_base+half_dim)
     drawing.append(p)
     if shape == 'C':
       drawing.append(draw.Circle(x_base - 0.4 * dim, y_base, 0.15 * dim, fill = 'none',
                                  stroke_width = stroke_w, stroke = col_dict['black']))
+  if shape not in ['empty', 'text', 'red_end', 'free', 'Z', 'Y', 'B', 'C'] and not any(x in shape for x in ['04', '15', '02', '13', '24', '35', '25', '03', '14']):
+    add_customization(drawing, x_base, y_base, dim, modification, col_dict, conf, furanose, text_anchor)
 
 
 def add_bond(
@@ -473,10 +444,9 @@ def add_bond(
   "Draws glycosidic bond line with optional label between specified coordinates"
   col_dict = col_dict_transparent if highlight == 'hide' else col_dict_base
   scaling_factor = 1.2 if compact else 2
-  x_start = -x_start * scaling_factor * dim
-  x_stop = -x_stop * scaling_factor * dim
-  y_start = y_start * (0.6 if compact else 1) * dim
-  y_stop = y_stop * (0.6 if compact else 1) * dim
+  y_scaling = 0.6 if compact else 1
+  x_start, x_stop = [-x * scaling_factor * dim for x in (x_start, x_stop)]
+  y_start, y_stop = [y * y_scaling * dim for y in (y_start, y_stop)]
   p = draw.Path(stroke_width = 0.08*dim, stroke = col_dict['black'],)
   p.M(x_start, y_start)
   p.L(x_stop, y_stop)
@@ -511,13 +481,10 @@ def add_sugar(
   else:
     x_base = -x_pos * dim
     y_base = y_pos * dim
-    stroke_w = 0.04 * dim
     half_dim = dim / 2
-    p = draw.Path(stroke_width = stroke_w, stroke = 'black')
+    p = draw.Path(stroke_width = 0.04 * dim, stroke = 'black')
     p.M(x_base-half_dim, y_base+half_dim)
     p.L(x_base+half_dim, y_base-half_dim)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = 'black')
     p.M(x_base+half_dim, y_base+half_dim)
     p.L(x_base-half_dim, y_base-half_dim)
     drawing.append(p)
@@ -1147,12 +1114,13 @@ def display_svg_with_matplotlib(
     from cairosvg import svg2png
   except ImportError:
     return svg_data
+  svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
   # Get original SVG dimensions and scale them up
   size_multiplier = 4  # Make everything 4x bigger
   width = svg_data.width if hasattr(svg_data, 'width') else 800
   height = svg_data.height if hasattr(svg_data, 'height') else 800
   # Convert to PNG with larger dimensions
-  png_output = svg2png(bytestring = svg_data.as_svg(), output_width = width * size_multiplier,
+  png_output = svg2png(bytestring = svg_data, output_width = width * size_multiplier,
                       output_height = height * size_multiplier, scale = 2.0)
   # Use PIL to crop aggressively
   img = Image.open(BytesIO(png_output))
@@ -1276,7 +1244,8 @@ def draw_chem2d(
     from rdkit.Chem import MolFromSmiles
     from rdkit.Chem.Draw import PrepareMolForDrawing
     from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
-    from IPython.display import SVG
+    if is_jupyter():
+      from IPython.display import SVG
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
 
@@ -1297,21 +1266,21 @@ def draw_chem2d(
   d.drawOptions().rotate = 180
   d.DrawMoleculeWithHighlights(mol, '', atom_colors, bond_colors, {}, {}, -1)
   d.FinishDrawing()
+  svg_data = d.GetDrawingText()
 
   if filepath:
     filepath = filepath.replace('?', '_')
-    data = d.GetDrawingText()
     if filepath.endswith('.svg'):
         with open(filepath, 'w') as f:
-          f.write(data)
+          f.write(svg_data)
     elif filepath.endswith('pdf'):
       try:
         from cairosvg import svg2pdf
         svg2pdf(bytestring = data, write_to = filepath)
-      except:
+      except ImportError:
         raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
+  return SVG(svg_data) if is_jupyter() else display_svg_with_matplotlib(svg_data)
 
-  return SVG(d.GetDrawingText())
 
 def draw_chem3d(
     draw_this: str, # IUPAC-condensed glycan sequence
@@ -1323,14 +1292,17 @@ def draw_chem3d(
   try:
     from glycowork.motif.processing import IUPAC_to_SMILES
     from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile
-    from rdkit.Chem.Draw import IPythonConsole
     from rdkit.Chem.AllChem import EmbedMolecule, MMFFOptimizeMolecule
-    import py3Dmol
+    if is_jupyter():
+      from rdkit.Chem.Draw import IPythonConsole
+      import py3Dmol
+    else:
+      from rdkit.Chem.Draw import rdDepictor
+      from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
 
   mol = MolFromSmiles(IUPAC_to_SMILES([draw_this])[0])
-
   atom_colors, bond_colors = {}, {}
   for i, smarts in enumerate(IUPAC_to_SMILES(mono_list)):
     atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
@@ -1343,21 +1315,32 @@ def draw_chem3d(
   MMFFOptimizeMolecule(mol)
   mol = RemoveHs(mol)
 
-  v = py3Dmol.view(width = 500, height = 300)
-  v.removeAllModels()
-  IPythonConsole.addMolToView(mol, v)
-  for atom_idx, colors in atom_colors.items():
-    v.setStyle({'serial': atom_idx}, {'stick': {'color': colors[0]}})
-
   if filepath:
     if filepath.endswith('pdb'):
       MolToPDBFile(mol, filepath)
     else:
       print("3D structure can only be saved as .pdb file.")
-
   print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
-  v.zoomTo()
-  v.show()
+
+  if is_jupyter():
+    v = py3Dmol.view(width = 500, height = 300)
+    v.removeAllModels()
+    IPythonConsole.addMolToView(mol, v)
+    for atom_idx, colors in atom_colors.items():
+      v.setStyle({'serial': atom_idx}, {'stick': {'color': colors[0]}})
+    v.zoomTo()
+    v.show()
+  else:
+    rdDepictor.Compute2DCoords(mol, clearConfs = False)
+    drawer = MolDraw2DSVG(500, 500)
+    drawer.drawOptions().addStereoAnnotation = True
+    drawer.drawOptions().addAtomIndices = False
+    drawer.drawOptions().bondLineWidth = 2
+    drawer.DrawMolecule(mol, highlightAtoms = list(atom_colors.keys()),
+                       highlightAtomColors = {k: tuple(int(v[0].lstrip('#')[i:i+2], 16)/255
+                                          for i in (0, 2, 4)) for k, v in atom_colors.items()})
+    drawer.FinishDrawing()
+    display_svg_with_matplotlib(drawer.GetDrawingText())
 
 
 @rescue_glycans

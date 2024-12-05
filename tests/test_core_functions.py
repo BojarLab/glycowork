@@ -2205,23 +2205,18 @@ def test_draw_chem2d():
         from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
     except ImportError:
         missing_deps.append("RDKit")
-    try:
-        import IPython.display
-    except ImportError:
-        missing_deps.append("IPython")
     if missing_deps:
         pytest.skip(f"Required dependencies not installed: {', '.join(missing_deps)}")
-    with patch('IPython.display.SVG', return_value="SVG Object"):
-        # Test basic 2D drawing
-        result = draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"])
-        assert result == "SVG Object"
-        # Test with filepath
-        with patch('builtins.open', mock_open()) as mock_file:
-            draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath="test.svg")
-            mock_file.assert_called_once_with('test.svg', 'w')
-        # Test with unsupported glycan
-        with patch('glycowork.motif.processing.IUPAC_to_SMILES', side_effect=Exception), pytest.raises(Exception):
-            draw_chem2d("InvalidGlycan", ["GlcNAc"])
+    # Test basic 2D drawing
+    result = draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"])
+    plt.close('all')
+    # Test with filepath
+    with patch('builtins.open', mock_open()) as mock_file:
+        draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath="test.svg")
+        mock_file.assert_called_once_with('test.svg', 'w')
+    # Test with unsupported glycan
+    with patch('glycowork.motif.processing.IUPAC_to_SMILES', side_effect=Exception), pytest.raises(Exception):
+        draw_chem2d("InvalidGlycan", ["GlcNAc"])
 
 
 def test_draw_chem3d():
@@ -2231,24 +2226,16 @@ def test_draw_chem3d():
         from rdkit.Chem.AllChem import EmbedMolecule, MMFFOptimizeMolecule
     except ImportError:
         missing_deps.append("RDKit")
-    try:
-        import py3Dmol
-    except ImportError:
-        missing_deps.append("py3Dmol")
-    try:
-        import IPython.display
-    except ImportError:
-        missing_deps.append("IPython")
     if missing_deps:
         pytest.skip(f"Required dependencies not installed: {', '.join(missing_deps)}")
-    with patch('IPython.display.display') as mock_display:
-        # Test basic 3D drawing
-        draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"])
-        # Test with filepath
-        draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath="test.pdb")
-        # Test with non-PDB filepath
-        with patch('builtins.print') as mock_print:
-            draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath="test.svg")
+    # Test basic 3D drawing
+    draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"])
+    plt.close('all')
+    # Test with filepath
+    draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath="test.pdb")
+    # Test with non-PDB filepath
+    with patch('builtins.print') as mock_print:
+        draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath="test.svg")
 
 
 def test_glycodraw():
@@ -2665,9 +2652,9 @@ def test_draw_shape_Pen():
 
 # Test cases structured as: (shape_name, color, expected_elements, description)
 TEST_CASES = [
-    ('HexN', 'snfg_green', 7, 'crossed square'),
-    ('HexA_2', 'snfg_yellow', 7, 'divided diamond'),
-    ('dHexNAc', 'snfg_yellow', 7, 'divided triangle'),
+    ('HexN', 'snfg_green', 5, 'crossed square'),
+    ('HexA_2', 'snfg_yellow', 5, 'divided diamond'),
+    ('dHexNAc', 'snfg_yellow', 5, 'divided triangle'),
     ('ddHex', 'snfg_yellow', 3, 'flat rectangle'),
     ('dNon', 'snfg_red', 3, 'diamond'),
     ('ddNon', 'snfg_red', 3, 'flat diamond'),
@@ -2676,28 +2663,28 @@ TEST_CASES = [
     ('red_end', 'snfg_red', 2, 'reducing end'),
     ('free', 'snfg_red', 1, 'free end'),
     # Fragment drawings
-    ('04X', 'snfg_red', 10, 'fragment'),
-    ('15A', 'snfg_red', 10, 'fragment'),
-    ('02A', 'snfg_red', 10, 'fragment'),
-    ('13X', 'snfg_red', 10, 'fragment'),
-    ('24X', 'snfg_red', 10, 'fragment'),
-    ('35X', 'snfg_red', 10, 'fragment'),
-    ('04A', 'snfg_red', 10, 'fragment'),
-    ('15X', 'snfg_red', 10, 'fragment'),
-    ('02X', 'snfg_red', 10, 'fragment'),
-    ('13A', 'snfg_red', 10, 'fragment'),
-    ('24A', 'snfg_red', 10, 'fragment'),
-    ('35A', 'snfg_red', 10, 'fragment'),
-    ('25A', 'snfg_red', 9, 'fragment'),
-    ('03A', 'snfg_red', 9, 'fragment'),
-    ('14X', 'snfg_red', 9, 'fragment'),
-    ('25X', 'snfg_red', 9, 'fragment'),
-    ('03X', 'snfg_red', 9, 'fragment'),
-    ('14A', 'snfg_red', 9, 'fragment'),
+    ('04X', 'snfg_red', 5, 'fragment'),
+    ('15A', 'snfg_red', 5, 'fragment'),
+    ('02A', 'snfg_red', 5, 'fragment'),
+    ('13X', 'snfg_red', 5, 'fragment'),
+    ('24X', 'snfg_red', 5, 'fragment'),
+    ('35X', 'snfg_red', 5, 'fragment'),
+    ('04A', 'snfg_red', 5, 'fragment'),
+    ('15X', 'snfg_red', 5, 'fragment'),
+    ('02X', 'snfg_red', 5, 'fragment'),
+    ('13A', 'snfg_red', 5, 'fragment'),
+    ('24A', 'snfg_red', 5, 'fragment'),
+    ('35A', 'snfg_red', 5, 'fragment'),
+    ('25A', 'snfg_red', 4, 'fragment'),
+    ('03A', 'snfg_red', 4, 'fragment'),
+    ('14X', 'snfg_red', 4, 'fragment'),
+    ('25X', 'snfg_red', 4, 'fragment'),
+    ('03X', 'snfg_red', 4, 'fragment'),
+    ('14A', 'snfg_red', 4, 'fragment'),
     ('Z', 'snfg_red', 1, 'fragment'),
     ('Y', 'snfg_red', 1, 'fragment'),
-    ('B', 'snfg_red', 2, 'fragment'),
-    ('C', 'snfg_red', 3, 'fragment'),
+    ('B', 'snfg_red', 1, 'fragment'),
+    ('C', 'snfg_red', 2, 'fragment'),
 ]
 
 
@@ -2726,7 +2713,7 @@ def test_add_sugar():
     mock_drawing = get_clean_drawing()
     add_sugar('UnknownSugar', mock_drawing, 1.0, 1.0, dim=50)
     # Should draw X shape for unknown sugars
-    assert len(mock_drawing.all_elements()) == 2
+    assert len(mock_drawing.all_elements()) == 1
 
 
 def test_get_highlight_attribute():
@@ -3386,7 +3373,7 @@ def test_characterize_monosaccharide_with_modifications():
 def test_get_heatmap_basic(sample_df):
     """Test basic functionality of get_heatmap"""
     result = get_heatmap(sample_df)
-    plt.close('all') 
+    plt.close('all')
 
 
 def test_get_heatmap_with_motifs(sample_df):
