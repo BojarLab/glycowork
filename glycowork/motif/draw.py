@@ -2,10 +2,10 @@ from glycowork.glycan_data.loader import unwrap, motif_list, multireplace, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, in_lib, expand_lib, choose_correct_isoform
+from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, in_lib, expand_lib, choose_correct_isoform, get_matching_indices
 import matplotlib.pyplot as plt
 from io import BytesIO
-from typing import Dict, List, Tuple, Optional, Union, Generator, Any
+from typing import Dict, List, Tuple, Optional, Union, Any
 import networkx as nx
 
 try:
@@ -19,29 +19,6 @@ import numpy as np
 import pandas as pd
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
-
-
-def matches(
-    line: str, # Input string to search
-    opendelim: str = '(', # Opening delimiter
-    closedelim: str = ')' # Closing delimiter
-    ) -> Generator[Tuple[int, int, int], None, None]: # Yields (start pos, end pos, nesting depth)
-  "Finds matching pairs of delimiters in a string, handling nested pairs and returning positions and depth;ref: https://stackoverflow.com/questions/5454322/python-how-to-match-nested-parentheses-with-regex"""
-  stack = []
-  for m in re.finditer(r'[\[\]]', line) if opendelim == '[' else re.finditer(r'[{}{}]'.format(opendelim, closedelim), line):
-      pos = m.start()
-      if pos > 0 and line[pos-1] == '\\':
-          # Skip escape sequence
-          continue
-      c = line[pos]
-      if c == opendelim:
-          stack.append(pos+1)
-      elif c == closedelim and stack:
-          yield (stack.pop(), pos, len(stack))
-      elif c == closedelim:
-          print(f"Encountered extraneous closing quote at pos {pos}: '{line[pos:]}'")
-  for pos in stack:
-      print(f"Expecting closing quote to match open quote starting at: '{line[pos - 1:]}'")
 
 
 # Adjusted SNFG color palette
@@ -175,7 +152,7 @@ def draw_hex(
 def add_customization(
     drawing, # Drawing object to modify
     x_base: float, # X coordinate of base position
-    y_base: float, # Y coordinate of base position  
+    y_base: float, # Y coordinate of base position
     dim: float, # Base dimension for scaling
     modification: str, # Text annotation for modifications
     col_dict: Dict[str, str], # Color mapping dictionary
@@ -496,8 +473,7 @@ def split_node(
     ) -> nx.Graph: # Modified graph with split node
   "Splits graph at specified node creating disjoint subgraphs;ref: https://stackoverflow.com/questions/65853641/networkx-how-to-split-nodes-into-two-effectively-disconnecting-edges"""
   edges = G.edges(node, data = True)
-  new_edges = []
-  new_nodes = []
+  new_edges, new_nodes = [], []
   H = G.__class__()
   H.add_nodes_from(G.subgraph(node))
   for i, (_, target, data) in enumerate(edges):
@@ -530,24 +506,24 @@ def process_bonds(
     linkage_list: Union[List[str], List[List[str]]] # Glycosidic linkages
     ) -> Union[List[str], List[List[str]]]: # Formatted linkage text
   "Formats glycosidic linkage text for visualization"
-  def process_single_linkage(linkage, regex_dict):
+  ALPHA_PATTERN = re.compile(r"^a\d")
+  BETA_PATTERN = re.compile(r"^b\d")
+  DIGIT_PATTERN = re.compile(r"^\d-\d")
+  def process_single_linkage(linkage: str) -> str:
     first, last = linkage[0], linkage[-1]
-    if '?' in first and '?' in last:
-        return '?'
-    elif '?' in first:
-        return f' {last}'
-    elif '?' in last:
-        if regex_dict['alpha'].match(linkage): return '\u03B1'
-        if regex_dict['beta'].match(linkage): return '\u03B2'
+    if '?' in first and '?' in last: return '?'
+    if '?' in first: return f' {last}'
+    if '?' in last:
+        if ALPHA_PATTERN.match(linkage): return '\u03B1'
+        if BETA_PATTERN.match(linkage): return '\u03B2'
         return '-'
-    if regex_dict['alpha'].match(linkage): return f'\u03B1 {last}'
-    if regex_dict['beta'].match(linkage): return f'\u03B2 {last}'
-    if regex_dict['digit'].match(linkage): return f'{first} - {last}'
+    if ALPHA_PATTERN.match(linkage): return f'\u03B1 {last}'
+    if BETA_PATTERN.match(linkage): return f'\u03B2 {last}'
+    if DIGIT_PATTERN.match(linkage): return f'{first} - {last}'
     return '-'
-  regex_dict = {'alpha': re.compile(r"^a\d"), 'beta': re.compile(r"^b\d"), 'digit': re.compile(r"^\d-\d")}
   if any(isinstance(el, list) for el in linkage_list):
-    return [[process_single_linkage(linkage, regex_dict) for linkage in sub_list] for sub_list in linkage_list]
-  return [process_single_linkage(linkage, regex_dict) for linkage in linkage_list]
+    return [[process_single_linkage(linkage) for linkage in sub_list] for sub_list in linkage_list]
+  return [process_single_linkage(linkage) for linkage in linkage_list]
 
 
 def split_monosaccharide_linkage(
@@ -629,7 +605,7 @@ def get_coordinates_and_labels(
   if ']' in glycan:
     glycan = glycan.replace('[', '(').replace(']', ')')
     for k, lev in enumerate(levels):
-      for openpos, closepos, level in matches(glycan):
+      for openpos, closepos, level in get_matching_indices(glycan):
         if level == lev:
           parts[k].append(glycan[openpos:closepos])
           glycan = glycan[:openpos-1] + len(glycan[openpos-1:closepos+1])*'*' + glycan[closepos+1:]
@@ -1391,7 +1367,7 @@ def GlycoDraw(
 
   # Handle floaty bits if present
   floaty_bits = []
-  for openpos, closepos, _ in matches(draw_this, opendelim = '{', closedelim = '}'):
+  for openpos, closepos, _ in get_matching_indices(draw_this, opendelim = '{', closedelim = '}'):
       floaty_bits.append(f"{draw_this[openpos:closepos]}blank")
       draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')

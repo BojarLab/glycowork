@@ -216,11 +216,16 @@ def expand_termini_list(motif: Union[str, nx.Graph], # Glycan motif sequence or 
   if len(termini_list[0]) < 2:
     mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
     termini_list = [mapping[t] for t in termini_list]
-  t_list = deepcopy(termini_list)
-  to_add = ['flexible'] * (motif.count('(') if isinstance(motif, str) else (len(motif) - 1) // 2)
-  for i, k in enumerate(to_add, start = 1):
-    t_list.insert(i * 2 - 1, k)
-  return t_list
+  num_linkages = motif.count('(') if isinstance(motif, str) else (len(motif) - 1) // 2
+  result = [None] * (len(termini_list) + num_linkages)
+  j = 0
+  for i in range(len(result)):
+    if i % 2 == 0:
+      result[i] = termini_list[j]
+      j += 1
+    else:
+      result[i] = 'flexible'
+  return result
 
 
 def handle_negation(original_func: Callable # Function to wrap
@@ -319,8 +324,7 @@ def subgraph_isomorphism_with_negation(glycan: Union[str, nx.Graph], # Glycan se
     motif_stub = (motif[:motif.index('!')] + temp[temp.index(')')+1:]).replace('[]', '')
   else:
     motif_stub = motif.copy()
-    nodes_to_remove = {node for node, data in motif_stub.nodes(data = True)
-                       if '!' in data.get('string_labels', '')}
+    nodes_to_remove = {node for node, data in motif_stub.nodes(data = True) if '!' in data.get('string_labels', '')}
     nodes_to_remove.update({node + 1 for node in nodes_to_remove if node + 1 in motif_stub})
     motif_stub.remove_nodes_from(nodes_to_remove)
   res = subgraph_isomorphism(glycan, motif_stub, termini_list = termini_list, count = count, return_matches = return_matches)
@@ -439,13 +443,10 @@ def graph_to_string_int(graph: nx.Graph # Glycan graph
 
   # get the root node index, assuming the root node has the highest index
   root_idx = max(list(graph.nodes.keys()))
-
   # get the DFS tree of the graph
   dfs = nx.dfs_tree(graph, root_idx)
-
   # assign depth to each node
   assign_depth(dfs, root_idx)
-
   # convert the DFS tree to IUPAC-condensed format
   return dfs_to_string(dfs, root_idx)
 
@@ -563,9 +564,9 @@ def possible_topology_check(glycan: Union[str, nx.Graph], # Glycan with floating
 def deduplicate_glycans(glycans: Union[List[str], Set[str]] # List/set of glycans to deduplicate
                       ) -> List[str]: # Deduplicated list of glycans
   "Remove duplicate glycans from a list/set, even if they have different strings"
-  if not glycans:
-    return []
-  glycans = list(glycans) if isinstance(glycans, set) else list(set(glycans))
+  glycans = list(set(glycans) if isinstance(glycans, list) else glycans)
+  if len(glycans) <= 1:
+    return glycans
   ggraphs = list(map(glycan_to_nxGraph, glycans))
   n = len(glycans)
   keep = [True] * n

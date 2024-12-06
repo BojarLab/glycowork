@@ -6,7 +6,7 @@ from random import choice
 from functools import wraps
 from collections import defaultdict
 from itertools import permutations
-from typing import Dict, List, Set, Union, Optional, Callable, Tuple
+from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
 from glycowork.glycan_data.loader import (unwrap, multireplace, count_nested_brackets,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
@@ -178,24 +178,28 @@ def presence_to_matrix(df: pd.DataFrame, # DataFrame with glycan occurrence
   return grouped_df.sort_index().sort_index(axis = 1)
 
 
-def find_matching_brackets_indices(s: str # String containing brackets
-                                ) -> Optional[List[Tuple[int, int]]]: # List of (opening, closing) bracket indices or None
-  "Find pairs of matching brackets in a string"
+def get_matching_indices(
+    line: str, # Input string to search
+    opendelim: str = '(', # Opening delimiter
+    closedelim: str = ')' # Closing delimiter
+    ) -> Union[Generator[Tuple[int, int, int], None, None], Optional[List[Tuple[int, int]]]]: # Yields (start pos, end pos, nesting depth)
+  "Finds matching pairs of delimiters in a string, handling nested pairs and returning positions and depth;ref: https://stackoverflow.com/questions/5454322/python-how-to-match-nested-parentheses-with-regex"""
   stack = []
-  matching_indices = []
-  for i, c in enumerate(s):
-    if c == '[':
-      stack.append(i)
-    elif c == ']':
-      if stack:
-        opening_index = stack.pop()
-        matching_indices.append((opening_index, i))
+  pattern = r'[\[\]]' if opendelim == '[' else f'[{re.escape(opendelim)}{re.escape(closedelim)}]'
+  for m in re.finditer(pattern, line):
+      pos = m.start()
+      if pos > 0 and line[pos-1] == '\\':
+          # Skip escape sequence
+          continue
+      c = line[pos]
+      if c == opendelim:
+          stack.append(pos)
+      elif c == closedelim and stack:
+        yield (stack.pop() + 1, pos, len(stack))
+      elif c == closedelim:
+          print(f"Encountered extraneous closing quote at pos {pos}: '{line[pos:]}'")
   if stack:
-    print("Unmatched opening brackets:", [s[i] for i in stack])
-    return None
-  else:
-    matching_indices.sort()
-    return matching_indices
+    print(f"Unmatched opening delimiters at positions: {[p for p in stack]}")
 
 
 def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-condensed nomenclature
@@ -295,8 +299,8 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
   glycans2 = [k for k in glycans2 if k not in kill_list]
   # Choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(glycans2) > 1:
-    candidates = {k: find_matching_brackets_indices(k) for k in glycans2}
-    prefix = [min_process_glycans([k[j[0]+1:j[1]] for j in v]) for k, v in candidates.items()]
+    candidates = {k: list(get_matching_indices(k, '[', ']')) for k in glycans2}
+    prefix = [min_process_glycans([k[j[0]:j[1]] for j in v]) for k, v in candidates.items()]
     prefix = [np.argmax([len(j) for j in k]) for k in prefix]
     prefix = [k[:candidates[k][prefix[i]][0]] for i, k in enumerate(candidates.keys())]
     for i, p in enumerate(prefix):

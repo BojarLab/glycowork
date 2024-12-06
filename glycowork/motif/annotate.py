@@ -6,7 +6,7 @@ from collections import defaultdict
 from functools import partial
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-from glycowork.glycan_data.loader import linkages, motif_list, find_nth, unwrap, replace_every_second, remove_unmatched_brackets, df_species
+from glycowork.glycan_data.loader import linkages, motif_list, unwrap, replace_every_second, remove_unmatched_brackets, df_species
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, rescue_glycans
 from glycowork.motif.regex import get_match
@@ -18,27 +18,28 @@ def link_find(
   "Extracts all disaccharide motifs from a glycan sequence, handling branching and isomorphs"
   if '}' in glycan:
     glycan = glycan[glycan.rindex('}')+1:]
-  # Get different string representations of the same glycan
-  ss = find_isomorphs(glycan)
-  coll = []
-  # For each string representation, search and remove branches
-  for iso in ss:
-    if bool(re.search(r"\[[^\[\]]+\[[^\[\]]+\][^\]]+\]", iso)):
-      b_re = re.sub(r"\[[^\[\]]+\[[^\[\]]+\][^\]]+\]", '', iso)
-      b_re = re.sub(r"\[[^\]]+\]", '', b_re)
-    else:
-      b_re = re.sub(r"\[[^\]]+\]", '', iso)
+  disaccharides = set()
+  for iso in find_isomorphs(glycan):  # Get different string representations of the same glycan
+    variants = [iso]
+    if '[' in iso:
+      # For each string representation, search and remove branches
+      if bool(re.search(r"\[[^\[\]]+\[[^\[\]]+\][^\]]+\]", iso)):
+        b_re = re.sub(r"\[[^\[\]]+\[[^\[\]]+\][^\]]+\]", '', iso)
+        b_re = re.sub(r"\[[^\]]+\]", '', b_re)
+      else:
+        b_re = re.sub(r"\[[^\]]+\]", '', iso)
+      variants.append(b_re)
     # From this linear glycan part, chunk away disaccharides and re-format them
-    for i in [iso, b_re]:
-      b = i.split('(')
-      b = unwrap([k.split(')') for k in b])
-      b = ['*'.join(b[i:i+3]) for i in range(0, len(b) - 2, 2)]
-      b = [k for k in b if (re.search(r"\*\[", k) is None and re.search(r"\*\]\[", k) is None)]
-      b = [k.strip('[').strip(']') for k in b]
-      b = [k.replace('[', '').replace(']', '') for k in b]
-      b = [k[:find_nth(k, '*', 1)] + '(' + k[find_nth(k, '*', 1)+1:] for k in b]
-      coll += [k[:find_nth(k, '*', 1)] + ')' + k[find_nth(k, '*', 1)+1:] for k in b]
-  return list(set(coll))
+    for variant in variants:
+      parts = unwrap([k.split(')') for k in variant.split('(')])
+      for i in range(0, len(parts) - 2, 2):
+        tri_part = '*'.join(parts[i:i+3])
+        # Check for invalid bracket patterns around linkages
+        if '*[' not in tri_part and '*][' not in tri_part:
+          mono1 = parts[i].replace('[', '').replace(']', '')
+          mono2 = parts[i+2].replace('[', '').replace(']', '')
+          disaccharides.add(f"{mono1}({parts[i+1]}){mono2}")
+  return list(disaccharides)
 
 
 def annotate_glycan(
@@ -401,17 +402,17 @@ def group_glycans_core(
    p_values: List[float] # Statistical test p-values for each glycan
    ) -> Tuple[Dict[str, List[str]], Dict[str, List[float]]]: # (group:glycans dict, group:p-values dict)
   "Groups O-glycans by core structure (core1, core2, other) for statistical analysis"
-  temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
+  temp = dict(zip(glycans, p_values))
   grouped_glycans, grouped_p_values = {}, {}
-  grouped_glycans["core2"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAcOS(b1-6)GalNAc"]])]
-  grouped_glycans["core1"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]]) and g not in grouped_glycans["core2"]]
-  grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["core2"] and g not in grouped_glycans["core1"]]
-  grouped_p_values["core2"] = [temp[g] for g in grouped_glycans["core2"]]
-  grouped_p_values["core1"] = [temp[g] for g in grouped_glycans["core1"]]
-  if len(grouped_glycans["rest"]) > 0:
-    grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
-  else:
-    del grouped_glycans["rest"]
+  for g in glycans:
+    if any(subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-6)GalNAc", "GlcNAcOS(b1-6)GalNAc"]):
+      group = "core2"
+    elif any(subgraph_isomorphism(g, sub_g) for sub_g in ["Gal(b1-3)GalNAc", "GalOS(b1-3)GalNAc"]):
+      group = "core1"
+    else:
+      group = "rest"
+    grouped_glycans.setdefault(group, []).append(g)
+    grouped_p_values.setdefault(group, []).append(temp[g])
   return grouped_glycans, grouped_p_values
 
 
@@ -420,20 +421,21 @@ def group_glycans_sia_fuc(
    p_values: List[float] # Statistical test p-values for each glycan
    ) -> Tuple[Dict[str, List[str]], Dict[str, List[float]]]: # (group:glycans dict, group:p-values dict)
   "Groups glycans by sialic acid and fucose content for statistical analysis"
-  temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
+  temp = dict(zip(glycans, p_values))
   grouped_glycans, grouped_p_values = {}, {}
-  grouped_glycans["SiaFuc"] = [g for g in glycans if "Neu" in g and "Fuc" in g]
-  grouped_glycans["Sia"] = [g for g in glycans if "Neu" in g and g not in grouped_glycans["SiaFuc"]]
-  grouped_glycans["Fuc"] = [g for g in glycans if "Fuc" in g and g not in grouped_glycans["SiaFuc"]]
-  grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["SiaFuc"] and g not in grouped_glycans["Sia"] and g not in grouped_glycans["Fuc"]]
-  grouped_p_values["SiaFuc"] = [temp[g] for g in grouped_glycans["SiaFuc"]]
-  grouped_p_values["Sia"] = [temp[g] for g in grouped_glycans["Sia"]]
-  grouped_p_values["Fuc"] = [temp[g] for g in grouped_glycans["Fuc"]]
-  grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
-  for grp in ["SiaFuc", "Sia", "Fuc", "rest"]:
-    if not grouped_glycans[grp]:
-      del grouped_glycans[grp]
-      del grouped_p_values[grp]
+  for g in glycans:
+    has_sia = "Neu" in g
+    has_fuc = "Fuc" in g
+    if has_sia and has_fuc:
+      group = "SiaFuc"
+    elif has_sia:
+      group = "Sia"
+    elif has_fuc:
+      group = "Fuc"
+    else:
+      group = "rest"
+    grouped_glycans.setdefault(group, []).append(g)
+    grouped_p_values.setdefault(group, []).append(temp[g])
   return grouped_glycans, grouped_p_values
 
 
@@ -442,20 +444,21 @@ def group_glycans_N_glycan_type(
    p_values: List[float] # Statistical test p-values for each glycan
    ) -> Tuple[Dict[str, List[str]], Dict[str, List[float]]]: # (group:glycans dict, group:p-values dict)
   "Groups N-glycans by type (complex, hybrid, high-mannose, other) for statistical analysis"
-  temp = {glycans[k]: p_values[k] for k in range(len(glycans))}
+  temp = dict(zip(glycans, p_values))
   grouped_glycans, grouped_p_values = {}, {}
-  grouped_glycans["complex"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-6)", "GlcNAc(b1-2)Man(a1-?)[GlcNAc(b1-2)Man(a1-?)]Man"]])]
-  grouped_glycans["hybrid"] = [g for g in glycans if any([subgraph_isomorphism(g, sub_g) for sub_g in ["GlcNAc(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man"]]) and g not in grouped_glycans["complex"]]
-  grouped_glycans["high_man"] = [g for g in glycans if g.count("Man") > 3 and g not in grouped_glycans["hybrid"] and g not in grouped_glycans["complex"]]
-  grouped_glycans["rest"] = [g for g in glycans if g not in grouped_glycans["complex"] and g not in grouped_glycans["hybrid"] and g not in grouped_glycans["high_man"]]
-  grouped_p_values["complex"] = [temp[g] for g in grouped_glycans["complex"]]
-  grouped_p_values["hybrid"] = [temp[g] for g in grouped_glycans["hybrid"]]
-  grouped_p_values["high_man"] = [temp[g] for g in grouped_glycans["high_man"]]
-  grouped_p_values["rest"] = [temp[g] for g in grouped_glycans["rest"]]
-  for grp in ["complex", "hybrid", "high_man", "rest"]:
-    if not grouped_glycans[grp]:
-      del grouped_glycans[grp]
-      del grouped_p_values[grp]
+  complex_patterns = ["GlcNAc(b1-2)Man(a1-6)", "GlcNAc(b1-2)Man(a1-?)[GlcNAc(b1-2)Man(a1-?)]Man"]
+  hybrid_patterns = ["GlcNAc(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man"]
+  for g in glycans:
+    if any(subgraph_isomorphism(g, pattern) for pattern in complex_patterns):
+      group = "complex"
+    elif any(subgraph_isomorphism(g, pattern) for pattern in hybrid_patterns):
+      group = "hybrid"
+    elif g.count("Man") > 3:
+      group = "high_man"
+    else:
+      group = "rest"
+    grouped_glycans.setdefault(group, []).append(g)
+    grouped_p_values.setdefault(group, []).append(temp[g])
   return grouped_glycans, grouped_p_values
 
 

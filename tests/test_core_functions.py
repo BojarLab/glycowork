@@ -36,7 +36,7 @@ from glycowork.motif.processing import (
     glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac,
     canonicalize_composition, parse_glycoform, find_isomorphs,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
-    in_lib, get_class, enforce_class, equal_repeats, find_matching_brackets_indices,
+    in_lib, get_class, enforce_class, equal_repeats, get_matching_indices,
     choose_correct_isoform, bracket_removal, check_nomenclature, IUPAC_to_SMILES
 )
 from glycowork.glycan_data.loader import (
@@ -45,8 +45,7 @@ from glycowork.glycan_data.loader import (
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages
 )
 from glycowork.glycan_data.stats import (
-    fast_two_sum, two_sum, expansion_sum, hlm, cohen_d,
-    mahalanobis_distance, variance_stabilization, shannon_diversity_index,
+    cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
     simpson_diversity_index, get_equivalence_test, sequence_richness,
     hotellings_t2, calculate_permanova_stat, omega_squared, anosim, alpha_biodiversity_stats, permanova_with_permutation,
     clr_transformation, alr_transformation, get_procrustes_scores,
@@ -78,7 +77,7 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process
                   process_main_branch, check_negative_look,
                   filter_matches_by_location, parse_pattern
 )
-from glycowork.motif.draw import (matches, process_bonds, split_monosaccharide_linkage, draw_hex, split_node,
+from glycowork.motif.draw import (process_bonds, split_monosaccharide_linkage, draw_hex, split_node,
                  scale_in_range, glycan_to_skeleton, process_per_residue, col_dict_base,
                  get_hit_atoms_and_bonds, add_colours_to_map, unique, is_jupyter, process_repeat, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
@@ -95,7 +94,7 @@ from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighb
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
                          deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme,
                          get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
-                         plot_network
+                         plot_network, add_high_man_removal
 )
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
                       jaccard, distance_from_metric, check_conservation, get_communities
@@ -827,17 +826,17 @@ def test_equal_repeats():
     assert equal_repeats("Gal(b1-4)GlcNAc(b1-3)", "Man(a1-3)Man(a1-2)") == False
 
 
-def test_find_matching_brackets_indices():
+def test_get_matching_indices2():
     # Test simple brackets
-    assert find_matching_brackets_indices("[abc]") == [(0, 4)]
+    assert list(get_matching_indices("[abc]", '[', ']')) == [(1, 4, 0)]
     # Test nested brackets
-    assert find_matching_brackets_indices("a[b[c]d]e") == [(1, 7), (3, 5)]
+    assert list(get_matching_indices("a[b[c]d]e", '[', ']')) == [(4, 5, 1), (2, 7, 0)]
     # Test multiple brackets
-    result = find_matching_brackets_indices("[a][b][c]")
+    result = list(get_matching_indices("[a][b][c]", '[', ']'))
     assert len(result) == 3
-    assert result[0] == (0, 2)
+    assert result[0] == (1, 2, 0)
     # Test unmatched brackets
-    assert find_matching_brackets_indices("[a[b") is None
+    assert len(list(get_matching_indices("[a[b", '[', ']'))) == 0
 
 
 def test_choose_correct_isoform():
@@ -1095,46 +1094,6 @@ def test_real_glycan_structures():
     s2 = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     # These should have different nested bracket counts
     assert count_nested_brackets(s1) != count_nested_brackets(s2)
-
-
-def test_fast_two_sum():
-    # Test basic addition
-    assert fast_two_sum(5, 3) == [8]
-    # Test with floating points
-    assert fast_two_sum(5.5, 3.3)[0] == 8.8
-    # Test with negative numbers
-    assert fast_two_sum(-5, -3) == [-8]
-
-
-def test_two_sum():
-    # Test basic addition
-    assert two_sum(5, 3) == [8]
-    # Test order doesn't matter
-    assert two_sum(3, 5) == [8]
-    # Test with floating points
-    result = two_sum(5.5, 3.3)
-    assert abs(result[0] - 8.8) < 1e-10
-
-
-def test_expansion_sum():
-    # Test multiple numbers
-    assert expansion_sum(1, 2, 3) == 6
-    # Test floating points
-    result = expansion_sum(1.1, 2.2, 3.3)
-    assert abs((result if isinstance(result, float) else sum(result[0])+result[1]) - 6.6) < 1e-10
-    # Test negative numbers
-    assert expansion_sum(-1, -2, -3) == -6
-
-
-def test_hlm():
-    # Test with simple array
-    data = [1, 2, 3, 4, 5]
-    result = hlm(data)
-    assert 2.5 <= result <= 3.5  # Should be around 3
-    # Test with negative numbers
-    data = [-2, -1, 0, 1, 2]
-    result = hlm(data)
-    assert abs(result) < 1e-10  # Should be around 0
 
 
 def test_cohen_d():
@@ -1445,12 +1404,6 @@ def test_jtkdist():
     assert "NUM_VALS" in result
     assert "MAX" in result
     assert "DIMS" in result
-    # Test with normal approximation
-    result_normal = jtkdist(timepoints=6, param_dic={}, normal=True)
-    assert "VAR" in result_normal
-    assert "SDV" in result_normal
-    assert "EXV" in result_normal
-    assert "EXACT" in result_normal
 
 
 def test_jtkinit():
@@ -1481,7 +1434,10 @@ def test_jtkstat():
         "MAX": 15,
         "PERIODS": [6],
         "DIMS": [15, 1],
-        "CGOOSV": [[np.zeros(15) for _ in range(6)]]
+        "CGOOSV": [[np.zeros(15) for _ in range(6)]],
+        "EXV": 7.5,  # MAX/2
+        "SDV": np.sqrt(35),
+        "CP": [1.0] * 31
     }
     result = jtkstat(z, param_dic)
     assert "CJTK" in result
@@ -1772,14 +1728,24 @@ def test_possible_topology_check():
 
 def test_link_find():
     # Simple glycan
-    glycan = "Gal(b1-4)Gal(b1-4)GlcNAc"
-    result = link_find(glycan)
+    result = link_find("Gal(b1-4)Gal(b1-4)GlcNAc")
     assert "Gal(b1-4)GlcNAc" in result
     # Branched glycan
-    glycan = "Gal(b1-4)[Fuc(a1-3)]GlcNAc"
-    result = link_find(glycan)
+    result = link_find("Gal(b1-4)[Fuc(a1-3)]GlcNAc")
     assert "Gal(b1-4)GlcNAc" in result
     assert "Fuc(a1-3)GlcNAc" in result
+    result = link_find("Fuc(a1-2)Gal(b1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]GalNAc")
+    assert "Fuc(a1-3)GlcNAc" in result
+    assert "Gal(b1-4)Fuc" not in result
+    assert "Gal(b1-3)GalNAc" in result
+    assert "Gal(b1-3)Fuc" not in result
+    result = link_find("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")
+    assert "Fuc(a1-3)GlcNAc" in result
+    assert "Man(a1-3)Man" in result
+    assert "Man(a1-3)GlcNAc" not in result
+    assert "Gal(b1-4)Fuc" not in result
+    assert "GlcNAc(b1-2)Neu5Ac" not in result
+    assert not any('[' in k for k in result)
 
 
 def test_annotate_glycan():
@@ -2168,19 +2134,19 @@ def test_parse_pattern():
     assert max_occur == 1
 
 
-def test_matches():
+def test_get_matching_indices():
     # Test nested parentheses matching
-    result = list(matches("(a(b)c)", "(", ")"))
+    result = list(get_matching_indices("(a(b)c)", "(", ")"))
     assert len(result) == 2
     assert result[0][2] == 1  # Nested level
     assert result[1][2] == 0  # Outer level
     # Test square brackets
-    result = list(matches("[a[b]c]", "[", "]"))
+    result = list(get_matching_indices("[a[b]c]", "[", "]"))
     assert len(result) == 2
     assert result[0][2] == 1  # Nested level
     assert result[1][2] == 0  # Outer level
     # Test empty string
-    result = list(matches("", "(", ")"))
+    result = list(get_matching_indices("", "(", ")"))
     assert len(result) == 0
 
 
@@ -3763,6 +3729,18 @@ def test_infer_roots():
     roots = infer_roots(frozenset(free_glycans))
     assert "Gal(b1-4)Glc-ol" in roots
     assert "Gal(b1-4)GlcNAc-ol" in roots
+    # Test N-linked glycans
+    n_glycans = {"Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"}
+    roots = infer_roots(frozenset(n_glycans))
+    assert "Man(b1-4)GlcNAc(b1-4)GlcNAc" in roots
+    # Test glycolipids
+    glycolipids = {"Neu5Ac(a2-3)Gal(b1-4)Glc1Cer", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc1Cer"}
+    roots = infer_roots(frozenset(glycolipids))
+    assert "Glc1Cer" in roots
+    # Test poorly formatted glycolipids
+    glycolipids = {"Neu5Ac(a2-3)Gal(b1-4)Glc", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"}
+    roots = infer_roots(frozenset(glycolipids))
+    assert "Gal(b1-4)Glc" in roots
 
 
 def test_deorphanize_nodes(sample_network):
@@ -4259,8 +4237,7 @@ def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
     # Check that plot was created
     assert plt.gcf() is not None
     ax = plt.gca()
-    nodes, edges, _ = get_network_elements(ax)
-    # Check that nodes and edges are present
+    nodes, edges, _ = get_network_elements(ax)    # Check that nodes and edges are present
     assert len(nodes) == 1  # One PathCollection for all nodes
     assert len(edges) == len(main_net.edges())  # FancyArrowPatch for every edges
     # Clean up
@@ -4332,6 +4309,12 @@ def test_plot_network_no_notebook(evo_test_networks):
             plot_network(main_net, plot_format='kamada_kawai')
             assert mock_show.called
             plt.close()
+
+
+def test_add_high_man_removal(evo_test_networks):
+    main_net, _ = evo_test_networks
+    network = add_high_man_removal(main_net)
+    assert len(main_net.edges()) == len(network.edges())
 
 
 @pytest.fixture
@@ -5130,6 +5113,7 @@ def test_poly1_cross_entropy_loss(_):
     loss = criterion(logits, labels)
     assert isinstance(loss, torch.Tensor)
     assert loss.ndim == 0  # Scalar tensor
+    criterion = Poly1CrossEntropyLoss(num_classes=3, epsilon=1.0, reduction = "sum")
 
 
 def test_sam_optimizer(mock_model, mode):
@@ -5235,6 +5219,30 @@ def test_training_setup(_, mock_model):
     assert isinstance(optimizer, SAM)
     assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
     assert isinstance(criterion, Poly1CrossEntropyLoss)
+    optimizer, scheduler, criterion = training_setup(
+        mock_model,
+        lr=0.001,
+        mode='multilabel'
+    )
+    assert isinstance(optimizer, SAM)
+    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+    assert isinstance(criterion, Poly1CrossEntropyLoss)
+    optimizer, scheduler, criterion = training_setup(
+        mock_model,
+        lr=0.001,
+        mode='binary'
+    )
+    assert not isinstance(optimizer, SAM)
+    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+    assert isinstance(criterion, Poly1CrossEntropyLoss)
+    optimizer, scheduler, criterion = training_setup(
+        mock_model,
+        lr=0.001,
+        mode='regression'
+    )
+    assert not isinstance(optimizer, SAM)
+    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+    assert isinstance(criterion, torch.nn.MSELoss)
 
 
 def test_train_ml_model(mock_xgb_data):
@@ -5253,6 +5261,17 @@ def test_train_ml_model(mock_xgb_data):
         feature_calc=False
     )
     assert isinstance(model, xgb.XGBRegressor)
+    # Test feature calculation
+    X_train = ["Neu5Ac(a2-3)Gal(b1-4)Glc", "Fuc(a1-3)[Gal(b1-4)]GlcNAc", "Glc(a1-4)Glc"]
+    X_test = ["Fuc(a1-2)Gal(b1-4)Glc", "Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", "Neu5Ac(a2-6)GalNAc"]
+    model, train, test = train_ml_model(
+        X_train, X_test, y_train, y_test,
+        mode='classification',
+        feature_calc=True,
+        return_features = True
+    )
+    assert isinstance(model, xgb.XGBClassifier)
+    assert isinstance(train, pd.DataFrame)
 
 
 @patch('matplotlib.pyplot.show')
