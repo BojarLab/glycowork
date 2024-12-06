@@ -2,7 +2,7 @@ from glycowork.glycan_data.loader import unwrap, motif_list, multireplace, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, in_lib, expand_lib, choose_correct_isoform, get_matching_indices
+from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, choose_correct_isoform, get_matching_indices
 import matplotlib.pyplot as plt
 from io import BytesIO
 from typing import Dict, List, Tuple, Optional, Union, Any
@@ -1252,7 +1252,7 @@ def draw_chem2d(
     elif filepath.endswith('pdf'):
       try:
         from cairosvg import svg2pdf
-        svg2pdf(bytestring = data, write_to = filepath)
+        svg2pdf(bytestring = svg_data, write_to = filepath)
       except ImportError:
         raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   return SVG(svg_data) if is_jupyter() else display_svg_with_matplotlib(svg_data)

@@ -3,10 +3,9 @@ import numpy as np
 import math
 import warnings
 from typing import Dict, List, Optional, Tuple, Union
-from collections import defaultdict, Counter
+from collections import Counter
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
-from scipy.special import gammaln
 from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind
 from scipy.stats.mstats import winsorize
 from scipy.spatial import procrustes
@@ -217,12 +216,11 @@ def jtkdist(timepoints: Union[int, np.ndarray], # number/array of timepoints wit
   MM = int(M // 2)  # Mode of this possible alternative to JTK distribution
   cf = np.ones(MM + 1)  # Initial lower half cumulative frequency (cf) distribution
   size = np.sort(tim)  # Sizes of each group of known replicate values, in ascending order for fastest calculation
-  k = len(tim)  # Number of groups of replicates
   N = np.cumsum(size[::-1])[::-1][1:] # Count permutations using the Harding algorithm
   for m, n in zip(size[:-1], N): # Calculate cumulative frequencies; cf now contains the lower half cumulative frequency distribution
     P = min(m + n, MM)
-    for t in range(n + 1, P + 1):
-      cf[t:MM + 1] -= cf[:MM + 1 - t]
+    for q in range(n + 1, P + 1):
+      cf[q:MM + 1] -= cf[:MM + 1 - q]
     Q = min(m, MM)
     for s in range(1, Q + 1):
       cf[s:MM + 1] += cf[:MM + 1 - s]
@@ -357,7 +355,7 @@ def jtkx(z: pd.DataFrame, # expression data ordered in groups by timepoint
   if np.isnan(hlm_z).all():
     hlm_z = np.zeros_like(z_trim)  # Fallback if all values are NaN
   w = (z_trim - hlm_z) * np.sqrt(2)
-  for i in range(abs(pers)):
+  for _ in range(abs(pers)):
     for lagi in lagis:
       S = param_dic["CJTK"][lagi][1]
       s = np.sign(S) if S != 0 else 1

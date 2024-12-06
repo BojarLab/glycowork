@@ -74,8 +74,8 @@ from glycowork.motif.annotate import (
 from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process_occurrence,
                   expand_pattern, convert_pattern_component, reformat_glycan_string,
                   motif_to_regex, get_match, process_question_mark, calculate_len_matches_comb,
-                  process_main_branch, check_negative_look,
-                  filter_matches_by_location, parse_pattern
+                  process_main_branch, check_negative_look, get_match_batch,
+                  filter_matches_by_location, parse_pattern, compile_pattern
 )
 from glycowork.motif.draw import (process_bonds, split_monosaccharide_linkage, draw_hex, split_node,
                  scale_in_range, glycan_to_skeleton, process_per_residue, col_dict_base,
@@ -1996,6 +1996,15 @@ def test_convert_pattern_component():
     result = convert_pattern_component("[Hex|Fuc]{1,2}")
     assert isinstance(result, dict)
     assert list(result.values())[0] == [1, 2]
+    result = convert_pattern_component("([Hex|Fuc])*")
+    assert isinstance(result, dict)
+    assert list(result.values())[0] == [0, 1, 2, 3, 4, 5, 6, 7]
+    result = convert_pattern_component("([Hex|Fuc])?")
+    assert isinstance(result, dict)
+    assert list(result.values())[0] == [0, 1]
+    result = convert_pattern_component("([Hex|Fuc])+")
+    assert isinstance(result, dict)
+    assert list(result.values())[0] == [1, 2, 3, 4, 5, 6, 7]
 
 
 def test_reformat_glycan_string():
@@ -2022,6 +2031,26 @@ def test_get_match():
     pattern = "Hex-[HexNAc]{1,2}"
     glycan = "Gal(b1-4)GlcNAc(b1-4)GlcNAc"
     assert get_match(pattern, glycan, return_matches=False) is True
+    # Test graph as input
+    pattern = "Hex-[HexNAc]{1,2}"
+    glycan = "Gal(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert get_match(pattern, glycan_to_nxGraph(glycan), return_matches=False) is True
+    # Test other nomenclature as input
+    pattern = "Hex-[HexNAc]{1,2}"
+    assert get_match(pattern, "β-D-Galp-(1→4)-β-D-GlcpNAc-(1→", return_matches=False) is True
+    # Complex cases
+    pattern = "r[Sia]{,1}-Monosaccharide-([dHex]){,1}-Monosaccharide(?=-Mana6-Monosaccharide)"
+    result = get_match(pattern, "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert result == ['Gal(b1-4)GlcNAc']
+    result = get_match(pattern, "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert result == ['GalNAc(b1-4)GlcNAc']
+    result = get_match(pattern, "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-6)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert result == ['Neu5Ac(a2-6)GalNAc(b1-4)GlcNAc']
+    result = get_match(pattern, "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert result == ['Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc']
+    pattern = "r[Sia]{,1}-[.]{,1}-([dHex]){,1}-.b3(?=-GalNAc)"
+    assert get_match(pattern, "Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc") == ['Gal']
+    assert get_match(pattern, "Neu5Gc(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc") == ["Neu5Gc(a2-3)Gal"]
 
 
 def test_motif_to_regex():
@@ -2035,6 +2064,16 @@ def test_motif_to_regex():
     pattern = motif_to_regex(motif)
     assert isinstance(pattern, str)
     assert get_match(pattern, motif, return_matches=False) is True
+
+
+def test_compile_pattern():
+    assert compile_pattern("r[Sia]{,1}-[.]{,1}-([dHex]){,1}-.b3(?=-GalNAc)") == ['[Sia]{,1}', '[Monosaccharide]{,1}', '([dHex]){,1}', 'Monosaccharideb3(?=-GalNAc)']
+
+
+def test_get_match_batch():
+    glycan_list = ["Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-4)GlcNAc"]
+    pattern = "r[Sia]{,1}-[.]{,1}-([dHex]){,1}-.b3(?=-GalNAc)"
+    assert len(get_match_batch(pattern, glycan_list)) == 2
 
 
 def test_process_question_mark():

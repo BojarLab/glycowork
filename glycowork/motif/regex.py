@@ -491,7 +491,7 @@ def get_match(pattern: Union[str, List[str]], # Expression or pre-compiled patte
               return_matches: bool = True # Whether to return matches vs boolean
              ) -> Union[bool, List[str]]: # Match results
   "Find matches for glyco-regular expression in glycan"
-  pattern = pattern[1:] if pattern.startswith('r') else pattern
+  pattern = pattern[1:] if isinstance(pattern, str) and pattern.startswith('r') else pattern
   global lookahead_snuck_in
   lookahead_snuck_in = False
   if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
