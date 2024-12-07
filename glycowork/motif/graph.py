@@ -508,11 +508,11 @@ def get_possible_topologies(glycan: Union[str, nx.Graph], # Glycan with floating
                           modification_map: Dict[str, Set[str]] = modification_map # Maps modifications to valid attachments
                          ) -> List[nx.Graph]: # List of possible topology graphs
   "Create possible glycan graphs given a floating substituent"
-  if isinstance(glycan, str):
-    if '{' not in glycan:
-      print("This glycan already has a defined topology; please don't use this function.")
   ggraph = ensure_graph(glycan)
   parts = [ggraph.subgraph(c) for c in nx.connected_components(ggraph)]
+  if len(parts) == 1:
+    print("This glycan already has a defined topology; please don't use this function.")
+    return [parts[0]]
   main_part, floating_part = parts[-1], parts[0]
   dangling_linkage = max(floating_part.nodes())
   is_modification = len(floating_part.nodes()) == 1
