@@ -1078,7 +1078,7 @@ def is_jupyter() -> bool:
   try:
     from IPython import get_ipython
     return 'IPKernelApp' in get_ipython().config  # Check if in IPython kernel
-  except:
+  except (ImportError, AttributeError):
     return False
 
 

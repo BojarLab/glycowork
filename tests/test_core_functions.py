@@ -224,6 +224,8 @@ def test_constrain_prot():
     chars = {'A': 1, 'B': 2, 'C': 3}
     result = constrain_prot(proteins, chars)
     assert result == ['ABC', 'zzz', 'AzC']
+    result = constrain_prot(proteins)
+    assert result == ['ABC', 'XYZ', 'AzC']
 
 
 def test_prot_to_coded():
@@ -235,6 +237,8 @@ def test_prot_to_coded():
     # DE should be [3,4,5,5,5]
     assert result[0] == [0, 1, 2, 5, 5]
     assert result[1] == [3, 4, 5, 5, 5]
+    result = prot_to_coded(proteins)
+    assert len(result[0]) == 1000
 
 
 def test_string_to_labels():
@@ -242,6 +246,7 @@ def test_string_to_labels():
     assert string_to_labels('ABC', chars) == [1, 2, 3]
     assert string_to_labels('BAC', chars) == [2, 1, 3]
     assert string_to_labels('', chars) == []
+    assert len(string_to_labels('ABC')) == 3
 
 
 def test_pad_sequence():
@@ -281,48 +286,52 @@ def test_get_stem_lib():
 
 def test_stemify_glycan():
     # Test basic glycan
-    glycan = "Neu5Ac9Ac(a2-3)Gal(b1-4)GlcNAc"
-    result = stemify_glycan(glycan)
+    result = stemify_glycan("Neu5Ac9Ac(a2-3)Gal(b1-4)GlcNAc")
     assert result == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
+    result = stemify_glycan("Neu5Ac9Ac")
+    assert result == "Neu5Ac"
     # Test glycan with multiple modifications
-    glycan = "Neu5Ac9Ac(a2-3)Gal6S(b1-4)GlcNAc"
-    result = stemify_glycan(glycan)
+    result = stemify_glycan("Neu5Ac9Ac(a2-3)Gal6S(b1-4)GlcNAc")
     assert result == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
 
 
 def test_glycan_to_composition():
     # Test basic glycan
-    glycan = "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
-    result = glycan_to_composition(glycan)
+    result = glycan_to_composition("Neu5Ac(a2-3)Gal(b1-4)GlcNAc")
     assert result == {'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}
     # Test glycan with sulfation
-    glycan = "Neu5Ac(a2-3)Gal6S(b1-4)GlcNAc"
-    result = glycan_to_composition(glycan)
+    result = glycan_to_composition("Neu5Ac(a2-3)Gal6S(b1-4)GlcNAc")
     assert result == {'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1, 'S': 1}
+    # Test lactonization
+    result = glycan_to_composition("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc")
+    assert result == {'Neu5Ac': 1, 'Hex': 2, '-H2O': 1, 'Ac': 1}
 
 
 def test_calculate_adduct_mass():
     # Test simple molecules
     assert abs(calculate_adduct_mass('H2O') - 18.0106) < 0.001
+    assert abs(calculate_adduct_mass('+H2O') - 18.0106) < 0.001
     assert abs(calculate_adduct_mass('CH3COOH') - 60.0211) < 0.001
+    assert abs(calculate_adduct_mass('-H2O') + 18.0106) < 0.001
     # Test with different mass types
     h2o_mono = calculate_adduct_mass('H2O', mass_value='monoisotopic')
     h2o_avg = calculate_adduct_mass('H2O', mass_value='average')
     assert h2o_mono != h2o_avg
+    # Test enforce_sign
+    assert calculate_adduct_mass('CH3COOH', enforce_sign=True) < 0.001
 
 
 def test_structure_to_basic():
     # Basic glycan
-    glycan = "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
-    result = structure_to_basic(glycan)
+    result = structure_to_basic("Neu5Ac(a2-3)Gal(b1-4)GlcNAc")
     assert result == "Neu5Ac(?1-?)Hex(?1-?)HexNAc"
+    result = structure_to_basic("GlcNAc")
+    assert result == "HexNAc"
     # Glycan with sulfation
-    glycan = "Gal6S(b1-4)GlcNAc"
-    result = structure_to_basic(glycan)
+    result = structure_to_basic("Gal6S(b1-4)GlcNAc")
     assert result == "HexOS(?1-?)HexNAc"
     # Glycan with branch
-    glycan = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"
-    result = structure_to_basic(glycan)
+    result = structure_to_basic("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc")
     assert result == "Neu5Ac(?1-?)Hex(?1-?)[dHex(?1-?)]HexNAc"
 
 
@@ -333,8 +342,12 @@ def test_map_to_basic():
     assert map_to_basic("GlcNAc") == "HexNAc"
     assert map_to_basic("Fuc") == "dHex"
     assert map_to_basic("GlcA") == "HexA"
+    assert map_to_basic("GlcA3S") == "HexAOS"
     assert map_to_basic("Gal6S") == "HexOS"
     assert map_to_basic("GlcNAc6S") == "HexNAcOS"
+    assert map_to_basic("GlcNS") == "HexNS"
+    assert map_to_basic("Man6P") == "HexOP"
+    assert map_to_basic("GlcNAc6P") == "HexNAcOP"
 
 
 def test_mask_rare_glycoletters():
@@ -370,6 +383,16 @@ def test_mz_to_composition():
     )
     expected = [{'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}]
     assert result == expected
+    result = mz_to_composition(
+        675,
+        mode='negative',
+        mass_value='monoisotopic',
+        glycan_class='all',
+        mass_tolerance=0.5,
+        reduced=True,
+        adduct="H2O",
+        extras=["doubly_charged", "adduct"]
+    )
 
 
 def test_compositions_to_structures():
@@ -387,6 +410,13 @@ def test_compositions_to_structures():
         comp = glycan_to_composition(glycan)
         assert comp['Hex'] == 3
         assert comp['HexNAc'] == 2
+    composition = {'Hex': 3, 'HexNAc': 2, 'dHex': 10}
+    result = compositions_to_structures(
+        [composition],
+        glycan_class='N',
+        kingdom='Animalia',
+        verbose=True
+    )
 
 
 def test_match_composition_relaxed():
@@ -428,6 +458,8 @@ def test_composition_to_mass():
     mass = composition_to_mass(comp)
     expected_mass = 383.1322  # Theoretical mass for Hex-HexNAc
     assert abs(mass - expected_mass) < 0.1
+    mass = composition_to_mass(comp, adduct="H2O")
+    assert abs(mass - expected_mass - 18.01) < 0.1
     # Test with modifications
     comp = {'Hex': 1, 'HexNAc': 1, 'S': 1}
     mass = composition_to_mass(comp)
@@ -625,6 +657,9 @@ def test_de_wildcard_glycoletter():
     # Test monosaccharide wildcard
     result = de_wildcard_glycoletter('Hex')
     assert result in Hex
+    # Test quick return
+    result = de_wildcard_glycoletter('Man')
+    assert result == "Man"
 
 
 def test_find_isomorphs():
@@ -655,6 +690,7 @@ def test_canonicalize_iupac():
     # Test basic cleanup
     assert canonicalize_iupac("Galb4GlcNAc") == "Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("{Gal(b1-4)}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc") == "{Neu5Ac(a2-3)}{Gal(b1-4)}Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("{Gal(b1-4)}{Neu5Ac(a2-3)}Gal(b1-4)[Fuc(a1-3)]GlcNAc") == "{Neu5Ac(a2-3)}{Gal(b1-4)}Fuc(a1-3)[Gal(b1-4)]GlcNAc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-?)Gal(b1-4)GlcNAc"
@@ -741,6 +777,10 @@ def test_canonicalize_composition():
     result = canonicalize_composition("9 2 0 0")
     assert result["Hex"] == 9
     assert result["HexNAc"] == 2
+    result = canonicalize_composition("9 2 0 1 0")
+    assert result["Hex"] == 9
+    assert result["HexNAc"] == 2
+    assert result["Neu5Gc"] == 1
 
 
 def test_parse_glycoform():

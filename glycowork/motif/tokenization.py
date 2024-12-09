@@ -455,30 +455,45 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
   "Map glycan to its composition"
   if stem_libr is None:
     stem_libr = stem_lib
-  if '{' in glycan:
-    glycan = glycan.replace('{', '').replace('}', '')
-  composition = Counter([map_to_basic(stem_libr[k]) for k in min_process_glycans([glycan])[0]])
-  allowed_mods = ['Me', 'S', 'P', 'PCho', 'PEtN']
-  for m in allowed_mods:
-    if m in glycan:
-      composition[m] = glycan.count(m)
+  SPECIAL_MODS = {
+    '1,7lactone': {'replacement': '', 'diff_moiety': '-H2O'},
+    # Add other special modifications here in the format:
+    # 'modification': {'replacement': 'what to replace with', 'diff_moiety': chemical formula, sign indicating loss/gain}
+  }
+  VALID_COMPONENTS = {'Hex', 'dHex', 'HexNAc', 'HexN', 'HexA', 'Neu5Ac', 'Neu5Gc', 'Kdn',
+                     'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac', '-H2O'}
+  glycan = glycan.replace('{', '').replace('}', '') if '{' in glycan else glycan
+  diff_moieties = Counter()
+  for mod, info in SPECIAL_MODS.items():
+    while mod in glycan:
+      diff_moieties[info['diff_moiety']] += 1
+      glycan = glycan.replace(mod, info['replacement'])
+  composition = Counter(sorted([map_to_basic(stem_libr[k]) for k in min_process_glycans([glycan])[0]]))
+  composition.update(diff_moieties)
+  for mod in ('Me', 'S', 'P', 'PCho', 'PEtN'):
+    if mod in glycan:
+      composition[mod] = glycan.count(mod)
   if 'PCho' in glycan or 'PEtN' in glycan:
-    del composition['P']
-  ac_mods = ['OAc', '2Ac', '3Ac', '4Ac', '6Ac', '7Ac', '9Ac']
-  if any([k in glycan for k in ac_mods]):
-    composition['Ac'] = sum([glycan.count(k) for k in ac_mods])
-  del composition['?1-?']
-  if any([k not in {'Hex', 'dHex', 'HexNAc', 'HexN', 'HexA', 'Neu5Ac', 'Neu5Gc', 'Kdn',
-                    'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac'} for k in composition.keys()]):
-    return {}
-  else:
-    return dict(composition)
+    composition.pop('P', None)
+  ac_mods = ('OAc', '2Ac', '3Ac', '4Ac', '6Ac', '7Ac', '9Ac')
+  if any(mod in glycan for mod in ac_mods):
+    composition['Ac'] = sum(glycan.count(mod) for mod in ac_mods)
+  composition.pop('?1-?', None)
+  return dict(composition) if all(k in VALID_COMPONENTS for k in composition) else {}
 
 
-def calculate_adduct_mass(adduct: str, # Chemical formula of adduct (e.g., "C2H4O2")
-                         mass_value: str = 'monoisotopic' # Mass type: monoisotopic/average
-                        ) -> float: # Adduct mass
-  "Calculate mass of adduct from chemical formula"
+def calculate_adduct_mass(formula: str, # Chemical formula of adduct (e.g., "C2H4O2", "-H2O", "+Na")
+                         mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
+                         enforce_sign: bool = False # If True, returns 0 for unsigned formulas
+                        ) -> float: # Formula mass
+  "Calculate mass of adduct from chemical formula, including signed formulas"
+  # Handle sign if present
+  sign = 1
+  if formula.startswith(('+', '-')):
+    sign = -1 if formula.startswith('-') else 1
+    formula = formula[1:]
+  elif enforce_sign:
+    return 0
   element_masses = {
     'monoisotopic': {'C': 12.0000, 'H': 1.0078, 'O': 15.9949, 'N': 14.0031},
     'average': {'C': 12.0107, 'H': 1.00794, 'O': 15.9994, 'N': 14.0067}
@@ -487,7 +502,7 @@ def calculate_adduct_mass(adduct: str, # Chemical formula of adduct (e.g., "C2H4
   element_count = {'C': 0, 'H': 0, 'O': 0, 'N': 0}
   current_element = ''
   current_count = ''
-  for char in adduct:
+  for char in formula:
     if char.isalpha():
       if current_element:
         element_count[current_element] += int(current_count) if current_count else 1
@@ -499,7 +514,7 @@ def calculate_adduct_mass(adduct: str, # Chemical formula of adduct (e.g., "C2H4
     element_count[current_element] += int(current_count) if current_count else 1
   for element, count in element_count.items():
     mass += element_masses[mass_value][element] * count
-  return mass
+  return sign * mass
 
 
 @rescue_compositions
@@ -515,10 +530,10 @@ def composition_to_mass(dict_comp_in: Dict[str, int], # Composition dictionary o
   for old_key, new_key in {'S': 'Sulphate', 'P': 'Phosphate', 'Me': 'Methyl', 'Ac': 'Acetate'}.items():
     if old_key in dict_comp:
       dict_comp[new_key] = dict_comp.pop(old_key)
-  total_mass = sum(mass_dict_in.get(k, 0) * v for k, v in dict_comp.items()) + mass_dict_in['red_end']
+  total_mass = sum(v * (mass_dict_in.get(k) or calculate_adduct_mass(k, mass_value, enforce_sign = True))
+                   for k, v in dict_comp.items()) + mass_dict_in['red_end']
   if adduct:
-    adduct_mass = calculate_adduct_mass(adduct, mass_value)
-    total_mass += adduct_mass
+    total_mass += calculate_adduct_mass(adduct, mass_value)
   return total_mass
 
 

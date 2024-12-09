@@ -11,18 +11,32 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - .:/data/
+      - .:/data/:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
 
   notebook:
     <<: *fastai
     command: bash -c "pip install -e . && jupyter notebook --allow-root --no-browser --ip=0.0.0.0 --port=8080 --NotebookApp.token='' --NotebookApp.password=''"
     ports:
       - "8080:8080"
+    volumes:
+      - .:/data/:rw  # Notebook needs write access
 
   watcher:
     <<: *fastai
     command: watchmedo shell-command --command nbdev_build_docs --pattern *.ipynb --recursive --drop
     network_mode: host # for GitHub Codespaces https://github.com/features/codespaces/
+    volumes:
+      - .:/data/:rw  # Watcher needs write access
 
   jekyll:
     <<: *fastai
@@ -33,3 +47,5 @@ services:
      && nbdev_build_docs && cd docs
      && bundle i
      && chmod -R u+rwx . && bundle exec jekyll serve --host 0.0.0.0"
+    volumes:
+      - .:/data/:rw  # Jekyll needs write access
