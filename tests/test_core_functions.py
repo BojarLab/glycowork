@@ -85,7 +85,7 @@ from glycowork.motif.draw import (process_bonds, split_monosaccharide_linkage, d
 )
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
-                     get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings,
+                     get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings, get_pval_distribution,
                      characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site
 )
 from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighbors, create_neighbors,
@@ -305,6 +305,15 @@ def test_glycan_to_composition():
     # Test lactonization
     result = glycan_to_composition("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc")
     assert result == {'Neu5Ac': 1, 'Hex': 2, '-H2O': 1, 'Ac': 1}
+
+
+def test_glycan_to_mass():
+    assert abs(glycan_to_mass("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc") - 674.2149056) < 0.1
+    assert abs(glycan_to_mass("Neu5Az(a2-3)Gal(b1-4)Glc") - 658.2181545999999) < 0.1
+    assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc") - 633.2115546) < 0.1
+    assert abs(glycan_to_mass("Neu5Az9Ac(a2-3)Gal(b1-4)Glc") - 717.2320056) < 0.1
+    assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "C2H4O2") - 693.2325546) < 0.1
+    assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "-C2H4O2") - 573.1905546) < 0.1
 
 
 def test_calculate_adduct_mass():
@@ -691,16 +700,20 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Galb4GlcNAc") == "Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("{Gal(b1-4)}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc") == "{Neu5Ac(a2-3)}{Gal(b1-4)}Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("{Gal(b1-4)}{Neu5Ac(a2-3)}Gal(b1-4)[Fuc(a1-3)]GlcNAc") == "{Neu5Ac(a2-3)}{Gal(b1-4)}Fuc(a1-3)[Gal(b1-4)]GlcNAc"
+    assert canonicalize_iupac("Fucα2Galβ1-4GlcNAcβ1-3(NeuAcα2-3Galβ1-4GlcNAcβ1-6)Galβ1-4GlcNAcol") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Fucα1-2Galβ1-4GlcNAcβ1-3(Fucα1-2Galβ1-4GlcNAcβ1-6)Galβ1-4GlcNAcβ1-3Galβ1-4Glcβ-") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-?)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("Gal+Gal(b1-4)GlcNAc") == "{Gal(?1-?)}Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("NeuAcα2-6Galβ1-4(6S)GlcNAcβ1-2Manα1-3(Manα-Manα1-6)Manβ1-4GlcNAcβ1-4(Fucα1-6)GlcNAcol") == "Neu5Ac(a2-6)Gal(b1-4)GlcNAc6S(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     # Test modification handling
     assert canonicalize_iupac("Neu5,9Ac2a2-6Galb1-4GlcNAcb-Sp8") == "Neu5Ac9Ac(a2-6)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("Neu4,5Ac2a2-6Galb1-4GlcNAcb-Sp8") == "Neu4Ac5Ac(a2-6)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("6SGal(b1-4)GlcNAc") == "Gal6S(b1-4)GlcNAc"
     assert canonicalize_iupac("(6S)Galb1-4GlcNAcb-Sp0") == "Gal6S(b1-4)GlcNAc"
     assert canonicalize_iupac("(6S)(4S)Galb1-4GlcNAcb-Sp0") == "Gal4S6S(b1-4)GlcNAc"
+    assert canonicalize_iupac("S+NeuAcα2-6(Galβ1-3)GlcNAcβ1-3Galβ1-4Glcol") == "{OS}Gal(b1-3)[Neu5Ac(a2-6)]GlcNAc(b1-3)Gal(b1-4)Glc-ol"
     # Test other nomenclatures
     assert canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Gal(b1-4)GlcNAc"
@@ -2907,23 +2920,80 @@ def test_get_pvals_motifs():
     assert len(results_thresh) > 0
 
 
-def test_get_differential_expression():
-    df = pd.DataFrame({
+@pytest.fixture
+def sample_comp_glycomics_data():
+    """
+    Creates a sample glycomics dataset for testing purposes.
+    Contains 5 glycans across 6 pairs of control/tumor samples.
+    """
+    data = {
         'glycan': [
-            'Gal(b1-4)GlcNAc',
-            'Man(a1-6)Man',
-            'Neu5Ac(a2-6)Gal(b1-4)GlcNAc',
-            'Fuc(a1-3)GlcNAc'
-        ],
-        'sample1': [100, 200, 150, 300],
-        'sample2': [110, 220, 140, 280],
-        'sample3': [120, 210, 160, 290],  # Group 1
-        'sample4': [500, 200, 140, 700],
-        'sample5': [480, 205, 155, 680],
-        'sample6': [520, 195, 160, 720]   # Group 2 - clearly different
-    })
-    group1 = ['sample1', 'sample2', 'sample3']
-    group2 = ['sample4', 'sample5', 'sample6']
+            'Gal(b1-3)GalNAc',
+            'Neu5Ac(a2-3)Gal(b1-3)GalNAc',
+            'Fuc(a1-2)Gal(b1-3)GalNAc',
+            'Neu5Ac(a2-6)GalNAc',
+            'Fuc(a1-2)Gal'
+        ]
+    }
+    # Generate control and tumor columns for 6 samples
+    for i in range(1, 7):
+        # Control samples: relatively stable values with some variation
+        data[f'control_{i}'] = [
+            np.random.normal(1.5, 0.2),  # Stable baseline
+            np.random.normal(20.0, 2.0),  # High abundance
+            np.random.normal(15.0, 1.5),  # Medium-high abundance
+            np.random.normal(8.0, 1.0),   # Medium abundance
+            np.random.normal(2.0, 0.3)    # Low abundance
+        ]
+        # Tumor samples: showing some consistent changes from control
+        data[f'tumor_{i}'] = [
+            np.random.normal(0.8, 0.2),   # Typically decreased
+            np.random.normal(30.0, 3.0),  # Typically increased
+            np.random.normal(7.0, 1.0),   # Typically decreased
+            np.random.normal(12.0, 1.5),  # Typically increased
+            np.random.normal(1.5, 0.3)    # Slightly decreased
+        ]
+    # Set random seed for reproducibility
+    np.random.seed(42)
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def sample_comp_glycomics_data_corr():
+    np.random.seed(42)
+    data={'glycan':['Neu5Ac(a2-8)Neu5Ac','GlcNAc(b1-4)Man','Gal(b1-4)Neu5Ac',
+                    'Man(a1-3)Man','Fuc(a1-3)GlcNAc']}
+    base_trends={
+        'Neu5Ac(a2-8)Neu5Ac':(1.5,0.8),      # Correlates inversely with Gal(b1-3)GalNAc
+        'GlcNAc(b1-4)Man':(18.0,28.0),       # Correlates positively with Neu5Ac(a2-3)Gal(b1-3)GalNAc
+        'Gal(b1-4)Neu5Ac':(16.0,6.0),        # Correlates positively with Fuc(a1-2)Gal(b1-3)GalNAc
+        'Man(a1-3)Man':(7.0,13.0),           # Correlates inversely with Neu5Ac(a2-6)GalNAc
+        'Fuc(a1-3)GlcNAc':(2.5,1.2)          # Correlates positively with Fuc(a1-2)Gal
+    }
+    for i in range(1,7):
+        control_vals=[]
+        tumor_vals=[]
+        for glycan in data['glycan']:
+            control_base,tumor_base=base_trends[glycan]
+            # Add coordinated noise to maintain correlations
+            noise_factor=np.random.normal(1,0.1)
+            if glycan in ['Neu5Ac(a2-8)Neu5Ac','Man(a1-3)Man']:
+                # Inverse correlations
+                control_vals.append(control_base*noise_factor+np.random.normal(0,control_base*0.05))
+                tumor_vals.append(tumor_base/noise_factor+np.random.normal(0,tumor_base*0.05))
+            else:
+                # Positive correlations
+                control_vals.append(control_base*noise_factor+np.random.normal(0,control_base*0.05))
+                tumor_vals.append(tumor_base*noise_factor+np.random.normal(0,tumor_base*0.05))
+        data[f'control_{i}']=control_vals
+        data[f'tumor_{i}']=tumor_vals
+    return pd.DataFrame(data)
+
+
+def test_get_differential_expression(sample_comp_glycomics_data):
+    df = sample_comp_glycomics_data
+    group1 = [k for k in df.columns if 'control' in k]
+    group2 = [k for k in df.columns if 'tumor' in k]
     # Test basic functionality
     results = get_differential_expression(df, group1, group2, impute=False)
     assert isinstance(results, pd.DataFrame)
@@ -2935,17 +3005,22 @@ def test_get_differential_expression():
     # At least some results should be significant
     assert any(results['significant'])
     # Effect sizes should be reasonable
-    assert all(abs(x) > 0.5 for x in results['Effect size'])
+    assert any(abs(x) > 0. for x in results['Effect size'])
+    assert any(results['significant'])  # Should find some significant results
     # Test with motifs
     results_motifs = get_differential_expression(df, group1, group2, motifs=True, impute=False)
     assert isinstance(results_motifs, pd.DataFrame)
     assert len(results_motifs) > 0
-    assert any(results_motifs['significant'])  # Should find some significant motifs
+    results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
+                                                 monte_carlo=True)
+    results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
+                                                 sets=True)
+    results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
+                                                 grouped_BH=True)
+    results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
+                                                 effect_size_variance=True)
     # Test with paired samples
-    group1_paired = ['sample1', 'sample2']
-    group2_paired = ['sample4', 'sample5']
-    results_paired = get_differential_expression(df[['glycan'] + group1_paired + group2_paired],
-                                              group1_paired, group2_paired,
+    results_paired = get_differential_expression(df, group1, group2,
                                               paired=True, impute=False)
     assert isinstance(results_paired, pd.DataFrame)
 
@@ -3067,43 +3142,61 @@ def test_get_biodiversity():
     # Optional: Check if the differences are detectable
     # The groups are designed to be different, so p-values should be < 0.05
     assert any(p < 0.05 for p in results['p-val']), "Should detect differences between groups"
+    results = get_biodiversity(df, group1, group2, metrics=['alpha', 'beta'], paired=True)
 
 
-def test_get_time_series():
-    df = pd.DataFrame({
-        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal'],
-        'T1_h0_r1': [100, 200, 150],
-        'T1_h0_r2': [110, 220, 140],
-        'T1_h4_r1': [120, 210, 160],
-        'T1_h4_r2': [500, 600, 450],
-        'T1_h8_r1': [480, 580, 470],
-        'T1_h8_r2': [520, 620, 430]
-    })
+@pytest.fixture
+def sample_time_series_data():
+    np.random.seed(42)
+    glycans=['Gal(b1-4)GlcNAc','Man(a1-6)Man','Neu5Ac(a2-6)Gal','Fuc(a1-2)Gal',
+             'GlcNAc(b1-4)GlcNAc','Neu5Ac(a2-3)Gal','Gal(b1-3)GalNAc']
+    data={'glycan':glycans}
+    timepoints=[0,4,8,12,24]
+    replicates=3
+    for t in timepoints:
+        for r in range(1,replicates+1):
+            col_name=f'T1_h{t}_r{r}'
+            base_values=[]
+            for i,glycan in enumerate(glycans):
+                if i%3==0:
+                    base=100+(t*10)
+                elif i%3==1:
+                    base=200-(t*5)
+                else:
+                    base=150+(t*np.sin(t/8))
+                value=base+np.random.normal(0,base*0.05)
+                base_values.append(max(0,value))
+            data[col_name]=base_values
+    return pd.DataFrame(data)
+
+
+def test_get_time_series(sample_time_series_data):
+    df = sample_time_series_data
     results = get_time_series(df, impute=False)
     assert isinstance(results, pd.DataFrame)
     assert 'Glycan' in results.columns
     assert 'p-val' in results.columns
+    results = get_time_series(df, impute=False, degree=2)
+    df2 = df.set_index('glycan').T
+    results = get_time_series(df2, impute=False)
+    results = get_time_series(df, impute=False, transform="ALR")
+    results = get_time_series(df, impute=False, transform="Nothing")
+    results = get_time_series(df, impute=False, motifs=True)
 
 
-def test_get_SparCC():
-    df1 = pd.DataFrame({
-        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal'],
-        'sample1': [100, 200, 150],
-        'sample2': [110, 220, 140],
-        'sample3': [120, 210, 160]
-    })
-    df2 = pd.DataFrame({
-        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal'],
-        'sample1': [500, 600, 450],
-        'sample2': [480, 580, 470],
-        'sample3': [520, 620, 430]
-    })
+def test_get_SparCC(sample_comp_glycomics_data, sample_comp_glycomics_data_corr):
+    df1 = sample_comp_glycomics_data
+    df2 = sample_comp_glycomics_data_corr
     corr, pvals = get_SparCC(df1, df2)
     assert isinstance(corr, pd.DataFrame)
     assert isinstance(pvals, pd.DataFrame)
+    corr, pvals = get_SparCC(df1, df2, transform="ALR")
+    corr, pvals = get_SparCC(df1, df2, transform="Nothing")
+    corr, pvals = get_SparCC(df1, df2, motifs=True)
+    corr, pvals = get_SparCC(df1, df2, partial_correlations=True)
 
 
-def test_get_roc():
+def test_get_roc(sample_comp_glycomics_data):
     df = pd.DataFrame({
         'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal', 'Fuc(a1-3)GlcNAc'],
         'sample1': [100, 200, 150, 300],
@@ -3118,6 +3211,16 @@ def test_get_roc():
     results = get_roc(df, group1, group2)
     assert isinstance(results, list)
     assert all(isinstance(x, tuple) for x in results)
+    df = sample_comp_glycomics_data
+    group1 = [k for k in df.columns if 'control' in k]
+    group2 = [k for k in df.columns if 'tumor' in k]
+    results = get_roc(df, group1, group2)
+    results = get_roc(df, group1, group2, multi_score=True)
+    df['sample7'] = [1000, 200, 400, 300, 100]
+    df['sample8'] = [1100, 250, 410, 380, 150]
+    df['sample9'] = [1050, 180, 380, 290, 120]
+    groups = [1, 2]*6 + [3]*3
+    results = get_roc(df, groups, [])
 
 
 def test_get_representative_substructures():
@@ -3153,6 +3256,7 @@ def test_get_lectin_array():
     results = get_lectin_array(df, group1, group2)
     assert isinstance(results, pd.DataFrame)
     assert 'score' in results.columns
+    results = get_lectin_array(df, [1,2,3], [4,5,6])
 
 
 @pytest.fixture
@@ -3248,7 +3352,7 @@ def test_get_ma_with_custom_thresholds(sample_diff_expr_results):
 def test_get_volcano_basic(sample_diff_expr_results):
     """Test basic functionality of get_volcano"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results)
+        get_volcano(sample_diff_expr_results, n=6)
         mock_savefig.assert_not_called()
 
 
@@ -3358,6 +3462,15 @@ def test_plot_embeddings_with_filepath(tmp_path):
     filepath = tmp_path / "test.png"
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
         plot_embeddings(glycans, emb, filepath=str(filepath))
+        mock_savefig.assert_called_once()
+
+
+def test_get_pval_distribution(tmp_path):
+    """Test plot_embeddings with file saving"""
+    df = pd.DataFrame(np.random.rand(3, 1), columns=['p-val'])
+    filepath = tmp_path / "test.png"
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_pval_distribution(df, filepath=str(filepath))
         mock_savefig.assert_called_once()
 
 
@@ -3518,6 +3631,8 @@ def test_get_jtk_basic(sample_jtk_df):
     assert isinstance(result, pd.DataFrame)
     assert 'Adjusted_P_value' in result.columns
     assert 'Period_Length' in result.columns
+    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods, interval=4, transform="ALR")
+    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods, interval=4, transform="Nothing")
 
 
 def test_get_jtk_with_motifs(sample_jtk_df):

@@ -457,11 +457,13 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
     stem_libr = stem_lib
   SPECIAL_MODS = {
     '1,7lactone': {'replacement': '', 'diff_moiety': '-H2O'},
+    'Az': {'replacement': 'AcH2O', 'diff_moiety': '+N3'},
+    'AcH2O': {'replacement': 'Ac', 'diff_moiety': '-OH'}
     # Add other special modifications here in the format:
     # 'modification': {'replacement': 'what to replace with', 'diff_moiety': chemical formula, sign indicating loss/gain}
   }
   VALID_COMPONENTS = {'Hex', 'dHex', 'HexNAc', 'HexN', 'HexA', 'Neu5Ac', 'Neu5Gc', 'Kdn',
-                     'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac', '-H2O'}
+                     'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac', '-H2O', '+N3', '-OH'}
   glycan = glycan.replace('{', '').replace('}', '') if '{' in glycan else glycan
   diff_moieties = Counter()
   for mod, info in SPECIAL_MODS.items():

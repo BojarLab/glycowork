@@ -543,9 +543,9 @@ def get_differential_expression(
   # Variance-based filtering of features
   if not monte_carlo:
     df, df_prison = variance_based_filtering(df)
+    df_org, df_org_prison = df_org.loc[df.index], df_org.loc[df_prison.index]
   else:
-    df_prison = []
-  df_org, df_org_prison = df_org.loc[df.index], df_org.loc[df_prison.index]
+    df_prison, df_org_prison = pd.DataFrame(), pd.DataFrame()
   glycans = df.index.tolist()
   mean_abundance = df_org.mean(axis = 1)
   df_a, df_b = df[group1], df[group2]
@@ -556,19 +556,18 @@ def get_differential_expression(
     # Testing differential expression of each set/cluster
     for cluster in clusters:
       if len(cluster) > 1:
-        glycans.append(cluster)
         cluster = list(cluster)
+        glycans.append(cluster)
         gp1, gp2 = df_a.loc[cluster, :], df_b.loc[cluster, :]
         mean_abundance_c.append(mean_abundance.loc[cluster].mean())
         log2fc.append(((gp2.values - gp1.values).mean(axis = 1)).mean() if paired else (gp2.mean(axis = 1) - gp1.mean(axis = 1)).mean())
-      gp1, gp2 = df.loc[cluster, group1], df.loc[cluster, group2]
-      # Hotelling's T^2 test for multivariate comparisons
-      pvals.append(hotellings_t2(gp1.T.values, gp2.T.values, paired = paired)[1])
-      levene_pvals.append(np.mean([levene(gp1.loc[variable, :], gp2.loc[variable, :])[1] for variable in cluster]))
-      # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
-      effect_sizes.append(mahalanobis_distance(gp1, gp2, paired = paired))
-      if effect_size_variance:
-        variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
+        # Hotelling's T^2 test for multivariate comparisons
+        pvals.append(hotellings_t2(gp1.T.values, gp2.T.values, paired = paired)[1])
+        levene_pvals.append(np.mean([levene(gp1.loc[variable, :], gp2.loc[variable, :])[1] for variable in cluster]))
+        # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
+        effect_sizes.append(mahalanobis_distance(gp1, gp2, paired = paired))
+        if effect_size_variance:
+          variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
     mean_abundance = mean_abundance_c
   else:
     log2fc = (df_b.values - df_a.values).mean(axis = 1) if paired else (df_b.mean(axis = 1) - df_a.mean(axis = 1))
@@ -606,21 +605,23 @@ def get_differential_expression(
     corrpvals, significance = [1]*len(glycans), [False]*len(glycans)
   df_out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes, equivalence_pvals)),
                      columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size', 'Equivalence p-val'])
-  prison_rows = pd.DataFrame({
-      'Glycan': df_prison.index,
-      'Mean abundance': df_org_prison.mean(axis = 1),
-      'Log2FC': (df_prison[group2].values - df_prison[group1].values).mean(axis = 1) if paired else (df_prison[group2].mean(axis = 1) - df_prison[group1].mean(axis = 1)),
-      'p-val': [1.0] * len(df_prison),
-      'corr p-val': [1.0] * len(df_prison),
-      'significant': [False] * len(df_prison),
-      'corr Levene p-val': [1.0] * len(df_prison),
-      'Effect size': [0] * len(df_prison),
-      'Equivalence p-val': [1.0] * len(df_prison)})
-  prison_rows = prison_rows.astype({'significant': 'bool'})
-  df_out = pd.concat([df_out, prison_rows], ignore_index = True)
+  if not monte_carlo:
+    prison_rows = pd.DataFrame({
+        'Glycan': df_prison.index,
+        'Mean abundance': df_org_prison.mean(axis = 1),
+        'Log2FC': (df_prison[group2].values - df_prison[group1].values).mean(axis = 1) if paired else (df_prison[group2].mean(axis = 1) - df_prison[group1].mean(axis = 1)),
+        'p-val': [1.0] * len(df_prison),
+        'corr p-val': [1.0] * len(df_prison),
+        'significant': [False] * len(df_prison),
+        'corr Levene p-val': [1.0] * len(df_prison),
+        'Effect size': [0] * len(df_prison),
+        'Equivalence p-val': [1.0] * len(df_prison)})
+    prison_rows = prison_rows.astype({'significant': 'bool'})
+    if len(prison_rows) > 0:
+      df_out = pd.concat([df_out, prison_rows], ignore_index = True)
   df_out['significant'] = df_out['significant'].astype('bool')
   if effect_size_variance:
-    df_out['Effect size variance'] = variances + [0]*len(df_prison)
+    df_out['Effect size variance'] = list(variances) + [0]*len(df_prison)
   if glycoproteomics:
     return get_glycoform_diff(df_out, alpha = alpha, level = level)
   else:
@@ -761,7 +762,8 @@ def get_glycanova(
       'corr p-val': [1.0] * len(df_prison),
       'significant': [False] * len(df_prison)})
     prison_rows = prison_rows.astype({'significant': 'bool'})
-    df_out = pd.concat([df_out, prison_rows], ignore_index = True)
+    if len(prison_rows) > 0:
+      df_out = pd.concat([df_out, prison_rows], ignore_index = True)
     df_out['significant'] = df_out['significant'].astype('bool')
     df_out['Effect size'] = effect_sizes.values
     return df_out.sort_values(by = 'corr p-val'), posthoc_results

@@ -836,6 +836,8 @@ def correct_multiple_testing(pvals: Union[List[float], np.ndarray], # list of ra
   "Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure"
   if not isinstance(pvals, list):
     pvals = pvals.tolist()
+  if not pvals:
+    return [], []
   corrpvals = multipletests(pvals, method = 'fdr_tsbh' if correction_method == "two-stage" else 'fdr_bh')[1]
   corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
   significance = [bool(p < alpha) for p in corrpvals]

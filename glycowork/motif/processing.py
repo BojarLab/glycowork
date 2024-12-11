@@ -867,6 +867,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if bool(re.search(r'\([A-Zd3-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
   # Canonicalize linkage uncertainty
+  # Open linkages with anomeric config specified (e.g., "Mana-")
+  glycan = re.sub(r'([A-Z][a-z]*)([a-b])\-([A-Z])', r'\1\g<2>1-?\3', glycan)
   # Open linkages (e.g., "c-")
   glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
   # Open linkages2 (e.g., "1-")
@@ -886,12 +888,12 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Missing starting carbon (e.g., "b-4")
   glycan = re.sub(r'(a|b|\?)-(\d)', r'\g<1>1-\2', glycan)
   # If still no '-' in glycan, assume 'a3' type of linkage denomination
-  if '-' not in glycan:
+  if '-' not in glycan or bool(re.search(r'[ab][123456](?!\-)', glycan)):
     # Check whether linkages are recorded as b1 or as a3
     if bool(re.search(r"^[^2-6]*1?[^2-6]*$", glycan)):
-      glycan = re.sub(r'(a|b)(\d)', r'\g<1>\g<2>-?', glycan)
+      glycan = re.sub(r'(a|b)(\d)(?!\-)', r'\g<1>\g<2>-?', glycan)
     else:
-      glycan = re.sub(r'(a|b)(\d)', r'\g<1>1-\g<2>', glycan)
+      glycan = re.sub(r'(a|b)(\d)(?!\-)', r'\g<1>1-\g<2>', glycan)
   # Smudge uncertainty
   while '/' in glycan:
     glycan = f'{glycan[:glycan.index("/")-1]}?{glycan[glycan.index("/")+2:]}'
@@ -929,13 +931,17 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'([\?2-9])([\[\]])', r'\1)\2', glycan)
   # Floating bits
   if '+' in glycan:
-    if '-' not in glycan[:glycan.index('+')]:
+    prefix = glycan[:glycan.index('+')]
+    if prefix == 'S':
+      glycan = glycan.replace('S+', 'OS+')
+    elif '-' not in prefix:
       glycan = glycan.replace('+', '(?1-?)+')
     glycan = '{'+glycan.replace('+', '}')
   post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?1': 'Kdn(a2',
                   'Kdn(a1': 'Kdn(a2'}
   glycan = multireplace(glycan, post_process)
+  glycan = re.sub(r'[ab]-$', '', glycan)  # Remove endings like Glcb-
   # Canonicalize branch ordering
   if '[' in glycan:
     glycan = choose_correct_isoform(glycan)
