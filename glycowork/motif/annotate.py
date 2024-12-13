@@ -150,11 +150,45 @@ def get_molecular_properties(
   return df
 
 
+def get_size_branching_features(
+    glycans: List[str],  # List of IUPAC-condensed glycan sequences
+    n_bins: int = 3  # Number of bins/features to create for size and branching level
+    ) -> pd.DataFrame:
+  "Generate binned features for glycan size (parentheses count) and branching (bracket count)"
+  # Calculate size and branching for each glycan
+  sizes = [glycan.count('(')+1 for glycan in glycans]
+  branchings = [glycan.count('[') for glycan in glycans]
+  # Helper function to create bin edges and labels
+  def create_bins(values: List[int], n_bins: int) -> Tuple[List[int], List[str]]:
+    min_val, max_val = min(values), max(values)
+    if min_val == max_val:
+      return [min_val - 0.5, max_val + 0.5], [f"{min_val}"]
+    edges = list(np.linspace(min_val - 0.5, max_val + 0.5, n_bins + 1))  # Create bin edges
+    labels = [f"{int(edges[i]+0.5)}-{int(edges[i+1]-0.5)}" for i in range(len(edges)-1)]  # Create bin labels
+    return edges, labels
+  # Create bins for size and branching
+  size_edges, size_labels = create_bins(sizes, n_bins)
+  branch_edges, branch_labels = create_bins(branchings, n_bins)
+  # Create DataFrames for size and branching distributions
+  size_dist = pd.DataFrame(0, index = glycans, columns = [f"Size_{label}" for label in size_labels])
+  branch_dist = pd.DataFrame(0, index = glycans, columns = [f"Branch_{label}" for label in branch_labels])
+  # Assign values to bins
+  for i, glycan in enumerate(glycans):
+    size_bin = np.digitize([sizes[i]], size_edges)[0] - 1
+    branch_bin = np.digitize([branchings[i]], branch_edges)[0] - 1
+    if size_bin < len(size_labels):
+      size_dist.iloc[i, size_bin] = 1
+    if branch_bin < len(branch_labels):
+      branch_dist.iloc[i, branch_bin] = 1
+  # Combine size and branching features
+  return pd.concat([size_dist, branch_dist], axis = 1)
+
+
 @rescue_glycans
 def annotate_dataset(
     glycans: List[str], # List of IUPAC-condensed glycan sequences
     motifs: Optional[pd.DataFrame] = None, # Motif dataframe (name + sequence); defaults to motif_list
-    feature_set: List[str] = ['known'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical
+    feature_set: List[str] = ['known'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
     termini_list: List = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
     condense: bool = False, # Remove columns with only zeros
     custom_motifs: List = [] # Custom motifs when using 'custom' feature set
@@ -162,7 +196,7 @@ def annotate_dataset(
   "Comprehensive glycan annotation combining multiple feature types: structural motifs, graph properties, terminal sequences"
   if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
-  invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive'}
+  invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive', 'size_branch'}
   if invalid_features:
     print(f"Warning: {', '.join(invalid_features)} not recognized as features.")
   if motifs is None:
@@ -226,6 +260,8 @@ def annotate_dataset(
     temp.index = glycans
     temp.columns = ['Terminal_' + c for c in temp.columns]
     shopping_cart.append(temp)
+  if 'size_branch' in feature_set:
+    shopping_cart.append(get_size_branching_features(glycans))
   if condense:
     # Remove motifs that never occur
     temp = pd.concat(shopping_cart, axis = 1)
@@ -254,7 +290,7 @@ def clean_up_heatmap(
 def quantify_motifs(
    df: Union[str, pd.DataFrame], # DataFrame or filepath with samples as columns, abundances as values
    glycans: List[str], # List of IUPAC-condensed glycan sequences
-   feature_set: List[str], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical
+   feature_set: List[str], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
    custom_motifs: List = [], # Custom motifs when using 'custom' feature set
    remove_redundant: bool = True # Remove redundant motifs via clean_up_heatmap
    ) -> pd.DataFrame: # DataFrame with motif abundances (motifs as columns, samples as rows)

@@ -344,9 +344,13 @@ class DataFrameSerializer:
 
 serializer = DataFrameSerializer()
 
-def count_nested_brackets(s):
+def count_nested_brackets(
+    s: str,
+    length: bool = False
+    ) -> int:
   count = 0
   depth = 0
+  nested_content = 0
   for c in s:
     if c == '[':
       if depth > 0:  # Only count if we're already inside brackets
@@ -354,4 +358,6 @@ def count_nested_brackets(s):
       depth += 1
     elif c == ']':
       depth -= 1
-  return count
+    elif c == '(' and depth > 1:
+      nested_content += 1
+  return nested_content if length else count

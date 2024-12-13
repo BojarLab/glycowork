@@ -138,6 +138,8 @@ def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
   # Double branch swap
   temp = {re.sub(r'(?<!\[)\[((?:[^[\]]|\[[^[\]]*\])*?)\]\[((?:[^[\]]|\[[^[\]]*\])*?)\]', r'[\2][\1]', k) for k in out_list if '][' in k}
   out_list.update(temp)
+  temp = {re.sub(r'\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]',  r'[\2][\1]', k) for k in out_list if '][' in k}
+  out_list.update(temp)
   # Triple branch handling
   temp = set()
   for k in out_list:
@@ -213,10 +215,8 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
   if '?' in ''.join(glycans) and not reverse:
     min_questions = min(glycan.count('?') for glycan in glycans)
     glycans = [glycan for glycan in glycans if glycan.count('?') == min_questions]
-  if len(glycans) == 1:
-    return glycans[0]
-  if not any(['[' in g for g in glycans]):
-    return [] if reverse else glycans
+  if len(glycans) == 1 or not any(['[' in g for g in glycans]):
+    return [] if reverse else sorted(glycans, key = lambda x: x.count('x'))[0]
   floaty = False
   if '{' in glycans[0]:
     floaty = glycans[0][:glycans[0].rindex('}')+1]
@@ -240,7 +240,7 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
     pos1 = int(branch1[-2] if branch1[-2].isdigit() else '9')
     pos2 = int(branch2[-2] if branch2[-2].isdigit() else '9')
     if use_linkage:
-          return pos1 > pos2
+      return pos1 > pos2
     # If either branch is a single monosaccharide
     if count1 == 1 or count2 == 1:
       # If either is a special single branch, use linkage ordering
@@ -276,8 +276,7 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
             if compare_branches(branches[i], branches[i+1]):
               kill_list.add(g)
               break
-      else:
-        # Fall back to pair checking
+      else:  # Fall back to pair checking
         pair_match = re.search(r'\[([^[\]]+)\]\[([^[\]]+)\]', g)
         if pair_match:
           branch1, branch2 = pair_match.group(1), pair_match.group(2)
@@ -296,6 +295,9 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
     for g in glycans2:
       if g[:g.index('[')].count('(') == 1 and g[g.index('['):g.index(']')].count('(') > 1:
         kill_list.add(g)
+      if pair_match := re.search(r'\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]', g):
+        if compare_branches(pair_match.group(1), pair_match.group(2)):
+          kill_list.add(g)
   glycans2 = [k for k in glycans2 if k not in kill_list]
   # Choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
   if len(glycans2) > 1:
@@ -314,7 +316,7 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
     min_ending = min(branch_endings)
     glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min_ending]
     if len(glycans2) > 1:
-      complexity = [count_nested_brackets(g) for g in glycans2]
+      complexity = [count_nested_brackets(g, length = True) for g in glycans2]
       min_complexity = min(complexity)
       glycans2 = [g for k, g in enumerate(glycans2) if complexity[k] == min_complexity]
       if len(glycans2) > 1:
@@ -324,7 +326,7 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
         min_ending = min(branch_endings)
         glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min_ending]
         if len(glycans2) > 1:
-          correct_isoform = sorted(glycans2)[0]
+          correct_isoform = sorted(glycans2, key = lambda x: sum(int(num) for num in re.findall(r'(\d+)\)\[', x)))[0]  # take the one with lowest sum of num)[
         else:
           correct_isoform = glycans2[0]
       else:
@@ -602,6 +604,7 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
 def get_mono(token: str # WURCS monosaccharide token
            ) -> str: # Monosaccharide with anomeric state
   "Map WURCS token to monosaccharide with anomeric state"
+  token = 'a' + token[1:].replace('h', 'h-1x_1-5', 1) if token.startswith('u') else token
   anomer = token[token.index('_')-1]
   if token in monosaccharide_mapping:
     mono = monosaccharide_mapping[token]
@@ -609,11 +612,10 @@ def get_mono(token: str # WURCS monosaccharide token
     for a in ['a', 'b', 'x']:
       if a != anomer:
         token = token[:token.index('_')-1] + a + token[token.index('_'):]
-        try:
-          mono = monosaccharide_mapping[token]
+        mono = monosaccharide_mapping.get(token, None)
+        if mono:
           break
-        except:
-          raise Exception("Token " + token + " not recognized.")
+        raise Exception("Token " + token + " not recognized.")
   mono += anomer if anomer in ['a', 'b'] else '?'
   return mono
 
@@ -938,7 +940,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
       glycan = glycan.replace('+', '(?1-?)+')
     glycan = '{'+glycan.replace('+', '}')
   post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
-                  'GalS': 'GalOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?1': 'Kdn(a2',
+                  'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?1': 'Kdn(a2',
                   'Kdn(a1': 'Kdn(a2'}
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'[ab]-$', '', glycan)  # Remove endings like Glcb-

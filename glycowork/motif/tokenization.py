@@ -523,7 +523,7 @@ def calculate_adduct_mass(formula: str, # Chemical formula of adduct (e.g., "C2H
 def composition_to_mass(dict_comp_in: Dict[str, int], # Composition dictionary of monosaccharide:count
                        mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                        sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
-                       adduct: Optional[str] = None # Chemical formula of adduct (e.g., "C2H4O2")
+                       adduct: Optional[Union[str, float]] = None # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
                       ) -> float: # Theoretical mass
   "Calculate theoretical mass from composition"
   dict_comp = dict_comp_in.copy()
@@ -535,7 +535,7 @@ def composition_to_mass(dict_comp_in: Dict[str, int], # Composition dictionary o
   total_mass = sum(v * (mass_dict_in.get(k) or calculate_adduct_mass(k, mass_value, enforce_sign = True))
                    for k, v in dict_comp.items()) + mass_dict_in['red_end']
   if adduct:
-    total_mass += calculate_adduct_mass(adduct, mass_value)
+    total_mass += calculate_adduct_mass(adduct, mass_value) if isinstance(adduct, str) else adduct
   return total_mass
 
 
@@ -543,7 +543,7 @@ def glycan_to_mass(glycan: str, # Glycan in IUPAC-condensed format
                    mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                    sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                    stem_libr: Optional[Dict[str, str]] = None, # Modified to core monosaccharide mapping
-                   adduct: Optional[str] = None # Chemical formula of adduct (e.g., "C2H4O2")
+                   adduct: Optional[Union[str, float]] = None # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
                   ) -> float: # Theoretical mass
   "Calculate theoretical mass from glycan"
   if stem_libr is None:
@@ -573,7 +573,7 @@ def get_unique_topologies(composition: Dict[str, int], # Composition dictionary 
 
 
 def get_random_glycan(n: int = 1, # How many random glycans to sample
-                      glycan_class: str = 'all', # Glycan class: N/O/lipid/free/all
+                      glycan_class: str = 'all', # Glycan class: N/O/lipid/free/repeat/all
                       kingdom: str = 'Animalia' # Taxonomic kingdom filter for choosing a subset of glycans to consider
                       ) -> Union[str, List[str]]: # Returns a random glycan or list of glycans if n > 1
   if glycan_class == "all":
