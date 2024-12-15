@@ -462,6 +462,9 @@ def train_ml_model(X_train: Union[pd.DataFrame, List], # training data/glycans
     elif mode == 'regression':
         model = xgb.XGBRegressor(random_state = 42, n_estimators = 100, objective = 'reg:squarederror')
     # Get features
+    if isinstance(X_train, list) and isinstance(X_train[0], str):
+        feature_calc = True
+        print("\nYou provided glycans without features but did not specify feature_calc; we'll step in and calculate features with the default feature_set but feel free to re-run and change.")
     if feature_calc:
         print("\nCalculating Glycan Features...")
         X_train = annotate_dataset(X_train, feature_set = feature_set, condense = True)
@@ -476,9 +479,11 @@ def train_ml_model(X_train: Union[pd.DataFrame, List], # training data/glycans
             X_test[k] = 0
         X_train = X_train.apply(pd.to_numeric)
         X_test = X_test.apply(pd.to_numeric)
-        if additional_features_train is not None:
-            X_train = pd.concat([X_train, additional_features_train], axis = 1)
-            X_test = pd.concat([X_test, additional_features_test], axis = 1)
+    if additional_features_train is not None:
+        additional_features_train.index = X_train.index
+        additional_features_test.index = X_test.index
+        X_train = pd.concat([X_train, additional_features_train], axis = 1)
+        X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")
     model.fit(X_train, y_train)
     # Keep track of column order & re-order test set accordingly
@@ -493,10 +498,7 @@ def train_ml_model(X_train: Union[pd.DataFrame, List], # training data/glycans
     elif mode == 'regression':
         out = mean_squared_error(y_test, preds)
         print("Mean squared error of trained model on separate validation set: " + str(out))
-    if return_features:
-        return model, X_train, X_test
-    else:
-        return model
+    return (model, X_train, X_test) if return_features else model
 
 
 def analyze_ml_model(model: xgb.XGBModel # trained ML model from train_ml_model

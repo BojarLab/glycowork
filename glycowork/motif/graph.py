@@ -154,6 +154,9 @@ def categorical_node_match_wildcard(attr: Union[str, Tuple[str, ...]], # Attribu
         return True
       elif data2_labels in narrow_wildcard_list and data1_labels in narrow_wildcard_list[data2_labels]:
         return True
+      for d in (data1_labels, data2_labels):
+        if '/' in d and any(x == (data1_labels if d == data2_labels else data2_labels) for x in [f"{d.split('-')[0]}-{x}" for x in d.split('-')[1].split('/')] + [f"{d.split('-')[0]}-?"]):
+          return True
       return data1_labels == data2_labels
   else:
     def match(data1, data2):
@@ -190,7 +193,7 @@ def compare_glycans(glycan_a: Union[str, nx.Graph], # First glycan to compare
     proc = attrs_a.union(attrs_b)
     g1, g2 = (ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))) if 'O' in ''.join(proc) else (glycan_a, glycan_b)
   narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in proc
-                          if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
+                          if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k or '/' in k}
   if narrow_wildcard_list:
     matcher = nx.isomorphism.GraphMatcher(g1, g2, categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
     for m in matcher.isomorphisms_iter():
@@ -268,7 +271,7 @@ def subgraph_isomorphism(glycan: Union[str, nx.Graph], # Glycan sequence or grap
     else:
       g1, g2 = deepcopy(glycan), motif
   narrow_wildcard_list = {k: get_possible_linkages(k) if '?' in k else get_possible_monosaccharides(k) for k in set(unwrap(motif_comp))
-                          if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k}
+                          if '?' in k or k in {'Hex', 'HexOS', 'HexNAc', 'HexNAcOS', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'} or '!' in k or '/' in k}
   if termini_list or narrow_wildcard_list:
     graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
                                                                                                              'termini', 'flexible'))

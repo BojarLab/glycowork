@@ -81,7 +81,7 @@ from glycowork.motif.draw import (process_bonds, split_monosaccharide_linkage, d
                  scale_in_range, glycan_to_skeleton, process_per_residue, col_dict_base,
                  get_hit_atoms_and_bonds, add_colours_to_map, unique, is_jupyter, process_repeat, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
-                 process_bonds, draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, get_indices
+                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, get_indices
 )
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
@@ -1698,6 +1698,10 @@ def test_subgraph_isomorphism():
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "!Man(a1-3)GlcNAc")
     # Test with termini constraints
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "GlcNAc", termini_list=['terminal'])
+    # Test with narrow linkage ambiguity
+    assert subgraph_isomorphism("Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-3/4)GlcNAc") == True
+    assert subgraph_isomorphism("Gal(a1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-3/4)GlcNAc") == False
+    assert subgraph_isomorphism("Gal(b1-?)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-3/4)GlcNAc") == True
 
 
 def test_generate_graph_features():
@@ -2302,6 +2306,9 @@ def test_process_bonds():
     assert process_bonds(["?1-?"]) == ["?"]
     assert process_bonds(["b1-2"]) == ["β 2"]
     assert process_bonds(["a1-?"]) == ["α"]
+    assert process_bonds(["x1-?"]) == ["-"]
+    assert process_bonds(["1-3"]) == ["1 - 3"]
+    assert process_bonds(["x1-3"]) == ["-"]
     # Test multiple bonds
     result = process_bonds([["a1-2", "b1-4"]])
     assert result == [["α 2", "β 4"]]
@@ -2352,6 +2359,12 @@ def test_glycodraw():
     # Test basic drawing
     result = GlycoDraw("GlcNAc(b1-4)GlcA", suppress=True)
     assert result is not None
+    result = GlycoDraw("{Gal(b1-4)}GlcNAc(b1-4)GlcA", suppress=True)
+    assert result is not None
+    result = GlycoDraw("Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc", suppress=True)
+    assert result is not None
+    result = GlycoDraw("Terminal_Fuc(a1-2)Gal", suppress=True)
+    assert result is not None
     # Test vertical orientation
     result = GlycoDraw("GlcNAc(b1-4)GlcA", vertical=True, suppress=True)
     assert result is not None
@@ -2361,9 +2374,26 @@ def test_glycodraw():
     # Test with highlighting
     result = GlycoDraw("GlcNAc(b1-4)GlcA", highlight_motif="GlcNAc", suppress=True)
     assert result is not None
+    result = GlycoDraw("GlcNAc(b1-4)GlcA", per_residue=[0.8, 0.2], suppress=True)
+    assert result is not None
+    result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_motif="r[Sia]{,1}-[.]{,1}-([dHex]){,1}-.b3(?=-GalNAc)", suppress=True)
+    assert result is not None
     # Test with repeat unit
     result = GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat=True, suppress=True)
     assert result is not None
+    result = GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat=3, suppress=True)
+    assert result is not None
+    result = GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat='2-3', suppress=True)
+    assert result is not None
+    # Test chemical drawing modes
+    result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", draw_method="chem2d", suppress=True)
+    # Test name recognition
+    result = GlycoDraw("Terminal_LewisX", suppress=True)
+    assert result is not None
+    # Test file saving
+    with patch('builtins.open', mock_open()) as mock_file:
+        GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.svg")
+        mock_file.assert_called_once_with('test.svg', 'w')
     # Test invalid glycan
     with pytest.raises(Exception):
         GlycoDraw("InvalidGlycan")
@@ -2532,6 +2562,9 @@ def test_process_per_residue():
     assert len(main) > 0
     assert len(side) > 0
     assert isinstance(side[0], list)
+    # Test branch-branched glycan
+    values = [1, 2, 3, 4, 5, 6]
+    main, side, branched = process_per_residue("Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man", values)
 
 
 def test_unique():
@@ -5359,7 +5392,10 @@ def test_poly1_cross_entropy_loss(_):
     loss = criterion(logits, labels)
     assert isinstance(loss, torch.Tensor)
     assert loss.ndim == 0  # Scalar tensor
-    criterion = Poly1CrossEntropyLoss(num_classes=3, epsilon=1.0, reduction = "sum")
+    criterion = Poly1CrossEntropyLoss(num_classes=3, epsilon=1.0, reduction="sum")
+    loss = criterion(logits, labels)
+    labels = torch.tensor([[1, 0, 0], [0, 1, 0]])
+    loss = criterion(logits, labels)
 
 
 def test_sam_optimizer(mock_model, mode):
@@ -5510,11 +5546,21 @@ def test_train_ml_model(mock_xgb_data):
     # Test feature calculation
     X_train = ["Neu5Ac(a2-3)Gal(b1-4)Glc", "Fuc(a1-3)[Gal(b1-4)]GlcNAc", "Glc(a1-4)Glc"]
     X_test = ["Fuc(a1-2)Gal(b1-4)Glc", "Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", "Neu5Ac(a2-6)GalNAc"]
+    model = train_ml_model(
+        X_train, X_test, y_train, y_test,
+        mode='classification',
+        feature_calc=False
+    )
+    additional_train = pd.DataFrame({'abc': [0, 1, 2], 'def': [3, 4, 5]})
+    additional_test = pd.DataFrame({'abc': [9, 8, 7], 'def': [6, 5, 4]})
     model, train, test = train_ml_model(
         X_train, X_test, y_train, y_test,
         mode='classification',
         feature_calc=True,
-        return_features = True
+        feature_set=['terminal'],
+        return_features=True,
+        additional_features_train=additional_train,
+        additional_features_test=additional_test
     )
     assert isinstance(model, xgb.XGBClassifier)
     assert isinstance(train, pd.DataFrame)
@@ -5609,6 +5655,27 @@ def test_lectin_oracle_forward():
     num_nodes = 4
     # Create dummy inputs
     prot = torch.randn(batch_size, 1280)
+    nodes = torch.randint(0, 100, (num_nodes,))
+    edge_index = torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.long)
+    batch = torch.tensor([0, 0, 1, 1])
+    # Test normal forward pass
+    output = model(prot, nodes, edge_index, batch)
+    assert output.shape == (batch_size, 1)
+    # Test inference mode
+    output, prot_emb, glyco_emb = model(prot, nodes, edge_index, batch, inference=True)
+    assert isinstance(output, torch.Tensor)
+    assert isinstance(prot_emb, torch.Tensor)
+    assert isinstance(glyco_emb, torch.Tensor)
+
+
+def test_lectin_oracle_flex_forward():
+    model = LectinOracle_flex(input_size_glyco=100)
+    batch_size = 2
+    num_nodes = 4
+    # Create dummy inputs
+    prot = prot_to_coded(["MKVSAAALAVILIATALCAPASASPYSSDTTPCCFAYIARPLPRAHIKEYFYTSGKCSNPAVVFVTRKNRQVCANPEKKWVREYINSLEMS"])
+    prot = torch.tensor(prot, dtype=torch.float)
+    prot = prot.repeat(batch_size, 1)
     nodes = torch.randint(0, 100, (num_nodes,))
     edge_index = torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.long)
     batch = torch.tensor([0, 0, 1, 1])
@@ -5796,6 +5863,15 @@ def test_get_multi_pred(sample_data, mock_models):
         correction_df=correction_df
     )
     assert len(results_corrected) == len(sample_data['glycans'])
+    results_corrected = get_multi_pred(
+        prot=sample_data['protein'],
+        glycans=sample_data['glycans'],
+        model=model,
+        prot_dic=sample_data['prot_dict'],
+        background_correction=True,
+        correction_df=correction_df,
+        flex=True
+    )
 
 
 def test_get_lectin_preds(sample_data, mock_models):
@@ -5918,3 +5994,26 @@ def test_train_model_all_modes(mock_cuda, mode, expected_metrics, mock_model, mo
             assert len(metric) == 2  # Two epochs
             assert all(isinstance(v, float) for v in metric)
             assert all(not np.isnan(v) for v in metric)
+
+
+@patch('torch.cuda.is_available', return_value=False)
+def test_train_model_plotting(mock_cuda, mock_model, mock_dataloader):
+    if mode == "classification":
+        criterion = nn.CrossEntropyLoss()
+        optimizer = SAM(mock_model.parameters(), torch.optim.SGD, lr=0.1, alpha=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer.base_optimizer,
+            step_size=1
+        )
+        # Run training
+        _ = train_model(
+            mock_model,
+            mock_dataloader,
+            criterion,
+            optimizer,
+            scheduler,
+            num_epochs=2,
+            mode=mode,
+            mode2='multi',
+            return_metrics=False
+        )

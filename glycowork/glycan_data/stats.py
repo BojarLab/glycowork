@@ -639,9 +639,11 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
                       group1: List[Union[str, int]], # column indices/names for first group of samples, usually control
                       group2: List[Union[str, int]], # column indices/names for second group of samples
                       gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
-                      custom_scale: Union[float, Dict] = 0 # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict for multivariate)
+                      custom_scale: Union[float, Dict] = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict for multivariate)
+                      random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
                      ) -> pd.DataFrame: # CLR-transformed dataframe
   "performs the Center Log-Ratio (CLR) Transformation with scale model adjustment"
+  local_rng = np.random.default_rng(random_state) if random_state is not None else rng
   geometric_mean = gmean(df.replace(0, np.nan), axis = 0, nan_policy = 'omit')
   clr_adjusted = np.zeros_like(df.values)
   if gamma and not isinstance(custom_scale, dict):
@@ -649,18 +651,18 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
     group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
     geometric_mean = -np.log2(geometric_mean)
     if group2:
-      clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, random_state = rng, size = (df.shape[0], len(group1))))
-      condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, random_state = rng, size = (df.shape[0], len(group2))) if not custom_scale else \
-                  norm.rvs(loc = np.log2(custom_scale), scale = gamma, random_state = rng, size = (df.shape[0], len(group2)))
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + (geometric_mean[group1i] if not custom_scale else norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1))))
+      condition = norm.rvs(loc = geometric_mean[group2i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group2))) if not custom_scale else \
+                  norm.rvs(loc = np.log2(custom_scale), scale = gamma, random_state = local_rng, size = (df.shape[0], len(group2)))
       clr_adjusted[:, group2i] = np.log2(df[group2]) + condition
     else:
-      clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = rng, size = (df.shape[0], len(group1)))
+      clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1)))
   elif not group2 and isinstance(custom_scale, dict):
     gamma = max(gamma, 0.1)
     for idx in range(df.shape[1]):
       group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
-      clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = rng, size = df.shape[0])
+      clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = local_rng, size = df.shape[0])
   else:
     clr_adjusted = np.log2(df) - np.log2(geometric_mean)
   return pd.DataFrame(clr_adjusted, index = df.index, columns = df.columns)
