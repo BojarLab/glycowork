@@ -30,7 +30,8 @@ monosaccharide_mapping = {
     'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4S', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3S',
     'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS',
     'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3S', 'a2211m-1x_1-5': 'Rha', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAc',
-    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S', 'a2112h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS'
+    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S', 'a2112h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS',
+    'a2121A-1a_1-5': 'IdoA', 'a2112A-1a_1-5': 'GalA', 'a211h-1a_1-4': 'Araf'
     }
 
 
@@ -73,9 +74,13 @@ def get_possible_linkages(wildcard: str, # Pattern to match, ? can be wildcard
                          linkage_list: List[str] = linkages # List of linkages to search
                         ) -> List[str]: # Matching linkages
   "Retrieves all linkages that match a given wildcard pattern"
-  pattern = wildcard.replace("?", r"[a-zA-Z0-9\?]")
+  if '/' in wildcard:
+    base = wildcard[:wildcard.index('/')-1]
+    options = [base + wildcard[wildcard.index('/')-1], base + wildcard[wildcard.index('/')+1]]
+    pattern = f"({'|'.join(options)}|{base}\\?)"
+  else:
+    pattern = wildcard.replace("?", r"[a-zA-Z0-9\?]")
   return [linkage for linkage in linkage_list if re.fullmatch(pattern, linkage)]
-  #return possible_linkages if libr is None else list(possible_linkages & libr.keys())
 
 
 def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: Hex, HexNAc, dHex, Sia, HexA, Pen, HexOS, HexNAcOS
@@ -90,7 +95,7 @@ def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: H
 def de_wildcard_glycoletter(glycoletter: str # Monosaccharide or linkage with wildcards
                           ) -> str: # Specific glycoletter instance
   "Retrieves a random specified instance of a general type (e.g., 'Gal' for 'Hex')"
-  if '?' in glycoletter:
+  if '?' in glycoletter or '/' in glycoletter:
     return choice(get_possible_linkages(glycoletter))
   elif monos := get_possible_monosaccharides(glycoletter):
     return choice(list(monos))
@@ -896,9 +901,6 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
       glycan = re.sub(r'(a|b)(\d)(?!\-)', r'\g<1>\g<2>-?', glycan)
     else:
       glycan = re.sub(r'(a|b)(\d)(?!\-)', r'\g<1>1-\g<2>', glycan)
-  # Smudge uncertainty
-  while '/' in glycan:
-    glycan = f'{glycan[:glycan.index("/")-1]}?{glycan[glycan.index("/")+2:]}'
   # Introduce parentheses for linkages
   if '(' not in glycan and len(glycan) > 6:
     for k in range(1, glycan.count('-')+1):

@@ -645,6 +645,11 @@ def test_get_possible_linkages():
     result = get_possible_linkages('?1-?')
     assert 'a1-3' in result
     assert 'b1-4' in result
+    # Test narrow linkage ambiguities
+    result = get_possible_linkages("b1-3/4")
+    assert 'b1-3' in result
+    assert 'b1-4' in result
+    assert 'b1-?' in result
 
 
 def test_get_possible_monosaccharides():
@@ -662,6 +667,8 @@ def test_get_possible_monosaccharides():
 def test_de_wildcard_glycoletter():
     # Test linkage wildcard
     result = de_wildcard_glycoletter('?1-?')
+    assert result in linkages
+    result = de_wildcard_glycoletter('a1-3/4')
     assert result in linkages
     # Test monosaccharide wildcard
     result = de_wildcard_glycoletter('Hex')
@@ -705,7 +712,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Neu5Aca2-3Galb1-3{Neu5Aca2-6}GalNAc") == "Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
-    assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-?)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("Gal+Gal(b1-4)GlcNAc") == "{Gal(?1-?)}Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("NeuAcα2-6Galβ1-4(6S)GlcNAcβ1-2Manα1-3(Manα-Manα1-6)Manβ1-4GlcNAcβ1-4(Fucα1-6)GlcNAcol") == "Neu5Ac(a2-6)Gal(b1-4)GlcNAc6S(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("Neu5Ac{Galb1-3(Neu5Aca2-6)GalNAc") == "{Neu5Ac(a2-?)}Gal(b1-3)[Neu5Ac(a2-6)]GalNAc"
@@ -726,9 +733,158 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("α-D-Manp-(1→3)[α-D-Manp-(1→6)]-β-D-Manp-(1→4)-β-D-GlcpNAc-(1→4)-β-D-GlcpNAc-(1→") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("M3") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("FA2[3]G1") == "Gal(b1-?)GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("A4G4") == "Gal(b1-?)GlcNAc(b1-?)[Gal(b1-?)GlcNAc(b1-?)]Man(a1-3)[Gal(b1-?)GlcNAc(b1-?)[Gal(b1-?)GlcNAc(b1-?)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("FA2BiG2") == "Gal(b1-?)GlcNAc(b1-?)Man(a1-3)[Gal(b1-?)GlcNAc(b1-?)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/5,7,6/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O]/1-2-3-4-2-5-4/a4-b1_b4-c1_c3-d1_c6-g1_d2-e1_e4-f1") == "GalNAc4S(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/8,15,14/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O][Aad21122h-2a_2-6_5*NCC/3=O]/1-2-3-4-2-5-6-7-8-4-2-5-6-8-5/a4-b1_a6-o1_b4-c1_c3-d1_c6-j1_d2-e1_e3-f1_e4-g1_h8-i2_j2-k1_k3-l1_k4-m1_h2-g3|g6_n2-m3|m6 ") == "Neu5Ac(a2-8)Neu5Gc(a2-?)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-?)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/3,5,4/[a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5]/1-1-2-3-3/a4-b1_b4-c1_c3-d1_c6-e1") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/5,19,18/[a2122h-1x_1-5_2*NCC/3=O][a1122h-1x_1-5][a2112h-1x_1-5][Aad21122h-2x_2-6_5*NCC/3=O][a1221m-1x_1-5]/1-1-2-2-1-3-4-1-3-4-2-1-3-4-1-3-4-5-4/a?-b1_a?-r1_b?-c1_c?-d1_c?-k1_d?-e1_d?-h1_e?-f1_f?-g2_h?-i1_i?-j2_k?-l1_k?-o1_l?-m1_m?-n2_o?-p1_p?-q2_s2-a?|b?|c?|d?|e?|f?|g?|h?|i?|j?|k?|l?|m?|n?|o?|p?|q?|r?}") == "{Neu5Ac(a2-?)}Neu5Ac(?2-?)Gal(?1-?)GlcNAc(?1-?)[Neu5Ac(?2-?)Gal(?1-?)GlcNAc(?1-?)]Man(?1-?)[Neu5Ac(?2-?)Gal(?1-?)GlcNAc(?1-?)[Neu5Ac(?2-?)Gal(?1-?)GlcNAc(?1-?)]Man(?1-?)]Man(?1-?)GlcNAc(?1-?)[Fuc(a1-?)]GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/4,8,7/[u2122h_2*NCC/3=O][a2121A-1a_1-5][a2122h-1a_1-5_2*NCC/3=O][a2122A-1b_1-5]/1-2-3-4-3-2-3-4/a4-b1_b4-c1_c4-d1_d4-e1_e4-f1_f4-g1_g4-h1") == "GlcA(b1-4)GlcNAc(a1-4)IdoA(a1-4)GlcNAc(a1-4)GlcA(b1-4)GlcNAc(a1-4)IdoA(a1-4)GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/6,9,8/[a2122h-1a_1-5_2*NCC/3=O][a1221m-1a_1-5][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a212h-1b_1-5][a1122h-1a_1-5]/1-2-3-4-5-6-3-6-3/a3-b1_a4-c1_c4-d1_d2-e1_d3-f1_d6-h1_f2-g1_h2-i1") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
+    assert canonicalize_iupac("""RES
+1b:b-dglc-HEX-1:5
+2s:n-acetyl
+3b:b-dglc-HEX-1:5
+4s:n-acetyl
+5b:b-dman-HEX-1:5
+6b:a-dman-HEX-1:5
+7b:a-dman-HEX-1:5
+LIN
+1:1d(2+1)2n
+2:1o(4+1)3d
+3:3d(2+1)4n
+4:3o(4+1)5d
+5:5o(3+1)6d
+6:5o(6+1)7d""") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("""RES
+1b:b-dglc-HEX-1:5
+2s:n-acetyl
+3b:b-dglc-HEX-1:5
+4s:n-acetyl
+5b:b-dman-HEX-1:5
+6b:a-dman-HEX-1:5
+7b:b-dglc-HEX-1:5
+8s:n-acetyl
+9b:b-dgal-HEX-1:5
+10b:b-dglc-HEX-1:5
+11s:n-acetyl
+12b:b-dgal-HEX-1:5
+13b:a-dman-HEX-1:5
+14b:b-dglc-HEX-1:5
+15s:n-acetyl
+16b:b-dgal-HEX-1:5
+17b:b-dglc-HEX-1:5
+18s:n-acetyl
+19b:b-dgal-HEX-1:5
+20b:b-dglc-HEX-1:5
+21s:n-acetyl
+22b:b-dgal-HEX-1:5
+23b:b-dglc-HEX-1:5
+24s:n-acetyl
+25b:b-dgal-HEX-1:5
+26b:a-lgal-HEX-1:5|6:d
+LIN
+1:1d(2+1)2n
+2:1o(4+1)3d
+3:3d(2+1)4n
+4:3o(4+1)5d
+5:5o(3+1)6d
+6:6o(2+1)7d
+7:7d(2+1)8n
+8:7o(4+1)9d
+9:6o(4+1)10d
+10:10d(2+1)11n
+11:10o(4+1)12d
+12:5o(6+1)13d
+13:13o(2+1)14d
+14:14d(2+1)15n
+15:14o(4+1)16d
+16:16o(3+1)17d
+17:17d(2+1)18n
+18:17o(4+1)19d
+19:13o(6+1)20d
+20:20d(2+1)21n
+21:20o(4+1)22d
+22:22o(3+1)23d
+23:23d(2+1)24n
+24:23o(4+1)25d
+25:1o(6+1)26d""") == "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("""RES
+1b:b-dglc-HEX-1:5
+2s:n-acetyl
+3b:b-dglc-HEX-1:5
+4s:n-acetyl
+5b:b-dman-HEX-1:5
+6b:a-dman-HEX-1:5
+7b:b-dglc-HEX-1:5
+8s:n-acetyl
+9b:b-dgal-HEX-1:5
+10b:a-dman-HEX-1:5
+11b:b-dglc-HEX-1:5
+12s:n-acetyl
+13b:b-dgal-HEX-1:5
+14b:b-dglc-HEX-1:5
+15s:n-acetyl
+16b:b-dgal-HEX-1:5
+17b:a-lgal-HEX-1:5|6:d
+LIN
+1:1d(2+1)2n
+2:1o(4+1)3d
+3:3d(2+1)4n
+4:3o(4+1)5d
+5:5o(-1+1)6d
+6:6o(2+1)7d
+7:7d(2+1)8n
+8:7o(4+1)9d
+9:5o(-1+1)10d
+10:10o(-1+1)11d
+11:11d(2+1)12n
+12:11o(4+1)13d
+13:10o(2+1)14d
+14:14d(2+1)15n
+15:14o(4+1)16d
+16:1o(6+1)17d
+UND
+UND1:100.0:100.0
+ParentIDs:1|3|5|6|7|9|10|11|13|14|16|17
+SubtreeLinkageID1:o(3+2)d
+RES
+18b:a-dgro-dgal-NON-2:6|1:a|2:keto|3:d
+19s:n-acetyl
+LIN
+17:18d(5+1)19n
+UND2:100.0:100.0
+ParentIDs:1|3|5|6|7|9|10|11|13|14|16|17
+SubtreeLinkageID1:o(3+2)d
+RES
+20b:a-dgro-dgal-NON-2:6|1:a|2:keto|3:d
+21s:n-acetyl
+LIN
+18:20d(5+1)21n
+UND3:100.0:100.0
+ParentIDs:1|3|5|6|7|9|10|11|13|14|16|17
+SubtreeLinkageID1:o(6+2)d
+RES
+22b:a-dgro-dgal-NON-2:6|1:a|2:keto|3:d
+23s:n-acetyl
+LIN
+19:22d(5+1)23n""") == "{Neu5Ac(a2-?)}{Neu5Ac(a2-?)}{Neu5Ac(a2-?)}Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-?)]Man(a1-?)[Gal(b1-4)GlcNAc(b1-2)Man(a1-?)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("""RES
+1b:a-dgal-HEX-1:5
+2s:n-acetyl
+3b:b-dgal-HEX-1:5
+4b:b-dglc-HEX-1:5
+5s:n-acetyl
+6s:sulfate
+LIN
+1:1d(2+1)2n
+2:1o(3+1)3d
+3:1o(6+1)4d
+4:4d(2+1)5n
+5:4o(6+1)6n""") == "Gal(b1-3)[GlcNAc6S(b1-6)]GalNAc"
     # Test warnings
     assert canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol") == "Fuc(a1-3)[Gal(b1-4)Glc-ol"
 
