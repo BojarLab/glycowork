@@ -10,7 +10,7 @@ from sklearn.cluster import DBSCAN
 from functools import reduce
 from typing import Dict, List, Set, Union, Optional
 
-from glycowork.glycan_data.loader import lib, unwrap, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages
+from glycowork.glycan_data.loader import lib, unwrap, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 
@@ -114,7 +114,7 @@ def get_modification(sugar: str # Monosaccharide or linkage
                    ) -> str: # Modification string
   "Retrieve modification from modified monosaccharide"
   core = get_core(sugar)
-  modification = sugar.replace(core, '')
+  modification = multireplace(sugar, {core: '', 'Neu': '', '5Ac': '', '5Gc': ''})
   return modification
 
 

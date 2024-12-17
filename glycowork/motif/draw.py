@@ -175,11 +175,12 @@ def add_customization(
     drawing.append(p)
     drawing.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = text_anchor, center = True))
   if conf:
+    conf_dict = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
     p = draw.Path(stroke_width = 0)
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     drawing.append(p)
-    drawing.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
+    drawing.append(draw.Text(conf_dict[conf], dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
 
 
 def draw_shape(
@@ -510,7 +511,7 @@ def process_bonds(
   BETA_PATTERN = re.compile(r"^b\d")
   DIGIT_PATTERN = re.compile(r"^\d-\d")
   def process_single_linkage(linkage: str) -> str:
-    first, last = linkage[0], linkage[-1]
+    first, last = linkage[0], re.search(r"-(.*)", linkage).group(1)
     if '?' in first and '?' in last: return '?'
     if '?' in first: return f' {last}'
     if '?' in last:
@@ -1022,17 +1023,17 @@ def get_coordinates_and_labels(
             if [k[::2][::-1] for k in (branch_branch_node if list_to_update is branch_branch_y_pos else branch_branch_branch_node)][k][j] in str_upper:
               list_to_update[k][j] += to_add
 
-  main_conf = [k.group()[0] if k is not None else '' for k in [re.search('^L-|^D-', k) for k in main_sugar_modification]]
-  main_sugar_modification = [re.sub('^L-|^D-', '', k) for k in main_sugar_modification]
+  main_conf = [k.group() if k is not None else '' for k in [re.search('^L-|^D-|(\d,\d+lactone)', k) for k in main_sugar_modification]]
+  main_sugar_modification = [re.sub('^L-|^D-|(\d,\d+lactone)', '', k) for k in main_sugar_modification]
 
-  b_conf = [[k.group()[0] if k is not None else '' for k in j] for j in [[re.search('^L-|^D-', k) for k in j] for j in branch_sugar_modification]]
-  branch_sugar_modification = [[re.sub('^L-|^D-', '', k) for k in j] for j in branch_sugar_modification]
+  b_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search('^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_sugar_modification]]
+  branch_sugar_modification = [[re.sub('^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_sugar_modification]
 
-  bb_conf = [[k.group()[0] if k is not None else '' for k in j] for j in [[re.search('^L-|^D-', k) for k in j] for j in branch_branch_sugar_modification]]
-  branch_branch_sugar_modification = [[re.sub('^L-|^D-', '', k) for k in j] for j in branch_branch_sugar_modification]
+  bb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search('^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_branch_sugar_modification]]
+  branch_branch_sugar_modification = [[re.sub('^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_branch_sugar_modification]
 
-  bbb_conf = [[k.group()[0] if k is not None else '' for k in j] for j in [[re.search('^L-|^D-', k) for k in j] for j in bbb_sugar_modification]]
-  bbb_sugar_modification = [[re.sub('^L-|^D-', '', k) for k in j] for j in bbb_sugar_modification]
+  bbb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search('^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in bbb_sugar_modification]]
+  bbb_sugar_modification = [[re.sub('^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in bbb_sugar_modification]
 
   data_combined = [
       [main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label],
@@ -1374,7 +1375,7 @@ def GlycoDraw(
 
   if draw_this in motif_list.motif_name.values.tolist():
     draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values[0]
-  if not in_lib(draw_this, expand_lib(lib, additions)):
+  if not in_lib(draw_this, expand_lib(lib, additions + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
     raise Exception('Warning: did you enter a real glycan or motif?')
 
   try:
