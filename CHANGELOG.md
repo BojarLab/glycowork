@@ -66,7 +66,7 @@
 - Expanded `glycan_to_mass` and `composition_to_mass` to deal with compositional building blocks that represent losses/gains in the molecule (like "-H2O") (8c69c2c)
 - Composition and mass functions now can correctly work with azide-modified monosaccharides such as Neu5Az (ef3da9c)
 - In addition to chemical formulae, users can now also provide direct additional masses as floats with the same "adduct" keyword argument in `composition_to_mass` and `glycan_to_mass` (d57b836)
-- `get_modification` will no longer the 5Ac / 5Gc of Neu5Ac / Neu5Gc as part of the modification (0387d37)
+- `get_modification` will no longer return the 5Ac / 5Gc of Neu5Ac / Neu5Gc as part of the modification (0387d37)
 
 ##### Fixed
 - Fixed an edge case in `get_unique_topologies`, in which the absence of a universal replacer sometimes created an empty list that was attempted to be indexed (0c94995)
@@ -88,9 +88,9 @@
 - `canonicalize_iupac` now can handle even more typos (e.g., 'aa1-3' in specifying a linkage) (a64f694)
 - `canonicalize_iupac` now can handle even more inconsistencies (e.g., mix of short-hand and expanded linkages)
 - Expanded `get_mono` to deal with some special WURCS2 tokens at the reducing end, of type "u2122h_2*NCC/3=O" (d57b836)
-- `canonicalize_iupac` will no longer convert things like "b1-3/4" into "b1-?", because narrow linkage ambiguities can now be properly handled
+- `canonicalize_iupac` will no longer convert things like "b1-3/4" into "b1-?", because narrow linkage ambiguities can now be properly handled (52fc16e)
 - `get_possible_linkages` and `de_wildcard_glycoletter` now also support narrow linkage ambiguities like "b1-3/4" (52fc16e)
-- `canonicalize_iupac` will now no longer mess up branch formatting of the repeating unit in glycans of type "repeat"
+- `canonicalize_iupac` will now no longer mess up branch formatting of the repeating unit in glycans of type "repeat" (9a94537)
 - Ensured that `canonicalize_iupac` works with lactonized glycans (i.e., containing something like "1,7lactone") (8c69c2c)
 - `find_matching_brackets_indices` has been renamed to `get_matching_indices` and now takes multiple delimiter choices and returns a generator, including the level of nesting (basically what `.draw.matches` used to do) (e1afe33)
 

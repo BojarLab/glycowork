@@ -32,18 +32,24 @@ pytest
 * Please update CHANGELOG.md with any significant changes. Add your changes in the relevant module/submodule section in the following format:
 
 ### module_name
+
 #### sub_module_name
+
 ##### Added
-- Added new feature X (commit-hash)
+
+* Added new feature X (commit-hash)
 
 ##### Changed
-- Modified behavior of Y (commit-hash)
+
+* Modified behavior of Y (commit-hash)
 
 ##### Deprecated
-- Removed feature Z (commit-hash)
+
+* Removed feature Z (commit-hash)
 
 ##### Fixed
-- Fixed bug in W (commit-hash)
+
+* Fixed bug in W (commit-hash)
 
 * We have a PR template in the .github folder. Consider using it.
 * Keep each PR focused. While it's more convenient, do not combine several unrelated fixes together. Create as many branches as needing to keep each PR focused.
