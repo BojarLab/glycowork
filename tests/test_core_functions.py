@@ -2917,7 +2917,7 @@ def test_draw_shape_hexnac():
     # Test with configuration
     mock_drawing = get_clean_drawing()
     draw_shape('HexNAc', 'snfg_yellow', 1.0, 1.0, col_dict_base, mock_drawing,
-               conf='α', dim=50)
+               conf='L-', dim=50)
     assert len(mock_drawing.all_elements()) == 5
 
 

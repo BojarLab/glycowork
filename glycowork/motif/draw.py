@@ -1023,17 +1023,17 @@ def get_coordinates_and_labels(
             if [k[::2][::-1] for k in (branch_branch_node if list_to_update is branch_branch_y_pos else branch_branch_branch_node)][k][j] in str_upper:
               list_to_update[k][j] += to_add
 
-  main_conf = [k.group() if k is not None else '' for k in [re.search('^L-|^D-|(\d,\d+lactone)', k) for k in main_sugar_modification]]
-  main_sugar_modification = [re.sub('^L-|^D-|(\d,\d+lactone)', '', k) for k in main_sugar_modification]
+  main_conf = [k.group() if k is not None else '' for k in [re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in main_sugar_modification]]
+  main_sugar_modification = [re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in main_sugar_modification]
 
-  b_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search('^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_sugar_modification]]
-  branch_sugar_modification = [[re.sub('^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_sugar_modification]
+  b_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_sugar_modification]]
+  branch_sugar_modification = [[re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_sugar_modification]
 
-  bb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search('^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_branch_sugar_modification]]
-  branch_branch_sugar_modification = [[re.sub('^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_branch_sugar_modification]
+  bb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_branch_sugar_modification]]
+  branch_branch_sugar_modification = [[re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_branch_sugar_modification]
 
-  bbb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search('^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in bbb_sugar_modification]]
-  bbb_sugar_modification = [[re.sub('^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in bbb_sugar_modification]
+  bbb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in bbb_sugar_modification]]
+  bbb_sugar_modification = [[re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in bbb_sugar_modification]
 
   data_combined = [
       [main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label],
