@@ -180,7 +180,10 @@ def add_customization(
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     drawing.append(p)
-    drawing.append(draw.Text(conf_dict[conf], dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
+    if conf in list(conf_dict.keys()):
+      drawing.append(draw.Text(conf_dict[conf], dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
+    else:
+      drawing.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
 
 
 def draw_shape(
@@ -511,7 +514,10 @@ def process_bonds(
   BETA_PATTERN = re.compile(r"^b\d")
   DIGIT_PATTERN = re.compile(r"^\d-\d")
   def process_single_linkage(linkage: str) -> str:
-    first, last = linkage[0], re.search(r"-(.*)", linkage).group(1)
+    if '-' in linkage:
+      first, last = linkage[0], re.search(r"-(.*)", linkage).group(1)
+    else:
+      first, last = linkage[0], linkage[-1]
     if '?' in first and '?' in last: return '?'
     if '?' in first: return f' {last}'
     if '?' in last:
