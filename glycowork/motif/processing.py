@@ -947,7 +947,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'[ab]-$', '', glycan)  # Remove endings like Glcb-
   # Canonicalize branch ordering
-  if '[' in glycan:
+  if '[' in glycan and not glycan.startswith('['):
     glycan = choose_correct_isoform(glycan)
   if '{' in glycan:
     floating_bits = re.findall(r'\{.*?\}', glycan)

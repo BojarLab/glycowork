@@ -1,0 +1,25 @@
+name: Changelog Check
+on: [pull_request]
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Check if CHANGELOG.md was modified
+        run: |
+          # Check if any code files were modified
+          if git diff --name-only origin/${{ github.base_ref }} HEAD | grep -E '\.py$|\.js$|\.cpp$'; then
+            # If code was modified, require changelog update
+            if git diff --name-only origin/${{ github.base_ref }} HEAD | grep -q "CHANGELOG.md"; then
+              echo "Changelog was updated"
+              exit 0
+            else
+              echo "Code changes detected but CHANGELOG.md was not updated"
+              exit 1
+            fi
+          else
+            echo "No code changes detected, skipping changelog check"
+            exit 0
+          fi

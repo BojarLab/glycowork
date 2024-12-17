@@ -29,6 +29,23 @@ cd tests
 pytest
 ```
 
+* Please update CHANGELOG.md with any significant changes. Add your changes in the relevant module/submodule section in the following format:
+
+### module_name
+#### sub_module_name
+##### Added
+- Added new feature X (commit-hash)
+
+##### Changed
+- Modified behavior of Y (commit-hash)
+
+##### Deprecated
+- Removed feature Z (commit-hash)
+
+##### Fixed
+- Fixed bug in W (commit-hash)
+
+* We have a PR template in the .github folder. Consider using it.
 * Keep each PR focused. While it's more convenient, do not combine several unrelated fixes together. Create as many branches as needing to keep each PR focused.
 * Do not mix style changes/fixes with "functional" changes. It's very difficult to review such PRs and it most likely gets rejected.
 * Do not add/remove vertical whitespace. Preserve the original style of the file you edit as much as you can.
@@ -40,7 +57,7 @@ pytest
 
 * Docs are automatically created from the notebooks in the nbs folder.
 
-## Wishlist for future glycowork updates (last update: 2024-07-10)
+## Wishlist for future glycowork updates (last update: 2024-12-17)
 
 ### Urgent
 
@@ -51,7 +68,6 @@ pytest
 * any further expansion of our universal input pipeline, to cover more usecases etc.
 * split motif_list into ‘core’ motifs (occurring frequently) and ‘extended’ motifs (that are rare or niche) for performance reasons
 * characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context
-* allow users to specify their own deep learning architecture in ml.models
 * implement multiple sequence alignment and other substitution matrices
 * parallelize motif matching
 * refactor glycan graphs to be directed graphs & treat linkages as edges (would mean a *lot* of downstream fixes/refactoring)
