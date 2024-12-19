@@ -90,7 +90,7 @@ def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and t
   # Get all objects to calculate distance between
   value_counts = df[rank].value_counts()
   valid_ranks = value_counts.index[value_counts >= cut_off]
-  valid_networks = [net for spec, net in zip(df[rank], networks) if spec in valid_ranks]
+  valid_networks = [net for spec, net in zip(value_counts.index, networks) if spec in valid_ranks]
   # Get distance matrix
   return calculate_distance_matrix(valid_networks, dist_func, label_list = valid_ranks.tolist())
 

@@ -147,8 +147,9 @@ def find_shared_virtuals(glycan_a: str, # First glycan
   ggraph_nb_b, _ = get_virtual_nodes(glycan_b, graph_dic, min_size = min_size)
   # Check whether any of the nodes of glycan_a and glycan_b are the same
   out = set((glycan_a, glycans_a[k]) for k, graph_a in enumerate(ggraph_nb_a)
-              for graph_b in ggraph_nb_b if compare_glycans(graph_a, graph_b))
-  out.update((glycan_b, g[1]) for g in out)
+              for graph_b in ggraph_nb_b if subgraph_isomorphism(graph_a, graph_b))
+  out2 = {(glycan_b, g[1]) for g in out}
+  out.update(out2)
   return list(out)
 
 
@@ -240,13 +241,10 @@ def find_shortest_path(goal_glycan: str, # Target glycan
   for glycan in sorted(glycan_list, key = len, reverse = True):
     # For each glycan, check whether it could constitute a precursor (i.e., is it a sub-graph + does it stem from the correct root)
     if len(glycan) < len(goal_glycan) and goal_glycan.endswith(glycan[-5:]) and subgraph_isomorphism(ggraph, safe_index(glycan, graph_dic)):
-      try:
-        # Finding a path through shells of generated virtual nodes
-        virtual_edges, edge_labels = find_path(goal_glycan, glycan, graph_dic,
-                                                 permitted_roots = permitted_roots, min_size = min_size, allowed_ptms = allowed_ptms)
-        return virtual_edges, edge_labels
-      except:
-        continue
+      # Finding a path through shells of generated virtual nodes
+      virtual_edges, edge_labels = find_path(goal_glycan, glycan, graph_dic,
+                                               permitted_roots = permitted_roots, min_size = min_size, allowed_ptms = allowed_ptms)
+      return virtual_edges, edge_labels
   return [], {}
 
 

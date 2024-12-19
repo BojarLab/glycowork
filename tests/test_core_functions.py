@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import seaborn as sns
-import sys
+import sys, os
 import shutil
 import torch
 import torch.nn as nn
@@ -89,12 +89,12 @@ from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_
                      characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site
 )
 from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighbors, create_neighbors,
-                         find_diff, find_path, construct_network, prune_network, estimate_weights, network_alignment,
+                         find_diff, find_path, construct_network, prune_network, estimate_weights, network_alignment, export_network,
                          extend_glycans, highlight_network, infer_roots, deorphanize_nodes, get_edge_weight_by_abundance,
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
-                         deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme,
+                         deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme, infer_network,
                          get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
-                         plot_network, add_high_man_removal
+                         plot_network, add_high_man_removal, net_dic, find_shared_virtuals, create_adjacency_matrix, find_ptm
 )
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
                       jaccard, distance_from_metric, check_conservation, get_communities
@@ -1089,12 +1089,10 @@ def test_choose_correct_isoform():
     result = choose_correct_isoform(glycans_with_wildcards)
     assert result == "Gal(b1-4)[Fuc(a1-3)]GlcNAc"
     # Complex cases
-    result = choose_correct_isoform("Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc")
-    assert result == "Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)]GalNAc"
+    assert choose_correct_isoform("Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc") == "Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)]GalNAc"
     result = choose_correct_isoform("Gal(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc")
     assert result == "Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)]GalNAc"
-    result = choose_correct_isoform("Xyl(b1-2)[Man(a1-3)][Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
-    assert result == "Xyl(b1-2)[Man(a1-3)][GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert choose_correct_isoform("Xyl(b1-2)[Man(a1-3)][Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Xyl(b1-2)[Man(a1-3)][GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     # Mode for GlycoDraw
     result = choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", order_by="linkage")
     assert result == "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-4)][Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
@@ -1102,6 +1100,8 @@ def test_choose_correct_isoform():
     assert result == "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     result = choose_correct_isoform("Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", order_by="linkage")
     assert result == "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-4)][Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", order_by="linkage") == "Gal(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]GalNAc"
+    assert choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", order_by="linkage") == "Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
 
 
 def test_bracket_removal():
@@ -4033,6 +4033,8 @@ def test_get_neighbors(simple_glycans):
     assert len(neighbors) > 0
     assert all(isinstance(n, str) for n in neighbors)
     assert all(isinstance(idx, list) for idx in indices)
+    neighbors, indices = get_neighbors(glycan_to_nxGraph("Glc-ol"), simple_glycans, graphs)
+    assert neighbors == []
 
 
 def test_create_neighbors():
@@ -4042,6 +4044,8 @@ def test_create_neighbors():
     assert len(neighbors) > 0
     assert all(isinstance(n, nx.Graph) for n in neighbors)
     assert len(neighbors[0].nodes()) < len(ggraph.nodes())
+    neighbors = create_neighbors(glycan_to_nxGraph("Glc-ol"))
+    assert neighbors == []
 
 
 def test_find_diff():
@@ -4052,6 +4056,7 @@ def test_find_diff():
     assert isinstance(diff, str)
     assert "GlcNAc" in diff
     assert find_diff(glycan_a, glycan_a, graph_dic) == ""
+    assert find_diff(glycan_a, "Gal(b1-3)[GlcNAc(b1-6)]GalNAc", graph_dic) == "disregard"
 
 
 def test_find_path():
@@ -4063,6 +4068,9 @@ def test_find_path():
     assert isinstance(labels, dict)
     assert len(edges) > 0
     assert all(isinstance(e, tuple) for e in edges)
+    glycan_a = "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
+    edges, labels = find_path(glycan_a, glycan_b, graph_dic)
+    assert edges == []
 
 
 def test_construct_network(simple_glycans):
@@ -4071,6 +4079,7 @@ def test_construct_network(simple_glycans):
     assert len(network.nodes()) >= len(simple_glycans)
     assert len(network.edges()) > 0
     assert all("diffs" in data for _, _, data in network.edges(data=True))
+    network = construct_network(simple_glycans, edge_type="enzymes")
 
 
 def test_prune_network(simple_glycans):
@@ -4186,6 +4195,7 @@ def test_deorphanize_nodes(sample_network):
     assert len(deorphanized.edges()) > len(sample_network.edges())
     # Check if orphaned node is now connected
     assert deorphanized.degree("GlcNAc(b1-3)Gal(b1-4)Glc-ol") > 0
+    deorphanized = deorphanize_nodes(sample_network, {}, permitted_roots = frozenset("GalNAc"))
 
 
 def test_get_edge_weight_by_abundance(sample_network):
@@ -4258,6 +4268,13 @@ def test_get_differential_biosynthesis(abundance_data):
     assert "p-val" in results.columns
     assert "significant" in results.columns
     assert len(results) > 0
+    results = get_differential_biosynthesis(
+        abundance_data,
+        group1=[1,2],
+        group2=[3,4],
+        analysis="flow",
+        paired=True
+    )
 
 
 def test_deorphanize_edge_labels(sample_network):
@@ -4617,6 +4634,12 @@ def test_extend_network_basic(extension_test_network):
     for new_glycan in new_glycans:
         paths = nx.single_source_shortest_path(extended_net, 'Gal(b1-4)Glc-ol')
         assert any(new_glycan in path for path in paths.values())
+    extended_net, new_glycans = extend_network(
+        extension_test_network,
+        steps=1,
+        to_extend="all",
+        strict_context=True
+    )
 
 
 def test_extend_network_specific_target(extension_test_network):
@@ -4676,6 +4699,8 @@ def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
     assert len(nodes) == 1  # One PathCollection for all nodes
     assert len(edges) == len(main_net.edges())  # FancyArrowPatch for every edges
     # Clean up
+    plt.close()
+    plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=False)
     plt.close()
 
 
@@ -4750,6 +4775,46 @@ def test_add_high_man_removal(evo_test_networks):
     main_net, _ = evo_test_networks
     network = add_high_man_removal(main_net)
     assert len(main_net.edges()) == len(network.edges())
+
+
+def test_net_dic():
+    assert len(net_dic) > 0
+
+
+def test_find_shared_virtuals():
+    glycan_a = "Glc-ol"
+    glycan_b = "GlcNAc(b1-3)Gal(b1-4)Gal-ol"
+    assert find_shared_virtuals(glycan_a, glycan_b, {}) == []
+
+
+def test_create_adjacency_matrix():
+    glycans = ["Glc-ol", "Gal-ol"]
+    assert create_adjacency_matrix(glycans, {})[1] == []
+    glycans = ["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"]
+    assert create_adjacency_matrix(glycans, {})[1] == ['GlcNAc(b1-3)Gal(b1-4)Glc-ol']
+
+
+def test_find_ptm():
+    assert find_ptm("Gal(b1-4)Glc-ol", ["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"], {}, {}) == 0
+    from glycowork.motif.tokenization import stem_lib
+    assert find_ptm("Sug(b1-4)Gal6S(b1-4)Glc-ol", ["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"], {}, stem_lib) == 0
+    assert find_ptm("Gal(b1-4)Gal6S(b1-4)Glc-ol", ["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"], {}, stem_lib)[1] == "6S"
+
+
+def test_infer_network():
+    net = construct_network(["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"])
+    spec_dic = {"test": construct_network(["GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"]), "org": net}
+    net2 = infer_network(net, "org", ["test"], spec_dic)
+    assert nx.get_node_attributes(net2, "virtual")["GlcNAc(b1-3)Gal(b1-4)Glc-ol"] == 2
+
+
+def test_export_network(tmp_path):
+    net = construct_network(["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"])
+    filepath = os.path.join(tmp_path, "test_network")
+    export_network(net, filepath, other_node_attributes=["extra_attr"])
+    # Clean up
+    os.remove(f"{filepath}_edge_list.csv")
+    os.remove(f"{filepath}_node_labels.csv")
 
 
 @pytest.fixture

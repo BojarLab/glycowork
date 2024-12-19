@@ -298,7 +298,7 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
               kill_list.add(g)
   if order_by == "linkage":
     for g in glycans2:
-      if g[:g.index('[')].count('(') == 1 and g[g.index('['):g.index(']')].count('(') > 1:
+      if g[:g.index('[')].count('(') == 1 and g[g.index('['):g.index(']')].count('(') > 1 and g.count('[') > 1 and g.startswith('F'):
         kill_list.add(g)
       if pair_match := re.search(r'\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]', g):
         if compare_branches(pair_match.group(1), pair_match.group(2)):

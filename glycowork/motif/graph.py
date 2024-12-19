@@ -222,7 +222,7 @@ def expand_termini_list(motif: Union[str, nx.Graph], # Glycan motif sequence or 
   num_linkages = motif.count('(') if isinstance(motif, str) else (len(motif) - 1) // 2
   result = [None] * (len(termini_list) + num_linkages)
   j = 0
-  for i in range(len(result)):
+  for i, _ in enumerate(result):
     if i % 2 == 0:
       result[i] = termini_list[j]
       j += 1
@@ -479,7 +479,7 @@ def try_string_conversion(graph: nx.Graph # Glycan graph to validate
     temp = graph_to_string(graph)
     temp = glycan_to_nxGraph(temp)
     return graph_to_string(temp)
-  except:
+  except (ValueError, IndexError):
     return None
 
 

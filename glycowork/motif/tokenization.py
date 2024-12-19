@@ -156,7 +156,7 @@ def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
           cut = glycan_start[index_pos:]
           try:
             cut = cut.split('(', 1)[0]
-          except:
+          except IndexError:
             pass
           # Replace offending monosaccharide with stemified monosaccharide
           if cut not in clean_list:

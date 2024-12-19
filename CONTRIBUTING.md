@@ -35,19 +35,19 @@ pytest
 
 #### sub_module_name
 
-##### Added
+##### Added ✨
 
 * Added new feature X (commit-hash)
 
-##### Changed
+##### Changed 🔄
 
 * Modified behavior of Y (commit-hash)
 
-##### Deprecated
+##### Deprecated ⚠️
 
 * Removed feature Z (commit-hash)
 
-##### Fixed
+##### Fixed 🐛
 
 * Fixed bug in W (commit-hash)
 
