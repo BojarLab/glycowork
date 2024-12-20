@@ -15,8 +15,8 @@ nbdev_install_hooks
 
 ### Did you write a patch that fixes a bug?
 
-* Open a new GitHub pull request with the patch.
-* Ensure that your PR includes a test that fails without your patch, and pass with it.
+* Open a new GitHub pull request with the patch, based on the current dev branch and targeted to merge into the dev branch.
+* Ensure that your PR includes a test that fails without your patch, and passes with it.
 * Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
 
 ## PR submission guidelines

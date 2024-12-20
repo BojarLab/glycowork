@@ -50,15 +50,15 @@ class LazyLoader:
     if name not in self._datasets:
       filename = f"{self.prefix}{name}.csv"
       try:
-        with resources.open_text(self.package + '.' + self.directory, filename) as f:
+        with resources.files(f"{self.package}.{self.directory}").joinpath(filename).open(encoding = 'utf-8-sig') as f:
           self._datasets[name] = pd.read_csv(f)
       except FileNotFoundError:
         raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
     return self._datasets[name]
 
   def __dir__(self):
-    files = resources.contents(self.package + '.' + self.directory)
-    dataset_names = [file[len(self.prefix):-4] for file in files if file.startswith(self.prefix) and file.endswith('.csv')]
+    files = resources.files(f"{self.package}.{self.directory}").iterdir()
+    dataset_names = [file.name[len(self.prefix):-4] for file in files if file.name.startswith(self.prefix) and file.name.endswith('.csv')]
     return dataset_names
 
 

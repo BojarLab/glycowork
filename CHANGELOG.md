@@ -32,9 +32,13 @@
 - Changed `resources.open_text` to `resources.files` to prevent `DeprecationWarning` from `importlib` (0c94995)
 - `lectin_specificity` now uses our custom `DataFrameSerializer` and is stored as a .json file rather than a .pkl file, to improve long-term stability across versions (034b6ad)
 
+##### Fixed 🐛
+- Fixed DeprecationWarning in all data-loading functions that used `importlib.resources.open_text` or `.content`
+
 #### stats
 ##### Added ✨
 - Added the "random_state" keyword argument to `clr_transformation` to allow users to provide a reproducible RNG seed (b94744e)
+- Added the `JTKTest` class object
 
 ##### Changed 🔄
 - For `replace_outliers_winsorization`, in small datasets, the 5% limit is dynamically changed to include at least one datapoint (23d6456)
@@ -43,6 +47,7 @@
 
 ##### Deprecated ⚠️
 - Deprecated `hlm`, `fast_two_sum`, `two_sum`, `expansion_sum`, and `update_cf_for_m_n`, which will all be done in-line instead (e1afe33)
+- Deprecated `jtkdist`, `jtkinit`, `jtkstat`, `jtkx`, which will all be done by the new `JTKTest`
 
 ##### Fixed 🐛
 - Fixed DeprecationWarning in `calculate_permanova_stat` for calling nonzero on 0d arrays (23d6456)
@@ -133,6 +138,7 @@
 ##### Changed 🔄
 - `get_glycanova` will now raise a ValueError if fewer than three groups are provided in the input data (f76535e)
 - Improved console drawing quality controlled by `display_svg_with_matplotlib` and image quality in Excel cells using `plot_glycans_excel` (a64f694)
+- The "periods" argument in `get_jtk` is now a keyword argument and has a default value of [12, 24]
 
 ##### Fixed 🐛
 - Fixed a FutureWarning in `get_lectin_array` by avoiding DataFrame.groupby with axis=1 (f76535e)
@@ -144,6 +150,7 @@
 - Fixed an issue where variance-filtered rows could cause problems in `get_differential_expression` if "monte_carlo = True" (ef3da9c)
 - Fixed an issue in `get_differential_expression` if "sets = True" that caused indexing issues under certain conditions (ef3da9c)
 - Ensured that "effect_size_variance = True" in `get_differential_expression` always formats variances correctly (ef3da9c)
+- Ensured that the combination of "grouped_BH = True", "paired = False", and CLR/ALR in `get_differential_expression` works even when negative values are present
 
 #### regex
 ##### Fixed 🐛
@@ -175,7 +182,7 @@
 #### evolution
 ##### Fixed 🐛
 - Fixed DeprecationWarning in `distance_from_embeddings` to prevent DataFrameGroupBy.apply from operating on the grouping columns (94646ad)
-- Fixed an issue in `distance_from_metric` where networks were indexed incorrectly based on presented DataFrame order
+- Fixed an issue in `distance_from_metric` where networks were indexed incorrectly based on presented DataFrame order (d2f5d55)
 
 #### biosynthesis
 ##### Changed 🔄
@@ -183,4 +190,4 @@
 - `choose_leaves_to_extend` will now correctly return no leaf node glycan if the target composition cannot be reached from any of the leaf nodes in a network (918d18f)
 
 ##### Fixed 🐛
-- Fixed an issue in `find_shared_virtuals` in which no shared nodes were found because of graph comparisons
+- Fixed an issue in `find_shared_virtuals` in which no shared nodes were found because of graph comparisons (d2f5d55)

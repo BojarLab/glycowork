@@ -24,8 +24,8 @@ from sklearn.linear_model import LogisticRegression
 
 from glycowork.glycan_data.loader import df_species, unwrap, strip_suffixes, download_model
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
-                                         impute_and_normalize, variance_based_filtering,
-                                         jtkdist, jtkinit, MissForest, jtkx, get_alphaN, TST_grouped_benjamini_hochberg,
+                                         impute_and_normalize, variance_based_filtering, JTKTest,
+                                         MissForest, get_alphaN, TST_grouped_benjamini_hochberg,
                                          compare_inter_vs_intra_group, replace_outliers_winsorization, hotellings_t2,
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
@@ -910,8 +910,8 @@ def get_time_series(
 def get_jtk(
    df_in: Union[pd.DataFrame, str], # DataFrame with molecules in rows (col 0), then groups arranged by ascending timepoints
    timepoints: int, # Number of timepoints (each must have same number of replicates)
-   periods: List[int], # Timepoints per cycle to test
    interval: int, # Time units between experimental timepoints
+   periods: List[int] = [12, 24], # Timepoints per cycle to test
    motifs: bool = False, # Analyze motifs instead of sequences
    feature_set: List[str] = ['known', 'exhaustive', 'terminal'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
@@ -926,10 +926,7 @@ def get_jtk(
       df = df_in.copy(deep = True)
     replicates = (df.shape[1] - 1) // timepoints
     alpha = get_alphaN(replicates)
-    param_dic = {"GRP_SIZE": [], "NUM_GRPS": [], "MAX": [], "DIMS": [], "EXACT": bool(True),
-                 "VAR": [], "EXV": [], "SDV": [], "CGOOSV": []}
-    param_dic = jtkdist(timepoints, param_dic, replicates)
-    param_dic = jtkinit(periods, param_dic, interval, replicates)
+    jtk = JTKTest(timepoints, periods, interval, replicates)
     df = df.apply(replace_outliers_winsorization, axis = 1)
     mf = MissForest()
     df = df.replace(0, np.nan)
@@ -948,12 +945,15 @@ def get_jtk(
       raise ValueError("Only ALR and CLR are valid transforms for now.")
     if motifs:
       df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).reset_index()
-    res = df.iloc[:, 1:].apply(jtkx, param_dic = param_dic, axis = 1)
-    corrpvals, significance = correct_multiple_testing(res[0], alpha, correction_method = correction_method)
-    df_out = pd.concat([df.iloc[:, 0], pd.DataFrame(corrpvals), res], axis = 1)
-    df_out.columns = ['Molecule_Name', 'BH_Q_Value', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude']
+    results = []
+    for _, row in df.iterrows():
+      p_val, period, phase, tau = jtk.test(row.iloc[1:].values.astype(float))
+      results.append([row.iloc[0], p_val, period, phase, abs(tau)])
+    df_out = pd.DataFrame(results, columns = ['Molecule_Name', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude'])
+    corrpvals, significance = correct_multiple_testing(df_out.iloc[:, 1].tolist(), alpha, correction_method = correction_method)
+    df_out['Adjusted_P_value'] = corrpvals
     df_out['significant'] = significance
-    return df_out.sort_values("Adjusted_P_value")
+    return df_out.sort_values("Adjusted_P_value").reset_index(drop = True)
 
 
 def get_biodiversity(

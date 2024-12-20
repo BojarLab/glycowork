@@ -42,16 +42,16 @@ from glycowork.motif.processing import (
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets,
-    strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages
+    strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader
 )
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
     simpson_diversity_index, get_equivalence_test, sequence_richness,
     hotellings_t2, calculate_permanova_stat, omega_squared, anosim, alpha_biodiversity_stats, permanova_with_permutation,
     clr_transformation, alr_transformation, get_procrustes_scores,
-    get_additive_logratio_transformation, get_BF, get_alphaN,
+    get_additive_logratio_transformation, get_BF, get_alphaN, mahalanobis_variance,
     pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
-    correct_multiple_testing, partial_corr, estimate_technical_variance, jtkdist, jtkinit, jtkstat, jtkx, MissForest, impute_and_normalize,
+    correct_multiple_testing, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results, replace_outliers_with_IQR_bounds,
     replace_outliers_winsorization, perform_tests_monte_carlo
 )
@@ -1181,8 +1181,9 @@ def test_find_nth_reverse():
     assert find_nth_reverse(glycan, "Gal", 1, ignore_branches=True) == 0
     # Test with nested branches
     glycan = "Neu5Ac(a2-3)[Neu5Ac(a2-6)[Gal(b1-3)]Gal(b1-4)]GlcNAc"
-    result = find_nth_reverse(glycan, "Gal", 2, ignore_branches=True)
-    assert result >= 0
+    assert find_nth_reverse(glycan, "Gal", 2, ignore_branches=True) == 26
+    # Test missing
+    assert find_nth_reverse("hello", "j", 1) == -1
 
 
 def test_remove_unmatched_brackets():
@@ -1212,6 +1213,11 @@ def test_reindex():
     # Test reindexing
     result = reindex(df_new, df_old, 'value', 'id', 'id')
     assert result == [3, 1, 2]
+    df_old = pd.DataFrame({
+        'id2': ['a', 'b', 'c'],
+        'value': [1, 2, 3]
+    })
+    result = reindex(df_new, df_old, 'value', 'id2', 'id')
 
 
 def test_stringify_dict():
@@ -1307,6 +1313,15 @@ def test_dataframe_serializer():
     assert result == ['1', '2', '3']
 
 
+def test_glycan_binding():
+    assert len(glycan_binding) > 0
+
+
+def test_glycomics_data_loader():
+    dir(glycomics_data_loader)
+    assert len(glycomics_data_loader.human_brain_GSL_PMID38343116) > 0
+
+
 def test_count_nested_brackets():
     # Basic cases
     assert count_nested_brackets('') == 0
@@ -1359,6 +1374,22 @@ def test_mahalanobis_distance():
     # Test with paired data
     dist_paired = mahalanobis_distance(x, y, paired=True)
     assert dist_paired >= 0  # Should still be positive
+
+
+def test_mahalanobis_variance():
+    # Create simple test data
+    x = np.array([[1, 2, 3], [4, 5, 6]]).T  # 3 samples, 2 features
+    y = np.array([[2, 3, 4], [5, 6, 7]]).T  # 3 samples, 2 features
+    # Call the function
+    variance = mahalanobis_variance(x, y, paired=False)
+    # Check that the output is a float
+    assert isinstance(variance, float)
+    # Check that the variance is non-negative
+    assert variance >= 0
+    # Check that the function works with paired=True as well
+    variance_paired = mahalanobis_variance(x, y, paired=True)
+    assert isinstance(variance_paired, float)
+    assert variance_paired >= 0
 
 
 def test_variance_stabilization():
@@ -1633,65 +1664,6 @@ def test_estimate_technical_variance():
     # Test variance estimation
     result = estimate_technical_variance(data, group1, group2, num_instances=10)
     assert result.shape[1] == (len(group1) + len(group2)) * 10
-
-
-def test_jtkdist():
-    # Test JTK distribution calculation
-    param_dic = {}
-    result = jtkdist(timepoints=6, param_dic=param_dic)
-    assert "GRP_SIZE" in result
-    assert "NUM_GRPS" in result
-    assert "NUM_VALS" in result
-    assert "MAX" in result
-    assert "DIMS" in result
-
-
-def test_jtkinit():
-    # Test JTK initialization
-    periods = [24]  # 24-hour period
-    param_dic = {
-        'GRP_SIZE': [1] * 24,
-        'INTERVAL': 1,
-        'NUM_GRPS': 24,  # Match period length
-        'NUM_VALS': 24,
-        'DIMS': [276, 1],  # (24 * 23) / 2 = 276
-        'PERFACTOR': np.ones(24),
-        'CGOOSV': [np.zeros([276, 24])]
-    }
-    result = jtkinit(periods, param_dic, interval=1, replicates=1)
-    assert "INTERVAL" in result
-    assert "PERIODS" in result
-    assert "PERFACTOR" in result
-    assert "SIGNCOS" in result
-    assert "CGOOSV" in result
-
-
-def test_jtkstat():
-    # Test JTK statistics calculation
-    # Create mock expression data
-    z = pd.DataFrame([1, 2, 1, 2, 1, 2])  # Cycling data
-    param_dic = {
-        "MAX": 15,
-        "PERIODS": [6],
-        "DIMS": [15, 1],
-        "CGOOSV": [[np.zeros(15) for _ in range(6)]],
-        "EXV": 7.5,  # MAX/2
-        "SDV": np.sqrt(35),
-        "CP": [1.0] * 31
-    }
-    result = jtkstat(z, param_dic)
-    assert "CJTK" in result
-
-
-def test_jtkx():
-    # Test JTK deployent
-    z = pd.Series([1, 2, 1, 2, 1, 2], index=['t1', 't2', 't3', 't4', 't5', 't6'])  # Cycling data
-    param_dic = {"GRP_SIZE": [], "NUM_GRPS": [], "MAX": [], "DIMS": [], "EXACT": bool(True),
-                 "VAR": [], "EXV": [], "SDV": [], "CGOOSV": []}
-    param_dic = jtkdist(6, param_dic, reps=1)
-    param_dic = jtkinit([6], param_dic, interval=1, replicates=1)
-    result = jtkx(z, param_dic)
-    assert len(result) == 4  # Should return p-value, period, lag, and amplitude
 
 
 def test_missforest():
@@ -3161,7 +3133,6 @@ def test_get_pvals_motifs():
     assert len(results_thresh) > 0
 
 
-@pytest.fixture
 def sample_comp_glycomics_data():
     """
     Creates a sample glycomics dataset for testing purposes.
@@ -3176,6 +3147,8 @@ def sample_comp_glycomics_data():
             'Fuc(a1-2)Gal'
         ]
     }
+    # Set random seed for reproducibility
+    np.random.seed(42)
     # Generate control and tumor columns for 6 samples
     for i in range(1, 7):
         # Control samples: relatively stable values with some variation
@@ -3194,12 +3167,78 @@ def sample_comp_glycomics_data():
             np.random.normal(12.0, 1.5),  # Typically increased
             np.random.normal(1.5, 0.3)    # Slightly decreased
         ]
-    # Set random seed for reproducibility
-    np.random.seed(42)
     return pd.DataFrame(data)
 
 
-@pytest.fixture
+def sample_grouped_BH_data():
+    """
+    Creates a sample glycomics dataset specifically for testing grouped BH correction.
+    Contains glycans with clear Sia/Fuc groupings and enough samples per group.
+    """
+    data = {
+        'glycan': [
+            # Sia only glycans
+            'Neu5Ac(a2-3)Gal(b1-4)GlcNAc',
+            'Neu5Ac(a2-6)Gal(b1-4)GlcNAc',
+            'Neu5Ac(a2-3)Gal(b1-3)GalNAc',
+            # Fuc only glycans
+            'Fuc(a1-2)Gal(b1-4)GlcNAc',
+            'Fuc(a1-3)Gal(b1-4)GlcNAc',
+            'Fuc(a1-2)Gal(b1-3)GalNAc',
+            # Both Sia and Fuc
+            'Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc',
+            'Neu5Ac(a2-6)Gal(b1-4)[Fuc(a1-3)]GlcNAc',
+            'Fuc(a1-2)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc',
+            # Neither (rest)
+            'Gal(b1-4)GlcNAc',
+            'Gal(b1-3)GalNAc',
+            'GlcNAc(b1-3)Gal'
+        ]
+    }
+    # Generate control and tumor columns for 6 samples
+    np.random.seed(42)  # For reproducibility
+    for i in range(1, 7):
+        # Control samples
+        data[f'control_{i}'] = [
+            # Sia group - generally high abundance
+            np.random.normal(20.0, 2.0),
+            np.random.normal(18.0, 2.0),
+            np.random.normal(22.0, 2.0),
+            # Fuc group - medium abundance
+            np.random.normal(10.0, 1.0),
+            np.random.normal(12.0, 1.0),
+            np.random.normal(11.0, 1.0),
+            # SiaFuc group - very high abundance
+            np.random.normal(30.0, 3.0),
+            np.random.normal(32.0, 3.0),
+            np.random.normal(28.0, 3.0),
+            # Rest group - low abundance
+            np.random.normal(2.0, 0.3),
+            np.random.normal(1.8, 0.3),
+            np.random.normal(2.2, 0.3)
+        ]
+        # Tumor samples - showing consistent changes within groups
+        data[f'tumor_{i}'] = [
+            # Sia group - increased in tumor
+            np.random.normal(30.0, 3.0),
+            np.random.normal(28.0, 3.0),
+            np.random.normal(32.0, 3.0),
+            # Fuc group - decreased in tumor
+            np.random.normal(5.0, 1.0),
+            np.random.normal(6.0, 1.0),
+            np.random.normal(5.5, 1.0),
+            # SiaFuc group - slight increase
+            np.random.normal(35.0, 3.0),
+            np.random.normal(37.0, 3.0),
+            np.random.normal(33.0, 3.0),
+            # Rest group - minimal change
+            np.random.normal(2.1, 0.3),
+            np.random.normal(1.9, 0.3),
+            np.random.normal(2.3, 0.3)
+        ]
+    return pd.DataFrame(data)
+
+
 def sample_comp_glycomics_data_corr():
     np.random.seed(42)
     data={'glycan':['Neu5Ac(a2-8)Neu5Ac','GlcNAc(b1-4)Man','Gal(b1-4)Neu5Ac',
@@ -3231,8 +3270,9 @@ def sample_comp_glycomics_data_corr():
     return pd.DataFrame(data)
 
 
-def test_get_differential_expression(sample_comp_glycomics_data):
-    df = sample_comp_glycomics_data
+def test_get_differential_expression():
+    df = sample_comp_glycomics_data()
+    df_grouped = sample_grouped_BH_data()
     group1 = [k for k in df.columns if 'control' in k]
     group2 = [k for k in df.columns if 'tumor' in k]
     # Test basic functionality
@@ -3256,7 +3296,8 @@ def test_get_differential_expression(sample_comp_glycomics_data):
                                                  monte_carlo=True)
     results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
                                                  sets=True)
-    results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
+    results = get_differential_expression(df_grouped, [k for k in df_grouped.columns if 'control' in k],
+                                          [k for k in df_grouped.columns if 'tumor' in k], motifs=False, impute=False,
                                                  grouped_BH=True)
     results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
                                                  effect_size_variance=True)
@@ -3425,9 +3466,9 @@ def test_get_time_series(sample_time_series_data):
     results = get_time_series(df, impute=False, motifs=True)
 
 
-def test_get_SparCC(sample_comp_glycomics_data, sample_comp_glycomics_data_corr):
-    df1 = sample_comp_glycomics_data
-    df2 = sample_comp_glycomics_data_corr
+def test_get_SparCC():
+    df1 = sample_comp_glycomics_data()
+    df2 = sample_comp_glycomics_data_corr()
     corr, pvals = get_SparCC(df1, df2)
     assert isinstance(corr, pd.DataFrame)
     assert isinstance(pvals, pd.DataFrame)
@@ -3437,7 +3478,7 @@ def test_get_SparCC(sample_comp_glycomics_data, sample_comp_glycomics_data_corr)
     corr, pvals = get_SparCC(df1, df2, partial_correlations=True)
 
 
-def test_get_roc(sample_comp_glycomics_data):
+def test_get_roc():
     df = pd.DataFrame({
         'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal', 'Fuc(a1-3)GlcNAc'],
         'sample1': [100, 200, 150, 300],
@@ -3452,7 +3493,7 @@ def test_get_roc(sample_comp_glycomics_data):
     results = get_roc(df, group1, group2)
     assert isinstance(results, list)
     assert all(isinstance(x, tuple) for x in results)
-    df = sample_comp_glycomics_data
+    df = sample_comp_glycomics_data()
     group1 = [k for k in df.columns if 'control' in k]
     group2 = [k for k in df.columns if 'tumor' in k]
     results = get_roc(df, group1, group2)
@@ -3832,35 +3873,39 @@ def sample_jtk_df():
     Creates a test dataset for JTK analysis with:
     - 24h coverage with 4h intervals (0,4,8,12,16,20)
     - 2 replicates per timepoint
-    - 3 glycans with different rhythmic patterns:
+    - 4 glycans with different rhythmic patterns:
       - Man3GlcNAc2: Strong 24h rhythm
       - Man5GlcNAc2: Weak 12h rhythm
-      - Man9GlcNAc2: No rhythm (control)
+      - Man9GlcNAc2: Extremely weak 12h rhythm
+      - Biantennary: No rhythm (control)
     """
     # Generate timepoints every 4 hours for 24 hours
-    timepoints = [0, 4, 8, 12, 16, 20]
-    columns = ['glycan'] + [f'T_h{t}_r{r}' for t in timepoints for r in [1, 2]]
+    timepoints = [0, 3, 6, 9, 12, 15, 18, 21]
+    columns = ['glycan'] + [f'T_h{t}_r{r}' for t in timepoints for r in [1, 2, 3]]
     # Create rhythmic patterns
     # Man3GlcNAc2: 24h cycle (peak at 12h)
-    h24_pattern = [10, 15, 25, 30, 25, 15]  # Base values for 24h rhythm
-    # Man5GlcNAc2: 12h cycle (peaks at 4h and 16h)
-    h12_pattern = [15, 25, 15, 20, 25, 15]  # Base values for 12h rhythm
-    # Man9GlcNAc2: No rhythm (random variation around mean)
-    no_rhythm = [20, 21, 19, 22, 20, 21]    # Stable values with small variation
+    h24_pattern = [10, 15, 25, 27, 33, 25, 15, 10]  # Base values for 24h rhythm
+    # Man5GlcNAc2: 12h cycle (peaks at 0h and 12h)
+    h12_pattern = [25, 15, 17, 20, 25, 18, 13, 19]  # Base values for 12h rhythm
+    # Man9GlcNAc2: Weak rhythm (tiny 12h amplitude)
+    weak_rhythm = [20, 21, 19, 21, 22, 20, 21, 20]    # Stable values with small variation
+    # Biantennary: No rhythm (random variation around mean)
+    no_rhythm = [20, 20, 20, 20, 20, 20, 20, 20]    # Stable values with small variation
     # Add some noise to replicates (±10% variation)
     data = {
         'glycan': ['Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
                    'Man(a1-2)Man(a1-3)[Man(a1-6)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
-                   'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc']
+                   'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                   'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']
     }
     # Add two replicates for each timepoint with small random variation
     np.random.seed(42)  # For reproducibility
     for t_idx, t in enumerate(timepoints):
-        for r in [1, 2]:
+        for r in [1, 2, 3]:
             col = f'T_h{t}_r{r}'
-            base_values = [h24_pattern[t_idx], h12_pattern[t_idx], no_rhythm[t_idx]]
+            base_values = [h24_pattern[t_idx], h12_pattern[t_idx], weak_rhythm[t_idx], no_rhythm[t_idx]]
             # Add 5% random noise
-            noise = np.random.normal(0, 0.05, 3) * np.array(base_values)
+            noise = np.random.normal(0, 0.05, 4) * np.array(base_values)
             data[col] = np.array(base_values) + noise
     return pd.DataFrame(data)
 
@@ -3868,19 +3913,19 @@ def sample_jtk_df():
 def test_get_jtk_basic(sample_jtk_df):
     """Test basic functionality of get_jtk"""
     periods = [12, 24]
-    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods, interval=4)
+    result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods)
     assert isinstance(result, pd.DataFrame)
     assert 'Adjusted_P_value' in result.columns
     assert 'Period_Length' in result.columns
-    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods, interval=4, transform="ALR")
-    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods, interval=4, transform="Nothing")
+    result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, transform="ALR")
+    result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, transform="Nothing")
+    assert sum(result.significant) == 2
 
 
 def test_get_jtk_with_motifs(sample_jtk_df):
     """Test get_jtk with motif analysis"""
     periods = [12, 24]
-    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods,
-                     interval=4, motifs=True)
+    result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, motifs=True)
     assert isinstance(result, pd.DataFrame)
     assert 'Adjusted_P_value' in result.columns
 
@@ -3888,8 +3933,7 @@ def test_get_jtk_with_motifs(sample_jtk_df):
 def test_get_jtk_with_transform(sample_jtk_df):
     """Test get_jtk with data transformation"""
     periods = [12, 24]
-    result = get_jtk(sample_jtk_df, timepoints=6, periods=periods,
-                     interval=4, transform='CLR')
+    result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, transform='CLR')
     assert isinstance(result, pd.DataFrame)
 
 
@@ -5073,6 +5117,7 @@ def test_check_presence_existing_glycan(sample_glycan_df, capsys):
     check_presence('Gal(b1-4)Glc-ol', sample_glycan_df)
     captured = capsys.readouterr()
     assert "Glycan already in dataset." in captured.out
+    check_presence("WURCS=2.0/3,5,4/[a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5]/1-1-2-3-3/a4-b1_b4-c1_c3-d1_c6-e1", sample_glycan_df)
 
 
 def test_check_presence_new_glycan(sample_glycan_df, capsys):

@@ -197,186 +197,70 @@ def variance_based_filtering(df: pd.DataFrame, # dataframe with glycans as index
   return filtered_df, discarded_df
 
 
-def jtkdist(timepoints: Union[int, np.ndarray], # number/array of timepoints within experiment
-           param_dic: Dict, # dictionary carrying parameter values
-           reps: int = 1 # number of replicates within each timepoint
-          ) -> Dict: # updated param_dic with statistical values
-  "Precalculates all possible JT test statistic permutation probabilities for reference using the Harding algorithm"
-  tim = np.full(timepoints, reps)
-  nn = sum(tim)  # Number of data values (Independent of period and lag)
-  M = (nn ** 2 - np.sum(np.square(tim))) * 0.5 if nn > 0 else 0  # Max possible jtk statistic
-  param_dic.update({"GRP_SIZE": tim, "NUM_GRPS": len(tim), "NUM_VALS": nn,
-                    "MAX": M, "DIMS": [int(nn * (nn - 1) * 0.5), 1 if nn > 1 else [0, 0]]})
-  squared_terms = tim * tim * (2 * tim + 3)
-  var = (nn ** 2 * (2 * nn + 3) - np.sum(squared_terms)) / 72
-  param_dic["VAR"] = var  # Variance of JTK
-  param_dic["SDV"] = np.sqrt(max(var, 0.0))  # Standard deviation of JTK
-  param_dic["EXV"] = M * 0.5  # Expected value of JTK
-  param_dic["EXACT"] = False
-  MM = int(M // 2)  # Mode of this possible alternative to JTK distribution
-  cf = np.ones(MM + 1)  # Initial lower half cumulative frequency (cf) distribution
-  size = np.sort(tim)  # Sizes of each group of known replicate values, in ascending order for fastest calculation
-  N = np.cumsum(size[::-1])[::-1][1:] # Count permutations using the Harding algorithm
-  for m, n in zip(size[:-1], N): # Calculate cumulative frequencies; cf now contains the lower half cumulative frequency distribution
-    P = min(m + n, MM)
-    for q in range(n + 1, P + 1):
-      cf[q:MM + 1] -= cf[:MM + 1 - q]
-    Q = min(m, MM)
-    for s in range(1, Q + 1):
-      cf[s:MM + 1] += cf[:MM + 1 - s]
-  # append the symmetric upper half cumulative frequency distribution to cf
-  if M % 2:   # jtkcf = upper-tail cumulative frequencies for all integer jtk
-    jtkcf = np.concatenate((cf, 2 * cf[MM] - cf[:MM][::-1], [2 * cf[MM]]))[::-1]
-  else:
-    jtkcf = np.concatenate((cf, cf[MM - 1] + cf[MM] - cf[:MM-1][::-1], [cf[MM - 1] + cf[MM]]))[::-1]
-  ajtkcf = [(jtkcf[i - 1] + jtkcf[i]) / 2 for i in range(1, len(jtkcf))]  # Interpolated values
-  cf = [ajtkcf[(j - 1) // 2] if j % 2 == 0 else jtkcf[j // 2] for j in range(1, 2 * int(M) + 2)]
-  param_dic["CP"] = [c / jtkcf[0] if jtkcf[0] != 0 else 1 for c in cf]  # All upper-tail p-values
-  return param_dic
+class JTKTest:
+  def __init__(self, timepoints: int, periods: List[int], interval: int = 1, replicates: int = 1):
+    self.group_sizes = np.full(timepoints, replicates)
+    self.n = self.group_sizes.sum()
+    squared_sizes = np.square(self.group_sizes)
+    self.max_stat = (self.n**2 - squared_sizes.sum()) * 0.5 if self.n > 0 else 0
+    self.interval = interval
+    self.periods = periods  # Keep original periods
+    self.timepoint_periods = np.array(periods) / interval
+    self.variance = (self.n**2 * (2 * self.n + 3) - (squared_sizes * (2 * self.group_sizes + 3)).sum()) / 72
+    self.reference_dist = self._generate_exact_distribution()
+    self.waveforms = self._generate_reference_waveforms(timepoints)
 
-
-def jtkinit(periods: List[int], # possible periods of rhythmicity in biological data (valued as 'number of timepoints')
-           param_dic: Dict, # dictionary carrying parameter values
-           interval: int = 1, # units of time between experimental timepoints
-           replicates: int = 1 # number of replicates within each group
-          ) -> Dict: # updated param_dic with waveform parameters
-  "Defines the parameters of the simulated sine waves for reference later"
-  param_dic["INTERVAL"] = interval
-  param_dic["PERIODS"] = list(periods)
-  tim = np.array(param_dic["GRP_SIZE"])
-  timepoints = int(param_dic["NUM_GRPS"])
-  param_dic["PERFACTOR"] = np.repeat(np.arange(1, len(periods) + 1), timepoints)
-  timerange = np.arange(timepoints)  # Zero-based time indices
-  max_period = max(periods)
-  signcos_length = ((math.floor(timepoints / max_period) * max_period) * replicates)
-  param_dic["SIGNCOS"] = np.zeros((max_period, signcos_length), dtype = int)
-  param_dic["CGOOSV"] = []
-  PI2 = 2 * round(math.pi, 4)
-  max_tim = np.max(tim) if np.max(tim) > 0 else 1
-  for i, period in enumerate(periods):
-    theta = (PI2 * timerange) / period  # Zero-based angular values across time indices
-    cos_v = np.cos(theta)  # Unique cosine values at each time point
-    ranked = rankdata(cos_v)
-    cos_r = np.repeat(ranked, max_tim) # replicated ranks of unique cosine values
-    cgoos = np.sign(np.subtract.outer(cos_r, cos_r)).astype(int)
-    mask = np.tril_indices(len(cgoos), k = -1)
-    cgoos = cgoos[mask]  # Lower triangular calculation
-    period_array = np.zeros((len(cgoos), period))
-    period_array[:, 0] = cgoos.reshape(param_dic["DIMS"])[:, 0]
-    param_dic["CGOOSV"].append(period_array)  # Period array
-    cycles = math.floor(timepoints / period)
-    jrange = np.arange(cycles * period)
-    cos_s = np.repeat(np.sign(cos_v)[jrange], tim[jrange])  # Cosine signs
-    slice_idx = slice(len(cos_s))
-    if replicates == 1:
-      param_dic["SIGNCOS"][slice_idx, i] = cos_s
+  def _generate_exact_distribution(self) -> np.ndarray:
+    MM = int(self.max_stat // 2)
+    cf = np.ones(MM + 1)
+    size = np.sort(self.group_sizes)
+    N = np.cumsum(size[::-1])[::-1][1:]
+    for m, n in zip(size[:-1], N):
+      P, Q = min(m + n, MM), min(m, MM)
+      cf[n+1:P+1] -= cf[:P-n]
+      cf[1:Q+1] += cf[:Q]
+    if self.max_stat % 2:
+      double_MM = 2 * cf[MM]
+      jtkcf = np.concatenate((cf, double_MM - cf[:MM][::-1], [double_MM]))[::-1]
     else:
-      param_dic["SIGNCOS"][i, slice_idx] = cos_s
-    for j in range(1, period):  # One-based half-integer lag index j
-      delta_theta = j * theta / 2  # Angles of half-integer lags
-      cos_v = np.cos(theta + delta_theta)  # Cycle left
-      cos_r = np.repeat(rankdata(cos_v), tim) # Phase-shifted replicated ranks
-      cgoos = np.sign(np.subtract.outer(cos_r, cos_r))
-      mask = np.triu_indices(len(cgoos), k = 1)
-      cgoos = cgoos[mask]  #Upper triangular calculation
-      param_dic["CGOOSV"][i][:, j] = cgoos.reshape(param_dic["DIMS"]).flatten()
-      cos_s = np.repeat(np.sign(cos_v.flatten())[jrange], tim[jrange])
-      if replicates == 1:
-        param_dic["SIGNCOS"][slice_idx, j] = cos_s
-      else:
-        param_dic["SIGNCOS"][j, slice_idx] = cos_s
-  return param_dic
+      sum_MM = cf[MM-1] + cf[MM]
+      jtkcf = np.concatenate((cf, sum_MM - cf[:MM-1][::-1], [sum_MM]))[::-1]
+    ajtkcf = [(jtkcf[i - 1] + jtkcf[i]) / 2 for i in range(1, len(jtkcf))]
+    cf = [ajtkcf[(j - 1) // 2] if j % 2 == 0 else jtkcf[j // 2] for j in range(1, 2 * int(self.max_stat) + 2)]
+    return np.array(cf) / (jtkcf[0] or 1)
 
+  def _generate_reference_waveforms(self, timepoints: int) -> Dict[int, List[np.ndarray]]:
+    timerange = np.arange(timepoints) * self.interval
+    waveforms = {}
+    for period in self.periods:
+      theta = 2 * np.pi * timerange / period
+      waveforms[period] = [
+      self._generate_phase_waveform(theta + (j * theta / 2))
+      for j in range(timepoints)
+     ]
+    return waveforms
 
-def jtkstat(z: pd.DataFrame, # expression data for a molecule ordered in groups by timepoint
-           param_dic: Dict # dictionary containing parameters defining model waveforms
-          ) -> Dict: # updated param_dic with appropriate model waveform assigned
-  "Determines the JTK statistic and p-values for all model phases, compared to expression data"
-  param_dic["CJTK"] = []
-  M = param_dic["MAX"]
-  z = np.array(z).flatten()
-  valid_mask = ~np.isnan(z)
-  z_valid = z[valid_mask]
-  foosv = np.sign(np.subtract.outer(z_valid, z_valid)).T  # Select upper triangle rather than the lower triangle
-  mask = np.triu(np.ones(foosv.shape), k = 1).astype(bool) # Remove middle diagonal from the tri index
-  mask[np.diag_indices(mask.shape[0])] = False
-  foosv = foosv[mask]
-  expected_dims = param_dic["DIMS"][0] * param_dic["DIMS"][1]
-  if len(foosv) != expected_dims:
-    temp_foosv = np.zeros(expected_dims)
-    temp_foosv[:len(foosv)] = foosv[:expected_dims]
-    foosv = temp_foosv
-  foosv = foosv.reshape(param_dic["DIMS"])
-  num_periods = param_dic["PERIODS"][0]
-  EXV = param_dic["EXV"]
-  SDV = param_dic["SDV"]
-  is_exact = param_dic.get("EXACT", False)
-  CP = param_dic["CP"]
-  for i in range(num_periods):
-    if i >= len(param_dic["CGOOSV"][0]):
-      param_dic["CJTK"].append([1, 0, 0])
-      continue
-    cgoosv = param_dic["CGOOSV"][0][i]
-    if foosv.shape != cgoosv.shape:
-      param_dic["CJTK"].append([1, 0, 0])
-      continue
-    S = np.nansum(np.diag(foosv * cgoosv))
-    if S == 0:
-      param_dic["CJTK"].append([1, 0, 0])
-      continue
-    jtk = (abs(S) + M) / 2  # Two-tailed JTK statistic for this lag and distribution
-    tau = S / M if M != 0 else 0
-    if is_exact:
-      jtki = min(1 + 2 * int(jtk), len(CP))  # index into the exact upper-tail distribution
-      p = 2 * CP[jtki-1] if jtki > 0 else 1
-    else:
-      p = 2 * norm.cdf(-(jtk - 0.5), -EXV, SDV)
-    param_dic["CJTK"].append([p, S, tau])  # include tau = s/M for this lag and distribution
-  return param_dic
+  def _generate_phase_waveform(self, theta: np.ndarray) -> np.ndarray:
+    cos_r = np.repeat(rankdata(np.cos(theta)), self.group_sizes[0])
+    matrix = np.sign(np.subtract.outer(cos_r, cos_r))
+    return matrix[np.tril_indices(len(cos_r), k = -1)]
 
-
-def jtkx(z: pd.DataFrame, # expression data ordered in groups by timepoint
-        param_dic: Dict, # dictionary containing parameters defining model waveforms
-        ampci: bool = False # whether to calculate amplitude confidence interval
-       ) -> pd.Series: # optimal waveform parameters for each molecular species
-  "Deployment of jtkstat for repeated use, and parameter extraction"
-  param_dic = jtkstat(z, param_dic)  # Calculate p and S for all phases
-  padj = np.array([cjtk[0] for cjtk in param_dic["CJTK"]])  # Exact two-tailed p values for period/phase combos
-  JTK_ADJP = np.min(padj)  # Global minimum adjusted p-value
-  minpadj = [np.min(padj[param_dic["PERFACTOR"] == p]) for p in range(1, len(param_dic["PERIODS"]) + 1)] # Minimum adjusted p-values for each period
-  pers = param_dic["PERIODS"][np.argmin(minpadj)] if len(param_dic["PERIODS"]) > 1 else param_dic["PERIODS"][0]
-  lagis = np.where(np.abs(padj - JTK_ADJP) < 1e-10)[0]  # list of optimal lag indices for each optimal period
-  if len(lagis) == 0:
-    lagis = np.array([np.nanargmin(np.abs(padj - JTK_ADJP))])
-  best_results = {'bestper': 0, 'bestlag': 0, 'besttau': 0, 'maxamp': 0, 'maxamp_ci': 2, 'maxamp_pval': 0}
-  sc = param_dic["SIGNCOS"].T
-  z_trim = z[:len(sc)]
-  hlm_z = float(np.nanmedian(z_trim)) if len(z_trim) > 0 else 0.0
-  if np.isnan(hlm_z).all():
-    hlm_z = np.zeros_like(z_trim)  # Fallback if all values are NaN
-  w = (z_trim - hlm_z) * np.sqrt(2)
-  for _ in range(abs(pers)):
-    for lagi in lagis:
-      S = param_dic["CJTK"][lagi][1]
-      s = np.sign(S) if S != 0 else 1
-      lag = (pers + (1 - s) * pers / 4 - lagi / 2) % pers
-      tmp = s * w * sc[:, lagi]
-      tmp_clean = tmp[np.isfinite(tmp)]
-      if len(tmp_clean) > 0:
-        if ampci:
-          jtkwt = pd.DataFrame(wilcoxon(tmp_clean, zero_method = 'wilcox', correction = False,
-                                                alternatives = 'two-sided', mode = 'exact'))
-          amp = jtkwt['confidence_interval'].median()  # Extract estimate (median) from the conf. interval
-          best_results['maxamp_ci'] = jtkwt['confidence_interval'].values
-          best_results['maxamp_pval'] = jtkwt['pvalue'].values
-        else:
-          amp = float(np.nanmedian(tmp_clean)) if len(tmp_clean) > 0 else 0.0
-        if amp > best_results['maxamp']:
-          best_results.update({'bestper': pers, 'bestlag': lag, 'besttau': [abs(param_dic["CJTK"][lagi][2])], 'maxamp': amp})
-  JTK_PERIOD = param_dic["INTERVAL"] * best_results['bestper']
-  JTK_LAG = param_dic["INTERVAL"] * best_results['bestlag']
-  JTK_AMP = float(max(0, best_results['maxamp']))
-  return pd.Series([JTK_ADJP, JTK_PERIOD, JTK_LAG, JTK_AMP])
+  def test(self, values: np.ndarray) -> Tuple[float, int, int, float]:
+    signs = np.sign(np.subtract.outer(values, values))[np.tril_indices(len(values), k = -1)]
+    best_stats = (1.0, self.periods[0], 0, 0)
+    for period in self.periods:
+      waveforms_period = self.waveforms[period]
+      for phase in range(len(waveforms_period)):
+        if phase > 0 and (period+(phase*self.interval) in self.periods or period-(phase*self.interval) in self.periods):
+          continue
+        S = (signs * waveforms_period[phase]).sum()
+        if S == 0:
+          continue
+        jtk = (abs(S) + self.max_stat) / 2
+        p_val = 2 * norm.cdf(-(jtk - 0.5), -self.max_stat/2, np.sqrt(self.variance))
+        if p_val < best_stats[0]:
+          best_stats = (p_val, period, phase * self.interval, S/self.max_stat)
+    return best_stats
 
 
 def get_BF(n: int, # sample size
@@ -481,7 +365,7 @@ def compare_inter_vs_intra_group(cohort_b: pd.DataFrame, # dataframe of glycans 
     temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
   else:
     mean_cohort_a = np.mean(cohort_a, axis = 1).values[:, np.newaxis] + 1e-8
-    temp = pd.DataFrame(np.log2((cohort_b.values + 1e-8) / mean_cohort_a))
+    temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / mean_cohort_a)))
   temp.index = glycans
   temp = temp.reset_index()
   # Melt the dataframe to long format
