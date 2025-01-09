@@ -275,16 +275,20 @@ def clean_up_heatmap(
     ) -> pd.DataFrame: # DataFrame with redundant motifs removed
   "Removes redundant motif entries from glycan abundance data while preserving the most informative labels"
   motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
-  df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' '*20 if x in motif_dic else x)
+  original_index = df.index.copy()
+  df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' ' * 20 if x in motif_dic else x)
+  df['_original_position'] = range(len(df))
   # Group the DataFrame by identical rows
-  grouped = df.groupby(list(df.columns))
-  # Find the row with the longest string index within each group and return a new DataFrame
-  max_idx_series = grouped.apply(lambda group: group.index.to_series().str.len().idxmax(), include_groups = False)
-  result = df.loc[max_idx_series].drop_duplicates()
-  result.index = result.index.str.strip()
-  motif_dic = {value: key for key, value in motif_dic.items()}
-  result.index = [motif_dic.get(k, k) for k in result.index]
-  return result
+  grouped = df.groupby(list(df.columns[:-1]), sort = False)
+  # Find the integer indices of rows with the longest string index within each group
+  max_idx_positions = []
+  for _, group in grouped:
+    # Find the row with the longest string index
+    longest_idx = group.index.to_series().str.len().idxmax()
+    # Retrieve the original integer position of this row
+    max_idx_positions.append(group.loc[longest_idx, '_original_position'])
+  df.index = original_index
+  return df.iloc[max_idx_positions].drop_duplicates().drop(['_original_position'], axis = 1)
 
 
 def quantify_motifs(

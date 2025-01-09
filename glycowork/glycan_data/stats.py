@@ -1,12 +1,11 @@
 import pandas as pd
 import numpy as np
-import math
 import warnings
 from typing import Dict, List, Optional, Tuple, Union
 from collections import Counter
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
-from scipy.stats import wilcoxon, rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind
+from scipy.stats import rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind
 from scipy.stats.mstats import winsorize
 from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
@@ -250,10 +249,10 @@ class JTKTest:
     best_stats = (1.0, self.periods[0], 0, 0)
     for period in self.periods:
       waveforms_period = self.waveforms[period]
-      for phase in range(len(waveforms_period)):
+      for phase, waveform_phase in enumerate(waveforms_period):
         if phase > 0 and (period+(phase*self.interval) in self.periods or period-(phase*self.interval) in self.periods):
           continue
-        S = (signs * waveforms_period[phase]).sum()
+        S = (signs * waveform_phase).sum()
         if S == 0:
           continue
         jtk = (abs(S) + self.max_stat) / 2
