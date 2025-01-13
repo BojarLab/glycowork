@@ -1025,6 +1025,7 @@ def test_get_class():
     assert get_class("GlcNAc(b1-4)GlcNAc") == "N"
     assert get_class("Glc-ol") == "free"
     assert get_class("Glc1Cer") == "lipid"
+    assert get_class("Gal(b1-4)Glc") == "lipid/free"
     assert get_class("UnknownGlycan") == ""
 
 

@@ -371,7 +371,7 @@ def enforce_class(glycan: str, # Glycan in IUPAC-condensed nomenclature
 
 
 def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
-            ) -> str: # Glycan class (O, N, free, lipid, or empty)
+            ) -> str: # Glycan class (O, N, free, lipid, free/lipid, or empty)
   "Determines glycan class"
   if glycan.endswith('-ol'):
     return 'free'
@@ -381,6 +381,8 @@ def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
     return 'N'
   if re.search(r'(GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S)$', glycan):
     return 'O'
+  if re.search(r'(Gal\(b1-4\)Glc|Gal\(b1-4\)\[Fuc\(a1-3\)\]Glc|Gal[36O]S\(b1-4\)Glc|Gal[36O]S\(b1-4\)\[Fuc\(a1-3\)\]Glc|Gal\(b1-4\)Glc[36O]S)$', glycan):
+    return 'lipid/free'
   return ''
 
 

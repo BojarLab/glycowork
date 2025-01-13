@@ -76,7 +76,7 @@
 ##### Fixed 🐛
 - Fixed an edge case in `get_unique_topologies`, in which the absence of a universal replacer sometimes created an empty list that was attempted to be indexed (0c94995)
 - Made sure that `compositions_to_structures` always returns a DataFrame, even if no matches are found (0c94995)
-- Provided correct exact methyl masses in `mass_dict`
+- Provided correct exact methyl masses in `mass_dict` (e3eeb32)
 
 #### processing
 ##### Added ✨
@@ -99,6 +99,7 @@
 - `canonicalize_iupac` will now no longer mess up branch formatting of the repeating unit in glycans of type "repeat" (9a94537)
 - Ensured that `canonicalize_iupac` works with lactonized glycans (i.e., containing something like "1,7lactone") (8c69c2c)
 - `find_matching_brackets_indices` has been renamed to `get_matching_indices` and now takes multiple delimiter choices and returns a generator, including the level of nesting (basically what `.draw.matches` used to do) (e1afe33)
+- `get_class` will now return "lipid/free" if glycans of type Neu5Ac(a2-3)Gal(b1-4)Glc are supplied (i.e., lacking 1Cer and -ol but still lactose-core based)
 
 ##### Fixed 🐛
 - Fixed component inference in `parse_glycoform` in case of unexpected composition formats (0c94995)
@@ -163,7 +164,7 @@
 - Added the "size_branch" option in the "feature_set" keyword argument of `annotate_dataset` and `quantify_motifs`, to analyze glycans by size or level of branching (d57b836)
 
 ##### Fixed 🐛
-- Fixed an issue in `clean_up_heatmap` in which, occasionally, duplicate strings were introduced in the output
+- Fixed an issue in `clean_up_heatmap` in which, occasionally, duplicate strings were introduced in the output (e3eeb32)
 
 ### ml
 #### model_training
