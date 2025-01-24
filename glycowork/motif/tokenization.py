@@ -80,23 +80,18 @@ def pad_sequence(seq: List[int], # Sequence to pad
 def get_core(sugar: str # Monosaccharide or linkage
            ) -> str: # Core monosaccharide string
   "Retrieve core monosaccharide from modified monosaccharide"
-  easy_cores = set(['dHexNAc', 'GlcNAc', 'GalNAc', 'ManNAc', 'FucNAc', 'QuiNAc', 'RhaNAc', 'GulNAc',
-                'IdoNAc', 'Ins', 'MurNAc', '6dAltNAc', 'AcoNAc', 'HexA', 'GlcA', 'AltA',
-                'GalA', 'ManA', 'Tyv', 'Yer', 'Abe', 'GlcfNAc', 'GalfNAc', 'ManfNAc',
-                'FucfNAc', 'IdoA', 'GulA', 'LDManHep', 'DDManHep', 'DDGlcHep', 'LyxHep', 'ManHep',
-                'DDAltHep', 'IdoHep', 'DLGlcHep', 'GalHep', 'ddHex', 'ddNon', 'Unknown', 'Assigned',
-                'MurNGc', '6dTalNAc', '6dGul', 'AllA', 'TalA', 'AllNAc', 'TalNAc', 'Kdn', 'Pen'])
-  next_cores = set(['GlcN', 'GalN', 'ManN', 'FucN', 'QuiN', 'RhaN', 'AraN', 'IdoN', 'Glcf', 'Galf', 'Manf',
-                'Fucf', 'Araf', 'Lyxf', 'Xylf', '6dAltf', 'Ribf', 'Fruf', 'Apif', 'Kdof', 'Sedf',
-                '6dTal', 'AltNAc', '6dAlt', 'dHex', 'HexNAc', 'dNon', '4eLeg', 'GulN', 'AltN', 'AllN', 'TalN'])
-  hard_cores = set(['HexN', 'Glc', 'Gal', 'Man', 'Fuc', 'Qui', 'Rha', 'Ara', 'Oli', 'Gul', 'Lyx',
-                'Xyl', 'Dha', 'Rib', 'Kdo', 'Tal', 'All', 'Pse', 'Leg', 'Asc', 'Hex',
-                'Fru', 'Hex', 'Alt', 'Xluf', 'Api', 'Ko', 'Pau', 'Fus', 'Erwiniose',
-                'Aco', 'Bac', 'Dig', 'Thre-ol', 'Ery-ol', 'Tag', 'Sor', 'Psi', 'Mur', 'Aci', 'Sia',
-                'Par', 'Col', 'Ido'])
-  for core_set in [easy_cores, next_cores, hard_cores]:
-    if catch := [ele for ele in core_set if (ele in sugar)]:
-      return next(iter(catch))
+  cores = ['dHexNAc', 'GlcNAc', 'GalNAc', 'ManNAc', 'FucNAc', 'QuiNAc', 'RhaNAc', 'GulNAc', 'IdoNAc', 'Ins', 'MurNAc',
+           '6dAltNAc', 'AcoNAc', 'HexA', 'GlcA', 'AltA', 'GalA', 'ManA', 'Tyv', 'Yer', 'Abe', 'GlcfNAc', 'GalfNAc',
+           'ManfNAc', 'FucfNAc', 'IdoA', 'GulA', 'LDManHep', 'DDManHep', 'DDGlcHep', 'LyxHep', 'ManHep', 'DDAltHep',
+           'IdoHep', 'DLGlcHep', 'GalHep', 'ddHex', 'ddNon', 'Unknown', 'Assigned', 'MurNGc', '6dTalNAc', '6dGul',
+           'AllA', 'TalA', 'AllNAc', 'TalNAc', 'Kdn', 'Pen', 'GlcN', 'GalN', 'ManN', 'FucN', 'QuiN', 'RhaN', 'AraN',
+           'IdoN', 'Glcf', 'Galf', 'Manf', 'Fucf', 'Araf', 'Lyxf', 'Xylf', '6dAltf', 'Ribf', 'Fruf', 'Apif', 'Kdof',
+           'Sedf', '6dTal', 'AltNAc', '6dAlt', 'dHex', 'HexNAc', 'dNon', '4eLeg', 'GulN', 'AltN', 'AllN', 'TalN',
+           'HexN', 'Glc', 'Gal', 'Man', 'Fuc', 'Qui', 'Rha', 'Ara', 'Oli', 'Gul', 'Lyx', 'Xyl', 'Dha', 'Rib', 'Kdo',
+           'Tal', 'All', 'Pse', 'Leg', 'Asc', 'Hex', 'Fru', 'Hex', 'Alt', 'Xluf', 'Api', 'Ko', 'Pau', 'Fus', 'Erwiniose',
+           'Aco', 'Bac', 'Dig', 'Thre-ol', 'Ery-ol', 'Tag', 'Sor', 'Psi', 'Mur', 'Aci', 'Sia', 'Par', 'Col', 'Ido']
+  if catch := next((c for c in cores if c in sugar), -1) != -1:
+    return catch
   if 'Neu' in sugar:
     if '5Ac' in sugar:
       return 'Neu5Ac'
