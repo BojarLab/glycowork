@@ -90,7 +90,7 @@ def get_core(sugar: str # Monosaccharide or linkage
            'HexN', 'Glc', 'Gal', 'Man', 'Fuc', 'Qui', 'Rha', 'Ara', 'Oli', 'Gul', 'Lyx', 'Xyl', 'Dha', 'Rib', 'Kdo',
            'Tal', 'All', 'Pse', 'Leg', 'Asc', 'Hex', 'Fru', 'Hex', 'Alt', 'Xluf', 'Api', 'Ko', 'Pau', 'Fus', 'Erwiniose',
            'Aco', 'Bac', 'Dig', 'Thre-ol', 'Ery-ol', 'Tag', 'Sor', 'Psi', 'Mur', 'Aci', 'Sia', 'Par', 'Col', 'Ido']
-  if catch := next((c for c in cores if c in sugar), -1) != -1:
+  if (catch := next((c for c in cores if c in sugar), -1)) != -1:
     return catch
   if 'Neu' in sugar:
     if '5Ac' in sugar:
