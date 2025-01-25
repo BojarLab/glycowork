@@ -68,11 +68,11 @@ from glycowork.motif.annotate import (
     get_k_saccharides, get_terminal_structures, create_correlation_network,
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
     Lectin, load_lectin_lib, create_lectin_and_motif_mappings,
-    lectin_motif_scoring, clean_up_heatmap, quantify_motifs,
+    lectin_motif_scoring, clean_up_heatmap, quantify_motifs, get_size_branching_features,
     count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty
 )
 from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process_occurrence,
-                  expand_pattern, convert_pattern_component, reformat_glycan_string,
+                  convert_pattern_component, reformat_glycan_string,
                   motif_to_regex, get_match, process_question_mark, calculate_len_matches_comb,
                   process_main_branch, check_negative_look, get_match_batch,
                   filter_matches_by_location, parse_pattern, compile_pattern
@@ -1973,20 +1973,9 @@ def test_annotate_glycan():
     assert result.index[0] == glycan
 
 
-def test_annotate_dataset():
-    glycans = ["Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc"]
-    # Test known motifs
-    result = annotate_dataset(glycans, feature_set=['known', 'chemical'])
-    assert isinstance(result, pd.DataFrame)
-    assert len(result) == 2
-    result = annotate_dataset(glycans+["{Fuc(a1-?)}Gal(b1-4)GlcNAc"], feature_set=['known'])
-    assert isinstance(result, pd.DataFrame)
-    assert len(result) == 3
-    # Test graph features
-    result = annotate_dataset(glycans, feature_set=['graph'])
-    assert 'diameter' in result.columns
-    assert 'branching' in result.columns
-    glycans = ['Gal(a1-4)Gal(b1-?)GlcNAc(b1-2)Man(a1-6)[Gal(b1-?)GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)]Gal(b1-3)GlcNAc(b1-6)[Fuc(a1-2)Gal(b1-3)]GalNAc',
+@pytest.fixture
+def test_glycans():
+    return ['Gal(a1-4)Gal(b1-?)GlcNAc(b1-2)Man(a1-6)[Gal(b1-?)GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)]Gal(b1-3)GlcNAc(b1-6)[Fuc(a1-2)Gal(b1-3)]GalNAc',
                'Gal(b1-4)GlcNAc(b1-2)Man(a1-?)[GlcNAc(b1-2)Man(a1-?)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Gal(b1-3)GlcNAc(b1-6)]Gal(b1-4)Glc-ol',
                'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
                'Glc(a1-3)Man(a1-2)[GlcNAc(b1-6)]Man6P(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man6P(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
@@ -1998,9 +1987,31 @@ def test_annotate_dataset():
                'Gal(b1-?)GlcNAc(b1-3)Gal(b1-?)[Fuc(a1-?)]GlcNAc6S(b1-3)[GlcNAc(b1-6)]GalNAc', 'Neu5Gc(a2-?)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(?1-?)GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
                'Neu5Ac(a2-?)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'ManOP(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
                'Gal(b1-4)GlcNAc(b1-6)[Gal3S(b1-3)]GalNAc', 'Neu5Ac(a2-3)Gal(b1-2)GlcNAc(b1-4)Man(a1-?)[Gal(b1-4)GlcNAc(b1-2)Man(a1-?)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']
-    result = annotate_dataset(glycans, feature_set=['size_branch'])
+
+
+def test_size_branching_features(test_glycans):
+    result = get_size_branching_features(test_glycans, n_bins=3)
     assert result.shape[1] == 6
-    result = annotate_dataset(glycans, feature_set=['custom', 'terminal2', 'terminal3'], custom_motifs=["Gal(b1-4)GlcNAc"])
+    result = get_size_branching_features(test_glycans, n_bins=0)
+    assert result.shape[1] == 2
+
+
+def test_annotate_dataset(test_glycans):
+    few_glycans = ["Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc"]
+    # Test known motifs
+    result = annotate_dataset(few_glycans, feature_set=['known', 'chemical'])
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 2
+    result = annotate_dataset(few_glycans+["{Fuc(a1-?)}Gal(b1-4)GlcNAc"], feature_set=['known'])
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 3
+    # Test graph features
+    result = annotate_dataset(few_glycans, feature_set=['graph'])
+    assert 'diameter' in result.columns
+    assert 'branching' in result.columns
+    result = annotate_dataset(test_glycans, feature_set=['size_branch'])
+    assert result.shape[1] == 6
+    result = annotate_dataset(test_glycans, feature_set=['custom', 'terminal2', 'terminal3'], custom_motifs=["Gal(b1-4)GlcNAc"])
 
 
 def test_get_molecular_properties():
@@ -2210,17 +2221,6 @@ def test_process_occurrence():
     assert process_occurrence("2,") == [2, 5]
 
 
-def test_expand_pattern():
-    # Test pattern with ambiguous linkage
-    assert expand_pattern("Galb3/4GlcNAc") == ["Galb3GlcNAc", "Galb4GlcNAc"]
-    # Test pattern without ambiguous linkage
-    assert expand_pattern("Galb4GlcNAc") == ["Galb4GlcNAc"]
-    # Test multiple ambiguous linkages (if supported)
-    pattern = "Galb3/4GlcNAca3/6"
-    result = expand_pattern(pattern)
-    assert len(result) == 2  # Should handle first ambiguity
-
-
 def test_convert_pattern_component():
     # Test simple component
     result = convert_pattern_component("Hex")
@@ -2289,6 +2289,10 @@ def test_get_match():
     pattern = "r[Sia]{,1}-[.]{,1}-([dHex]){,1}-.b3(?=-GalNAc)"
     assert get_match(pattern, "Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc") == ['Gal']
     assert get_match(pattern, "Neu5Gc(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc") == ["Neu5Gc(a2-3)Gal"]
+    assert get_match("Hex-HexNAc-([Hex|Fuc])?-HexNAc", "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == ["Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]
+    assert get_match("Hex-HexNAc-([Hex|Fuc])*-HexNAc", "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == ["Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]
+    assert get_match(".-.-([Hex|Fuc])+-.", "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == ['Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc', 'Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']
+    assert get_match("Fuc-Galb3/4-([Hex|Fuc])*-HexNAc", "Fuc(a1-2)Gal(b1-?)[Fuc(a1-?)]GlcNAc(b1-6)[Gal(b1-3)]GalNAc") == ["Fuc(a1-2)Gal(b1-?)[Fuc(a1-?)]GlcNAc"]
 
 
 def test_motif_to_regex():

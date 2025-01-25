@@ -158,6 +158,8 @@ def get_size_branching_features(
   # Calculate size and branching for each glycan
   sizes = [glycan.count('(')+1 for glycan in glycans]
   branchings = [glycan.count('[') for glycan in glycans]
+  if n_bins == 0:
+    return pd.DataFrame({'Size': sizes, 'Branching': branchings}, index = glycans)
   # Helper function to create bin edges and labels
   def create_bins(values: List[int], n_bins: int) -> Tuple[List[int], List[str]]:
     min_val, max_val = min(values), max(values)

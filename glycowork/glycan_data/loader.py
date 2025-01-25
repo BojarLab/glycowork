@@ -342,7 +342,9 @@ class DataFrameSerializer:
       index = data['index']
     )
 
+
 serializer = DataFrameSerializer()
+
 
 def count_nested_brackets(
     s: str,
@@ -361,3 +363,9 @@ def count_nested_brackets(
     elif c == '(' and depth > 1:
       nested_content += 1
   return nested_content if length else count
+
+
+def share_neighbor(edges, node1, node2):
+   neighbors1 = set(v2 for v1, v2 in edges if v1 == node1) | set(v1 for v1, v2 in edges if v2 == node1)
+   neighbors2 = set(v2 for v1, v2 in edges if v1 == node2) | set(v1 for v1, v2 in edges if v2 == node2)
+   return bool(neighbors1 & neighbors2)

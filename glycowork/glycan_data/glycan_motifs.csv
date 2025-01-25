@@ -137,7 +137,7 @@ Oglycan_core2,Gal(b1-3)[GlcNAc(b1-6)]GalNAc,"['flexible', 'flexible', 'flexible'
 Oglycan_core3,GlcNAc(b1-3)[!GlcNAc(b1-6)]GalNAc,"['flexible', 'flexible', 'terminal']"
 Oglycan_core4,GlcNAc(b1-3)[GlcNAc(b1-6)]GalNAc,"['flexible', 'flexible', 'flexible']"
 Oglycan_core5,GalNAc(a1-3)GalNAc,"['flexible', 'terminal']"
-Oglycan_core6,GlcNAc(b1-6)[!GlcNAc(b1-3)]GalNAc,"['flexible', 'flexible', 'terminal']"
+Oglycan_core6,GlcNAc(b1-6)[!Monosaccharide(b1-3)]GalNAc,"['flexible', 'flexible', 'terminal']"
 Oglycan_core7,GalNAc(a1-6)GalNAc,"['flexible', 'terminal']"
 Xylogalacturonan,Xyl(a1-3)GalA(a1-4)[Xyl(a1-3)]GalA,"['flexible', 'flexible', 'flexible', 'flexible']"
 Sialosylparagloboside,Sia(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc1Cer,"['terminal', 'flexible', 'flexible', 'flexible', 'terminal']"

@@ -3,7 +3,7 @@ import copy
 import networkx as nx
 from itertools import product, combinations, chain
 from typing import Dict, List, Union, Optional, Tuple
-from glycowork.glycan_data.loader import replace_every_second, unwrap
+from glycowork.glycan_data.loader import replace_every_second, unwrap, share_neighbor
 from glycowork.motif.processing import min_process_glycans, bracket_removal, canonicalize_iupac
 from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, compare_glycans, glycan_to_nxGraph
 
@@ -20,14 +20,14 @@ def preprocess_pattern(pattern: str # Glyco-regular expression like "Hex-HexNAc-
 
 def specify_linkages(pattern_component: str # Chunk of glyco-regular expression
                    ) -> str: # Specified component with linkages
-  "Convert expression linkages from shorthand to full notation, such as Mana6 to Man(a1-6)"
+  "Convert expression linkages from shorthand to full notation, such as Mana6 to Man(a1-6) or Galb3/4 to Gal(b1-3/4)"
   if re.search(r"[\d|\?]\(|\d$", pattern_component):
-    pattern = re.compile(r"([ab\?])([2-9\?])\(\?1-\?\)")
+    pattern = re.compile(r"([ab\?])(\d+/\d+|\d|\?)\(\?1-\?\)")
     def replacer(match):
       letter, number = match.groups()
       return f'({letter}1-{number})'
     pattern_component = pattern.sub(replacer, pattern_component)
-  return pattern_component.replace('5Ac(a1', '5Ac(a2').replace('5Gc(a1', '5Gc(a2').replace('Kdn(a1', 'Kdn(a2').replace('Sia(a1', 'Sia(a2')
+  return re.sub(r'(5Ac|5Gc|Kdn|Sia)\(a1', r'\1(a2', pattern_component)
 
 
 def replace_patterns(s: str # String to process
@@ -62,25 +62,11 @@ def process_question_mark(s: str, # Original pattern component
   return occurrence, pattern
 
 
-def expand_pattern(pattern_component: str # Chunk of glyco-regular expression
-                 ) -> List[str]: # List of specified components
-  "Expand ambiguous (but not wildcarded) linkages into specific versions; e.g., Galb3/4 to the two specified versions"
-  # Find the window of ambiguity (a segment with characters separated by slashes)
-  match = re.findall(r'\d\/\d', pattern_component)
-  if not match:
-    return [pattern_component]  # Return the original pattern if no ambiguous window is found
-  # Extract the ambiguous characters
-  ambiguous_window = match[0]
-  ambiguous_chars = ambiguous_window.split('/')
-  # Duplicate the pattern for each ambiguous character and replace the window
-  return [pattern_component.replace(ambiguous_window, char, 1) for char in ambiguous_chars]
-
-
 def convert_pattern_component(pattern_component: str # Chunk of glyco-regular expression
                            ) -> Union[str, Dict[str, List[int]]]: # String or dict mapping to occurrences
   "Process pattern component into string or occurrence dictionary"
   if not any([k in pattern_component for k in ['[', '{', '*', '+', '=', '<!', '?!']]):
-    if pattern_component[-1].isdigit() or pattern_component[-1] == '?':
+    if pattern_component[-1].isdigit() or pattern_component.endswith('?'):
       pattern_component += '-'
     return specify_linkages(replace_patterns(pattern_component))
   pattern, occurrence = None, None
@@ -99,13 +85,6 @@ def convert_pattern_component(pattern_component: str # Chunk of glyco-regular ex
     occurrence, pattern = process_question_mark(pattern_component, pattern)
   if pattern is None:
     pattern = replace_patterns(pattern_component)
-  if any(['/' in p for p in pattern]):
-    expanded_pattern = []
-    for p in pattern:
-      expanded_pattern.extend(expand_pattern(p) if '/' in p else [p])
-    pattern = expanded_pattern
-  elif '/' in pattern:
-    pattern = expand_pattern(pattern)
   return {specify_linkages(p): occurrence for p in pattern}
 
 
@@ -113,7 +92,7 @@ def process_main_branch(glycan: str, # Glycan in IUPAC-condensed
                        glycan_parts: List[str] # List of glycoletters as returned by min_process_glycans
                       ) -> List[str]: # Node index list with non-main chain nodes as empty strings
   "Extract main chain node indices of glycan"
-  glycan_dic = {i:p for i,p in enumerate(glycan_parts)}
+  glycan_dic = {i: p for i,p in enumerate(glycan_parts)}
   glycan2 = bracket_removal(glycan)
   glycan_parts2 = min_process_glycans([glycan2])[0]
   i = 0
@@ -192,6 +171,8 @@ def process_simple_pattern(p2: nx.Graph, # Glycomotif graph
     matches = filter_matches_by_location(matches, ggraph, match_location)
     if not matches:
       return False
+  if p2.number_of_nodes() % 2 == 0:
+    matches = [m[:-1] for m in matches]
   return [m for m in matches if all(x < y for x, y in zip(m, m[1:]))]
 
 
@@ -219,17 +200,18 @@ def process_complex_pattern(p: str, # Pattern component
   if not any('-' in p_key for p_key in p2.keys()):
     p2_keys = [specify_linkages(replace_patterns(p_key + '-' if p_key[-1].isdigit() or p_key[-1] == '?' else p_key)) for p_key in p2.keys()]
   else:
-    p2_keys = p2.keys()
+    p2_keys = list(p2.keys())
   counts_matches = [subgraph_isomorphism(ggraph, glycan_to_nxGraph(p_key.strip('^$%')),
                                          count = True, return_matches = True) for p_key in p2_keys]
   if sum([k for k in counts_matches if isinstance(k, int)]) < 1 and isinstance(counts_matches[0], int):
     matches = []
   else:
     _, matches = zip(*[x for x in counts_matches if x])
+  matches = [[n[:-1] for n in m] if p2_keys[i].endswith(')') else m for i, m in enumerate(matches)]
   len_matches = [list(set([len(j) for j in k])) for k in matches]
   len_matches_comb = calculate_len_matches_comb(len_matches)
   len_motif = list(p2.keys())[0]
-  len_motif = (len([le for le in len_motif.split('-') if le]) + len_motif.count('-')) + len_motif[-1].isdigit()
+  len_motif = (len([le for le in len_motif.split('-') if le]) + len_motif.count('-')) + len_motif[-1].isdigit() - p2_keys[0].endswith(')')
   len_motif = [v*len_motif for v in list(p2.values())[0]]
   if not any([le in len_motif for le in len_matches_comb]) and '{' in p:
     return False
@@ -257,16 +239,6 @@ def process_complex_pattern(p: str, # Pattern component
   return matches
 
 
-def process_pattern(p: str, # Pattern description
-                   p2: Union[str, Dict[str, List[int]]], # Pattern or occurrence dict
-                   ggraph: nx.Graph, # Glycan graph
-                   glycan: str, # Glycan in IUPAC-condensed
-                   match_location: Optional[str] # Location to match: start/end/internal
-                  ) -> Union[List[List[int]], bool]: # Match node indices or False
-  "Check if and where glycomotif exists in glycan"
-  return process_complex_pattern(p, p2, ggraph, glycan, match_location) if isinstance(p2, dict) else process_simple_pattern(p2, ggraph, match_location)
-
-
 def match_it_up(pattern_components: List[str], # Pattern chunks
                 glycan: str, # Glycan in IUPAC-condensed
                 ggraph: nx.Graph # Glycan graph
@@ -281,7 +253,7 @@ def match_it_up(pattern_components: List[str], # Pattern chunks
     else:
       match_location = 'start' if '^' in p2 else 'end' if '$' in p2 else 'internal' if '%' in p2 else None
       p2 = glycan_to_nxGraph(p2.strip('^$%'))
-    res = process_pattern(p, p2, ggraph, glycan, match_location)
+    res = process_complex_pattern(p, p2, ggraph, glycan, match_location) if isinstance(p2, dict) else process_simple_pattern(p2, ggraph, match_location)
     res = sorted(res) if isinstance(res, list) and all(len(inner) == 1 for inner in res) else res
     pattern_matches.append((p, res) if res else (p, []))
   return pattern_matches
@@ -322,25 +294,20 @@ def try_matching(current_trace: List[int], # Current match indices
     return True
   if not all_match_nodes or max([len(k) for k in all_match_nodes]) < 1:
     return min_occur == 0
-  last_trace_element = current_trace[-1]
+  last_node = current_trace[-1]
   edges_set = set(edges)
   if max_occur > 1:
     all_match_nodes = all_combinations(all_match_nodes, min_len = min_occur, max_len = max_occur)
     #currently only working for branches of size 1
-    idx = [all(last_trace_element - node == -2*(i+1) for i, node in enumerate(groupy)) for groupy in all_match_nodes]
+    idx = [all(last_node - node == -2*(i+1) for i, node in enumerate(groupy)) for groupy in all_match_nodes]
   else:
     if all_match_nodes[0] and isinstance(all_match_nodes[0][0], list):
       all_match_nodes = unwrap(all_match_nodes)
-    idx = [(last_trace_element - node[0] == -2 and not branch and (last_trace_element+1, node[0]) in edges_set) or \
-           ((last_trace_element+1, node[0]) in edges_set) or \
-           (last_trace_element - node[0] <= -2 and branch and not (last_trace_element+1, node[0]) in edges_set) and ((last_trace_element+1, node[-1]+2) in edges_set) or \
-           (last_trace_element - node[0] == 2 and branch and (node[0]+1, last_trace_element+2) in edges_set) or \
-           (last_trace_element - node[0] == -1 and not branch and (last_trace_element, node[0]) in edges_set) or \
-           (last_trace_element - node[0] == -1 and branch and not (last_trace_element, node[0]) in edges_set) and ((last_trace_element, node[-1]+1) in edges_set)
-           for node in all_match_nodes]
+    idx = [node[0] > last_node and ((not branch and share_neighbor(edges_set, last_node, node[0]))
+                                    or (branch and share_neighbor(edges_set, last_node+1, node[-1]+1))) for node in all_match_nodes]
   matched_nodes = [node for i, node in enumerate(all_match_nodes) if (idx[i]) and node]
   if branch and matched_nodes:
-    matched_nodes = [nodes for nodes in matched_nodes if nodes and not (last_trace_element+1, nodes[0]) in edges_set]
+    matched_nodes = [nodes for nodes in matched_nodes if nodes and not (last_node+1, nodes[0]) in edges_set]
   if not matched_nodes and min_occur == 0:
     return True
   return sorted(matched_nodes, key = lambda x: (len(x), x[-1]))

@@ -133,7 +133,7 @@ def get_pvals_motifs(
       df = df.set_index(glycan_col_name)
       df_motif = pd.concat([pd.concat([df.iloc[:, k],
                                    df_motif], axis = 1).dropna() for k in range(len(df.columns))], axis = 0)
-      cols = df_motif.columns.values.tolist()[1:] + [df_motif.columns.values.tolist()[0]]
+      cols = df_motif.columns.tolist()[1:] + [df_motif.columns.tolist()[0]]
       df_motif = df_motif[cols]
     else:
       df_motif[label_col_name] = df[label_col_name].values.tolist()

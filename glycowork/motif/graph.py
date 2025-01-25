@@ -286,33 +286,21 @@ def subgraph_isomorphism(glycan: Union[str, nx.Graph], # Glycan sequence or grap
     mappings = [list(isos.keys()) for isos in graph_pair.subgraph_isomorphisms_iter()]
 
   # Count motif occurrence
+  valid_mappings = []
+  if graph_pair.subgraph_is_isomorphic():
+      for mapping in graph_pair.subgraph_isomorphisms_iter():  # ensure directionality
+        inverted_mapping = {v: k for k, v in mapping.items()}  # motif node -> glycan node
+        if all(inverted_mapping[node] < inverted_mapping[neighbor] for node, neighbor in g2.edges()):
+          if not return_matches and not count:
+            return True
+        valid_mappings.append(list(mapping.keys()))
   if count:
-    counts = 0
-    while graph_pair.subgraph_is_isomorphic():
-      mapping = graph_pair.mapping
-      inverse_mapping  = {v: k for k, v in mapping.items()}
-      if all(inverse_mapping[node] < inverse_mapping[neighbor] for node, neighbor in g2.edges()):
-        counts += 1
-      g1.remove_nodes_from(mapping.keys())
-      if termini_list or narrow_wildcard_list:
-        graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
-                                                                                                             'termini', 'flexible'))
-      else:
-        g1_node_attr = set(nx.get_node_attributes(g1, "string_labels").values())
-        if all(k in g1_node_attr for k in motif_comp[0]):
-          graph_pair = nx.algorithms.isomorphism.GraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-        else:
-          return counts if not return_matches else (counts, mappings)
-    return counts if not return_matches else (counts, mappings)
+    total = len(valid_mappings)
+    return (total, valid_mappings) if return_matches else total
+  elif return_matches:
+    return (1 if valid_mappings else 0, valid_mappings)  # (count, matches)
   else:
-    if graph_pair.subgraph_is_isomorphic():
-      for mapping in graph_pair.subgraph_isomorphisms_iter():
-        mapping = {v: k for k, v in mapping.items()}
-        for node, neighbor in g2.edges():
-          if mapping[node] >= mapping[neighbor]:
-             return False if not return_matches else (0, [])
-        return True if not return_matches else (1, mappings)
-  return False if not return_matches else (0, [])
+    return bool(valid_mappings)
 
 
 def subgraph_isomorphism_with_negation(glycan: Union[str, nx.Graph], # Glycan sequence or graph
