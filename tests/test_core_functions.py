@@ -1885,6 +1885,8 @@ def test_subgraph_isomorphism_with_negation():
     result, matches = subgraph_isomorphism_with_negation(glycan, motif, count=True, return_matches=True)
     assert isinstance(result, int)
     assert isinstance(matches, list)
+    assert subgraph_isomorphism_with_negation("Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", '!Neu5Ac(a2-?)Gal(?1-?)GlcNAc', return_matches=True) == (1, [[12, 13, 14]])
+    assert subgraph_isomorphism_with_negation("Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", 'Neu5Ac(a2-?)!Gal(b1-4)GlcNAc', return_matches=True) == (1, [[0, 1, 2, 3, 6]])
 
 
 def test_categorical_node_match_wildcard():
@@ -2293,6 +2295,9 @@ def test_get_match():
     assert get_match("Hex-HexNAc-([Hex|Fuc])*-HexNAc", "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == ["Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]
     assert get_match(".-.-([Hex|Fuc])+-.", "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == ['Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc', 'Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']
     assert get_match("Fuc-Galb3/4-([Hex|Fuc])*-HexNAc", "Fuc(a1-2)Gal(b1-?)[Fuc(a1-?)]GlcNAc(b1-6)[Gal(b1-3)]GalNAc") == ["Fuc(a1-2)Gal(b1-?)[Fuc(a1-?)]GlcNAc"]
+    assert get_match("Fuc-([^Gal])+-GlcNAc", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == ['Fuc(a1-3)[Gal(b1-4)]GlcNAc']
+    assert get_match(".-HexNAc$", "Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == ['GlcNAc(b1-4)GlcNAc']
+    assert get_match("!Neu5Ac-Gal-GlcNAc", "Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == ["Gal(b1-4)GlcNAc"]
 
 
 def test_motif_to_regex():

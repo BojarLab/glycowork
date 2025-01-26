@@ -417,7 +417,7 @@ def format_retrieved_matches(lists: List[List[int]], # List of traces
                            ggraph: nx.Graph # Glycan graph
                           ) -> List[str]: # Matching glycan strings
   "Convert traces into glycan strings"
-  return sorted([graph_to_string(ggraph.subgraph(trace)) for trace in lists if nx.is_connected(ggraph.subgraph(trace))], key = len, reverse = True)
+  return sorted([canonicalize_iupac(graph_to_string(ggraph.subgraph(trace))) for trace in lists if nx.is_connected(ggraph.subgraph(trace))], key = len, reverse = True)
 
 
 def filter_dealbreakers(lists: List[List[int]], # List of traces

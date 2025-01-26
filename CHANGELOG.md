@@ -24,13 +24,13 @@
 - Improved the description of blood group motifs in `motif_list` (including type 3 blood group antigens, ExtB, and parent motifs) (b94744e)
 
 ##### Fixed 🐛
-- Fixed the "Oglycan_core6" motif definition in `motif_list` to no longer overlap with core 2 structures
+- Fixed the "Oglycan_core6" motif definition in `motif_list` to no longer overlap with core 2 structures (f394bda)
 
 #### loader
 ##### Added ✨
 - Added `count_nested_brackets` helper function to monitor level of nesting in glycans (41bb1a1, d57b836)
 - Added dictionaries with lists of strings as values as a new supported data type for `DataFrameSerializer` (034b6ad)
-- Added `share_neighbor` helper function to check whether two nodes in a glycan graph share a neighbor
+- Added `share_neighbor` helper function to check whether two nodes in a glycan graph share a neighbor (f394bda)
 
 ##### Changed 🔄
 - Changed `resources.open_text` to `resources.files` to prevent `DeprecationWarning` from `importlib` (0c94995)
@@ -117,9 +117,12 @@
 - Ensured that `compare_glycans` is 100% order-specific, never matching something like ("Gal(b1-4)GlcNAc", "GlcNAc(b1-4)Gal") (5a99d6b)
 - `glycan_to_nxGraph` will now return an empty graph if the input is an empty string (4f1ccfa)
 - `get_possible_topologies` will now also produce a warning (and return the input) if an already defined topology is provided as a pre-calculated graph (3f22f14)
+- Negation in `subgraph_isomorphism` can now also be added for internal monosaccharides (e.g., "Neu5Ac(a2-3)!Gal(b1-4)GlcNAc")
+- Functions with the `handle_negation` decorator can now be accessed without the decorator via `.__wrapped__`
 
 ##### Fixed 🐛
-- Fixed an edge case in which `subgraph_isomorphism` could erroneously return False if any of the matchings were in the wrong order, if "count = False"
+- Fixed an edge case in which `subgraph_isomorphism` could erroneously return False if any of the matchings were in the wrong order, if "count = False" (f394bda)
+- Fixed an edge case in which negated motifs in `subgraph_isomorphism` sometimes wrongly returned False because the negated motif was present somewhere else in the glycan (but the intended motif was still there)
 
 #### draw
 ##### Added ✨
@@ -148,7 +151,7 @@
 - `get_glycanova` will now raise a ValueError if fewer than three groups are provided in the input data (f76535e)
 - Improved console drawing quality controlled by `display_svg_with_matplotlib` and image quality in Excel cells using `plot_glycans_excel` (a64f694)
 - The "periods" argument in `get_jtk` is now a keyword argument and has a default value of [12, 24] (87ea2fc)
-- `specify_linkages` can now also handle super-narrow linkage wildcards like Galb3/4
+- `specify_linkages` can now also handle super-narrow linkage wildcards like Galb3/4 (f394bda)
 
 ##### Fixed 🐛
 - Fixed a FutureWarning in `get_lectin_array` by avoiding DataFrame.groupby with axis=1 (f76535e)
@@ -164,11 +167,12 @@
 
 #### regex
 ##### Changed 🔄
-- Improved tracing in `try_matching` for complicated branching cases
+- Improved tracing in `try_matching` for complicated branching cases (f394bda)
+- Ensured that `format_retrieved_matches` outputs the identified motifs in the canonical IUPAC representation
 
 ##### Deprecated ⚠️
-- Deprecated `process_pattern`; will be done in-line instead
-- Deprecated `expand_pattern`; will be handled by `specify_linkages` and improvements in `subgraph_isomorphism` instead
+- Deprecated `process_pattern`; will be done in-line instead (f394bda)
+- Deprecated `expand_pattern`; will be handled by `specify_linkages` and improvements in `subgraph_isomorphism` instead (f394bda)
 
 ##### Fixed 🐛
 - Fixed an issue in `get_match_batch`, in which precompiled patterns caused issues in `get_match` (194f31c)

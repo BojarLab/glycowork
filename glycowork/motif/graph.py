@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 from scipy.sparse.linalg import eigsh
-from functools import lru_cache
+from functools import lru_cache, wraps
 
 
 @lru_cache(maxsize = 1024)
@@ -234,6 +234,7 @@ def expand_termini_list(motif: Union[str, nx.Graph], # Glycan motif sequence or 
 def handle_negation(original_func: Callable # Function to wrap
                   ) -> Callable: # Wrapped function handling negation
   "Decorator for handling negation patterns in glycan matching functions"
+  @wraps(original_func)
   def wrapper(glycan, motif, *args, **kwargs):
     if isinstance(motif, str) and '!' in motif:
       return subgraph_isomorphism_with_negation(glycan, motif, *args, **kwargs)
@@ -311,29 +312,37 @@ def subgraph_isomorphism_with_negation(glycan: Union[str, nx.Graph], # Glycan se
                                     ) -> Union[bool, int, Tuple[int, List[List[int]]]]: # Boolean presence, count, or (count, matches)
   "Check if motif exists as subgraph in glycan, handling negation patterns"
   if isinstance(motif, str):
-    temp = motif[motif.index('!'):]
-    motif_stub = (motif[:motif.index('!')] + temp[temp.index(')')+1:]).replace('[]', '')
+    negated_part = re.search(r'(![A-Za-z0-9?(-]+)', motif).group(1) + ')'
+    to_replace = '' if motif.startswith('!') or '[!' in motif else 'Monosaccharide(?1-?)'
+    motif_stub = motif.replace(negated_part, to_replace).replace('[]', '')
+    negated_part_clean = glycan_to_nxGraph(negated_part.replace('!', ''))
   else:
     motif_stub = motif.copy()
-    nodes_to_remove = {node for node, data in motif_stub.nodes(data = True) if '!' in data.get('string_labels', '')}
-    nodes_to_remove.update({node + 1 for node in nodes_to_remove if node + 1 in motif_stub})
-    motif_stub.remove_nodes_from(nodes_to_remove)
-  res = subgraph_isomorphism(glycan, motif_stub, termini_list = termini_list, count = count, return_matches = return_matches)
-  if not res or (isinstance(res, tuple) and not res[0]):
-    return res
+    negated_nodes = {n for n, data in motif.nodes(data = True) if '!' in data.get('string_labels', '')}
+    negated_nodes.update({node + 1 for node in negated_nodes if node + 1 in motif_stub})
+    motif_stub.remove_nodes_from(negated_nodes)
+    negated_part_clean = nx.subgraph(motif, negated_nodes)
+  res = subgraph_isomorphism.__wrapped__(glycan, motif_stub, termini_list = termini_list, count = count, return_matches = True)
+  if not res[0]:
+    return (0, []) if return_matches else 0 if count else False
+  valid_matches = []
+  negated_len = len(negated_part_clean)
+  for match_nodes in res[1]:
+    ggraph = glycan_to_nxGraph(glycan) if isinstance(glycan, str) else glycan.copy()
+    context_nodes = set(match_nodes)
+    for step in range(negated_len):
+      for node in list(context_nodes):
+        context_nodes.update(list(ggraph.neighbors(node)))
+    context_subgraph = ggraph.subgraph(context_nodes)
+    if not subgraph_isomorphism.__wrapped__(context_subgraph, negated_part_clean):
+      valid_matches.append(match_nodes)
+  if count:
+    total = len(valid_matches)
+    return (total, valid_matches) if return_matches else total
+  elif return_matches:
+    return (1 if valid_matches else 0, valid_matches)
   else:
-    if isinstance(motif, str):
-      motif_too_large = motif.replace('!', '')
-    else:
-      motif_too_large = motif.copy()
-      for node, data in motif_too_large.nodes(data = True):
-        if '!' in data.get('string_labels', ''):
-          motif_too_large.nodes[node]['string_labels'] = data['string_labels'].replace('!', '')
-    res2 = subgraph_isomorphism(glycan, motif_too_large, termini_list = termini_list, count = count, return_matches = return_matches)
-    if res2:
-      return (0, []) if return_matches else 0 if count else False
-    else:
-      return res
+    return bool(valid_matches)
 
 
 def generate_graph_features(glycan: Union[str, nx.Graph], # Glycan sequence or network graph
