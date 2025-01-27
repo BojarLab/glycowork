@@ -161,10 +161,7 @@ def process_simple_pattern(p2: nx.Graph, # Glycomotif graph
                          match_location: Optional[str] # Location to match: start/end/internal
                         ) -> Union[List[List[int]], bool]: # Match node indices or False
   "Check if simple glycomotif exists in glycan"
-  res = subgraph_isomorphism(ggraph, p2, return_matches = True)
-  if not res:
-    return False
-  matched, matches = res
+  matched, matches = subgraph_isomorphism(ggraph, p2, return_matches = True)
   if not matched or not matches:
     return False
   if match_location:
@@ -420,32 +417,6 @@ def format_retrieved_matches(lists: List[List[int]], # List of traces
   return sorted([canonicalize_iupac(graph_to_string(ggraph.subgraph(trace))) for trace in lists if nx.is_connected(ggraph.subgraph(trace))], key = len, reverse = True)
 
 
-def filter_dealbreakers(lists: List[List[int]], # List of traces
-                       ggraph: nx.Graph, # Glycan graph
-                       pattern: str # Glyco-regular expression, e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-                      ) -> List[List[int]]: # Filtered traces
-  "Filter traces breaking pattern negations"
-  if '!' not in pattern:
-    return lists
-  else:
-    lists2 = []
-    node_dict = nx.get_node_attributes(ggraph, "string_labels")
-    for listy in lists:
-      last = pattern.split('-')[-1]
-      if '!' in last and node_dict.get(listy[-1]+2, 'default') != re.findall(r'[a-zA-Z0-9!]+', last)[0][1:]:
-        lists2.append(listy)
-        continue
-      first = pattern.split('-')[0]
-      if '!' in first and node_dict.get(listy[0]-2, 'default') != re.findall(r'[a-zA-Z0-9!]+', first)[0][1:]:
-        lists2.append(listy)
-        continue
-      second_to_last = pattern.split('-')[-2]
-      if '!' in second_to_last and node_dict.get(listy[-1]-2, 'default') != re.findall(r'[a-zA-Z0-9!]+', second_to_last)[0][1:]:
-        lists2.append(listy)
-        continue
-    return lists2
-
-
 def compile_pattern(pattern: str # Glyco-regular expression, e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
                   ) -> List[str]: # Pre-compiled pattern chunks
   "Pre-compile glyco-regular expression for faster processing"
@@ -473,7 +444,6 @@ def get_match(pattern: Union[str, List[str]], # Expression or pre-compiled patte
   if pattern_matches:
     traces, _ = trace_path(pattern_matches, ggraph)
     traces = fill_missing_in_list(traces)
-    traces = filter_dealbreakers(traces, ggraph, pattern)
     if traces:
       return True if not return_matches else format_retrieved_matches(traces, ggraph)
     else:

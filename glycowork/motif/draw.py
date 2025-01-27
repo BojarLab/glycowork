@@ -34,12 +34,6 @@ col_dict_transparent = {
     'snfg_orange': '#FDE7E0', 'snfg_red': '#F7E0E0', 'black': '#D9D9D9', 'grey': '#ECECEC'
 }
 
-# Extensions for draw_lib
-additions = ['-', 'blank', 'red_end', 'free', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A',
-             '25A', '03A', '14X', '25X', '03X', '14A', 'Z', 'Y', 'B', 'C', 'text', 'non_glycan', 'show', 'hide', 
-             'AltN', 'TalNAc', 'TalN', 'AllA', 'dHexNAc', 'ddHex', 'dNon', 'ddNon', 'Aci', '4eLeg', 'Unknown',
-             'MurNGc', 'Assigned', 'Psi']
-
 # Shape-color mapping
 sugar_dict = {
   "Hex": ['Hex', 'snfg_white', False], "Glc": ['Hex', 'snfg_alt_blue', False],
@@ -110,8 +104,8 @@ sugar_dict = {
   "Sor": ['Assigned', 'snfg_orange', False], "Psi": ['Assigned', 'snfg_pink', False],
   "non_glycan": ['Assigned', 'black', False],
 
-  "blank": ['empty', 'snfg_white', False], "text": ['text', None, None],
-  "red_end": ['red_end', None, None], "free": ['free', None, None],
+  "blank": ['empty', 'snfg_white', False], "text": ['text', None, None], "-": ['empty', None, None],
+  "red_end": ['red_end', None, None], "free": ['free', None, None], "show": ['empty', None, None], "hide": ['empty', None, None],
   "04X": ['04X', None, None], "15A": ['15A', None, None], "02A": ['02A', None, None], "13X": ['13X', None, None],
   "24X": ['24X', None, None], "35X": ['35X', None, None], "04A": ['04A', None, None], "15X": ['15X', None, None],
   "02X": ['02X', None, None], "13A": ['13A', None, None], "24A": ['24A', None, None], "35A": ['35A', None, None],
@@ -550,8 +544,8 @@ def split_monosaccharide_linkage(
   "Separates monosaccharides, modifications and linkages from label strings"
   def process_sublist(sub_list):
     sugar = sub_list[::2][::-1]
-    mod = [multireplace(get_modification(k) if k not in additions else '', {'O': '', '-ol': ''}) for k in sugar]
-    sugar = [get_core(k) if k not in additions else k for k in sugar]
+    mod = [multireplace(get_modification(k) if in_lib(k, lib) else '', {'O': '', '-ol': ''}) for k in sugar]
+    sugar = [get_core(k) if in_lib(k, lib) else k for k in sugar]
     bond = sub_list[1::2][::-1]
     return sugar, mod, bond
   if any(isinstance(el, list) for el in label_list):
@@ -1392,7 +1386,7 @@ def GlycoDraw(
 
   if draw_this in motif_list.motif_name.values.tolist():
     draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values[0]
-  if not in_lib(draw_this, expand_lib(lib, additions + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
+  if not in_lib(draw_this, expand_lib(lib, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
     raise Exception('Warning: did you enter a real glycan or motif?')
 
   try:

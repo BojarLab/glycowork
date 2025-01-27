@@ -330,7 +330,7 @@ def subgraph_isomorphism_with_negation(glycan: Union[str, nx.Graph], # Glycan se
   for match_nodes in res[1]:
     ggraph = glycan_to_nxGraph(glycan) if isinstance(glycan, str) else glycan.copy()
     context_nodes = set(match_nodes)
-    for step in range(negated_len):
+    for _ in range(negated_len):
       for node in list(context_nodes):
         context_nodes.update(list(ggraph.neighbors(node)))
     context_subgraph = ggraph.subgraph(context_nodes)

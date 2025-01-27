@@ -104,6 +104,7 @@
 - Ensured that `canonicalize_iupac` works with lactonized glycans (i.e., containing something like "1,7lactone") (8c69c2c)
 - `find_matching_brackets_indices` has been renamed to `get_matching_indices` and now takes multiple delimiter choices and returns a generator, including the level of nesting (basically what `.draw.matches` used to do) (e1afe33)
 - `get_class` will now return "lipid/free" if glycans of type Neu5Ac(a2-3)Gal(b1-4)Glc are supplied (i.e., lacking 1Cer and -ol but still lactose-core based) (b99699c)
+- `expand_lib` now no longer modifies the input dictionary
 
 ##### Fixed 🐛
 - Fixed component inference in `parse_glycoform` in case of unexpected composition formats (0c94995)
@@ -117,12 +118,12 @@
 - Ensured that `compare_glycans` is 100% order-specific, never matching something like ("Gal(b1-4)GlcNAc", "GlcNAc(b1-4)Gal") (5a99d6b)
 - `glycan_to_nxGraph` will now return an empty graph if the input is an empty string (4f1ccfa)
 - `get_possible_topologies` will now also produce a warning (and return the input) if an already defined topology is provided as a pre-calculated graph (3f22f14)
-- Negation in `subgraph_isomorphism` can now also be added for internal monosaccharides (e.g., "Neu5Ac(a2-3)!Gal(b1-4)GlcNAc")
-- Functions with the `handle_negation` decorator can now be accessed without the decorator via `.__wrapped__`
+- Negation in `subgraph_isomorphism` can now also be added for internal monosaccharides (e.g., "Neu5Ac(a2-3)!Gal(b1-4)GlcNAc") (7558d9b)
+- Functions with the `handle_negation` decorator can now be accessed without the decorator via `.__wrapped__` (7558d9b)
 
 ##### Fixed 🐛
 - Fixed an edge case in which `subgraph_isomorphism` could erroneously return False if any of the matchings were in the wrong order, if "count = False" (f394bda)
-- Fixed an edge case in which negated motifs in `subgraph_isomorphism` sometimes wrongly returned False because the negated motif was present somewhere else in the glycan (but the intended motif was still there)
+- Fixed an edge case in which negated motifs in `subgraph_isomorphism` sometimes wrongly returned False because the negated motif was present somewhere else in the glycan (but the intended motif was still there) (7558d9b)
 
 #### draw
 ##### Added ✨
@@ -145,6 +146,7 @@
 
 ##### Fixed 🐛
 - Made sure `scale_in_range` never divides by zero, if value range is zero (f76535e)
+- Made sure that monosaccharides that were never observed but are still SNFG-defined (like TalNAc vs 6dTalNAc) can still be drawn with `GlycoDraw` (ef24af4)
 
 #### analysis
 ##### Changed 🔄
@@ -168,11 +170,12 @@
 #### regex
 ##### Changed 🔄
 - Improved tracing in `try_matching` for complicated branching cases (f394bda)
-- Ensured that `format_retrieved_matches` outputs the identified motifs in the canonical IUPAC representation
+- Ensured that `format_retrieved_matches` outputs the identified motifs in the canonical IUPAC representation (7558d9b)
 
 ##### Deprecated ⚠️
 - Deprecated `process_pattern`; will be done in-line instead (f394bda)
 - Deprecated `expand_pattern`; will be handled by `specify_linkages` and improvements in `subgraph_isomorphism` instead (f394bda)
+- Deprecated `filter_dealbreakers`; will be handled by improvements in `subgraph_isomorphism` instead
 
 ##### Fixed 🐛
 - Fixed an issue in `get_match_batch`, in which precompiled patterns caused issues in `get_match` (194f31c)

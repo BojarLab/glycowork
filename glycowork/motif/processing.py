@@ -50,10 +50,11 @@ def get_lib(glycan_list: List[str] # List of IUPAC-condensed glycan sequences
   return {k: i for i, k in enumerate(lib)}
 
 
-def expand_lib(libr: Dict[str, int], # Existing dictionary of glycoletter:index
+def expand_lib(libr_in: Dict[str, int], # Existing dictionary of glycoletter:index
               glycan_list: List[str] # List of IUPAC-condensed glycan sequences
              ) -> Dict[str, int]: # Updated dictionary with new glycoletters
   "Updates libr with newly introduced glycoletters"
+  libr = dict(libr_in)
   new_libr = get_lib(glycan_list)
   offset = len(libr)
   for k, v in new_libr.items():
