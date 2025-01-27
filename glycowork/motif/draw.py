@@ -36,7 +36,9 @@ col_dict_transparent = {
 
 # Extensions for draw_lib
 additions = ['-', 'blank', 'red_end', 'free', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A',
-             '25A', '03A', '14X', '25X', '03X', '14A', 'Z', 'Y', 'B', 'C', 'text', 'non_glycan', 'show', 'hide']
+             '25A', '03A', '14X', '25X', '03X', '14A', 'Z', 'Y', 'B', 'C', 'text', 'non_glycan', 'show', 'hide', 
+             'AltN', 'TalNAc', 'TalN', 'AllA', 'dHexNAc', 'ddHex', 'dNon', 'ddNon', 'Aci', '4eLeg', 'Unknown',
+             'MurNGc', 'Assigned', 'Psi']
 
 # Shape-color mapping
 sugar_dict = {
@@ -249,11 +251,14 @@ def draw_shape(
                         x_base+half_dim, y_base,
                         x_base-half_dim, y_base,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
     p.M(x_base-half_dim, y_base)
     p.L(x_base, y_base+y_direction)
     p.L(x_base+half_dim, y_base)
-    p.L(x_base-half_dim, y_base)
+    drawing.append(p)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
+    p.M(x_base-half_dim, y_base)
+    p.L(x_base+half_dim, y_base)
     drawing.append(p)
   elif shape == 'dHex':
     # Deoxyhexose - triangle
@@ -271,11 +276,17 @@ def draw_shape(
                         x_base, y_base-inside_hex_dim,
                         x_base+half_dim, y_base+inside_hex_dim,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
     p.M(x_base, y_base+inside_hex_dim)
     p.L(x_base, y_base-inside_hex_dim)
+    drawing.append(p)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
+    p.M(x_base, y_base+inside_hex_dim)
     p.L(x_base+half_dim, y_base+inside_hex_dim)
-    p.L(x_base, y_base+inside_hex_dim)
+    drawing.append(p)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
+    p.M(x_base, y_base-inside_hex_dim)
+    p.L(x_base+half_dim, y_base+inside_hex_dim)
     drawing.append(p)
   elif shape == 'ddHex':
     # Dideoxyhexose - flat rectangle
