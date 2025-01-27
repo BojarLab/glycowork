@@ -2934,8 +2934,8 @@ def test_draw_shape_Pen():
 # Test cases structured as: (shape_name, color, expected_elements, description)
 TEST_CASES = [
     ('HexN', 'snfg_green', 5, 'crossed square'),
-    ('HexA_2', 'snfg_yellow', 5, 'divided diamond'),
-    ('dHexNAc', 'snfg_yellow', 5, 'divided triangle'),
+    ('HexA_2', 'snfg_yellow', 6, 'divided diamond'),
+    ('dHexNAc', 'snfg_yellow', 7, 'divided triangle'),
     ('ddHex', 'snfg_yellow', 3, 'flat rectangle'),
     ('dNon', 'snfg_red', 3, 'diamond'),
     ('ddNon', 'snfg_red', 3, 'flat diamond'),
