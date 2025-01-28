@@ -205,7 +205,7 @@ def replace_every_second(string: str, # input string
 def multireplace(string: str, # string to perform replacements on
                 remove_dic: Dict[str, str] # dict of form to_replace:replace_with
                ) -> str: # modified string
-  "Replaces all occurences of items in a set with a given string"
+  "Replaces all occurences of items in a string with a given string"
   for k, v in remove_dic.items():
     string = string.replace(k, v)
   return string

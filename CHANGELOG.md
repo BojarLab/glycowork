@@ -104,7 +104,8 @@
 - Ensured that `canonicalize_iupac` works with lactonized glycans (i.e., containing something like "1,7lactone") (8c69c2c)
 - `find_matching_brackets_indices` has been renamed to `get_matching_indices` and now takes multiple delimiter choices and returns a generator, including the level of nesting (basically what `.draw.matches` used to do) (e1afe33)
 - `get_class` will now return "lipid/free" if glycans of type Neu5Ac(a2-3)Gal(b1-4)Glc are supplied (i.e., lacking 1Cer and -ol but still lactose-core based) (b99699c)
-- `expand_lib` now no longer modifies the input dictionary
+- `expand_lib` now no longer modifies the input dictionary (65bd12c)
+- `get_possible_linkages` now returns a set instead of a list
 
 ##### Fixed 🐛
 - Fixed component inference in `parse_glycoform` in case of unexpected composition formats (0c94995)
@@ -113,6 +114,7 @@
 #### graph
 ##### Added ✨
 - Natively support narrow linkage ambiguity in `categorical_node_match_wildcard`; that means you can use things like "Gal(b1-3/4)GlcNAc" with `subgraph_isomorphism` or `compare_glycans` (as well as all functions using these core functions) and it will only return True for "Gal(b1-3)GlcNAc", "Gal(b1-4)GlcNAc", and "Gal(b1-?)GlcNAc" (b94744e)
+- Added `build_wildcard_cache` for a central handling of wildcard mapping that can also be cached
 
 ##### Changed 🔄
 - Ensured that `compare_glycans` is 100% order-specific, never matching something like ("Gal(b1-4)GlcNAc", "GlcNAc(b1-4)Gal") (5a99d6b)
@@ -175,7 +177,7 @@
 ##### Deprecated ⚠️
 - Deprecated `process_pattern`; will be done in-line instead (f394bda)
 - Deprecated `expand_pattern`; will be handled by `specify_linkages` and improvements in `subgraph_isomorphism` instead (f394bda)
-- Deprecated `filter_dealbreakers`; will be handled by improvements in `subgraph_isomorphism` instead
+- Deprecated `filter_dealbreakers`; will be handled by improvements in `subgraph_isomorphism` instead (65bd12c)
 
 ##### Fixed 🐛
 - Fixed an issue in `get_match_batch`, in which precompiled patterns caused issues in `get_match` (194f31c)

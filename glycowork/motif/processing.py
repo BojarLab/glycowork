@@ -34,6 +34,15 @@ monosaccharide_mapping = {
     'a2121A-1a_1-5': 'IdoA', 'a2112A-1a_1-5': 'GalA', 'a211h-1a_1-4': 'Araf'
     }
 
+# for canonicalize_iupac
+replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
+                 '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',
+                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P',
+                 '–': '-', ' ': '', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b',
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
+                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)'}
+CANONICALIZE = re.compile('|'.join(map(re.escape, list(replace_dic.keys()))))
+
 
 def min_process_glycans(glycan_list: List[str] # List of glycans in IUPAC-condensed format
                       ) -> List[List[str]]: # List of glycoletter lists
@@ -73,15 +82,15 @@ def in_lib(glycan: str, # Glycan in IUPAC-condensed nomenclature
 
 def get_possible_linkages(wildcard: str, # Pattern to match, ? can be wildcard
                          linkage_list: List[str] = linkages # List of linkages to search
-                        ) -> List[str]: # Matching linkages
+                        ) -> Set[str]: # Matching linkages
   "Retrieves all linkages that match a given wildcard pattern"
   if '/' in wildcard:
-    base = wildcard[:wildcard.index('/')-1]
-    options = [base + wildcard[wildcard.index('/')-1], base + wildcard[wildcard.index('/')+1]]
-    pattern = f"({'|'.join(options)}|{base}\\?)"
+    options = re.search(r'-(\d+(?:/\d+)*)', wildcard)
+    pattern =  f"{wildcard[:wildcard.index('-')]}-({('|'.join(options.group(1).split('/')))}|\\?)$"
   else:
-    pattern = wildcard.replace("?", r"[a-zA-Z0-9\?]")
-  return [linkage for linkage in linkage_list if re.fullmatch(pattern, linkage)]
+    pattern = wildcard.replace("?", "[ab1-9\\?]")
+  pattern = re.compile(f'^{pattern}')
+  return {linkage for linkage in linkage_list if pattern.fullmatch(linkage)}
 
 
 def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: Hex, HexNAc, dHex, Sia, HexA, Pen, HexOS, HexNAcOS
@@ -90,14 +99,14 @@ def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: H
   wildcard_dict = {'Hex': Hex, 'HexNAc': HexNAc, 'dHex': dHex, 'Sia': Sia, 'HexA': HexA, 'Pen': Pen,
                    'HexOS': HexOS, 'HexNAcOS': HexNAcOS,
                    'Monosaccharide': set().union(*[Hex, HexOS, HexNAc, HexNAcOS, dHex, Sia, HexA, Pen])}
-  return wildcard_dict.get(wildcard, [])
+  return wildcard_dict.get(wildcard, {})
 
 
 def de_wildcard_glycoletter(glycoletter: str # Monosaccharide or linkage with wildcards
                           ) -> str: # Specific glycoletter instance
   "Retrieves a random specified instance of a general type (e.g., 'Gal' for 'Hex')"
   if '?' in glycoletter or '/' in glycoletter:
-    return choice(get_possible_linkages(glycoletter))
+    return choice(list(get_possible_linkages(glycoletter)))
   elif monos := get_possible_monosaccharides(glycoletter):
     return choice(list(monos))
   else:
@@ -856,13 +865,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   elif ((glycan[-1].isdigit() and bool(re.search("[A-Z]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B') or glycan.endswith("LacDiNAc")) and 'e' not in glycan and '-' not in glycan:
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
-  replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
-                 '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',
-                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P',
-                 '–': '-', ' ': '', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b',
-                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
-                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)'}
-  glycan = multireplace(glycan, replace_dic)
+  glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
   glycan = re.sub(r'(\d),(\d)(?!l)', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone)
   if '{' in glycan and '}' not in glycan:
     glycan = f'{{{glycan[:glycan.index("{")]}?1-?}}{glycan[glycan.index("{")+1:]}'
