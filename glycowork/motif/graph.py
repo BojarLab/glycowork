@@ -189,7 +189,7 @@ def ptm_wildcard_for_graph(graph: nx.Graph # Input graph
                          ) -> nx.Graph: # Modified graph with PTM wildcards
   "Standardize PTM wildcards in graph"
   for node in graph.nodes:
-    graph.nodes[node]['string_labels'] = PTM_REGEX.sub('O', graph.nodes[node]['string_labels']).replace('NeuOAc', 'Neu5Ac').replace('NeuOGc', 'Neu5Gc')
+    graph.nodes[node]['string_labels'] = PTM_REGEX.sub('O', graph.nodes[node]['string_labels'])
   return graph
 
 

@@ -3155,6 +3155,13 @@ def test_get_pvals_motifs():
     results_thresh = get_pvals_motifs(df, thresh=1.0)
     assert isinstance(results_thresh, pd.DataFrame)
     assert len(results_thresh) > 0
+    high_scores = np.random.normal(100, 10, n_high)  # Above threshold
+    low_scores = np.random.normal(10, 2, n_low)   # Below threshold
+    df = pd.DataFrame({
+        'glycan': glycans * 4,  # Replicate each glycan 4 times
+        'target': np.concatenate([high_scores, low_scores])  # Mix high and low z-scores
+    })
+    results = get_pvals_motifs(df, zscores=False, thresh=0.5)
 
 
 def sample_comp_glycomics_data():
@@ -3307,6 +3314,10 @@ def test_get_differential_expression():
     assert 'Effect size' in results.columns
     assert 'corr p-val' in results.columns
     assert 'significant' in results.columns
+    group1_int = [df.columns.tolist().index(k) for k in group1]
+    group2_int = [df.columns.tolist().index(k) for k in group2]
+    results = get_differential_expression(df, group1_int, group2_int, impute=False)
+    results = get_differential_expression(df, group1, group2, impute=False, transform="ALR")
     # At least some results should be significant
     assert any(results['significant'])
     # Effect sizes should be reasonable

@@ -123,7 +123,7 @@ def get_pvals_motifs(
     if not zscores:
       means = df.iloc[:, 1:].mean()
       std_devs = df.iloc[:, 1:].std()
-      df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / std_devs
+      df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / (std_devs + 1e-6)
     # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 motifs = motifs, feature_set = feature_set, condense = True,
@@ -1097,8 +1097,9 @@ def get_SparCC(
   for i in range(df1.shape[1]):
     for j in range(df2.shape[1]):
       if partial_correlations:
-        valid_controls_i = [k for k in range(df1.shape[1]) if correlations_df1[i, k] > threshold and k != i]
-        valid_controls_j = [k for k in range(df2.shape[1]) if correlations_df2[j, k] > threshold and k != j]
+        max_controls = min(df1.shape[0] // 5, 5)
+        valid_controls_i = [k for k in range(df1.shape[1]) if correlations_df1[i, k] > threshold and k != i][:max_controls]
+        valid_controls_j = [k for k in range(df2.shape[1]) if correlations_df2[j, k] > threshold and k != j][:max_controls]
         controls_i = df1.iloc[:, valid_controls_i].values
         controls_j = df2.iloc[:, valid_controls_j].values
         controls = np.hstack([controls_i, controls_j])

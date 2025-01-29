@@ -816,6 +816,9 @@ def partial_corr(x: np.ndarray, # typically values from a column or row
                 motifs: bool = False # whether to analyze full sequences or motifs
                ) -> Tuple[float, float]: # (regularized partial correlation coefficient, p-value from Spearman correlation of residuals)
   "Compute regularized partial correlation of x and y, controlling for multiple other variables in controls"
+  # Check if we have any controls
+  if controls.size == 0 or controls.shape[1] == 0:
+    return spearmanr(x, y)
   # Fit regression models
   alpha = 0.1 if motifs else 0.25
   beta_x = Ridge(alpha = alpha).fit(controls, x).coef_

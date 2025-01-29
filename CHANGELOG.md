@@ -48,6 +48,7 @@
 - For `replace_outliers_winsorization`, in small datasets, the 5% limit is dynamically changed to include at least one datapoint (23d6456)
 - Handled the edge case of strong differences in `cohen_d` with zero standard deviation; now outputting positive/negative infinity (23d6456)
 - Renamed `test_inter_vs_intra_group` to `compare_inter_vs_intra_group`, to avoid testing issues (23d6456)
+- `partial_corr` will now return a normal Spearman's correlation if no control features can be identified
 
 ##### Deprecated ⚠️
 - Deprecated `hlm`, `fast_two_sum`, `two_sum`, `expansion_sum`, and `update_cf_for_m_n`, which will all be done in-line instead (e1afe33)
@@ -105,7 +106,7 @@
 - `find_matching_brackets_indices` has been renamed to `get_matching_indices` and now takes multiple delimiter choices and returns a generator, including the level of nesting (basically what `.draw.matches` used to do) (e1afe33)
 - `get_class` will now return "lipid/free" if glycans of type Neu5Ac(a2-3)Gal(b1-4)Glc are supplied (i.e., lacking 1Cer and -ol but still lactose-core based) (b99699c)
 - `expand_lib` now no longer modifies the input dictionary (65bd12c)
-- `get_possible_linkages` now returns a set instead of a list
+- `get_possible_linkages` now returns a set instead of a list (a98461f)
 
 ##### Fixed 🐛
 - Fixed component inference in `parse_glycoform` in case of unexpected composition formats (0c94995)
@@ -114,7 +115,7 @@
 #### graph
 ##### Added ✨
 - Natively support narrow linkage ambiguity in `categorical_node_match_wildcard`; that means you can use things like "Gal(b1-3/4)GlcNAc" with `subgraph_isomorphism` or `compare_glycans` (as well as all functions using these core functions) and it will only return True for "Gal(b1-3)GlcNAc", "Gal(b1-4)GlcNAc", and "Gal(b1-?)GlcNAc" (b94744e)
-- Added `build_wildcard_cache` for a central handling of wildcard mapping that can also be cached
+- Added `build_wildcard_cache` for a central handling of wildcard mapping that can also be cached (a98461f)
 
 ##### Changed 🔄
 - Ensured that `compare_glycans` is 100% order-specific, never matching something like ("Gal(b1-4)GlcNAc", "GlcNAc(b1-4)Gal") (5a99d6b)
@@ -156,6 +157,7 @@
 - Improved console drawing quality controlled by `display_svg_with_matplotlib` and image quality in Excel cells using `plot_glycans_excel` (a64f694)
 - The "periods" argument in `get_jtk` is now a keyword argument and has a default value of [12, 24] (87ea2fc)
 - `specify_linkages` can now also handle super-narrow linkage wildcards like Galb3/4 (f394bda)
+- `get_SparCC` will now limit the number of eligible controls for "partial_correlations=True" to sample_size//5, capped at 5
 
 ##### Fixed 🐛
 - Fixed a FutureWarning in `get_lectin_array` by avoiding DataFrame.groupby with axis=1 (f76535e)
