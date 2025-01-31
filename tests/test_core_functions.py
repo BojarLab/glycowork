@@ -1,3 +1,4 @@
+from pathlib import Path
 import pytest
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
@@ -3505,13 +3506,63 @@ def test_get_time_series(sample_time_series_data):
 def test_get_SparCC():
     df1 = sample_comp_glycomics_data()
     df2 = sample_comp_glycomics_data_corr()
+
+    for corr, pvals in [
+        get_SparCC(df1, df2),
+        get_SparCC(df1, df2, transform="ALR"),
+        get_SparCC(df1, df2, transform="Nothing"),
+        get_SparCC(df1, df2, motifs=True),
+        get_SparCC(df1, df2, partial_correlations=True),
+    ]:
+        assert isinstance(corr, pd.DataFrame)
+        assert isinstance(pvals, pd.DataFrame)
+
+
+def test_get_SparCC_ec_csv():
+    df1 = sample_comp_glycomics_data()
+    df2 = sample_comp_glycomics_data_corr()
+
+    tmp_dir = Path("test_tmp")
+    tmp_dir.mkdir(exist_ok=True)
+    df1.to_csv(tmp_dir / "df1.csv", index=False)
+    df2.to_csv(tmp_dir / "df2.csv", index=False)
+
+    corr, pvals = get_SparCC(str(tmp_dir / "df1.csv"), str(tmp_dir / "df2.csv"))
+    assert isinstance(corr, pd.DataFrame)
+    assert isinstance(pvals, pd.DataFrame)
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def test_get_SparCC_ec_xlsx():
+    df1 = sample_comp_glycomics_data()
+    df2 = sample_comp_glycomics_data_corr()
+
+    tmp_dir = Path("test_tmp")
+    tmp_dir.mkdir(exist_ok=True)
+    df1.to_excel(tmp_dir / "df1.xlsx", index=False)
+    df2.to_excel(tmp_dir / "df2.xlsx", index=False)
+
+    corr, pvals = get_SparCC(str(tmp_dir / "df1.xlsx"), str(tmp_dir / "df2.xlsx"))
+    assert isinstance(corr, pd.DataFrame)
+    assert isinstance(pvals, pd.DataFrame)
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def test_get_SparCC_ec_col_mismatch():
+    df1 = sample_comp_glycomics_data()
+    df2 = sample_comp_glycomics_data_corr()
+    df2 = df2[df2.columns[::-1]]
     corr, pvals = get_SparCC(df1, df2)
     assert isinstance(corr, pd.DataFrame)
     assert isinstance(pvals, pd.DataFrame)
-    corr, pvals = get_SparCC(df1, df2, transform="ALR")
-    corr, pvals = get_SparCC(df1, df2, transform="Nothing")
-    corr, pvals = get_SparCC(df1, df2, motifs=True)
-    corr, pvals = get_SparCC(df1, df2, partial_correlations=True)
+
+
+def test_get_SparCC_ec_inval_transform():
+    df1 = sample_comp_glycomics_data()
+    df2 = sample_comp_glycomics_data_corr()
+    df1.drop(columns=df1.columns[1], inplace=True)
+    with pytest.raises(ValueError):
+        get_SparCC(df1, df2, transform="Invalid")
 
 
 def test_get_roc():
@@ -3575,6 +3626,60 @@ def test_get_lectin_array():
     assert isinstance(results, pd.DataFrame)
     assert 'score' in results.columns
     results = get_lectin_array(df, [1,2,3], [4,5,6])
+
+
+@pytest.mark.parametrize("extension", ["csv", "xlsx"])
+def test_get_lectin_array_ec_file_extension(extension):
+    df = pd.DataFrame({
+        'sample_id': ['sample1', 'sample2', 'sample3', 'sample4', 'sample5', 'sample6'],
+        'ConA': [100, 110, 120, 500, 480, 520],
+        'WGA': [200, 220, 210, 600, 580, 620],
+        'SNA': [150, 140, 160, 450, 470, 430]
+    })
+    group1 = ['sample1', 'sample2', 'sample3']
+    group2 = ['sample4', 'sample5', 'sample6']
+    
+    tmp_dir = Path("test_tmp")
+    tmp_dir.mkdir(exist_ok=True)
+    filepath = tmp_dir / f"df.{extension}"
+    if extension == "csv":
+        df.to_csv(filepath, index=False)
+    else:
+        df.to_excel(filepath, index=False)
+    results = get_lectin_array(str(filepath), group1, group2)
+    assert isinstance(results, pd.DataFrame)
+    assert 'score' in results.columns
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def test_get_lectin_array_ec_duplicate():
+    df = pd.DataFrame({
+        'sample_id': ['sample1', 'sample2', 'sample3', 'sample4', 'sample5', 'sample6', 'sample6'],
+        'ConA': [100, 110, 120, 500, 480, 520, 520],
+        'WGA': [200, 220, 210, 600, 580, 620, 620],
+        'SNA': [150, 140, 160, 450, 470, 430, 430]
+    })
+    df = pd.concat([df, pd.DataFrame({
+        'sample_id': ['sample1', 'sample2', 'sample3', 'sample4', 'sample5', 'sample6', 'sample6'],
+        'WGA': [170, 200, 240, 700, 480, 630, 580],
+    })], axis=1)
+    group1 = ['sample1', 'sample2', 'sample3']
+    group2 = ['sample4', 'sample5', 'sample6']
+    with pytest.raises(ValueError):
+        get_lectin_array(df, group1, group2)
+
+
+def test_get_lectin_array_ec_no_group2():
+    df = pd.DataFrame({
+        'sample_id': ['sample1', 'sample2', 'sample3', 'sample4', 'sample5', 'sample6'],
+        'ConA': [100, 110, 120, 500, 480, 520],
+        'WGA': [200, 220, 210, 600, 580, 620],
+        'SNA': [150, 140, 160, 450, 470, 430]
+    })
+    group1 = ['sample1', 'sample2', 'sample3']
+    results = get_lectin_array(df, group1, None)
+    assert isinstance(results, pd.DataFrame)
+    assert 'score' in results.columns
 
 
 @pytest.fixture
@@ -4036,6 +4141,30 @@ def test_multi_feature_scoring_imbalanced_groups(sample_df):
     assert hasattr(model, 'predict')
     assert 0 <= roc_auc <= 1
     assert roc_auc > 0.5
+
+
+def test_multi_feature_scoring_no_group2(sample_df):
+    """Test basic functionality of multi_feature_scoring"""
+    np.random.seed(42)
+    n_features = 5
+    n_samples = 10
+    data = np.random.rand(n_features, n_samples)
+    # Make the first feature strongly predictive
+    data[0, :5] = 0.1  # Clear signal for group 1
+    data[0, 5:] = 0.9  # Clear signal for group 2
+    # Make the second feature moderately predictive
+    data[1, :5] = 0.3
+    data[1, 5:] = 0.7
+    df_transformed = pd.DataFrame(data)
+    group1 = [0, 1, 2, 3, 4]
+    with patch('matplotlib.pyplot.subplots') as mock_subplots:
+        mock_fig = MagicMock()
+        mock_ax = MagicMock()
+        mock_subplots.return_value = (mock_fig, mock_ax)
+        model, roc_auc = multi_feature_scoring(df_transformed, group1, None)
+        assert hasattr(model, 'predict')
+        assert 0 <= roc_auc <= 1
+        assert roc_auc > 0.5
 
 
 def test_get_glycoshift_per_site_basic(sample_glycoshift_df):

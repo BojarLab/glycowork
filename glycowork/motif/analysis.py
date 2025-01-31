@@ -1050,12 +1050,12 @@ def get_SparCC(
   if isinstance(df1, str):
     df1 = pd.read_csv(df1) if df1.endswith(".csv") else pd.read_excel(df1)
     df2 = pd.read_csv(df2) if df2.endswith(".csv") else pd.read_excel(df2)
-  df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
-  df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
   if df1.columns.tolist()[0] != df2.columns.tolist()[0] and df1.columns.tolist()[0] in df2.columns.tolist():
     common_columns = df1.columns.intersection(df2.columns)
     df1 = df1[common_columns]
     df2 = df2[common_columns]
+  df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
+  df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
   # Drop rows with all zero, followed by outlier removal and imputation & normalization
   df1 = df1.loc[~(df1.iloc[:, 1:] == 0).all(axis = 1)]
   df1 = df1.apply(replace_outliers_winsorization, axis = 1)
