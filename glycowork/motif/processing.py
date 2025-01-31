@@ -31,14 +31,15 @@ monosaccharide_mapping = {
     'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS',
     'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3S', 'a2211m-1x_1-5': 'Rha', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAc',
     'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S', 'a2112h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS',
-    'a2121A-1a_1-5': 'IdoA', 'a2112A-1a_1-5': 'GalA', 'a211h-1a_1-4': 'Araf'
+    'a2121A-1a_1-5': 'IdoA', 'a2112A-1a_1-5': 'GalA', 'a211h-1a_1-4': 'Araf', 'a2d22m-1x_1-5': 'Par', 'a2112m-1a_1-5': 'D-Fuc',
+    'u2222h_2*NCC/3=O': 'AllNAc'
     }
 
 # for canonicalize_iupac
 replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
-                 '\u03B1': 'a', '\u03B2': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',
+                  'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P',
-                 '–': '-', ' ': '', 'α': 'a', 'β': 'b', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b',
+                 '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, list(replace_dic.keys()))))
@@ -644,6 +645,13 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
   pattern = r'\b([a-z])\d(?:\|\1\d)+\}?|\b[a-z](\d)(?:\|[a-z]\2)+\}?'
   additional_pattern = r'\b([a-z])\?(?:\|\w\?)+\}?'
   def replacement(match):
+    text = match.group(0)
+    if '?' in text:
+      return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
+    if '|' in text and text[-1].isdigit():  # Case like r3|r6
+      letter = text[0]
+      nums = [c for c in text if c.isdigit()]
+      return f'{letter}{nums[0]}*{nums[1]}'
     return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
   wurcs = re.sub(pattern, replacement, wurcs)
   wurcs = re.sub(additional_pattern, '?', wurcs)
@@ -669,7 +677,10 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
       continue
     target_index, target_carbon = connectivity[target[0]], target[1:]
     target_mono = get_mono(monosaccharides[int(target_index)-1])
-    if '?' in target:
+    if '*' in target[1:]:  # Ultra-narrow wildcards
+      target_carbon = '/'.join(target[1:].split('*'))
+      iupac_parts.append((f"{source_mono}({source_carbon}-{target_carbon}){target_mono}", source[0], target[0]))
+    elif '?' in target:
       iupac_parts.append((f"{source_mono}({source_carbon}-{target_carbon}){target_mono}", source[0], target[0]))
     else:
       iupac_parts.append((f"{target_mono}({target_carbon}-{source_carbon}){source_mono}", target[0], source[0]))

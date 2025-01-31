@@ -16,7 +16,7 @@
 
 ### glycan_data
 ##### Added ✨
-- Added new named motifs to `motif_list`: DisialylLewisC, "Sia(a2-3)Gal(b1-3)[Sia(a2-6)]GlcNAc"; RM2, "Sia(a2-3)[GalNAc(b1-4)]Gal(b1-3)[Sia(a2-6)]GlcNAc"; DisialylLewisA, "Sia(a2-3)Gal(b1-3)[Fuc(a1-4)][Sia(a2-6)]GlcNAc" (a64f694)
+- Added new named motifs to `motif_list`: DisialylLewisC, `Sia(a2-3)Gal(b1-3)[Sia(a2-6)]GlcNAc`; RM2, `Sia(a2-3)[GalNAc(b1-4)]Gal(b1-3)[Sia(a2-6)]GlcNAc`; DisialylLewisA, `Sia(a2-3)Gal(b1-3)[Fuc(a1-4)][Sia(a2-6)]GlcNAc` (a64f694)
 - Added new curated glycomics dataset, `mouse_brain_GSL_PMID39375371` (b94744e)
 
 ##### Changed 🔄
@@ -48,7 +48,7 @@
 - For `replace_outliers_winsorization`, in small datasets, the 5% limit is dynamically changed to include at least one datapoint (23d6456)
 - Handled the edge case of strong differences in `cohen_d` with zero standard deviation; now outputting positive/negative infinity (23d6456)
 - Renamed `test_inter_vs_intra_group` to `compare_inter_vs_intra_group`, to avoid testing issues (23d6456)
-- `partial_corr` will now return a normal Spearman's correlation if no control features can be identified
+- `partial_corr` will now return a normal Spearman's correlation if no control features can be identified (241141b)
 
 ##### Deprecated ⚠️
 - Deprecated `hlm`, `fast_two_sum`, `two_sum`, `expansion_sum`, and `update_cf_for_m_n`, which will all be done in-line instead (e1afe33)
@@ -86,7 +86,7 @@
 #### processing
 ##### Added ✨
 - Added "antennary_Fuc" as another inferred feature to `infer_features_from_composition` (a64f694)
-- Added "IdoA", "GalA", and "Araf" to recognized WURCS2 tokens (52fc16e)
+- Added "IdoA", "GalA", "Araf", "D-Fuc", "AllNAc", and "Par" to recognized WURCS2 tokens (52fc16e)
 - Added the new "order_by" keyword argument to `choose_correct_isoform` to enforce strictly sorting branches by branch endings / linkages, if desired (918d18f)
 
 ##### Changed 🔄
@@ -96,9 +96,9 @@
 - `choose_correct_isoform` can now also be used with a single glycan sequence, in which case it internally calls `find_isomorphs` to generate material for choosing (918d18f)
 - `choose_correct_isoform` can now correctly handle more complex sequences than before (41bb1a1, 034b6ad)
 - `canonicalize_iupac` now can handle modifications such as Neu5,9Ac2 / Neu4,5Ac2 or multiple ones like in (6S)(4S)Gal, even if in the wrong order (034b6ad)
-- `canonicalize_iupac` now can handle even more typos (e.g., 'aa1-3' in specifying a linkage) (a64f694)
+- `canonicalize_iupac` now can handle even more typos (e.g., 'aa1-3' in specifying a linkage) (a64f694, 241141b)
 - `canonicalize_iupac` now can handle even more inconsistencies (e.g., mix of short-hand and expanded linkages)
-- Expanded `get_mono` to deal with some special WURCS2 tokens at the reducing end, of type "u2122h_2*NCC/3=O" (d57b836)
+- Expanded `get_mono` to deal with some special WURCS2 tokens at the reducing end, of type `u2122h_2*NCC/3=O` (d57b836)
 - `canonicalize_iupac` will no longer convert things like "b1-3/4" into "b1-?", because narrow linkage ambiguities can now be properly handled (52fc16e)
 - `get_possible_linkages` and `de_wildcard_glycoletter` now also support narrow linkage ambiguities like "b1-3/4" (52fc16e)
 - `canonicalize_iupac` will now no longer mess up branch formatting of the repeating unit in glycans of type "repeat" (9a94537)
@@ -107,6 +107,7 @@
 - `get_class` will now return "lipid/free" if glycans of type Neu5Ac(a2-3)Gal(b1-4)Glc are supplied (i.e., lacking 1Cer and -ol but still lactose-core based) (b99699c)
 - `expand_lib` now no longer modifies the input dictionary (65bd12c)
 - `get_possible_linkages` now returns a set instead of a list (a98461f)
+- `wurcs_to_iupac` now can also properly deal with ultra-narrow linkage wildcards (e.g., a2-3/6)
 
 ##### Fixed 🐛
 - Fixed component inference in `parse_glycoform` in case of unexpected composition formats (0c94995)
@@ -157,7 +158,7 @@
 - Improved console drawing quality controlled by `display_svg_with_matplotlib` and image quality in Excel cells using `plot_glycans_excel` (a64f694)
 - The "periods" argument in `get_jtk` is now a keyword argument and has a default value of [12, 24] (87ea2fc)
 - `specify_linkages` can now also handle super-narrow linkage wildcards like Galb3/4 (f394bda)
-- `get_SparCC` will now limit the number of eligible controls for "partial_correlations=True" to sample_size//5, capped at 5
+- `get_SparCC` will now limit the number of eligible controls for "partial_correlations=True" to sample_size//5, capped at 5 (241141b)
 
 ##### Fixed 🐛
 - Fixed a FutureWarning in `get_lectin_array` by avoiding DataFrame.groupby with axis=1 (f76535e)
