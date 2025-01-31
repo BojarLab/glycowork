@@ -308,7 +308,7 @@ def process_ptm(glycans: List[str], # List of glycans
   edges = [find_ptm(k, glycans, graph_dic, stem_lib, allowed_ptms = allowed_ptms,
                     ggraphs = ggraphs, suffix = suffix) for k in ptm_glycans]
   valid_edges = [k for k in edges if k != 0]
-  return zip(*valid_edges) if valid_edges else ([], [])
+  return list(zip(*valid_edges)) if valid_edges else ([], [])
 
 
 def update_network(network_in: nx.Graph, # Input network

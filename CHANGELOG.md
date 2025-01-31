@@ -86,7 +86,7 @@
 #### processing
 ##### Added ✨
 - Added "antennary_Fuc" as another inferred feature to `infer_features_from_composition` (a64f694)
-- Added "IdoA", "GalA", "Araf", "D-Fuc", "AllNAc", and "Par" to recognized WURCS2 tokens (52fc16e)
+- Added "IdoA", "GalA", "Araf", "D-Fuc", "AllNAc", and "Par" to recognized WURCS2 tokens (52fc16e, f3cd8f0)
 - Added the new "order_by" keyword argument to `choose_correct_isoform` to enforce strictly sorting branches by branch endings / linkages, if desired (918d18f)
 
 ##### Changed 🔄
@@ -107,7 +107,7 @@
 - `get_class` will now return "lipid/free" if glycans of type Neu5Ac(a2-3)Gal(b1-4)Glc are supplied (i.e., lacking 1Cer and -ol but still lactose-core based) (b99699c)
 - `expand_lib` now no longer modifies the input dictionary (65bd12c)
 - `get_possible_linkages` now returns a set instead of a list (a98461f)
-- `wurcs_to_iupac` now can also properly deal with ultra-narrow linkage wildcards (e.g., a2-3/6)
+- `wurcs_to_iupac` now can also properly deal with ultra-narrow linkage wildcards (e.g., a2-3/6) (f3cd8f0)
 
 ##### Fixed 🐛
 - Fixed component inference in `parse_glycoform` in case of unexpected composition formats (0c94995)

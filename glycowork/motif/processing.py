@@ -464,8 +464,7 @@ def linearcode_to_iupac(linearcode: str # Glycan in LinearCode format
   replace_dic = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GlcN': 'GlcNAc', 'GN': 'GlcNAc',
                  'GalN': 'GalNAc', 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
                  'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac'}
-  glycan = multireplace(linearcode.split(';')[0], replace_dic)
-  return glycan
+  return multireplace(linearcode.split(';')[0], replace_dic)
 
 
 def iupac_extended_to_condensed(iupac_extended: str # Glycan in IUPAC-extended format
@@ -555,11 +554,9 @@ def glycoct_build_iupac(iupac_parts: Dict[int, List[Tuple[str, int]]], # IUPAC f
   inverted_residue_dic = {}
   inverted_residue_dic.setdefault(residue_dic[start], []).append(start)
   for parent, children in iupac_parts.items():
-    child_strings = []
+    child_strings, i, last_child = [], 0, 0
     children_degree = [degrees[c[1]] for c in children]
     children = [x for _, x in sorted(zip(children_degree, children), reverse = True)]
-    i = 0
-    last_child = 0
     for child in children:
       prefix = '[' if degrees[child[1]] == 1 else ''
       suffix = ']' if children.index(child) > 0 else ''
@@ -585,16 +582,15 @@ def glycoct_build_iupac(iupac_parts: Dict[int, List[Tuple[str, int]]], # IUPAC f
 def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
                     ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from GlycoCT to barebones IUPAC-condensed format"
-  floating_bits = []
-  floating_part = ''
+  floating_part, floating_bits = '', []
   mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu',
                   'dxyl': 'Xyl', 'dara': 'D-Ara', 'lara': 'Ara', 'HEX': 'Hex', 'lman': 'Rha'}
   sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc',
                  'acetyl': 'OAc', 'methyl': 'OMe'}
   if len(glycoct.split("UND")) > 1:
-      floating_bits = glycoct.split("UND")[2:]
-      floating_bits = ["RES" + f.split('RES')[1] for f in floating_bits]
-      glycoct = glycoct.split("UND")[0]
+    floating_bits = glycoct.split("UND")[2:]
+    floating_bits = ["RES" + f.split('RES')[1] for f in floating_bits]
+    glycoct = glycoct.split("UND")[0]
   # Split the input by lines and iterate over them
   residue_dic, iupac_parts, degrees = glycoct_to_iupac_int(glycoct, mono_replace, sub_replace)
   if floating_bits:
@@ -615,8 +611,7 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
   iupac = re.sub(r'([1-9\?O](S|P|Ac|Me))NAc', r'NAc\1', iupac)
   if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
-  iupac = iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
-  return iupac
+  return iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
 
 
 def get_mono(token: str # WURCS monosaccharide token
@@ -646,8 +641,6 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
   additional_pattern = r'\b([a-z])\?(?:\|\w\?)+\}?'
   def replacement(match):
     text = match.group(0)
-    if '?' in text:
-      return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
     if '|' in text and text[-1].isdigit():  # Case like r3|r6
       letter = text[0]
       nums = [c for c in text if c.isdigit()]
@@ -655,16 +648,14 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
   wurcs = re.sub(pattern, replacement, wurcs)
   wurcs = re.sub(additional_pattern, '?', wurcs)
-  floating_part = ''
-  floating_parts = []
+  floating_part, floating_parts = '', []
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
   monosaccharides = '/'.join(parts[1:-2]).strip('[]').split('][')
   connectivity = parts[-2].split('-')
   connectivity = {chr(97 + i): int(num) for i, num in enumerate(connectivity)}
   degrees = {c: ''.join(topology).count(c) for c in connectivity}
-  inverted_connectivity = {}
-  iupac_parts = []
+  inverted_connectivity, iupac_parts = {}, []
   for link in topology:
     if '-' not in link:
       return get_mono(monosaccharides[0])
@@ -711,9 +702,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
       inverted_connectivity.setdefault(connectivity[tgt], []).insert(-insertion_idx, tgt)
     else:
       inverted_connectivity.setdefault(connectivity[tgt], []).append(tgt)
-  iupac = iupac[:-1]
-  iupac = iupac.strip('[]')
-  iupac = iupac.replace('}[', '}').replace('{[', '{')
+  iupac = iupac[:-1].strip('[]').replace('}[', '}').replace('{[', '{')
   pattern = re.compile(r'([ab\?])\(')
   iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
   # Define the pattern to find two ][ separated by a string with exactly one (
@@ -730,8 +719,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
       if balance < 0:
         return s[:i] + s[i + 1:]
     return s
-  iupac = remove_first_unmatched_opening_bracket(iupac)
-  return iupac
+  return remove_first_unmatched_opening_bracket(iupac)
 
 
 def oxford_to_iupac(oxford: str # Glycan in Oxford format
@@ -844,8 +832,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   while sulf > 0:
     iupac = iupac.replace("Gal(", "GalOS(", 1)
     sulf -= 1
-  iupac = floaty + iupac.strip('[]')
-  return iupac
+  return floaty + iupac.strip('[]')
 
 
 def check_nomenclature(glycan: str # Glycan string to check
