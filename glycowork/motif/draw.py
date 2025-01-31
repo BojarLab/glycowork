@@ -1273,13 +1273,14 @@ def draw_chem2d(
 def draw_chem3d(
     draw_this: str, # IUPAC-condensed glycan sequence
     mono_list: List[str], # List of monosaccharides to highlight
-    filepath: Optional[str] = None # Output file path for PDB
+    filepath: Optional[str] = None, # Output file path for PDB
+    pdb_file: Optional[str] = None  # already existing glycan structure
     ) -> None:
   "Generates 3D chemical structure model with highlighted monosaccharides using RDKit and py3Dmol"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py and https://github.com/rdkit/rdkit/blob/master/Docs/Book/GettingStartedInPython.rst
   try:
     from glycowork.motif.processing import IUPAC_to_SMILES
-    from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile
+    from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile, MolFromPDBFile
     from rdkit.Chem.AllChem import EmbedMolecule, MMFFOptimizeMolecule
     if is_jupyter():
       from rdkit.Chem.Draw import IPythonConsole
@@ -1298,17 +1299,20 @@ def draw_chem3d(
     add_colours_to_map(bonds, bond_colors, i, alpha = False)
   atom_colors = {k: ['#ECECEC'] if len(v) > 1 else v for k, v in atom_colors.items()}
 
-  mol = AddHs(mol)
-  EmbedMolecule(mol)
-  MMFFOptimizeMolecule(mol)
-  mol = RemoveHs(mol)
+  if pdb_file:
+    mol = MolFromPDBFile(pdb_file)
+  else:
+    mol = AddHs(mol)
+    EmbedMolecule(mol)
+    MMFFOptimizeMolecule(mol)
+    mol = RemoveHs(mol)
+    print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
 
   if filepath:
     if filepath.endswith('pdb'):
       MolToPDBFile(mol, filepath)
     else:
       print("3D structure can only be saved as .pdb file.")
-  print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
 
   if is_jupyter():
     v = py3Dmol.view(width = 500, height = 300)
@@ -1345,7 +1349,8 @@ def GlycoDraw(
     draw_method: Optional[str] = None, # Drawing method: None, 'chem2d', 'chem3d'
     filepath: Optional[str] = None, # Output file path
     suppress: bool = False, # Suppress display
-    per_residue: List = [] # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
+    per_residue: List = [], # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
+    pdb_file: Optional[str] = None  # only used when draw_method='chem3d'; already existing glycan structure
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
   if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
@@ -1373,7 +1378,7 @@ def GlycoDraw(
     if draw_method == 'chem2d':
       return draw_chem2d(draw_this = draw_this, mono_list = mono_list, filepath = filepath)
     elif draw_method == 'chem3d':
-      return draw_chem3d(draw_this = draw_this, mono_list = mono_list, filepath = filepath)
+      return draw_chem3d(draw_this = draw_this, mono_list = mono_list, filepath = filepath, pdb_file = pdb_file)
     else:
       raise ValueError('Method not supported. Please choose between "chem2d" and "chem3d".')
 

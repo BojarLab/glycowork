@@ -1278,7 +1278,7 @@ def get_lectin_array(
     effect_sizes, _ = list(zip(*effects)) if effects else [[0]*len(df), [0]*len(df)]
   else:
     effect_sizes = df.apply(omega_squared, axis = 1, args = (group1,))
-  lectin_score_dict = {lec: effect_sizes[i] for i, lec in enumerate(lectin_list)}
+  lectin_score_dict = {lec: effect_sizes[i] if isinstance(effect_sizes, tuple) else effect_sizes.iloc[i] for i, lec in enumerate(lectin_list)}
   df_out = lectin_motif_scoring(useable_lectin_mapping, motif_mapping, lectin_score_dict, lectin_lib, idf)
   df_out = df_out.sort_values(by = "score", ascending = False)
   scores = df_out['score'].values.reshape(-1, 1)

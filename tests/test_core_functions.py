@@ -3676,7 +3676,7 @@ def test_get_lectin_array_ec_no_group2():
         'WGA': [200, 220, 210, 600, 580, 620],
         'SNA': [150, 140, 160, 450, 470, 430]
     })
-    group1 = ['sample1', 'sample2', 'sample3']
+    group1 = ['treatment', 'treatment', 'treatment', 'control', 'control', 'control']
     results = get_lectin_array(df, group1, None)
     assert isinstance(results, pd.DataFrame)
     assert 'score' in results.columns
@@ -4156,7 +4156,7 @@ def test_multi_feature_scoring_no_group2(sample_df):
     data[1, :5] = 0.3
     data[1, 5:] = 0.7
     df_transformed = pd.DataFrame(data)
-    group1 = [0, 1, 2, 3, 4]
+    group1 = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
     with patch('matplotlib.pyplot.subplots') as mock_subplots:
         mock_fig = MagicMock()
         mock_ax = MagicMock()
