@@ -132,7 +132,7 @@
 #### draw
 ##### Added ✨
 - Added the "drawing" argument to `draw_hex`, `hex_circumference`, `add_bond`, `add_sugar`, and `draw_bracket` to avoid having to operate on global variables (918d18f)
-- Added the option to provide your own existing glycan .pdb structures to `GlycoDraw` when using `draw_method='chem3d'` with the new keyword argument `pdb_file`
+- Added the option to provide your own existing glycan .pdb structures to `GlycoDraw` when using `draw_method='chem3d'` with the new keyword argument `pdb_file` (9d082a6)
 
 ##### Changed 🔄
 - `matches` can now also use [] as delimiters (f76535e)

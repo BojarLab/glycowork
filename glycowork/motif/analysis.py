@@ -1300,7 +1300,7 @@ def get_lectin_array(
 
 def get_glycoshift_per_site(
     df: Union[pd.DataFrame, str], # DataFrame with rows formatted as 'protein_site_composition' in col 1, abundances in remaining cols
-    group1: List[Union[str, int]], # First group indices/names
+    group1: List[Union[str, int]], # First group indices/names or group labels for multi-group
     group2: List[Union[str, int]], # Second group indices/names
     paired: bool = False, # Whether samples are paired
     impute: bool = True, # Replace zeros with Random Forest model

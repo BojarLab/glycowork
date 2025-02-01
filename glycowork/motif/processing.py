@@ -5,7 +5,7 @@ import re
 from random import choice
 from functools import wraps
 from collections import defaultdict
-from itertools import permutations
+from itertools import permutations, combinations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
 from glycowork.glycan_data.loader import (unwrap, multireplace, count_nested_brackets,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
@@ -86,12 +86,13 @@ def get_possible_linkages(wildcard: str, # Pattern to match, ? can be wildcard
                         ) -> Set[str]: # Matching linkages
   "Retrieves all linkages that match a given wildcard pattern"
   if '/' in wildcard:
-    options = re.search(r'-(\d+(?:/\d+)*)', wildcard)
-    pattern =  f"{wildcard[:wildcard.index('-')]}-({('|'.join(options.group(1).split('/')))}|\\?)$"
-  else:
-    pattern = wildcard.replace("?", "[ab1-9\\?]")
-  pattern = re.compile(f'^{pattern}')
-  return {linkage for linkage in linkage_list if pattern.fullmatch(linkage)}
+    prefix = wildcard[:wildcard.index('-')].replace('?', '[ab?]')
+    numbers = re.search(r'-(\d+(?:/\d+)*)', wildcard).group(1).split('/')
+    base_pattern = f"{prefix}-({('|'.join(numbers))}|\\?)"
+    return {l for l in linkage_list if re.compile(f'^{base_pattern}$').fullmatch(l)} | \
+           ({f"{wildcard[:wildcard.index('-')]}-{'/'.join(sorted(combo))}" 
+            for combo in combinations(numbers, r = 2)} if len(numbers) > 2 else set())
+  return {l for l in linkage_list if re.compile(f'^{wildcard.replace("?", "[ab1-9\\?]")}$').fullmatch(l)}
 
 
 def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: Hex, HexNAc, dHex, Sia, HexA, Pen, HexOS, HexNAcOS

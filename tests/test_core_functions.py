@@ -651,6 +651,14 @@ def test_get_possible_linkages():
     assert 'b1-3' in result
     assert 'b1-4' in result
     assert 'b1-?' in result
+    result = get_possible_linkages("?1-3/4")
+    assert 'b1-3' in result
+    result = get_possible_linkages("?1-2/4/6")
+    assert '?1-2/6' in result
+    result = get_possible_linkages("a1-2/4/6")
+    assert 'a1-4/6' in result
+    assert 'a1-4' in result
+    assert 'a1-?' in result
 
 
 def test_get_possible_monosaccharides():
