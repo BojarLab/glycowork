@@ -92,7 +92,8 @@ def get_possible_linkages(wildcard: str, # Pattern to match, ? can be wildcard
     return {l for l in linkage_list if re.compile(f'^{base_pattern}$').fullmatch(l)} | \
            ({f"{wildcard[:wildcard.index('-')]}-{'/'.join(sorted(combo))}" 
             for combo in combinations(numbers, r = 2)} if len(numbers) > 2 else set())
-  return {l for l in linkage_list if re.compile(f'^{wildcard.replace("?", "[ab1-9\\?]")}$').fullmatch(l)}
+  pattern = f"^{wildcard.replace('?', '[ab1-9?]')}$"
+  return {l for l in linkage_list if re.compile(pattern).fullmatch(l)}
 
 
 def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: Hex, HexNAc, dHex, Sia, HexA, Pen, HexOS, HexNAcOS
