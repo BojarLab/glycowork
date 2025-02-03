@@ -6,7 +6,7 @@ import pickle
 from os import path
 from itertools import chain
 from importlib import resources
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 import urllib.request
 
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
