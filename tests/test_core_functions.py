@@ -897,6 +897,24 @@ LIN
 3:1o(6+1)4d
 4:4d(2+1)5n
 5:4o(6+1)6n""") == "Gal(b1-3)[GlcNAc6S(b1-6)]GalNAc"
+    assert canonicalize_iupac("""RES
+1b:b-dglc-HEX-1:5
+2s:n-acetyl
+3b:b-dgal-HEX-1:5
+4b:a-lxyl-HEX-1:5|3:d|6:d
+5b:a-lxyl-HEX-1:5|3:d|6:d
+LIN
+1:1d(2+1)2n
+2:1o(3+1)3d
+3:3o(2+1)4d
+4:1o(4+1)5d""") == "Col(a1-2)Gal(b1-3)[Col(a1-4)]GlcNAc"
+    assert glycoct_to_iupac("""RES
+1b:a-dman-OCT-2:6|1:a|2:keto|3:d
+2b:a-dman-OCT-2:6|1:a|2:keto|3:d
+3b:a-dman-OCT-2:6|1:a|2:keto|3:d
+LIN
+1:1o(8+2)2d
+2:2o(8+2)3d""") == "Kdo(a2-8)Kdo(a2-8)Kdo"
     # Test warnings
     assert canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol") == "Fuc(a1-3)[Gal(b1-4)Glc-ol"
 

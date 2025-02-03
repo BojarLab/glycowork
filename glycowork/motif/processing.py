@@ -32,7 +32,7 @@ monosaccharide_mapping = {
     'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3S', 'a2211m-1x_1-5': 'Rha', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAc',
     'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S', 'a2112h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS',
     'a2121A-1a_1-5': 'IdoA', 'a2112A-1a_1-5': 'GalA', 'a211h-1a_1-4': 'Araf', 'a2d22m-1x_1-5': 'Par', 'a2112m-1a_1-5': 'D-Fuc',
-    'u2222h_2*NCC/3=O': 'AllNAc'
+    'u2222h_2*NCC/3=O': 'AllNAc', 'a1d21m-1a_1-5': 'Col', 'Aad1122h-2a_2-6': 'Kdo', 'u2122h_2*N': 'GlcN', 'a2121h-1a_1-5': 'Ido'
     }
 
 # for canonicalize_iupac
@@ -585,10 +585,12 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
                     ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from GlycoCT to barebones IUPAC-condensed format"
   floating_part, floating_bits = '', []
-  mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu',
-                  'dxyl': 'Xyl', 'dara': 'D-Ara', 'lara': 'Ara', 'HEX': 'Hex', 'lman': 'Rha'}
+  mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu', 'lido': 'Ido',
+                  'dxyl': 'Xyl', 'dara': 'D-Ara', 'lara': 'Ara', 'HEX': 'Hex', 'lman': 'Rha', 'lxyl': 'Col'}
   sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc',
                  'acetyl': 'OAc', 'methyl': 'OMe'}
+  global_replace = {'dman-OCT': 'Kdo'}
+  glycoct = multireplace(glycoct, global_replace)
   if len(glycoct.split("UND")) > 1:
     floating_bits = glycoct.split("UND")[2:]
     floating_bits = ["RES" + f.split('RES')[1] for f in floating_bits]

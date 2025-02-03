@@ -86,8 +86,9 @@
 #### processing
 ##### Added ✨
 - Added "antennary_Fuc" as another inferred feature to `infer_features_from_composition` (a64f694)
-- Added "IdoA", "GalA", "Araf", "D-Fuc", "AllNAc", and "Par" to recognized WURCS2 tokens (52fc16e, f3cd8f0)
+- Added "IdoA", "GalA", "Araf", "D-Fuc", "AllNAc", "Par", "Kdo", "GlcN", "Ido", and "Col" to recognized WURCS2 tokens (52fc16e, f3cd8f0)
 - Added the new "order_by" keyword argument to `choose_correct_isoform` to enforce strictly sorting branches by branch endings / linkages, if desired (918d18f)
+- Added "Col", "Ido", and "Kdo" to supported GlycoCT monosaccharides
 
 ##### Changed 🔄
 - `check_nomenclature` will now actually raise appropriate Exceptions, in case nomenclature is incompatible with glycowork, instead of print warnings (23d6456)
