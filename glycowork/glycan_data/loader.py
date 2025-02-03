@@ -247,13 +247,12 @@ def build_custom_df(df: pd.DataFrame, # df_glycan / sugarbase
 
 
 def download_model(file_id: str, # Google Drive file ID
-                  local_path: str = 'model_weights.pt' # where to save model file
+                  local_path: Union[str, Path] = 'model_weights.pt' # where to save model file
                  ) -> None:
   "Download the model weights file from Google Drive"
   file_id = file_id.split('/d/')[1].split('/view')[0]
   url = f'https://drive.google.com/uc?id={file_id}'
-  urllib.request.urlretrieve(url, "mp3.mp3")
-  # gdown.download(url, local_path, quiet = False)
+  urllib.request.urlretrieve(url, local_path)
   print("Download completed.")
 
 
