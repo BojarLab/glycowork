@@ -1,7 +1,7 @@
 import mpld3
 import pickle
 import re
-from os import path
+from pathlib import Path
 from copy import deepcopy
 from itertools import combinations
 from functools import lru_cache
@@ -24,8 +24,10 @@ from glycowork.motif.tokenization import get_stem_lib, glycan_to_composition, ma
 from glycowork.motif.regex import get_match
 from glycowork.motif.annotate import link_find
 
-this_dir, this_filename = path.split(__file__)
-data_path = path.join(this_dir, 'milk_networks_exhaustive.pkl')
+# Get the directory and filename of the current script and construct the data path
+this_dir = Path(__file__).parent
+this_filename = Path(__file__).name
+data_path = this_dir / 'milk_networks_exhaustive.pkl'
 
 def __getattr__(name):
   if name == "net_dic":

@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 import pickle
 import pandas as pd
 import numpy as np
@@ -40,7 +40,7 @@ from glycowork.motif.graph import subgraph_isomorphism
 
 
 def preprocess_data(
-    df: Union[pd.DataFrame, str], # Input dataframe or filepath (.csv/.xlsx)
+    df: Union[pd.DataFrame, str, Path], # Input dataframe or filepath (.csv/.xlsx)
     group1: List[Union[str, int]], # Column indices/names for first group
     group2: List[Union[str, int]], # Column indices/names for second group
     experiment: str = "diff", # Type of experiment: "diff" or "anova"
@@ -56,8 +56,8 @@ def preprocess_data(
     monte_carlo: bool = False # Use Monte Carlo for technical variation
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[Union[str, int]], List[Union[str, int]]]: # (transformed df, untransformed df, group1 labels, group2 labels)
   "Preprocesses glycomics data by handling missing values with Random Forest imputation, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  if isinstance(df, (str, Path)):
+      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   if not isinstance(group1[0], str) and experiment == "diff":
     columns_list = df.columns.tolist()
     group1 = [columns_list[k] for k in group1]
@@ -114,8 +114,8 @@ def get_pvals_motifs(
     custom_motifs: List[str] = [] # Custom motifs if using 'custom' feature set
     ) -> pd.DataFrame: # DataFrame with p-values, FDR-corrected p-values, and Cohen's d effect sizes for glycan motifs
     "Identifies significantly enriched glycan motifs using Welch's t-test with FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
-    if isinstance(df, str):
-      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    if isinstance(df, (str, Path)):
+      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
     # Reformat to allow for proper annotation in all samples
     if multiple_samples:
       df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
@@ -190,13 +190,13 @@ def get_representative_substructures(
 
 
 def get_heatmap(
-    df: Union[pd.DataFrame, str], # Input dataframe or filepath (.csv/.xlsx)
+    df: Union[pd.DataFrame, str, Path], # Input dataframe or filepath (.csv/.xlsx)
     motifs: bool = False, # Analyze motifs instead of sequences
     feature_set: List[str] = ['known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
     transform: str = '', # Transform data before plotting
     datatype: str = 'response', # Data type: 'response' or 'presence'
     rarity_filter: float = 0.05, # Min proportion for non-zero values
-    filepath: str = '', # Path to save plot
+    filepath: Union[str, Path] = '', # Path to save plot
     index_col: str = 'glycan', # Column to use as index
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
     return_plot: bool = False, # Return plot object
@@ -204,8 +204,8 @@ def get_heatmap(
     **kwargs: Any # Keyword args passed to seaborn clustermap
     ) -> Optional[Any]: # None or plot object if return_plot=True
   "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  if isinstance(df, (str, Path)):
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   if index_col in df.columns:
     df = df.set_index(index_col)
   elif isinstance(df.iloc[0,0], str):
@@ -249,7 +249,7 @@ def get_heatmap(
   plt.ylabel('Glycans' if not motifs else 'Motifs')
   plt.tight_layout()
   if filepath and not return_plot:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300,
                 bbox_inches = 'tight')
     plt.close(g.fig)
   elif return_plot:
@@ -263,7 +263,7 @@ def plot_embeddings(
    emb: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None, # Glycan embeddings dict/DataFrame; defaults to SweetNet embeddings
    label_list: Optional[List[Any]] = None, # Labels for coloring points
    shape_feature: Optional[str] = None, # Monosaccharide/bond for point shapes
-   filepath: str = '', # Path to save plot
+   filepath: Union[str, Path] = '', # Path to save plot
    alpha: float = 0.8, # Point transparency
    palette: str = 'colorblind', # Color palette for groups
    **kwargs: Any # Keyword args passed to seaborn scatterplot
@@ -275,7 +275,7 @@ def plot_embeddings(
       label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
-      if not os.path.exists('glycan_representations_v1_4.pkl'):
+      if not Path('glycan_representations_v1_4.pkl').exists():
           download_model("https://drive.google.com/file/d/1--tf0kyea9jFLfffUtICKkyIw36E9hJ3/view?usp=sharing", local_path = 'glycan_representations_v1_4.pkl')
       emb = pickle.load(open('glycan_representations_v1_4.pkl', 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
@@ -300,7 +300,7 @@ def plot_embeddings(
       plt.legend(bbox_to_anchor = (1.05, 1), loc = 2, borderaxespad = 0.)
     plt.tight_layout()
     if filepath:
-      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+      plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300,
                   bbox_inches = 'tight')
     plt.show()
 
@@ -313,7 +313,7 @@ def characterize_monosaccharide(
     rank: Optional[str] = None, # Column name for group filtering
     focus: Optional[str] = None, # Row value for group filtering
     modifications: bool = False, # Consider modified monosaccharides
-    filepath: str = '', # Path to save plot
+    filepath: Union[str, Path] = '', # Path to save plot
     thresh: int = 10 # Minimum count threshold for inclusion
     ) -> None:
   "Analyzes connectivity and modification patterns of specified monosaccharides/linkages in glycan sequences"
@@ -398,18 +398,18 @@ def characterize_monosaccharide(
   fig.suptitle(f'Characterizing {sugar}')
   fig.tight_layout()
   if filepath:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300,
                   bbox_inches = 'tight')
   plt.show()
 
 
 def get_coverage(
-    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1), abundances in columns
+    df: Union[pd.DataFrame, str, Path], # DataFrame with glycans in rows (col 1), abundances in columns
     filepath: str = '' # Path to save plot
     ) -> None:
   "Visualizes glycan detection frequency across samples with intensity-based ordering"
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  if isinstance(df, (str, Path)):
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   d = df.iloc[:,1:]
   # arrange by mean intensity across all samples
   order = d.mean(axis = 1).sort_values().index
@@ -419,12 +419,12 @@ def get_coverage(
   ax.set(xlabel = 'Samples', ylabel =  'Glycan ID', title = '')
   # save figure
   if filepath:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
   plt.show()
 
 
 def get_pca(
-    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1), abundances in columns
+    df: Union[pd.DataFrame, str, Path], # DataFrame with glycans in rows (col 1), abundances in columns
     groups: Optional[Union[List[int], pd.DataFrame]] = None, # Group labels (e.g., [1,1,1,2,2,2,3,3,3]) or metadata DataFrame with 'id' column
     motifs: bool = False, # Analyze motifs instead of sequences
     feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
@@ -432,14 +432,14 @@ def get_pca(
     pc_y: int = 2, # Principal component for y-axis
     color: Optional[str] = None, # Column in metadata for color grouping
     shape: Optional[str] = None, # Column in metadata for shape grouping
-    filepath: str = '', # Path to save plot
+    filepath: Union[str, Path] = '', # Path to save plot
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
     transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
     rarity_filter: float = 0.05 # Min proportion for non-zero values
     ) -> None:
   "Performs PCA on glycan/motif abundance data with group-based visualization"
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  if isinstance(df, (str, Path)):
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   if transform == "ALR":
     df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
     df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
@@ -472,7 +472,7 @@ def get_pca(
            ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
   # save to file
   if filepath:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
   plt.show()
 
 
@@ -513,7 +513,7 @@ def select_grouping(
 
 
 def get_differential_expression(
-    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1) and abundance values in subsequent columns
+    df: Union[pd.DataFrame, str, Path], # DataFrame with glycans in rows (col 1) and abundance values in subsequent columns
     group1: List[Union[str, int]], # Column indices/names for first group
     group2: List[Union[str, int]], # Column indices/names for second group
     motifs: bool = False, # Analyze motifs instead of sequences
@@ -629,30 +629,30 @@ def get_differential_expression(
 
 
 def get_pval_distribution(
-    df_res: Union[pd.DataFrame, str], # Output DataFrame from get_differential_expression
-    filepath: str = '' # Path to save plot
+    df_res: Union[pd.DataFrame, str, Path], # Output DataFrame from get_differential_expression
+    filepath: Union[str, Path] = '' # Path to save plot
     ) -> None:
   "Creates histogram of p-values from differential expression analysis"
-  if isinstance(df_res, str):
-    df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
+  if isinstance(df_res, (str, Path)):
+    df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep="\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
   # make plot
   ax = sns.histplot(x = 'p-val', data = df_res, stat = 'frequency')
   ax.set(xlabel = 'p-values', ylabel =  'Frequency', title = '')
   # save to file
   if filepath:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
   plt.show()
 
 
 def get_ma(
-    df_res: Union[pd.DataFrame, str], # Output DataFrame from get_differential_expression
+    df_res: Union[pd.DataFrame, str, Path], # Output DataFrame from get_differential_expression
     log2fc_thresh: int = 1, # Log2FC threshold for highlighting
     sig_thresh: float = 0.05, # Significance threshold for highlighting
-    filepath: str = '' # Path to save plot
+    filepath: Union[str, Path] = '' # Path to save plot
     ) -> None:
   "Generates MA plot (mean abundance vs log2 fold change) from differential expression results"
-  if isinstance(df_res, str):
-    df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
+  if isinstance(df_res, (str, Path)):
+    df = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep="\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
   # Create masks for significant and non-significant points
   sig_mask = (abs(df_res['Log2FC']) > log2fc_thresh) & (df_res['corr p-val'] < sig_thresh)
   # Plot non-significant points first
@@ -664,12 +664,12 @@ def get_ma(
   ax.set(xlabel = 'Mean Abundance', ylabel = 'Log2FC', title = '')
   # save to file
   if filepath:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
   plt.show()
 
 
 def get_volcano(
-    df_res: Union[pd.DataFrame, str], # DataFrame from get_differential_expression with columns [Glycan, Log2FC, p-val, corr p-val]
+    df_res: Union[pd.DataFrame, str, Path], # DataFrame from get_differential_expression with columns [Glycan, Log2FC, p-val, corr p-val]
     y_thresh: float = 0.05, # Corrected p threshold for labeling
     x_thresh: float = 0, # Absolute x metric threshold for labeling
     n: Optional[int] = None, # Sample size for Bayesian-Adaptive Alpha
@@ -680,8 +680,8 @@ def get_volcano(
     **kwargs: Any # Keyword args passed to seaborn scatterplot
     ) -> None: # Displays volcano plot
   "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
-  if isinstance(df_res, str):
-    df_res = pd.read_csv(df_res) if df_res.endswith(".csv") else pd.read_excel(df_res)
+  if isinstance(df_res, (str, Path)):
+    df = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep="\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
   df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
   x = df_res[x_metric].values
   y = df_res['log_p'].values
@@ -855,7 +855,7 @@ def get_glycan_change_over_time(
 
 
 def get_time_series(
-    df: Union[pd.DataFrame, str], # DataFrame with sample IDs as 'sampleID_timepoint_replicate' in col 1 (e.g., T1_h5_r1)
+    df: Union[pd.DataFrame, str, Path], # DataFrame with sample IDs as 'sampleID_timepoint_replicate' in col 1 (e.g., T1_h5_r1)
     impute: bool = True, # Replace zeros with Random Forest model
     motifs: bool = False, # Analyze motifs instead of sequences
     feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
@@ -867,8 +867,8 @@ def get_time_series(
     custom_scale: Union[float, Dict] = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     ) -> pd.DataFrame: # DataFrame with regression coefficients and FDR-corrected p-values
     "Analyzes time series glycomics data using polynomial regression"
-    if isinstance(df, str):
-      df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    if isinstance(df, (str, Path)):
+      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
     df = df.fillna(0)
     if isinstance(df.iloc[0, 0], str):
       df = df.set_index(df.columns[0])
@@ -908,7 +908,7 @@ def get_time_series(
 
 
 def get_jtk(
-   df_in: Union[pd.DataFrame, str], # DataFrame with molecules in rows (col 0), then groups arranged by ascending timepoints
+   df_in: Union[pd.DataFrame, str, Path], # DataFrame with molecules in rows (col 0), then groups arranged by ascending timepoints
    timepoints: int, # Number of timepoints (each must have same number of replicates)
    interval: int, # Time units between experimental timepoints
    periods: List[int] = [12, 24], # Timepoints per cycle to test
@@ -920,10 +920,10 @@ def get_jtk(
    correction_method: str = "two-stage" # Multiple testing correction method
    ) -> pd.DataFrame: # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
-    if isinstance(df_in, str):
-      df = pd.read_csv(df_in) if df_in.endswith(".csv") else pd.read_excel(df_in)
+    if isinstance(df_in, (str, Path)):
+      df = pd.read_csv(df_in) if Path(df_in).suffix.lower() == ".csv" else pd.read_csv(df_in, sep="\t") if Path(df_in).suffix.lower() == ".tsv" else pd.read_excel(df_in)
     else:
-      df = df_in.copy(deep = True)
+      df = df_in.copy(deep=True)
     replicates = (df.shape[1] - 1) // timepoints
     alpha = get_alphaN(replicates)
     jtk = JTKTest(timepoints, periods, interval, replicates)
@@ -957,7 +957,7 @@ def get_jtk(
 
 
 def get_biodiversity(
-    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1), abundances in columns
+    df: Union[pd.DataFrame, str, Path], # DataFrame with glycans in rows (col 1), abundances in columns
     group1: List[Union[str, int]], # First group column indices or group labels
     group2: List[Union[str, int]], # Second group indices or additional group labels
     metrics: List[str] = ['alpha', 'beta'], # Diversity metrics to calculate
@@ -1037,8 +1037,8 @@ def get_biodiversity(
 
 
 def get_SparCC(
-    df1: Union[pd.DataFrame, str], # First DataFrame with glycans in rows (col 1) and abundances in columns
-    df2: Union[pd.DataFrame, str], # Second DataFrame with same format as df1
+    df1: Union[pd.DataFrame, str, Path], # First DataFrame with glycans in rows (col 1) and abundances in columns
+    df2: Union[pd.DataFrame, str, Path], # Second DataFrame with same format as df1
     motifs: bool = False, # Analyze motifs instead of sequences
     feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
@@ -1047,9 +1047,10 @@ def get_SparCC(
     partial_correlations: bool = False # Use regularized partial correlations
     ) -> Tuple[pd.DataFrame, pd.DataFrame]: # (Spearman correlation matrix, FDR-corrected p-value matrix)
   "Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)"
-  if isinstance(df1, str):
-    df1 = pd.read_csv(df1) if df1.endswith(".csv") else pd.read_excel(df1)
-    df2 = pd.read_csv(df2) if df2.endswith(".csv") else pd.read_excel(df2)
+  if isinstance(df1, (str, Path)):
+    df1 = pd.read_csv(df1) if Path(df1).suffix.lower() == ".csv" else pd.read_csv(df1, sep="\t") if Path(df1).suffix.lower() == ".tsv" else pd.read_excel(df1)
+  if isinstance(df2, (str, Path)):
+    df2 = pd.read_csv(df2) if Path(df2).suffix.lower() == ".csv" else pd.read_csv(df2, sep="\t") if Path(df2).suffix.lower() == ".tsv" else pd.read_excel(df2)
   if df1.columns.tolist()[0] != df2.columns.tolist()[0] and df1.columns.tolist()[0] in df2.columns.tolist():
     common_columns = df1.columns.intersection(df2.columns)
     df1 = df1[common_columns]
@@ -1152,7 +1153,7 @@ def multi_feature_scoring(
 
 
 def get_roc(
-    df: Union[pd.DataFrame, str], # DataFrame with glycans in rows (col 1), abundances in columns
+    df: Union[pd.DataFrame, str, Path], # DataFrame with glycans in rows (col 1), abundances in columns
     group1: List[Union[str, int]], # First group indices/names
     group2: List[Union[str, int]], # Second group indices/names
     motifs: bool = False, # Analyze motifs instead of sequences
@@ -1164,7 +1165,7 @@ def get_roc(
     transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
     custom_scale: Union[float, Dict] = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-    filepath: str = '', # Path to save ROC plot
+    filepath: Union[str, Path] = '', # Path to save ROC plot
     multi_score: bool = False # Find best multi-glycan score
     ) -> Union[List[Tuple[str, float]], Dict[Any, Tuple[str, float]], Tuple[LogisticRegression, float]]: # (Feature scores with ROC AUC values)
   "Calculates ROC curves and AUC scores for glycans/motifs or multi-glycan classifiers"
@@ -1198,7 +1199,7 @@ def get_roc(
     plt.title(f'ROC Curve for {best}')
     plt.legend(loc = 'lower right')
     if filepath:
-      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+      plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
   else: # multi-group comparison
     classes = list(set(group1))
     df = df.groupby(df.index).mean()
@@ -1235,20 +1236,21 @@ def get_roc(
       plt.title(f'Best Feature ROC for {classy}: {best_feature}')
       plt.legend(loc = "lower right")
     if filepath:
-      plt.savefig(filepath.split('.')[0] + "_" + str(classy) + filepath.split('.')[-1], format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+      filepath = Path(filepath)
+      plt.savefig(f"{Path(filepath).stem}_{classy}{Path(filepath).suffix}", format = filepath.suffix[1:], dpi = 300, bbox_inches = 'tight')
   return sorted_auc_scores
 
 
 def get_lectin_array(
-    df: Union[pd.DataFrame, str], # DataFrame with samples as rows and lectins as columns, first column containing sample IDs
+    df: Union[pd.DataFrame, str, Path], # DataFrame with samples as rows and lectins as columns, first column containing sample IDs
     group1: List[Union[str, int]], # First group indices/names
     group2: List[Union[str, int]], # Second group indices/names
     paired: bool = False, # Whether samples are paired
     transform: str = '' # Optional log2 transformation
     ) -> pd.DataFrame: # DataFrame with altered glycan motifs, supporting lectins, and effect sizes
   "Analyzes lectin microarray data by mapping lectin binding patterns to glycan motifs, calculating Cohen's d effect sizes between groups and clustering results by significance"
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  if isinstance(df, (str, Path)):
+      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   df = df.set_index(df.columns[0])
   duplicated_cols = set(df.columns[df.columns.duplicated()])
   if duplicated_cols:
@@ -1299,7 +1301,7 @@ def get_lectin_array(
 
 
 def get_glycoshift_per_site(
-    df: Union[pd.DataFrame, str], # DataFrame with rows formatted as 'protein_site_composition' in col 1, abundances in remaining cols
+    df: Union[pd.DataFrame, str, Path], # DataFrame with rows formatted as 'protein_site_composition' in col 1, abundances in remaining cols
     group1: List[Union[str, int]], # First group indices/names or group labels for multi-group
     group2: List[Union[str, int]], # Second group indices/names
     paired: bool = False, # Whether samples are paired

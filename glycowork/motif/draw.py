@@ -1,3 +1,4 @@
+from pathlib import Path
 from glycowork.glycan_data.loader import unwrap, motif_list, multireplace, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism
@@ -1223,7 +1224,7 @@ def add_colours_to_map(
 def draw_chem2d(
     draw_this: str, # IUPAC-condensed glycan sequence
     mono_list: List[str], # List of monosaccharides to highlight
-    filepath: Optional[str] = None # Output file path
+    filepath: Optional[Union[str, Path]] = None # Output file path
     ) -> Any: # IPython SVG display object
   "Creates 2D chemical structure drawing with highlighted monosaccharides using RDKit"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
@@ -1257,11 +1258,12 @@ def draw_chem2d(
   svg_data = d.GetDrawingText()
 
   if filepath:
-    filepath = filepath.replace('?', '_')
-    if filepath.endswith('.svg'):
+    filepath = Path(filepath)
+    filepath = filepath.with_name(filepath.name.replace('?', '_'))
+    if filepath.suffix.lower() == '.svg':
         with open(filepath, 'w') as f:
           f.write(svg_data)
-    elif filepath.endswith('pdf'):
+    elif filepath.suffix.lower() == '.pdf':
       try:
         from cairosvg import svg2pdf
         svg2pdf(bytestring = svg_data, write_to = filepath)
@@ -1273,8 +1275,8 @@ def draw_chem2d(
 def draw_chem3d(
     draw_this: str, # IUPAC-condensed glycan sequence
     mono_list: List[str], # List of monosaccharides to highlight
-    filepath: Optional[str] = None, # Output file path for PDB
-    pdb_file: Optional[str] = None  # already existing glycan structure
+    filepath: Optional[Union[str, Path]] = None, # Output file path for PDB
+    pdb_file: Optional[Union[str, Path]] = None  # already existing glycan structure
     ) -> None:
   "Generates 3D chemical structure model with highlighted monosaccharides using RDKit and py3Dmol"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py and https://github.com/rdkit/rdkit/blob/master/Docs/Book/GettingStartedInPython.rst
@@ -1309,7 +1311,8 @@ def draw_chem3d(
     print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
 
   if filepath:
-    if filepath.endswith('pdb'):
+    filepath = Path(filepath)
+    if filepath.suffix.lower() == '.pdb':
       MolToPDBFile(mol, filepath)
     else:
       print("3D structure can only be saved as .pdb file.")
@@ -1347,10 +1350,10 @@ def GlycoDraw(
     repeat: Optional[Union[bool, int, str]] = None, # Repeat unit specification (True: n units, int: # of units, str: range of units)
     repeat_range: Optional[List[int]] = None, # Repeat unit range
     draw_method: Optional[str] = None, # Drawing method: None, 'chem2d', 'chem3d'
-    filepath: Optional[str] = None, # Output file path
+    filepath: Optional[Union[str, Path]] = None, # Output file path
     suppress: bool = False, # Suppress display
     per_residue: List = [], # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
-    pdb_file: Optional[str] = None  # only used when draw_method='chem3d'; already existing glycan structure
+    pdb_file: Optional[Union[str, Path]] = None  # only used when draw_method='chem3d'; already existing glycan structure
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
   if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
@@ -1581,15 +1584,16 @@ def GlycoDraw(
   d2.append(d)
 
   if filepath:
-      filepath = filepath.replace('?', '_')
+      filepath = Path(filepath)
+      filepath = filepath.with_name(filepath.name.replace('?', '_'))
       data = d2.as_svg()
       data = re.sub(r'<text font-size="17.5" ', r'<text font-size="17.5" font-family="century gothic" font-weight="bold" ', data)
       data = re.sub(r'<text font-size="20.0" ', r'<text font-size="20" font-family="century gothic" ', data)
       data = re.sub(r'<text font-size="15.0" ', r'<text font-size="17.5" font-family="century gothic" font-style="italic" ', data)
-      if filepath.endswith('.svg'):
+      if filepath.suffix.lower() == '.svg':
         with open(filepath, 'w') as f:
           f.write(data)
-      elif filepath.endswith('.pdf'):
+      elif filepath.suffix.lower() == '.pdf':
         try:
           from cairosvg import svg2pdf
           svg2pdf(bytestring = data, write_to = filepath)
@@ -1615,7 +1619,7 @@ def annotate_figure(
     scale_range: Tuple[int, int] = (25, 80), # Min/max glycan dimensions
     compact: bool = False, # Use compact style
     glycan_size: str = 'medium', # Glycan size preset ('small', 'medium', 'large')
-    filepath: str = '', # Output file path
+    filepath: Union[str, Path] = '', # Output file path
     scale_by_DE_res: Optional[pd.DataFrame] = None, # Differential expression results (motif_analysis.get_differential_expression)
     x_thresh: float = 1, # X metric threshold
     y_thresh: float = 0.05, # P-value threshold
@@ -1685,13 +1689,14 @@ def annotate_figure(
   svg_tmp += '</svg>'
 
   if filepath:
+    filepath = Path(filepath)
     try:
       from cairosvg import svg2pdf, svg2svg, svg2png
-      if filepath.split('.')[-1] == 'pdf':
+      if filepath.suffix.lower() == '.pdf':
         svg2pdf(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-      elif filepath.split('.')[-1] == 'svg':
+      elif filepath.suffix.lower() == '.svg':
         svg2svg(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-      elif filepath.split('.')[-1] == 'png':
+      elif filepath.suffix.lower() == '.png':
         svg2png(bytestring = svg_tmp, write_to = filepath, dpi = 300)
     except:
       raise ImportError("You're missing some draw dependencies. Either don't use filepath or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
@@ -1700,8 +1705,8 @@ def annotate_figure(
 
 
 def plot_glycans_excel(
-    df: Union[pd.DataFrame, str], # DataFrame or filepath with glycans
-    folder_filepath: str, # Output folder path
+    df: Union[pd.DataFrame, str, Path], # DataFrame or filepath with glycans
+    folder_filepath: Union[str, Path], # Output folder path
     glycan_col_num: int = 0, # Glycan column index
     scaling_factor: float = 0.2, # Image scaling
     compact: bool = False # Use compact style
@@ -1711,14 +1716,12 @@ def plot_glycans_excel(
     from cairosvg import svg2png
   except ImportError:
     raise ImportError("You're missing some draw dependencies. If you want to use this function, head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-  if not folder_filepath.endswith('/'):
-    folder_filepath += '/'
+  if isinstance(df, (str, Path)):
+      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   df["SNFG"] = [np.nan for k in range(len(df))]
   image_column_number = df.columns.tolist().index("SNFG") + 1
   # Convert df_out to Excel
-  writer = pd.ExcelWriter(folder_filepath + "output.xlsx", engine = "openpyxl")
+  writer = pd.ExcelWriter(Path(folder_filepath) / "output.xlsx", engine = "openpyxl")
   df.to_excel(writer, index = False)
   # Load the workbook and get the active sheet
   workbook = writer.book
@@ -1765,4 +1768,4 @@ def plot_glycans_excel(
       sheet.column_dimensions[column_letter].width = img.width * 0.75 * 0.15
       sheet.row_dimensions[cell.row].height = img.height * 0.75
   # Save the workbook
-  workbook.save(filename = folder_filepath + "output.xlsx")
+  workbook.save(filename = Path(folder_filepath) / "output.xlsx")

@@ -2478,7 +2478,7 @@ def test_get_matching_indices():
     assert len(result) == 0
 
 
-def test_process_bonds():
+def test_process_bonds_1():
     # Test basic linkages
     assert process_bonds(["a1-2"]) == ["α 2"]
     assert process_bonds(["b1-4"]) == ["β 4"]
@@ -2508,9 +2508,8 @@ def test_draw_chem2d():
     result = draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"])
     plt.close('all')
     # Test with filepath
-    with patch('builtins.open', mock_open()) as mock_file:
-        draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath="test.svg")
-        mock_file.assert_called_once_with('test.svg', 'w')
+    draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath="test.svg")
+    assert Path("test.svg").exists()
     # Test with unsupported glycan
     with patch('glycowork.motif.processing.IUPAC_to_SMILES', side_effect=Exception), pytest.raises(Exception):
         draw_chem2d("InvalidGlycan", ["GlcNAc"])
@@ -2571,9 +2570,8 @@ def test_glycodraw():
     result = GlycoDraw("Terminal_LewisX", suppress=True)
     assert result is not None
     # Test file saving
-    with patch('builtins.open', mock_open()) as mock_file:
-        GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.svg")
-        mock_file.assert_called_once_with('test.svg', 'w')
+    GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.svg")
+    assert Path("test.svg").exists()
     # Test invalid glycan
     with pytest.raises(Exception):
         GlycoDraw("InvalidGlycan")
@@ -3101,7 +3099,7 @@ def test_add_bond():
     assert len(mock_drawing.all_elements()) == 1
 
 
-def test_process_bonds():
+def test_process_bonds_2():
     # Test alpha linkages
     assert process_bonds(['a1']) == ['α 1']
     # Test beta linkages
@@ -5825,12 +5823,6 @@ def test_early_stopping():
     assert not early_stopping.early_stop  # Counter should have reset
 
 
-def test_sigmoid():
-    assert abs(sigmoid(0) - 0.5) < 1e-6
-    assert sigmoid(100) > 0.99
-    assert sigmoid(-100) < 0.01
-
-
 def test_batch_norm_stats(mock_model):
     # Test disabling
     disable_running_stats(mock_model)
@@ -6397,8 +6389,9 @@ def test_get_Nsequon_preds(sample_data, mock_models):
     assert all(0 <= p <= 1 for p in df['glycosylated'])
 
 
-def verify_mock_data(data):
+def test_mock_data(mock_dataloader):
     """Helper function to verify mock data structure"""
+    data = next(iter(mock_dataloader['train']))
     assert hasattr(data, 'labels')
     assert hasattr(data, 'y')
     assert hasattr(data, 'edge_index')

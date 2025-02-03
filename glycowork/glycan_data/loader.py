@@ -1,18 +1,25 @@
+from pathlib import Path
 import re
 import json
-import gdown
 import pandas as pd
-from pickle import load
+import pickle
 from os import path
 from itertools import chain
 from importlib import resources
 from typing import Any, Dict, List
+import urllib.request
 
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
   motif_list = pd.read_csv(f)
-this_dir, this_filename = path.split(__file__)  # Get path of data.pkl
-data_path = path.join(this_dir, 'lib_v11.pkl')
-lib = load(open(data_path, 'rb'))
+
+# Get the directory and filename of the current script
+this_dir = Path(__file__).parent
+this_filename = Path(__file__).name
+
+# Construct the path to the data file and load it
+data_path = this_dir / 'lib_v11.pkl'
+with open(data_path, 'rb') as f:
+  lib = pickle.load(f)
 
 
 def __getattr__(name):
@@ -27,12 +34,12 @@ def __getattr__(name):
     globals()[name] = df_species  # Cache it to avoid reloading
     return df_species
   elif name == "df_glycan":
-    data_path = path.join(this_dir, 'v11_sugarbase.json')
+    data_path = this_dir / 'v11_sugarbase.json'
     df_glycan = serializer.deserialize(data_path)
     globals()[name] = df_glycan  # Cache it to avoid reloading
     return df_glycan
   elif name == "lectin_specificity":
-    data_path = path.join(this_dir, 'lectin_specificity.json')
+    data_path = this_dir / 'lectin_specificity.json'
     lectin_specificity = serializer.deserialize(data_path)
     globals()[name] = lectin_specificity  # Cache it to avoid reloading
     return lectin_specificity
@@ -58,7 +65,7 @@ class LazyLoader:
 
   def __dir__(self):
     files = resources.files(f"{self.package}.{self.directory}").iterdir()
-    dataset_names = [file.name[len(self.prefix):-4] for file in files if file.name.startswith(self.prefix) and file.name.endswith('.csv')]
+    dataset_names = [file.name[len(self.prefix):-4] for file in files if file.name.startswith(self.prefix) and file.suffix.lower() == '.csv']
     return dataset_names
 
 
@@ -245,7 +252,8 @@ def download_model(file_id: str, # Google Drive file ID
   "Download the model weights file from Google Drive"
   file_id = file_id.split('/d/')[1].split('/view')[0]
   url = f'https://drive.google.com/uc?id={file_id}'
-  gdown.download(url, local_path, quiet = False)
+  urllib.request.urlretrieve(url, "mp3.mp3")
+  # gdown.download(url, local_path, quiet = False)
   print("Download completed.")
 
 

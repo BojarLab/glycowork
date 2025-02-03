@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 import pickle
 import numpy as np
 import pandas as pd
@@ -9,9 +9,14 @@ from scipy.spatial.distance import cosine
 from scipy.cluster.hierarchy import dendrogram, linkage
 from glycowork.motif.graph import subgraph_isomorphism
 
-this_dir, this_filename = os.path.split(__file__)
-data_path = os.path.join(this_dir, 'milk_networks_exhaustive.pkl')
-net_dic = pickle.load(open(data_path, 'rb'))
+# Get the directory and filename of the current script
+this_dir = Path(__file__).parent
+this_filename = Path(__file__).name
+
+# Construct the path to the data file and load it
+data_path = this_dir / 'milk_networks_exhaustive.pkl'
+with open(data_path, 'rb') as f:
+  net_dic = pickle.load(f)
 
 
 def calculate_distance_matrix(to_compare: Union[Dict[str, List], List], # Objects to compare - dict values must be lists
