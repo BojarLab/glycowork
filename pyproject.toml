@@ -23,7 +23,6 @@ dependencies = [
     "networkx>=3.0",
     "statsmodels",
     "scipy",
-    "gdown",
     "seaborn",
     "xgboost",
     "mpld3",
@@ -47,7 +46,6 @@ all = [
     "Pillow",
     "openpyxl",
     "py3Dmol",
-    "gdown"
 ]
 dev = [
     "torch_geometric",
@@ -60,7 +58,6 @@ dev = [
     "Pillow",
     "openpyxl",
     "py3Dmol",
-    "gdown",
     "pytest"
 ]
 ml = [

@@ -57,7 +57,7 @@ def preprocess_data(
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[Union[str, int]], List[Union[str, int]]]: # (transformed df, untransformed df, group1 labels, group2 labels)
   "Preprocesses glycomics data by handling missing values with Random Forest imputation, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
   if isinstance(df, (str, Path)):
-      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   if not isinstance(group1[0], str) and experiment == "diff":
     columns_list = df.columns.tolist()
     group1 = [columns_list[k] for k in group1]
@@ -115,7 +115,7 @@ def get_pvals_motifs(
     ) -> pd.DataFrame: # DataFrame with p-values, FDR-corrected p-values, and Cohen's d effect sizes for glycan motifs
     "Identifies significantly enriched glycan motifs using Welch's t-test with FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
     if isinstance(df, (str, Path)):
-      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
     # Reformat to allow for proper annotation in all samples
     if multiple_samples:
       df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
@@ -205,7 +205,7 @@ def get_heatmap(
     ) -> Optional[Any]: # None or plot object if return_plot=True
   "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
   if isinstance(df, (str, Path)):
-    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   if index_col in df.columns:
     df = df.set_index(index_col)
   elif isinstance(df.iloc[0,0], str):
@@ -409,7 +409,7 @@ def get_coverage(
     ) -> None:
   "Visualizes glycan detection frequency across samples with intensity-based ordering"
   if isinstance(df, (str, Path)):
-    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   d = df.iloc[:,1:]
   # arrange by mean intensity across all samples
   order = d.mean(axis = 1).sort_values().index
@@ -439,7 +439,7 @@ def get_pca(
     ) -> None:
   "Performs PCA on glycan/motif abundance data with group-based visualization"
   if isinstance(df, (str, Path)):
-    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   if transform == "ALR":
     df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
     df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
@@ -634,7 +634,7 @@ def get_pval_distribution(
     ) -> None:
   "Creates histogram of p-values from differential expression analysis"
   if isinstance(df_res, (str, Path)):
-    df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep="\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
+    df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep = "\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
   # make plot
   ax = sns.histplot(x = 'p-val', data = df_res, stat = 'frequency')
   ax.set(xlabel = 'p-values', ylabel =  'Frequency', title = '')
@@ -652,7 +652,7 @@ def get_ma(
     ) -> None:
   "Generates MA plot (mean abundance vs log2 fold change) from differential expression results"
   if isinstance(df_res, (str, Path)):
-    df = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep="\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
+    df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep = "\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
   # Create masks for significant and non-significant points
   sig_mask = (abs(df_res['Log2FC']) > log2fc_thresh) & (df_res['corr p-val'] < sig_thresh)
   # Plot non-significant points first
@@ -681,7 +681,7 @@ def get_volcano(
     ) -> None: # Displays volcano plot
   "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
   if isinstance(df_res, (str, Path)):
-    df = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep="\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
+    df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep = "\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
   df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
   x = df_res[x_metric].values
   y = df_res['log_p'].values
@@ -868,7 +868,7 @@ def get_time_series(
     ) -> pd.DataFrame: # DataFrame with regression coefficients and FDR-corrected p-values
     "Analyzes time series glycomics data using polynomial regression"
     if isinstance(df, (str, Path)):
-      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
     df = df.fillna(0)
     if isinstance(df.iloc[0, 0], str):
       df = df.set_index(df.columns[0])
@@ -921,9 +921,9 @@ def get_jtk(
    ) -> pd.DataFrame: # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
     if isinstance(df_in, (str, Path)):
-      df = pd.read_csv(df_in) if Path(df_in).suffix.lower() == ".csv" else pd.read_csv(df_in, sep="\t") if Path(df_in).suffix.lower() == ".tsv" else pd.read_excel(df_in)
+      df = pd.read_csv(df_in) if Path(df_in).suffix.lower() == ".csv" else pd.read_csv(df_in, sep = "\t") if Path(df_in).suffix.lower() == ".tsv" else pd.read_excel(df_in)
     else:
-      df = df_in.copy(deep=True)
+      df = df_in.copy(deep = True)
     replicates = (df.shape[1] - 1) // timepoints
     alpha = get_alphaN(replicates)
     jtk = JTKTest(timepoints, periods, interval, replicates)
@@ -1048,9 +1048,9 @@ def get_SparCC(
     ) -> Tuple[pd.DataFrame, pd.DataFrame]: # (Spearman correlation matrix, FDR-corrected p-value matrix)
   "Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)"
   if isinstance(df1, (str, Path)):
-    df1 = pd.read_csv(df1) if Path(df1).suffix.lower() == ".csv" else pd.read_csv(df1, sep="\t") if Path(df1).suffix.lower() == ".tsv" else pd.read_excel(df1)
+    df1 = pd.read_csv(df1) if Path(df1).suffix.lower() == ".csv" else pd.read_csv(df1, sep = "\t") if Path(df1).suffix.lower() == ".tsv" else pd.read_excel(df1)
   if isinstance(df2, (str, Path)):
-    df2 = pd.read_csv(df2) if Path(df2).suffix.lower() == ".csv" else pd.read_csv(df2, sep="\t") if Path(df2).suffix.lower() == ".tsv" else pd.read_excel(df2)
+    df2 = pd.read_csv(df2) if Path(df2).suffix.lower() == ".csv" else pd.read_csv(df2, sep = "\t") if Path(df2).suffix.lower() == ".tsv" else pd.read_excel(df2)
   if df1.columns.tolist()[0] != df2.columns.tolist()[0] and df1.columns.tolist()[0] in df2.columns.tolist():
     common_columns = df1.columns.intersection(df2.columns)
     df1 = df1[common_columns]
@@ -1237,7 +1237,7 @@ def get_roc(
       plt.legend(loc = "lower right")
     if filepath:
       filepath = Path(filepath)
-      plt.savefig(f"{Path(filepath).stem}_{classy}{Path(filepath).suffix}", format = filepath.suffix[1:], dpi = 300, bbox_inches = 'tight')
+      plt.savefig(f"{filepath.stem}_{classy}{filepath.suffix}", format = filepath.suffix[1:], dpi = 300, bbox_inches = 'tight')
   return sorted_auc_scores
 
 
@@ -1250,7 +1250,7 @@ def get_lectin_array(
     ) -> pd.DataFrame: # DataFrame with altered glycan motifs, supporting lectins, and effect sizes
   "Analyzes lectin microarray data by mapping lectin binding patterns to glycan motifs, calculating Cohen's d effect sizes between groups and clustering results by significance"
   if isinstance(df, (str, Path)):
-      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   df = df.set_index(df.columns[0])
   duplicated_cols = set(df.columns[df.columns.duplicated()])
   if duplicated_cols:

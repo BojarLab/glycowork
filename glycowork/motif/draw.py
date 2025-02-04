@@ -1591,7 +1591,7 @@ def GlycoDraw(
       data = re.sub(r'<text font-size="20.0" ', r'<text font-size="20" font-family="century gothic" ', data)
       data = re.sub(r'<text font-size="15.0" ', r'<text font-size="17.5" font-family="century gothic" font-style="italic" ', data)
       if filepath.suffix.lower() == '.svg':
-        with open(filepath, 'w') as f:
+        with open(filepath, 'w', encoding = "utf-8") as f:
           f.write(data)
       elif filepath.suffix.lower() == '.pdf':
         try:
@@ -1717,7 +1717,7 @@ def plot_glycans_excel(
   except ImportError:
     raise ImportError("You're missing some draw dependencies. If you want to use this function, head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   if isinstance(df, (str, Path)):
-      df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep="\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   df["SNFG"] = [np.nan for k in range(len(df))]
   image_column_number = df.columns.tolist().index("SNFG") + 1
   # Convert df_out to Excel
