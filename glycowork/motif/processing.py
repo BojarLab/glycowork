@@ -840,6 +840,15 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   return floaty + iupac.strip('[]')
 
 
+def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
+                    ) -> str: # Basic IUPAC-condensed format
+  "Convert glycan from GLYCAM to IUPAC-condensed format"
+  pattern = r'(?:[DL])|(?:\[(\d+[SP]+)\])'
+  glycan = '-'.join(glycan.split('-')[:-1])[:-2]
+  glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan)
+  return glycan.replace('[', '(').replace(']', ')')
+
+
 def check_nomenclature(glycan: str # Glycan string to check
                      ) -> None: # Prints reason if not convertible
   "Check whether glycan has correct nomenclature for glycowork"
@@ -851,9 +860,9 @@ def check_nomenclature(glycan: str # Glycan string to check
 
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
-  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, and WURCS to standardized IUPAC-condensed format"
+  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, and GLYCAM to standardized IUPAC-condensed format"
   glycan = glycan.strip()
-  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford
+  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
   elif '-D-' in glycan:
@@ -862,6 +871,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycoct_to_iupac(glycan)
   elif '=' in glycan:
     glycan = wurcs_to_iupac(glycan)
+  elif glycan.endswith('-OH'):
+    glycan = glycam_to_iupac(glycan)
   elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
     check_nomenclature(glycan)
     return

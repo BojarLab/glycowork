@@ -63,7 +63,7 @@ pytest
 
 * Docs are automatically created from the notebooks in the nbs folder.
 
-## Wishlist for future glycowork updates (last update: 2025-02-03)
+## Wishlist for future glycowork updates (last update: 2025-02-05)
 
 ### Urgent
 
@@ -71,7 +71,7 @@ pytest
 
 ### At some point
 
-* less commonly used nomenclaturs for universal input: GLYCAM and GlycoWorkBench
+* less commonly used nomenclatures for universal input: GlycoWorkBench
 * any further expansion of our universal input pipeline, to cover more usecases etc.
 * split motif_list into ‘core’ motifs (occurring frequently) and ‘extended’ motifs (that are rare or niche) for performance reasons
 * characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context

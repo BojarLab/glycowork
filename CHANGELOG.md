@@ -13,7 +13,7 @@
 ### Changed 🔄
 - Bumped minimum supported Python version to 3.9 (3.8 is no longer supported, see https://devguide.python.org/versions/) (4960c5c)
 - Switched docstring style to docments (<https://nbdev.fast.ai/tutorials/best_practices.html#document-parameters-with-docments>) (e6721a1)
-- Removed `gdown` dependency; Will be handled by the standard library module `urllib` for better retrieval of externally stored models/files (319981e)
+- Removed `gdown` dependency; Will be handled by the standard library module `urllib` for better retrieval of externally stored models/files (319981e, 35ed71a)
 - Switched pathing from `os` to `pathlib` (319981e)
 
 ### glycan_data
@@ -88,9 +88,10 @@
 #### processing
 ##### Added ✨
 - Added "antennary_Fuc" as another inferred feature to `infer_features_from_composition` (a64f694)
-- Added "IdoA", "GalA", "Araf", "D-Fuc", "AllNAc", "Par", "Kdo", "GlcN", "Ido", "Col", "Tyv", "GalN", "QuiNAc", "Gul", and "Gal6S" to recognized WURCS2 tokens (52fc16e, f3cd8f0, 7551805)
+- Added "IdoA", "GalA", "Araf", "D-Fuc", "AllNAc", "Par", "Kdo", "GlcN", "Ido", "Col", "Tyv", "GalN", "QuiNAc", "Gul", and "Gal6S" to recognized WURCS2 tokens (52fc16e, f3cd8f0, 7551805, 35ed71a)
 - Added the new "order_by" keyword argument to `choose_correct_isoform` to enforce strictly sorting branches by branch endings / linkages, if desired (918d18f)
-- Added "Col", "Ido", "Kdo", and "Gul" to supported GlycoCT monosaccharides (7551805)
+- Added "Col", "Ido", "Kdo", and "Gul" to supported GlycoCT monosaccharides (7551805, 35ed71a)
+- GLYCAM is now another supported nomenclature in the Universal Input framework, enabled by the added `glycam_to_iupac` function, which is also integrated into `canonicalize_iupac`
 
 ##### Changed 🔄
 - `check_nomenclature` will now actually raise appropriate Exceptions, in case nomenclature is incompatible with glycowork, instead of print warnings (23d6456)
