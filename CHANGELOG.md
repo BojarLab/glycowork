@@ -91,7 +91,7 @@
 - Added "IdoA", "GalA", "Araf", "D-Fuc", "AllNAc", "Par", "Kdo", "GlcN", "Ido", "Col", "Tyv", "GalN", "QuiNAc", "Gul", and "Gal6S" to recognized WURCS2 tokens (52fc16e, f3cd8f0, 7551805, 35ed71a)
 - Added the new "order_by" keyword argument to `choose_correct_isoform` to enforce strictly sorting branches by branch endings / linkages, if desired (918d18f)
 - Added "Col", "Ido", "Kdo", and "Gul" to supported GlycoCT monosaccharides (7551805, 35ed71a)
-- GLYCAM is now another supported nomenclature in the Universal Input framework, enabled by the added `glycam_to_iupac` function, which is also integrated into `canonicalize_iupac`
+- GLYCAM is now another supported nomenclature in the Universal Input framework, enabled by the added `glycam_to_iupac` function, which is also integrated into `canonicalize_iupac` (2fb5dc6)
 
 ##### Changed 🔄
 - `check_nomenclature` will now actually raise appropriate Exceptions, in case nomenclature is incompatible with glycowork, instead of print warnings (23d6456)
@@ -139,12 +139,12 @@
 - Added the option to provide your own existing glycan .pdb structures to `GlycoDraw` when using `draw_method='chem3d'` with the new keyword argument `pdb_file` (9d082a6)
 
 ##### Changed 🔄
-- `matches` can now also use [] as delimiters (f76535e)
+- `matches` can now also use `[]` as delimiters (f76535e)
 - Support easy import of `GlycoDraw`, via `from glycowork import GlycoDraw` (d5f5d4e)
 - Renamed `hex` to `draw_hex`, to avoid overwriting the built-in `hex` (918d18f)
 - Changed keyword argument "hex" to "hex_codes" in `add_colours_to_map` (838c708)
 - `get_highlight_attribute` now internally uses `motif.graph.subgraph_isomorphism` for pattern retrieval, ensuring up-to-date functionality (4f1ccfa)
-- `get_coordinates_and_labels` not internally uses `motif.processing.choose_correct_isoform` to reorder the glycan for drawing (41bb1a1)
+- `get_coordinates_and_labels` now internally uses `motif.processing.choose_correct_isoform` to reorder the glycan for drawing (41bb1a1)
 - Improved console drawing quality controlled by `display_svg_with_matplotlib` and image quality in Excel cells using `plot_glycans_excel` (a64f694)
 - `draw_chem2d` and `draw_chem3d` will now detect whether the user is in a Jupyter environment and, if not, plot to the Matplotlib console (c3a7f64)
 

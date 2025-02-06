@@ -1596,7 +1596,7 @@ def GlycoDraw(
       elif filepath.suffix.lower() == '.pdf':
         try:
           from cairosvg import svg2pdf
-          svg2pdf(bytestring = data, write_to = filepath)
+          svg2pdf(bytestring = data, write_to = str(filepath))
         except:
           raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   return d2 if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
