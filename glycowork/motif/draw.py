@@ -1,7 +1,7 @@
 from pathlib import Path
 from glycowork.glycan_data.loader import unwrap, motif_list, multireplace, lib
 from glycowork.motif.regex import get_match
-from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism
+from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, choose_correct_isoform, get_matching_indices
 import matplotlib.pyplot as plt
@@ -1134,7 +1134,12 @@ def process_per_residue(
     per_residue: List[float] # Scalar values per residue
     ) -> Tuple[List[float], List[List[float]], List[List[float]]]: # (main chain values, side chain values, branched side chain values)
   "Maps per-residue scalar values to main chain, side chains, and branched side chains"
-  temp = re.sub(r'\([^)]*\)', 'x', glycan) + 'x'
+  g1 = glycan_to_nxGraph(glycan)
+  draw_this = choose_correct_isoform(glycan, order_by = "linkage")
+  g2 = glycan_to_nxGraph(draw_this)
+  _, mappy = compare_glycans(g2, g1, return_matches = True)
+  per_residue = [per_residue[mappy[i*2]//2] for i in range(len(per_residue))]
+  temp = re.sub(r'\([^)]*\)', 'x', draw_this) + 'x'
   temp = re.sub(r'[^x\[\]]', '', temp)
   main_chain_indices, side_chain_indices = [], []
   branched_side_chain_indices, side_chain_stack = [], []
@@ -1146,8 +1151,7 @@ def process_per_residue(
       if len(side_chain_stack) == 1:
         side_chain_indices.append(side_chain_stack.pop())
       else:
-        nested_chain = side_chain_stack.pop()
-        branched_side_chain_indices.append(nested_chain)
+        branched_side_chain_indices.append(side_chain_stack.pop())
     elif char == 'x':
       if side_chain_stack:
         side_chain_stack[-1].append(per_residue[idx])

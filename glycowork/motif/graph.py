@@ -194,21 +194,22 @@ def ptm_wildcard_for_graph(graph: nx.Graph # Input graph
 
 
 def compare_glycans(glycan_a: Union[str, nx.Graph], # First glycan to compare
-                   glycan_b: Union[str, nx.Graph] # Second glycan to compare
+                   glycan_b: Union[str, nx.Graph], # Second glycan to compare
+                   return_matches: bool = False # Whether to return node mapping between glycans
                   ) -> bool: # True if glycans are same, False if not
-  "Check if two glycans are identical"
+  "Check whether two glycans are identical"
   if glycan_a == glycan_b:
-    return True
+    return (True, {i: i for i in range(len(glycan_a.nodes))} if return_matches else True) if isinstance(glycan_a, nx.Graph) else (True, None) if return_matches else True
   if isinstance(glycan_a, str) and isinstance(glycan_b, str):
     if glycan_a.count('(') != glycan_b.count('('):
-      return False
+      return (False, None) if return_matches else False
     proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
     if 'O' in glycan_a + glycan_b:
       glycan_a, glycan_b = [PTM_REGEX.sub('O', glycan) for glycan in (glycan_a, glycan_b)]
     g1, g2 = map(glycan_to_nxGraph, (glycan_a, glycan_b))
   else:
     if len(glycan_a.nodes) != len(glycan_b.nodes):
-      return False
+      return (False, None) if return_matches else False
     proc = frozenset(nx.get_node_attributes(glycan_a, "string_labels").values()) | frozenset(nx.get_node_attributes(glycan_b, "string_labels").values())
     g1, g2 = (ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))) if 'O' in ''.join(proc) else (glycan_a, glycan_b)
   narrow_wildcard_list = build_wildcard_cache(proc)
@@ -219,8 +220,11 @@ def compare_glycans(glycan_a: Union[str, nx.Graph], # First glycan to compare
     if sorted(nx.get_node_attributes(g1, "string_labels").values()) == sorted(nx.get_node_attributes(g2, "string_labels").values()):
       matcher = nx.isomorphism.GraphMatcher(g1, g2, nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
     else:
-      return False
-  return matcher.is_isomorphic() and any(all(m[u] < m[v] for u, v in g1.edges) for m in matcher.isomorphisms_iter())
+      return (False, None) if return_matches else False
+  for mapping in matcher.isomorphisms_iter():
+    if all(mapping[u] < mapping[v] for u, v in g1.edges):
+      return (True, mapping) if return_matches else True
+  return (False, None) if return_matches else False
 
 
 def expand_termini_list(motif: Union[str, nx.Graph], # Glycan motif sequence or graph
