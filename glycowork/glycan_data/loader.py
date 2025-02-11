@@ -1,7 +1,6 @@
 import re
 import json
 import pickle
-import urllib.request
 import pandas as pd
 from pathlib import Path
 from itertools import chain
@@ -253,7 +252,7 @@ def download_model(file_id: str, # Google Drive file ID
   "Download the model weights file from Google Drive"
   file_id = file_id.split('/d/')[1].split('/view')[0]
   url = f'https://drive.google.com/uc?id={file_id}'
-  response = requests.get(url, stream=True)
+  response = requests.get(url, stream=True, timeout=10)
   if response.status_code == 200:
     with open(local_path, 'wb') as f:
       for chunk in response.iter_content(chunk_size=8192):
