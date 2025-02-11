@@ -8,6 +8,8 @@ from itertools import chain
 from importlib import resources
 from typing import Any, Dict, List, Union
 
+import requests
+
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
   motif_list = pd.read_csv(f)
 
@@ -251,7 +253,14 @@ def download_model(file_id: str, # Google Drive file ID
   "Download the model weights file from Google Drive"
   file_id = file_id.split('/d/')[1].split('/view')[0]
   url = f'https://drive.google.com/uc?id={file_id}'
-  urllib.request.urlretrieve(url, local_path)
+  response = requests.get(url, stream=True)
+  if response.status_code == 200:
+    with open(local_path, 'wb') as f:
+      for chunk in response.iter_content(chunk_size=8192):
+        f.write(chunk)
+    print("Download completed.")
+  else:
+    print(f"Download failed. Status code: {response.status_code}")
   print("Download completed.")
 
 
