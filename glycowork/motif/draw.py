@@ -1306,7 +1306,7 @@ def draw_chem3d(
   atom_colors = {k: ['#ECECEC'] if len(v) > 1 else v for k, v in atom_colors.items()}
 
   if pdb_file:
-    mol = MolFromPDBFile(pdb_file)
+    mol = MolFromPDBFile(str(pdb_file))
   else:
     mol = AddHs(mol)
     EmbedMolecule(mol)

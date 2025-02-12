@@ -90,8 +90,8 @@ def get_possible_linkages(wildcard: str, # Pattern to match, ? can be wildcard
     numbers = re.search(r'-(\d+(?:/\d+)*)', wildcard).group(1).split('/')
     base_pattern = f"{prefix}-({('|'.join(numbers))}|\\?)"
     return {l for l in linkage_list if re.compile(f'^{base_pattern}$').fullmatch(l)} | \
-           ({f"{wildcard[:wildcard.index('-')]}-{'/'.join(sorted(combo))}" 
-            for combo in combinations(numbers, r = 2)} if len(numbers) > 2 else set())
+           ({f"{wildcard[:wildcard.index('-')]}-{'/'.join(sorted(combo))}"
+             for combo in combinations(numbers, r = 2)} if len(numbers) > 2 else set())
   pattern = f"^{wildcard.replace('?', '[ab1-9?]')}$"
   return {l for l in linkage_list if re.compile(pattern).fullmatch(l)}
 
@@ -128,7 +128,7 @@ def bracket_removal(glycan_part: str # Residual part of glycan from glycan_to_gr
 def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
                  ) -> List[str]: # List of isomorphic glycan notations
   "Returns a set of isomorphic glycans by swapping branches"
-  if '[' not in glycan or glycan.index('[') == 0:
+  if '[' not in glycan or ']' not in glycan or glycan.index('[') == 0:
     return [glycan]
   floaty = False
   if '{' in glycan:
@@ -162,18 +162,22 @@ def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
   temp = set()
   for k in out_list:
     if k.count('[') >= 3 and k.count('][') >= 2:
-      m = re.search(r'^(.*?)\[(.*?)\]\[(.*?)\]\[(.*?)\](.*?)$', k)
-      if m and not bool(re.search(r'\[[^\]]+\[', k)):
-        main, b1, b2, b3, rest = m.groups()
-        branches = [main, b1, b2, b3]
-        # Generate all 24 permutations
-        for p in permutations(range(4)):
-          # First element is main chain (no brackets), rest get brackets
-          result = branches[p[0]]
-          for idx in p[1:]:
-            result += f"[{branches[idx]}]"
-          result += rest
-          temp.add(result)
+      groups = re.finditer(r'((?:^[^[]+|^)\[[^[\]]*\]\[[^[\]]*\]\[[^[\]]*\](?=[A-Z]|$))', k)
+      for g in groups:
+        branch_section = g.group(1)
+        if not bool(re.search(r'\[[^\]]+\[', branch_section)):
+          m = re.search(r'^(.*?)\[(.*?)\]\[(.*?)\]\[(.*?)\]', branch_section)
+          if m:
+            main, b1, b2, b3 = m.groups()
+            branches = [main, b1, b2, b3]
+            # Generate all 24 permutations
+            for p in permutations(range(4)):
+              # First element is main chain (no brackets), rest get brackets
+              result = k[:g.start(1)] + branches[p[0]]
+              for idx in p[1:]:
+                result += f"[{branches[idx]}]"
+              result += k[g.end(1):]
+              temp.add(result)
   out_list.update(temp)
   temp = set()
   # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
@@ -182,7 +186,7 @@ def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
     if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
       temp.add(re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1))
   out_list.update(temp)
-  out_list = {k for k in out_list if not any([j in k for j in ['[[', ']]']])}
+  out_list = {k for k in out_list if not any([j in k for j in ['[[', ']]']]) and k.index(']') > k.index('[')}
   if floaty:
     out_list = {floaty+k for k in out_list}
   return list(out_list)

@@ -121,7 +121,7 @@
 ##### Added ✨
 - Natively support narrow linkage ambiguity in `categorical_node_match_wildcard`; that means you can use things like "Gal(b1-3/4)GlcNAc" with `subgraph_isomorphism` or `compare_glycans` (as well as all functions using these core functions) and it will only return True for "Gal(b1-3)GlcNAc", "Gal(b1-4)GlcNAc", and "Gal(b1-?)GlcNAc" (b94744e)
 - Added `build_wildcard_cache` for a central handling of wildcard mapping that can also be cached (a98461f)
-- `compare_glycans` now also has the `return_matches` keyword argument that allows for a retrieval of the node mapping if the glycans are isomorphic
+- `compare_glycans` now also has the `return_matches` keyword argument that allows for a retrieval of the node mapping if the glycans are isomorphic (7c510c9)
 
 ##### Changed 🔄
 - Ensured that `compare_glycans` is 100% order-specific, never matching something like ("Gal(b1-4)GlcNAc", "GlcNAc(b1-4)Gal") (5a99d6b)
@@ -148,7 +148,7 @@
 - `get_coordinates_and_labels` now internally uses `motif.processing.choose_correct_isoform` to reorder the glycan for drawing (41bb1a1)
 - Improved console drawing quality controlled by `display_svg_with_matplotlib` and image quality in Excel cells using `plot_glycans_excel` (a64f694)
 - `draw_chem2d` and `draw_chem3d` will now detect whether the user is in a Jupyter environment and, if not, plot to the Matplotlib console (c3a7f64)
-- `process_per_residue` now will re-order the `per_residue` list in the same way as the glycan is re-ordered for drawing with `GlycoDraw`
+- `process_per_residue` now will re-order the `per_residue` list in the same way as the glycan is re-ordered for drawing with `GlycoDraw` (7c510c9)
 
 ##### Deprecated ⚠️
 - Deprecated `hex_circumference`, the functionality is now available within `draw_hex` with the new keyword argument "outline_only" (4f1ccfa)

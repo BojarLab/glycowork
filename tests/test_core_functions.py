@@ -1127,6 +1127,7 @@ def test_choose_correct_isoform():
     result = choose_correct_isoform("Gal(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc")
     assert result == "Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)]GalNAc"
     assert choose_correct_isoform("Xyl(b1-2)[Man(a1-3)][Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Xyl(b1-2)[Man(a1-3)][GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert choose_correct_isoform('Man(a1-3)[Xyl(b1-2)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc') == "Xyl(b1-2)[Man(a1-3)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc"
     # Mode for GlycoDraw
     result = choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", order_by="linkage")
     assert result == "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-4)][Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
