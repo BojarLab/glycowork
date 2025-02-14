@@ -918,6 +918,14 @@ LIN
 LIN
 1:1o(8+2)2d
 2:2o(8+2)3d""") == "Kdo(a2-8)Kdo(a2-8)Kdo"
+    assert canonicalize_iupac("redEnd--??1D-GalNAc,p--??2D-KDN,p$MONO,Und,-H,0,redEnd") == "Kdn(?2-?)GalNAc"
+    assert canonicalize_iupac("redEnd--??1D-Glc,p--4b1D-Gal,p(--3a2D-NeuGc,p@270)--4b1D-GalNAc,p$MONO,Und,-H,0,redEnd") == "Neu5Gc(a2-3)[GalNAc(b1-4)]Gal(b1-4)Glc"
+    assert canonicalize_iupac("redEnd--??1D-GalNAc,p(--3b1D-Gal,p(--3a2D-NeuAc,p)--6?1S)--6b1D-GlcNAc,p--4b1D-Gal,p$MONO,Und,-2H,0,redEnd") == "Neu5Ac(a2-3)Gal6S(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc"
+    assert canonicalize_iupac("redEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--2b1D-GlcNAc,p)--4b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p$MONO,Und,-H,0,redEnd") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("redEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--??1D-GlcNAc,p)--4b1D-GlcNAc,p)--6a1D-Man,p--??1D-GlcNAc,p}--??1D-GlcNAc,p$MONO,Und,-H,0,redEnd") == "{GlcNAc(?1-?)}GlcNAc(?1-?)Man(a1-3)[GlcNAc(?1-?)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("redEnd--?a1D-GalNAc,p(--6b1D-GlcNAc,p)--3b1D-Gal,p--??1D-GlcNAc,p(--??1L-Fuc,p)--??1S$MONO,Und,-H,0,redEnd") == "Fuc(a1-?)GlcNAcOS(?1-?)Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
+    assert canonicalize_iupac("freeEnd--?b1D-GlcNAc,p(--6a1L-Fuc,p)--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--??1D-GlcNAc,p--??1D-Gal,p--??2D-NeuAc,p)--??1D-GlcNAc,p--??1D-Gal,p--??2D-NeuAc,p--??2D-NeuAc,p)--6a1D-Man,p(--??1D-Man,p)--??1D-Man,p$MONO,Und,-2H,0,freeEnd") == 'Man(?1-?)[Man(?1-?)]Man(a1-6)[Neu5Ac(?2-?)Neu5Ac(?2-?)Gal(?1-?)GlcNAc(?1-?)[Neu5Ac(?2-?)Gal(?1-?)GlcNAc(?1-?)]Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol'
+    assert canonicalize_iupac('freeEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315)--4b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315$MONO,Und,-2H,0,freeEnd')  == 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol'
     # Test warnings
     assert canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol") == "Fuc(a1-3)[Gal(b1-4)Glc-ol"
 

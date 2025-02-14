@@ -853,6 +853,45 @@ def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
   return glycan.replace('[', '(').replace(']', ')')
 
 
+def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
+                            ) -> str: # Basic IUPAC-condensed format
+  """Convert GlycoWorkbench nomenclature to IUPAC-condensed format."""
+  glycan = glycan.replace('D-', '').replace('L-', '')  # Remove D- and L- prefixes
+  # Handle floating parts if present
+  floaty_parts = []
+  if '}' in glycan:
+    glycan, floaty_section = glycan.split('}')
+    floaty_section = floaty_section.split('$MONO')[0]
+    # Process floating sections into parts
+    content = floaty_section.strip('()')
+    content = re.sub(r'\(+', '(', content)
+    parts = [part.strip('()') for part in re.split(r'\)\-\-', content) if part]
+    # Convert each floating part to IUPAC format
+    for part in parts:
+      new_float = ''.join(part.split(',p'))
+      processed_monos = [f"{x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})".strip('-') for x in new_float.split('--') if x]
+      floaty_parts.append(''.join(processed_monos[::-1]))
+  # Process main glycan structure
+  split_monos = [x for x in glycan.split('$MONO')[0].split('--')[1:]]
+  split_monos[-1] = split_monos[-1] + ',p'
+  # Convert monosaccharides to IUPAC format
+  converted_monos = [f"{x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})"+"".join(re.findall("[()]+", y)).replace("(","]").replace(")","[") for x, y in zip(split_monos, glycan.split('--'))]
+  converted_glycan = ''.join(converted_monos[::-1])
+  # Fix double branch notation if present
+  if ']]' in converted_glycan:
+    double_brack_idx = converted_glycan.index(']]')
+    branch_str = converted_glycan[:double_brack_idx+2]
+    second_brack_end = [(m.start(0), m.end(0)) for m in re.finditer(re.escape('['), branch_str)][-1][0]
+    converted_glycan = branch_str[:second_brack_end] + ']' + branch_str[second_brack_end:-1] + converted_glycan[double_brack_idx+2:]
+  if floaty_parts:  # Add floating parts to final structure
+    converted_glycan = ''.join(f"{{{part}}}" for part in floaty_parts) + converted_glycan
+  converted_glycan = re.sub(r'S[\)\(]*\?1-\?\)\[(.*?)\]([^(]+)', r'\1\2OS', converted_glycan)  # O-sulfate case
+  converted_glycan = re.sub(r'S[\)\(]*\?1-(\d)\)\[(.*?)\]([^(]+)', r'\2\3\1S', converted_glycan)  # numbered sulfate
+  if 'freeEnd' in glycan:
+    return converted_glycan[:-6]+'-ol' 
+  return converted_glycan[:-6]
+
+
 def check_nomenclature(glycan: str # Glycan string to check
                      ) -> None: # Prints reason if not convertible
   "Check whether glycan has correct nomenclature for glycowork"
@@ -877,6 +916,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = wurcs_to_iupac(glycan)
   elif glycan.endswith('-OH'):
     glycan = glycam_to_iupac(glycan)
+  elif '$MONO' in glycan:
+    glycan = glycoworkbench_to_iupac(glycan)
   elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
     check_nomenclature(glycan)
     return
