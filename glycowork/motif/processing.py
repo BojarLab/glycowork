@@ -153,10 +153,14 @@ def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
     if re.search(main_vs_branch, k):
       temp.add(re.sub(main_vs_branch, r'\2[\1]\3', k))
   out_list.update(temp)
+  temp = {re.sub(r'(.*Man\(a1-[36]\))\[(.*Man\(a1-[36]\))\](Man\(b1-4\).*)', r'\2[\1]\3', k) for k in out_list}
+  out_list.update(temp)
   # Double branch swap
   temp = {re.sub(r'(?<!\[)\[((?:[^[\]]|\[[^[\]]*\])*?)\]\[((?:[^[\]]|\[[^[\]]*\])*?)\]', r'[\2][\1]', k) for k in out_list if '][' in k}
   out_list.update(temp)
   temp = {re.sub(r'\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]',  r'[\2][\1]', k) for k in out_list if '][' in k}
+  out_list.update(temp)
+  temp = {re.sub(r'(.*)\[((?:[^[\]]|\[[^[\]]*\])*)\]\[((?:[^[\]]|\[[^[\]]*\])*)\]([A-Z][^[\]]*?)$', r'\1[\3][\2]\4', k) for k in out_list if '][' in k}
   out_list.update(temp)
   # Triple branch handling
   temp = set()
@@ -273,6 +277,25 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
     # Neither is single monosaccharide: use linkage ordering
     return pos1 > pos2
 
+  def kill_noncanonical(glycans):
+    kill_list = set()
+    for g in glycans:
+      paren_counts = [0]  # Stack of counts for each nesting level
+      current_count = 0
+      for c in g:
+        if c == '(':
+          current_count += 1
+          paren_counts[-1] = current_count  # Update current level's count
+        elif c == '[':
+          paren_counts.append(0)  # Start new branch level
+          current_count = 0  # Reset for new branch
+        elif c == ']':
+          if current_count > paren_counts[-2]:  # Compare with parent branch
+            kill_list.add(g)
+          current_count = paren_counts[-2]  # Return to parent branch's count
+          paren_counts.pop()  # Remove current branch level 
+    return [g for g in glycans if g not in kill_list]
+
   # Handle neighboring branches
   kill_list = set()
   for g in glycans2:
@@ -338,21 +361,9 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
     min_ending = min(branch_endings)
     glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min_ending]
     if len(glycans2) > 1:
-      complexity = [count_nested_brackets(g, length = True) for g in glycans2]
-      min_complexity = min(complexity)
-      glycans2 = [g for k, g in enumerate(glycans2) if complexity[k] == min_complexity]
-      if len(glycans2) > 1:
-        preprefix = min_process_glycans([glyc[:glyc.index('[')] for glyc in glycans2])
-        branch_endings = [k[-1][-1] if k[-1][-1].isdigit() else 10 for k in preprefix]
-        branch_endings = [int(k) for k in branch_endings]
-        min_ending = min(branch_endings)
-        glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min_ending]
-        if len(glycans2) > 1:
-          correct_isoform = sorted(glycans2, key = lambda x: sum(int(num) for num in re.findall(r'(\d+)\)\[', x)))[0]  # take the one with lowest sum of num)[
-        else:
-          correct_isoform = glycans2[0]
-      else:
-        correct_isoform = glycans2[0]
+      glycans2 = kill_noncanonical(glycans2) or glycans2 if order_by == "length" else glycans2
+      correct_isoform = sorted(glycans2, key = lambda x: sum((10 if num == '?' else int(num)) * (len(re.findall(r'(\d+|\?)\)[\[\]]', x))-i) \
+                                                           for i, num in enumerate(re.findall(r'(\d+|\?)\)[\[\]]', x))))[0] # take the one with lowest sum of num)[ and num)]
     else:
       correct_isoform = glycans2[0]
   else:
@@ -887,9 +898,7 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
     converted_glycan = ''.join(f"{{{part}}}" for part in floaty_parts) + converted_glycan
   converted_glycan = re.sub(r'S[\)\(]*\?1-\?\)\[(.*?)\]([^(]+)', r'\1\2OS', converted_glycan)  # O-sulfate case
   converted_glycan = re.sub(r'S[\)\(]*\?1-(\d)\)\[(.*?)\]([^(]+)', r'\2\3\1S', converted_glycan)  # numbered sulfate
-  if 'freeEnd' in glycan:
-    return converted_glycan[:-6]+'-ol' 
-  return converted_glycan[:-6]
+  return f"{converted_glycan[:-6]}-ol" if 'freeEnd' in glycan else converted_glycan[:-6]
 
 
 def check_nomenclature(glycan: str # Glycan string to check
@@ -903,9 +912,9 @@ def check_nomenclature(glycan: str # Glycan string to check
 
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
-  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, and GLYCAM to standardized IUPAC-condensed format"
+  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, and GlycoWorkBench to standardized IUPAC-condensed format"
   glycan = glycan.strip()
-  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM
+  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
   elif '-D-' in glycan:
@@ -918,7 +927,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycam_to_iupac(glycan)
   elif '$MONO' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
-  elif not isinstance(glycan, str) or any([k in glycan for k in ['@']]):
+  elif not isinstance(glycan, str) or '@' in glycan:
     check_nomenclature(glycan)
     return
   elif ((glycan[-1].isdigit() and bool(re.search("[A-Z]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B') or glycan.endswith("LacDiNAc")) and 'e' not in glycan and '-' not in glycan:
@@ -1006,8 +1015,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     elif '-' not in prefix:
       glycan = glycan.replace('+', '(?1-?)+')
     glycan = '{'+glycan.replace('+', '}')
-  post_process = {'5Ac(?1': '5Ac(a2', '5Gc(?1': '5Gc(a2', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
-                  'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?1': 'Kdn(a2',
+  post_process = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
+                  'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a',
                   'Kdn(a1': 'Kdn(a2'}
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'[ab]-$', '', glycan)  # Remove endings like Glcb-

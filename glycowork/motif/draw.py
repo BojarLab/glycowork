@@ -1270,7 +1270,7 @@ def draw_chem2d(
     elif filepath.suffix.lower() == '.pdf':
       try:
         from cairosvg import svg2pdf
-        svg2pdf(bytestring = svg_data, write_to = filepath)
+        svg2pdf(bytestring = svg_data, write_to = str(filepath))
       except ImportError:
         raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   return SVG(svg_data) if is_jupyter() else display_svg_with_matplotlib(svg_data)

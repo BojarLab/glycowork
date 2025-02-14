@@ -92,7 +92,7 @@
 - Added the new "order_by" keyword argument to `choose_correct_isoform` to enforce strictly sorting branches by branch endings / linkages, if desired (918d18f)
 - Added "Col", "Ido", "Kdo", and "Gul" to supported GlycoCT monosaccharides (7551805, 35ed71a)
 - GLYCAM is now another supported nomenclature in the Universal Input framework, enabled by the added `glycam_to_iupac` function, which is also integrated into `canonicalize_iupac` (2fb5dc6)
-- GlycoWorkBench (GlycanBuilder) is now anoter supported nomenclature in the Universal Input framework, enabled by the added `glycoworkbench_to_iupac` function, which is also integrated into `canonicalize_iupac` (ea1fdfc)
+- GlycoWorkBench (GlycanBuilder) is now another supported nomenclature in the Universal Input framework, enabled by the added `glycoworkbench_to_iupac` function, which is also integrated into `canonicalize_iupac` (ea1fdfc)
 
 ##### Changed 🔄
 - `check_nomenclature` will now actually raise appropriate Exceptions, in case nomenclature is incompatible with glycowork, instead of print warnings (23d6456)
@@ -217,6 +217,10 @@
 #### inference
 ##### Changed 🔄
 - Changed `resources.open_text` to `resources.files` to prevent `DeprecationWarning` from `importlib` (d1a8c6d)
+
+#### models
+##### Changed 🔄
+- In `prep_model`, the `hidden_dim` argument can now also be used to modify the protein embedding size of a newly defined LectinOracle model 
 
 ### network
 #### evolution

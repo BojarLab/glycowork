@@ -295,7 +295,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
               num_classes: int, # number of unique classes for classification
               libr: Optional[Dict[str, int]] = None, # dictionary of form glycoletter:index
               trained: bool = False, # whether to use pretrained model
-              hidden_dim: int = 128 # hidden dimension for the model (SweetNet only)
+              hidden_dim: int = 128 # hidden dimension for the model (SweetNet/LectinOracle only)
              ) -> torch.nn.Module: # initialized PyTorch model
     "wrapper to instantiate model, initialize it, and put it on the GPU"
     if libr is None:
@@ -311,7 +311,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
         model.load_state_dict(torch.load("SweetNet_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     elif model_type == 'LectinOracle':
-      model = LectinOracle(len(libr), num_classes = num_classes)
+      model = LectinOracle(len(libr), num_classes = num_classes, input_size_prot = 10*hidden_dim)
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
         if not Path("LectinOracle_v1_4.pt").exists():
