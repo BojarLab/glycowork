@@ -311,7 +311,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
         model.load_state_dict(torch.load("SweetNet_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     elif model_type == 'LectinOracle':
-      model = LectinOracle(len(libr), num_classes = num_classes, input_size_prot = 10*hidden_dim)
+      model = LectinOracle(len(libr), num_classes = num_classes, input_size_prot = int(10*hidden_dim))
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
         if not Path("LectinOracle_v1_4.pt").exists():

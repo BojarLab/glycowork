@@ -7,7 +7,7 @@ from functools import wraps
 from collections import defaultdict
 from itertools import permutations, combinations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
-from glycowork.glycan_data.loader import (unwrap, multireplace, count_nested_brackets,
+from glycowork.glycan_data.loader import (unwrap, multireplace,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
@@ -293,7 +293,7 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
           if current_count > paren_counts[-2]:  # Compare with parent branch
             kill_list.add(g)
           current_count = paren_counts[-2]  # Return to parent branch's count
-          paren_counts.pop()  # Remove current branch level 
+          paren_counts.pop()  # Remove current branch level
     return [g for g in glycans if g not in kill_list]
 
   # Handle neighboring branches

@@ -9,6 +9,7 @@
 - Added setuptools to required_installs to support pip installation beyond `pip 25.0` (94646ad)
 - Added pyproject.toml to support pip installation beyond `pip 25.0` (94646ad)
 - Added CITATION.bib to allow for even easier citation of glycowork (a64f694)
+- Reworked user interface of the `glycoworkGUI`
 
 ### Changed 🔄
 - Bumped minimum supported Python version to 3.9 (3.8 is no longer supported, see https://devguide.python.org/versions/) (4960c5c)
@@ -99,7 +100,7 @@
 - Supported triple-branch reordering in `find_isomorphs` and `choose_correct_isoform` (918d18f)
 - Improved `find_isomorphs` to swap neighboring branches with different levels of nesting (41bb1a1, 034b6ad)
 - `choose_correct_isoform` can now also be used with a single glycan sequence, in which case it internally calls `find_isomorphs` to generate material for choosing (918d18f)
-- `choose_correct_isoform` can now correctly handle more complex sequences than before (41bb1a1, 034b6ad)
+- `choose_correct_isoform` can now correctly handle more complex sequences than before (41bb1a1, 034b6ad, d1ff321)
 - `canonicalize_iupac` now can handle modifications such as Neu5,9Ac2 / Neu4,5Ac2 or multiple ones like in (6S)(4S)Gal, even if in the wrong order (034b6ad)
 - `canonicalize_iupac` now can handle even more typos (e.g., 'aa1-3' in specifying a linkage) (a64f694, 241141b)
 - `canonicalize_iupac` now can handle even more inconsistencies (e.g., mix of short-hand and expanded linkages)
@@ -220,7 +221,7 @@
 
 #### models
 ##### Changed 🔄
-- In `prep_model`, the `hidden_dim` argument can now also be used to modify the protein embedding size of a newly defined LectinOracle model 
+- In `prep_model`, the `hidden_dim` argument can now also be used to modify the protein embedding size of a newly defined LectinOracle model (d1ff321) 
 
 ### network
 #### evolution
