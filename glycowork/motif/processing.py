@@ -186,7 +186,7 @@ def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
   temp = set()
   # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
   for k in out_list:
-    temp.add(re.sub(r'^(.*?)\[((?:[^\[\]]|\[[^\[\]]*\])*)\]', r'\2[\1]', k, 1))
+    temp.add(re.sub(r'^(.*?)\[((?:[^\[\]]|\[[^\[\]]*\])*?)\]((?:\[[^\[\]]*\])*?)([A-Z][a-z0-9]*[A-Z]?[a-z0-9]*\([ab?][1-2]-[1-9?]\))', r'\2[\1]\3\4', k, 1))
     if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
       temp.add(re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1))
   out_list.update(temp)

@@ -9,7 +9,7 @@
 - Added setuptools to required_installs to support pip installation beyond `pip 25.0` (94646ad)
 - Added pyproject.toml to support pip installation beyond `pip 25.0` (94646ad)
 - Added CITATION.bib to allow for even easier citation of glycowork (a64f694)
-- Reworked user interface of the `glycoworkGUI`
+- Reworked user interface of the `glycoworkGUI` (77bbfa3)
 
 ### Changed 🔄
 - Bumped minimum supported Python version to 3.9 (3.8 is no longer supported, see https://devguide.python.org/versions/) (4960c5c)

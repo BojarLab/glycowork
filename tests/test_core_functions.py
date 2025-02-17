@@ -741,6 +741,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)][Fuc(a1-3)]GlcNAc") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == "Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("Galβ1–4GlcNAcβ1–2(Fucα1–3(Galβ1–4)GlcNAcβ1–4)Manα1–3(Galβ1–4GlcNAcβ1–2(Galβ1–4GlcNAcβ1–6)Manα1–6)Manβ1–4GlcNAcβ1–4GlcNAc") == "Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     # Test other nomenclatures
     assert canonicalize_iupac("DManpa1-6DManpb1-4DGlcpNAcb1-4[LFucpa1-6]DGlcpNAcb1-OH") == "Man(a1-6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("Neup5Aca2-3DGalpb1-4DGlcpNAcb1-3DGalpb1-3DGalpb1-4DGlcpb1-OH") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)Gal(b1-4)Glc"
