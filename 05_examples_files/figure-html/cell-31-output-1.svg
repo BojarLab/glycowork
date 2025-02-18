@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="600" height="510" viewBox="-550.0 -355.0 600 510">
+<defs>
+<path d="M-100,-75.0 L0,-75.0" stroke-width="4.0" stroke="#000000" id="Qon1OwGy0" />
+<path d="M-200,-75.0 L-100,-75.0" stroke-width="4.0" stroke="#000000" id="Qon1OwGy1" />
+<path d="M-300,0 L-200,-75.0" stroke-width="4.0" stroke="#000000" id="Qon1OwGy2" />
+<path d="M-400,0 L-300,0" stroke-width="4.0" stroke="#000000" id="Qon1OwGy3" />
+<path d="M-500,0 L-400,0" stroke-width="4.0" stroke="#000000" id="Qon1OwGy4" />
+<path d="M-400,-100 L-300,-150.0" stroke-width="4.0" stroke="#000000" id="Qon1OwGy5" />
+<path d="M-500,-100 L-400,-100" stroke-width="4.0" stroke="#000000" id="Qon1OwGy6" />
+<path d="M-300,-150.0 L-200,-75.0" stroke-width="4.0" stroke="#000000" id="Qon1OwGy7" />
+<path d="M-500,-200 L-400,-200" stroke-width="4.0" stroke="#000000" id="Qon1OwGy8" />
+<path d="M-400,-200 L-300,-150.0" stroke-width="4.0" stroke="#000000" id="Qon1OwGy9" />
+<path d="M-50,-50.0 L50,-50.0" stroke-width="0" id="Qon1OwGy10" />
+<path d="M-150,-50.0 L-50,-50.0" stroke-width="0" id="Qon1OwGy11" />
+<path d="M-250,-50.0 L-150,-50.0" stroke-width="0" id="Qon1OwGy12" />
+<path d="M-350,25.0 L-250,25.0" stroke-width="0" id="Qon1OwGy13" />
+<path d="M-450,25.0 L-350,25.0" stroke-width="0" id="Qon1OwGy14" />
+<path d="M-550,25.0 L-450,25.0" stroke-width="0" id="Qon1OwGy15" />
+<path d="M-350,-125.0 L-250,-125.0" stroke-width="0" id="Qon1OwGy16" />
+<path d="M-450,-75.0 L-350,-75.0" stroke-width="0" id="Qon1OwGy17" />
+<path d="M-550,-75.0 L-450,-75.0" stroke-width="0" id="Qon1OwGy18" />
+<path d="M-450,-175.0 L-350,-175.0" stroke-width="0" id="Qon1OwGy19" />
+<path d="M-550,-175.0 L-450,-175.0" stroke-width="0" id="Qon1OwGy20" />
+</defs>
+<g transform="rotate(0 -250.0 -100.0)">
+<use xlink:href="#Qon1OwGy0" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy0" startOffset="50%">
+<tspan dy="-0.5em">β 4</tspan>
+</textPath></text>
+<use xlink:href="#Qon1OwGy1" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy1" startOffset="50%">
+<tspan dy="-0.5em">β 4</tspan>
+</textPath></text>
+<use xlink:href="#Qon1OwGy2" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy2" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#Qon1OwGy3" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy3" startOffset="50%">
+<tspan dy="-0.5em">α 2</tspan>
+</textPath></text>
+<use xlink:href="#Qon1OwGy4" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy4" startOffset="50%">
+<tspan dy="-0.5em">α 2</tspan>
+</textPath></text>
+<use xlink:href="#Qon1OwGy5" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy5" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#Qon1OwGy6" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy6" startOffset="50%">
+<tspan dy="-0.5em">α 2</tspan>
+</textPath></text>
+<use xlink:href="#Qon1OwGy7" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy7" startOffset="50%">
+<tspan dy="-0.5em">α 6</tspan>
+</textPath></text>
+<use xlink:href="#Qon1OwGy8" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy8" startOffset="50%">
+<tspan dy="-0.5em">α 2</tspan>
+</textPath></text>
+<use xlink:href="#Qon1OwGy9" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#Qon1OwGy9" startOffset="50%">
+<tspan dy="-0.5em">α 6</tspan>
+</textPath></text>
+<rect x="-25.0" y="-100.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy10" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy10" startOffset="50%"></textPath></text>
+<rect x="-125.0" y="-100.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy11" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy11" startOffset="50%"></textPath></text>
+<circle cx="-200" cy="-75.0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy12" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy12" startOffset="50%"></textPath></text>
+<circle cx="-300" cy="0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy13" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy13" startOffset="50%"></textPath></text>
+<circle cx="-400" cy="0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy14" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy14" startOffset="50%"></textPath></text>
+<circle cx="-500" cy="0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy15" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy15" startOffset="50%"></textPath></text>
+<circle cx="-300" cy="-150.0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy16" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy16" startOffset="50%"></textPath></text>
+<circle cx="-400" cy="-100" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy17" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy17" startOffset="50%"></textPath></text>
+<circle cx="-500" cy="-100" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy18" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy18" startOffset="50%"></textPath></text>
+<circle cx="-400" cy="-200" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy19" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy19" startOffset="50%"></textPath></text>
+<circle cx="-500" cy="-200" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#Qon1OwGy20" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#Qon1OwGy20" startOffset="50%"></textPath></text>
+</g>
+</svg>
