@@ -760,6 +760,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("FA2BiG2") == "Gal(b1-?)GlcNAc(b1-?)Man(a1-3)[Gal(b1-?)GlcNAc(b1-?)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("F(3)XA2") == "GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("F(6)A2[6]G(4)1Sg(6)1") == "Neu5Gc(a2-?)Gal(b1-?)GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("M4") == "Man(a1-?)Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("redEnd--??1D-GalNAc,p--??2D-KDN,p$MONO,Und,-H,0,redEnd") == "Kdn(a2-?)GalNAc"
     assert canonicalize_iupac("redEnd--??1D-Glc,p--4b1D-Gal,p(--3a2D-NeuGc,p@270)--4b1D-GalNAc,p$MONO,Und,-H,0,redEnd") == "Neu5Gc(a2-3)[GalNAc(b1-4)]Gal(b1-4)Glc"
     assert canonicalize_iupac("redEnd--??1D-GalNAc,p(--3b1D-Gal,p(--3a2D-NeuAc,p)--6?1S)--6b1D-GlcNAc,p--4b1D-Gal,p$MONO,Und,-2H,0,redEnd") == "Neu5Ac(a2-3)Gal6S(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc"
@@ -1916,6 +1917,7 @@ def test_generate_graph_features():
     assert 'diameter' in features.columns
     assert 'branching' in features.columns
     assert 'avgDeg' in features.columns
+    features = generate_graph_features("GalNAc", glycan_to_nxGraph("GalNAc"))
 
 
 def test_largest_subgraph():
@@ -1930,6 +1932,7 @@ def test_get_possible_topologies():
     topologies = get_possible_topologies(glycan)
     assert len(topologies) > 0
     assert all(isinstance(g, nx.Graph) for g in topologies)
+    assert graph_to_string(get_possible_topologies("{6S}Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", exhaustive=True)[0]) == "Neu5Ac(a2-3)Gal6S(b1-3)[Neu5Ac(a2-6)]GalNAc"
 
 
 def test_deduplicate_glycans():
