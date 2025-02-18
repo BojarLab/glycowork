@@ -127,6 +127,9 @@ Thumbs.db
 
 # pytest
 .pytest_cache
+*.pdb
+tests/*.svg
+tests/*.pt
 
 # tools/trust-doc-nbs
 docs_src/.last_checked

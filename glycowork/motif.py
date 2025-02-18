@@ -4,12 +4,12 @@
 __all__ = []
 
 # %% ../03_motif.ipynb 2
-from .motif.draw import *
-from .motif.analysis import *
-from .motif.annotate import *
-from .motif.graph import *
-from .motif.processing import *
-from .motif.regex import *
-from .motif.query import *
-from .motif.tokenization import *
-from .glycan_data.loader import df_species, glycomics_data_loader, lectin_array_data_loader, glycoproteomics_data_loader
+from .motif.draw import *  # noqa
+from .motif.analysis import *  # noqa
+from .motif.annotate import *  # noqa
+from .motif.graph import *  # noqa
+from .motif.processing import *  # noqa
+from .motif.regex import *  # noqa
+from .motif.query import *  # noqa
+from .motif.tokenization import *  # noqa
+from .glycan_data.loader import df_species, glycomics_data_loader, lectin_array_data_loader, glycoproteomics_data_loader  # noqa

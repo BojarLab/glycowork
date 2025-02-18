@@ -1,21 +1,17 @@
+import pandas as pd
+from typing import Optional
 from glycowork.motif.processing import check_nomenclature
 from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
 
 
-def check_presence(glycan, df, colname = 'glycan',
-                   name = None, rank = 'Species', fast = False):
-  """checks whether glycan (of that species) is already present in dataset\n
-  | Arguments:
-  | :-
-  | glycan (string): IUPAC-condensed glycan sequence
-  | df (dataframe): glycan dataframe where glycans are under colname and ideally taxonomic labels are columns
-  | name (string): name of the species (etc.) of interest
-  | rank (string): column name for filtering; default: species
-  | fast (bool): True uses precomputed glycan graphs, only use if df has column 'graph' with glycan graphs\n
-  | Returns:
-  | :-
-  | Returns text output regarding whether the glycan is already in df
-  """
+def check_presence(glycan: str, # IUPAC-condensed glycan sequence
+                  df: pd.DataFrame, # glycan dataframe where glycans are under colname
+                  colname: str = 'glycan', # column name containing glycans
+                  name: Optional[str] = None, # name of species of interest
+                  rank: str = 'Species', # column name for filtering
+                  fast: bool = False # True uses precomputed glycan graphs
+                 ) -> None:
+  "checks whether glycan (of that species) is already present in dataset"
   if any([p in glycan for p in ['RES', '=']]) or not isinstance(glycan, str):
     check_nomenclature(glycan)
     return

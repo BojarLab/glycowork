@@ -1,0 +1,68 @@
+name: PR Branch Check
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - master
+
+jobs:
+  check-target-branch:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Check target branch
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            
+            // Skip if PR is from maintainer
+            const maintainer = 'Bribak';
+            if (pr.user.login === maintainer) {
+              return;
+            }
+            
+            // Check if PR is targeting master
+            if (pr.base.ref === 'master') {
+              const warning = `⚠️ **Important Notice About Your Pull Request**
+            
+            Thank you for your contribution! However, I noticed that this PR is targeting the \`master\` branch.
+            
+            In this repository:
+            - The \`master\` branch is reserved for PyPI release mirroring only
+            - All development PRs should target the \`dev\` branch
+            
+            **Action Required:**
+            1. Please update your PR to target the \`dev\` branch instead
+            2. If you created your branch from \`master\`, you may need to:
+               - Create a new branch from \`dev\`
+               - Cherry-pick or reapply your changes
+               - Update your PR or create a new one
+            
+            For more information, please check our CONTRIBUTING.md guide.
+            
+            Let us know if you need any help with this process!`;
+              
+              // Add comment to PR
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: warning
+              });
+              
+              // Add 'wrong-target-branch' label if it exists
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  labels: ['wrong-target-branch']
+                });
+              } catch (error) {
+                console.log('Label could not be added (might not exist)');
+              }
+            }

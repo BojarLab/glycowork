@@ -1,12 +1,13 @@
+from pathlib import Path
 from glycowork.glycan_data.loader import unwrap, motif_list, multireplace, lib
 from glycowork.motif.regex import get_match
-from glycowork.motif.graph import glycan_to_nxGraph, categorical_node_match_wildcard
+from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, in_lib
+from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, choose_correct_isoform, get_matching_indices
 import matplotlib.pyplot as plt
 from io import BytesIO
+from typing import Dict, List, Tuple, Optional, Union, Any
 import networkx as nx
-import copy
 
 try:
   import drawsvg as draw
@@ -17,87 +18,22 @@ except ImportError:
   raise ImportError("<draw dependencies missing; did you do 'pip install glycowork[draw]'?>")
 import numpy as np
 import pandas as pd
-import sys
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
 
 
-def matches(line, opendelim = '(', closedelim = ')'):
-  """Find matching pairs of delimiters in a given string.\n
-  | Arguments:
-  | :-
-  | line (str): The string to search for delimiter pairs.
-  | opendelim (str, optional): The character to use as the opening delimiter. Default: '('.
-  | closedelim (str, optional): The character to use as the closing delimiter. Default: ')'.\n
-  | Returns:
-  | :-
-  | tuple: A tuple containing the start and end positions of the matched delimiter pair, and the current depth of the stack.\n
-  ref: https://stackoverflow.com/questions/5454322/python-how-to-match-nested-parentheses-with-regex
-  """
-  stack = []
-  for m in re.finditer(r'[{}{}]'.format(opendelim, closedelim), line):
-      pos = m.start()
-      if line[pos-1] == '\\':
-          # Skip escape sequence
-          continue
-
-      c = line[pos]
-      if c == opendelim:
-          stack.append(pos+1)
-      elif c == closedelim:
-          if stack:
-              # print("matched", prevpos, pos, line[prevpos:pos])
-              yield (stack.pop(), pos, len(stack))
-          else:
-              # Error
-              print(f"Encountered extraneous closing quote at pos {pos}: '{line[pos:]}'")
-              pass
-
-  if stack:
-      for pos in stack:
-          print(f"Expecting closing quote to match open quote starting at: '{line[pos - 1:]}'")
-
-
 # Adjusted SNFG color palette
 col_dict_base = {
-    'snfg_white'     : '#FFFFFF',
-    'snfg_alt_blue'  : '#0385AE',
-    'snfg_green'     : '#058F60',
-    'snfg_yellow'    : '#FCC326',
-    'snfg_light_blue': '#91D3E3',
-    'snfg_pink'      : '#F39EA0',
-    'snfg_purple'    : '#A15989',
-    'snfg_brown'     : '#9F6D55',
-    'snfg_orange'    : '#EF6130',
-    'snfg_red'       : '#C23537',
-    'black'          : '#000000',
-    'grey'           : '#7F7F7F'
+    'snfg_white': '#FFFFFF', 'snfg_alt_blue': '#0385AE', 'snfg_green': '#058F60', 'snfg_yellow': '#FCC326',
+    'snfg_light_blue': '#91D3E3', 'snfg_pink': '#F39EA0', 'snfg_purple': '#A15989', 'snfg_brown': '#9F6D55',
+    'snfg_orange': '#EF6130', 'snfg_red': '#C23537', 'black': '#000000', 'grey': '#7F7F7F'
 }
 
 col_dict_transparent = {
-    'snfg_white'     : '#FFFFFF',
-    'snfg_alt_blue'  : '#CDE7EF',
-    'snfg_green'     : '#CDE9DF',
-    'snfg_yellow'    : '#FFF6DE',
-    'snfg_light_blue': '#EEF8FB',
-    'snfg_pink'      : '#FDF0F1',
-    'snfg_purple'    : '#F1E6ED',
-    'snfg_brown'     : '#F1E9E5',
-    'snfg_orange'    : '#FDE7E0',
-    'snfg_red'       : '#F7E0E0',
-    'black'          : '#D9D9D9',
-    'grey'           : '#ECECEC'
+    'snfg_white': '#FFFFFF', 'snfg_alt_blue': '#CDE7EF', 'snfg_green': '#CDE9DF', 'snfg_yellow': '#FFF6DE',
+    'snfg_light_blue': '#EEF8FB', 'snfg_pink': '#FDF0F1', 'snfg_purple': '#F1E6ED', 'snfg_brown': '#F1E9E5',
+    'snfg_orange': '#FDE7E0', 'snfg_red': '#F7E0E0', 'black': '#D9D9D9', 'grey': '#ECECEC'
 }
-
-# Extensions for draw_lib
-additions = ['-', 'blank', 'red_end', 'free',
-             '04X', '15A', '02A', '13X',
-             '24X', '35X', '04A', '15X',
-             '02X', '13A', '24A', '35A',
-             '25A', '03A', '14X', '25X',
-             '03X', '14A', 'Z', 'Y',
-             'B', 'C', 'text', 'non_glycan',
-             'show', 'hide']
 
 # Shape-color mapping
 sugar_dict = {
@@ -169,1139 +105,459 @@ sugar_dict = {
   "Sor": ['Assigned', 'snfg_orange', False], "Psi": ['Assigned', 'snfg_pink', False],
   "non_glycan": ['Assigned', 'black', False],
 
-  "blank": ['empty', 'snfg_white', False], "text": ['text', None, None],
-  "red_end": ['red_end', None, None], "free": ['free', None, None],
-  "04X": ['04X', None, None], "15A": ['15A', None, None],
-  "02A": ['02A', None, None], "13X": ['13X', None, None],
-  "24X": ['24X', None, None], "35X": ['35X', None, None],
-  "04A": ['04A', None, None], "15X": ['15X', None, None],
-  "02X": ['02X', None, None], "13A": ['13A', None, None],
-  "24A": ['24A', None, None], "35A": ['35A', None, None],
-  "25A": ['25A', None, None], "03A": ['03A', None, None],
-  "14X": ['14X', None, None], "25X": ['25X', None, None],
-  "03X": ['03X', None, None], "14A": ['14A', None, None],
-  "Z": ['Z', None, None], "Y": ['Y', None, None],
+  "blank": ['empty', 'snfg_white', False], "text": ['text', None, None], "-": ['empty', None, None],
+  "red_end": ['red_end', None, None], "free": ['free', None, None], "show": ['empty', None, None], "hide": ['empty', None, None],
+  "04X": ['04X', None, None], "15A": ['15A', None, None], "02A": ['02A', None, None], "13X": ['13X', None, None],
+  "24X": ['24X', None, None], "35X": ['35X', None, None], "04A": ['04A', None, None], "15X": ['15X', None, None],
+  "02X": ['02X', None, None], "13A": ['13A', None, None], "24A": ['24A', None, None], "35A": ['35A', None, None],
+  "25A": ['25A', None, None], "03A": ['03A', None, None], "14X": ['14X', None, None], "25X": ['25X', None, None],
+  "03X": ['03X', None, None], "14A": ['14A', None, None], "Z": ['Z', None, None], "Y": ['Y', None, None],
   "B": ['B', None, None], "C": ['C', None, None]
 }
 
 
-def hex_circumference(x_pos, y_pos, dim, col_dict):
-  """Draw a hexagoncircumference at the specified position and dimensions.\n
-  | Arguments:
-  | :-
-  | x_pos (int): X coordinate of the hexagon's center on the drawing canvas.
-  | y_pos (int): Y coordinate of the hexagon's center on the drawing canvas.
-  | dim (int): Arbitrary dimension unit used for scaling the hexagon's size.\n
-  | Returns:
-  | :-
-  | None
-  """
-  for i in range(6):
-    angle1 = radians(60 * i)
-    angle2 = radians(60 * (i + 1))
-    x1 = (0 - x_pos * dim) + (0.5 * dim) * cos(angle1)
-    y1 = (0 + y_pos * dim) + (0.5 * dim) * sin(angle1)
-    x2 = (0 - x_pos * dim) + (0.5 * dim) * cos(angle2)
-    y2 = (0 + y_pos * dim) + (0.5 * dim) * sin(angle2)
-    p = draw.Path(stroke_width = 0.04 * dim, stroke = col_dict['black'])
-    p.M(x1, y1)
-    p.L(x2, y2)
-    d.append(p)
-
-
-def hex(x_pos, y_pos, dim, col_dict, color = 'white'):
-  """Draw a hexagon shape at the specified position and dimensions.\n
-  | Arguments:
-  | :-
-  | x_pos (int): X coordinate of the hexagon's center on the drawing canvas.
-  | y_pos (int): Y coordinate of the hexagon's center on the drawing canvas.
-  | dim (int): Arbitrary dimension unit used for scaling the hexagon's size.
-  | color (str): Color of the hexagon. Default is 'white'.\n
-  | Returns:
-  | :-
-  | None
-  """
-  x_base = 0 - x_pos * dim
-  y_base = 0 + y_pos * dim
+def draw_hex(
+    x_pos: float, # X coordinate of hexagon center
+    y_pos: float, # Y coordinate of hexagon center
+    dim: float, # Base dimension for scaling
+    col_dict: Dict[str, str], # Color mapping dictionary
+    drawing: draw.Drawing, # Glycan drawing to be modified
+    color: str = 'white', # Fill color
+    outline_only: bool = False # Whether to draw only the circumference
+    ) -> None:
+  "Draws filled hexagon shape with border at specified position and scale"
+  x_base = -x_pos * dim
+  y_base = y_pos * dim
   half_dim = 0.5 * dim
+  stroke_width = 0.04 * dim
   points = []
-  for angle in range(0, 360, 60):
-    x = x_base + half_dim * cos(radians(angle))
-    y = y_base + half_dim * sin(radians(angle))
-    points.extend([x, y])
-  d.append(draw.Lines(*points, close = True, fill = color, stroke = col_dict['black'], stroke_width = 0.04 * dim))
+  for angle in (0, 60, 120, 180, 240, 300):
+    rad = radians(angle)
+    points.extend([x_base + half_dim * cos(rad), y_base + half_dim * sin(rad)])
+  if outline_only:
+    p = draw.Path(stroke_width = stroke_width, stroke = col_dict['black'], fill = 'none')
+    p.M(points[0], points[1])  # Move to first point
+    for i in range(2, len(points), 2):  # Line to subsequent points
+      p.L(points[i], points[i+1])
+    p.Z()  # Close path
+    drawing.append(p)
+  else:
+    # Draw filled hexagon with border
+    drawing.append(draw.Lines(*points, close = True, fill = color, stroke = col_dict['black'], stroke_width = stroke_width))
 
 
-def draw_shape(shape, color, x_pos, y_pos, col_dict, modification = '', dim = 50, furanose = False, conf = '', deg = 0, text_anchor = 'middle',
-               scalar = 0):
-  """draw individual monosaccharides in shapes & colors according to the SNFG nomenclature\n
-  | Arguments:
-  | :-
-  | shape (string): monosaccharide class; shape of icon
-  | color (string): monosaccharide identity; color of icon
-  | x_pos (int): x coordinate of icon on drawing canvas
-  | y_pos (int): y coordinate of icon on drawing canvas
-  | modification (string): icon text annotation; used for post-biosynthetic modifications
-  | dim (int): arbitrary dimention unit; necessary for drawsvg; inconsequential when drawing is exported as svg graphics\n
-  | Returns:
-  | :-
-  |
-  """
-  x_base = 0 - x_pos * dim
-  y_base = 0 + y_pos * dim
+def add_customization(
+    drawing, # Drawing object to modify
+    x_base: float, # X coordinate of base position
+    y_base: float, # Y coordinate of base position
+    dim: float, # Base dimension for scaling
+    modification: str, # Text annotation for modifications
+    col_dict: Dict[str, str], # Color mapping dictionary
+    conf: str = None, # Ring configuration text
+    furanose: bool = False, # Draw furanose indicator
+    text_anchor: str = 'middle' # Text alignment
+    ) -> None:
+  "Adds text annotations and indicators to glycan symbol"
+  half_dim = dim / 2
+  # Text annotation
+  p = draw.Path(stroke_width = 0)
+  p.M(x_base-dim, y_base+half_dim)
+  p.L(x_base+dim, y_base+half_dim)
+  drawing.append(p)
+  drawing.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = text_anchor, line_offset = -3.15))
+  if furanose:
+    p = draw.Path(stroke_width = 0)
+    p.M(x_base-dim, y_base)
+    p.L(x_base+dim, y_base)
+    drawing.append(p)
+    drawing.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = text_anchor, center = True))
+  if conf:
+    conf_dict = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
+    p = draw.Path(stroke_width = 0)
+    p.M(x_base-dim, y_base)
+    p.L(x_base+dim, y_base)
+    drawing.append(p)
+    if conf in list(conf_dict.keys()):
+      drawing.append(draw.Text(conf_dict[conf], dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
+    else:
+      drawing.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
+
+
+def draw_shape(
+    shape: str, # SNFG shape designation
+    color: str, # SNFG color designation
+    x_pos: float, # X coordinate of shape center
+    y_pos: float, # Y coordinate of shape center
+    col_dict: Dict[str, str], # Color mapping dictionary
+    drawing: draw.Drawing, # Glycan drawing to be modified
+    modification: str = '', # Text annotation for modifications
+    dim: float = 50, # Base dimension for scaling
+    furanose: bool = False, # Draw furanose indicator
+    conf: str = '', # Ring configuration text
+    deg: float = 0, # Rotation angle in degrees
+    text_anchor: str = 'middle', # Text alignment for postbiosynthetic modifications
+    scalar: float = 0 # Intensity scaling factor for drawsvg output
+    ) -> None:
+  "Draws SNFG glycan symbol with specified shape, color, position, and optional annotations"
+  x_base = -x_pos * dim
+  y_base = y_pos * dim
   stroke_w = 0.04 * dim
   half_dim = dim / 2
-  inside_hex_dim = ((sqrt(3))/2)*half_dim
+  inside_hex_dim = ((sqrt(3))/2) * half_dim
   if scalar:
-    gradient = draw.RadialGradient(x_base, y_base, half_dim*2.2)
+    gradient = draw.RadialGradient(x_base, y_base, half_dim * 2.2)
     opacity = max(0, min(1, scalar))  # Normalize opacity to [0, 1]
     gradient.add_stop(0, 'purple', opacity = opacity)
     gradient.add_stop(1, 'white', opacity = 0)
-    d.append(draw.Circle(x_base, y_base, half_dim*2, fill = gradient))
+    drawing.append(draw.Circle(x_base, y_base, half_dim * 2, fill = gradient))
 
   if shape == 'Hex':
     # Hexose - circle
-    d.append(draw.Circle(x_base, y_base, half_dim, fill = col_dict[color], stroke_width = stroke_w, stroke = col_dict['black']))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    if furanose:
-      p = draw.Path(stroke_width = 0)
-      p.M(x_base-dim, y_base)
-      p.L(x_base+dim, y_base)
-      d.append(p)
-      d.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'HexNAc':
+    drawing.append(draw.Circle(x_base, y_base, half_dim, fill = col_dict[color], stroke_width = stroke_w, stroke = col_dict['black']))
+  elif shape == 'HexNAc':
     # HexNAc - square
-    d.append(draw.Rectangle(x_base-half_dim, y_base-half_dim, dim, dim, fill = col_dict[color], stroke_width = stroke_w, stroke = col_dict['black']))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    if furanose:
-      p = draw.Path(stroke_width = 0)
-      p.M(x_base-dim, y_base)
-      p.L(x_base+dim, y_base)
-      d.append(p)
-      d.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'HexN':
+    drawing.append(draw.Rectangle(x_base-half_dim, y_base-half_dim, dim, dim, fill = col_dict[color], stroke_width = stroke_w, stroke = col_dict['black']))
+  elif shape == 'HexN':
     # Hexosamine - crossed square
-    d.append(draw.Rectangle(x_base-half_dim, y_base-half_dim, dim, dim, fill = 'white', stroke_width = stroke_w, stroke = col_dict['black']))
-    d.append(draw.Lines(x_base-half_dim, y_base-half_dim,
+    drawing.append(draw.Rectangle(x_base-half_dim, y_base-half_dim, dim, dim, fill = 'white', stroke_width = stroke_w, stroke = col_dict['black']))
+    drawing.append(draw.Lines(x_base-half_dim, y_base-half_dim,
                         x_base+half_dim, y_base-half_dim,
                         x_base+half_dim, y_base+half_dim,
                         x_base-half_dim, y_base-half_dim,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
     p.M(x_base-half_dim, y_base-half_dim)
     p.L(x_base+half_dim, y_base-half_dim)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
     p.M(x_base+half_dim, y_base-half_dim)
     p.L(x_base+half_dim, y_base+half_dim)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
     p.M(x_base+half_dim, y_base+half_dim)
     p.L(x_base-half_dim, y_base-half_dim)
-    d.append(p)
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'HexA_2':
-    # Hexuronate - divided diamond
-    # AltA / IdoA
-    d.append(draw.Lines(x_base,         y_base+half_dim,
-                        x_base+half_dim, y_base,
-                        x_base,         y_base-half_dim,
-                        x_base-half_dim, y_base,
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width =stroke_w))
-    d.append(draw.Lines(x_base-half_dim, y_base,
-                        x_base, y_base+half_dim,
-                        x_base+half_dim, y_base,
-                        x_base-half_dim, y_base,
-                        close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base-half_dim, y_base)
-    p.L(x_base, y_base+half_dim)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base, y_base+half_dim)
-    p.L(x_base+half_dim, y_base)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base+half_dim, y_base)
-    p.L(x_base-half_dim, y_base)
-    d.append(p)
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'HexA':
-    # Hexuronate - divided diamond (col_dict[color]s flipped)
-    d.append(draw.Lines(x_base,         y_base+half_dim,
+    drawing.append(p)
+  elif shape in ['HexA_2', 'HexA']:
+    # Hexuronate - divided diamond;  AltA / IdoA for HexA_2 and flipped colors for HexA
+    drawing.append(draw.Lines(x_base,         y_base+half_dim,
                         x_base+half_dim, y_base,
                         x_base,         y_base-half_dim,
                         x_base-half_dim, y_base,
                         close = True, fill = 'white', stroke = col_dict['black'], stroke_width = stroke_w))
-    d.append(draw.Lines(x_base-half_dim, y_base,
-                        x_base, y_base-half_dim,
+    y_direction = half_dim if shape == 'HexA_2' else -half_dim
+    drawing.append(draw.Lines(x_base-half_dim, y_base,
+                        x_base, y_base+y_direction,
                         x_base+half_dim, y_base,
                         x_base-half_dim, y_base,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
     p.M(x_base-half_dim, y_base)
-    p.L(x_base, y_base-half_dim)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base, y_base-half_dim)
+    p.L(x_base, y_base+y_direction)
     p.L(x_base+half_dim, y_base)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base+half_dim, y_base)
-    p.L(x_base-half_dim, y_base)
-    d.append(p)
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'dHex':
+    drawing.append(p)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
+    p.M(x_base-half_dim, y_base)
+    p.L(x_base+half_dim, y_base)
+    drawing.append(p)
+  elif shape == 'dHex':
     # Deoxyhexose - triangle
-    d.append(draw.Lines(x_base- half_dim, y_base+inside_hex_dim,  # -(dim*1/3)
+    drawing.append(draw.Lines(x_base- half_dim, y_base+inside_hex_dim,  # -(dim*1/3)
                         x_base, y_base-inside_hex_dim,
                         x_base+half_dim, y_base+inside_hex_dim,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, text_anchor = 'middle', line_offset = -3.15))
-    if furanose:
-      p = draw.Path(stroke_width = 0)
-      p.M(x_base-dim, y_base+half_dim)
-      p.L(x_base+dim, y_base+half_dim)
-      d.append(p)
-      d.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'dHexNAc':
+  elif shape == 'dHexNAc':
     # Deoxyhexnac - divided triangle
-    d.append(draw.Lines(x_base-half_dim, y_base+inside_hex_dim,  # -(dim*1/3) for center of triangle
+    drawing.append(draw.Lines(x_base-half_dim, y_base+inside_hex_dim,  # -(dim*1/3) for center of triangle
                         x_base, y_base-inside_hex_dim,  # -(dim*1/3) for bottom alignment
                         x_base+half_dim, y_base+inside_hex_dim,  # -(((3**0.5)/2)*dim*0.5) for half of triangle height
                         close = True, fill = 'white', stroke = col_dict['black'], stroke_width = stroke_w))
-    d.append(draw.Lines(x_base, y_base+inside_hex_dim,  # -(dim*1/3)
+    drawing.append(draw.Lines(x_base, y_base+inside_hex_dim,  # -(dim*1/3)
                         x_base, y_base-inside_hex_dim,
                         x_base+half_dim, y_base+inside_hex_dim,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
     p.M(x_base, y_base+inside_hex_dim)
     p.L(x_base, y_base-inside_hex_dim)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
+    drawing.append(p)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
+    p.M(x_base, y_base+inside_hex_dim)
+    p.L(x_base+half_dim, y_base+inside_hex_dim)
+    drawing.append(p)
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
     p.M(x_base, y_base-inside_hex_dim)
     p.L(x_base+half_dim, y_base+inside_hex_dim)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'],)
-    p.M(x_base+half_dim, y_base+inside_hex_dim)
-    p.L(x_base, y_base+inside_hex_dim)
-    d.append(p)
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'ddHex':
+    drawing.append(p)
+  elif shape == 'ddHex':
     # Dideoxyhexose - flat rectangle
-    d.append(draw.Lines(x_base-half_dim,         y_base+(dim*7/12*0.5),  # -(dim*0.5/12)
+    drawing.append(draw.Lines(x_base-half_dim,         y_base+(dim*7/12*0.5),  # -(dim*0.5/12)
                         x_base+half_dim,         y_base+(dim*7/12*0.5),
                         x_base+half_dim,         y_base-(dim*7/12*0.5),
                         x_base-half_dim,         y_base-(dim*7/12*0.5),
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'Pen':
+  elif shape == 'Pen':
     # Pentose - star
-    d.append(draw.Lines(x_base,         y_base-half_dim/cos(radians(18)),
-                        x_base+((0.25*dim)/cos(radians(18)))*cos(radians(54)),         y_base-((0.25*dim)/cos(radians(18)))*sin(radians(54)),
-                        x_base+(half_dim/cos(radians(18)))*cos(radians(18)),         y_base-(half_dim/cos(radians(18)))*sin(radians(18)),
-                        x_base+((0.25*dim)/cos(radians(18)))*cos(radians(18)),         y_base+((0.25*dim)/cos(radians(18)))*sin(radians(18)),
-                        x_base+(half_dim/cos(radians(18)))*cos(radians(54)),         y_base+(half_dim/cos(radians(18)))*sin(radians(54)),
-                        x_base,         y_base+(0.25*dim)/cos(radians(18)),
-                        x_base-(half_dim/cos(radians(18)))*cos(radians(54)),         y_base+(half_dim/cos(radians(18)))*sin(radians(54)),
-                        x_base-((0.25*dim)/cos(radians(18)))*cos(radians(18)),         y_base+((0.25*dim)/cos(radians(18)))*sin(radians(18)),
-                        x_base-(half_dim/cos(radians(18)))*cos(radians(18)),         y_base-(half_dim/cos(radians(18)))*sin(radians(18)),
-                        x_base-((0.25*dim)/cos(radians(18)))*cos(radians(54)),         y_base-((0.25*dim)/cos(radians(18)))*sin(radians(54)),
+    cos18 = cos(radians(18))
+    cos54 = cos(radians(54))
+    sin18 = sin(radians(18))
+    sin54 = sin(radians(54))
+    base_r = half_dim/cos18
+    small_r = (0.25*dim)/cos18
+    drawing.append(draw.Lines(x_base, y_base-base_r,
+                    x_base+small_r*cos54, y_base-small_r*sin54,
+                    x_base+base_r*cos18, y_base-base_r*sin18,
+                    x_base+small_r*cos18, y_base+small_r*sin18,
+                    x_base+base_r*cos54, y_base+base_r*sin54,
+                    x_base, y_base+small_r,
+                    x_base-base_r*cos54, y_base+base_r*sin54,
+                    x_base-small_r*cos18, y_base+small_r*sin18,
+                    x_base-base_r*cos18, y_base-base_r*sin18,
+                    x_base-small_r*cos54, y_base-small_r*sin54,
+                   close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
+  elif shape in ['dNon', 'ddNon']:
+    # Deoxynonulosonate - diamond or Dideoxynonulosonate - flat diamond
+    diamond_adjust = 0 if shape == 'dNon' else dim*1/8
+    drawing.append(draw.Lines(x_base,         y_base+half_dim-diamond_adjust,
+                        x_base+half_dim+diamond_adjust, y_base,
+                        x_base,         y_base-half_dim+diamond_adjust,
+                        x_base-half_dim-diamond_adjust, y_base,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    if furanose:
-      p = draw.Path(stroke_width = 0)
-      p.M(x_base-dim, y_base)
-      p.L(x_base+dim, y_base)
-      d.append(p)
-      d.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'dNon':
-    # Deoxynonulosonate - diamond
-    d.append(draw.Lines(x_base,         y_base+half_dim,
-                        x_base+half_dim, y_base,
-                        x_base,         y_base-half_dim,
-                        x_base-half_dim, y_base,
-                        close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'ddNon':
-    # Dideoxynonulosonate - flat diamond
-    d.append(draw.Lines(x_base,         y_base+half_dim-(dim*1/8),
-                        x_base+half_dim+(dim*1/8), y_base,
-                        x_base,         y_base-half_dim+(dim*1/8),
-                        x_base-half_dim-(dim*1/8), y_base,
-                        close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'Unknown':
+  elif shape == 'Unknown':
     # Unknown - flat hexagon
-    d.append(draw.Lines(x_base-half_dim+(dim*1/8),         y_base+half_dim-(dim*1/8),
-                        x_base+half_dim-(dim*1/8),         y_base+half_dim-(dim*1/8),
-                        x_base+half_dim-(dim*1/8)+(dim*0.2),         y_base,
-                        x_base+half_dim-(dim*1/8),         y_base-half_dim+(dim*1/8),
-                        x_base-half_dim+(dim*1/8),         y_base-half_dim+(dim*1/8),
-                        x_base-half_dim+(dim*1/8)-(dim*0.2),         y_base,
+    flat_adjust = dim*1/8
+    extra = dim*0.2
+    drawing.append(draw.Lines(x_base-half_dim+flat_adjust, y_base+half_dim-flat_adjust,
+                        x_base+half_dim-flat_adjust, y_base+half_dim-flat_adjust,
+                        x_base+half_dim-flat_adjust+extra, y_base,
+                        x_base+half_dim-flat_adjust, y_base-half_dim+flat_adjust,
+                        x_base-half_dim+flat_adjust, y_base-half_dim+flat_adjust,
+                        x_base-half_dim+flat_adjust-extra, y_base,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'Assigned':
+  elif shape == 'Assigned':
     # Assigned - pentagon
-    d.append(draw.Lines(x_base,         y_base-half_dim/cos(radians(18)),
-                        x_base+(half_dim/cos(radians(18)))*cos(radians(18)),         y_base-(half_dim/cos(radians(18)))*sin(radians(18)),
-                        x_base+(half_dim/cos(radians(18)))*cos(radians(54)),         y_base+(half_dim/cos(radians(18)))*sin(radians(54)),
-                        x_base-(half_dim/cos(radians(18)))*cos(radians(54)),         y_base+(half_dim/cos(radians(18)))*sin(radians(54)),
-                        x_base-(half_dim/cos(radians(18)))*cos(radians(18)),         y_base-(half_dim/cos(radians(18)))*sin(radians(18)),
+    cos18 = cos(radians(18))
+    cos54 = cos(radians(54))
+    sin18 = sin(radians(18))
+    sin54 = sin(radians(54))
+    base_r = half_dim/cos18
+    drawing.append(draw.Lines(x_base, y_base-base_r,
+                        x_base+base_r*cos18, y_base-base_r*sin18,
+                        x_base+base_r*cos54, y_base+base_r*sin54,
+                        x_base-base_r*cos54, y_base+base_r*sin54,
+                        x_base-base_r*cos18, y_base-base_r*sin18,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = stroke_w))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = 'middle', line_offset = -3.15))
-    # Ring configuration
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    d.append(p)
-    d.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor = 'middle', center = True))
-
-  if shape == 'empty':
-    d.append(draw.Circle(x_base, y_base, dim/2, fill = 'none', stroke_width = stroke_w, stroke = 'none'))
-    # Text annotation
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base+half_dim)
-    p.L(x_base+dim, y_base+half_dim)
-    d.append(p)
-    d.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = text_anchor, line_offset = -3.15))
-
-  if shape == 'text':
-    d.append(draw.Text(modification, dim*0.35, x_base, y_base, text_anchor = text_anchor, fill = col_dict['black']))
-
-  if shape == 'red_end':
+  elif shape == 'empty':
+    drawing.append(draw.Circle(x_base, y_base, dim/2, fill = 'none', stroke_width = stroke_w, stroke = 'none'))
+  elif shape == 'text':
+    drawing.append(draw.Text(modification, dim*0.35, x_base, y_base, text_anchor = text_anchor, fill = col_dict['black']))
+  elif shape in ['red_end', 'free']:
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
     p.M((x_base+0.1*dim), (y_base-0.4*dim))  # Start path at point (-10, 20)
     p.C((x_base-0.3*dim), (y_base-0.1*dim),
         (x_base+0.3*dim), (y_base+0.1*dim),
         (x_base-0.1*dim), (y_base+0.4*dim))
-    d.append(p)
-    d.append(draw.Circle(x_base, y_base, 0.15*dim, fill = 'white', stroke_width = stroke_w, stroke = col_dict['black']))
-
-  if shape == 'free':
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
-    p.M((x_base+0.1*dim), (y_base-0.4*dim))  # Start path at point (-10, 20)
-    p.C((x_base-0.3*dim), (y_base-0.1*dim),
-        (x_base+0.3*dim), (y_base+0.1*dim),
-        (x_base-0.1*dim), (y_base+0.4*dim))
-    d.append(p)
-
-  if shape == '04X':
-    hex(x_pos, y_pos, dim, col_dict)
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
-                        x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
-                        x_base+half_dim*cos(radians(120)),                      y_base-half_dim*sin(radians(120)),
-                        x_base+inside_hex_dim*cos(radians(150)),           y_base-inside_hex_dim*sin(radians(150)),
-                        close = True, fill = col_dict['grey'], stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(150)),           y_base-inside_hex_dim*sin(radians(150)))
-    d.append(p)
-
-  if shape == '15A':
-    hex(x_pos, y_pos, dim, col_dict)
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
-                        x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
-                        x_base+half_dim*cos(radians(0)),                      y_base-half_dim*sin(radians(0)),
-                        x_base+inside_hex_dim*cos(radians(330)),           y_base-inside_hex_dim*sin(radians(330)),
-                        close = True, fill = col_dict['grey'], stroke =col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(330)),           y_base-inside_hex_dim*sin(radians(330)))
-    d.append(p)
-
-  if shape == '02A':
-    hex(x_pos, y_pos, dim, col_dict)
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
-                        x_base+half_dim*cos(radians(0)),                      y_base-half_dim*sin(radians(0)),
-                        x_base+half_dim*cos(radians(300)),                        y_base-half_dim*sin(radians(300)),
-                        x_base+inside_hex_dim*cos(radians(270)),           y_base-inside_hex_dim*sin(radians(270)),
-                        close = True, fill = col_dict['grey'], stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(270)),           y_base-inside_hex_dim*sin(radians(270)))
-    d.append(p)
-
-  if shape == '13X':
-    hex(x_pos, y_pos, dim, col_dict)
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
-                        x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
-                        x_base+half_dim*cos(radians(240)),                        y_base-half_dim*sin(radians(240)),
-                        x_base+inside_hex_dim*cos(radians(210)),           y_base-inside_hex_dim*sin(radians(210)),
-                        close = True, fill = col_dict['grey'], stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(210)),           y_base-inside_hex_dim*sin(radians(210)))
-    d.append(p)
-
-  if shape == '24X':
-    hex(x_pos, y_pos, dim, col_dict)
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)),
-                        x_base+half_dim*cos(radians(240)),                       y_base-half_dim*sin(radians(240)),
-                        x_base+half_dim*cos(radians(180)),                        y_base-half_dim*sin(radians(180)),
-                        x_base+inside_hex_dim*cos(radians(150)),           y_base-inside_hex_dim*sin(radians(150)),
-                        close = True, fill = col_dict['grey'], stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(150)),           y_base-inside_hex_dim*sin(radians(150)))
-    d.append(p)
-
-  if shape == '35X':
-    hex(x_pos, y_pos, dim, col_dict)
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)),
-                        x_base+half_dim*cos(radians(180)),                       y_base-half_dim*sin(radians(180)),
-                        x_base+half_dim*cos(radians(120)),                        y_base-half_dim*sin(radians(120)),
-                        x_base+inside_hex_dim*cos(radians(90)),           y_base-inside_hex_dim*sin(radians(90)),
-                        close = True, fill = col_dict['grey'], stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)))
-    d.append(p)
-
-  if shape == '04A':
-    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
-                        x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
-                        x_base+half_dim*cos(radians(120)),                      y_base-half_dim*sin(radians(120)),
-                        x_base+inside_hex_dim*cos(radians(150)),           y_base-inside_hex_dim*sin(radians(150)),
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(150)),           y_base-inside_hex_dim*sin(radians(150)))
-    d.append(p)
-
-  if shape == '15X':
-    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
-                        x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
-                        x_base+half_dim*cos(radians(0)),                      y_base-half_dim*sin(radians(0)),
-                        x_base+inside_hex_dim*cos(radians(330)),           y_base-inside_hex_dim*sin(radians(330)),
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(330)),           y_base-inside_hex_dim*sin(radians(330)))
-    d.append(p)
-
-  if shape == '02X':
-    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
-                        x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
-                        x_base+half_dim*cos(radians(300)),                        y_base-half_dim*sin(radians(300)),
-                        x_base+inside_hex_dim*cos(radians(270)),           y_base-inside_hex_dim*sin(radians(270)),
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(270)),           y_base-inside_hex_dim*sin(radians(270)))
-    d.append(p)
-
-  if shape == '13A':
-    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
-                        x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
-                        x_base+half_dim*cos(radians(240)),                        y_base-half_dim*sin(radians(240)),
-                        x_base+inside_hex_dim*cos(radians(210)),           y_base-inside_hex_dim*sin(radians(210)),
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(210)),           y_base-inside_hex_dim*sin(radians(210)))
-    d.append(p)
-
-  if shape == '24A':
-    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)),
-                        x_base+half_dim*cos(radians(240)),                       y_base-half_dim*sin(radians(240)),
-                        x_base+half_dim*cos(radians(180)),                        y_base-half_dim*sin(radians(180)),
-                        x_base+inside_hex_dim*cos(radians(150)),           y_base-inside_hex_dim*sin(radians(150)),
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(150)),           y_base-inside_hex_dim*sin(radians(150)))
-    d.append(p)
-
-  if shape == '35A':
-    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)),
-                        x_base+half_dim*cos(radians(180)),                       y_base-half_dim*sin(radians(180)),
-                        x_base+half_dim*cos(radians(120)),                        y_base-half_dim*sin(radians(120)),
-                        x_base+inside_hex_dim*cos(radians(90)),          y_base-inside_hex_dim*sin(radians(90)),
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)))
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,                                                y_base)
-    p.L(x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)))
-    d.append(p)
-
-  if shape == '25A':
-    hex(x_pos, y_pos, dim, col_dict)
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
-                        x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
-                        x_base+half_dim*cos(radians(0)),                        y_base-half_dim*sin(radians(0)),
-                        x_base+half_dim*cos(radians(300)),                      y_base-half_dim*sin(radians(300)),
-                        x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)),
-                        close = True, fill = col_dict['grey'], stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)))
-    p.L(x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)))
-    d.append(p)
-
-  if shape == '03A':
-    hex(x_pos, y_pos, dim, col_dict)
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
-                        x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
-                        x_base+half_dim*cos(radians(300)),                        y_base-half_dim*sin(radians(300)),
-                        x_base+half_dim*cos(radians(240)),                      y_base-half_dim*sin(radians(240)),
-                        x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)),
-                        close = True, fill = col_dict['grey'], stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)))
-    p.L(x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)))
-    d.append(p)
-
-  if shape == '14X':
-    hex(x_pos, y_pos, dim, col_dict)
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
-                        x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
-                        x_base+half_dim*cos(radians(240)),                        y_base-half_dim*sin(radians(240)),
-                        x_base+half_dim*cos(radians(180)),                      y_base-half_dim*sin(radians(180)),
-                        x_base+inside_hex_dim*cos(radians(150)),            y_base-inside_hex_dim*sin(radians(150)),
-                        close = True, fill = col_dict['grey'], stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)))
-    p.L(x_base+inside_hex_dim*cos(radians(150)),            y_base-inside_hex_dim*sin(radians(150)))
-    d.append(p)
-
-  if shape == '25X':
-    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
-    d.append(draw.Lines(x_base,                                               y_base,
-                        x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)),
-                        x_base+half_dim*cos(radians(60)),                       y_base-half_dim*sin(radians(60)),
-                        x_base+half_dim*cos(radians(0)),                        y_base-half_dim*sin(radians(0)),
-                        x_base+half_dim*cos(radians(300)),                      y_base-half_dim*sin(radians(300)),
-                        x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)),
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base+inside_hex_dim*cos(radians(90)),            y_base-inside_hex_dim*sin(radians(90)))
-    p.L(x_base+inside_hex_dim*cos(radians(270)),            y_base-inside_hex_dim*sin(radians(270)))
-    d.append(p)
-
-  if shape == '03X':
-    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)),
-                        x_base+half_dim*cos(radians(0)),                       y_base-half_dim*sin(radians(0)),
-                        x_base+half_dim*cos(radians(300)),                        y_base-half_dim*sin(radians(300)),
-                        x_base+half_dim*cos(radians(240)),                     y_base-half_dim*sin(radians(240)),
-                        x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)),
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base+inside_hex_dim*cos(radians(30)),            y_base-inside_hex_dim*sin(radians(30)))
-    p.L(x_base+inside_hex_dim*cos(radians(210)),            y_base-inside_hex_dim*sin(radians(210)))
-    d.append(p)
-
-  if shape == '14A':
-    hex(x_pos, y_pos, dim, col_dict, color = col_dict['grey'])
-    d.append(draw.Lines(x_base,                                                y_base,
-                        x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)),
-                        x_base+half_dim*cos(radians(300)),                       y_base-half_dim*sin(radians(300)),
-                        x_base+half_dim*cos(radians(240)),                        y_base-half_dim*sin(radians(240)),
-                        x_base+half_dim*cos(radians(180)),                      y_base-half_dim*sin(radians(180)),
-                        x_base+inside_hex_dim*cos(radians(150)),           y_base-inside_hex_dim*sin(radians(150)),
-                        close = True, fill = 'white', stroke = col_dict['black'], stroke_width = 0))
-    hex_circumference(x_pos, y_pos, dim, col_dict)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base+inside_hex_dim*cos(radians(330)),            y_base-inside_hex_dim*sin(radians(330)))
-    p.L(x_base+inside_hex_dim*cos(radians(150)),            y_base-inside_hex_dim*sin(radians(150)))
-    d.append(p)
-
-  if shape == 'Z':
-    # deg = 0
-    rot = 'rotate(' + str(deg) + ' ' + str(0-abs(x_pos)*(dim)) + ' ' + str(0-abs(y_pos)*(dim)) + ')'
+    drawing.append(p)
+    if shape == 'red_end':
+      drawing.append(draw.Circle(x_base, y_base, 0.15 * dim, fill = 'white',
+                                 stroke_width = stroke_w, stroke = col_dict['black']))
+  # Handle segmented Hex shapes (04X, 15A, etc.)
+  elif any(x in shape for x in ['04', '15', '02', '13', '24', '35', '25', '03', '14']):
+    use_grey_base = shape in ['04A', '15X', '02X', '13A', '24A', '35A', '14A']
+    segment_fill = 'white' if use_grey_base else col_dict['grey']
+    # Define angle pairs for each shape type
+    angles = {
+      '04': (30, 150, [60, 120]), '15': (90, 330, [60, 0]),
+      '02': (30, 270, [0, 300]), '13': (330, 210, [300, 240]),
+      '24': (270, 150, [240, 180]), '35': (210, 90, [180, 120]),
+      '25': (90, 270, [60, 0, 300]), '03': (30, 210, [0, 300, 240]),
+      '14': (330, 150, [300, 240, 180])
+    }
+    start_angle, end_angle, mid_angles = angles[shape[:2]]
+    draw_hex(x_pos, y_pos, dim, col_dict, drawing, color = col_dict['grey'] if use_grey_base else 'white')
+    # Draw the segment
+    points = [x_base, y_base]
+    points.extend([x_base+inside_hex_dim*cos(radians(start_angle)), y_base-inside_hex_dim*sin(radians(start_angle))])
+    for angle in mid_angles:
+      points.extend([x_base+half_dim*cos(radians(angle)), y_base-half_dim*sin(radians(angle))])
+    points.extend([x_base+inside_hex_dim*cos(radians(end_angle)), y_base-inside_hex_dim*sin(radians(end_angle))])
+    drawing.append(draw.Lines(*points, close = True, fill = segment_fill, stroke = col_dict['black'], stroke_width = 0))
+    # Draw the dividing line - either center-to-edge or edge-to-edge
+    if shape[:2] in ['25', '03', '14']:
+      p = draw.Path(stroke_width=stroke_w, stroke=col_dict['black'])
+      p.M(x_base+inside_hex_dim*cos(radians(start_angle)), y_base-inside_hex_dim*sin(radians(start_angle)))
+      p.L(x_base+inside_hex_dim*cos(radians(end_angle)), y_base-inside_hex_dim*sin(radians(end_angle)))
+      drawing.append(p)
+    else:
+      for angle in [start_angle, end_angle]:
+        p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
+        p.M(x_base, y_base)
+        p.L(x_base+inside_hex_dim*cos(radians(angle)), y_base-inside_hex_dim*sin(radians(angle)))
+        drawing.append(p)
+    # Draw outline
+    draw_hex(x_pos, y_pos, dim, col_dict, drawing, outline_only = True)
+  elif shape in ['Z', 'Y']:
+    rot = f'rotate({deg} {-abs(x_pos)*dim} {-abs(y_pos)*dim})'
     g = draw.Group(transform = rot)
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,            y_base-half_dim)
-    p.L(x_base,            y_base+half_dim)
+    p.M(x_base, y_base-half_dim)
+    p.L(x_base, y_base+half_dim)
+    p.M(x_base-0.02*dim, y_base-half_dim)
+    p.L(x_base+0.4*dim, y_base-half_dim)
     g.append(p)
+    if shape == 'Y':
+      g.append(draw.Circle(x_base + 0.4 * dim, y_base, 0.15 * dim, fill = 'none',
+                           stroke_width = stroke_w, stroke = col_dict['black']))
+    drawing.append(g)
+  elif shape in ['B', 'C']:
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base-0.02*dim,            y_base-half_dim)
-    p.L(x_base+0.4*dim,            y_base-half_dim)
-    g.append(p)
-    d.append(g)
-
-  if shape == 'Y':
-    # deg = 0
-    rot = 'rotate(' + str(deg) + ' ' + str(0-abs(x_pos)*(dim)) + ' ' + str(0-abs(y_pos)*(dim)) + ')'
-    g = draw.Group(transform = rot)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,            y_base-half_dim)
-    p.L(x_base,            y_base+half_dim)
-    g.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base-0.02*dim,            y_base-half_dim)
-    p.L(x_base+0.4*dim,           y_base-half_dim)
-    g.append(p)
-    g.append(draw.Circle(x_base+0.4*dim, y_base, 0.15*dim, fill = 'none', stroke_width = stroke_w, stroke = col_dict['black']))
-    d.append(g)
-
-  if shape == 'B':
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,            y_base-half_dim)
-    p.L(x_base,            y_base+half_dim)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base+0.02*dim,            y_base+half_dim)
-    p.L(x_base-0.4*dim,            y_base+half_dim)
-    d.append(p)
-
-  if shape == 'C':
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base,            y_base-half_dim)
-    p.L(x_base,            y_base+half_dim)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base+0.02*dim,            y_base+half_dim)
-    p.L(x_base-0.4*dim,            y_base+half_dim)
-    d.append(p)
-    d.append(draw.Circle(x_base-0.4*dim, y_base, 0.15*dim, fill = 'none', stroke_width = stroke_w, stroke = col_dict['black']))
+    p.M(x_base, y_base-half_dim)
+    p.L(x_base, y_base+half_dim)
+    p.M(x_base+0.02*dim, y_base+half_dim)
+    p.L(x_base-0.4*dim, y_base+half_dim)
+    drawing.append(p)
+    if shape == 'C':
+      drawing.append(draw.Circle(x_base - 0.4 * dim, y_base, 0.15 * dim, fill = 'none',
+                                 stroke_width = stroke_w, stroke = col_dict['black']))
+  if shape not in ['empty', 'text', 'red_end', 'free', 'Z', 'Y', 'B', 'C'] and not any(x in shape for x in ['04', '15', '02', '13', '24', '35', '25', '03', '14']):
+    add_customization(drawing, x_base, y_base, dim, modification, col_dict, conf, furanose, text_anchor)
 
 
-def add_bond(x_start, x_stop, y_start, y_stop, label = '', dim = 50, compact = False, highlight = 'show'):
-  """drawing lines (bonds) between start/stop coordinates\n
-  | Arguments:
-  | :-
-  | x_start (int): x1 coordinate
-  | x_stop (int): x2 coordinate
-  | y_start (int): y1 coordinate
-  | y_stop (int): y2 coordinate
-  | label (string): bond text annotation to specify linkage
-  | dim (int): arbitrary dimention unit; necessary for drawsvg; inconsequential when drawing is exported as svg graphics
-  | compact (bool): drawing style; normal or compact\n
-  | Returns:
-  | :-
-  |
-  """
-  if highlight == 'hide':
-    col_dict = col_dict_transparent
-  else:
-    col_dict = col_dict_base
-
-  label = label if label != '-' else ''
+def add_bond(
+    x_start: float, # Starting X coordinate
+    x_stop: float, # Ending X coordinate
+    y_start: float, # Starting Y coordinate
+    y_stop: float, # Ending Y coordinate
+    drawing: draw.Drawing, # Glycan drawing to be modified
+    label: str = '', # Bond label text
+    dim: float = 50, # Base dimension for scaling
+    compact: bool = False, # Use compact drawing style
+    highlight: str = 'show' # Highlight state: 'show' or 'hide'
+    ) -> None:
+  "Draws glycosidic bond line with optional label between specified coordinates"
+  col_dict = col_dict_transparent if highlight == 'hide' else col_dict_base
   scaling_factor = 1.2 if compact else 2
-  x_start = x_start * scaling_factor
-  x_stop = x_stop * scaling_factor
-  if compact:
-    y_start = y_start * 0.6
-    y_stop = y_stop * 0.6
+  y_scaling = 0.6 if compact else 1
+  x_start, x_stop = [-x * scaling_factor * dim for x in (x_start, x_stop)]
+  y_start, y_stop = [y * y_scaling * dim for y in (y_start, y_stop)]
   p = draw.Path(stroke_width = 0.08*dim, stroke = col_dict['black'],)
-  p.M(0-x_start*dim, 0+y_start*dim)
-  p.L(0-x_stop*dim, 0+y_stop*dim)
-  d.append(p)
-  d.append(draw.Text(label, dim*0.4, path = p, text_anchor = 'middle', fill = col_dict['black'], valign = 'middle', line_offset = -0.5))
+  p.M(x_start, y_start)
+  p.L(x_stop, y_stop)
+  drawing.append(p)
+  if label and label != '-':
+    drawing.append(draw.Text(label, dim*0.4, path = p, text_anchor = 'middle',
+                             fill = col_dict['black'], valign = 'middle', line_offset = -0.5))
 
 
-def add_sugar(monosaccharide, x_pos = 0, y_pos = 0, modification = '', dim = 50, compact = False, conf = '', deg = 0, text_anchor = 'middle', highlight = 'show',
-              scalar = 0):
-  """wrapper function for drawing monosaccharide at specified position\n
-  | Arguments:
-  | :-
-  | monosaccharide (string): simplified IUPAC nomenclature
-  | x_pos (int): x coordinate of icon on drawing canvas
-  | y_pos (int): y coordinate of icon on drawing canvas
-  | modification (string): icon text annotation; used for post-biosynthetic modifications
-  | dim (int): arbitrary dimention unit; necessary for drawsvg; inconsequential when drawing is exported as svg graphics
-  | compact (bool): drawing style; normal or compact\n
-  | Returns:
-  | :-
-  |
-  """
-  if highlight == 'hide':
-    col_dict = col_dict_transparent
-  else:
-    col_dict = col_dict_base
-
+def add_sugar(
+    monosaccharide: str, # IUPAC monosaccharide name
+    drawing: draw.Drawing, # Glycan drawing to be modified
+    x_pos: float = 0, # X coordinate of sugar center
+    y_pos: float = 0, # Y coordinate of sugar center
+    modification: str = '', # Text annotation for modifications
+    dim: float = 50, # Base dimension for scaling
+    compact: bool = False, # Use compact drawing style
+    conf: str = '', # Ring configuration text
+    deg: float = 0, # Rotation angle in degrees
+    text_anchor: str = 'middle', # Text alignment for postbiosynthetic modifications
+    highlight: str = 'show', # Highlight state: 'show' or 'hide'
+    scalar: float = 0 # Intensity scaling factor
+    ) -> None:
+  "Draws SNFG monosaccharide symbol with specified parameters at given position"
+  col_dict = col_dict_transparent if highlight == 'hide' else col_dict_base
   x_pos = x_pos * (1.2 if compact else 2)
   y_pos = y_pos * (0.6 if compact else 1)
   if monosaccharide in sugar_dict:
-    draw_shape(shape = sugar_dict[monosaccharide][0], color = sugar_dict[monosaccharide][1], x_pos = x_pos, y_pos = y_pos,
-               modification = modification, conf = conf, furanose = sugar_dict[monosaccharide][2], dim = dim, deg = deg, text_anchor = text_anchor, col_dict = col_dict,
-               scalar = scalar)
+    shape, color, furanose = sugar_dict[monosaccharide]
+    draw_shape(shape = shape, color = color, x_pos = x_pos, y_pos = y_pos, drawing = drawing, modification = modification,
+               conf = conf, furanose = furanose, dim = dim, deg = deg, text_anchor = text_anchor, col_dict = col_dict, scalar = scalar)
   else:
-    x_base = 0 - x_pos * dim
-    y_base = 0 + y_pos * dim
-    stroke_w = 0.04 * dim
+    x_base = -x_pos * dim
+    y_base = y_pos * dim
     half_dim = dim / 2
-    p = draw.Path(stroke_width = stroke_w, stroke = 'black')
+    p = draw.Path(stroke_width = 0.04 * dim, stroke = 'black')
     p.M(x_base-half_dim, y_base+half_dim)
     p.L(x_base+half_dim, y_base-half_dim)
-    d.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = 'black')
     p.M(x_base+half_dim, y_base+half_dim)
     p.L(x_base-half_dim, y_base-half_dim)
-    d.append(p)
+    drawing.append(p)
 
 
-def multiple_branches(glycan):
-  """Reorder multiple branches by linkage on a given glycan\n
-  | Arguments:
-  | :-
-  | glycan (string): Input glycan string.\n
-  | Returns:
-  | :-
-  | str: Modified glycan string.
-  """
-  if ']' not in glycan:
-    return glycan
-  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-  open_close = [(openpos, closepos) for openpos, closepos, level in matches(tmp) if level == 0 and not re.search(r"^Fuc\S{6}$", tmp[openpos:closepos])]
-  for k in range(len(open_close)-1):
-    if open_close[k + 1][0] - open_close[k][1] != 2:
-      continue
-    branch1, branch2 = glycan[open_close[k][0]:open_close[k][1]], glycan[open_close[k + 1][0]:open_close[k + 1][1]]
-    tmp1, tmp2 = branch1[-2], branch2[-2]
-    if tmp1 == tmp2 == '?':
-      if len(branch1) > len(branch2):
-        tmp1, tmp2 = [1, 2]
-      else:
-        tmp1, tmp2 = [2, 1]
-    if tmp1 > tmp2:
-      glycan = f"{glycan[:open_close[k][0]]}{branch2}][{branch1}{glycan[open_close[k + 1][1]:]}"
-  return glycan
-
-
-def multiple_branch_branches(glycan):
-  """Reorder nested multiple branches by linkage on a given glycan\n
-  | Arguments:
-  | :-
-  | glycan (str): Input glycan string.\n
-  | Returns:
-  | :-
-  | str: Modified glycan string.
-  """
-  if ']' not in glycan:
-    return glycan
-  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-  for openpos, closepos, level in matches(tmp):
-    if level == 0 and not re.search(r"^Fuc\S{6}$", tmp[openpos:closepos]):
-        glycan = glycan[:openpos] + multiple_branches(glycan[openpos:closepos]) + glycan[closepos:]
-  return glycan
-
-
-def reorder_for_drawing(glycan, by = 'linkage'):
-  """order level 0 branches by linkage, ascending\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns re-ordered glycan
-  """
-  if ']' not in glycan:
-    return glycan
-  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-  for openpos, closepos, level in matches(tmp):
-    if level == 0 and not re.search(r"^Fuc\S{6}$|^Xyl\S{6}$", tmp[openpos:closepos]):
-      # Nested branches
-      glycan = glycan[:openpos] + branch_order(glycan[openpos:closepos]) + glycan[closepos:]
-      # Branches
-      group1 = glycan[:openpos-1]
-      group2 = glycan[openpos:closepos]
-      branch_end = [j[-2] for j in [group1, group2]]
-      if by == 'length':
-        branch_len = [len(k) for k in min_process_glycans([group1, group2])]
-        if branch_len[0] == branch_len[1]:
-          if branch_end[0] == branch_end[1]:
-            glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-          else:
-            glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
-        else:
-          glycan = [group1, group2][np.argmax(branch_len)] + '[' + [group1, group2][np.argmin(branch_len)] + ']' + glycan[closepos+1:]
-      elif by == 'linkage':
-        if branch_end[0] == branch_end[1]:
-          glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-        else:
-          glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
-  return glycan
-
-
-def branch_order(glycan, by = 'linkage'):
-  """order nested branches by linkage, ascending\n
-  | Arguments:
-  | :-
-  | glycan (string): glycan in IUPAC-condensed format\n
-  | Returns:
-  | :-
-  | Returns re-ordered glycan
-  """
-  tmp = multireplace(glycan, {'(': '*', ')': '*', '[': '(', ']': ')'})
-  for openpos, closepos, level in matches(tmp):
-    if level == 0 and not re.search(r"^Fuc\S{6}$|^Xyl\S{6}$", tmp[openpos:closepos]):
-      group1 = glycan[:openpos-1]
-      group2 = glycan[openpos:closepos]
-      branch_end = [j[-2] for j in [group1, group2]]
-      branch_end = [k.replace('z', '9') for k in branch_end]
-      if by == 'length':
-        branch_len = [len(k) for k in min_process_glycans([group1, group2])]
-        if branch_len[0] == branch_len[1]:
-          if branch_end[0] == branch_end[1]:
-            glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-          else:
-            glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
-        else:
-          glycan = [group1, group2][np.argmax(branch_len)] + '[' + [group1, group2][np.argmin(branch_len)] + ']' + glycan[closepos+1:]
-      elif by == 'linkage':
-        if branch_end[0] == branch_end[1]:
-          glycan = group1 + '[' + group2 + ']' + glycan[closepos+1:]
-        else:
-          glycan = [group1, group2][np.argmin(branch_end)] + '[' + [group1, group2][np.argmax(branch_end)] + ']' + glycan[closepos+1:]
-  return glycan
-
-
-def split_node(G, node):
-  """split graph at node\n
-  | Arguments:
-  | :-
-  | G (networkx object): glycan graph
-  | node (int): where to split the graph object\n
-  | Returns:
-  | :-
-  | glycan graph (networkx object), consisting of two disjointed graphs\n
-  ref: https://stackoverflow.com/questions/65853641/networkx-how-to-split-nodes-into-two-effectively-disconnecting-edges
-  """
+def split_node(
+    G: nx.Graph, # NetworkX glycan graph
+    node: int # Node to split
+    ) -> nx.Graph: # Modified graph with split node
+  "Splits graph at specified node creating disjoint subgraphs;ref: https://stackoverflow.com/questions/65853641/networkx-how-to-split-nodes-into-two-effectively-disconnecting-edges"""
   edges = G.edges(node, data = True)
-  new_edges = []
-  new_nodes = []
+  new_edges, new_nodes = [], []
   H = G.__class__()
   H.add_nodes_from(G.subgraph(node))
-  for i, (s, t, data) in enumerate(edges):
+  for i, (_, target, data) in enumerate(edges):
       new_node = f"{node}_{i}"
-      Ix = nx.relabel_nodes(H, {node: new_node})
-      new_nodes += list(Ix.nodes(data = True))
-      new_edges.append((new_node, t, data))
+      new_nodes.extend(nx.relabel_nodes(H, {node: new_node}).nodes(data = True))
+      new_edges.append((new_node, target, data))
   G.remove_node(node)
   G.add_nodes_from(new_nodes)
   G.add_edges_from(new_edges)
   return G
 
 
-def unique(sequence):
-  """remove duplicates but keep order\n
-  | Arguments:
-  | :-
-  | sequence (list): \n
-  | Returns:
-  | :-
-  | deduplicated list, preserving original order\n
-  ref: https://stackoverflow.com/questions/480214/how-do-i-remove-duplicates-from-a-list-while-preserving-order
-  """
+def unique(
+    sequence: List[Any] # Input sequence with duplicates
+    ) -> List[Any]: # Deduplicated sequence
+  "Removes duplicates while preserving original order;ref: https://stackoverflow.com/questions/480214/how-do-i-remove-duplicates-from-a-list-while-preserving-order"""
   seen = set()
   return [x for x in sequence if not (x in seen or seen.add(x))]
 
 
-def get_indices(x, y):
-  """for each element in list x, get index (indices if present multiple times) in list y\n
-  | Arguments:
-  | :-
-  | x (list):
-  | y (list) elements can be lists: \n
-  | Returns:
-  | :-
-  | list of list of indices\n
-  """
+def get_indices(
+    x: List[Any], # Reference list
+    y: List[Any] # Query list
+    ) -> List[List[Optional[int]]]: # Lists of indices or None
+  "Finds indices of elements from y in x, handling multiple occurrences"
   return [([idx for idx, val in enumerate(x) if val == sub] if sub in x else [None]) for sub in y]
 
 
-def process_bonds(linkage_list):
-  """prepare linkages for printing to figure\n
-  | Arguments:
-  | :-
-  | linkage_list (list): list (or list of lists) of linkages\n
-  | Returns:
-  | :-
-  | processed linkage_list\n
-  """
-  def process_single_linkage(linkage, regex_dict):
-    if '?' in linkage[0] and '?' in linkage[-1]:
-        return '?'
-    elif '?' in linkage[0]:
-        return ' ' + linkage[-1]
-    elif '?' in linkage[-1]:
-        return regex_dict['alpha'].match(linkage) and '\u03B1' or regex_dict['beta'].match(linkage) and '\u03B2' or '-'
-    elif regex_dict['alpha'].match(linkage):
-        return '\u03B1 ' + linkage[-1]
-    elif regex_dict['beta'].match(linkage):
-        return '\u03B2 ' + linkage[-1]
-    elif regex_dict['digit'].match(linkage):
-        return linkage[0] + ' - ' + linkage[-1]
+def process_bonds(
+    linkage_list: Union[List[str], List[List[str]]] # Glycosidic linkages
+    ) -> Union[List[str], List[List[str]]]: # Formatted linkage text
+  "Formats glycosidic linkage text for visualization"
+  ALPHA_PATTERN = re.compile(r"^a\d")
+  BETA_PATTERN = re.compile(r"^b\d")
+  DIGIT_PATTERN = re.compile(r"^\d-\d")
+  def process_single_linkage(linkage: str) -> str:
+    if '-' in linkage:
+      first, last = linkage[0], re.search(r"-(.*)", linkage).group(1)
     else:
+      first, last = linkage[0], linkage[-1]
+    if '?' in first and '?' in last: return '?'
+    if '?' in first: return f' {last}'
+    if '?' in last:
+        if ALPHA_PATTERN.match(linkage): return '\u03B1'
+        if BETA_PATTERN.match(linkage): return '\u03B2'
         return '-'
-  regex_dict = {'alpha': re.compile(r"^a\d"), 'beta': re.compile(r"^b\d"), 'digit': re.compile(r"^\d-\d")}
+    if ALPHA_PATTERN.match(linkage): return f'\u03B1 {last}'
+    if BETA_PATTERN.match(linkage): return f'\u03B2 {last}'
+    if DIGIT_PATTERN.match(linkage): return f'{first} - {last}'
+    return '-'
   if any(isinstance(el, list) for el in linkage_list):
-    return [[process_single_linkage(linkage, regex_dict) for linkage in sub_list] for sub_list in linkage_list]
-  else:
-    return [process_single_linkage(linkage, regex_dict) for linkage in linkage_list]
+    return [[process_single_linkage(linkage) for linkage in sub_list] for sub_list in linkage_list]
+  return [process_single_linkage(linkage) for linkage in linkage_list]
 
 
-def split_monosaccharide_linkage(label_list):
-  """Split the monosaccharide linkage and extract relevant information from the given label list.\n
-  | Arguments:
-  | :-
-  | label_list (list): List of labels \n
-  | Returns:
-  | :-
-  | Three lists - sugar, sugar_modification, and bond.
-  |   - sugar (list): List of sugars
-  |   - sugar_modification (list): List of sugar modifications
-  |   - bond (list): List of bond information
-  """
+def split_monosaccharide_linkage(
+    label_list: Union[List[str], List[List[str]]] # List of monosaccharide-linkage labels
+    ) -> Tuple[List[str], List[str], List[str]]: # (sugars, modifications, bonds)
+  "Separates monosaccharides, modifications and linkages from label strings"
   def process_sublist(sub_list):
     sugar = sub_list[::2][::-1]
-    mod = [get_modification(k) if k not in additions else '' for k in sugar]
-    mod = [multireplace(k, {'O': '', '-ol': ''}) for k in mod]
-    sugar = [get_core(k) if k not in additions else k for k in sugar]
+    mod = [multireplace(get_modification(k) if in_lib(k, lib) else '', {'O': '', '-ol': ''}) for k in sugar]
+    sugar = [get_core(k) if in_lib(k, lib) else k for k in sugar]
     bond = sub_list[1::2][::-1]
     return sugar, mod, bond
   if any(isinstance(el, list) for el in label_list):
     return zip(*[process_sublist(sub) for sub in label_list])
-  else:
-    return process_sublist(label_list)
+  return process_sublist(label_list)
 
 
-def glycan_to_skeleton(glycan_string):
-  """convert glycan to skeleton of node labels according to the respective glycan graph object\n
-  | Arguments:
-  | :-
-  | glycan_string (string): \n
-  | Returns:
-  | :-
-  | node label skeleton of glycan (string)\n
-  """
+def glycan_to_skeleton(
+    glycan_string: str # IUPAC-condensed glycan sequence
+    ) -> str: # Node label skeleton
+  "Converts glycan to backbone structure with node indices"
   tmp = multireplace(glycan_string, {'(': ',', ')': ',', '[': ',[,', ']': ',],'})
   elements, idx = [], 0
   for k in filter(bool, tmp.split(',')):
@@ -1313,93 +569,40 @@ def glycan_to_skeleton(glycan_string):
   return multireplace( '-'.join(elements), {'[-': '[', '-]': ']'})
 
 
-def get_highlight_attribute(glycan_graph, motif_string, termini_list = []):
-  '''
-  Label nodes in parent glycan (graph) by presence in motif (string)
-  | Arguments:
-  | :-
-  | glycan_graph (networkx object): Glycan as networkx object.
-  | motif_string (string): Glycan as named motif or in IUPAC-condensed format.
-  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
-  | Returns:
-  | :-
-  | Returns networkx object of glycan, annotated with the node attribute 'highlight_labels', labeling nodes that constitute the motif ('show') or not ('hide').
-  '''
-  g1 = glycan_graph
-  g_tmp = copy.deepcopy(g1)
-  if not motif_string:
-    g2 = copy.deepcopy(g1)
+def get_highlight_attribute(
+    glycan_graph: nx.Graph, # NetworkX glycan graph
+    motif_string: str, # Motif to highlight
+    termini_list: List = [] # Terminal position specifications
+    ) -> nx.Graph: # Graph with highlight attributes
+  "Labels nodes in glycan graph based on presence in specified motif"
+  if motif_string:
+    motif = glycan_to_nxGraph(motif_string, termini = 'provided' if termini_list else None, termini_list = termini_list)
+    _, mappings = subgraph_isomorphism(glycan_graph, motif, termini_list = termini_list, return_matches = True)
+    mapping_show = {node: 'show' if node in set(unwrap(mappings)) else 'hide' for node in glycan_graph.nodes()}
   else:
-    try:
-      g2 = glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0], termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_list.loc[motif_list.motif_name == motif_string].motif.values.tolist()[0])
-    except:
-      g2 = glycan_to_nxGraph(motif_string, termini = 'provided', termini_list = termini_list) if termini_list else glycan_to_nxGraph(motif_string)
-
-  g1_node_labels = nx.get_node_attributes(g1, 'string_labels')
-  relevant_labels = set(list(g1_node_labels.values()) + list(nx.get_node_attributes(g2, 'string_labels').values()))
-  narrow_wildcard_list = {k:[j for j in get_possible_linkages(k)] for k in relevant_labels if '?' in k}
-  narrow_wildcard_list2 = {k:[j for j in get_possible_monosaccharides(k)] for k in relevant_labels if k in ['Hex', 'HexNAc', 'dHex', 'Sia', 'HexA', 'Pen', 'Monosaccharide'] or '!' in k}
-  narrow_wildcard_list = {**narrow_wildcard_list, **narrow_wildcard_list2}
-
-  if termini_list or narrow_wildcard_list:
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
-  else:
-    graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-  graph_pair.subgraph_is_isomorphic()
-  mapping = graph_pair.mapping
-  mapping = {v: k for k, v in mapping.items()}
-  mapping_show = {v: 'show' for v in list(graph_pair.mapping.keys())}
-
-  while list(graph_pair.mapping.keys()) != []:
-    g_tmp.remove_nodes_from(graph_pair.mapping.keys())
-    if termini_list or narrow_wildcard_list:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
-    else:
-      graph_pair = nx.algorithms.isomorphism.GraphMatcher(g_tmp, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-    graph_pair.subgraph_is_isomorphic()
-    mapping = graph_pair.mapping
-    mapping = {v: k for k, v in mapping.items()}
-    mapping_show.update({v: 'show' for v in list(graph_pair.mapping.keys())})
-
-  mapping_hide = {v: 'hide' for v in list(set(list(g1_node_labels.keys())) - set(list(mapping_show.keys())))}
-  mapping_show.update(mapping_hide)
-
-  nx.set_node_attributes(g1, dict(sorted(mapping_show.items())), 'highlight_labels')
-
-  return g1
+    mapping_show = {node: 'show' for node in glycan_graph.nodes()}
+  nx.set_node_attributes(glycan_graph, dict(sorted(mapping_show.items())), 'highlight_labels')
+  return glycan_graph
 
 
-def process_repeat(repeat):
-  """prepare input for repeat unit\n
-  | Arguments:
-  | :-
-  | repeat (string): Repeat unit in IUPAC-condensed format, terminating either in linkage connecting units or first monosaccharide of the unit\n
-  | Returns:
-  | :-
-  | processed repeat unit in GlycoDraw-ready IUPAC-condensed format\n
-  """
+def process_repeat(
+    repeat: str # Repeating unit specification, terminating either in linkage connecting units or first monosaccharide of the unit
+    ) -> str: # Processed repeat unit
+  "Formats repeating unit glycan sequence for drawing"
   backbone = re.findall(r'.*\((?!.*\()', repeat)[0]
   repeat_connection = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', repeat))
-  return 'blank(?1-' + repeat_connection[-1] + ')' + backbone + repeat_connection[:2] + '-?)'
+  return f'blank(?1-{repeat_connection[-1]}){backbone}{repeat_connection[:2]}-?)'
 
 
-def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, termini_list = []):
-  """Extract monosaccharide labels and calculate coordinates for drawing\n
-  | Arguments:
-  | :-
-  | draw_this (string): Glycan structure to be drawn.
-  | highlight_motif (string): Glycan as named motif or in IUPAC-condensed format.
-  | show_linkage (bool, optional): Flag indicating whether to show linkages. Default: True.
-  | termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')\n
-  | Returns:
-  | :-
-  | data_combined (list of lists)
-  | contains lists with monosaccharide label, x position, y position, modification, bond, conformation
-  """
+def get_coordinates_and_labels(
+    draw_this: str, # IUPAC-condensed glycan sequence
+    highlight_motif: Optional[str], # Motif to highlight
+    show_linkage: bool = True, # Show linkage labels
+    termini_list: List = [] # Terminal position specifications (from 'terminal', 'internal', and 'flexible')
+) -> List[List]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
+  "Calculates drawing coordinates and formats labels for glycan visualization"
   if not draw_this.startswith('['):
-    draw_this = multiple_branches(multiple_branch_branches(draw_this))
-    draw_this = reorder_for_drawing(draw_this)
-    draw_this = multiple_branch_branches(multiple_branches(draw_this))
+    draw_this = choose_correct_isoform(draw_this, order_by = "linkage")
 
   graph = glycan_to_nxGraph(draw_this, termini = 'calc') if termini_list else glycan_to_nxGraph(draw_this)
   graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list)
@@ -1415,32 +618,32 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   if ']' in glycan:
     glycan = glycan.replace('[', '(').replace(']', ')')
     for k, lev in enumerate(levels):
-      for openpos, closepos, level in matches(glycan):
+      for openpos, closepos, level in get_matching_indices(glycan):
         if level == lev:
           parts[k].append(glycan[openpos:closepos])
           glycan = glycan[:openpos-1] + len(glycan[openpos-1:closepos+1])*'*' + glycan[closepos+1:]
       glycan = glycan.replace('*', '')
     parts = [[[i for i in k.split('-') if i] for k in part] for part in parts]
 
-  main_node = glycan.split('-')
-  main_node = [k for k in main_node if k != '']
+  main_node = [k for k in glycan.split('-') if k]
   node_values = list(node_labels.values())
   highlight_values = list(highlight_labels.values())
   graph_nodes = list(graph.nodes())
   branch_branch_branch_node, branch_branch_node, branch_node = parts
 
-  branch_label, branch_highlight = [], []
-  for k in range(len(branch_node)):
-    branch_label.append([node_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, branch_node[k])])
-    branch_highlight.append([highlight_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, branch_node[k])])
-  branch_branch_label, branch_branch_highlight = [], []
-  for k in range(len(branch_branch_node)):
-    branch_branch_label.append([node_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, branch_branch_node[k])])
-    branch_branch_highlight.append([highlight_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, branch_branch_node[k])])
-  bbb_label, bbb_highlight = [], []
-  for k in range(len(branch_branch_branch_node)):
-    bbb_label.append([node_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, branch_branch_branch_node[k])])
-    bbb_highlight.append([highlight_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, branch_branch_branch_node[k])])
+  # Get labels for each level
+  def get_level_labels(nodes):
+    labels, highlights = [], []
+    for node_set in nodes:
+      labels.append([node_values[j] for j in range(len(graph_nodes))
+                     if graph_nodes[j] in map(int, node_set)])
+      highlights.append([highlight_values[j] for j in range(len(graph_nodes))
+                         if graph_nodes[j] in map(int, node_set)])
+    return labels, highlights
+
+  branch_label, branch_highlight = get_level_labels(branch_node)
+  branch_branch_label, branch_branch_highlight = get_level_labels(branch_branch_node)
+  bbb_label, bbb_highlight = get_level_labels(branch_branch_branch_node)
   main_label = [node_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, main_node)]
   main_highlight = [highlight_values[j] for j in range(len(graph_nodes)) if graph_nodes[j] in map(int, main_node)]
 
@@ -1511,18 +714,15 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   branch_node = [branch_node[i] for i in new_order]
   branch_connection = [branch_connection[i] for i in new_order]
 
-  for k in range(len(branch_branch_connection)):
-    tmp = get_indices(new_order, [branch_branch_connection[k][0]])
-    branch_branch_connection[k] = (tmp[0][0], branch_branch_connection[k][1])
+  for k, k_val in enumerate(branch_branch_connection):
+    tmp = get_indices(new_order, [k_val[0]])
+    branch_branch_connection[k] = (tmp[0][0], k_val[1])
 
   # Order multiple connections on a branch_branch level
   new_order = []
   for k in sorted(set(branch_branch_connection), reverse = True):
     idx = unwrap(get_indices(branch_branch_connection, [k]))
-    if len(idx) == 1:
-      new_order.extend(idx)
-    else:
-      new_order.extend([idx[i] for i in np.argsort([k[0][-1] for k in [j for j in [branch_branch_bond[k] for k in idx]]])])
+    new_order.extend(idx) if len(idx) == 1 else new_order.extend([idx[i] for i in np.argsort([k[0][-1] for k in [j for j in [branch_branch_bond[k] for k in idx]]])])
 
   branch_branch_sugar = [branch_branch_sugar[i] for i in new_order]
   branch_branch_sugar_label = [branch_branch_sugar_label[i] for i in new_order]
@@ -1698,68 +898,67 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
     for pair in pairwise_node_crawl:
       idx_A = [k for k in get_indices(node_list, [str(k) for k in pair[0]]) if k != [None]]
       idx_B = [k for k in get_indices(node_list, [str(k) for k in pair[1]]) if k != [None]]
-      upper, lower = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
+      upper, _ = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
       upper_min = min(y_list[k[0]] for k in (idx_A if upper == pair[0] else idx_B))
       lower_max = max(y_list[k[0]] for k in (idx_B if upper == pair[0] else idx_A))
 
-      to_add = 2 - (upper_min-lower_max)
+      to_add = 2 - (upper_min - lower_max)
       if main_sugar[-1] not in {'Fuc', 'Xyl'} or len(main_sugar) != 2:
-        for k in range(len(branch_y_pos)):
-          for j in range(len(branch_y_pos[k])):
-            if [k[::2][::-1] for k in branch_node][k][j] in [str(k) for k in upper] and branch_sugar[k] not in [['Fuc'], ['Xyl']]:
-              branch_y_pos[k][j] = branch_y_pos[k][j] + to_add
+        for k, k_val in enumerate(branch_y_pos):
+          for j, j_val in enumerate(k_val):
+            if [k[::2][::-1] for k in branch_node][k][j] in [str(u) for u in upper] and branch_sugar[k] not in [['Fuc'], ['Xyl']]:
+              branch_y_pos[k][j] += to_add
 
-      for k in range(len(branch_branch_y_pos)):
-        for j in range(len(branch_branch_y_pos[k])):
-          if [k[::2][::-1] for k in branch_branch_node][k][j] in [str(k) for k in upper]:
-            branch_branch_y_pos[k][j] = branch_branch_y_pos[k][j] + to_add
+      for k, k_val in enumerate(branch_branch_y_pos):
+        for j, j_val in enumerate(k_val):
+          if [k[::2][::-1] for k in branch_branch_node][k][j] in [str(u) for u in upper]:
+            branch_branch_y_pos[k][j] += to_add
 
-      for k in range(len(bbb_y_pos)):
-        for j in range(len(bbb_y_pos[k])):
-          if [k[::2][::-1] for k in branch_branch_branch_node][k][j] in [str(k) for k in upper]:
-            bbb_y_pos[k][j] = bbb_y_pos[k][j] + to_add
+      for k, k_val in enumerate(bbb_y_pos):
+        for j, j_val in enumerate(k_val):
+          if [k[::2][::-1] for k in branch_branch_branch_node][k][j] in [str(u) for u in upper]:
+            bbb_y_pos[k][j] += to_add
 
   # Adjust y branch_branch connections
   for j, conn in enumerate(unique(branch_branch_connection)):
     if branch_branch_sugar[j] not in [['Fuc'], ['Xyl']] and max(branch_x_pos[branch_branch_connection[j][0]]) >= branch_branch_x_pos[j][0]:
       tmp = [branch_branch_y_pos[j][0] for j in unwrap(get_indices(branch_branch_connection, [conn]))]
-      y_adj = (max(tmp)-branch_y_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]+1])/2
+      y_adj = (max(tmp) - branch_y_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1] + 1])/2
       # For each branch
-      for k in range(len(branch_x_pos)):
+      for k, k_val in enumerate(branch_x_pos):
         # If connected
         if k == branch_branch_connection[j][0]:
           # And if smaller/equal x
-          for n in range(len(branch_x_pos[k])):
-            if branch_x_pos[k][n] <= branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]:
-              branch_y_pos[k][n] = branch_y_pos[k][n] + y_adj
+          for n, n_val in enumerate(k_val):
+            if n_val <= branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]:
+              branch_y_pos[k][n] += y_adj
       # For each branch branch
-      for k in range(len(branch_branch_x_pos)):
+      for k, k_val in enumerate(branch_branch_x_pos):
         # If connected
         if branch_branch_connection[k][0] == branch_branch_connection[j][0] and branch_branch_connection[k][1] == branch_branch_connection[j][1]:
           # And if smaller/equal x
-          for n in range(len(branch_branch_x_pos[k])):
-            if branch_branch_x_pos[k][n] <= branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]:
-              branch_branch_y_pos[k][n] = branch_branch_y_pos[k][n] + y_adj
+          for n, n_val in enumerate(k_val):
+            if n_val <= branch_x_pos[branch_branch_connection[j][0]][branch_branch_connection[j][1]]:
+              branch_branch_y_pos[k][n] += y_adj
 
   # Adjust y branch connections
-  # print(branch_connection)
-  for k in range(len(unique(branch_connection))):
-    tmp = [branch_y_pos[j][0] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))]
-    if ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(unique(branch_connection)[k]) < 2 or ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(0) > 1:  # and list(set(unwrap([branch_sugar[k] for k in unwrap(get_indices(unwrap(branch_sugar), ['Fuc']))]))) == ['Fuc']:
+  for k, k_val in enumerate(unique(branch_connection)):
+    tmp = [branch_y_pos[j][0] for j in unwrap(get_indices(branch_connection, [k_val]))]
+    if ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [k_val]))] and branch_connection.count(k_val) < 2 or ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [k_val]))] and branch_connection.count(0) > 1:  # and list(set(unwrap([branch_sugar[k] for k in unwrap(get_indices(unwrap(branch_sugar), ['Fuc']))]))) == ['Fuc']:
       y_adj = 0
-    elif ['Xyl'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [unique(branch_connection)[k]]))] and branch_connection.count(unique(branch_connection)[k]) < 2:
+    elif ['Xyl'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [k_val]))] and branch_connection.count(k_val) < 2:
       y_adj = 0
     else:
-      y_adj = (max(tmp)-main_sugar_y_pos[unique(branch_connection)[k]])/2
-    for j in range(len(main_sugar_x_pos)):
-      if main_sugar_x_pos[j] <= main_sugar_x_pos[unique(branch_connection)[k]]:
+      y_adj = (max(tmp) - main_sugar_y_pos[k_val])/2
+    for j, j_val in enumerate(main_sugar_x_pos):
+      if j_val <= main_sugar_x_pos[k_val]:
         main_sugar_y_pos[j] += y_adj
       else:
         pass
-    for j in range(len(branch_x_pos)):
-      if branch_connection[j] == unique(branch_connection)[k] or branch_sugar[j] in [['Fuc'], ['Xyl']]:
-        for n in range(len(branch_x_pos[j])):
-          if branch_x_pos[j][n] <= main_sugar_x_pos[unique(branch_connection)[k]]:
+    for j, j_val in enumerate(branch_x_pos):
+      if branch_connection[j] == k_val or branch_sugar[j] in [['Fuc'], ['Xyl']]:
+        for n, n_val in enumerate(j_val):
+          if n_val <= main_sugar_x_pos[k_val]:
             branch_y_pos[j][n] += y_adj
 
   # Fix for handling 'wrong' structures with the core fucose in the main chain
@@ -1795,7 +994,7 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
     for pair in pairwise_node_crawl:
       idx_A = [k for k in get_indices(node_list, [str(k) for k in pair[0]]) if k != [None]]
       idx_B = [k for k in get_indices(node_list, [str(k) for k in pair[1]]) if k != [None]]
-      upper, lower = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
+      upper, _ = (pair[0], pair[1]) if max(y_list[k[0]] for k in idx_A) > max(y_list[k[0]] for k in idx_B) else (pair[1], pair[0])
       upper_min = min(y_list[k[0]] for k in (idx_A if upper == pair[0] else idx_B))
       lower_max = max(y_list[k[0]] for k in (idx_B if upper == pair[0] else idx_A))
 
@@ -1811,14 +1010,14 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
         if x_cor in list(set(lower_x)):
           min_y_upper = min([upper_y[k] for k in unwrap(get_indices(upper_x, [x_cor]))])
           max_y_lower = max([lower_y[k] for k in unwrap(get_indices(lower_x, [x_cor]))])
-          diff_to_fix.append(2 - (min_y_upper-max_y_lower))
+          diff_to_fix.append(2 - (min_y_upper - max_y_lower))
       if diff_to_fix:
         to_add = max(diff_to_fix)
 
       str_upper = [str(k) for k in upper]
       if main_sugar[-1] != 'Fuc':
-        for k in range(len(branch_y_pos)):
-          for j in range(len(branch_y_pos[k])):
+        for k, k_val in enumerate(branch_y_pos):
+          for j, j_val in enumerate(k_val):
             if [k[::2][::-1] for k in branch_node][k][j] in str_upper:
               branch_y_pos[k][j] += to_add
             if branch_x_pos[k][j] == 0:
@@ -1831,22 +1030,22 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
           main_sugar_y_pos[k] += (to_add/2)
 
       for list_to_update in [branch_branch_y_pos, bbb_y_pos]:
-        for k in range(len(list_to_update)):
-          for j in range(len(list_to_update[k])):
+        for k, k_val in enumerate(list_to_update):
+          for j, j_val in enumerate(k_val):
             if [k[::2][::-1] for k in (branch_branch_node if list_to_update is branch_branch_y_pos else branch_branch_branch_node)][k][j] in str_upper:
               list_to_update[k][j] += to_add
 
-  main_conf = [k.group()[0] if k is not None else '' for k in [re.search('^L-|^D-', k) for k in main_sugar_modification]]
-  main_sugar_modification = [re.sub('^L-|^D-', '', k) for k in main_sugar_modification]
+  main_conf = [k.group() if k is not None else '' for k in [re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in main_sugar_modification]]
+  main_sugar_modification = [re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in main_sugar_modification]
 
-  b_conf = [[k.group()[0] if k is not None else '' for k in j] for j in [[re.search('^L-|^D-', k) for k in j] for j in branch_sugar_modification]]
-  branch_sugar_modification = [[re.sub('^L-|^D-', '', k) for k in j] for j in branch_sugar_modification]
+  b_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_sugar_modification]]
+  branch_sugar_modification = [[re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_sugar_modification]
 
-  bb_conf = [[k.group()[0] if k is not None else '' for k in j] for j in [[re.search('^L-|^D-', k) for k in j] for j in branch_branch_sugar_modification]]
-  branch_branch_sugar_modification = [[re.sub('^L-|^D-', '', k) for k in j] for j in branch_branch_sugar_modification]
+  bb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_branch_sugar_modification]]
+  branch_branch_sugar_modification = [[re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_branch_sugar_modification]
 
-  bbb_conf = [[k.group()[0] if k is not None else '' for k in j] for j in [[re.search('^L-|^D-', k) for k in j] for j in bbb_sugar_modification]]
-  bbb_sugar_modification = [[re.sub('^L-|^D-', '', k) for k in j] for j in bbb_sugar_modification]
+  bbb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in bbb_sugar_modification]]
+  bbb_sugar_modification = [[re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in bbb_sugar_modification]
 
   data_combined = [
       [main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label],
@@ -1857,102 +1056,102 @@ def get_coordinates_and_labels(draw_this, highlight_motif, show_linkage = True, 
   return data_combined
 
 
-def draw_bracket(x, y_min_max, direction = 'right', dim = 50,  highlight = 'show', deg = 0):
-  """Draw a bracket shape at the specified position and dimensions.\n
-  | Arguments:
-  | :-
-  | x (int): X coordinate of the bracket on the drawing canvas.
-  | y_min_max (list): List containing the minimum and maximum Y coordinates for the bracket.
-  | direction (string, optional): Direction of the bracket. Possible values are 'right' and 'left'. Default: 'right'.
-  | dim (int, optional): Arbitrary dimension unit used for scaling the bracket's size. Default: 50.\n
-  | Returns:
-  | :-
-  | None
-  """
-  if highlight == 'hide':
-    col_dict = col_dict_transparent
-  else:
-    col_dict = col_dict_base
-
+def draw_bracket(
+    x: float, # X coordinate
+    y_min_max: List[float], # [Min Y, Max Y] coordinates
+    drawing: draw.Drawing, # Glycan drawing to be modified
+    direction: str = 'right', # Bracket direction ("left", "right")
+    dim: float = 50, # Base dimension for scaling
+    highlight: str = 'show', # Highlight state
+    deg: float = 0 # Rotation angle in degrees
+    ) -> None:
+  "Draws bracket shape at specified position and dimensions"
+  col_dict = col_dict_transparent if highlight == 'hide' else col_dict_base
   stroke_opts = {'stroke_width': 0.04 * dim, 'stroke': col_dict['black']}
-  x_common = 0 - (x * dim)
-  y_min = 0 + (y_min_max[0] * dim) - 0.75 * dim
-  y_max = 0 + (y_min_max[1] * dim) + 0.75 * dim
-  # rot = 'rotate(' + str(deg) + ' ' + str(0-abs(x*2)*(dim)) + ' ' + str(0-abs(y_min)*(dim)) + ')'
-  rot = 'rotate(' + str(deg) + ' ' + str(x_common) + ' ' + str(np.mean(y_min_max)) + ')'
+  x_common = -x * dim
+  y_min = y_min_max[0] * dim - 0.75 * dim
+  y_max = y_min_max[1] * dim + 0.75 * dim
   # Vertical
-
-  g = draw.Group(transform = rot)
+  g = draw.Group(transform = f'rotate({deg} {x_common} {np.mean(y_min_max)})')
   p = draw.Path(**stroke_opts)
   p.M(x_common, y_max)
   p.L(x_common, y_min)
-  # d.append(p)
   g.append(p)
-  dir_mult = 1 if direction == 'right' else -1
+  offset = 0.25 * dim * (1 if direction == 'right' else -1)
   for y in [y_min, y_max]:
     p = draw.Path(**stroke_opts)
-    p.M(x_common - (0.02 * dim * dir_mult), y)
-    p.L(x_common + (0.25 * dim * dir_mult), y)
-    # d.append(p)
+    p.M(x_common - offset/12.5, y)
+    p.L(x_common + offset, y)
     g.append(p)
-  d.append(g)
+  drawing.append(g)
 
 
-def is_jupyter():
+def is_jupyter() -> bool:
+  "Detects if code is running in Jupyter notebook environment"
   try:
     from IPython import get_ipython
-    if 'IPKernelApp' not in get_ipython().config:  # Check if not in IPython kernel
-      return False
-  except:
+    return 'IPKernelApp' in get_ipython().config  # Check if in IPython kernel
+  except (ImportError, AttributeError):
     return False
-  return True
 
 
-def display_svg_with_matplotlib(svg_data):
+def display_svg_with_matplotlib(
+    svg_data: Any # SVG drawing object
+    ) -> None:
+  "Renders SVG using matplotlib for non-Jupyter environments"
   try:
     from cairosvg import svg2png
-  except:
+  except ImportError:
     return svg_data
-  # Convert SVG data to PNG
-  png_output = svg2png(bytestring = svg_data.as_svg(), dpi = 600)
-  # Convert PNG output to a format that can be read by matplotlib (a BytesIO stream)
-  png_stream = BytesIO(png_output)
-  # Load the image from BytesIO stream
-  img = plt.imread(png_stream, format = 'png')
-  # Display the image using matplotlib
-  plt.imshow(img, interpolation = 'lanczos')
-  plt.axis('off')  # Turn off axis numbers and ticks
+  svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
+  # Get original SVG dimensions and scale them up
+  size_multiplier = 4  # Make everything 4x bigger
+  width = svg_data.width if hasattr(svg_data, 'width') else 800
+  height = svg_data.height if hasattr(svg_data, 'height') else 800
+  # Convert to PNG with larger dimensions
+  png_output = svg2png(bytestring = svg_data, output_width = width * size_multiplier,
+                      output_height = height * size_multiplier, scale = 2.0)
+  # Use PIL to crop aggressively
+  img = Image.open(BytesIO(png_output))
+  bbox = img.convert('RGBA').getbbox()
+  if bbox:
+    # Add minimal padding - just enough to not cut off edges
+    padding = int(10 * size_multiplier)
+    bbox = (max(0, bbox[0] - padding), max(0, bbox[1] - padding),
+            min(img.width, bbox[2] + padding), min(img.height, bbox[3] + padding))
+  img_cropped = img.crop(bbox).convert('RGBA')
+  # Display with appropriate figure size
+  dpi = plt.rcParams['figure.dpi']
+  figsize = (img_cropped.width / dpi, img_cropped.height / dpi)
+  plt.figure(figsize = figsize)
+  plt.imshow(img_cropped)
+  plt.axis('off')
   plt.show()
 
 
-def process_per_residue(glycan, per_residue):
-  """Given a glycan and per-residue scalars, will output separate scalar mappings for main, side, and branched side chains\n
-  | Arguments:
-  | :-
-  | glycan (string): Glycan in IUPAC-condensed format.
-  | per_residue (list): list of floats (order should be the same as the monosaccharides in glycan string).\n
-  | Returns:
-  | :-
-  | (i) list of per_residue values for main chain monosaccharides
-  | (ii) nested list of per_residue values for each side chain monosaccharides
-  | (iii) nested list of per_residue values for each branched side chain monosaccharides
-  """
-  temp = re.sub(r'\([^)]*\)', 'x', glycan) + 'x'
+def process_per_residue(
+    glycan: str, # IUPAC-condensed glycan sequence
+    per_residue: List[float] # Scalar values per residue
+    ) -> Tuple[List[float], List[List[float]], List[List[float]]]: # (main chain values, side chain values, branched side chain values)
+  "Maps per-residue scalar values to main chain, side chains, and branched side chains"
+  g1 = glycan_to_nxGraph(glycan)
+  draw_this = choose_correct_isoform(glycan, order_by = "linkage")
+  g2 = glycan_to_nxGraph(draw_this)
+  _, mappy = compare_glycans(g2, g1, return_matches = True)
+  per_residue = [per_residue[mappy[i*2]//2] for i in range(len(per_residue))]
+  temp = re.sub(r'\([^)]*\)', 'x', draw_this) + 'x'
   temp = re.sub(r'[^x\[\]]', '', temp)
-  main_chain_indices = []
-  side_chain_indices = []
-  branched_side_chain_indices = []
-  side_chain_stack = []
+  main_chain_indices, side_chain_indices = [], []
+  branched_side_chain_indices, side_chain_stack = [], []
   idx = 0
-  for index, char in enumerate(temp):
+  for char in temp:
     if char == '[':
       side_chain_stack.append([])
     elif char == ']':
       if len(side_chain_stack) == 1:
         side_chain_indices.append(side_chain_stack.pop())
       else:
-        nested_chain = side_chain_stack.pop()
-        branched_side_chain_indices.append(nested_chain)
+        branched_side_chain_indices.append(side_chain_stack.pop())
     elif char == 'x':
       if side_chain_stack:
         side_chain_stack[-1].append(per_residue[idx])
@@ -1964,17 +1163,8 @@ def process_per_residue(glycan, per_residue):
   return main_chain_indices[::-1], side_chain_indices, branched_side_chain_indices
 
 
-mono_list = ['Glc', 'GlcNAc', 'GlcA',
-                 'Man', 'ManNAc',
-                 'Gal', 'GalNAc',
-                 'Gul', 'GulNAc',
-                 'Alt', 'AltNAc',
-                 'All', 'AllNAc', 'Neu5Ac',
-                 'Tal', 'TalNAc', 'Neu5Gc',
-                 'Ido', 'IdoNAc', 'IdoA',
-                 'Fuc'
-                 ]
-
+mono_list = ['Glc', 'GlcNAc', 'GlcA', 'Man', 'ManNAc', 'Gal', 'GalNAc', 'Gul', 'GulNAc',
+                 'Alt', 'AltNAc', 'All', 'AllNAc', 'Neu5Ac', 'Tal', 'TalNAc', 'Neu5Gc', 'Ido', 'IdoNAc', 'IdoA', 'Fuc']
 
 chem_cols = ['#CDE7EF', '#CDE7EF', '#CDE7EF',     # blue
         '#CDE9DF', '#CDE9DF',                # green
@@ -1985,7 +1175,6 @@ chem_cols = ['#CDE7EF', '#CDE7EF', '#CDE7EF',     # blue
         '#EEF8FB', '#EEF8FB', '#EEF8FB',     # light blue
         '#F1E9E5', '#F1E9E5', '#F1E9E5',     # brown
         '#F7E0E0', '#F7E0E0']                # red
-
 
 chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
         '#058F60', '#058F60',                # green
@@ -1998,177 +1187,179 @@ chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
         '#C23537']                           # red
 
 
-def get_hit_atoms_and_bonds(mol, smt):
+def get_hit_atoms_and_bonds(
+    mol: Any, # RDKit molecule object
+    smt: str # SMARTS pattern string
+    ) -> Tuple[List[int], List[int]]: # (matching atom indices, matching bond indices)
+  "Identifies atoms and bonds matching SMARTS pattern in molecule"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
   try:
     from rdkit.Chem import MolFromSmarts
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
-
-  alist = []
-  blist = []
+  bonds = []
   q = MolFromSmarts(smt)
-  for match in mol.GetSubstructMatches(q, useChirality=True):
-    alist.extend(match)
-
-  for ha1 in alist:
-    for ha2 in alist:
+  atoms = [atom for match in mol.GetSubstructMatches(q, useChirality = True) for atom in match]
+  for ha1 in atoms:
+    for ha2 in atoms:
       if ha1 > ha2:
         b = mol.GetBondBetweenAtoms(ha1, ha2)
         if b:
-          blist.append(b.GetIdx())
+          bonds.append(b.GetIdx())
+  return atoms, bonds
 
-  return alist, blist
 
-
-def add_colours_to_map(els, cols, col_num, alpha = True, hex = True):
-  # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
+def add_colours_to_map(
+    els: List[int], # Element indices
+    cols: Dict[int, List], # Color map dictionary
+    col_num: int, # Color index
+    alpha: bool = True, # Use alpha-adjusted colors
+    hex_codes: bool = True # Return hex color codes
+    ) -> None:
+  "Adds color assignments to mapping dictionary for chemical structure visualization"
   from matplotlib.colors import ColorConverter
-
-  if alpha:
-    COLS = chem_cols
-  else:
-    COLS = chem_cols_alpha
+  color = chem_cols_alpha[col_num] if alpha else chem_cols[col_num]
+  color = color if hex_codes else ColorConverter().to_rgb(color)
   for el in els:
-    if el not in cols:
-      cols[el] = []
-    if COLS[col_num] not in cols[el]:
-      if hex:
-        cols[el].append(COLS[col_num])
-      else:
-        cols[el].append(ColorConverter().to_rgb(COLS[col_num]))
+    cols.setdefault(el, [])
+    if color not in cols[el]: cols[el].append(color)
 
 
-def draw_chem2d(draw_this, mono_list, filepath = None):
+def draw_chem2d(
+    draw_this: str, # IUPAC-condensed glycan sequence
+    mono_list: List[str], # List of monosaccharides to highlight
+    filepath: Optional[Union[str, Path]] = None # Output file path
+    ) -> Any: # IPython SVG display object
+  "Creates 2D chemical structure drawing with highlighted monosaccharides using RDKit"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
   try:
     from glycowork.motif.processing import IUPAC_to_SMILES
     from rdkit.Chem import MolFromSmiles
     from rdkit.Chem.Draw import PrepareMolForDrawing
     from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
-    from IPython.display import SVG
+    if is_jupyter():
+      from IPython.display import SVG
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
 
-  smarts_list = IUPAC_to_SMILES(mono_list)
-
-  mol = IUPAC_to_SMILES([draw_this])[0]
-  mol = MolFromSmiles(mol)
+  mol = MolFromSmiles(IUPAC_to_SMILES([draw_this])[0])
   mol = PrepareMolForDrawing(mol)
 
-  acols = {}
-  bcols = {}
-  h_rads = {}
-  h_lw_mult = {}
-
-  for i, smt in enumerate(smarts_list):
-    alist, blist = get_hit_atoms_and_bonds(mol, smt)
-    col = i
-    add_colours_to_map(alist, acols, col, hex = False, alpha = True)
-    add_colours_to_map(blist, bcols, col, hex = False, alpha = True)
-
-  for k in list(acols.keys()):
-    if len(acols[k]) > 1:
-      del acols[k]
-
-  for k in bcols.keys():
-    if len(bcols[k]) > 1:
-      bcols[k] = [bcols[k][0]]
+  atom_colors, bond_colors = {}, {}
+  for i, smarts in enumerate(IUPAC_to_SMILES(mono_list)):
+    atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
+    add_colours_to_map(atoms, atom_colors, i, hex_codes = False)
+    add_colours_to_map(bonds, bond_colors, i, hex_codes = False)
+  atom_colors = {k: v for k, v in atom_colors.items() if len(v) == 1}
+  bond_colors = {k: [v[0]] for k, v in bond_colors.items() if len(v) == 1}
 
   d = MolDraw2DSVG(250, 250)
-
   d.drawOptions().fillHighlights = True
   d.drawOptions().useBWAtomPalette()
   d.drawOptions().rotate = 180
-  d.DrawMoleculeWithHighlights(mol, '', acols, bcols, h_rads, h_lw_mult, -1)
+  d.DrawMoleculeWithHighlights(mol, '', atom_colors, bond_colors, {}, {}, -1)
   d.FinishDrawing()
+  svg_data = d.GetDrawingText()
 
   if filepath:
-    filepath = filepath.replace('?', '_')
-    data = d.GetDrawingText()
-    if 'svg' in filepath:
+    filepath = Path(filepath)
+    filepath = filepath.with_name(filepath.name.replace('?', '_'))
+    if filepath.suffix.lower() == '.svg':
         with open(filepath, 'w') as f:
-          f.write(data)
-    elif 'pdf' in filepath:
+          f.write(svg_data)
+    elif filepath.suffix.lower() == '.pdf':
       try:
         from cairosvg import svg2pdf
-        svg2pdf(bytestring = data, write_to = filepath)
-      except:
+        svg2pdf(bytestring = svg_data, write_to = str(filepath))
+      except ImportError:
         raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-  
-  return SVG(d.GetDrawingText())
+  return SVG(svg_data) if is_jupyter() else display_svg_with_matplotlib(svg_data)
 
-def draw_chem3d(draw_this, mono_list, filepath = None):
+
+def draw_chem3d(
+    draw_this: str, # IUPAC-condensed glycan sequence
+    mono_list: List[str], # List of monosaccharides to highlight
+    filepath: Optional[Union[str, Path]] = None, # Output file path for PDB
+    pdb_file: Optional[Union[str, Path]] = None  # already existing glycan structure
+    ) -> None:
+  "Generates 3D chemical structure model with highlighted monosaccharides using RDKit and py3Dmol"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py and https://github.com/rdkit/rdkit/blob/master/Docs/Book/GettingStartedInPython.rst
   try:
     from glycowork.motif.processing import IUPAC_to_SMILES
-    from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile
-    from rdkit.Chem.Draw import IPythonConsole
+    from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile, MolFromPDBFile
     from rdkit.Chem.AllChem import EmbedMolecule, MMFFOptimizeMolecule
-    import py3Dmol
+    if is_jupyter():
+      from rdkit.Chem.Draw import IPythonConsole
+      import py3Dmol
+    else:
+      from rdkit.Chem.Draw import rdDepictor
+      from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
 
-  smarts_list = IUPAC_to_SMILES(mono_list)
-  mol = IUPAC_to_SMILES([draw_this])[0]
-  mol = MolFromSmiles(mol)
+  mol = MolFromSmiles(IUPAC_to_SMILES([draw_this])[0])
+  atom_colors, bond_colors = {}, {}
+  for i, smarts in enumerate(IUPAC_to_SMILES(mono_list)):
+    atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
+    add_colours_to_map(atoms, atom_colors, i, alpha = False)
+    add_colours_to_map(bonds, bond_colors, i, alpha = False)
+  atom_colors = {k: ['#ECECEC'] if len(v) > 1 else v for k, v in atom_colors.items()}
 
-  acols = {}
-  bcols = {}
-
-  for i, smt in enumerate(smarts_list):
-      alist, blist = get_hit_atoms_and_bonds(mol, smt)
-      col = i
-      add_colours_to_map(alist, acols, col, alpha = False, hex = True)
-      add_colours_to_map(blist, bcols, col, alpha = False, hex = True)
-
-  for k in acols.keys():
-    if len(acols[k]) > 1:
-      acols[k] = ['#ECECEC']
-
-  mol = AddHs(mol)
-  EmbedMolecule(mol)
-  MMFFOptimizeMolecule(mol)
-  mol = RemoveHs(mol)
-
-  v = py3Dmol.view(width=500,height=300)
-  v.removeAllModels()
-  IPythonConsole.addMolToView(mol, v)
-
-  for d in acols.keys():
-    v.setStyle({'serial':d},{'stick':{'color': acols[d][0]}})
+  if pdb_file:
+    mol = MolFromPDBFile(str(pdb_file))
+  else:
+    mol = AddHs(mol)
+    EmbedMolecule(mol)
+    MMFFOptimizeMolecule(mol)
+    mol = RemoveHs(mol)
+    print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
 
   if filepath:
-    if 'pdb' in filepath:
+    filepath = Path(filepath)
+    if filepath.suffix.lower() == '.pdb':
       MolToPDBFile(mol, filepath)
     else:
       print("3D structure can only be saved as .pdb file.")
-  
-  print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
-  v.zoomTo()
-  v.show()
+
+  if is_jupyter():
+    v = py3Dmol.view(width = 500, height = 300)
+    v.removeAllModels()
+    IPythonConsole.addMolToView(mol, v)
+    for atom_idx, colors in atom_colors.items():
+      v.setStyle({'serial': atom_idx}, {'stick': {'color': colors[0]}})
+    v.zoomTo()
+    v.show()
+  else:
+    rdDepictor.Compute2DCoords(mol, clearConfs = False)
+    drawer = MolDraw2DSVG(500, 500)
+    drawer.drawOptions().addStereoAnnotation = True
+    drawer.drawOptions().addAtomIndices = False
+    drawer.drawOptions().bondLineWidth = 2
+    drawer.DrawMolecule(mol, highlightAtoms = list(atom_colors.keys()),
+                       highlightAtomColors = {k: tuple(int(v[0].lstrip('#')[i:i+2], 16)/255
+                                          for i in (0, 2, 4)) for k, v in atom_colors.items()})
+    drawer.FinishDrawing()
+    display_svg_with_matplotlib(drawer.GetDrawingText())
 
 
 @rescue_glycans
-def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True, dim = 50, highlight_motif = None, highlight_termini_list = [],
-              repeat = None, repeat_range = None, draw_method = None, filepath = None, suppress = False, per_residue = []):
-  """Draws a glycan structure based on the provided input.\n
-  | Arguments:
-  | :-
-  | draw_this (string): The glycan structure or motif to be drawn.
-  | vertical (bool, optional): Set to True to draw the structure vertically. Default: False.
-  | compact (bool, optional): Set to True to draw the structure in a compact form. Default: False.
-  | show_linkage (bool, optional): Set to False to hide the linkage information. Default: True.
-  | dim (int, optional): The dimension (size) of the individual sugar units in the structure. Default: 50.
-  | highlight_motif (string, optional): Glycan motif to highlight within the parent structure.
-  | highlight_termini_list (list): list of monosaccharide positions (from 'terminal', 'internal', and 'flexible')
-  | repeat (bool | int | str): If specified, indicate repeat unit by brackets (True: n units, int: # of units, str: range of units)
-  | repeat_range (list of 2 int): List of index integers for the first and last main-chain monosaccharide in repeating unit. Monosaccharides are numbered starting from 0 (invisible placeholder = 0 in case of structure terminating in a linkage) at the reducing end.
-  | draw_method (string, optional): Specify 'chem2d' or 'chem3d' to draw chemical structures; default:None (SNFG figure)
-  | filepath (string, optional): The path to the output file to save as SVG or PDF when drawing SNFG/chem2d figures or PDB when generating 3D conformers. Default: None.
-  | suppress (bool, optional): Whether to suppress the visual display of drawings into the console; default:False
-  | per_residue (list, optional): list of floats (order should be the same as the monosaccharides in glycan string) to quantitatively highlight monosaccharides.\n
-  """
+def GlycoDraw(
+    draw_this: str, # IUPAC-condensed glycan sequence
+    vertical: bool = False, # Draw vertically
+    compact: bool = False, # Use compact style
+    show_linkage: bool = True, # Show linkage labels
+    dim: float = 50, # Base dimension for scaling
+    highlight_motif: Optional[str] = None, # Motif to highlight
+    highlight_termini_list: List = [], # Terminal positions (from 'terminal', 'internal', and 'flexible')
+    repeat: Optional[Union[bool, int, str]] = None, # Repeat unit specification (True: n units, int: # of units, str: range of units)
+    repeat_range: Optional[List[int]] = None, # Repeat unit range
+    draw_method: Optional[str] = None, # Drawing method: None, 'chem2d', 'chem3d'
+    filepath: Optional[Union[str, Path]] = None, # Output file path
+    suppress: bool = False, # Suppress display
+    per_residue: List = [], # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
+    pdb_file: Optional[Union[str, Path]] = None  # only used when draw_method='chem3d'; already existing glycan structure
+    ) -> Any: # Drawing object
+  "Renders glycan structure using SNFG symbols or chemical structure representation"
   if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if draw_this.startswith('Terminal') and draw_this not in motif_list.motif_name.values.tolist():
@@ -2176,16 +1367,16 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   if per_residue:
     main_per_residue, side_per_residue, branched_side_per_residue = process_per_residue(draw_this, per_residue)
   bond_hack = False
-  if 'Man(a1-?)' in draw_this and 'Man(a1-3)' not in draw_this and 'Man(a1-6)' not in draw_this:
+  if 'Man(a1-?)' in draw_this and not any(x in draw_this for x in ['Man(a1-3)', 'Man(a1-6)']):
     draw_this = 'Man(a1-6)'.join(draw_this.rsplit('Man(a1-?)', 1))
     bond_hack = True
   if repeat and not repeat_range:
     draw_this = process_repeat(draw_this)
-  if draw_this[-1] == ')':
+  if draw_this.endswith(')'):
     draw_this += 'blank'
   if compact:
     show_linkage = False
-  if isinstance(highlight_motif, str) and highlight_motif[0] == 'r':
+  if isinstance(highlight_motif, str) and highlight_motif.startswith('r'):
     temp = get_match(highlight_motif[1:], draw_this)
     highlight_motif = temp[0] if temp else None
 
@@ -2194,26 +1385,26 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
     if draw_method == 'chem2d':
       return draw_chem2d(draw_this = draw_this, mono_list = mono_list, filepath = filepath)
     elif draw_method == 'chem3d':
-      return draw_chem3d(draw_this = draw_this, mono_list = mono_list, filepath = filepath)
+      return draw_chem3d(draw_this = draw_this, mono_list = mono_list, filepath = filepath, pdb_file = pdb_file)
     else:
-      print('Method not supported. Please choose between "chem2d" and "chem3d".')
-      return
+      raise ValueError('Method not supported. Please choose between "chem2d" and "chem3d".')
 
   # Handle floaty bits if present
   floaty_bits = []
-  for openpos, closepos, level in matches(draw_this, opendelim = '{', closedelim = '}'):
-      floaty_bits.append(draw_this[openpos:closepos]+'blank')
+  for openpos, closepos, _ in get_matching_indices(draw_this, opendelim = '{', closedelim = '}'):
+      floaty_bits.append(f"{draw_this[openpos:closepos]}blank")
       draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')
 
   if draw_this in motif_list.motif_name.values.tolist():
-    draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values.tolist()[0]
+    draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values[0]
+  if not in_lib(draw_this, expand_lib(lib, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
+    raise Exception('Warning: did you enter a real glycan or motif?')
 
   try:
     data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list)
   except:
-    print('Warning: did you enter a real glycan or motif?')
-    raise Exception
+    raise Exception('Warning: did you enter a real glycan or motif?')
 
   main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label = data[0]
   branch_sugar, branch_x_pos, branch_y_pos, branch_sugar_modification, branch_bond, branch_connection, b_conf, branch_sugar_label, branch_bond_label = data[1]
@@ -2221,15 +1412,14 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   bbb_sugar, bbb_x_pos, bbb_y_pos, bbb_sugar_modification, bbb_bond, bbb_connection, bbb_conf, bbb_sugar_label, bbb_bond_label = data[3]
 
   while bond_hack:
-    for k in range(len(main_bond)):
-      if main_sugar[k] + '--' + main_bond[k] == 'Man--α 6':
-        main_bond[k] = 'α'
+    for k, bond in enumerate(main_bond):
+      if f"{main_sugar[k]}--{bond}" == 'Man--α 6':
+        bond = 'α'
         bond_hack = False
-
-    for branch in range(len(branch_bond)):
-      for bond in range(len(branch_bond[branch])):
-        if branch_sugar[branch][bond] + '--' + branch_bond[branch][bond] == 'Man--α 6':
-          branch_bond[branch][bond] = 'α'
+    for branch, branch_val in enumerate(branch_bond):
+      for bond, bond_val in enumerate(branch_val):
+        if f"{branch_sugar[branch][bond]}--{bond_val}" == 'Man--α 6':
+          bond_val = 'α'
           bond_hack = False
     bond_hack = False
 
@@ -2283,67 +1473,60 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
   if floaty_bits:
     len_one_gw = ((max([len(j) for k in min_process_glycans(floaty_bits) for j in k]) / 6) + 1) * dim
     len_multiple_gw = (max([len(k) for k in min_process_glycans(floaty_bits)], default = 0)+1) * dim
-    width += max([len_one_gw, len_multiple_gw])
+    width += max(len_one_gw, len_multiple_gw)
   if len(floaty_bits) > len(set(floaty_bits)):
      width += dim
-  height = ((((max(abs(min_y), max_y)+1)*2)-1)*dim)+10+50
-  if vertical:
-    height = max(height, width)
+  height = ((((max(abs(min_y), max_y)+1)*2)-1)*dim)+60
+  height = max(height, width) if vertical else height
   x_ori = -width+(dim/2)+0.5*dim
   y_ori = (-height/2)+(((max_y-abs(min_y))/2)*dim)
 
-  global d
   # Draw
   d2 = draw.Drawing(width, height, origin = (x_ori, y_ori))
   deg = 90 if vertical else 0
-  rot = f'rotate({deg} {x_ori+0.5*width} {y_ori+0.5*height})'
-  d = draw.Group(transform = rot)
+  d = draw.Group(transform = f'rotate({deg} {x_ori+0.5*width} {y_ori+0.5*height})')
 
   # Bond main chain
-  [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k]) for k in range(len(main_sugar)-1)]
+  [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k]) for k in range(len(main_sugar)-1)]
   # Bond branch
-  [add_bond(branch_x_pos[b_idx][s_idx+1], branch_x_pos[b_idx][s_idx], branch_y_pos[b_idx][s_idx+1], branch_y_pos[b_idx][s_idx], branch_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = branch_bond_label[b_idx][s_idx+1]) for b_idx in range(len(branch_sugar)) for s_idx in range(len(branch_sugar[b_idx])-1) if len(branch_sugar[b_idx]) > 1]
+  [add_bond(branch_x_pos[b_idx][s_idx+1], branch_x_pos[b_idx][s_idx], branch_y_pos[b_idx][s_idx+1], branch_y_pos[b_idx][s_idx], d, branch_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = branch_bond_label[b_idx][s_idx+1]) for b_idx in range(len(branch_sugar)) for s_idx in range(len(branch_sugar[b_idx])-1) if len(branch_sugar[b_idx]) > 1]
   # Bond branch to main chain
-  [add_bond(branch_x_pos[k][0], main_sugar_x_pos[branch_connection[k]], branch_y_pos[k][0], main_sugar_y_pos[branch_connection[k]], branch_bond[k][0], dim = dim, compact = compact, highlight = branch_bond_label[k][0]) for k in range(len(branch_sugar))]
+  [add_bond(branch_x_pos[k][0], main_sugar_x_pos[branch_connection[k]], branch_y_pos[k][0], main_sugar_y_pos[branch_connection[k]], d, branch_bond[k][0], dim = dim, compact = compact, highlight = branch_bond_label[k][0]) for k in range(len(branch_sugar))]
   # Bond branch branch
-  [add_bond(branch_branch_x_pos[b_idx][s_idx+1], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx+1], branch_branch_y_pos[b_idx][s_idx], branch_branch_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = branch_branch_bond_label[b_idx][s_idx+1]) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx])-1) if len(branch_branch_sugar[b_idx]) > 1]
+  [add_bond(branch_branch_x_pos[b_idx][s_idx+1], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx+1], branch_branch_y_pos[b_idx][s_idx], d, branch_branch_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = branch_branch_bond_label[b_idx][s_idx+1]) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx])-1) if len(branch_branch_sugar[b_idx]) > 1]
   # Bond branch branch branch
-  [add_bond(bbb_x_pos[b_idx][s_idx+1], bbb_x_pos[b_idx][s_idx], bbb_y_pos[b_idx][s_idx+1], bbb_y_pos[b_idx][s_idx], bbb_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = bbb_bond_label[b_idx][s_idx+1]) for b_idx in range(len(bbb_sugar)) for s_idx in range(len(bbb_sugar[b_idx])-1) if len(bbb_sugar[b_idx]) > 1]
+  [add_bond(bbb_x_pos[b_idx][s_idx+1], bbb_x_pos[b_idx][s_idx], bbb_y_pos[b_idx][s_idx+1], bbb_y_pos[b_idx][s_idx], d, bbb_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = bbb_bond_label[b_idx][s_idx+1]) for b_idx in range(len(bbb_sugar)) for s_idx in range(len(bbb_sugar[b_idx])-1) if len(bbb_sugar[b_idx]) > 1]
   # Bond branch_branch to branch
-  [add_bond(branch_branch_x_pos[k][0], branch_x_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]], branch_branch_y_pos[k][0], branch_y_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]], branch_branch_bond[k][0], dim = dim, compact = compact, highlight = branch_branch_bond_label[k][0]) for k in range(len(branch_branch_sugar))]
+  [add_bond(branch_branch_x_pos[k][0], branch_x_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]], branch_branch_y_pos[k][0], branch_y_pos[branch_branch_connection[k][0]][branch_branch_connection[k][1]], d, branch_branch_bond[k][0], dim = dim, compact = compact, highlight = branch_branch_bond_label[k][0]) for k in range(len(branch_branch_sugar))]
   # Bond branch_branch_branch to branch_branch
-  [add_bond(bbb_x_pos[k][0], branch_branch_x_pos[bbb_connection[k][0]][bbb_connection[k][1]], bbb_y_pos[k][0], branch_branch_y_pos[bbb_connection[k][0]][bbb_connection[k][1]], bbb_bond[k][0], dim = dim, compact = compact, highlight = bbb_bond_label[k][0]) for k in range(len(bbb_sugar))]
+  [add_bond(bbb_x_pos[k][0], branch_branch_x_pos[bbb_connection[k][0]][bbb_connection[k][1]], bbb_y_pos[k][0], branch_branch_y_pos[bbb_connection[k][0]][bbb_connection[k][1]], d, bbb_bond[k][0], dim = dim, compact = compact, highlight = bbb_bond_label[k][0]) for k in range(len(bbb_sugar))]
 
   # Sugar main chain
-  [add_sugar(main_sugar[k], main_sugar_x_pos[k], main_sugar_y_pos[k], modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim, deg = main_deg[k], highlight = main_sugar_label[k], scalar = main_per_residue[k] if per_residue else 0) for k in range(len(main_sugar))]
+  [add_sugar(main_sugar[k], d, main_sugar_x_pos[k], main_sugar_y_pos[k], modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim, deg = main_deg[k], highlight = main_sugar_label[k], scalar = main_per_residue[k] if per_residue else 0) for k in range(len(main_sugar))]
   # Sugar branch
-  [add_sugar(branch_sugar[b_idx][s_idx], branch_x_pos[b_idx][s_idx], branch_y_pos[b_idx][s_idx], modification = branch_sugar_modification[b_idx][s_idx], conf = b_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_deg[b_idx][s_idx], highlight = branch_sugar_label[b_idx][s_idx], scalar = side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(branch_sugar)) for s_idx in range(len(branch_sugar[b_idx]))]
+  [add_sugar(branch_sugar[b_idx][s_idx], d, branch_x_pos[b_idx][s_idx], branch_y_pos[b_idx][s_idx], modification = branch_sugar_modification[b_idx][s_idx], conf = b_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_deg[b_idx][s_idx], highlight = branch_sugar_label[b_idx][s_idx], scalar = side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(branch_sugar)) for s_idx in range(len(branch_sugar[b_idx]))]
   # Sugar branch_branch
-  [add_sugar(branch_branch_sugar[b_idx][s_idx], branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx], modification = branch_branch_sugar_modification[b_idx][s_idx], conf = bb_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_branch_deg[b_idx][s_idx], highlight = branch_branch_sugar_label[b_idx][s_idx], scalar = branched_side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx]))]
+  [add_sugar(branch_branch_sugar[b_idx][s_idx], d, branch_branch_x_pos[b_idx][s_idx], branch_branch_y_pos[b_idx][s_idx], modification = branch_branch_sugar_modification[b_idx][s_idx], conf = bb_conf[b_idx][s_idx], compact = compact, dim = dim, deg = branch_branch_deg[b_idx][s_idx], highlight = branch_branch_sugar_label[b_idx][s_idx], scalar = branched_side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(branch_branch_sugar)) for s_idx in range(len(branch_branch_sugar[b_idx]))]
   # Sugar branch branch branch
-  [add_sugar(bbb_sugar[b_idx][s_idx], bbb_x_pos[b_idx][s_idx], bbb_y_pos[b_idx][s_idx], modification = bbb_sugar_modification[b_idx][s_idx], conf = bbb_conf[b_idx][s_idx], compact = compact, dim = dim, highlight = bbb_sugar_label[b_idx][s_idx]) for b_idx in range(len(bbb_sugar)) for s_idx in range(len(bbb_sugar[b_idx]))]
+  [add_sugar(bbb_sugar[b_idx][s_idx], d, bbb_x_pos[b_idx][s_idx], bbb_y_pos[b_idx][s_idx], modification = bbb_sugar_modification[b_idx][s_idx], conf = bbb_conf[b_idx][s_idx], compact = compact, dim = dim, highlight = bbb_sugar_label[b_idx][s_idx]) for b_idx in range(len(bbb_sugar)) for s_idx in range(len(bbb_sugar[b_idx]))]
 
-  if highlight_motif == None:
-    highlight = 'show'
-  else:
-    highlight = 'hide'
-
+  highlight = 'show' if highlight_motif == None else 'hide'
   if floaty_bits != []:
     fb_count = {i: floaty_bits.count(i) for i in floaty_bits}
     floaty_bits = list(set(floaty_bits))
     floaty_data = []
-    for k in range(len(floaty_bits)):
-      if in_lib(min_process_glycans([floaty_bits[k]])[0][0], lib):
-        floaty_data.append(get_coordinates_and_labels(floaty_bits[k], show_linkage = show_linkage, highlight_motif = None))
+    for k, k_val in enumerate(floaty_bits):
+      if in_lib(min_process_glycans([k_val])[0][0], lib):
+        floaty_data.append(get_coordinates_and_labels(k_val, show_linkage = show_linkage, highlight_motif = None))
       else:
         floaty_data.append(get_coordinates_and_labels('blank(-)blank', show_linkage = show_linkage, highlight_motif = None))
-    y_span = max_y-min_y
+    y_span = max_y - min_y
     n_floats = len(floaty_bits)
     floaty_span = n_floats * 2 - 2
     y_diff = (floaty_span/2) - (y_span/2)
 
-    for j in range(len(floaty_data)):
-      floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf, _, _ = floaty_data[j][0]
+    for j, j_val in enumerate(floaty_data):
+      floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf, _, _ = j_val[0]
       floaty_sugar_label = ['show' if highlight_motif == None else 'hide' for k in floaty_sugar]
       floaty_bond_label = ['show' if highlight_motif == None else 'hide' for k in floaty_bond]
       floaty_sugar_x_pos = [floaty_sugar_x_pos[k] + max_x + 1 for k in floaty_sugar_x_pos]
@@ -2351,30 +1534,28 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
       # Fix for drawsvg 2.0
       floaty_sugar_y_pos = [(k*-1) for k in floaty_sugar_y_pos]
       if floaty_sugar != ['blank', 'blank']:
-        [add_bond(floaty_sugar_x_pos[k+1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k+1], floaty_sugar_y_pos[k], floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar)-1)]
-        [add_sugar(floaty_sugar[k], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf, compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
+        [add_bond(floaty_sugar_x_pos[k+1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k+1], floaty_sugar_y_pos[k], d, floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar)-1)]
+        [add_sugar(floaty_sugar[k], d, floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf, compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
       else:
-        add_sugar('text', min(floaty_sugar_x_pos)-0.3, floaty_sugar_y_pos[-1], modification = floaty_bits[j].translate(str.maketrans("123456789", "\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089")).replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
+        add_sugar('text', d, min(floaty_sugar_x_pos)-0.3, floaty_sugar_y_pos[-1], modification = floaty_bits[j].translate(str.maketrans("123456789", "\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089")).replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
 
       if fb_count[floaty_bits[j]] > 1:
         if not compact:
-          add_sugar('blank', max(floaty_sugar_x_pos)+0.5, floaty_sugar_y_pos[-1]+0.75, modification = str(fb_count[floaty_bits[j]]) + 'x', compact = compact, dim = dim, highlight = highlight)
+          add_sugar('blank', d, max(floaty_sugar_x_pos)+0.5, floaty_sugar_y_pos[-1]+0.75, modification = str(fb_count[floaty_bits[j]]) + 'x', compact = compact, dim = dim, highlight = highlight)
         else:
-          add_sugar('blank', max(floaty_sugar_x_pos)+0.75, floaty_sugar_y_pos[-1]+1.15, modification = str(fb_count[floaty_bits[j]]) + 'x', compact = compact, dim = dim, highlight = highlight)
+          add_sugar('blank', d, max(floaty_sugar_x_pos)+0.75, floaty_sugar_y_pos[-1]+1.15, modification = str(fb_count[floaty_bits[j]]) + 'x', compact = compact, dim = dim, highlight = highlight)
 
     bracket_x = max_x * (2 if not compact else 1.2) + 1
     bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
-    draw_bracket(bracket_x, bracket_y, direction = 'right', dim = dim, highlight = highlight)
+    draw_bracket(bracket_x, bracket_y, d, direction = 'right', dim = dim, highlight = highlight)
 
   # add brackets around repeating unit
   if repeat:
-
     # process annotation
     repeat_annot = 'n'
     if isinstance(repeat, (str, int)):
       if repeat != True:
         repeat_annot += ' = ' + str(repeat)
-
     # repeat range code block
     if repeat_range:
       bracket_open = (main_sugar_x_pos[repeat_range[1]]*2)+1 if not compact else (main_sugar_x_pos[repeat_range[1]]*1.2)+0.6
@@ -2383,10 +1564,9 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
       bracket_y_close = (main_sugar_y_pos[repeat_range[0]], main_sugar_y_pos[repeat_range[0]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2)-0.0)
       text_x = main_sugar_x_pos[repeat_range[0]]-0.5
       text_y = main_sugar_y_pos[0]+1.05 if not compact else (main_sugar_y_pos[0]+1.03)/0.6
-      draw_bracket(bracket_close, bracket_y_close, direction = 'left', dim = dim, highlight = highlight, deg = 0)
-      draw_bracket(bracket_open, bracket_y_open, direction = 'right', dim = dim, highlight = highlight, deg = 0)
-      add_sugar('text', text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
-
+      draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
+      draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = 0)
+      add_sugar('text', d, text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
     # repeat unit code block
     else:
       open_deg = calculate_degree(main_sugar_y_pos[-1], main_sugar_y_pos[-2], main_sugar_x_pos[-1], main_sugar_x_pos[-2])
@@ -2399,67 +1579,57 @@ def GlycoDraw(draw_this, vertical = False, compact = False, show_linkage = True,
         bracket_y_open = (np.mean(main_sugar_y_pos[-2:]), np.mean(main_sugar_y_pos[-2:])) if not compact else (((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)+0.3, ((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)-0.3)
         bracket_y_close = (main_sugar_y_pos[0], main_sugar_y_pos[0]) if not compact else (((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)+0.3, ((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)-0.3)
       bracket_close = np.mean([k*2 for k in main_sugar_x_pos][:2])-0.2 if not compact else np.mean([k*1.2 for k in main_sugar_x_pos][:2])-0.15
-      text_x = bracket_close-(0.42) if not compact else bracket_close-(0.13)
-      text_y = main_sugar_y_pos[0]+1.05 if not compact else (main_sugar_y_pos[0]+1.03)/0.6
-      draw_bracket(bracket_open, bracket_y_open, direction = 'right', dim = dim, highlight = highlight, deg = open_deg)
-      draw_bracket(bracket_close, bracket_y_close, direction = 'left', dim = dim, highlight = highlight, deg = 0)
-      add_sugar('text', text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
+      text_x = bracket_close - (0.42) if not compact else bracket_close - (0.13)
+      text_y = main_sugar_y_pos[0] + 1.05 if not compact else (main_sugar_y_pos[0] + 1.03)/0.6
+      draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = open_deg)
+      draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
+      add_sugar('text', d, text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
 
   d2.append(d)
 
   if filepath:
-      filepath = filepath.replace('?', '_')
+      filepath = Path(filepath)
+      filepath = filepath.with_name(filepath.name.replace('?', '_'))
       data = d2.as_svg()
       data = re.sub(r'<text font-size="17.5" ', r'<text font-size="17.5" font-family="century gothic" font-weight="bold" ', data)
       data = re.sub(r'<text font-size="20.0" ', r'<text font-size="20" font-family="century gothic" ', data)
       data = re.sub(r'<text font-size="15.0" ', r'<text font-size="17.5" font-family="century gothic" font-style="italic" ', data)
-      if filepath.endswith('.svg'):
-        with open(filepath, 'w') as f:
+      if filepath.suffix.lower() == '.svg':
+        with open(filepath, 'w', encoding = "utf-8") as f:
           f.write(data)
-      elif filepath.endswith('.pdf'):
+      elif filepath.suffix.lower() == '.pdf':
         try:
           from cairosvg import svg2pdf
-          svg2pdf(bytestring = data, write_to = filepath)
+          svg2pdf(bytestring = data, write_to = str(filepath))
         except:
           raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   return d2 if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
 
 
-def scale_in_range(listy, a, b):
-  """Normalize list of numbers in range a to b\n
-  | Arguments:
-  | :-
-  | listy (list): list of numbers as integers/floats
-  | a (integer/float): min value in normalized range
-  | b (integer/float): max value in normalized range\n
-  | Returns:
-  | :-
-  | Normalized list of numbers
-  """
+def scale_in_range(
+    listy: List[float], # Numbers to normalize
+    a: float, # Target minimum
+    b: float # Target maximum
+    ) -> List[float]: # Normalized numbers
+  "Normalizes list of numbers to specified range"
   min_val = min(listy)
   max_val = max(listy)
-  range_val = max_val - min_val
+  range_val = max(max_val - min_val, 1e-6)
   return [(b - a) * ((x - min_val) / range_val) + a for x in listy]
 
 
-def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_size = 'medium', filepath = '',
-                    scale_by_DE_res = None, x_thresh = 1, y_thresh = 0.05, x_metric = 'Log2FC'):
-  """Modify matplotlib svg figure to replace text labels with glycan figures\n
-  | Arguments:
-  | :-
-  | svg_input (string): absolute path including full filename for input svg figure
-  | scale_range (tuple): tuple of two integers defining min/max glycan dim; default:(25,80)
-  | compact (bool): if True, draw compact glycan figures; default:False
-  | glycan_size (string): modify glycan size; default:'medium'; options are 'small', 'medium', 'large'
-  | filepath (string): absolute path including full filename allows for saving the plot
-  | scale_by_DE_res (df): result table from motif_analysis.get_differential_expression. Include to scale glycan figure size by -10logp
-  | x_thresh (float): absolute x metric threshold for datapoints included for scaling, set to match get_differential_expression; default:1.0
-  | y_thresh (float): corr p threshhold for datapoints included for scaling, set to match get_differential_expression; default:0.05
-  | x_metric (string): x-axis metric; default:'Log2FC'; options are 'Log2FC', 'Effect size'\n
-  | Returns:
-  | :-
-  | Modified figure svg code
-  """
+def annotate_figure(
+    svg_input: str, # Input SVG file path
+    scale_range: Tuple[int, int] = (25, 80), # Min/max glycan dimensions
+    compact: bool = False, # Use compact style
+    glycan_size: str = 'medium', # Glycan size preset ('small', 'medium', 'large')
+    filepath: Union[str, Path] = '', # Output file path
+    scale_by_DE_res: Optional[pd.DataFrame] = None, # Differential expression results (motif_analysis.get_differential_expression)
+    x_thresh: float = 1, # X metric threshold
+    y_thresh: float = 0.05, # P-value threshold
+    x_metric: str = 'Log2FC' # X axis metric ('Log2FC', 'Effect size')
+    ) -> Optional[str]: # Modified SVG code
+  "Replaces text labels with glycan drawings in SVG figure"
   glycan_size_dict = {
       'small': 'scale(0.1 0.1)  translate(0, -74)',
       'medium': 'scale(0.2 0.2)  translate(0, -55)',
@@ -2523,13 +1693,14 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
   svg_tmp += '</svg>'
 
   if filepath:
+    filepath = Path(filepath)
     try:
       from cairosvg import svg2pdf, svg2svg, svg2png
-      if filepath.split('.')[-1] == 'pdf':
+      if filepath.suffix.lower() == '.pdf':
         svg2pdf(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-      elif filepath.split('.')[-1] == 'svg':
+      elif filepath.suffix.lower() == '.svg':
         svg2svg(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-      elif filepath.split('.')[-1] == 'png':
+      elif filepath.suffix.lower() == '.png':
         svg2png(bytestring = svg_tmp, write_to = filepath, dpi = 300)
     except:
       raise ImportError("You're missing some draw dependencies. Either don't use filepath or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
@@ -2537,49 +1708,54 @@ def annotate_figure(svg_input, scale_range = (25, 80), compact = False, glycan_s
     return svg_tmp
 
 
-def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
-                       scaling_factor = 0.2, compact = False):
-  """plots SNFG images of glycans into new column in df and saves df as Excel file\n
-  | Arguments:
-  | :-
-  | df (dataframe): dataframe containing glycan sequences [alternative: filepath to .csv or .xlsx]
-  | folder_filepath (string): full filepath to the folder you want to save the output to
-  | glycan_col_num (int): index of the column containing glycan sequences; default:0 (first column)
-  | scaling_factor (float): how large the glycans should be; default:0.2
-  | compact (bool, optional): Set to True to draw the structures in a compact form. Default: False.\n
-  | Returns:
-  | :-
-  | Saves the dataframe with glycan images as output.xlsx into folder_filepath
-  """
+def plot_glycans_excel(
+    df: Union[pd.DataFrame, str, Path], # DataFrame or filepath with glycans
+    folder_filepath: Union[str, Path], # Output folder path
+    glycan_col_num: int = 0, # Glycan column index
+    scaling_factor: float = 0.2, # Image scaling
+    compact: bool = False # Use compact style
+    ) -> None:
+  "Creates Excel file with SNFG glycan images in a new column"
   try:
     from cairosvg import svg2png
-  except:
+  except ImportError:
     raise ImportError("You're missing some draw dependencies. If you want to use this function, head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-  if isinstance(df, str):
-    df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
-  if not folder_filepath.endswith('/'):
-    folder_filepath += '/'
+  if isinstance(df, (str, Path)):
+    df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   df["SNFG"] = [np.nan for k in range(len(df))]
   image_column_number = df.columns.tolist().index("SNFG") + 1
   # Convert df_out to Excel
-  writer = pd.ExcelWriter(folder_filepath + "output.xlsx", engine = "openpyxl")
+  writer = pd.ExcelWriter(Path(folder_filepath) / "output.xlsx", engine = "openpyxl")
   df.to_excel(writer, index = False)
   # Load the workbook and get the active sheet
   workbook = writer.book
   sheet = writer.sheets["Sheet1"]
+  min_padding = 5  # Minimum padding in pixels
   for i, glycan_structure in enumerate(df.iloc[:, glycan_col_num]):
     if glycan_structure and glycan_structure[0]:
       if not isinstance(glycan_structure[0], str):
         glycan_structure = glycan_structure[0][0]
       # Generate glycan image using GlycoDraw
       svg_data = GlycoDraw(glycan_structure, compact = compact, suppress = True).as_svg()
+      # Get SVG dimensions and scale them
+      width = svg_data.width if hasattr(svg_data, 'width') else 800
+      height = svg_data.height if hasattr(svg_data, 'height') else 800
       # Convert SVG data to image
-      png_data = svg2png(bytestring = svg_data, output_width = 3000, output_height = 3000)
-      img_stream = BytesIO(png_data)
-      img = Image.open(img_stream)
-      # Set the size of the image
+      temp_bytes = BytesIO()
+      svg2png(bytestring = svg_data.encode('utf-8'), write_to = temp_bytes, output_width = width,
+              output_height = height, scale = 2.0)
+      temp_bytes.seek(0)
+      # Load and crop image
+      img = Image.open(temp_bytes)
+      bbox = img.convert('RGBA').getbbox()
+      if bbox:
+        # Add minimal padding
+        bbox = (max(0, bbox[0] - min_padding), max(0, bbox[1] - min_padding),
+               min(img.width, bbox[2] + min_padding), min(img.height, bbox[3] + min_padding))
+        img = img.crop(bbox).convert('RGBA')
+      # Apply user scaling factor
       img_width, img_height = img.size
-      img = img.resize((int(img_width * scaling_factor / 5), int(img_height * scaling_factor / 5)), Image.LANCZOS)
+      img = img.resize((int(img_width * scaling_factor), int(img_height * scaling_factor)), Image.BICUBIC)
       # Save the image to a BytesIO object
       img_stream = BytesIO()
       img.save(img_stream, format = 'PNG')
@@ -2593,7 +1769,7 @@ def plot_glycans_excel(df, folder_filepath, glycan_col_num = 0,
       sheet.add_image(img_for_excel, cell.coordinate)
       # Resize the cell to fit the image
       column_letter = get_column_letter(image_column_number)
-      sheet.column_dimensions[column_letter].width = img.width*0.75*0.25
-      sheet.row_dimensions[cell.row].height = img.height*0.75
+      sheet.column_dimensions[column_letter].width = img.width * 0.75 * 0.15
+      sheet.row_dimensions[cell.row].height = img.height * 0.75
   # Save the workbook
-  workbook.save(filename = folder_filepath + "output.xlsx")
+  workbook.save(filename = Path(folder_filepath) / "output.xlsx")
