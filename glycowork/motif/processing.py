@@ -39,7 +39,7 @@ monosaccharide_mapping = {
 replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                   'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc',
-                 '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b',
+                 '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, list(replace_dic.keys()))))
@@ -186,9 +186,10 @@ def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
   temp = set()
   # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
   for k in out_list:
-    temp.add(re.sub(r'^(.*?)\[((?:[^\[\]]|\[[^\[\]]*\])*?)\]((?:\[[^\[\]]*\])*?)([A-Z][a-z0-9]*[A-Z]?[a-z0-9]*\([ab?][1-2]-[1-9?]\))', r'\2[\1]\3\4', k, 1))
-    if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
-      temp.add(re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1))
+    if k.index(']') > k.index('['):
+      temp.add(re.sub(r'^(.*?)\[((?:[^\[\]]|\[[^\[\]]*\])*?)\]((?:\[[^\[\]]*\])*?)([A-Z][a-z0-9]*[A-Z]?[a-z0-9]*\([ab?][1-2]-[1-9?]\))', r'\2[\1]\3\4', k, 1))
+      if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
+        temp.add(re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1))
   out_list.update(temp)
   out_list = {k for k in out_list if not any([j in k for j in ['[[', ']]']]) and k.index(']') > k.index('[')}
   if floaty:
@@ -237,7 +238,7 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
   "Given a list of glycan branch isomers, returns the correct isomer"
   if isinstance(glycans, str):
     glycans = find_isomorphs(glycans)
-  glycans = list(set(glycans))
+  glycans = sorted(list(set(glycans)))
   if '?' in ''.join(glycans) and not reverse:
     min_questions = min(glycan.count('?') for glycan in glycans)
     glycans = [glycan for glycan in glycans if glycan.count('?') == min_questions]
@@ -294,6 +295,9 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
             kill_list.add(g)
           current_count = paren_counts[-2]  # Return to parent branch's count
           paren_counts.pop()  # Remove current branch level
+      if '][' in g:
+        if any(sum(1 for c in left if c == '(') < sum(1 for c in right if c == '(') for match in re.finditer(r'\[([^\[\]]*)\]\[([^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*)\]', g) if (left := match.group(1)) and (right := match.group(2))):
+          kill_list.add(g)
     return [g for g in glycans if g not in kill_list]
 
   # Handle neighboring branches
@@ -350,13 +354,14 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
     prefix = [min_process_glycans([k[j[0]:j[1]] for j in v]) for k, v in candidates.items()]
     prefix = [np.argmax([len(j) for j in k]) for k in prefix]
     prefix = [k[:candidates[k][prefix[i]][0]] for i, k in enumerate(candidates.keys())]
+    prefix = [k[:k.rfind('[')] if k.endswith('][') else k for k in prefix]
     for i, p in enumerate(prefix):
       if p.endswith(']'):
         prefix[i] = p[:p.rfind('[')]
-    prefix = min_process_glycans(prefix)
-    branch_endings = [k[-1][-1] if k[-1][-1].isdigit() else 10 for k in prefix]
+    prefix_proc = min_process_glycans(prefix)
+    branch_endings = [k[-1][-1] if k[-1][-1].isdigit() else 10 for k in prefix_proc]
     if len(set(branch_endings)) == 1:
-      branch_endings = [ord(k[0][0]) for k in prefix]
+      branch_endings = [k[k.index('[')-2] if k[k.index('[')-2].isdigit() else 10 for k in prefix] if ']' in prefix[0] else [ord(k[0][0]) for k in prefix_proc]
     branch_endings = [int(k) for k in branch_endings]
     min_ending = min(branch_endings)
     glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min_ending]
@@ -896,8 +901,8 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
     converted_glycan = branch_str[:second_brack_end] + ']' + branch_str[second_brack_end:-1] + converted_glycan[double_brack_idx+2:]
   if floaty_parts:  # Add floating parts to final structure
     converted_glycan = ''.join(f"{{{part}}}" for part in floaty_parts) + converted_glycan
-  converted_glycan = re.sub(r'S[\)\(]*\?1-\?\)\[(.*?)\]([^(]+)', r'\1\2OS', converted_glycan)  # O-sulfate case
-  converted_glycan = re.sub(r'S[\)\(]*\?1-(\d)\)\[(.*?)\]([^(]+)', r'\2\3\1S', converted_glycan)  # numbered sulfate
+  converted_glycan = re.sub(r'([SP])[\)\(]*\?1-\?\)\[(.*?)\]([^(]+)', r'\2\3O\1', converted_glycan)  # O-sulfate/phosphate case
+  converted_glycan = re.sub(r'([SP])[\)\(]*\?1-(\d)\)\[(.*?)\]([^(]+)', r'\3\4\2\1', converted_glycan)  # numbered sulfate/phosphate
   return f"{converted_glycan[:-6]}-ol" if 'freeEnd' in glycan else converted_glycan[:-6]
 
 
@@ -974,7 +979,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if bool(re.search(r"^[^2-6]*1?[^2-6]*$", glycan)):
       glycan = re.sub(r'(a|b)(\d)(?!\-)', r'\g<1>\g<2>-?', glycan)
     else:
-      glycan = re.sub(r'(a|b)(\d)(?!\-)', r'\g<1>1-\g<2>', glycan)
+      glycan = re.sub(r'(?<!h)(a|b)(\d)(?!\-)', r'\g<1>1-\g<2>', glycan)
   # Introduce parentheses for linkages
   if '(' not in glycan and len(glycan) > 6:
     for k in range(1, glycan.count('-')+1):
