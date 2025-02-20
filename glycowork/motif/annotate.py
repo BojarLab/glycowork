@@ -272,7 +272,7 @@ def annotate_dataset(
     return pd.concat(shopping_cart, axis = 1)
 
 
-def clean_up_heatmap(
+def deduplicate_motifs(
     df: pd.DataFrame # DataFrame with glycan motifs as rows, samples as columns
     ) -> pd.DataFrame: # DataFrame with redundant motifs removed
   "Removes redundant motif entries from glycan abundance data while preserving the most informative labels"
@@ -298,7 +298,7 @@ def quantify_motifs(
    glycans: List[str], # List of IUPAC-condensed glycan sequences
    feature_set: List[str], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
    custom_motifs: List = [], # Custom motifs when using 'custom' feature set
-   remove_redundant: bool = True # Remove redundant motifs via clean_up_heatmap
+   remove_redundant: bool = True # Remove redundant motifs via deduplicate_motifs
    ) -> pd.DataFrame: # DataFrame with motif abundances (motifs as columns, samples as rows)
   "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences"
   if isinstance(df, str):
@@ -321,7 +321,7 @@ def quantify_motifs(
     else:
       collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
   df = pd.DataFrame(collect_dic)
-  return df if not remove_redundant else clean_up_heatmap(df.T)
+  return df if not remove_redundant else deduplicate_motifs(df.T)
 
 
 def count_unique_subgraphs_of_size_k(

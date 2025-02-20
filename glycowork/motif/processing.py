@@ -7,7 +7,7 @@ from functools import wraps
 from collections import defaultdict
 from itertools import permutations, combinations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
-from glycowork.glycan_data.loader import (unwrap, multireplace,
+from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
@@ -906,6 +906,28 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
   return f"{converted_glycan[:-6]}-ol" if 'freeEnd' in glycan else converted_glycan[:-6]
 
 
+def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
+                       revert: bool = False # Whether to map glycans to IDs; default:False
+                      ) -> List[str]: # List of glycans or IDs
+    "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
+    if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
+      glytoucan_to_glycan.glycan_dict = dict(zip(df_glycan.glytoucan_id, df_glycan.glycan))
+      glytoucan_to_glycan.id_dict = dict(zip(df_glycan.glycan, df_glycan.glytoucan_id))
+    lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
+    result , not_found = [], []
+    for item in ids:
+      if item in lookup:
+        result.append(lookup[item])
+      else:
+        result.append(item)
+        not_found.append(item)
+    # Print missing items if any
+    if not_found:
+      msg = 'glycans' if revert else 'IDs'
+      print(f'These {msg} are not in our database: {not_found}')
+    return result
+
+
 def check_nomenclature(glycan: str # Glycan string to check
                      ) -> None: # Prints reason if not convertible
   "Check whether glycan has correct nomenclature for glycowork"
@@ -915,11 +937,24 @@ def check_nomenclature(glycan: str # Glycan string to check
     raise ValueError("Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around.")
 
 
+def sanitize_iupac(glycan: str # Glycan string to check
+                   ) -> str: # Sanitized glycan string
+  """Sanitize IUPAC glycan sequence by identifying and correcting chemical impossibilities."""
+  # Handle NAc special case (any sugar with NAc can't have linkage at position 2)
+  glycan = re.sub(r'([A-Za-z]+)\(([ab?][1-2])-2\)([A-Za-z]+NAc)', r'\1(\2-?)\3', glycan)
+  # Handle modifications (can't have a linkage to a position that's modified)
+  glycan = re.sub(r'\(([ab?][1-2])-(\d)\)([A-Za-z]+\2[A-Z])', r'(\1-?)\3', glycan)
+  # Handle branched cases with same linkage position
+  for match in re.finditer(r'([A-Za-z]+)\(([ab?][1-2])-(\d)\)\[([A-Za-z]+)\(([ab?][1-2])-(\3)\)\]', glycan):
+    glycan = glycan.replace(match.group(0), f'{match.group(1)}({match.group(2)}-?)[{match.group(4)}({match.group(5)}-?)]')
+  return glycan
+
+
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
-  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, and GlycoWorkBench to standardized IUPAC-condensed format"
+  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, and GlyTouCanIDs to standardized IUPAC-condensed format"
   glycan = glycan.strip()
-  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench
+  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, GlyTouCanIDs
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
   elif '-D-' in glycan:
@@ -932,6 +967,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycam_to_iupac(glycan)
   elif '$MONO' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
+  elif bool(re.match(r'^G\d+', glycan)):
+    glycan = glytoucan_to_glycan([glycan])[0]
   elif not isinstance(glycan, str) or '@' in glycan:
     check_nomenclature(glycan)
     return
@@ -1025,6 +1062,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                   'Kdn(a1': 'Kdn(a2'}
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'[ab]-$', '', glycan)  # Remove endings like Glcb-
+  glycan = sanitize_iupac(glycan)
   # Canonicalize branch ordering
   if '[' in glycan and not glycan.startswith('['):
     glycan = choose_correct_isoform(glycan)

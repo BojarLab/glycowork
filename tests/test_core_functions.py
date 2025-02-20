@@ -22,7 +22,7 @@ from torch_geometric.data import Data
 from collections import Counter
 from contextlib import contextmanager
 from glycowork.glycan_data.data_entry import check_presence
-from glycowork.motif.query import get_insight, glytoucan_to_glycan
+from glycowork.motif.query import get_insight
 from glycowork.motif.tokenization import (
     constrain_prot, prot_to_coded, string_to_labels, pad_sequence, mz_to_composition,
     get_core, get_modification, get_stem_lib, stemify_glycan, mask_rare_glycoletters,
@@ -34,7 +34,7 @@ from glycowork.motif.tokenization import (
 from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages,
     get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac,
-    glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac,
+    glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan,
     canonicalize_composition, parse_glycoform, find_isomorphs,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices,
@@ -69,7 +69,7 @@ from glycowork.motif.annotate import (
     get_k_saccharides, get_terminal_structures, create_correlation_network,
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
     Lectin, load_lectin_lib, create_lectin_and_motif_mappings,
-    lectin_motif_scoring, clean_up_heatmap, quantify_motifs, get_size_branching_features,
+    lectin_motif_scoring, deduplicate_motifs, quantify_motifs, get_size_branching_features,
     count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty
 )
 from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process_occurrence,
@@ -736,6 +736,10 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Gal(b1-4)Glc-olS") == "Gal(b1-4)GlcOS-ol"
     assert canonicalize_iupac("SGalNAc(b1-4)GlcNAc") == "GalNAcOS(b1-4)GlcNAc"
     assert canonicalize_iupac("S-Gal(b1-4)Glc-ol") == "GalOS(b1-4)Glc-ol"
+    # Test sanitization
+    assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
+    assert canonicalize_iupac("Gal(b1-2)GlcNAc") == "Gal(b1-?)GlcNAc"
+    assert canonicalize_iupac("GlcNAc(b1-3)Gal3S") == "GlcNAc(b1-?)Gal3S"
     # Test branch ordering
     assert canonicalize_iupac("GalNAcβ1-4(NeuAcα2-3)GlcNAcβ1-3(NeuAcα2-3Galβ1-4GlcNAcβ1-6)Galβ1-4Glcol") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)[GalNAc(b1-4)]GlcNAc(b1-3)]Gal(b1-4)Glc-ol"
     assert canonicalize_iupac("Fucα1-2Galβ1-4GlcNAcβ1-3[NeuAcα2-3Galβ1-4(Fucα1-3)GlcNAcβ1-6]Galβ1-4GlcNAcβ1-3(Fucα1-2Galβ1-4GlcNAcβ1-6)Galβ1-4Glcol") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)Glc-ol"
@@ -777,6 +781,9 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("WURCS=2.0/4,8,7/[u2122h_2*NCC/3=O][a2121A-1a_1-5][a2122h-1a_1-5_2*NCC/3=O][a2122A-1b_1-5]/1-2-3-4-3-2-3-4/a4-b1_b4-c1_c4-d1_d4-e1_e4-f1_f4-g1_g4-h1") == "GlcA(b1-4)GlcNAc(a1-4)IdoA(a1-4)GlcNAc(a1-4)GlcA(b1-4)GlcNAc(a1-4)IdoA(a1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/6,9,8/[a2122h-1a_1-5_2*NCC/3=O][a1221m-1a_1-5][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a212h-1b_1-5][a1122h-1a_1-5]/1-2-3-4-5-6-3-6-3/a3-b1_a4-c1_c4-d1_d2-e1_d3-f1_d6-h1_f2-g1_h2-i1") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/7,19,18/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O]/1-2-3-4-2-5-6-7-2-6-2-4-2-5-6-2-5-6-7/a4-b1_b4-c1_c3-d1_c4-k1_c6-l1_d2-e1_d4-i1_e3-f1_e4-g1_i4-j1_l2-m1_l6-p1_m3-n1_m4-o1_p3-q1_p4-r1_h2-g3|g6_s2-r3|r6 ") == "Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Fuc(a1-3)[Neu5Gc(a2-3/6)Gal(b1-4)]GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("G07426YY") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("G96417BZ") == "Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("G26039ES") == "Gal(b1-4)Glc-ol"
     assert canonicalize_iupac("""RES
 1b:b-dglc-HEX-1:5
 2s:n-acetyl
@@ -2224,12 +2231,12 @@ def test_lectin_motif_scoring():
     assert "score" in result.columns
 
 
-def test_clean_up_heatmap():
+def test_deduplicate_motifs():
     data = pd.DataFrame({
         'sample1': [1, 1],
         'sample2': [2, 2]
     }, index=['motif1', 'motif2'])
-    result = clean_up_heatmap(data)
+    result = deduplicate_motifs(data)
     assert isinstance(result, pd.DataFrame)
     assert len(result) <= len(data)
 
@@ -5401,32 +5408,28 @@ def test_get_insight_with_disease(sample_glycan_df, sample_motif_df, monkeypatch
     assert "tumor" in captured.out
 
 
-def test_glytoucan_to_glycan_forward(sample_glycan_df, monkeypatch):
-    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
-    result = glytoucan_to_glycan(['G00001', 'G00002'])
+def test_glytoucan_to_glycan_forward():
+    result = glytoucan_to_glycan(['G26039ES', 'G65562ZE'])
     assert len(result) == 2
     assert 'Gal(b1-4)Glc-ol' in result
-    assert 'Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol' in result
+    assert 'Neu5Ac(a2-3)Gal(b1-3)GalNAc' in result
 
 
-def test_glytoucan_to_glycan_reverse(sample_glycan_df, monkeypatch):
-    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
-    result = glytoucan_to_glycan(['Gal(b1-4)Glc-ol', 'Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol'], revert=True)
+def test_glytoucan_to_glycan_reverse():
+    result = glytoucan_to_glycan(['Gal(b1-4)Glc-ol', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc'], revert=True)
     assert len(result) == 2
-    assert 'G00001' in result
-    assert 'G00002' in result
+    assert 'G26039ES' in result
+    assert 'G65562ZE' in result
 
 
-def test_glytoucan_to_glycan_missing_id(sample_glycan_df, monkeypatch, capsys):
-    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
-    glytoucan_to_glycan(['G00001', 'MISSING'])
+def test_glytoucan_to_glycan_missing_id(capsys):
+    glytoucan_to_glycan(['G26039ES', 'MISSING'])
     captured = capsys.readouterr()
     assert 'These IDs are not in our database: ' in captured.out
     assert 'MISSING' in captured.out
 
 
-def test_glytoucan_to_glycan_missing_glycan(sample_glycan_df, monkeypatch, capsys):
-    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
+def test_glytoucan_to_glycan_missing_glycan(capsys):
     glytoucan_to_glycan(['Gal(b1-4)Glc-ol', 'MISSING'], revert=True)
     captured = capsys.readouterr()
     assert 'These glycans are not in our database: ' in captured.out
