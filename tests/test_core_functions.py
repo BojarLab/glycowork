@@ -69,7 +69,7 @@ from glycowork.motif.annotate import (
     get_k_saccharides, get_terminal_structures, create_correlation_network,
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
     Lectin, load_lectin_lib, create_lectin_and_motif_mappings,
-    lectin_motif_scoring, clean_up_heatmap, quantify_motifs, get_size_branching_features,
+    lectin_motif_scoring, deduplicate_motifs, quantify_motifs, get_size_branching_features,
     count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty
 )
 from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process_occurrence,
@@ -736,6 +736,10 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Gal(b1-4)Glc-olS") == "Gal(b1-4)GlcOS-ol"
     assert canonicalize_iupac("SGalNAc(b1-4)GlcNAc") == "GalNAcOS(b1-4)GlcNAc"
     assert canonicalize_iupac("S-Gal(b1-4)Glc-ol") == "GalOS(b1-4)Glc-ol"
+    # Test sanitization
+    assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
+    assert canonicalize_iupac("Gal(b1-2)GlcNAc") == "Gal(b1-?)GlcNAc"
+    assert canonicalize_iupac("GlcNAc(b1-3)Gal3S") == "GlcNAc(b1-?)Gal3S"
     # Test branch ordering
     assert canonicalize_iupac("GalNAcβ1-4(NeuAcα2-3)GlcNAcβ1-3(NeuAcα2-3Galβ1-4GlcNAcβ1-6)Galβ1-4Glcol") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)[GalNAc(b1-4)]GlcNAc(b1-3)]Gal(b1-4)Glc-ol"
     assert canonicalize_iupac("Fucα1-2Galβ1-4GlcNAcβ1-3[NeuAcα2-3Galβ1-4(Fucα1-3)GlcNAcβ1-6]Galβ1-4GlcNAcβ1-3(Fucα1-2Galβ1-4GlcNAcβ1-6)Galβ1-4Glcol") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)Glc-ol"
@@ -2227,12 +2231,12 @@ def test_lectin_motif_scoring():
     assert "score" in result.columns
 
 
-def test_clean_up_heatmap():
+def test_deduplicate_motifs():
     data = pd.DataFrame({
         'sample1': [1, 1],
         'sample2': [2, 2]
     }, index=['motif1', 'motif2'])
-    result = clean_up_heatmap(data)
+    result = deduplicate_motifs(data)
     assert isinstance(result, pd.DataFrame)
     assert len(result) <= len(data)
 

@@ -35,7 +35,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
-                                      create_lectin_and_motif_mappings, lectin_motif_scoring, clean_up_heatmap)
+                                      create_lectin_and_motif_mappings, lectin_motif_scoring, deduplicate_motifs)
 from glycowork.motif.graph import subgraph_isomorphism
 
 
@@ -231,7 +231,7 @@ def get_heatmap(
       df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
       df = df_motif.T.fillna(0) @ df
       df = df.apply(lambda col: col / col.sum()).T
-      df = clean_up_heatmap(df.T)
+      df = deduplicate_motifs(df.T)
   df = df.dropna(axis = 1)
   if not (df < 0).any().any():
     df /= df.sum()

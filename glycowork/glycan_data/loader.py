@@ -252,7 +252,8 @@ def download_model(file_id: str, # Google Drive file ID
   "Download the model weights file from Google Drive"
   file_id = file_id.split('/d/')[1].split('/view')[0]
   url = f'https://drive.google.com/uc?id={file_id}'
-  response = requests.get(url, stream = True, timeout = 30)
+  headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+  response = requests.get(url, stream = True, timeout = 30, headers = headers)
   if response.status_code == 200:
     with open(local_path, 'wb') as f:
       for chunk in response.iter_content(chunk_size = 8192):

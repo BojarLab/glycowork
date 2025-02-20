@@ -937,6 +937,19 @@ def check_nomenclature(glycan: str # Glycan string to check
     raise ValueError("Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around.")
 
 
+def sanitize_iupac(glycan: str # Glycan string to check
+                   ) -> str: # Sanitized glycan string
+  """Sanitize IUPAC glycan sequence by identifying and correcting chemical impossibilities."""
+  # Handle NAc special case (any sugar with NAc can't have linkage at position 2)
+  glycan = re.sub(r'([A-Za-z]+)\(([ab?][1-2])-2\)([A-Za-z]+NAc)', r'\1(\2-?)\3', glycan)
+  # Handle modifications (can't have a linkage to a position that's modified)
+  glycan = re.sub(r'\(([ab?][1-2])-(\d)\)([A-Za-z]+\2[A-Z])', r'(\1-?)\3', glycan)
+  # Handle branched cases with same linkage position
+  for match in re.finditer(r'([A-Za-z]+)\(([ab?][1-2])-(\d)\)\[([A-Za-z]+)\(([ab?][1-2])-(\3)\)\]', glycan):
+    glycan = glycan.replace(match.group(0), f'{match.group(1)}({match.group(2)}-?)[{match.group(4)}({match.group(5)}-?)]')
+  return glycan
+
+
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
   "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, and GlyTouCanIDs to standardized IUPAC-condensed format"
@@ -1049,6 +1062,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                   'Kdn(a1': 'Kdn(a2'}
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'[ab]-$', '', glycan)  # Remove endings like Glcb-
+  glycan = sanitize_iupac(glycan)
   # Canonicalize branch ordering
   if '[' in glycan and not glycan.startswith('['):
     glycan = choose_correct_isoform(glycan)
