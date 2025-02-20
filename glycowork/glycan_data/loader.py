@@ -255,8 +255,7 @@ def download_model(file_id: str, # Google Drive file ID
   response = requests.get(url, stream = True, timeout = 30)
   if response.status_code == 200:
     with open(local_path, 'wb') as f:
-      for chunk in response.iter_content(chunk_size = 8192):
-        f.write(chunk)
+      f.write(response.content)
     print("Download completed.")
   else:
     print(f"Download failed. Status code: {response.status_code}")
