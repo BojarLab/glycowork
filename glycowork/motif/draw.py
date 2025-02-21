@@ -205,11 +205,18 @@ def draw_shape(
   half_dim = dim / 2
   inside_hex_dim = ((sqrt(3))/2) * half_dim
   if scalar:
-    gradient = draw.RadialGradient(x_base, y_base, half_dim * 2.2)
-    opacity = max(0, min(1, scalar))  # Normalize opacity to [0, 1]
-    gradient.add_stop(0, 'purple', opacity = opacity)
+    col_dict_scalar = {
+    'snfg_white': '#FFFFFF', 'snfg_alt_blue': 'darkblue', 'snfg_green': 'green', 'snfg_yellow': 'darkgoldenrod',
+    'snfg_light_blue': 'skyblue', 'snfg_pink': 'orchid', 'snfg_purple': 'purple', 'snfg_brown': 'saddlebrown',
+    'snfg_orange': 'orangered', 'snfg_red': 'firebrick', 'black': '#000000', 'grey': '#7F7F7F'}
+    radius = 2.35 if shape == "HexNAc" else 2.2
+    gradient = draw.RadialGradient(x_base, y_base, half_dim * radius)
+    opacity = max(0, min(1, scalar))*0.8  # Normalize opacity to [0, 1]
+    opacity = opacity * 1.3 if color in ['snfg_yellow', 'snfg_light_blue', 'snfg_white'] else opacity
+    gradient.add_stop(0, col_dict_scalar[color], opacity = opacity)
+    gradient.add_stop(0.6, col_dict_scalar[color], opacity = opacity * 0.4)
     gradient.add_stop(1, 'white', opacity = 0)
-    drawing.append(draw.Circle(x_base, y_base, half_dim * 2, fill = gradient))
+    drawing.append(draw.Circle(x_base, y_base, half_dim * radius, fill = gradient))
 
   if shape == 'Hex':
     # Hexose - circle

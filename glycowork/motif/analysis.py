@@ -118,7 +118,6 @@ def get_pvals_motifs(
       df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
     # Reformat to allow for proper annotation in all samples
     if multiple_samples:
-      df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
       df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
     if not zscores:
       means = df.iloc[:, 1:].mean()

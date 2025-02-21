@@ -3243,6 +3243,13 @@ def test_get_pvals_motifs():
         'target': np.concatenate([high_scores, low_scores])  # Mix high and low z-scores
     })
     results = get_pvals_motifs(df, zscores=False, thresh=0.5)
+    df = pd.DataFrame({
+        'glycan': glycans * 4,  # Replicate each glycan 4 times
+        'target1': np.concatenate([high_scores, low_scores]),  # Mix high and low z-scores
+        'target2': np.concatenate([low_scores, high_scores]),  # Mix high and low z-scores
+        'target3': np.concatenate([low_scores, high_scores])  # Mix high and low z-scores
+    })
+    results = get_pvals_motifs(df, zscores=False, thresh=0.5, multiple_samples=True)
 
 
 def sample_comp_glycomics_data():
