@@ -485,10 +485,11 @@ def add_sugar(
 
 
 def split_node(
-    G: nx.Graph, # NetworkX glycan graph
+    G: nx.DiGraph, # NetworkX glycan graph
     node: int # Node to split
-    ) -> nx.Graph: # Modified graph with split node
+    ) -> nx.DiGraph: # Modified graph with split node
   "Splits graph at specified node creating disjoint subgraphs;ref: https://stackoverflow.com/questions/65853641/networkx-how-to-split-nodes-into-two-effectively-disconnecting-edges"""
+  G = G.copy()
   edges = G.edges(node, data = True)
   new_edges, new_nodes = [], []
   H = G.__class__()
@@ -577,10 +578,10 @@ def glycan_to_skeleton(
 
 
 def get_highlight_attribute(
-    glycan_graph: nx.Graph, # NetworkX glycan graph
+    glycan_graph: nx.DiGraph, # NetworkX glycan graph
     motif_string: str, # Motif to highlight
     termini_list: List = [] # Terminal position specifications
-    ) -> nx.Graph: # Graph with highlight attributes
+    ) -> nx.DiGraph: # Graph with highlight attributes
   "Labels nodes in glycan graph based on presence in specified motif"
   if motif_string:
     motif = glycan_to_nxGraph(motif_string, termini = 'provided' if termini_list else None, termini_list = termini_list)
@@ -674,7 +675,7 @@ def get_coordinates_and_labels(
   # Get connectivity
   branch_connection = []
   for x in branch_node:
-    branch_connection = branch_connection + [edges[k][1] for k in range(len(edges)) if edges[k][0] == int(x[-1])]
+    branch_connection.extend(edges[k][0] for k in range(len(edges)) if edges[k][1] == int(x[-1]))
   branch_connection = unwrap(get_indices(main_node[::2][::-1], [str(k) for k in branch_connection]))
 
   branch_node_old = branch_node
@@ -690,7 +691,7 @@ def get_coordinates_and_labels(
 
   branch_branch_connection = []
   for x in branch_branch_node:
-    branch_branch_connection = branch_branch_connection + [edges[k][1] for k in range(len(edges)) if edges[k][0] == int(x[-1])]
+    branch_branch_connection.extend(edges[k][0] for k in range(len(edges)) if edges[k][1] == int(x[-1]))
   tmp = []
   for k in branch_branch_connection:
     tmp.append([(i, color.index(str(k))) for i, color in enumerate([k[::2][::-1] for k in branch_node]) if str(k) in color])
@@ -698,7 +699,7 @@ def get_coordinates_and_labels(
 
   bbb_connection = []
   for x in branch_branch_branch_node:
-    bbb_connection = bbb_connection + [edges[k][1] for k in range(len(edges)) if edges[k][0] == int(x[-1])]
+    bbb_connection.extend(edges[k][0] for k in range(len(edges)) if edges[k][1] == int(x[-1]))
   tmp = []
   for k in bbb_connection:
     tmp.append([(i, color.index(str(k))) for i, color in enumerate([k[::2][::-1] for k in branch_branch_node]) if str(k) in color])
@@ -886,7 +887,7 @@ def get_coordinates_and_labels(
     graph2 = split_node(graph, int(n))
     edges = graph.edges()
     split_node_connections = [e[0] for e in edges if f"{n}_"in str(e[1])]
-    node_crawl = [k for k in [list(nx.node_connected_component(graph2, k)) for k in split_node_connections] if int(main_node[-1]) not in k]
+    node_crawl = [k for k in [list(nx.weakly_connected_components(graph2, k)) for k in split_node_connections] if int(main_node[-1]) not in k]
     new_node_crawl = [[x for x in k if '_' not in str(x)] for k in node_crawl]
 
     final_linkage = [tmp_b[unwrap(get_indices(tmp_a, [str(k[-1])]))[0]] for k in new_node_crawl]
@@ -989,8 +990,8 @@ def get_coordinates_and_labels(
     graph2 = split_node(graph, int(n))
     edges = graph.edges()
     split_node_connections = [e[0] for e in edges if f"{n}_" in str(e[1])]
-    node_crawl = [k for k in [list(nx.node_connected_component(graph2, k)) for k in split_node_connections] if int(main_node[-1]) not in k]
-    anti_node_crawl = [k for k in [list(nx.node_connected_component(graph2, k)) for k in split_node_connections] if int(main_node[-1]) in k]
+    node_crawl = [k for k in [list(nx.weakly_connected_components(graph2, k)) for k in split_node_connections] if int(main_node[-1]) not in k]
+    anti_node_crawl = [k for k in [list(nx.weakly_connected_components(graph2, k)) for k in split_node_connections] if int(main_node[-1]) in k]
     anti_node_crawl = [re.sub(r"_\S*$", '', str(k)) for k in unwrap(anti_node_crawl)]
     new_node_crawl = [[x for x in k if '_' not in str(x)] for k in node_crawl]
     final_linkage = [tmp_b[unwrap(get_indices(tmp_a, [str(k[-1])]))[0]] for k in new_node_crawl]

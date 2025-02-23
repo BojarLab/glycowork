@@ -41,7 +41,7 @@ from glycowork.motif.processing import (
     choose_correct_isoform, bracket_removal, check_nomenclature, IUPAC_to_SMILES
 )
 from glycowork.glycan_data.loader import (
-    unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib,
+    unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader
 )
@@ -1282,6 +1282,18 @@ def test_remove_unmatched_brackets():
     glycan = "Gal(b1-4)[Fuc(a1-3]GlcNAc"  # Missing closing bracket
     result = remove_unmatched_brackets(glycan)
     assert result.count('[') == result.count(']')
+
+
+def test_hashable_dict():
+    # Test __hash__
+    d1 = HashableDict({'a': 1, 'b': 2})
+    d2 = HashableDict({'b': 2, 'a': 1})
+    assert hash(d1) == hash(d2)  # Tests hash() and sorted items
+    # Test __eq__
+    assert d1 == d2  # Same content, different order
+    d3 = {'a': 1, 'b': 2}
+    assert not isinstance(d3, HashableDict)
+    assert d1.__eq__(d3) is False
 
 
 def test_reindex():
@@ -3792,9 +3804,9 @@ def sample_df():
         'glycan': ['Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
                    'Man(a1-2)Man(a1-3)[Man(a1-6)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
                    'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'],
-        'sample1': [10, 20, 30],
-        'sample2': [15, 25, 35],
-        'sample3': [12, 22, 32]
+        'sample1': [10.0, 20.0, 30.0],
+        'sample2': [15.0, 25.0, 35.0],
+        'sample3': [12.0, 22.0, 32.0]
     }
     return pd.DataFrame(data)
 
@@ -4012,7 +4024,7 @@ def sample_glycoshift_df():
 def test_characterize_monosaccharide_basic():
     """Test basic functionality of characterize_monosaccharide"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        characterize_monosaccharide('Man')
+        characterize_monosaccharide('Man', rank="Class", focus="Mammalia")
         mock_savefig.assert_not_called()
 
 
@@ -4040,6 +4052,24 @@ def test_characterize_monosaccharide_with_modifications():
 def test_get_heatmap_basic(sample_df):
     """Test basic functionality of get_heatmap"""
     result = get_heatmap(sample_df)
+    # Add tests for return_plot=True
+    result_with_plot = get_heatmap(sample_df, return_plot=True)
+    assert result_with_plot is not None
+    # Add test for filepath saving
+    result_with_save = get_heatmap(sample_df, filepath="test.png")
+    presence_df = pd.DataFrame({
+        'glycan': [
+            'Glc(a1-2)Gal',
+            'Man(a1-3)Man',
+            'Fuc(a1-2)Gal',
+            'Xyl(b1-2)Man'
+        ],
+        'Fabaceae': [1, 2, 1, 0],
+        'Fagaceae': [0, 1, 0, 0],
+        'Polygalaceae': [0, 0, 1, 0],
+        'Quillajaceae': [0, 0, 0, 1]
+    }).set_index('glycan')
+    result_presence = get_heatmap(presence_df, datatype='presence')
     plt.close('all')
 
 
@@ -4052,12 +4082,13 @@ def test_get_heatmap_with_motifs(sample_df):
 def test_get_heatmap_with_transform(sample_df):
     """Test get_heatmap with data transformation"""
     result = get_heatmap(sample_df, transform='CLR')
+    result_alr = get_heatmap(sample_df, transform='ALR')
     plt.close('all')
 
 
 def test_get_heatmap_with_custom_feature_set(sample_df):
     """Test get_heatmap with custom feature set"""
-    result = get_heatmap(sample_df, motifs=True, feature_set=['known'])
+    result = get_heatmap(sample_df, motifs=True, feature_set=['known'], show_all=True)
     plt.close('all')
 
 
@@ -4065,7 +4096,8 @@ def test_get_pca_basic(sample_df):
     """Test basic functionality of get_pca"""
     groups = [1, 1, 1]
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_pca(sample_df, groups)
+        get_pca(sample_df, groups, transform="CLR")
+        get_pca(sample_df, groups, transform="ALR")
         mock_savefig.assert_not_called()
 
 

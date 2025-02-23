@@ -382,3 +382,13 @@ def share_neighbor(edges, node1, node2):
    neighbors1 = set(v2 for v1, v2 in edges if v1 == node1) | set(v1 for v1, v2 in edges if v2 == node1)
    neighbors2 = set(v2 for v1, v2 in edges if v1 == node2) | set(v1 for v1, v2 in edges if v2 == node2)
    return bool(neighbors1 & neighbors2)
+
+
+class HashableDict(dict):
+  def __hash__(self):
+      return hash(tuple(sorted(self.items())))
+  
+  def __eq__(self, other):
+      if isinstance(other, HashableDict):
+          return tuple(sorted(self.items())) == tuple(sorted(other.items()))
+      return False

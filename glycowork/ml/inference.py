@@ -53,8 +53,7 @@ def glycans_to_emb(glycans: List[str], # list of glycans in IUPAC-condensed
       libr = lib
     # Preparing dataset for PyTorch
     glycan_loader = dataset_to_dataloader(glycans, range(len(glycans)),
-                                          libr = libr, batch_size = batch_size,
-                                          shuffle = False)
+                                          libr = libr, batch_size = batch_size, shuffle = False)
     res = []
     model = model.eval()
     # Get predictions for each mini-batch
@@ -132,8 +131,7 @@ def get_lectin_preds(prot: str, # protein amino acid sequence
   if prot_dic is None and not flex:
     print("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
   preds = unwrap(get_multi_pred(prot, glycans, model, prot_dic,
-                         batch_size = batch_size, libr = libr,
-                         flex = flex))
+                         batch_size = batch_size, libr = libr, flex = flex))
   df_pred = pd.DataFrame({'motif': glycans, 'pred': preds})
   if background_correction:
     correction_dict = {motif: pred for motif, pred in zip(correction_df['motif'], correction_df['pred'])}

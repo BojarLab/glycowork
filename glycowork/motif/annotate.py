@@ -43,10 +43,10 @@ def link_find(
 
 
 def annotate_glycan(
-    glycan: Union[str, nx.Graph], # IUPAC-condensed glycan sequence or NetworkX graph
+    glycan: Union[str, nx.DiGraph], # IUPAC-condensed glycan sequence or NetworkX graph
     motifs: Optional[pd.DataFrame] = None, # Motif dataframe (name + sequence); defaults to motif_list
     termini_list: List = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
-    gmotifs: Optional[List[nx.Graph]] = None # Precalculated motif graphs for speed
+    gmotifs: Optional[List[nx.DiGraph]] = None # Precalculated motif graphs for speed
     ) -> pd.DataFrame: # DataFrame with motif counts for the glycan
   "Counts occurrences of known motifs in a glycan structure using subgraph isomorphism"
   if motifs is None:
@@ -70,11 +70,11 @@ def annotate_glycan(
 
 
 def annotate_glycan_topology_uncertainty(
-    glycan: Union[str, nx.Graph], # IUPAC-condensed glycan sequence or NetworkX graph
+    glycan: Union[str, nx.DiGraph], # IUPAC-condensed glycan sequence or NetworkX graph
     feasibles: Optional[Set[str]] = None, # Set of potential full topology glycans; defaults to mammalian glycans
     motifs: Optional[pd.DataFrame] = None, # Motif dataframe (name + sequence); defaults to motif_list
     termini_list: List = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
-    gmotifs: Optional[List[nx.Graph]] = None # Precalculated motif graphs for speed
+    gmotifs: Optional[List[nx.DiGraph]] = None # Precalculated motif graphs for speed
     ) -> pd.DataFrame: # DataFrame with motif counts considering topology uncertainty
   "Annotates glycan motifs while handling uncertain topologies by comparing against physiological structures"
   if motifs is None:
@@ -325,7 +325,7 @@ def quantify_motifs(
 
 
 def count_unique_subgraphs_of_size_k(
-   graph: nx.Graph, # NetworkX graph of a glycan
+   graph: nx.DiGraph, # NetworkX graph of a glycan
    size: int = 2, # Number of monosaccharides per subgraph
    terminal: bool = False # Only count terminal subgraphs
    ) -> Dict[str, float]: # Dictionary mapping k-saccharide sequences to counts
@@ -406,7 +406,7 @@ def get_k_saccharides(
 
 
 def get_terminal_structures(
-   glycan: Union[str, nx.Graph], # IUPAC-condensed glycan sequence or NetworkX graph
+   glycan: Union[str, nx.DiGraph], # IUPAC-condensed glycan sequence or NetworkX graph
    size: int = 1 # Number of monosaccharides in terminal fragment (1 or 2)
    ) -> List[str]: # List of terminal structures with linkages
   "Identifies terminal monosaccharide sequences from non-reducing ends of glycan structure"
@@ -417,7 +417,7 @@ def get_terminal_structures(
   temp =  [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' + \
    ''.join([nodeDict.get(k+1+j+i, {'string_labels': ''})['string_labels']+'('+nodeDict.get(k+2+j+i, {'string_labels': ''})['string_labels']+')' \
             for i, j in enumerate(range(1, size))]) for k in list(ggraph.nodes())[:-1] if \
-          ggraph.degree[k] == 1 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages]
+          ggraph.out_degree[k] == 0 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages]
   return [g.replace('()', '') for g in temp]
 
 

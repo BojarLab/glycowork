@@ -1,12 +1,16 @@
 # Changelog
 
 ## [1.6.0]
+- All glycan graphs are now directed graphs (`nx.Graph` --> `nx.DiGraph`), flowing from the root (reducing end) to the tips (non-reducing ends), which has led to code changes in quite few functions. Some functions run faster now, yet outputs are unaffected
 
 ## glycan_data
+##### Added ✨
+- Added `HashableDict` class to allow for caching of functions with dicts as inputs
+
 ##### Changed 🔄
-- refined motif definition of `Internal_LewisX`/`Internal_Lewis_A`/`i_antigen` in `motif_list`, to exclude `LewisY`/`LewisB`/`I_antigen` from matching/overlapping
-- renamed `Hyluronan` in `motif_list` into `Hyaluronan`
-- removed `Nglycolyl_GM2` from `motif_list`; it's captured by `GM2`
+- refined motif definition of `Internal_LewisX`/`Internal_Lewis_A`/`i_antigen` in `motif_list`, to exclude `LewisY`/`LewisB`/`I_antigen` from matching/overlapping (07c9c12)
+- renamed `Hyluronan` in `motif_list` into `Hyaluronan` (07c9c12)
+- removed `Nglycolyl_GM2` from `motif_list`; it's captured by `GM2` (07c9c12)
 
 ### motif
 #### processing
@@ -21,13 +25,17 @@
 ##### Deprecated ⚠️
 - XXX
 
-##### Fixed 🐛
-- XXX
-
 #### annotate
 ##### Changed 🔄
 - Renamed `clean_up_heatmap` to `deduplicate_motifs` (407cd6f)
 
 #### draw
 ##### Changed 🔄
-- Quantitative highlighting in `GlycoDraw` via the `per_residue` keyword argument will now use individual SNFG-colors instead of a uniform highlight color
+- Quantitative highlighting in `GlycoDraw` via the `per_residue` keyword argument will now use individual SNFG-colors instead of a uniform highlight color (07c9c12)
+
+#### graph
+##### Changed 🔄
+- Switched `lru_cache` from `glycan_to_graph` to `glycan_to_nxGraph_int` for better performance and fewer opportunities to mess with the cache
+
+##### Fixed 🐛
+- Fixed an edge case in `compare_glycans` in which two identical string glycans returned (True, True) if `return_matches == False`

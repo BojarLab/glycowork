@@ -129,6 +129,7 @@ Thumbs.db
 .pytest_cache
 *.pdb
 tests/*.svg
+tests/*.png
 tests/*.pt
 
 # tools/trust-doc-nbs

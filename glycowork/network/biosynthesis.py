@@ -41,8 +41,8 @@ allowed_ptms = frozenset({'OS', '3S', '6S', 'OP', '1P', '3P', '6P', 'OAc', '4Ac'
 
 
 @lru_cache(maxsize = 1024)
-def safe_compare(g1: nx.Graph, # First glycan graph
-                g2: nx.Graph # Second glycan graph
+def safe_compare(g1: nx.DiGraph, # First glycan graph
+                g2: nx.DiGraph # Second glycan graph
                ) -> bool: # True if glycans are same
   "Compare glycans with error catch, returning False on exception"
   try:
@@ -52,15 +52,15 @@ def safe_compare(g1: nx.Graph, # First glycan graph
 
 
 def safe_index(glycan: str, # Glycan in IUPAC-condensed format
-              graph_dic: Dict[str, nx.Graph] # Dictionary of glycan:graph mappings
+              graph_dic: Dict[str, nx.DiGraph] # Dictionary of glycan:graph mappings
              ) -> nx.Graph: # Glycan graph
   "Retrieve glycan graph from dictionary or calculate if not present"
   return graph_dic.setdefault(glycan, glycan_to_nxGraph(glycan))
 
 
-def get_neighbors(ggraph: nx.Graph, # Glycan graph
+def get_neighbors(ggraph: nx.DiGraph, # Glycan graph
                  glycans: List[str], # List of glycans in IUPAC-condensed
-                 graphs: List[nx.Graph], # List of glycan graphs
+                 graphs: List[nx.DiGraph], # List of glycan graphs
                  min_size: int = 1 # Minimum root size; default:1
                 ) -> Tuple[List[str], List[List[int]]]: # (Precursor glycans, Index lists for finding precursors in glycans)
   "Find observed biosynthetic precursors of a glycan"
@@ -75,7 +75,7 @@ def get_neighbors(ggraph: nx.Graph, # Glycan graph
 
 
 @lru_cache(maxsize = 1024)
-def create_neighbors(ggraph: nx.Graph, # Glycan graph
+def create_neighbors(ggraph: nx.DiGraph, # Glycan graph
                     min_size: int = 1 # Minimum root size; default:1
                    ) -> List[nx.Graph]: # List of precursor graphs
   "Create biosynthetic precursor glycans"
@@ -86,8 +86,7 @@ def create_neighbors(ggraph: nx.Graph, # Glycan graph
   if num_nodes == 3:
     return [nx.relabel_nodes(ggraph.subgraph([2]), {2: 0})]
   # Generate all precursors by iteratively cleaving off the non-reducing-end monosaccharides
-  max_node = max(ggraph)
-  terminal_pairs = [frozenset({k, next(ggraph.neighbors(k))}) for k in ggraph.nodes() if ggraph.degree(k) == 1 and k != max_node]
+  terminal_pairs = [frozenset({k, next(ggraph.predecessors(k))}) for k in ggraph.nodes() if ggraph.out_degree(k) == 0]
   nodes = frozenset(ggraph)
   # Cleaving off messes with the node labeling, so they have to be re-labeled
   return [
@@ -97,9 +96,9 @@ def create_neighbors(ggraph: nx.Graph, # Glycan graph
 
 
 def get_virtual_nodes(glycan: str, # Glycan in IUPAC-condensed
-                     graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+                     graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
                      min_size: int = 1 # Minimum root size; default:1
-                    ) -> Tuple[List[nx.Graph], List[str]]: # (List of virtual graphs, List of virtual glycans)
+                    ) -> Tuple[List[nx.DiGraph], List[str]]: # (List of virtual graphs, List of virtual glycans)
   "Find unobserved biosynthetic precursors of a glycan"
   if glycan.count('(') + 1 <= min_size:
     return [], []
@@ -108,14 +107,13 @@ def get_virtual_nodes(glycan: str, # Glycan in IUPAC-condensed
   # Get biosynthetic precursors
   ggraph_nb_t = {graph_to_string(g) for g in create_neighbors(ggraph, min_size = min_size)}
   # Get both string and graph versions of the precursors
-  ggraph_nb, ggraph_nb_t2 = zip(*[(safe_index(k, graph_dic), k)
-                                    for k in ggraph_nb_t if not k.startswith('(')])
+  ggraph_nb, ggraph_nb_t2 = zip(*[(safe_index(k, graph_dic), k) for k in ggraph_nb_t if not k.startswith('(')])
   return ggraph_nb, ggraph_nb_t2
 
 
 def find_diff(glycan_a: str, # First glycan
              glycan_b: str, # Second glycan
-             graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+             graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
              allowed_ptms: FrozenSet[str] = allowed_ptms # Set of allowed PTMs
             ) -> str: # Differing subgraph or 'disregard'
   "Find connected subgraph differing between glycans"
@@ -135,7 +133,7 @@ def find_diff(glycan_a: str, # First glycan
 
 def find_shared_virtuals(glycan_a: str, # First glycan
                         glycan_b: str, # Second glycan
-                        graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+                        graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
                         min_size: int = 1 # Minimum root size; default:1
                        ) -> List[Tuple[str, str]]: # List of virtual edge tuples connecting glycans
   "Find virtual nodes shared between two glycans"
@@ -161,9 +159,9 @@ def adjacencyMatrix_to_network(adjacency_matrix: pd.DataFrame # Matrix of biosyn
 
 
 def create_adjacency_matrix(glycans: List[str], # List of glycans
-                          graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+                          graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
                           min_size: int = 1 # Minimum root size; default:1
-                         ) -> Tuple[nx.Graph, List[str]]: # (Network, Virtual nodes)
+                         ) -> Tuple[nx.DiGraph, List[str]]: # (Network, Virtual nodes)
   "Create biosynthetic adjacency matrix from glycan list"
   # Connect glycans with biosynthetic precursors
   df_out = pd.DataFrame(0, index = glycans, columns = glycans)
@@ -179,8 +177,7 @@ def create_adjacency_matrix(glycans: List[str], # List of glycans
       if i:
         df_out.iat[i[0], j] = 1
   # Find connections between virtual nodes that connect observed nodes
-  virtual_edges = set(unwrap([find_shared_virtuals(k[0], k[1], graph_dic,
-                                               min_size = min_size) for k in combinations(glycans, 2)]))
+  virtual_edges = set(unwrap([find_shared_virtuals(k[0], k[1], graph_dic, min_size = min_size) for k in combinations(glycans, 2)]))
   new_nodes = list(set([k[1] for k in virtual_edges if k[1] not in df_out.columns]))
   idx = [i for i, k in enumerate(new_nodes) if any(compare_glycans(safe_index(k, graph_dic), safe_index(j, graph_dic)) for j in df_out.columns)]
   if idx:
@@ -207,7 +204,7 @@ def shells_to_edges(prev_shell: List[List[str]], # Previous generation virtual n
 
 def find_path(glycan_a: str, # First glycan
              glycan_b: str, # Second glycan
-             graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+             graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
              permitted_roots: FrozenSet[str] = permitted_roots, # Allowed root nodes
              min_size: int = 1, # Minimum root size; default:1
              allowed_ptms: FrozenSet[str] = allowed_ptms # Set of allowed PTMs
@@ -230,7 +227,7 @@ def find_path(glycan_a: str, # First glycan
 
 def find_shortest_path(goal_glycan: str, # Target glycan
                       glycan_list: List[str], # List of glycans
-                      graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+                      graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
                       permitted_roots: FrozenSet[str] = permitted_roots, # Allowed root nodes
                       min_size: int = 1, # Minimum root size; default:1
                       allowed_ptms: FrozenSet[str] = allowed_ptms # Set of allowed PTMs
@@ -247,7 +244,7 @@ def find_shortest_path(goal_glycan: str, # Target glycan
   return [], {}
 
 
-def filter_disregard(network: nx.Graph, # Biosynthetic network
+def filter_disregard(network: nx.DiGraph, # Biosynthetic network
                     attr: str = 'diffs', # Edge attribute name
                     value: str = 'disregard' # Value to filter
                    ) -> nx.Graph: # Filtered network
@@ -256,9 +253,9 @@ def filter_disregard(network: nx.Graph, # Biosynthetic network
   return network
 
 
-def stemify_glycan_fast(ggraph_in: nx.Graph, # Input glycan graph
+def stemify_glycan_fast(ggraph_in: nx.DiGraph, # Input glycan graph
                        stem_lib: Dict[str, str] # Modified-to-core monosaccharide mapping
-                      ) -> Tuple[str, nx.Graph]: # (Stemified glycan, Stemified graph)
+                      ) -> Tuple[str, nx.DiGraph]: # (Stemified glycan, Stemified graph)
   "Stemify glycan graph quickly using precomputed mapping"
   ggraph = deepcopy(ggraph_in)
   nx.set_node_attributes(ggraph, {k: {"string_labels": stem_lib[v]} for k, v in ggraph.nodes(data = "string_labels")})
@@ -267,10 +264,10 @@ def stemify_glycan_fast(ggraph_in: nx.Graph, # Input glycan graph
 
 def find_ptm(glycan: str, # Glycan with PTM
             glycans: List[str], # List of glycans
-            graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+            graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
             stem_lib: Dict[str, str], # Modified-to-core monosaccharide mapping
             allowed_ptms: FrozenSet[str] = allowed_ptms, # Set of allowed PTMs
-            ggraphs: Optional[List[nx.Graph]] = None, # Precomputed glycan graphs
+            ggraphs: Optional[List[nx.DiGraph]] = None, # Precomputed glycan graphs
             suffix: str = '-ol' # Glycan suffix
            ) -> Union[Tuple[Tuple[str, str], str], int]: # Edge tuple (glycan, precursor) and PTM or 0
   "Identify precursor glycans for glycan with PTM"
@@ -297,7 +294,7 @@ def find_ptm(glycan: str, # Glycan with PTM
 
 
 def process_ptm(glycans: List[str], # List of glycans
-               graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+               graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
                stem_lib: Dict[str, str], # Modified-to-core monosaccharide mapping
                allowed_ptms: FrozenSet[str] = allowed_ptms, # Set of allowed PTMs
                suffix: str = '-ol' # Glycan suffix
@@ -313,11 +310,11 @@ def process_ptm(glycans: List[str], # List of glycans
   return list(zip(*valid_edges)) if valid_edges else ([], [])
 
 
-def update_network(network_in: nx.Graph, # Input network
+def update_network(network_in: nx.DiGraph, # Input network
                   edge_list: List[Tuple[str, str]], # List of edges to add
                   edge_labels: Optional[List[str]] = None, # Labels for new edges
                   node_labels: Optional[Dict[str, int]] = None # Node virtual status (0: observed, 1: virtual)
-                 ) -> nx.Graph: # Updated network
+                 ) -> nx.DiGraph: # Updated network
   "Update network with new edges and labels"
   network = network_in.copy()
   network.add_edges_from(edge_list)
@@ -330,7 +327,7 @@ def update_network(network_in: nx.Graph, # Input network
   return network
 
 
-def return_unconnected_to_root(network: nx.Graph, # Biosynthetic network
+def return_unconnected_to_root(network: nx.DiGraph, # Biosynthetic network
                               permitted_roots: FrozenSet[str] = permitted_roots # Allowed root nodes
                              ) -> Set[str]: # Nodes not connected to roots
   "Find observed nodes not connected to root nodes"
@@ -340,8 +337,8 @@ def return_unconnected_to_root(network: nx.Graph, # Biosynthetic network
   return set(filter(lambda node: not any(nx.has_path(network, node, root) for root in permitted_roots), candidate_nodes))
 
 
-def deorphanize_nodes(network: nx.Graph, # Biosynthetic network
-                     graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+def deorphanize_nodes(network: nx.DiGraph, # Biosynthetic network
+                     graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
                      permitted_roots: FrozenSet[str] = permitted_roots, # Allowed root nodes
                      min_size: int = 1, # Minimum root size; default:1
                      allowed_ptms: FrozenSet[str] = allowed_ptms # Set of allowed PTMs
@@ -385,8 +382,8 @@ def prune_directed_edges(network: nx.DiGraph # Directed network
   return network
 
 
-def deorphanize_edge_labels(network: nx.Graph, # Biosynthetic network
-                          graph_dic: Dict[str, nx.Graph], # Dictionary of glycan:graph mappings
+def deorphanize_edge_labels(network: nx.DiGraph, # Biosynthetic network
+                          graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
                           allowed_ptms: FrozenSet[str] = allowed_ptms # Set of allowed PTMs
                          ) -> nx.Graph: # Network with complete labels
   "Complete edge labels in newly added edges"
@@ -396,7 +393,7 @@ def deorphanize_edge_labels(network: nx.Graph, # Biosynthetic network
   return network
 
 
-@lru_cache(maxsize = 1024)
+@lru_cache(maxsize = 128)
 def infer_roots(glycans: FrozenSet[str] # Set of glycans
                ) -> FrozenSet[str]: # Set of permitted roots
   "Infer correct permitted roots for glycan class"
@@ -419,11 +416,10 @@ def infer_roots(glycans: FrozenSet[str] # Set of glycans
   return frozenset()
 
 
-def add_high_man_removal(network: nx.Graph # Biosynthetic network
-                       ) -> nx.Graph: # Network with high-mannose removal
+def add_high_man_removal(network: nx.DiGraph # Biosynthetic network
+                       ) -> nx.DiGraph: # Network with high-mannose removal
   "Add 'reverse' edges for high-mannose N-glycan maturation (i.e., cutting down)"
-  edges_to_add = [(target, source, network[source][target])
-                    for source, target in network.edges() if target.count('Man') >= 5]
+  edges_to_add = [(target, source, network[source][target]) for source, target in network.edges() if target.count('Man') >= 5]
   network.add_edges_from(edges_to_add, diffs = lambda x: x[2])
   return network
 
@@ -524,7 +520,7 @@ def construct_network(glycans: List[str], # List of glycans
   return filter_disregard(network)
 
 
-def plot_network(network: nx.Graph, # Biosynthetic network
+def plot_network(network: nx.DiGraph, # Biosynthetic network
                 plot_format: str = 'pydot2', # Layout type: pydot2/kamada_kawai/spring
                 edge_label_draw: bool = True, # Whether to draw edge labels
                 lfc_dict: Optional[Dict[str, float]] = None # Enzyme:log2FC mapping for edge width
@@ -578,9 +574,9 @@ def plot_network(network: nx.Graph, # Biosynthetic network
   mpld3.plugins.connect(fig, tooltip)
 
 
-def network_alignment(network_a: nx.Graph, # First network
-                     network_b: nx.Graph # Second network
-                    ) -> nx.Graph: # Combined network
+def network_alignment(network_a: nx.DiGraph, # First network
+                     network_b: nx.DiGraph # Second network
+                    ) -> nx.DiGraph: # Combined network
   "Combine two networks into one with color coding (brown: shared, blue: only in a, orange: only in b)"""
   U = nx.Graph()
   network_a_nodes = set(network_a.nodes)
@@ -605,9 +601,9 @@ def network_alignment(network_a: nx.Graph, # First network
   return U
 
 
-def infer_virtual_nodes(network_a: nx.Graph, # First network
-                       network_b: nx.Graph, # Second network
-                       combined: Optional[nx.Graph] = None # Pre-merged network from network_alignment
+def infer_virtual_nodes(network_a: nx.DiGraph, # First network
+                       network_b: nx.DiGraph, # Second network
+                       combined: Optional[nx.DiGraph] = None # Pre-merged network from network_alignment
                       ) -> Tuple[Tuple[List[str], List[str]], Tuple[List[str], List[str]]]: # ((a-virtuals in b, shared), (b-virtuals in a, shared))
   "Identify virtual nodes observed in other species"
   # Perform network alignment if not provided
@@ -624,10 +620,10 @@ def infer_virtual_nodes(network_a: nx.Graph, # First network
   return (list(inferred_a), list(supported_a)), (list(inferred_b), list(supported_b))
 
 
-def infer_network(network: nx.Graph, # Network to infer
+def infer_network(network: nx.DiGraph, # Network to infer
                  network_species: str, # Source species
                  species_list: List[str], # Species to compare against
-                 network_dic: Dict[str, nx.Graph] # Species:network mapping
+                 network_dic: Dict[str, nx.DiGraph] # Species:network mapping
                 ) -> nx.Graph: # Network with inferred nodes
   "Replace virtual nodes observed in other species"
   inferences = set()
@@ -645,7 +641,7 @@ def infer_network(network: nx.Graph, # Network to infer
   return network2
 
 
-def retrieve_inferred_nodes(network: nx.Graph, # Network with inferred nodes
+def retrieve_inferred_nodes(network: nx.DiGraph, # Network with inferred nodes
                           species: Optional[str] = None # Source species if multiple
                          ) -> Union[List[str], Dict[str, List[str]]]: # Inferred nodes list or dict
   "Get inferred virtual nodes from network"
@@ -653,7 +649,7 @@ def retrieve_inferred_nodes(network: nx.Graph, # Network with inferred nodes
   return {species: inferred_nodes} if species is not None else inferred_nodes
 
 
-def export_network(network: nx.Graph, # Biosynthetic network
+def export_network(network: nx.DiGraph, # Biosynthetic network
                   filepath: str, # Output path prefix, will be appended by file description and type
                   other_node_attributes: Optional[List[str]] = None # Additional attributes for extraction
                  ) -> None: # Saves network files (edge list/labels + node IDs and labels)
@@ -688,7 +684,7 @@ def monolink_to_glycoenzyme(edge_label: str, # Monolink edge label
 
 def choose_path(diamond: Dict[int, str], # Diamond node positions mapping to glycans
                species_list: List[str], # Species to compare against
-               network_dic: Dict[str, nx.Graph], # Species:network mapping
+               network_dic: Dict[str, nx.DiGraph], # Species:network mapping
                threshold: float = 0.0, # Cutoff threshold
                nb_intermediates: int = 2, # Number of intermediate nodes; has to be a multiple of 2
                mode: str = 'presence' # Analysis mode: presence/abundance
@@ -722,7 +718,7 @@ def choose_path(diamond: Dict[int, str], # Diamond node positions mapping to gly
   return {k[0]: v for k, v in alts.items()} if nb_intermediates == 2 else alts
 
 
-def find_diamonds(network: nx.Graph, # Biosynthetic network
+def find_diamonds(network: nx.DiGraph, # Biosynthetic network
                  nb_intermediates: int = 2, # Number of intermediate nodes; has to be a multiple of 2
                  mode: str = 'presence' # Analysis mode: presence/abundance
                 ) -> List[Dict[int, str]]: # List of diamond motifs as diamond node positions mapping to glycans
@@ -737,7 +733,6 @@ def find_diamonds(network: nx.Graph, # Biosynthetic network
   g1 = nx.DiGraph()
   nx.add_path(g1, first_path)
   nx.add_path(g1, second_path)
-
   # Find networks containing the matching motif
   graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(network, g1)
   # Find diamonds within those networks
@@ -766,9 +761,9 @@ def find_diamonds(network: nx.Graph, # Biosynthetic network
   return final_matchings
 
 
-def trace_diamonds(network: nx.Graph, # Biosynthetic network
+def trace_diamonds(network: nx.DiGraph, # Biosynthetic network
                   species_list: List[str], # Species to compare against
-                  network_dic: Dict[str, nx.Graph], # Species:network mapping
+                  network_dic: Dict[str, nx.DiGraph], # Species:network mapping
                   threshold: float = 0.0, # Cutoff threshold
                   nb_intermediates: int = 2, # Number of intermediate nodes; has to be a multiple of 2
                   mode: str = 'presence' # Analysis mode: presence/abundance
@@ -784,7 +779,7 @@ def trace_diamonds(network: nx.Graph, # Biosynthetic network
   return df_out
 
 
-def prune_network(network: nx.Graph, # Biosynthetic network
+def prune_network(network: nx.DiGraph, # Biosynthetic network
                  node_attr: str = 'abundance', # Node attribute to use for pruning
                  threshold: float = 0.0 # Cutoff threshold
                 ) -> nx.Graph: # Pruned network
@@ -804,14 +799,14 @@ def prune_network(network: nx.Graph, # Biosynthetic network
   return network_out
 
 
-def evoprune_network(network: nx.Graph, # Biosynthetic network
-                    network_dic: Optional[Dict[str, nx.Graph]] = None, # Species:network mapping
+def evoprune_network(network: nx.DiGraph, # Biosynthetic network
+                    network_dic: Optional[Dict[str, nx.DiGraph]] = None, # Species:network mapping
                     species_list: Optional[List[str]] = None, # Species to compare against
                     node_attr: str = 'abundance', # Node attribute to use for pruning
                     threshold: float = 0.01, # Cutoff threshold
                     nb_intermediates: int = 2, # Number of intermediate nodes; has to be a multiple of 2
                     mode: str = 'presence' # Analysis mode: presence/abundance
-                   ) -> nx.Graph: # Evolutionarily pruned network (with virtual node probability as a new node attribute)
+                   ) -> nx.DiGraph: # Evolutionarily pruned network (with virtual node probability as a new node attribute)
   "Prune network using evolutionary path preferences"
   if network_dic is None:
     network_dic = pickle.load(open(data_path, 'rb'))
@@ -827,16 +822,16 @@ def evoprune_network(network: nx.Graph, # Biosynthetic network
   return prune_network(network_out, node_attr = node_attr, threshold = threshold*100)
 
 
-def highlight_network(network: nx.Graph, # Biosynthetic network
+def highlight_network(network: nx.DiGraph, # Biosynthetic network
                      highlight: str, # What to highlight: motif/species/abundance/conservation
                      motif: Optional[str] = None, # Motif to highlight; highlight=motif
                      abundance_df: Optional[pd.DataFrame] = None, # Glycan abundance data; highlight=abundance
                      glycan_col: str = 'glycan', # Glycan column name; highlight=abundance
                      intensity_col: str = 'rel_intensity', # Intensity column name; highlight=abundance
                      conservation_df: Optional[pd.DataFrame] = None, # Species-glycan data; highlight=conservation
-                     network_dic: Optional[Dict[str, nx.Graph]] = None, # Species:network mapping; highlight=conservation/species
+                     network_dic: Optional[Dict[str, nx.DiGraph]] = None, # Species:network mapping; highlight=conservation/species
                      species: Optional[str] = None # Species to highlight; highlight=species
-                    ) -> nx.Graph: # Network with highlight attributes ('origin' (motif/species) or 'abundance' (abundance/conservation) node attribute)
+                    ) -> nx.DiGraph: # Network with highlight attributes ('origin' (motif/species) or 'abundance' (abundance/conservation) node attribute)
   "Add visual highlighting to network nodes, to be used in plot_network"
   if network_dic is None:
     network_dic = pickle.load(open(data_path, 'rb'))
@@ -886,10 +881,10 @@ def highlight_network(network: nx.Graph, # Biosynthetic network
   return network_out
 
 
-def get_edge_weight_by_abundance(network: nx.Graph, # Biosynthetic network
+def get_edge_weight_by_abundance(network: nx.DiGraph, # Biosynthetic network
                                root: str = "Gal(b1-4)Glc-ol", # Root node
                                root_default: float = 10.0 # Root abundance
-                              ) -> nx.Graph: # Network with edge capacities
+                              ) -> nx.DiGraph: # Network with edge capacities
   "Estimate reaction capacity (edge attribute) from node abundances"
   abundance_dict = nx.get_node_attributes(network, 'abundance')
   if abundance_dict.get(root, 1) < 0.1:
@@ -901,11 +896,11 @@ def get_edge_weight_by_abundance(network: nx.Graph, # Biosynthetic network
   return network
 
 
-def estimate_weights(network: nx.Graph, # Biosynthetic network
+def estimate_weights(network: nx.DiGraph, # Biosynthetic network
                     root: str = "Gal(b1-4)Glc-ol", # Root node
                     root_default: float = 10, # Root abundance
                     min_default: float = 0.001 # Minimum weight
-                   ) -> nx.Graph: # Network with estimated weights
+                   ) -> nx.DiGraph: # Network with estimated weights
   "Estimate reaction capacity (edge attribute) and missing abundances"
   net_estimated = get_edge_weight_by_abundance(network, root = root, root_default = root_default)
   # Function to estimate weight based on neighboring edges
@@ -922,7 +917,7 @@ def estimate_weights(network: nx.Graph, # Biosynthetic network
   return net_estimated
 
 
-def get_maximum_flow(network: nx.Graph, # Biosynthetic network
+def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
                     source: str = "Gal(b1-4)Glc-ol", # Source node
                     sinks: Optional[List[str]] = None # Target nodes; default:all terminal nodes
                    ) -> Dict[str, Dict[str, Union[float, Dict[str, Dict[str, float]]]]]: # Flow results; sink: {maximum flow value, flow path dictionary}
@@ -947,7 +942,7 @@ def get_maximum_flow(network: nx.Graph, # Biosynthetic network
   return flow_results
 
 
-def get_max_flow_path(network: nx.Graph, # Biosynthetic network
+def get_max_flow_path(network: nx.DiGraph, # Biosynthetic network
                      flow_dict: Dict[str, Dict[str, float]], # Flow dictionary as returned by get_maximum_flow
                      sink: str, # Target node
                      source: str = "Gal(b1-4)Glc-ol" # Source node
@@ -967,7 +962,7 @@ def get_max_flow_path(network: nx.Graph, # Biosynthetic network
   return path
 
 
-def get_reaction_flow(network: nx.Graph, # Biosynthetic network
+def get_reaction_flow(network: nx.DiGraph, # Biosynthetic network
                      res: Dict[str, Dict[str, float]], # Flow results as returned by get_maximum_flow
                      aggregate: Optional[str] = None # Aggregation: sum/mean/None
                     ) -> Union[Dict[str, List[float]], Dict[str, float]]: # Reaction flows (reaction: flow)
@@ -1088,10 +1083,8 @@ def get_differential_biosynthesis(df: Union[pd.DataFrame, str], # Glycan abundan
       slopes = reaction_data.groupby('participant').apply(lambda x: np.polyfit(x['time_numeric'], x[reaction], 1)[0], include_groups = False)
       average_slope = slopes.mean()
       direction = "Increase" if average_slope > 0 else "Decrease"
-
       model = ols('Q("{0}") ~ C(time_point) + C(participant)'.format(reaction), data = reaction_data).fit()
       anova_table = sm.stats.anova_lm(model, typ = 2)
-
       f_value = anova_table.loc['C(time_point)', 'F']
       p_value = anova_table.loc['C(time_point)', 'PR(>F)']
 
@@ -1116,7 +1109,6 @@ def get_differential_biosynthesis(df: Union[pd.DataFrame, str], # Glycan abundan
     alpha = get_alphaN(len(all_groups))
     significance = [p < alpha for p in corrpvals] if pvals else []
     effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
-
     out = pd.DataFrame({'Feature': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
                         'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
 
@@ -1139,7 +1131,7 @@ def extend_glycans(glycans: Union[List[str], Set[str]], # Glycans to extend
 
 def edges_for_extension(leaf_glycans: Set[str], # Terminal glycans in a network
                        new_glycans: Set[str], # Extended glycans
-                       graphs: Dict[str, nx.Graph] # Glycan:graph mapping
+                       graphs: Dict[str, nx.DiGraph] # Glycan:graph mapping
                       ) -> Tuple[List[Tuple[str, str]], List[str]]: # (New edges, Labels)
   "Create edges connecting leaf and extended glycans"
   new_edges, new_edge_labels = [], []
@@ -1179,11 +1171,11 @@ def choose_leaves_to_extend(leaf_glycans: Set[str], # Terminal glycans in a netw
   return {glycan for glycan, score in scored_glycans if score == min_score}
 
 
-def extend_network(network: nx.Graph, # Biosynthetic network
+def extend_network(network: nx.DiGraph, # Biosynthetic network
                   steps: int = 1, # Number of extension steps; default:1
                   to_extend: Union[str, Dict[str, int], List[str]] = "all", # Nodes to extend (all, specific leaf node, target composition)
                   strict_context: bool = False # Whether to use network only to derive allowed reaction products; default:False
-                 ) -> Tuple[nx.Graph, Set[str]]: # (Extended network, New glycans)
+                 ) -> Tuple[nx.DiGraph, Set[str]]: # (Extended network, New glycans)
   "Extend biosynthetic network physiologically"
   graphs = {}
   new_glycans = set()

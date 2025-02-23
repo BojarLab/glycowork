@@ -193,7 +193,7 @@ def get_heatmap(
     motifs: bool = False, # Analyze motifs instead of sequences
     feature_set: List[str] = ['known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
     transform: str = '', # Transform data before plotting
-    datatype: str = 'response', # Data type: 'response' or 'presence'
+    datatype: str = 'response', # Data type: 'response' for quantitative values or 'presence' for presence/absence
     rarity_filter: float = 0.05, # Min proportion for non-zero values
     filepath: Union[str, Path] = '', # Path to save plot
     index_col: str = 'glycan', # Column to use as index
