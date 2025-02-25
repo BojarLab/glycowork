@@ -633,7 +633,7 @@ def get_coordinates_and_labels(
       glycan = glycan.replace('*', '')
     parts = [[[i for i in k.split('-') if i] for k in part] for part in parts]
 
-  main_node = [k for k in glycan.split('-') if k]  
+  main_node = [k for k in glycan.split('-') if k]
   branch_branch_branch_node, branch_branch_node, branch_node = parts
 
   # Get labels for each level

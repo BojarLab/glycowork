@@ -12,7 +12,7 @@
 - Refined motif definition of `Internal_LewisX`/`Internal_Lewis_A`/`i_antigen` in `motif_list`, to exclude `LewisY`/`LewisB`/`I_antigen` from matching/overlapping (07c9c12)
 - Renamed `Hyluronan` in `motif_list` into `Hyaluronan` (07c9c12)
 - Removed `Nglycolyl_GM2` from `motif_list`; it's captured by `GM2` (07c9c12)
-- Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities
+- Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities (9eeaa3a)
 
 ### motif
 #### processing
@@ -23,7 +23,8 @@
 ##### Changed 🔄
 - Moved `.motif.query.glytoucan_to_glycan` into `.motif.processing` (eafb218)
 - `canonicalize_iupac` will now use `sanitize_iupac` to auto-fix chemical impossibilities in input glycans (407cd6f)
-- More GlycoWorkBench sequence variants can now be handled via `glycoworkbench_to_iupac`/`canonicalize_iupac`
+- More GlycoWorkBench sequence variants can now be handled via `glycoworkbench_to_iupac`/`canonicalize_iupac` (9eeaa3a)
+- Newly supported WURCS2 tokens: `GalNAc-ol`
 
 ##### Deprecated ⚠️
 - XXX

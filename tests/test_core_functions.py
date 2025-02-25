@@ -775,6 +775,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac('freeEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315)--4b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315$MONO,Und,-2H,0,freeEnd')  == 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol'
     assert canonicalize_iupac("freeEnd--?D-GalNAc--3b1D-GlcNAc,p(--3a1D-Gal,p)--4a1D-Fuc,p$MONO,perMe,Na,0,freeEnd") == "Gal(a1-3)[Fuc(a1-4)]GlcNAc(b1-3)GalNAc-ol"
     assert canonicalize_iupac("freeEnd--??1D-Qui(--2b1D-Glc,p)--4b1D-Qui,p") == "Glc(b1-2)[Qui(b1-4)]Qui-ol"
+    assert canonicalize_iupac("freeEnd--??1L-Ara--5[--5a1L-Ara,f--?]--5a1L-Ara,f$MONO,perMe,Na,0,freeEnd") == "Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Ara-ol"
     assert canonicalize_iupac("WURCS=2.0/5,7,6/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O]/1-2-3-4-2-5-4/a4-b1_b4-c1_c3-d1_c6-g1_d2-e1_e4-f1") == "GalNAc4S(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/8,15,14/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O][Aad21122h-2a_2-6_5*NCC/3=O]/1-2-3-4-2-5-6-7-8-4-2-5-6-8-5/a4-b1_a6-o1_b4-c1_c3-d1_c6-j1_d2-e1_e3-f1_e4-g1_h8-i2_j2-k1_k3-l1_k4-m1_h2-g3|g6_n2-m3|m6 ") == "Neu5Ac(a2-8)Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/3,5,4/[a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5]/1-1-2-3-3/a4-b1_b4-c1_c3-d1_c6-e1") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -1468,6 +1469,7 @@ def test_mahalanobis_distance():
     y = np.array([[7, 8], [9, 10], [11, 12]])
     dist = mahalanobis_distance(x, y)
     assert dist > 0  # Distance should be positive
+    dist = mahalanobis_distance(pd.DataFrame(x), pd.DataFrame(y))
     # Test with paired data
     dist_paired = mahalanobis_distance(x, y, paired=True)
     assert dist_paired >= 0  # Should still be positive
@@ -1680,9 +1682,11 @@ def test_bayes_factor_functions():
     # Test get_BF
     bf = get_BF(n=20, p=0.05)
     assert bf > 0
+    bf = get_BF(n=20, p=0.05, method="balanced")
     # Test get_alphaN
     alpha = get_alphaN(n=20)
     assert 0 < alpha < 1
+    alpha = get_alphaN(n=20, method="balanced")
 
 
 def test_pi0_tst():
@@ -1726,6 +1730,7 @@ def test_compare_inter_vs_intra_group():
     intra, inter = compare_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans)
     assert -1 <= intra <= 1
     assert -1 <= inter <= 1
+    intra, inter = compare_inter_vs_intra_group(cohort_b, cohort_a, glycans, grouped_glycans, paired=True)
 
 
 def test_correct_multiple_testing():
@@ -1789,6 +1794,8 @@ def test_impute_and_normalize():
     assert result.shape == data.shape
     assert not (result.iloc[:, 1:] == 0).any().any()
     assert abs(result.iloc[:, 1:].sum().sum() - 300) < 1e-5  # Check normalization to 100%
+    data.columns = [0] + data.columns.tolist()[1:]
+    result = impute_and_normalize(data, groups)
 
 
 def test_variance_based_filtering():
@@ -1857,6 +1864,8 @@ def test_replace_outliers_with_iqr_bounds():
     result = replace_outliers_with_IQR_bounds(data)
     assert max(result) < 10  # Outlier should be replaced
     assert len(result) == len(data)
+    data = pd.Series(['Neu5Ac', 1, 2, 3, 10, 2, 3, 1])  # 10 is an outlier
+    result = replace_outliers_with_IQR_bounds(data)
 
 
 def test_replace_outliers_winsorization():
@@ -1865,6 +1874,8 @@ def test_replace_outliers_winsorization():
     result = replace_outliers_winsorization(data)
     assert max(result) < 10  # Outlier should be replaced
     assert len(result) == len(data)
+    result = replace_outliers_winsorization(data, cap_side='lower')
+    result = replace_outliers_winsorization(data, cap_side='upper')
 
 
 def test_perform_tests_monte_carlo():

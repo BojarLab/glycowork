@@ -15,7 +15,7 @@ from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
 # for WURCS mapping
 monosaccharide_mapping = {
     'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1a_1-5_2*NCC/3=O': 'GalNAc',
-    'a1122h-1b_1-5': 'Man', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Ac',
+    'a1122h-1b_1-5': 'Man', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Ac', 'h2112h_2*NCC/3=O': 'GalNAc-ol',
     'a1122h-1a_1-5': 'Man', 'a2112h-1b_1-5': 'Gal', 'Aad21122h-2a_2-6_5*NCCO/3=O': 'Neu5Gc',
     'a2112h-1b_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS', 'a2112h-1b_1-5_2*NCC/3=O': 'GalNAc',
     'a1221m-1a_1-5': 'Fuc', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6S', 'a212h-1b_1-5': 'Xyl',
@@ -873,6 +873,15 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
                             ) -> str: # Basic IUPAC-condensed format
   """Convert GlycoWorkBench nomenclature to IUPAC-condensed format."""
   glycan = glycan.replace('D-', '').replace('L-', '')  # Remove D- and L- prefixes
+  repeat_pattern = r'--(\d+)\[(.*?)\]'
+  main_part = glycan.split('$MONO')[0]
+  while re.search(repeat_pattern, main_part):
+    match = re.search(repeat_pattern, main_part)
+    repeat_count = int(match.group(1))
+    repeat_unit = match.group(2)
+    expanded = repeat_unit * repeat_count
+    main_part = main_part[:match.start()] + expanded + main_part[match.end():]
+  glycan = main_part + glycan[glycan.index('$MONO'):] if '$MONO' in glycan else main_part
   # Handle floating parts if present
   floaty_parts = []
   if '}' in glycan:
@@ -888,15 +897,19 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
       processed_monos = [f"{x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})".strip('-') for x in new_float.split('--') if x]
       floaty_parts.append(''.join(processed_monos[::-1]))
   # Process main glycan structure
-  split_monos = [x for x in glycan.split('$MONO')[0].split('--')[1:]]
-  split_monos[-1] = split_monos[-1] + ',p'
+  split_monos = [x for x in glycan.split('$MONO')[0].split('--')[1:] if x != '?']
+  if ',' not in split_monos[-1]:
+    split_monos[-1] = split_monos[-1] + ',p'
   # Convert monosaccharides to IUPAC format
-  converted_monos = [f"{x[1:]}(?1-?)" if re.match(r"^\?[A-Z]", x) else f"{x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})"+"".join(re.findall("[()]+", y)).replace("(","]").replace(")","[") for x, y in zip(split_monos, glycan.split('--'))]
+  converted_monos = [f"{x[1:]}(?1-?)" if re.match(r"^\?[A-Z]", x) else
+                     f"{x.split(',')[0][3:]}{'f' if ',f' in x else ''}({x[1]}{x[2]}-{x[0]})" +
+                     "".join(re.findall("[()]+", y)).replace("(","]").replace(")","[")
+                     for x, y in zip(split_monos, glycan.split('--'))]
   converted_glycan = ''.join(converted_monos[::-1])
   # Fix double branch notation if present
   if ']]' in converted_glycan:
     double_brack_idx = converted_glycan.index(']]')
-    branch_str = converted_glycan[:double_brack_idx+2]
+    branch_str = converted_glycan[:double_brack_idx + 2]
     second_brack_end = [(m.start(0), m.end(0)) for m in re.finditer(re.escape('['), branch_str)][-1][0]
     converted_glycan = branch_str[:second_brack_end] + ']' + branch_str[second_brack_end:-1] + converted_glycan[double_brack_idx+2:]
   if floaty_parts:  # Add floating parts to final structure
@@ -972,7 +985,6 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glytoucan_to_glycan([glycan])[0]
   elif not isinstance(glycan, str) or '@' in glycan:
     check_nomenclature(glycan)
-    return
   elif ((glycan[-1].isdigit() and bool(re.search("[A-Z]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B') or glycan.endswith("LacDiNAc")) and 'e' not in glycan and '-' not in glycan:
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
