@@ -442,8 +442,7 @@ def add_bond(
   x_start, x_stop = [-x * scaling_factor * dim for x in (x_start, x_stop)]
   y_start, y_stop = [y * y_scaling * dim for y in (y_start, y_stop)]
   p = draw.Path(stroke_width = 0.08*dim, stroke = col_dict['black'],)
-  p.M(x_start, y_start)
-  p.L(x_stop, y_stop)
+  p.M(x_start, y_start).L(x_stop, y_stop)
   drawing.append(p)
   if label and label != '-':
     drawing.append(draw.Text(label, dim*0.4, path = p, text_anchor = 'middle',
@@ -612,11 +611,12 @@ def get_coordinates_and_labels(
   if not draw_this.startswith('['):
     draw_this = choose_correct_isoform(draw_this, order_by = "linkage")
 
-  graph = glycan_to_nxGraph(draw_this, termini = 'calc') if termini_list else glycan_to_nxGraph(draw_this)
+  graph = glycan_to_nxGraph(draw_this, termini = 'calc' if termini_list else 'ignore')
   graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list)
-  node_labels = nx.get_node_attributes(graph, 'string_labels')
-  highlight_labels = nx.get_node_attributes(graph, 'highlight_labels')
+  node_values = list(nx.get_node_attributes(graph, 'string_labels').values())
+  highlight_values = list(nx.get_node_attributes(graph, 'highlight_labels').values())
   edges = list(graph.edges())
+  graph_nodes = list(graph.nodes())
   glycan = glycan_to_skeleton(draw_this)
 
   # Split main & branches, get labels
@@ -633,10 +633,7 @@ def get_coordinates_and_labels(
       glycan = glycan.replace('*', '')
     parts = [[[i for i in k.split('-') if i] for k in part] for part in parts]
 
-  main_node = [k for k in glycan.split('-') if k]
-  node_values = list(node_labels.values())
-  highlight_values = list(highlight_labels.values())
-  graph_nodes = list(graph.nodes())
+  main_node = [k for k in glycan.split('-') if k]  
   branch_branch_branch_node, branch_branch_node, branch_node = parts
 
   # Get labels for each level
@@ -675,7 +672,7 @@ def get_coordinates_and_labels(
   # Get connectivity
   branch_connection = []
   for x in branch_node:
-    branch_connection.extend(edges[k][0] for k in range(len(edges)) if edges[k][1] == int(x[-1]))
+    branch_connection.extend(e[0] for e in edges if e[1] == int(x[-1]))
   branch_connection = unwrap(get_indices(main_node[::2][::-1], [str(k) for k in branch_connection]))
 
   branch_node_old = branch_node
@@ -691,7 +688,7 @@ def get_coordinates_and_labels(
 
   branch_branch_connection = []
   for x in branch_branch_node:
-    branch_branch_connection.extend(edges[k][0] for k in range(len(edges)) if edges[k][1] == int(x[-1]))
+    branch_branch_connection.extend(e[0] for e in edges if e[1] == int(x[-1]))
   tmp = []
   for k in branch_branch_connection:
     tmp.append([(i, color.index(str(k))) for i, color in enumerate([k[::2][::-1] for k in branch_node]) if str(k) in color])
@@ -699,7 +696,7 @@ def get_coordinates_and_labels(
 
   bbb_connection = []
   for x in branch_branch_branch_node:
-    bbb_connection.extend(edges[k][0] for k in range(len(edges)) if edges[k][1] == int(x[-1]))
+    bbb_connection.extend(e[0] for e in edges if e[1] == int(x[-1]))
   tmp = []
   for k in bbb_connection:
     tmp.append([(i, color.index(str(k))) for i, color in enumerate([k[::2][::-1] for k in branch_branch_node]) if str(k) in color])
@@ -851,9 +848,7 @@ def get_coordinates_and_labels(
       tmp = [branch_branch_y_pos[bbb_connection[k][0]][bbb_connection[k][1]]+2 for x in bbbx_pos]
       tmp[-1] = tmp[-1]-2
       bbb_y_pos[k] = tmp
-    elif len(bbb_sugar[k]) > 1 and bbb_sugar[k][-1] not in {'Fuc', 'Xyl'}:
-      bbb_y_pos[k] = [pos_value+2 for x in bbbx_pos]
-    elif bbb_sugar[k] == ['GlcNAc']:
+    elif (len(bbb_sugar[k]) > 1 and bbb_sugar[k][-1] not in {'Fuc', 'Xyl'}) or (bbb_sugar[k] == ['GlcNAc']):
       bbb_y_pos[k] = [pos_value+2 for x in bbbx_pos]
     elif bbb_sugar[k] in [['Fuc'], ['Xyl']]:
       bbb_y_pos[k] = [pos_value-2 for x in bbbx_pos]
@@ -951,18 +946,15 @@ def get_coordinates_and_labels(
 
   # Adjust y branch connections
   for k, k_val in enumerate(unique(branch_connection)):
-    tmp = [branch_y_pos[j][0] for j in unwrap(get_indices(branch_connection, [k_val]))]
-    if ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [k_val]))] and branch_connection.count(k_val) < 2 or ['Fuc'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [k_val]))] and branch_connection.count(0) > 1:  # and list(set(unwrap([branch_sugar[k] for k in unwrap(get_indices(unwrap(branch_sugar), ['Fuc']))]))) == ['Fuc']:
-      y_adj = 0
-    elif ['Xyl'] in [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [k_val]))] and branch_connection.count(k_val) < 2:
+    tmp2 = [branch_sugar[j] for j in unwrap(get_indices(branch_connection, [k_val]))]
+    if (['Fuc'] in tmp2 and branch_connection.count(k_val) < 2) or (['Fuc'] in tmp2 and branch_connection.count(0) > 1) or (['Xyl'] in tmp2 and branch_connection.count(k_val) < 2):
       y_adj = 0
     else:
+      tmp = [branch_y_pos[j][0] for j in unwrap(get_indices(branch_connection, [k_val]))]
       y_adj = (max(tmp) - main_sugar_y_pos[k_val])/2
     for j, j_val in enumerate(main_sugar_x_pos):
       if j_val <= main_sugar_x_pos[k_val]:
         main_sugar_y_pos[j] += y_adj
-      else:
-        pass
     for j, j_val in enumerate(branch_x_pos):
       if branch_connection[j] == k_val or branch_sugar[j] in [['Fuc'], ['Xyl']]:
         for n, n_val in enumerate(j_val):
@@ -994,8 +986,7 @@ def get_coordinates_and_labels(
     anti_node_crawl = [k for k in [list(nx.weakly_connected_components(graph2, k)) for k in split_node_connections] if int(main_node[-1]) in k]
     anti_node_crawl = [re.sub(r"_\S*$", '', str(k)) for k in unwrap(anti_node_crawl)]
     new_node_crawl = [[x for x in k if '_' not in str(x)] for k in node_crawl]
-    final_linkage = [tmp_b[unwrap(get_indices(tmp_a, [str(k[-1])]))[0]] for k in new_node_crawl]
-    final_linkage = [k[-1] for k in final_linkage]
+    final_linkage = [tmp_b[unwrap(get_indices(tmp_a, [str(k[-1])]))[0]][-1] for k in new_node_crawl]
     new_node_crawl = [new_node_crawl[i] for i in np.argsort(final_linkage)]
     pairwise_node_crawl = list(zip(new_node_crawl, new_node_crawl[1:]))
 
@@ -1014,8 +1005,8 @@ def get_coordinates_and_labels(
         lower_y, lower_x = [y_list[k[0]] for k in idx_A], [x_list[k[0]] for k in idx_A]
 
       diff_to_fix = []
-      for x_cor in list(set(upper_x)):
-        if x_cor in list(set(lower_x)):
+      for x_cor in set(upper_x):
+        if x_cor in set(lower_x):
           min_y_upper = min([upper_y[k] for k in unwrap(get_indices(upper_x, [x_cor]))])
           max_y_lower = max([lower_y[k] for k in unwrap(get_indices(lower_x, [x_cor]))])
           diff_to_fix.append(2 - (min_y_upper - max_y_lower))
@@ -1043,17 +1034,18 @@ def get_coordinates_and_labels(
             if [k[::2][::-1] for k in (branch_branch_node if list_to_update is branch_branch_y_pos else branch_branch_branch_node)][k][j] in str_upper:
               list_to_update[k][j] += to_add
 
-  main_conf = [k.group() if k is not None else '' for k in [re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in main_sugar_modification]]
-  main_sugar_modification = [re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in main_sugar_modification]
+  conf_pattern = r'^L-|^D-|(\d,\d+lactone)'
+  main_conf = [k.group() if k is not None else '' for k in [re.search(conf_pattern, k) for k in main_sugar_modification]]
+  main_sugar_modification = [re.sub(conf_pattern, '', k) for k in main_sugar_modification]
 
-  b_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_sugar_modification]]
-  branch_sugar_modification = [[re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_sugar_modification]
+  b_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(conf_pattern, k) for k in j] for j in branch_sugar_modification]]
+  branch_sugar_modification = [[re.sub(conf_pattern, '', k) for k in j] for j in branch_sugar_modification]
 
-  bb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in branch_branch_sugar_modification]]
-  branch_branch_sugar_modification = [[re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in branch_branch_sugar_modification]
+  bb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(conf_pattern, k) for k in j] for j in branch_branch_sugar_modification]]
+  branch_branch_sugar_modification = [[re.sub(conf_pattern, '', k) for k in j] for j in branch_branch_sugar_modification]
 
-  bbb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(r'^L-|^D-|(\d,\d+lactone)', k) for k in j] for j in bbb_sugar_modification]]
-  bbb_sugar_modification = [[re.sub(r'^L-|^D-|(\d,\d+lactone)', '', k) for k in j] for j in bbb_sugar_modification]
+  bbb_conf = [[k.group() if k is not None else '' for k in j] for j in [[re.search(conf_pattern, k) for k in j] for j in bbb_sugar_modification]]
+  bbb_sugar_modification = [[re.sub(conf_pattern, '', k) for k in j] for j in bbb_sugar_modification]
 
   data_combined = [
       [main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label],

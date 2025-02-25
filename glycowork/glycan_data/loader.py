@@ -387,7 +387,7 @@ def share_neighbor(edges, node1, node2):
 class HashableDict(dict):
   def __hash__(self):
       return hash(tuple(sorted(self.items())))
-  
+
   def __eq__(self, other):
       if isinstance(other, HashableDict):
           return tuple(sorted(self.items())) == tuple(sorted(other.items()))

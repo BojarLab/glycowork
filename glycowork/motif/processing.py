@@ -871,7 +871,7 @@ def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
 
 def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
                             ) -> str: # Basic IUPAC-condensed format
-  """Convert GlycoWorkbench nomenclature to IUPAC-condensed format."""
+  """Convert GlycoWorkBench nomenclature to IUPAC-condensed format."""
   glycan = glycan.replace('D-', '').replace('L-', '')  # Remove D- and L- prefixes
   # Handle floating parts if present
   floaty_parts = []
@@ -891,7 +891,7 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
   split_monos = [x for x in glycan.split('$MONO')[0].split('--')[1:]]
   split_monos[-1] = split_monos[-1] + ',p'
   # Convert monosaccharides to IUPAC format
-  converted_monos = [f"{x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})"+"".join(re.findall("[()]+", y)).replace("(","]").replace(")","[") for x, y in zip(split_monos, glycan.split('--'))]
+  converted_monos = [f"{x[1:]}(?1-?)" if re.match(r"^\?[A-Z]", x) else f"{x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})"+"".join(re.findall("[()]+", y)).replace("(","]").replace(")","[") for x, y in zip(split_monos, glycan.split('--'))]
   converted_glycan = ''.join(converted_monos[::-1])
   # Fix double branch notation if present
   if ']]' in converted_glycan:
@@ -903,6 +903,7 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
     converted_glycan = ''.join(f"{{{part}}}" for part in floaty_parts) + converted_glycan
   converted_glycan = re.sub(r'([SP])[\)\(]*\?1-\?\)\[(.*?)\]([^(]+)', r'\2\3O\1', converted_glycan)  # O-sulfate/phosphate case
   converted_glycan = re.sub(r'([SP])[\)\(]*\?1-(\d)\)\[(.*?)\]([^(]+)', r'\3\4\2\1', converted_glycan)  # numbered sulfate/phosphate
+  converted_glycan = converted_glycan.replace('((', '(').replace('))', ')')
   return f"{converted_glycan[:-6]}-ol" if 'freeEnd' in glycan else converted_glycan[:-6]
 
 
@@ -965,7 +966,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = wurcs_to_iupac(glycan)
   elif glycan.endswith('-OH'):
     glycan = glycam_to_iupac(glycan)
-  elif '$MONO' in glycan:
+  elif 'End--' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
   elif bool(re.match(r'^G\d+', glycan)):
     glycan = glytoucan_to_glycan([glycan])[0]
