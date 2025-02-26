@@ -740,6 +740,10 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
     assert canonicalize_iupac("Gal(b1-2)GlcNAc") == "Gal(b1-?)GlcNAc"
     assert canonicalize_iupac("GlcNAc(b1-3)Gal3S") == "GlcNAc(b1-?)Gal3S"
+    # Test lookup
+    assert canonicalize_iupac("LacNAc") == "Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("LEWISX") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc"
+    assert canonicalize_iupac("3'-FL") == "Fuc(a1-3)[Gal(b1-4)]Glc-ol"
     # Test branch ordering
     assert canonicalize_iupac("GalNAcβ1-4(NeuAcα2-3)GlcNAcβ1-3(NeuAcα2-3Galβ1-4GlcNAcβ1-6)Galβ1-4Glcol") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)[GalNAc(b1-4)]GlcNAc(b1-3)]Gal(b1-4)Glc-ol"
     assert canonicalize_iupac("Fucα1-2Galβ1-4GlcNAcβ1-3[NeuAcα2-3Galβ1-4(Fucα1-3)GlcNAcβ1-6]Galβ1-4GlcNAcβ1-3(Fucα1-2Galβ1-4GlcNAcβ1-6)Galβ1-4Glcol") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)Glc-ol"

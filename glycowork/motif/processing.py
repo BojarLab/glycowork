@@ -1,16 +1,21 @@
 import numpy as np
 import pandas as pd
 import copy
+import json
 import re
 from random import choice
 from functools import wraps
 from collections import defaultdict
+from pathlib import Path
 from itertools import permutations, combinations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
 from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
+mapping_path = Path(__file__).parent / "common_names.json"
+with open(mapping_path) as f:
+    GLYCAN_MAPPINGS = json.load(f)
 
 # for WURCS mapping
 monosaccharide_mapping = {
@@ -968,6 +973,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
   "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, and GlyTouCanIDs to standardized IUPAC-condensed format"
   glycan = glycan.strip()
+  mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
+  if mapped_glycan:
+    return mapped_glycan
   # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, GlyTouCanIDs
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)

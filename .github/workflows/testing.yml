@@ -29,6 +29,16 @@ jobs:
           miniforge-version: latest
           activate-environment: MPP
           use-mamba: true
+          channels: conda-forge,defaults
+          channel-priority: strict
+
+      - name: Cache conda environment
+        uses: actions/cache@v3
+        with:
+          path: /usr/share/miniconda/envs/MPP
+          key: ${{ runner.os }}-conda-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-conda-
 
       - name: Install environment
         shell: bash -l {0}
