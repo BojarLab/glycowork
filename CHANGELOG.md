@@ -19,14 +19,15 @@
 ##### Added ✨
 - GlyTouCanIDs are now another supported nomenclature in the context of Universal Input and can be used as inputs for functions etc, supported via improvements in `canonicalize_iupac` (eafb218)
 - Added `sanitize_iupac` to detect and fix chemical impossibilities (like two monosaccharides connected via the same hydroxyl group) and fix it (407cd6f)
-- Added `GLYCAN_MAPPINGS` dictionary to map commonly used glycan names to their IUPAC-condensed sequence
+- Added `GLYCAN_MAPPINGS` dictionary to map commonly used glycan names to their IUPAC-condensed sequence (36d33b8)
 
 ##### Changed 🔄
 - Moved `.motif.query.glytoucan_to_glycan` into `.motif.processing` (eafb218)
 - `canonicalize_iupac` will now use `sanitize_iupac` to auto-fix chemical impossibilities in input glycans (407cd6f)
 - More GlycoWorkBench sequence variants can now be handled via `glycoworkbench_to_iupac`/`canonicalize_iupac` (9eeaa3a, 436bf09)
 - Newly supported WURCS2 tokens: `GalNAc-ol` (436bf09)
-- `canonicalize_iupac` and most glycowork functions now also support common names, like "LacNAc" or "2'-FL", in the Universal Input framework, thanks to `GLYCAN_MAPPINGS`
+- `canonicalize_iupac` and most glycowork functions now also support common names, like "LacNAc" or "2'-FL", in the Universal Input framework, thanks to `GLYCAN_MAPPINGS` (36d33b8)
+- `get_class` can now identify repeating unit glycans and returns "repeat" in this case
 
 ##### Deprecated ⚠️
 - XXX
@@ -34,6 +35,7 @@
 #### annotate
 ##### Changed 🔄
 - Renamed `clean_up_heatmap` to `deduplicate_motifs` (407cd6f)
+- Allow sets of glycans as inputs in `get_k_saccharides`, in addition to lists of glycans
 
 #### draw
 ##### Changed 🔄

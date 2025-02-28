@@ -409,8 +409,10 @@ def enforce_class(glycan: str, # Glycan in IUPAC-condensed nomenclature
 
 
 def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
-            ) -> str: # Glycan class (O, N, free, lipid, lipid/free, or empty)
+            ) -> str: # Glycan class (repeat, O, N, free, lipid, lipid/free, or empty)
   "Determines glycan class"
+  if glycan.startswith('['):
+    return 'repeat'
   if glycan.endswith('-ol'):
     return 'free'
   if glycan.endswith(('1Cer', 'Ins')):
@@ -877,7 +879,7 @@ def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
 def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
                             ) -> str: # Basic IUPAC-condensed format
   """Convert GlycoWorkBench nomenclature to IUPAC-condensed format."""
-  glycan = glycan.replace('D-', '').replace('L-', '')  # Remove D- and L- prefixes
+  glycan = glycan.replace('D-', '').replace('L-', '').replace("--?[", '')  # Remove D- and L- prefixes
   repeat_pattern = r'--(\d+)\[(.*?)\]'
   main_part = glycan.split('$MONO')[0]
   while re.search(repeat_pattern, main_part):
@@ -886,7 +888,7 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
     repeat_unit = match.group(2)
     expanded = repeat_unit * repeat_count
     main_part = main_part[:match.start()] + expanded + main_part[match.end():]
-  glycan = main_part + glycan[glycan.index('$MONO'):] if '$MONO' in glycan else main_part
+  glycan = (main_part + glycan[glycan.index('$MONO'):] if '$MONO' in glycan else main_part).replace("--?]", '')
   # Handle floating parts if present
   floaty_parts = []
   if '}' in glycan:
@@ -964,8 +966,8 @@ def sanitize_iupac(glycan: str # Glycan string to check
   # Handle modifications (can't have a linkage to a position that's modified)
   glycan = re.sub(r'\(([ab?][1-2])-(\d)\)([A-Za-z]+\2[A-Z])', r'(\1-?)\3', glycan)
   # Handle branched cases with same linkage position
-  for match in re.finditer(r'([A-Za-z]+)\(([ab?][1-2])-(\d)\)\[([A-Za-z]+)\(([ab?][1-2])-(\3)\)\]', glycan):
-    glycan = glycan.replace(match.group(0), f'{match.group(1)}({match.group(2)}-?)[{match.group(4)}({match.group(5)}-?)]')
+  for match in re.finditer(r'([A-Za-z]+)\(([ab?][1-2])-(\d)\)\[((?:[A-Za-z]+\([ab?][1-2]-\d\))*)([A-Za-z]+)\(([ab?][1-2])-(\3)\)\]', glycan):
+    glycan = glycan.replace(match.group(0), f'{match.group(1)}({match.group(2)}-?)[{match.group(4)}{match.group(5)}({match.group(6)}-?)]')
   return glycan
 
 

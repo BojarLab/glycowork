@@ -362,15 +362,15 @@ def count_unique_subgraphs_of_size_k(
 
 @rescue_glycans
 def get_k_saccharides(
-   glycans: List[str], # List of IUPAC-condensed glycan sequences
+   glycans: Union[List[str], Set[str]], # List or set of IUPAC-condensed glycan sequences
    size: int = 2, # Number of monosaccharides per fragment
    up_to: bool = False, # Include fragments up to size k (adds monosaccharides)
    just_motifs: bool = False, # Return nested list of motifs instead of count DataFrame
    terminal: bool = False # Only count terminal fragments
    ) -> Union[pd.DataFrame, List[List[str]]]: # DataFrame of k-saccharide counts or list of motifs per glycan
   "Extracts k-saccharide fragments from glycan sequences with options for different fragment sizes and positions"
-  if not isinstance(glycans, list):
-    raise TypeError("The input has to be a list of glycans")
+  if not (isinstance(glycans, list) or isinstance(glycans, set)):
+    raise TypeError("The input has to be a list or set of glycans")
   if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
     raise Exception
   if up_to:

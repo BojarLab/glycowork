@@ -738,6 +738,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("S-Gal(b1-4)Glc-ol") == "GalOS(b1-4)Glc-ol"
     # Test sanitization
     assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
+    assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-2)]Man") == "Gal(b1-4)GlcNAc(b1-?)[Gal(b1-4)GlcNAc(b1-?)]Man"
     assert canonicalize_iupac("Gal(b1-2)GlcNAc") == "Gal(b1-?)GlcNAc"
     assert canonicalize_iupac("GlcNAc(b1-3)Gal3S") == "GlcNAc(b1-?)Gal3S"
     # Test lookup
@@ -779,6 +780,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac('freeEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315)--4b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315$MONO,Und,-2H,0,freeEnd')  == 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol'
     assert canonicalize_iupac("freeEnd--?D-GalNAc--3b1D-GlcNAc,p(--3a1D-Gal,p)--4a1D-Fuc,p$MONO,perMe,Na,0,freeEnd") == "Gal(a1-3)[Fuc(a1-4)]GlcNAc(b1-3)GalNAc-ol"
     assert canonicalize_iupac("freeEnd--??1D-Qui(--2b1D-Glc,p)--4b1D-Qui,p") == "Glc(b1-2)[Qui(b1-4)]Qui-ol"
+    assert canonicalize_iupac("freeEnd--?[--4b1L-Rha,p--3a1D-Glc,p((--3a1L-Rha,p)--4b1D-Glc,p--?])--6b1D-Glc,p") == "Rha(a1-3)[Glc(b1-4)][Glc(b1-6)]Glc(a1-3)Rha-ol"
     assert canonicalize_iupac("freeEnd--??1L-Ara--5[--5a1L-Ara,f--?]--5a1L-Ara,f$MONO,perMe,Na,0,freeEnd") == "Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Ara-ol"
     assert canonicalize_iupac("WURCS=2.0/5,7,6/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O]/1-2-3-4-2-5-4/a4-b1_b4-c1_c3-d1_c6-g1_d2-e1_e4-f1") == "GalNAc4S(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/8,15,14/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O][Aad21122h-2a_2-6_5*NCC/3=O]/1-2-3-4-2-5-6-7-8-4-2-5-6-8-5/a4-b1_a6-o1_b4-c1_c3-d1_c6-j1_d2-e1_e3-f1_e4-g1_h8-i2_j2-k1_k3-l1_k4-m1_h2-g3|g6_n2-m3|m6 ") == "Neu5Ac(a2-8)Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
@@ -1092,6 +1094,7 @@ def test_get_class():
     assert get_class("Glc1Cer") == "lipid"
     assert get_class("Gal(b1-4)Glc") == "lipid/free"
     assert get_class("UnknownGlycan") == ""
+    assert get_class("[Glc(b1-3)]Glc(b1-6)Glc") == "repeat"
 
 
 def test_enforce_class():
