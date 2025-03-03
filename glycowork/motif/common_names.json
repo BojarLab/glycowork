@@ -174,8 +174,11 @@
   "gd3": "Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc1Cer",
   "gd2": "GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer",
   "gd1a": "Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer",
+  "gd1-a": "Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer",
   "gd1b": "Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer",
+  "gd1-b": "Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer",
   "gd1c": "Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)Gal(b1-4)Glc1Cer",
+  "gd1-c": "Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)Gal(b1-4)Glc1Cer",
   "gd1α": "Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer",
   "gt3": "Neu5Ac(a2-8)Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-4)Glc1Cer",
   "gt2": "GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Ac(a2-8)Neu5Ac(a2-3)]Gal(b1-4)Glc1Cer",
@@ -349,8 +352,10 @@
   "larch arabinogalactan": "Gal(b1-3)Ara(a1-6)",
   "beta-glucan": "Glc(b1-3)Glc(b1-4)",
   "panose": "Glc(a1-6)Glc(a1-4)Glc",
+  "isomaltose": "Glc(a1-6)Glc",
   "isomaltotriose": "Glc(a1-6)Glc(a1-6)Glc",
   "maltotriose": "Glc(a1-4)Glc(a1-4)Glc",
   "cellotriose": "Glc(b1-4)Glc(b1-4)Glc",
-  "laminaritriose": "Glc(b1-3)Glc(b1-3)Glc"
+  "laminaritriose": "Glc(b1-3)Glc(b1-3)Glc",
+  "trehalose": "Glc(a1-1)Glc"
 }

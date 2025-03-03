@@ -347,6 +347,8 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
               kill_list.add(g)
   if order_by == "linkage":
     for g in glycans2:
+      if any(x in g for x in {"[Fuc(a1-3)[F", "[Fuc(a1-3)[N"}):
+        kill_list.add(g)
       if g[:g.index('[')].count('(') == 1 and g[g.index('['):g.index(']')].count('(') > 1 and g.count('[') > 1 and g.startswith('F'):
         kill_list.add(g)
       if pair_match := re.search(r'\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]', g):
@@ -1009,6 +1011,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     last_dash = glycan.rindex('-')
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash-1:])) and 'ol' not in glycan and glycan[last_dash+1:] not in lib:
       glycan = glycan[:last_dash]
+  # Anomeric indicator placed before monosaccharide (e.g., "bGal14GlcNAc")
+  glycan = re.sub(r'([ab])([A-Z][a-z]*)(\d)(\d*)', r'\2\1-\4', glycan)
   # Canonicalize usage of brackets and parentheses
   if bool(re.search(r'\([A-Zd3-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')

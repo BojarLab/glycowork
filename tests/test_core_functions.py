@@ -720,6 +720,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Fucα1-2Galβ1-4GlcNAcβ1-3(Fucα1-2Galβ1-4GlcNAcβ1-6)Galβ1-4GlcNAcβ1-3Galβ1-4Glcβ-") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"
     assert canonicalize_iupac("Neu5Aca2-3Galb1-3{Neu5Aca2-6}GalNAc") == "Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc"
     assert canonicalize_iupac("Gal(a1-2)[Man(a1-3)D-Rha(a1-3)][Rha2Me3Me(a1-2)D-Ara(b1-3)Rha(b1-4)Xyl(b1-4)]Fuc(a1-3)[Xyl(b1-4)]Glc") == "Rha2Me3Me(a1-2)D-Ara(b1-3)Rha(b1-4)Xyl(b1-4)[Man(a1-3)D-Rha(a1-3)][Gal(a1-2)]Fuc(a1-3)[Xyl(b1-4)]Glc"
+    assert canonicalize_iupac("bGal14GlcNAc") == "Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("aMan13(aMan16)Man") == "Man(a1-3)[Man(a1-6)]Man"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -1180,6 +1182,7 @@ def test_choose_correct_isoform():
     assert result == "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-4)][Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", order_by="linkage") == "Gal(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]GalNAc"
     assert choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", order_by="linkage") == "Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert choose_correct_isoform("Neu5Ac(a2-?)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", order_by="linkage") == "Neu5Ac(a2-?)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
 
 
 def test_bracket_removal():
