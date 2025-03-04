@@ -10,9 +10,7 @@ jobs:
           with:
             python-version: '3.9'
             cache: "pip"
-            cache-dependency-path:  |
-            settings.ini
-            pyproject.toml
+            cache-dependency-path: settings.ini
         - name: Test with nbdev
           shell: bash
           run: |

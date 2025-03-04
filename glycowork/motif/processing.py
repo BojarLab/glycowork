@@ -1012,7 +1012,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash-1:])) and 'ol' not in glycan and glycan[last_dash+1:] not in lib:
       glycan = glycan[:last_dash]
   # Anomeric indicator placed before monosaccharide (e.g., "bGal14GlcNAc")
-  glycan = re.sub(r'([ab])([A-Z][a-z]*)(\d)(\d*)', r'\2\1-\4', glycan)
+  glycan = re.sub(r'([ab])([A-Z][A-Za-z5]*)(\d)(\d*)', r'\2\1-\4', glycan)
+  # Anomeric indicator placed behind monosaccharide (e.g., "Galb14GlcNAc")
+  glycan = re.sub(r'([A-Z][A-Za-z5]*)([ab])([1-2])(\d)', r'\1\2\3-\4', glycan)
   # Canonicalize usage of brackets and parentheses
   if bool(re.search(r'\([A-Zd3-9]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')

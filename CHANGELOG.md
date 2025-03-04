@@ -28,7 +28,7 @@
 - Newly supported WURCS2 tokens: `GalNAc-ol` (436bf09)
 - `canonicalize_iupac` and most glycowork functions now also support common names, like "LacNAc" or "2'-FL", in the Universal Input framework, thanks to `GLYCAN_MAPPINGS` (36d33b8)
 - `get_class` can now identify repeating unit glycans and returns "repeat" in this case (74d35a0)
-- `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide
+- `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide (24c8e81)
 
 ##### Deprecated ⚠️
 - XXX
