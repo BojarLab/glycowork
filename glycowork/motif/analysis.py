@@ -274,9 +274,8 @@ def plot_embeddings(
       label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
-      if not Path('glycan_representations_v1_4.pkl').exists():
-          download_model("glycan_representations.pkl", local_path = 'glycan_representations_v1_4.pkl')
-      emb = pickle.load(open('glycan_representations_v1_4.pkl', 'rb'))
+      model_path = download_model("glycan_representations.pkl")
+      emb = pickle.load(open(model_path, 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
     embs = emb.values if isinstance(emb, pd.DataFrame) else np.vstack([emb[g] for g in glycans])
     # Calculate t-SNE of embeddings

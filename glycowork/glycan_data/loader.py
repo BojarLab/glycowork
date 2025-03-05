@@ -245,12 +245,12 @@ def build_custom_df(df: pd.DataFrame, # df_glycan / sugarbase
   return df
 
 
-def download_model(file_id: str, # Filename in the HuggingFace repo
-                  local_path: Union[str, Path] = 'model_weights.pt' # where to save model file
-                 ) -> None:
+def download_model(file_id: str # Filename in the HuggingFace repo
+                 ) -> str:  # file path to cached model
   "Download the model weights file from HuggingFace Hub"
-  hf_hub_download(repo_id = "DBojar/glycowork_models", filename = file_id, local_file_path = local_path)
+  file_path = hf_hub_download(repo_id = "DBojar/glycowork_models", filename = file_id)
   print("Download completed.")
+  return file_path
 
 
 class DataFrameSerializer:
