@@ -2,6 +2,7 @@
 
 ## [1.6.0]
 - All glycan graphs are now directed graphs (`nx.Graph` --> `nx.DiGraph`), flowing from the root (reducing end) to the tips (non-reducing ends), which has led to code changes in quite few functions. Some functions run faster now, yet outputs are unaffected (03dfad6)
+- Added `huggingface_hub>=0.16.0` as a new dependency to facilitate more robust model distribution
 
 ## glycan_data
 #### loader
@@ -13,6 +14,7 @@
 - Renamed `Hyluronan` in `motif_list` into `Hyaluronan` (07c9c12)
 - Removed `Nglycolyl_GM2` from `motif_list`; it's captured by `GM2` (07c9c12)
 - Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities (9eeaa3a, 436bf09)
+- `download_model` will now download model weights and representations from the HuggingFace Hub
 
 ### motif
 #### processing
@@ -26,9 +28,9 @@
 - `canonicalize_iupac` will now use `sanitize_iupac` to auto-fix chemical impossibilities in input glycans (407cd6f)
 - More GlycoWorkBench sequence variants can now be handled via `glycoworkbench_to_iupac`/`canonicalize_iupac` (9eeaa3a, 436bf09, 74d35a0)
 - Newly supported WURCS2 tokens: `GalNAc-ol` (436bf09)
-- `canonicalize_iupac` and most glycowork functions now also support common names, like "LacNAc" or "2'-FL", in the Universal Input framework, thanks to `GLYCAN_MAPPINGS` (36d33b8)
+- `canonicalize_iupac` and most glycowork functions now also support common names, like "LacNAc" or "2'-FL", in the Universal Input framework, thanks to `GLYCAN_MAPPINGS` (36d33b8, ab42dbb)
 - `get_class` can now identify repeating unit glycans and returns "repeat" in this case (74d35a0)
-- `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide (24c8e81)
+- `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide (24c8e81, ab42dbb)
 
 ##### Deprecated ⚠️
 - XXX

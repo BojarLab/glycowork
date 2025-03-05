@@ -6,8 +6,7 @@ from pathlib import Path
 from itertools import chain
 from importlib import resources
 from typing import Any, Dict, List, Union
-
-import requests
+from huggingface_hub import hf_hub_download
 
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
   motif_list = pd.read_csv(f)
@@ -246,20 +245,11 @@ def build_custom_df(df: pd.DataFrame, # df_glycan / sugarbase
   return df
 
 
-def download_model(file_id: str, # Google Drive file ID
+def download_model(file_id: str, # Filename in the HuggingFace repo
                   local_path: Union[str, Path] = 'model_weights.pt' # where to save model file
                  ) -> None:
-  "Download the model weights file from Google Drive"
-  file_id = file_id.split('/d/')[1].split('/view')[0]
-  url = f'https://drive.google.com/uc?id={file_id}'
-  headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-  response = requests.get(url, stream = True, timeout = 30, headers = headers)
-  if response.status_code == 200:
-    with open(local_path, 'wb') as f:
-      f.write(response.content)
-    print("Download completed.")
-  else:
-    print(f"Download failed. Status code: {response.status_code}")
+  "Download the model weights file from HuggingFace Hub"
+  hf_hub_download(repo_id = "DBojar/glycowork_models", filename = filename, local_file_path = local_path)
   print("Download completed.")
 
 

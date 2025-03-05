@@ -347,7 +347,7 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
               kill_list.add(g)
   if order_by == "linkage":
     for g in glycans2:
-      if any(x in g for x in {"[Fuc(a1-3)[F", "[Fuc(a1-3)[N"}):
+      if any(x in g for x in {"[Fuc(a1-3)[F", "[Fuc(a1-3)[N"}) or g.startswith(("Fuc(a1-3)[F", "Fuc(a1-3)[N")):
         kill_list.add(g)
       if g[:g.index('[')].count('(') == 1 and g[g.index('['):g.index(']')].count('(') > 1 and g.count('[') > 1 and g.startswith('F'):
         kill_list.add(g)

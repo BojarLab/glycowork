@@ -307,7 +307,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
         if hidden_dim != 128:
           raise ValueError("Hidden dimension must be 128 for pretrained model")
         if not Path("SweetNet_v1_4.pt").exists():
-          download_model("https://drive.google.com/file/d/1arIT31FpA1FCKSDVUuntc9-UQEUpcXVz/view?usp=sharing", local_path = "SweetNet_v1_4.pt")
+          download_model("glycowork_sweetnet_species", local_path = "SweetNet_v1_4.pt")
         model.load_state_dict(torch.load("SweetNet_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     elif model_type == 'LectinOracle':
@@ -315,7 +315,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
         if not Path("LectinOracle_v1_4.pt").exists():
-          download_model("https://drive.google.com/file/d/1g5GnwJvGW0Zis2zwxjRsZE9t-ueV6-cP/view?usp=sharing", local_path = "LectinOracle_v1_4.pt")
+          download_model("glycowork_lectinoracle", local_path = "LectinOracle_v1_4.pt")
         model.load_state_dict(torch.load("LectinOracle_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     elif model_type == 'LectinOracle_flex':
@@ -323,7 +323,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
         if not Path("LectinOracle_flex_v1_4.pt").exists():
-          download_model("https://drive.google.com/file/d/1h051ql_LTfzQjuTpDzTrAqNTAPDpKqwB/view?usp=sharing", local_path = "LectinOracle_flex_v1_4.pt")
+          download_model("glycowork_lectinoracle_flex", local_path = "LectinOracle_flex_v1_4.pt")
         model.load_state_dict(torch.load("LectinOracle_flex_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     elif model_type == 'NSequonPred':
@@ -331,7 +331,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
         if not Path("NSequonPred_v1_4.pt").exists():
-          download_model("https://drive.google.com/file/d/12KQOfwCAUkXwCKw5DHYTh3uHEjXsJzSA/view?usp=sharing", local_path = "NSequonPred_v1_4.pt")
+          download_model("NSequonPred_batch32", local_path = "NSequonPred_v1_4.pt")
         model.load_state_dict(torch.load("NSequonPred_v1_4.pt", map_location = device, weights_only = True))
       model = model.to(device)
     else:
