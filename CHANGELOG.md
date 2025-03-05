@@ -2,7 +2,7 @@
 
 ## [1.6.0]
 - All glycan graphs are now directed graphs (`nx.Graph` --> `nx.DiGraph`), flowing from the root (reducing end) to the tips (non-reducing ends), which has led to code changes in quite few functions. Some functions run faster now, yet outputs are unaffected (03dfad6)
-- Added `huggingface_hub>=0.16.0` as a new dependency to facilitate more robust model distribution
+- Added `huggingface_hub>=0.16.0` as a new dependency to facilitate more robust model distribution (22f6b8f)
 
 ## glycan_data
 #### loader
@@ -14,7 +14,7 @@
 - Renamed `Hyluronan` in `motif_list` into `Hyaluronan` (07c9c12)
 - Removed `Nglycolyl_GM2` from `motif_list`; it's captured by `GM2` (07c9c12)
 - Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities (9eeaa3a, 436bf09)
-- `download_model` will now download model weights and representations from the HuggingFace Hub
+- `download_model` will now download model weights and representations from the HuggingFace Hub (22f6b8f)
 
 ### motif
 #### processing

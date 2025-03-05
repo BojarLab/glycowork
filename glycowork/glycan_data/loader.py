@@ -249,7 +249,7 @@ def download_model(file_id: str, # Filename in the HuggingFace repo
                   local_path: Union[str, Path] = 'model_weights.pt' # where to save model file
                  ) -> None:
   "Download the model weights file from HuggingFace Hub"
-  hf_hub_download(repo_id = "DBojar/glycowork_models", filename = filename, local_file_path = local_path)
+  hf_hub_download(repo_id = "DBojar/glycowork_models", filename = file_id, local_file_path = local_path)
   print("Download completed.")
 
 
