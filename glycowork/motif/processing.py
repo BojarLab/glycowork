@@ -976,7 +976,7 @@ def sanitize_iupac(glycan: str # Glycan string to check
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
   "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, and GlyTouCanIDs to standardized IUPAC-condensed format"
-  glycan = glycan.strip()
+  glycan = glycan.strip().replace('–', '-').replace(' ', '')
   mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
   if mapped_glycan:
     return mapped_glycan

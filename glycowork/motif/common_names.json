@@ -364,6 +364,8 @@
   "trehalose": "Glc(a1-1)Glc",
   "sucrose": "Glc(a1-2)Fruf",
   "turanose": "Glc(a1-3)Fruf",
+  "lactulose": "Gal(b1-4)Fruf",
+  "raffinose": "Gal(a1-6)Glc(a1-2)Fruf",
   "fucose": "Fuc",
   "galactose": "Gal",
   "mannose": "Man"
