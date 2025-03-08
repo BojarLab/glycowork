@@ -76,7 +76,7 @@ def preprocess_data(
   if transform is None:
     transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
   if transform == "ALR":
-    df = get_additive_logratio_transformation(df, group1 if experiment == "diff" else df.columns[1:], group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
+    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
   elif transform == "CLR":
     if monte_carlo and not motifs:
       df = pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
@@ -125,13 +125,11 @@ def get_pvals_motifs(
       df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / (std_devs + 1e-6)
     # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
-                                motifs = motifs, feature_set = feature_set, condense = True,
-                                custom_motifs = custom_motifs)
+                                motifs = motifs, feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
     # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
       df = df.set_index(glycan_col_name)
-      df_motif = pd.concat([pd.concat([df.iloc[:, k],
-                                   df_motif], axis = 1).dropna() for k in range(len(df.columns))], axis = 0)
+      df_motif = pd.concat([pd.concat([df.iloc[:, k], df_motif], axis = 1).dropna() for k in range(len(df.columns))], axis = 0)
       cols = df_motif.columns.tolist()[1:] + [df_motif.columns.tolist()[0]]
       df_motif = df_motif[cols]
     else:
@@ -248,8 +246,7 @@ def get_heatmap(
   plt.ylabel('Glycans' if not motifs else 'Motifs')
   plt.tight_layout()
   if filepath and not return_plot:
-    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300,
-                bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
     plt.close(g.fig)
   elif return_plot:
     return g
@@ -298,8 +295,7 @@ def plot_embeddings(
       plt.legend(bbox_to_anchor = (1.05, 1), loc = 2, borderaxespad = 0.)
     plt.tight_layout()
     if filepath:
-      plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300,
-                  bbox_inches = 'tight')
+      plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
     plt.show()
 
 
@@ -384,8 +380,7 @@ def characterize_monosaccharide(
     if len(cou_k2) > 1:
       cou_df2 = pd.DataFrame({'monosaccharides': cou_k2, 'counts': cou_v2})
       sns.histplot(data = cou_df2, x = 'monosaccharides', weights = 'counts',
-                     hue = 'monosaccharides', shrink = 0.8, legend = False,
-                     ax = a0, palette = palette, alpha = 0.75)
+                     hue = 'monosaccharides', shrink = 0.8, legend = False, ax = a0, palette = palette, alpha = 0.75)
     else:
       sns.barplot(x = cou_k2, y = cou_v2, ax = a0, color = "cornflowerblue")
     sns.despine(left = True, bottom = True)
@@ -396,8 +391,7 @@ def characterize_monosaccharide(
   fig.suptitle(f'Characterizing {sugar}')
   fig.tight_layout()
   if filepath:
-    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300,
-                  bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
   plt.show()
 
 
@@ -466,8 +460,7 @@ def get_pca(
   ax = sns.scatterplot(x = pc_x-1, y = pc_y-1, data = df_pca, hue = color, style = shape)
   if color or shape:
     plt.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
-  ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
-           ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
+  ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance', ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
   # save to file
   if filepath:
     plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
@@ -703,8 +696,7 @@ def get_volcano(
       plt.text(x[i], y[i], labels[i])
   # Save to file
   if filepath:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
-                  bbox_inches = 'tight')
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
     if annotate_volcano:
       from glycowork.motif.draw import annotate_figure
       annotate_figure(filepath, filepath = filepath.split('.')[0]+'.pdf', scale_by_DE_res = df_res,
@@ -823,8 +815,7 @@ def get_meta_analysis(
       ax.spines['right'].set_visible(False)
       ax.spines['top'].set_visible(False)
       plt.tight_layout()
-      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
-                    bbox_inches = 'tight')
+      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
     return combined_effect_size, p_value
 
 
@@ -1321,12 +1312,10 @@ def get_glycoshift_per_site(
   df = df.reset_index()
   results = [
         clr_transformation(group_df[group1 + group2], group1, group2, gamma = gamma, custom_scale = custom_scale)
-        .assign(Glycosite = glycosite)
-        for glycosite, group_df in df.groupby('Glycosite')
+        .assign(Glycosite = glycosite) for glycosite, group_df in df.groupby('Glycosite')
     ]
   df = pd.concat(results, ignore_index = True)
   df = pd.concat([df, preserved_data.reset_index(drop = True)], axis = 1)
-  df_long = pd.melt(df, id_vars = ['Glycosite', 'Glycoform'] + glycan_features,
-                  var_name = 'Sample', value_name = 'Abundance')
+  df_long = pd.melt(df, id_vars = ['Glycosite', 'Glycoform'] + glycan_features, var_name = 'Sample', value_name = 'Abundance')
   df_long['Condition'] = df_long['Sample'].apply(lambda x: 0 if x in group1 else 1)
   return process_glm_results(df_long, alpha, glycan_features)

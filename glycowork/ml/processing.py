@@ -90,8 +90,7 @@ def dataset_to_dataloader(glycan_list: List[str], # list of IUPAC-condensed glyc
   if libr is None:
     libr = lib
   # Converting glycans and labels to PyTorch Geometric Data objects
-  glycan_graphs = dataset_to_graphs(glycan_list, labels,
-                                    libr = libr, label_type = label_type)
+  glycan_graphs = dataset_to_graphs(glycan_list, labels, libr = libr, label_type = label_type)
   # Adding (optional) extra feature to the Data objects
   if extra_feature is not None:
     for graph, feature in zip(glycan_graphs, extra_feature):

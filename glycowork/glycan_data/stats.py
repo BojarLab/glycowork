@@ -542,8 +542,7 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
       clr_adjusted[:, group1i] = np.log2(df[group1]) + norm.rvs(loc = geometric_mean[group1i], scale = gamma, random_state = local_rng, size = (df.shape[0], len(group1)))
   elif not group2 and isinstance(custom_scale, dict):
     gamma = max(gamma, 0.1)
-    for idx in range(df.shape[1]):
-      group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
+    for idx, group_id in enumerate(group1):
       scale_factor = custom_scale.get(group_id, 1)
       clr_adjusted[:, idx] = np.log2(df.iloc[:, idx]) + norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = local_rng, size = df.shape[0])
   else:

@@ -277,10 +277,8 @@ class SAM(torch.optim.Optimizer):
         "Sharpness-Aware Minimization (SAM) optimizer adapted from https://github.com/davda54/sam"
         assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
         assert alpha >= 0.0, f"Invalid alpha, should be non-negative: {alpha}"
-
         defaults = dict(rho = rho, alpha = alpha, adaptive = adaptive, **kwargs)
         super(SAM, self).__init__(params, defaults)
-
         self.base_optimizer = base_optimizer(self.param_groups, **kwargs)
         self.param_groups = self.base_optimizer.param_groups
         self.defaults.update(self.base_optimizer.defaults)
@@ -293,7 +291,6 @@ class SAM(torch.optim.Optimizer):
         grad_norm = self._grad_norm()
         for group in self.param_groups:
             scale = group["rho"] / (grad_norm + 1e-12)
-
             for p in group["params"]:
                 if p.grad is None:
                     continue
@@ -302,7 +299,6 @@ class SAM(torch.optim.Optimizer):
                     self.state[p]["old_g"] = p.grad.data.clone()
                 e_w = (torch.pow(p, 2) if group["adaptive"] else 1.0) * p.grad * scale.to(p)
                 p.add_(e_w)  # Climb to the local maximum "w + e(w)"
-
         if zero_grad:
             self.zero_grad()
 
@@ -315,11 +311,9 @@ class SAM(torch.optim.Optimizer):
                 if p.grad is None:
                     continue
                 p.data = self.state[p]["old_p"]  # Get back to "w" from "w + e(w)"
-
         if self.minimize_surrogate_gap:
             self._gradient_decompose()
         self.base_optimizer.step()  # Do the actual "sharpness-aware" update
-
         if zero_grad:
             self.zero_grad()
 
@@ -327,7 +321,6 @@ class SAM(torch.optim.Optimizer):
     def step(self, closure: Optional[Callable] = None) -> None:
         assert closure is not None, "Sharpness Aware Minimization requires closure, but it was not provided"
         closure = torch.enable_grad()(closure)  # The closure should do a full forward-backward pass
-
         self.first_step(zero_grad = True)
         closure()
         self.second_step()
@@ -338,17 +331,13 @@ class SAM(torch.optim.Optimizer):
             for p in group['params']:
                 if p.grad is None:
                     continue
-
                 coeff_nomin += (self.state[p]['old_g'] * p.grad).sum()
                 coeff_denom += p.grad.pow(2).sum()
-
         coeff = coeff_nomin / (coeff_denom + 1e-12)
-
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
                     continue
-
                 rejection = self.state[p]['old_g'] - coeff * p.grad
                 p.grad.data.add_(rejection, alpha=-group["alpha"])
 
@@ -357,10 +346,8 @@ class SAM(torch.optim.Optimizer):
         norm = torch.norm(
                     torch.stack([
                         ((torch.abs(p) if group["adaptive"] else 1.0) * p.grad).norm(p=2).to(shared_device)
-                        for group in self.param_groups for p in group["params"]
-                        if p.grad is not None
-                    ]),
-                    p = 2
+                        for group in self.param_groups for p in group["params"] if p.grad is not None
+                    ]), p = 2
                )
         return norm
 
@@ -419,28 +406,27 @@ def training_setup(model: torch.nn.Module, # graph neural network for analyzing 
     "prepares optimizer, learning rate scheduler, and loss criterion for model training"
     # Choose optimizer & learning rate scheduler
     if mode in {'multiclass', 'multilabel'}:
-        optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, alpha = gsam_alpha, lr = lr,
+      optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, alpha = gsam_alpha, lr = lr,
                            weight_decay = weight_decay)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
+      scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
                                                                factor = factor)
     else:
-        optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr,
-                                         weight_decay = weight_decay)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
+      optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr, weight_decay = weight_decay)
+      scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
                                                                factor = factor)
     # Choose loss function
     if mode == 'multiclass':
-        if num_classes == 2:
-            raise Exception("You have to set the number of classes via num_classes")
-        criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
+      if num_classes == 2:
+        raise Exception("You have to set the number of classes via num_classes")
+      criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
     elif mode == 'multilabel':
-        criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
+      criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
     elif mode == 'binary':
-        criterion = Poly1CrossEntropyLoss(num_classes = 2).to(device)
+      criterion = Poly1CrossEntropyLoss(num_classes = 2).to(device)
     elif mode == 'regression':
-        criterion = torch.nn.MSELoss().to(device)
+      criterion = torch.nn.MSELoss().to(device)
     else:
-        print("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
+      print("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
     return optimizer_ft, scheduler, criterion
 
 
@@ -458,32 +444,32 @@ def train_ml_model(X_train: Union[pd.DataFrame, List], # training data/glycans
     "wrapper function to train standard machine learning models on glycans"
     # Choose model type
     if mode == 'classification':
-        model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,  max_depth = 3)
+      model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,  max_depth = 3)
     elif mode == 'regression':
-        model = xgb.XGBRegressor(random_state = 42, n_estimators = 100, objective = 'reg:squarederror')
+      model = xgb.XGBRegressor(random_state = 42, n_estimators = 100, objective = 'reg:squarederror')
     # Get features
     if isinstance(X_train, list) and isinstance(X_train[0], str):
-        feature_calc = True
-        print("\nYou provided glycans without features but did not specify feature_calc; we'll step in and calculate features with the default feature_set but feel free to re-run and change.")
+      feature_calc = True
+      print("\nYou provided glycans without features but did not specify feature_calc; we'll step in and calculate features with the default feature_set but feel free to re-run and change.")
     if feature_calc:
-        print("\nCalculating Glycan Features...")
-        X_train = annotate_dataset(X_train, feature_set = feature_set, condense = True)
-        X_test = annotate_dataset(X_test, feature_set = feature_set, condense = True)
-        # Get the difference between the columns
-        missing_in_X_train = set(X_test.columns) - set(X_train.columns)
-        missing_in_X_test = set(X_train.columns) - set(X_test.columns)
-        # Fill in the missing columns
-        for k in missing_in_X_train:
-            X_train[k] = 0
-        for k in missing_in_X_test:
-            X_test[k] = 0
-        X_train = X_train.apply(pd.to_numeric)
-        X_test = X_test.apply(pd.to_numeric)
+      print("\nCalculating Glycan Features...")
+      X_train = annotate_dataset(X_train, feature_set = feature_set, condense = True)
+      X_test = annotate_dataset(X_test, feature_set = feature_set, condense = True)
+      # Get the difference between the columns
+      missing_in_X_train = set(X_test.columns) - set(X_train.columns)
+      missing_in_X_test = set(X_train.columns) - set(X_test.columns)
+      # Fill in the missing columns
+      for k in missing_in_X_train:
+        X_train[k] = 0
+      for k in missing_in_X_test:
+        X_test[k] = 0
+      X_train = X_train.apply(pd.to_numeric)
+      X_test = X_test.apply(pd.to_numeric)
     if additional_features_train is not None:
-        additional_features_train.index = X_train.index
-        additional_features_test.index = X_test.index
-        X_train = pd.concat([X_train, additional_features_train], axis = 1)
-        X_test = pd.concat([X_test, additional_features_test], axis = 1)
+      additional_features_train.index = X_train.index
+      additional_features_test.index = X_test.index
+      X_train = pd.concat([X_train, additional_features_train], axis = 1)
+      X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")
     model.fit(X_train, y_train)
     # Keep track of column order & re-order test set accordingly
@@ -493,11 +479,11 @@ def train_ml_model(X_train: Union[pd.DataFrame, List], # training data/glycans
     preds = model.predict(X_test)
     # Get metrics of trained model
     if mode == 'classification':
-        out = accuracy_score(y_test, preds)
-        print("Accuracy of trained model on separate validation set: " + str(out))
+      out = accuracy_score(y_test, preds)
+      print("Accuracy of trained model on separate validation set: " + str(out))
     elif mode == 'regression':
-        out = mean_squared_error(y_test, preds)
-        print("Mean squared error of trained model on separate validation set: " + str(out))
+      out = mean_squared_error(y_test, preds)
+      print("Mean squared error of trained model on separate validation set: " + str(out))
     return (model, X_train, X_test) if return_features else model
 
 
@@ -510,8 +496,7 @@ def analyze_ml_model(model: xgb.XGBModel # trained ML model from train_ml_model
     feat_imp = feat_imp.sort_values(by = feat_imp.columns.values.tolist()[0], ascending = False)
     feat_imp = feat_imp[:10]
     # Plot important features
-    sns.barplot(x = feat_imp.index.values.tolist(),
-                y = feat_imp[feat_imp.columns.values.tolist()[0]],
+    sns.barplot(x = feat_imp.index.values.tolist(), y = feat_imp[feat_imp.columns.values.tolist()[0]],
                 color = 'cornflowerblue')
     sns.despine(left = True, bottom = True)
     plt.xticks(rotation = 90)

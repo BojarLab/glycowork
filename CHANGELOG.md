@@ -32,6 +32,9 @@
 - `get_class` can now identify repeating unit glycans and returns "repeat" in this case (74d35a0)
 - `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide (24c8e81, ab42dbb)
 
+##### Fixed 🐛
+- Fixed an edge case in `find_isomorphs`, in which core-fucose containing glycans had some wrong re-orderings in the output
+
 ##### Deprecated ⚠️
 - XXX
 

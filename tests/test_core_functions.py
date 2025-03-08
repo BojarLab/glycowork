@@ -116,7 +116,9 @@ from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRa
 from glycowork.ml.inference import (SimpleDataset, sigmoid, glycans_to_emb, get_multi_pred, get_lectin_preds,
                           get_esm1b_representations, get_Nsequon_preds
 )
-
+device = "cpu"
+if torch.cuda.is_available():
+    device = "cuda:0"
 
 @contextmanager
 def suppress_pydot_warnings():
@@ -1185,6 +1187,8 @@ def test_choose_correct_isoform():
     assert choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", order_by="linkage") == "Gal(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]GalNAc"
     assert choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", order_by="linkage") == "Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert choose_correct_isoform("Neu5Ac(a2-?)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", order_by="linkage") == "Neu5Ac(a2-?)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc",
+                      order_by = "linkage") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
 
 
 def test_bracket_removal():
@@ -1877,6 +1881,8 @@ def test_replace_outliers_with_iqr_bounds():
     assert max(result) < 10  # Outlier should be replaced
     assert len(result) == len(data)
     data = pd.Series(['Neu5Ac', 1, 2, 3, 10, 2, 3, 1])  # 10 is an outlier
+    result = replace_outliers_with_IQR_bounds(data)
+    data = pd.Series(['Neu5Ac', 10, 20, 30, 1, 20, 30, 10])  # 1 is an outlier
     result = replace_outliers_with_IQR_bounds(data)
 
 
@@ -3510,6 +3516,8 @@ def test_get_glycanova():
     results_no_posthoc, posthoc_empty = get_glycanova(df, groups, posthoc=False, impute=False)
     assert isinstance(results_no_posthoc, pd.DataFrame)
     assert posthoc_empty == {}  # Should be empty dict when posthoc=False
+    clr_dict = {1: 2.0, 2: 1.0, 3: 1.5}
+    results, posthoc = get_glycanova(df, groups, impute=False, custom_scale=clr_dict)
 
 
 def test_select_grouping():
@@ -5875,7 +5883,7 @@ def mock_model(mode):
         'classification': 2,
         'multilabel': 2
     }
-    return SimpleModel(output_sizes[mode])
+    return SimpleModel(output_sizes[mode]).to(device)
 
 
 @pytest.fixture
@@ -5968,10 +5976,10 @@ def test_poly1_cross_entropy_loss(_):
 def test_sam_optimizer(mock_model, mode):
     if mode == "classification":
         # Create a dummy input and target
-        x = torch.randint(0, 10, (6,))  # 6 nodes with features in range [0, 10)
-        edge_index = torch.tensor([[0, 1, 2], [1, 2, 0]], dtype=torch.long)  # Some edges
-        batch = torch.tensor([0, 0, 0, 1, 1, 1])  # Two graphs
-        target = torch.tensor([0, 1])  # Labels for the two graphs
+        x = torch.randint(0, 10, (6,)).to(device)  # 6 nodes with features in range [0, 10)
+        edge_index = torch.tensor([[0, 1, 2], [1, 2, 0]], dtype=torch.long).to(device)  # Some edges
+        batch = torch.tensor([0, 0, 0, 1, 1, 1]).to(device)  # Two graphs
+        target = torch.tensor([0, 1]).to(device)  # Labels for the two graphs
         # Create optimizer
         sam = SAM(
             mock_model.parameters(),
@@ -5982,14 +5990,14 @@ def test_sam_optimizer(mock_model, mode):
         )
         # Forward pass
         output = mock_model(x, edge_index, batch)
-        loss = torch.nn.functional.cross_entropy(output, target)
+        loss = torch.nn.functional.cross_entropy(output, target).to(device)
         # Backward pass to create gradients
         loss.backward()
         # Now test SAM steps
         sam.first_step(zero_grad=True)
         # Another forward-backward pass
         output = mock_model(x, edge_index, batch)
-        loss = torch.nn.functional.cross_entropy(output, target)
+        loss = torch.nn.functional.cross_entropy(output, target).to(device)
         loss.backward()
         sam.second_step(zero_grad=True)
         # Verify state
@@ -6288,36 +6296,8 @@ def test_prep_model(model_type: str, num_classes: int, expected_class: type):
 
 
 def test_prep_model_trained():
-    mock_state_dict = {
-        "conv1.lin_rel.weight": torch.randn(128, 128),
-        "conv1.lin_rel.bias": torch.randn(128),
-        "conv1.lin_root.weight": torch.randn(128, 128),
-        "conv2.lin_rel.weight": torch.randn(128, 128),
-        "conv2.lin_rel.bias": torch.randn(128),
-        "conv2.lin_root.weight": torch.randn(128, 128),
-        "conv3.lin_rel.weight": torch.randn(128, 128),
-        "conv3.lin_rel.bias": torch.randn(128),
-        "conv3.lin_root.weight": torch.randn(128, 128),
-        "item_embedding.weight": torch.randn(len(lib)+1, 128),  # lib_size + 1, hidden_dim
-        "lin1.weight": torch.randn(1024, 128),
-        "lin1.bias": torch.randn(1024),
-        "lin2.weight": torch.randn(128, 1024),
-        "lin2.bias": torch.randn(128),
-        "lin3.weight": torch.randn(1, 128),
-        "lin3.bias": torch.randn(1),
-        "bn1.weight": torch.randn(1024),
-        "bn1.bias": torch.randn(1024),
-        "bn1.running_mean": torch.randn(1024),
-        "bn1.running_var": torch.randn(1024),
-        "bn2.weight": torch.randn(128),
-        "bn2.bias": torch.randn(128),
-        "bn2.running_mean": torch.randn(128),
-        "bn2.running_var": torch.randn(128),
-    }
-    with patch("os.path.exists", return_value=True), \
-         patch("torch.load", return_value=mock_state_dict):
-        model = prep_model("SweetNet", num_classes=1, trained=True)
-        assert isinstance(model, SweetNet)
+    model = prep_model("LectinOracle", num_classes=1, trained=True)
+    assert isinstance(model, LectinOracle)
 
 
 @pytest.mark.parametrize("invalid_input", [
@@ -6361,9 +6341,9 @@ def mock_models():
         def forward(self, x):
             return torch.randn(x.shape[0], 1)
     return {
-        'sweetnet': MockSweetNet().eval(),
-        'lectin_oracle': MockLectinOracle().eval(),
-        'nsequon_pred': MockNSequonPred().eval()
+        'sweetnet': MockSweetNet().to(device).eval(),
+        'lectin_oracle': MockLectinOracle().to(device).eval(),
+        'nsequon_pred': MockNSequonPred().to(device).eval()
     }
 
 
@@ -6525,17 +6505,16 @@ def test_mock_data(mock_dataloader):
     assert (data.batch == 1).sum() == 3  # 3 nodes in second graph
 
 
-@patch('torch.cuda.is_available', return_value=False)
-def test_train_model_all_modes(mock_cuda, mode, expected_metrics, mock_model, mock_dataloader):
+def test_train_model_all_modes(mode, expected_metrics, mock_model, mock_dataloader):
     # Configure based on mode
     if mode == 'regression':
-        criterion = nn.MSELoss()
+        criterion = nn.MSELoss().to(device)
         optimizer = torch.optim.Adam(mock_model.parameters(), lr=0.1)
     elif mode == 'classification':
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss().to(device)
         optimizer = SAM(mock_model.parameters(), torch.optim.SGD, lr=0.1)
     else:  # multilabel
-        criterion = nn.BCEWithLogitsLoss()
+        criterion = nn.BCEWithLogitsLoss().to(device)
         optimizer = SAM(mock_model.parameters(), torch.optim.SGD, lr=0.1)
     scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer.base_optimizer if isinstance(optimizer, SAM) else optimizer,
@@ -6564,8 +6543,7 @@ def test_train_model_all_modes(mock_cuda, mode, expected_metrics, mock_model, mo
             assert all(not np.isnan(v) for v in metric)
 
 
-@patch('torch.cuda.is_available', return_value=False)
-def test_train_model_plotting(mock_cuda, mock_model, mock_dataloader):
+def test_train_model_plotting(mock_model, mock_dataloader):
     if mode == "classification":
         criterion = nn.CrossEntropyLoss()
         optimizer = SAM(mock_model.parameters(), torch.optim.SGD, lr=0.1, alpha=0.1)
