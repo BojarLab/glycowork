@@ -196,7 +196,7 @@ def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
       if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
         temp.add(re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1))
   out_list.update(temp)
-  out_list = {k for k in out_list if not any([j in k for j in ['[[', ']]']]) and k.index(']') > k.index('[')}
+  out_list = {k for k in out_list if not any([j in k for j in ['[[', ']]', '[Fuc(a1-6)[']]) and k.index(']') > k.index('[')}
   if floaty:
     out_list = {floaty+k for k in out_list}
   return list(out_list)
@@ -347,7 +347,7 @@ def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-co
               kill_list.add(g)
   if order_by == "linkage":
     for g in glycans2:
-      if any(x in g for x in {"[Fuc(a1-3)[F", "[Fuc(a1-3)[N"}) or g.startswith(("Fuc(a1-3)[F", "Fuc(a1-3)[N")):
+      if any(x in g for x in {"[Fuc(a1-3)[F", "[Fuc(a1-3)[N", "[Fuc(a1-3)[T"}) or g.startswith(("Fuc(a1-3)[F", "Fuc(a1-3)[N", "GlcNAc(b1-4)[")):
         kill_list.add(g)
       if g[:g.index('[')].count('(') == 1 and g[g.index('['):g.index(']')].count('(') > 1 and g.count('[') > 1 and g.startswith('F'):
         kill_list.add(g)

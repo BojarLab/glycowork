@@ -78,11 +78,10 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process
                   process_main_branch, check_negative_look, get_match_batch,
                   filter_matches_by_location, parse_pattern, compile_pattern
 )
-from glycowork.motif.draw import (process_bonds, split_monosaccharide_linkage, draw_hex, split_node,
-                 scale_in_range, glycan_to_skeleton, process_per_residue, col_dict_base,
-                 get_hit_atoms_and_bonds, add_colours_to_map, unique, is_jupyter, process_repeat, draw_bracket,
+from glycowork.motif.draw import (process_bonds, draw_hex, scale_in_range, process_per_residue, col_dict_base,
+                 get_hit_atoms_and_bonds, add_colours_to_map, is_jupyter, process_repeat, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
-                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, get_indices
+                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure
 )
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
@@ -1189,6 +1188,8 @@ def test_choose_correct_isoform():
     assert choose_correct_isoform("Neu5Ac(a2-?)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", order_by="linkage") == "Neu5Ac(a2-?)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert choose_correct_isoform("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc",
                       order_by = "linkage") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert choose_correct_isoform("Fuc(a1-?)[Gal(b1-?)]GlcNAc(b1-2)Man(a1-6)[Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc",
+                      order_by = "linkage") == "Man(a1-2)Man(a1-3)[Fuc(a1-?)[Gal(b1-?)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
 
 
 def test_bracket_removal():
@@ -2767,38 +2768,6 @@ def test_annotate_figure(mock_svg_file):
         assert isinstance(result, str)
 
 
-def test_get_indices():
-    # Test basic index finding
-    x = ['a', 'b', 'c', 'b']
-    y = ['b', 'c']
-    result = get_indices(x, y)
-    assert result == [[1, 3], [2]]
-    # Test with missing elements
-    y = ['b', 'd']
-    result = get_indices(x, y)
-    assert result == [[1, 3], [None]]
-    # Test with empty lists
-    assert get_indices([], ['a']) == [[None]]
-    assert get_indices(['a'], []) == []
-
-
-def test_split_monosaccharide_linkage():
-    # Test basic splitting
-    sugars, mods, bonds = split_monosaccharide_linkage(["GlcNAc", "b1-2", "Man"])
-    assert sorted(sugars) == sorted(["Man", "GlcNAc"])
-    assert all(m == "" for m in mods)
-    assert bonds == ["b1-2"]
-    # Test with modifications
-    sugars, mods, bonds = split_monosaccharide_linkage(["Gal6S", "b1-4", "Glc"])
-    assert sorted(sugars) == sorted(["Gal", "Glc"])
-    assert "6S" in mods
-    assert bonds == ["b1-4"]
-    # Test multiple entries
-    sugars, mods, bonds = split_monosaccharide_linkage([["GlcNAc", "b1-2", "Man"], ["Gal6S", "b1-4", "Glc"]])
-    assert len(sugars) == 2
-    assert all(isinstance(s, list) for s in sugars)
-
-
 def test_scale_in_range():
     # Test basic scaling
     result = scale_in_range([1, 2, 3], 0, 1)
@@ -2813,18 +2782,6 @@ def test_scale_in_range():
     # Test single value
     result = scale_in_range([5, 5, 5], 0, 1)
     assert all(x == 0 for x in result)  # All values map to min when input range is 0
-
-
-def test_glycan_to_skeleton():
-    # Test simple glycan
-    result = glycan_to_skeleton("Gal(b1-4)GlcNAc")
-    assert "0-1" in result
-    # Test branched glycan
-    result = glycan_to_skeleton("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man")
-    assert "[" in result and "]" in result
-    # Test empty string
-    result = glycan_to_skeleton("")
-    assert result == ""
 
 
 def test_process_per_residue():
@@ -2843,18 +2800,6 @@ def test_process_per_residue():
     # Test branch-branched glycan
     values = [1, 2, 3, 4, 5, 6]
     main, side, branched = process_per_residue("Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man", values)
-
-
-def test_unique():
-    # Test basic deduplication
-    result = unique([1, 2, 2, 3, 3, 1])
-    assert result == [1, 2, 3]
-    # Test order preservation
-    result = unique([3, 1, 2, 1, 2, 3])
-    assert result == [3, 1, 2]
-    # Test with strings
-    result = unique(["a", "b", "a", "c"])
-    assert result == ["a", "b", "c"]
 
 
 try:
@@ -2897,24 +2842,6 @@ def test_draw_hex():
     mock_drawing = get_clean_drawing()
     draw_hex(1.0, 1.0, 50, col_dict_base, mock_drawing, color='snfg_red')
     assert len(mock_drawing.all_elements()) == 1
-
-
-def test_split_node():
-    # Create test graph
-    G = nx.Graph()
-    G.add_edges_from([(1, 2), (2, 3), (2, 4)])
-    # Split node 2
-    G_split = split_node(G, 2)
-    # Check that node 2 was split
-    assert 2 not in G_split.nodes()
-    assert '2_0' in G_split.nodes()
-    assert '2_1' in G_split.nodes()
-    assert '2_2' in G_split.nodes()
-    # Check that edges were preserved
-    edges = list(G_split.edges())
-    assert ('2_0', 1) in edges or (1, '2_0') in edges
-    assert ('2_1', 3) in edges or (3, '2_1') in edges
-    assert ('2_2', 4) in edges or (4, '2_2') in edges
 
 
 def test_is_jupyter():
