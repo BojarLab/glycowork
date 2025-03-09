@@ -2,7 +2,7 @@ import re
 from copy import deepcopy
 from typing import Dict, List, Tuple, Set, Union, Optional, Callable
 from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
-from glycowork.motif.processing import min_process_glycans, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, choose_correct_isoform
+from glycowork.motif.processing import min_process_glycans, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -403,52 +403,149 @@ def neighbor_is_branchpoint(graph: nx.DiGraph, # Glycan graph
   return max(edges, default = 0) > 3
 
 
-def graph_to_string_int(graph: nx.DiGraph # Glycan graph
+def get_linkage_number(node, graph):
+  link_label = graph.nodes[node].get("string_labels", "")
+  match = re.search(r'[ab\?][12]-(\d+|\?)', link_label)
+  if match:  # Extract the second number in the linkage (e.g., from "a1-3" get "3")
+    linkage_num = match.group(1)
+    if linkage_num == "?":
+      return float('inf')  # Wildcard comes last
+    return int(linkage_num)
+  return float('inf')
+
+
+def canonicalize_glycan_graph(graph: nx.DiGraph,
+                             order_by: str = "length"  # canonicalize by 'length' or 'linkage'
+                             ) -> nx.DiGraph:
+  """Canonicalize a glycan graph according to the following rules:
+  1. Longest chain is the main chain
+  2. Tie breakers:
+     a. Lowest incoming linkage number
+     b. Integer linkages preferred over wildcards
+     c. Alphabetical ordering of leaf nodes
+  Returns a new graph with reordered branches for canonical representation
+  """
+  # Get the root node (highest index)
+  root_idx = max(graph.nodes())
+  # Create a new graph for the canonicalized result
+  canonical_graph = nx.DiGraph()
+  # Copy all node attributes to the new graph
+  for node, attrs in graph.nodes(data = True):
+    canonical_graph.add_node(node, **attrs)
+
+  def longest_path_length(graph, node):
+    if not list(graph.successors(node)):
+      return 0
+    return 1 + max((longest_path_length(graph, child) for child in graph.successors(node)), default = 0)
+
+  def get_leaf_label(node):
+    """Get the label of the leaf node for alphabetic tie-breaking"""
+    descendants = list(nx.descendants(graph, node))
+    leaves = [n for n in descendants if graph.out_degree(n) == 0]
+    if leaves:
+      return graph.nodes[leaves[0]].get("string_labels", "")
+    return ""
+
+  def sort_branches(node):
+    """Sort branches from a node based on canonicalization rules.
+    Returns a list of children nodes in canonical order (reversed).
+    """
+    children = list(graph.successors(node))
+    if len(children) < 2:
+      return children
+    if order_by == "length":
+      # Sort children based on criteria:
+      # 1. Monosaccharide count (descending)
+      # 2. Linkage number (ascending)
+      # 3. Leaf node label (alphabetical)
+      children.sort(key = lambda x: (-(longest_path_length(graph, x)),
+                                get_linkage_number(x, graph), get_leaf_label(x)), reverse = True)
+    else:  # order_by == "linkage"
+      # Primary: Linkage number (ascending)
+      # Secondary: Monosaccharide count (descending)
+      # Tertiary: Leaf node label (alphabetical) as final tiebreaker
+      children.sort(key = lambda x: (-get_linkage_number(x, graph), (longest_path_length(graph, x)),
+                                    get_leaf_label(x)), reverse = True)
+    return children
+
+  # Recursively build the canonical graph using DFS
+  def canonicalize_branch(node):
+    children = sort_branches(node)
+    for child in children:
+      canonical_graph.add_edge(node, child)
+      canonicalize_branch(child)
+
+  # Start canonicalization from root
+  canonicalize_branch(root_idx)
+  return canonical_graph
+
+
+def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
+                        canonicalize: bool = True,  # Whether to output canonicalized IUPAC-condensed
+                        order_by: str = "length"  # canonicalize by 'length' or 'linkage'
                       ) -> str: # IUPAC-condensed glycan string
   "Convert glycan graph back to IUPAC-condensed format"
-  def assign_depth(G: nx.DiGraph, # Directed glycan graph
-                idx: int # Node index
-               ) -> float: # Depth of the node
-    "Assign depth to each node in the graph recursively"
-    min_depth = float("inf")
-    children = list(G.neighbors(idx))
-    if len(children) == 0:  # if it's a leaf node, the depth is zero
-      G.nodes[idx]["depth"] = 0
-      return 0
-    for child in children:  # if it's not a leaf node, the depth is the minimum depth of its children + 1
-      min_depth = min(assign_depth(G, child) + 1, min_depth)
-    G.nodes[idx]["depth"] = min_depth
-    return min_depth
+  if canonicalize:
+    graph = canonicalize_glycan_graph(graph, order_by = order_by)
+  # Get the root node (highest index)
+  root_idx = max(graph.nodes())
+  # Build depths with a single traversal
+  depths = {}
 
-  def dfs_to_string(G: nx.DiGraph, # DFS tree of glycan graph
-                 idx: int # Node index
-                ) -> str: # IUPAC-condensed glycan string
-    "Convert the DFS tree of a glycan graph to IUPAC-condensed format recursively"
-    output = graph.nodes[idx]["string_labels"]
-    # put braces around the string describing linkages
-    if (output[0] in "?abn" or output[0].isdigit()) and (output[-1] == "?" or output[-1].isdigit()):
-      output = "(" + output + ")"
-    # sort kids from shallow to deep to have deepest as main branch in the end
-    children = list(sorted(G.neighbors(idx), key=lambda x: G.nodes[x]["depth"]))
-    if len(children) == 0:
+  def compute_depths(node):
+    children = list(graph.successors(node))
+    if not children:
+      depths[node] = 0
+      return 0
+    min_child_depth = min(compute_depths(child) for child in children) + 1
+    depths[node] = min_child_depth
+    return min_child_depth
+
+  compute_depths(root_idx)
+
+  def is_special_branch(graph, node):
+    """Check if a 1-mono branch starting at node contains Fuc."""
+    descendants = list(nx.descendants(graph, node))
+    if len(descendants) != 1:
+      return False
+    return graph.nodes[descendants[0]].get("string_labels", "") != "Fuc"
+
+  # Convert to string with a single traversal
+  def node_to_string(node):
+    output = graph.nodes[node]["string_labels"]
+    # Handle formatting for linkage descriptions
+    if (output[0] in "?ab" or output[0].isdigit()) and (output[-1] == "?" or output[-1].isdigit()):
+      output = f"({output})"
+    # Sort children by depth (shallow to deep)
+    children = list(graph.successors(node))
+    if not children:
       return output
-    for child in children[:-1]:  # iterate over all children except the last one and put them in branching brackets
-      output = "[" + dfs_to_string(G, child) + "]" + output
-    # put the last child in front of the output, without brackets
-    output = dfs_to_string(G, children[-1]) + output
+    # Sort children based on ordering mode
+    if order_by == "length":
+      # Sort by depth (shallow to deep)
+      children = sorted(children, key = lambda x: depths[x])
+    else:  # order_by == "linkage"
+      has_single_mono = any(len(nx.descendants(graph, child)) + 1 == 2 for child in children)
+      has_special = any(is_special_branch(graph, child) for child in children)
+      if has_single_mono and not has_special:
+        # Use length-based sorting if single mono branches exist but no special branches
+        children = sorted(children, key = lambda x: (depths[x], -get_linkage_number(x, graph)))
+      else:
+        # Use linkage-based sorting in all other cases
+        children = sorted(children, key = lambda x: -get_linkage_number(x, graph))
+    # Process all but the deepest child
+    for child in children[:-1]:
+      output = f"[{node_to_string(child)}]{output}"
+    # Process the deepest child (last in sorted list)
+    output = node_to_string(children[-1]) + output
     return output
 
-  # get the root node index, assuming the root node has the highest index
-  root_idx = max(list(graph.nodes.keys()))
-  # get the DFS tree of the graph
-  dfs = nx.dfs_tree(graph, root_idx)
-  # assign depth to each node
-  assign_depth(dfs, root_idx)
-  # convert the DFS tree to IUPAC-condensed format
-  return dfs_to_string(dfs, root_idx)
+  return node_to_string(root_idx)
 
 
-def graph_to_string(graph: nx.DiGraph # Glycan graph (assumes root node is the one with the highest index)
+def graph_to_string(graph: nx.DiGraph, # Glycan graph (assumes root node is the one with the highest index)
+                    canonicalize: bool = True,  # Whether to output canonicalized IUPAC-condensed
+                    order_by: str = "length"  # canonicalize by 'length' or 'linkage'
                   ) -> str: # IUPAC-condensed glycan string
   "Convert glycan graph back to IUPAC-condensed format, handling disconnected components"
   if len(list(nx.weakly_connected_components(graph))) > 1:
@@ -460,10 +557,10 @@ def graph_to_string(graph: nx.DiGraph # Glycan graph (assumes root node is the o
       H.add_edges_from(parts[p].edges(data = True))
       parts[p] = nx.relabel_nodes(H, {pn: pn - len_org for pn in H.nodes()})
       len_org += len(H)
-    parts = '}'.join(['{'+graph_to_string_int(p) for p in parts])
+    parts = '}'.join(['{'+graph_to_string_int(p, canonicalize = canonicalize, order_by = order_by) for p in parts])
     return parts[:parts.rfind('{')] + parts[parts.rfind('{')+1:]
   else:
-    return graph_to_string_int(graph)
+    return graph_to_string_int(graph, canonicalize = canonicalize, order_by = order_by)
 
 
 def try_string_conversion(graph: nx.DiGraph # Glycan graph to validate
@@ -573,7 +670,7 @@ def deduplicate_glycans(glycans: Union[List[str], Set[str]] # List/set of glycan
       if not keep[j]:
         continue
       if compare_glycans(ggraphs[i], ggraphs[j]):
-        correct_glycan = choose_correct_isoform(glycans[i], glycans[j])
+        correct_glycan = graph_to_string(ggraphs[i])
         if correct_glycan == glycans[i]:
           keep[j] = False
         else:

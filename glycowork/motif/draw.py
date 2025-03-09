@@ -1,9 +1,9 @@
 from pathlib import Path
 from glycowork.glycan_data.loader import unwrap, motif_list, lib
 from glycowork.motif.regex import get_match
-from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans
+from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, choose_correct_isoform, get_matching_indices
+from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices
 import matplotlib.pyplot as plt
 from io import BytesIO
 from typing import Dict, List, Tuple, Optional, Union, Any
@@ -593,8 +593,6 @@ def get_coordinates_and_labels(
     termini_list: List = [] # Terminal position specifications (from 'terminal', 'internal', and 'flexible')
 ) -> List[List]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
   "Calculates drawing coordinates and formats labels for glycan visualization"
-  if not draw_this.startswith('['):
-    draw_this = choose_correct_isoform(draw_this, order_by = "linkage")
   graph = glycan_to_nxGraph(draw_this, termini = 'calc' if termini_list else 'ignore')
   graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list)
   node_values = list(nx.get_node_attributes(graph, 'string_labels').values())
@@ -874,37 +872,38 @@ def display_svg_with_matplotlib(
 
 
 def process_per_residue(
-    glycan: str, # IUPAC-condensed glycan sequence
-    per_residue: List[float] # Scalar values per residue
+    draw_this: str, # reordered IUPAC-condensed glycan sequence
+    per_residue: List[float], # Scalar values per residue
+    glycan: str, # original IUPAC-condensed glycan sequence
     ) -> Tuple[List[float], List[List[float]], List[List[float]]]: # (main chain values, side chain values, branched side chain values)
   "Maps per-residue scalar values to main chain, side chains, and branched side chains"
-  g1 = glycan_to_nxGraph(glycan)
-  draw_this = choose_correct_isoform(glycan, order_by = "linkage")
-  g2 = glycan_to_nxGraph(draw_this)
-  _, mappy = compare_glycans(g2, g1, return_matches = True)
-  per_residue = [per_residue[mappy[i*2]//2] for i in range(len(per_residue))]
+  if glycan != draw_this:
+    g1 = glycan_to_nxGraph(glycan)
+    g2 = glycan_to_nxGraph(draw_this)
+    _, mappy = compare_glycans(g2, g1, return_matches = True)
+    per_residue = [per_residue[mappy[i*2]//2] for i in range(len(per_residue))]
   temp = re.sub(r'\([^)]*\)', 'x', draw_this) + 'x'
   temp = re.sub(r'[^x\[\]]', '', temp)
-  main_chain_indices, side_chain_indices = [], []
-  branched_side_chain_indices, side_chain_stack = [], []
+  main_chain_indices, l1_indices = [], []
+  l2_indices, l1_stack = [], []
   idx = 0
   for char in temp:
     if char == '[':
-      side_chain_stack.append([])
+      l1_stack.append([])
     elif char == ']':
-      if len(side_chain_stack) == 1:
-        side_chain_indices.append(side_chain_stack.pop())
+      if len(l1_stack) == 1:
+        l1_indices.append(l1_stack.pop())
       else:
-        branched_side_chain_indices.append(side_chain_stack.pop())
+        l2_indices.append(l1_stack.pop())
     elif char == 'x':
-      if side_chain_stack:
-        side_chain_stack[-1].append(per_residue[idx])
+      if l1_stack:
+        l1_stack[-1].append(per_residue[idx])
       else:
         main_chain_indices.append(per_residue[idx])
       idx += 1
-  side_chain_indices = [k[::-1] for k in side_chain_indices if k]
-  branched_side_chain_indices = [k[::-1] for k in branched_side_chain_indices if k]
-  return main_chain_indices[::-1], side_chain_indices, branched_side_chain_indices
+  l1_indices = [k[::-1] for k in l1_indices if k]
+  l2_indices = [k[::-1] for k in l2_indices if k]
+  return main_chain_indices[::-1], l1_indices, l2_indices
 
 
 mono_list = ['Glc', 'GlcNAc', 'GlcA', 'Man', 'ManNAc', 'Gal', 'GalNAc', 'Gul', 'GulNAc',
@@ -1088,7 +1087,7 @@ def draw_chem3d(
 
 @rescue_glycans
 def GlycoDraw(
-    draw_this: str, # IUPAC-condensed glycan sequence
+    glycan: str, # IUPAC-condensed glycan sequence
     vertical: bool = False, # Draw vertically
     compact: bool = False, # Use compact style
     show_linkage: bool = True, # Show linkage labels
@@ -1104,16 +1103,19 @@ def GlycoDraw(
     pdb_file: Optional[Union[str, Path]] = None  # only used when draw_method='chem3d'; already existing glycan structure
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
-  if any([k in draw_this for k in [';', '-D-', 'RES', '=']]):
+  if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
     raise Exception
-  if draw_this.startswith('Terminal') and draw_this not in motif_list.motif_name.values.tolist():
-    draw_this = draw_this.split('_')[-1]
-  if per_residue:
-    main_per_residue, side_per_residue, branched_side_per_residue = process_per_residue(draw_this, per_residue)
+  if glycan.startswith('Terminal') and glycan not in motif_list.motif_name.values.tolist():
+    glycan = glycan.split('_')[-1]
+  if glycan in motif_list.motif_name.values.tolist():
+    glycan = motif_list.loc[motif_list.motif_name == glycan].motif.values[0]
   if repeat and not repeat_range:
-    draw_this = process_repeat(draw_this)
-  if draw_this.endswith(')'):
-    draw_this += 'blank'
+    glycan = process_repeat(glycan)
+  if glycan.endswith(')'):
+    glycan += 'blank'
+  draw_this = graph_to_string(glycan_to_nxGraph(glycan), order_by = "linkage") if not glycan.startswith('[') else glycan
+  if per_residue:
+    main_per_residue, side_per_residue, branched_side_per_residue = process_per_residue(draw_this, per_residue, glycan)
   if compact:
     show_linkage = False
   if isinstance(highlight_motif, str) and highlight_motif.startswith('r'):
@@ -1136,8 +1138,6 @@ def GlycoDraw(
     draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')
 
-  if draw_this in motif_list.motif_name.values.tolist():
-    draw_this = motif_list.loc[motif_list.motif_name == draw_this].motif.values[0]
   if not in_lib(draw_this, expand_lib(lib, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
     raise Exception('Did you enter a real glycan or motif?')
 

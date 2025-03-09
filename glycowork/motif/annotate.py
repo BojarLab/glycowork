@@ -8,38 +8,8 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 from glycowork.glycan_data.loader import linkages, motif_list, unwrap, replace_every_second, remove_unmatched_brackets, df_species
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check
-from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, rescue_glycans
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans
 from glycowork.motif.regex import get_match
-
-
-def link_find(
-    glycan: str # IUPAC-condensed glycan sequence
-    ) -> List[str]: # List of unique disaccharide motifs
-  "Extracts all disaccharide motifs from a glycan sequence, handling branching and isomorphs"
-  if '}' in glycan:
-    glycan = glycan[glycan.rindex('}')+1:]
-  disaccharides = set()
-  for iso in find_isomorphs(glycan):  # Get different string representations of the same glycan
-    variants = [iso]
-    if '[' in iso:
-      # For each string representation, search and remove branches
-      if bool(re.search(r"\[[^\[\]]+\[[^\[\]]+\][^\]]+\]", iso)):
-        b_re = re.sub(r"\[[^\[\]]+\[[^\[\]]+\][^\]]+\]", '', iso)
-        b_re = re.sub(r"\[[^\]]+\]", '', b_re)
-      else:
-        b_re = re.sub(r"\[[^\]]+\]", '', iso)
-      variants.append(b_re)
-    # From this linear glycan part, chunk away disaccharides and re-format them
-    for variant in variants:
-      parts = unwrap([k.split(')') for k in variant.split('(')])
-      for i in range(0, len(parts) - 2, 2):
-        tri_part = '*'.join(parts[i:i+3])
-        # Check for invalid bracket patterns around linkages
-        if '*[' not in tri_part and '*][' not in tri_part:
-          mono1 = parts[i].replace('[', '').replace(']', '')
-          mono2 = parts[i+2].replace('[', '').replace(']', '')
-          disaccharides.add(f"{mono1}({parts[i+1]}){mono2}")
-  return list(disaccharides)
 
 
 def annotate_glycan(
@@ -330,33 +300,40 @@ def count_unique_subgraphs_of_size_k(
    terminal: bool = False # Only count terminal subgraphs
    ) -> Dict[str, float]: # Dictionary mapping k-saccharide sequences to counts
   "Identifies and counts unique connected subgraphs of specified size from glycan structure"
-  size = size + (size-1)
-  paths = nx.all_pairs_shortest_path(graph, cutoff = size-1)
+  path_len = size + (size-1)
   labels = nx.get_node_attributes(graph, 'string_labels')
   counts = defaultdict(int)
-  for _, path_dict in paths:
-    for path in path_dict.values():
-      if len(path) == size:
-        if terminal:
-          if graph.degree[min(path)] != 1:
+  out_degrees = {n: graph.out_degree[n] for n in graph.nodes()}
+  for start_node in graph.nodes():
+    if labels.get(start_node, [''])[0] not in {'a', 'b', '?', '('}:
+      # Use BFS to find paths of exact length
+      queue = [(start_node, [start_node])]
+      while queue:
+        node, path = queue.pop(0)
+        if len(path) == path_len:
+          if terminal and out_degrees[min(path)] != 0:
             continue
-        if labels[path[0]][0] not in {'a', 'b', '?', '('}:
+          # Process valid path
           path_sorted = sorted(path)
-          path_str = ""
           path_str_list = []
-          for index, node in enumerate(path_sorted):
-            prefix = ""
-            # Check degree and add prefix accordingly
-            degree = graph.degree[node]
-            if degree == 1 and node > 0 and index > 0 and node != len(graph)-1:
-              prefix = "["
-            elif degree > 2 or (degree == 2 and node == len(graph)-1):
-              prefix = "]"
-            path_str_list.append(prefix + labels[node])
+          for i, n in enumerate(path_sorted):
+            out_d = out_degrees[n]
+            prefix = "[" if out_d == 0 and n > 0 and i > 0 else "]" if out_d > 1 else ''
+            path_str_list.append(prefix + labels[n])
+          # Combine and format path string
           path_str = '('.join(path_str_list)
           path_str = replace_every_second(path_str, '(', ')')
-          path_str = path_str[:path_str.index('[')+1].replace('[', '') + path_str[path_str.index('['):] if '[' in path_str else path_str.replace(']', '')
-          counts[path_str] += 0.5
+          if '[' in path_str:
+            bracket_idx = path_str.index('[')
+            path_str = path_str[:bracket_idx].replace('[', '') + path_str[bracket_idx:]
+          else:
+            path_str = path_str.replace(']', '')
+          counts[path_str] += 1
+        elif len(path) < path_len:
+          # Continue building paths
+          for neighbor in graph.neighbors(node):
+            if neighbor not in path:
+              queue.append((neighbor, path + [neighbor]))
   return counts
 
 
@@ -375,11 +352,18 @@ def get_k_saccharides(
     raise Exception
   if up_to:
     wga_letter = pd.DataFrame([{i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(glycans) if i not in linkages} for g in glycans])
-  regex = re.compile(r"\(([ab])(\d)-(\d)\)")
-  shadow_glycans = [regex.sub(r"(\1\2-?)", g) for g in glycans]
-  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g), size = size, terminal = terminal) for g in glycans])
+  regex = re.compile(r"([ab])(\d)-(\d)")
+  ggraphs = [glycan_to_nxGraph(g) for g in glycans]
+  shadow_graphs = []
+  for g in ggraphs:
+    sg = g.copy()
+    labels = nx.get_node_attributes(sg, 'string_labels')
+    modified = {n: regex.sub(r"\1\2-?", labels[n]) for n in labels}
+    nx.set_node_attributes(sg, modified, 'string_labels')
+    shadow_graphs.append(sg)
+  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size, terminal = terminal) for g in ggraphs])
   ggraphs = ggraphs.drop(columns = [col for col in ggraphs.columns if '?' in col])
-  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g), size = size, terminal = terminal) for g in shadow_glycans])
+  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size, terminal = terminal) for g in shadow_graphs])
   org_len = ggraphs.shape[1]
   out_matrix = pd.concat([ggraphs, shadow_glycans], axis = 1).reset_index(drop = True)
   out_matrix = out_matrix.loc[:, ~out_matrix.columns.duplicated()].copy()

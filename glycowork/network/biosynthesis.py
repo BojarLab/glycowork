@@ -19,10 +19,10 @@ import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import unwrap, linkages, lib
 from glycowork.glycan_data.stats import cohen_d, get_alphaN
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism, get_possible_topologies
-from glycowork.motif.processing import choose_correct_isoform, get_lib, rescue_glycans, in_lib, get_class
+from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class
 from glycowork.motif.tokenization import get_stem_lib, glycan_to_composition, map_to_basic
 from glycowork.motif.regex import get_match
-from glycowork.motif.annotate import link_find
+from glycowork.motif.annotate import get_k_saccharides
 
 # Get the directory and filename of the current script and construct the data path
 this_dir = Path(__file__).parent
@@ -501,9 +501,8 @@ def construct_network(glycans: List[str], # List of glycans
   virtual_graphs = [safe_index(x, graph_dic) for x in virtual_nodes]
   isomeric_graphs = [k for k in combinations(virtual_graphs, 2) if compare_glycans(k[0], k[1])]
   if len(isomeric_graphs) > 0:
-    isomeric_nodes = [choose_correct_isoform([virtual_nodes[virtual_graphs.index(k[0])], virtual_nodes[virtual_graphs.index(k[1])]], reverse = True)
-                          for k in isomeric_graphs if len(set(k)) > 1]
-    network.remove_nodes_from([n[0] for n in isomeric_nodes if n])
+    to_remove = [item for k, v in isomeric_graphs for item in (k, v) if graph_to_string(item, canonicalize = False) != graph_to_string(item)]
+    network.remove_nodes_from(to_remove)
   network.remove_edges_from(nx.selfloop_edges(network))
   # Make network directed
   network = prune_directed_edges(network.to_directed())
@@ -1185,8 +1184,8 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
   else:
     from glycowork.glycan_data.loader import df_species
     glycs = df_species[df_species.Class == "Mammalia"].glycan.drop_duplicates()
-    glycs = glycs[glycs.apply(get_class) == classy]
-  mammal_disac = set(unwrap(map(link_find, glycs)))
+    glycs = glycs[glycs.apply(get_class) == classy].tolist()
+  mammal_disac = set(unwrap(get_k_saccharides(glycs, just_motifs = True)))
   reactions = {r for r in nx.get_edge_attributes(network, "diffs").values() if all(x not in r for x in ('?', 'Hex', 'O'))}
   leaf_glycans = {x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0}
   if isinstance(to_extend, dict):

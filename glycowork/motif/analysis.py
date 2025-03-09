@@ -33,7 +33,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          omega_squared, get_glycoform_diff, process_glm_results, partial_corr, estimate_technical_variance,
                                          perform_tests_monte_carlo)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
-from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
+from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network, get_k_saccharides,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
                                       create_lectin_and_motif_mappings, lectin_motif_scoring, deduplicate_motifs)
 from glycowork.motif.graph import subgraph_isomorphism
@@ -316,7 +316,7 @@ def characterize_monosaccharide(
   if rank is not None and focus is not None:
     df = df[df[rank] == focus]
   # Get all disaccharides for linkage analysis
-  pool_in = unwrap([link_find(k) for k in df[glycan_col_name]])
+  pool_in = unwrap(get_k_saccharides(df[glycan_col_name].tolist(), just_motifs = True))
   pool_in = [k.replace('(', '*').replace(')', '*') for k in pool_in]
   pool_in_split = [k.split('*') for k in pool_in]
   pool, sugars = [], []
