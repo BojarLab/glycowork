@@ -1,5 +1,5 @@
 from pathlib import Path
-from glycowork.glycan_data.loader import unwrap, motif_list, multireplace, lib
+from glycowork.glycan_data.loader import unwrap, motif_list, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans
 from glycowork.motif.tokenization import get_core, get_modification
@@ -613,25 +613,23 @@ def get_coordinates_and_labels(
   branch_level1, branch_level2, branch_level3 = get_branches_from_graph(graph, main_chain, main_label_sugar)
 
   def process_branch_data(branches):
-    label, sugar, sugar_mod, bond, connection, sugar_label, bond_label = [], [], [], [], [], [], []
+    sugar, sugar_mod, bond, connection, sugar_label, bond_label = [], [], [], [], [], []
     for branch in branches:
       # Extract sugar and bond labels
-      nodes, sugar_nodes = branch['nodes'], branch['sugar_nodes']
-      bond_nodes = [m for m in nodes if m % 2 == 1]
-      label.append([node_values[n] for n in nodes][::-1])
+      sugar_nodes = branch['sugar_nodes']
+      bond_nodes = [m for m in branch['nodes'] if m % 2 == 1]
       sugar.append([get_core(node_values[n]) for n in sugar_nodes])
       sugar_mod.append([get_modification(node_values[n]).replace('O', '') for n in sugar_nodes])
       bond.append([node_values[n] for n in bond_nodes])
       connection.append(branch['connection'])
       sugar_label.append([highlight_values[n] for n in sugar_nodes])
       bond_label.append([highlight_values[n] for n in bond_nodes])
-    return label, sugar, sugar_mod, bond, connection, sugar_label, bond_label
+    return sugar, sugar_mod, bond, connection, sugar_label, bond_label
 
   # Get branch data for all levels
-  l1_node = [branch['nodes'] for branch in branch_level1]
-  l1_label, l1_sugar, l1_sugar_modification, l1_bond, l1_connection, l1_sugar_label, l1_bond_label = process_branch_data(branch_level1)
-  l2_label, l2_sugar, l2_sugar_modification, l2_bond, l2_connection, l2_sugar_label, l2_bond_label = process_branch_data(branch_level2)
-  l3_label, l3_sugar, l3_sugar_modification, l3_bond, l3_connection, l3_sugar_label, l3_bond_label = process_branch_data(branch_level3)
+  l1_sugar, l1_sugar_modification, l1_bond, l1_connection, l1_sugar_label, l1_bond_label = process_branch_data(branch_level1)
+  l2_sugar, l2_sugar_modification, l2_bond, l2_connection, l2_sugar_label, l2_bond_label = process_branch_data(branch_level2)
+  l3_sugar, l3_sugar_modification, l3_bond, l3_connection, l3_sugar_label, l3_bond_label = process_branch_data(branch_level3)
 
   # Process linkages
   main_bond = process_bonds(main_bond)
@@ -639,8 +637,8 @@ def get_coordinates_and_labels(
   l2_bond = process_bonds(l2_bond)
   l3_bond = process_bonds(l3_bond)
 
-  # Main chain x y
-  if main_sugar[-1] in {'Fuc', 'Xyl'} and l1_sugar:
+  # Main chain x
+  if main_sugar[-1]  == 'Fuc' or (main_sugar[-1] == 'Xyl' and main_bond[-1] == 'β 2'):
     main_sugar_x_pos[-1] -= 1
 
   # Calculate x positions for branches
@@ -663,11 +661,11 @@ def get_coordinates_and_labels(
   l2_x_pos = calculate_x_positions(l2_sugar, l2_connection, l1_x_pos, level = 2)
   l3_x_pos = calculate_x_positions(l3_sugar, l3_connection, l2_x_pos, level = 3)
 
-  # Initialize y positions - ALL START AT Y=0
-  main_sugar_y_pos = [2 if s == "Fuc" else 0 for i, s in enumerate(main_sugar)]
-  l1_y_pos = [[2 if s == "Fuc" else 0 for i, s in enumerate(sugars)] for sugars in l1_sugar]
-  l2_y_pos = [[2 if s == "Fuc" else 0 for i, s in enumerate(sugars)] for sugars in l2_sugar]
-  l3_y_pos = [[2 if s == "Fuc" else 0 for i, s in enumerate(sugars)] for sugars in l3_sugar]
+  # Initialize y positions - ALL START AT Y=0 (except Fuc)
+  main_sugar_y_pos = [2 if s == "Fuc" and i == len(main_sugar)-1 else 0 for i, s in enumerate(main_sugar)]
+  l1_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l1_sugar]
+  l2_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l2_sugar]
+  l3_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l3_sugar]
 
   # Standard spacing unit
   SPACING = 1
@@ -686,13 +684,14 @@ def get_coordinates_and_labels(
       branch_sugar = max(core_branches, key = len)
       l2_connected_branches = [l2_sugar[k] for k, conn in enumerate(l2_connection) if conn[0] in branch_indices]
       l1_main_chain_branches = [l1_sugar[k] for k, conn in enumerate(l1_connection) if conn[1] > parent_idx and l1_sugar[k] not in [['Fuc'], ['Gal']]]
-      has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(l1_main_chain_branches)) or ('Fuc' in unwrap(l2_connected_branches))
+      has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(l2_connected_branches))
+      has_own_fuc = 'Fuc' in unwrap(l1_main_chain_branches)
       has_bisecting = any('GlcNAc' in b[0] for b in core_branches) and main_sugar[parent_idx] == 'Man' and main_bond[parent_idx-1] == 'β 4'
       l2_connected_branches = [k for k in l2_connected_branches if k not in [['Fuc'], ['Gal']]]
       max_l2_len = max((len(b) for b in l2_connected_branches), default = 0)
       max_l1_len = max((len(b) for b in l1_main_chain_branches if b not in [['Fuc'], ['Gal']]), default = 0)
-      spacing_spec = SPACING + has_fuc*SPACING + (max_l1_len > 0)*0.25*SPACING
-      if (max_l2_len > 0) and spacing_spec < 2.5:
+      spacing_spec = SPACING + has_fuc*SPACING + has_own_fuc*SPACING + (max_l1_len > 0)*0.25*SPACING
+      if (max_l2_len > 0) and (spacing_spec < 2.5 or (has_fuc and has_own_fuc)):
         spacing_spec += 0.5*SPACING
       if has_bisecting and spacing_spec < 1.1:
         spacing_spec += SPACING
@@ -1167,7 +1166,7 @@ def GlycoDraw(
   l1_deg = []
   for k, sugars in enumerate(l1_sugar):
     l1_deg.append([
-      calculate_degree(l1_y_pos[k][j], main_sugar_y_pos[l1_connection[k][1]], l1_x_pos[k][j], main_sugar_x_pos[branch_connection[k][1]])
+      calculate_degree(l1_y_pos[k][j], main_sugar_y_pos[l1_connection[k][1]], l1_x_pos[k][j], main_sugar_x_pos[l1_connection[k][1]])
       if sugar in {'Z', 'Y'} and len(sugars) == 1 else
       calculate_degree(l1_y_pos[k][j], l1_y_pos[k][j-1], l1_x_pos[k][j], l1_x_pos[k][j-1])
       if sugar in {'Z', 'Y'} else 0 for j, sugar in enumerate(sugars)
@@ -1315,6 +1314,12 @@ def GlycoDraw(
       try:
         from cairosvg import svg2pdf
         svg2pdf(bytestring = data, write_to = str(filepath))
+      except:
+        raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
+    elif filepath.suffix.lower() == '.png':
+      try:
+        from cairosvg import svg2png
+        svg2png(bytestring = data, write_to = str(filepath))
       except:
         raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   return d2 if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)

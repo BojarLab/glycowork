@@ -2645,6 +2645,10 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("Neu5Ac(a2-?)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", suppress=True)
     assert result is not None
+    result = GlycoDraw("Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc", suppress=True)
+    assert result is not None
+    result = GlycoDraw("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-?)]Man(a1-?)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-?)]Man(a1-?)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", suppress=True)
+    assert result is not None
     # Test vertical orientation
     result = GlycoDraw("GlcNAc(b1-4)GlcA", vertical=True, suppress=True)
     assert result is not None
@@ -2673,6 +2677,10 @@ def test_glycodraw():
     # Test file saving
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.svg")
     assert Path("test.svg").exists()
+    GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.pdf")
+    assert Path("test.pdf").exists()
+    GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.png")
+    assert Path("test.png").exists()
     # Test invalid glycan
     with pytest.raises(Exception):
         GlycoDraw("InvalidGlycan")

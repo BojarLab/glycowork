@@ -130,6 +130,7 @@ Thumbs.db
 *.pdb
 tests/*.svg
 tests/*.png
+tests/*.pdf
 tests/*.pt
 
 # tools/trust-doc-nbs

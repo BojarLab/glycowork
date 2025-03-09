@@ -33,7 +33,7 @@
 - `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide (24c8e81, ab42dbb)
 
 ##### Fixed 🐛
-- Fixed an edge case in `find_isomorphs`, in which core-fucose containing glycans had some wrong re-orderings in the output (a5ed208)
+- Fixed edge cases in `find_isomorphs` and `choose_correct_isoform`, in which core-fucose containing glycans had some wrong re-orderings in the output (a5ed208, e56d015)
 
 #### annotate
 ##### Changed 🔄
@@ -42,14 +42,15 @@
 
 #### draw
 ##### Added ✨
-- Added `get_branches_from_graph` to process directed glycan graphs into components for `GlycoDraw`
+- Added `get_branches_from_graph` to process directed glycan graphs into components for `GlycoDraw` (e56d015)
 
 ##### Changed 🔄
 - Quantitative highlighting in `GlycoDraw` via the `per_residue` keyword argument will now use individual SNFG-colors instead of a uniform highlight color (07c9c12)
-- Refactored `get_coordinates_and_labels` to be more efficient and generalizable; with this and the new `get_branches_from_graph`, `GlycoDraw` is now capable of drawing even more complex structures accurately
+- Refactored `get_coordinates_and_labels` to be more efficient and generalizable; with this and the new `get_branches_from_graph`, `GlycoDraw` is now capable of drawing even more complex structures accurately (e56d015)
+- Next to `.svg` and `.pdf`, it is now also possible to save `.png` files with `GlycoDraw`
 
 ##### Deprecated ⚠️
-- Deprecated `split_node`, `unique`, `get_indices`, `split_monosaccharide_linkage`, and `glycan_to_skeleton`, since this will now be handled by the changed `get_coordinates_and_labels`
+- Deprecated `split_node`, `unique`, `get_indices`, `split_monosaccharide_linkage`, and `glycan_to_skeleton`, since this will now be handled by the changed `get_coordinates_and_labels` (e56d015)
 
 #### graph
 ##### Changed 🔄
