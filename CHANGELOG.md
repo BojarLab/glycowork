@@ -31,23 +31,24 @@
 - `canonicalize_iupac` and most glycowork functions now also support common names, like "LacNAc" or "2'-FL", in the Universal Input framework, thanks to `GLYCAN_MAPPINGS` (36d33b8, ab42dbb)
 - `get_class` can now identify repeating unit glycans and returns "repeat" in this case (74d35a0)
 - `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide (24c8e81, ab42dbb)
-- `canonicalize_iupac` will now use `glycan_to_nxGraph` and `graph_to_string` for branch canonicalization, instead of `choose_correct_isoform`. On average, this works much better and more reliable
+- `canonicalize_iupac` will now use `glycan_to_nxGraph` and `graph_to_string` for branch canonicalization, instead of `choose_correct_isoform`. On average, this works much better and more reliable (7c52a0e)
 
 ##### Deprecated ⚠️
-- Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead
+- Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead (7c52a0e)
 
 #### annotate
 ##### Changed 🔄
 - Renamed `clean_up_heatmap` to `deduplicate_motifs` (407cd6f)
 - Allow sets of glycans as inputs in `get_k_saccharides`, in addition to lists of glycans (74d35a0)
-- Made `get_k_saccharides` faster by re-using graphs and using the directed graphs in an optimized way
+- Made `get_k_saccharides` faster by re-using graphs and using the directed graphs in an optimized way (7c52a0e)
 
 ##### Deprecated ⚠️
-- Deprecated `link_find`, will be done by an optimized `get_k_saccharides` instead (since `link_find` relied on `find_isomorphs`)
+- Deprecated `link_find`, will be done by an optimized `get_k_saccharides` instead (since `link_find` relied on `find_isomorphs`) (7c52a0e)
 
 #### draw
 ##### Added ✨
 - Added `get_branches_from_graph` to process directed glycan graphs into components for `GlycoDraw` (e56d015)
+- Added the `reverse_highlight` keyword argument to `GlycoDraw`, if you want to highlight everything *except* a certain motif (which means you can highlight discontiguous sequence stretches)
 
 ##### Changed 🔄
 - Quantitative highlighting in `GlycoDraw` via the `per_residue` keyword argument will now use individual SNFG-colors instead of a uniform highlight color (07c9c12)
@@ -59,12 +60,12 @@
 
 #### graph
 ##### Added ✨
-- Added `canonicalize_glycan_graph` to reorder graph nodes in either a length-first or linkage-first manner
-- `graph_to_string` and its sub-functions now have new keyword arguments: `canonicalize`, to determine whether transcribed graphs should be re-ordered into a canonicalized IUPAC-condensed and `order_by` to decide whether canonicalization happens in a length-first or linkage-first manner
+- Added `canonicalize_glycan_graph` to reorder graph nodes in either a length-first or linkage-first manner (7c52a0e)
+- `graph_to_string` and its sub-functions now have new keyword arguments: `canonicalize`, to determine whether transcribed graphs should be re-ordered into a canonicalized IUPAC-condensed and `order_by` to decide whether canonicalization happens in a length-first or linkage-first manner (7c52a0e)
 
 ##### Changed 🔄
 - Switched `lru_cache` from `glycan_to_graph` to `glycan_to_nxGraph_int` for better performance and fewer opportunities to mess with the cache (03dfad6)
-- Made `graph_to_string` faster, to accommodate its more central role in the Universal Input framework
+- Made `graph_to_string` faster, to accommodate its more central role in the Universal Input framework (7c52a0e)
 
 ##### Fixed 🐛
 - Fixed an edge case in `compare_glycans` in which two identical string glycans returned (True, True) if `return_matches == False` (03dfad6)

@@ -497,18 +497,18 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
     if not children:
       depths[node] = 0
       return 0
-    min_child_depth = min(compute_depths(child) for child in children) + 1
-    depths[node] = min_child_depth
-    return min_child_depth
+    max_child_depth = max(compute_depths(child) for child in children) + 1
+    depths[node] = max_child_depth
+    return max_child_depth
 
   compute_depths(root_idx)
 
   def is_special_branch(graph, node):
-    """Check if a 1-mono branch starting at node contains Fuc."""
+    """Check if a 1-mono branch starting at node contains Gal/Man."""
     descendants = list(nx.descendants(graph, node))
     if len(descendants) != 1:
       return False
-    return graph.nodes[descendants[0]].get("string_labels", "") != "Fuc"
+    return graph.nodes[descendants[0]].get("string_labels", "") in {"Gal", "Man"}
 
   # Convert to string with a single traversal
   def node_to_string(node):

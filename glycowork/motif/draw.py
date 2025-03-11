@@ -513,13 +513,17 @@ def process_bonds(
 def get_highlight_attribute(
     glycan_graph: nx.DiGraph, # NetworkX glycan graph
     motif_string: str, # Motif to highlight
-    termini_list: List = [] # Terminal position specifications
+    termini_list: List = [], # Terminal position specifications
+    reverse_highlight: bool = False # Whether to highlight everything EXCEPT highlight_motif
     ) -> nx.DiGraph: # Graph with highlight attributes
   "Labels nodes in glycan graph based on presence in specified motif"
   if motif_string:
     motif = glycan_to_nxGraph(motif_string, termini = 'provided' if termini_list else None, termini_list = termini_list)
     _, mappings = subgraph_isomorphism(glycan_graph, motif, termini_list = termini_list, return_matches = True)
-    mapping_show = {node: 'show' if node in set(unwrap(mappings)) else 'hide' for node in glycan_graph.nodes()}
+    if reverse_highlight:
+      mapping_show = {node: 'hide' if node in set(unwrap(mappings)) else 'show' for node in glycan_graph.nodes()}
+    else:
+      mapping_show = {node: 'show' if node in set(unwrap(mappings)) else 'hide' for node in glycan_graph.nodes()}
   else:
     mapping_show = {node: 'show' for node in glycan_graph.nodes()}
   nx.set_node_attributes(glycan_graph, dict(sorted(mapping_show.items())), 'highlight_labels')
@@ -590,11 +594,12 @@ def get_coordinates_and_labels(
     draw_this: str, # IUPAC-condensed glycan sequence
     highlight_motif: Optional[str], # Motif to highlight
     show_linkage: bool = True, # Show linkage labels
-    termini_list: List = [] # Terminal position specifications (from 'terminal', 'internal', and 'flexible')
+    termini_list: List = [], # Terminal position specifications (from 'terminal', 'internal', and 'flexible')
+    reverse_highlight: bool = False # Whether to highlight everything EXCEPT highlight_motif
 ) -> List[List]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
   "Calculates drawing coordinates and formats labels for glycan visualization"
   graph = glycan_to_nxGraph(draw_this, termini = 'calc' if termini_list else 'ignore')
-  graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list)
+  graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list, reverse_highlight = reverse_highlight)
   node_values = list(nx.get_node_attributes(graph, 'string_labels').values())
   highlight_values = list(nx.get_node_attributes(graph, 'highlight_labels').values())
   root = max(graph.nodes())
@@ -665,15 +670,12 @@ def get_coordinates_and_labels(
   l2_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l2_sugar]
   l3_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l3_sugar]
 
-  # Standard spacing unit
   SPACING = 1
   # Main chain goes down, branches go up
-  # Step 1: Find all branch points on the main chain
   branch_points = {conn[1] for conn in l1_connection}
-  # Step 2: For each branch point, main chain beyond it goes down
+  # For each branch point, main chain beyond it goes down
   for parent_idx in sorted(branch_points):
     # Core fucose special case (don't push down main chain)
-    # Check if all branches at this point are single Fuc/Xyl
     branch_indices = [j for j, conn in enumerate(l1_connection) if conn[1] == parent_idx]
     core_branches = [l1_sugar[j] for j in branch_indices]
     is_core_fuc = all(j in [['Fuc'], ['Xyl']] for j in core_branches)
@@ -697,7 +699,7 @@ def get_coordinates_and_labels(
       for i in range(parent_idx + 1, len(main_sugar)):
         main_sugar_y_pos[i] += spacing_spec
 
-  # Step 3: All branches go up
+  # All branches go up
   for j, conn in enumerate(l1_connection):
     parent_idx = conn[1]
     branch_sugar = l1_sugar[j]
@@ -720,60 +722,36 @@ def get_coordinates_and_labels(
         shift_amount = main_sugar_y_pos[parent_idx] - offset
         l1_y_pos[j] = [p + shift_amount for p in l1_y_pos[j]]
 
-  # Step 4: Level 2 branches - same rule
-  # At each branch point, push remaining sugars down
-  for idx, (parent_branch, parent_idx) in enumerate(l2_connection):
-    # Push rest of branch down
-    is_fuc_partner = l1_sugar[parent_branch][parent_idx+1] == 'Fuc'
-    if not is_fuc_partner and l2_sugar[idx][0] != 'Fuc':
-      branch_indices = [j for j, conn in enumerate(l2_connection) if conn[1] == parent_idx]
-      core_branches = [l2_sugar[j] for j in branch_indices]
-      branch_sugar = max(core_branches, key = len)
-      l3_connected_branches = [l3_sugar[k] for k, conn in enumerate(l3_connection) if conn[0] in branch_indices]
-      has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(l3_connected_branches))
-      spacing_spec = SPACING + has_fuc*SPACING
-      for i in range(parent_idx + 1, len(l1_y_pos[parent_branch])):
-        l1_y_pos[parent_branch][i] += spacing_spec
-  # Level 2 branches go up
-  for j, (parent_branch, parent_idx) in enumerate(l2_connection):
-    parent_y = l1_y_pos[parent_branch][parent_idx]
-    is_fuc_partner = l1_sugar[parent_branch][parent_idx+1] == 'Fuc'
-    if len(l2_sugar[j]) == 1 and l2_sugar[j][0] in ['Fuc', 'Xyl']:
-      l2_y_pos[j][0] = parent_y + 2*SPACING
-    elif len(l2_sugar[j]) == 1 and is_fuc_partner:
-      l2_y_pos[j][0] = parent_y
-    else:
-      # Branch goes up from parent
-      offset = l1_y_pos[parent_branch][parent_idx+1] - parent_y
-      shift_amount = parent_y - offset
-      l2_y_pos[j] = [p + shift_amount for p in l2_y_pos[j]]
+  def process_branch_level(level_sugar, level_y_pos, level_connection, next_level_sugar, next_level_connection, parent_level_y_pos, parent_level_sugar):
+    # At each branch point, push remaining sugars down
+    for idx, (parent_branch, parent_idx) in enumerate(level_connection):
+      is_fuc_partner = parent_level_sugar[parent_branch][parent_idx+1] == 'Fuc' if parent_idx+1 < len(parent_level_sugar[parent_branch]) else False
+      if not is_fuc_partner and level_sugar[idx][0] != 'Fuc':
+        branch_indices = [j for j, conn in enumerate(level_connection) if conn[0] == parent_branch and conn[1] == parent_idx]
+        core_branches = [level_sugar[j] for j in branch_indices]
+        branch_sugar = max(core_branches, key = len)
+        has_next_level = len(next_level_sugar) > 0
+        next_level_connected_branches = [next_level_sugar[k] for k, conn in enumerate(next_level_connection) if conn[0] in branch_indices] if has_next_level else []
+        has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(next_level_connected_branches) if has_next_level else False)
+        spacing_spec = SPACING + has_fuc*SPACING
+        for i in range(parent_idx + 1, len(parent_level_y_pos[parent_branch])):
+          parent_level_y_pos[parent_branch][i] += spacing_spec
+    # Branches go up
+    for j, (parent_branch, parent_idx) in enumerate(level_connection):
+      parent_y = parent_level_y_pos[parent_branch][parent_idx]
+      is_fuc_partner = parent_level_sugar[parent_branch][parent_idx+1] == 'Fuc' if parent_idx+1 < len(parent_level_sugar[parent_branch]) else False
+      if len(level_sugar[j]) == 1 and level_sugar[j][0] in ['Fuc', 'Xyl']:
+        level_y_pos[j][0] = parent_y + 2*SPACING
+      elif len(level_sugar[j]) == 1 and is_fuc_partner:
+        level_y_pos[j][0] = parent_y
+      else:
+        offset = parent_level_y_pos[parent_branch][parent_idx+1] - parent_y if parent_idx+1 < len(parent_level_y_pos[parent_branch]) else 0
+        shift_amount = parent_y - offset
+        level_y_pos[j] = [p + shift_amount for p in level_y_pos[j]]
+    return level_y_pos
 
-  # Step 5: Level 3 branches - same rule
-  # At each branch point, push remaining sugars down
-  for idx, (parent_branch, parent_idx) in enumerate(l3_connection):
-    # Push rest of branch down
-    is_fuc_partner = l2_sugar[parent_branch][parent_idx+1] == 'Fuc'
-    if not is_fuc_partner and l3_sugar[idx][0] != 'Fuc':
-      branch_indices = [j for j, conn in enumerate(l3_connection) if conn[1] == parent_idx]
-      core_branches = [l3_sugar[j] for j in branch_indices]
-      branch_sugar = max(core_branches, key = len)
-      has_fuc = ('Fuc' in branch_sugar)
-      spacing_spec = SPACING + has_fuc*SPACING
-      for i in range(parent_idx + 1, len(l2_y_pos[parent_branch])):
-        l2_y_pos[parent_branch][i] += spacing_spec
-  # Level 3 branches go up
-  for j, (parent_branch, parent_idx) in enumerate(l3_connection):
-    parent_y = l2_y_pos[parent_branch][parent_idx]
-    is_fuc_partner = l2_sugar[parent_branch][parent_idx+1] == 'Fuc'
-    if len(l3_sugar[j]) == 1 and l3_sugar[j][0] in ['Fuc', 'Xyl']:
-      l3_y_pos[j][0] = parent_y + 2*SPACING
-    elif len(l3_sugar[j]) == 1 and is_fuc_partner:
-      l3_y_pos[j][0] = parent_y
-    else:
-      # Branch goes up from parent
-      offset = l2_y_pos[parent_branch][parent_idx+1] - parent_y
-      shift_amount = parent_y - offset
-      l3_y_pos[j] = [p + shift_amount for p in l3_y_pos[j]]
+  l2_y_pos = process_branch_level(l2_sugar, l2_y_pos, l2_connection, l3_sugar, l3_connection, l1_y_pos, l1_sugar)
+  l3_y_pos = process_branch_level(l3_sugar, l3_y_pos, l3_connection, [], [], l2_y_pos, l2_sugar)
 
   def extract_conformation(sugar_modifications):
     conf_pattern = r'^L-|^D-|(\d,\d+lactone)'
@@ -1094,6 +1072,7 @@ def GlycoDraw(
     dim: float = 50, # Base dimension for scaling
     highlight_motif: Optional[str] = None, # Motif to highlight
     highlight_termini_list: List = [], # Terminal positions (from 'terminal', 'internal', and 'flexible')
+    reverse_highlight: bool = False, # Whether to highlight everything EXCEPT highlight_motif
     repeat: Optional[Union[bool, int, str]] = None, # Repeat unit specification (True: n units, int: # of units, str: range of units)
     repeat_range: Optional[List[int]] = None, # Repeat unit range
     draw_method: Optional[str] = None, # Drawing method: None, 'chem2d', 'chem3d'
@@ -1141,7 +1120,7 @@ def GlycoDraw(
   if not in_lib(draw_this, expand_lib(lib, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
     raise Exception('Did you enter a real glycan or motif?')
 
-  data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list)
+  data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
 
   main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label = data[0]
   l1_sugar, l1_x_pos, l1_y_pos, l1_sugar_modification, l1_bond, l1_connection, l1_conf, l1_sugar_label, l1_bond_label = data[1]
