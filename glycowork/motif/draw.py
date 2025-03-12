@@ -1391,14 +1391,13 @@ def annotate_figure(
   svg_tmp += '</svg>'
 
   if filepath:
-    filepath = Path(filepath)
     try:
       from cairosvg import svg2pdf, svg2svg, svg2png
-      if filepath.suffix.lower() == '.pdf':
+      if filepath.endswith('.pdf'):
         svg2pdf(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-      elif filepath.suffix.lower() == '.svg':
+      elif filepath.endswith('.svg'):
         svg2svg(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-      elif filepath.suffix.lower() == '.png':
+      elif filepath.endswith('.png'):
         svg2png(bytestring = svg_tmp, write_to = filepath, dpi = 300)
     except:
       raise ImportError("You're missing some draw dependencies. Either don't use filepath or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")

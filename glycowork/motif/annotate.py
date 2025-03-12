@@ -2,12 +2,12 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import re
-from collections import defaultdict
+from collections import Counter, deque
 from functools import partial
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-from glycowork.glycan_data.loader import linkages, motif_list, unwrap, replace_every_second, remove_unmatched_brackets, df_species
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check
+from glycowork.glycan_data.loader import linkages, motif_list, unwrap, replace_every_second, df_species
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans
 from glycowork.motif.regex import get_match
 
@@ -300,41 +300,27 @@ def count_unique_subgraphs_of_size_k(
    terminal: bool = False # Only count terminal subgraphs
    ) -> Dict[str, float]: # Dictionary mapping k-saccharide sequences to counts
   "Identifies and counts unique connected subgraphs of specified size from glycan structure"
-  path_len = size + (size-1)
-  labels = nx.get_node_attributes(graph, 'string_labels')
-  counts = defaultdict(int)
-  out_degrees = {n: graph.out_degree[n] for n in graph.nodes()}
-  for start_node in graph.nodes():
-    if labels.get(start_node, [''])[0] not in {'a', 'b', '?', '('}:
-      # Use BFS to find paths of exact length
-      queue = [(start_node, [start_node])]
-      while queue:
-        node, path = queue.pop(0)
-        if len(path) == path_len:
-          if terminal and out_degrees[min(path)] != 0:
-            continue
-          # Process valid path
-          path_sorted = sorted(path)
-          path_str_list = []
-          for i, n in enumerate(path_sorted):
-            out_d = out_degrees[n]
-            prefix = "[" if out_d == 0 and n > 0 and i > 0 else "]" if out_d > 1 else ''
-            path_str_list.append(prefix + labels[n])
-          # Combine and format path string
-          path_str = '('.join(path_str_list)
-          path_str = replace_every_second(path_str, '(', ')')
-          if '[' in path_str:
-            bracket_idx = path_str.index('[')
-            path_str = path_str[:bracket_idx].replace('[', '') + path_str[bracket_idx:]
-          else:
-            path_str = path_str.replace(']', '')
-          counts[path_str] += 1
-        elif len(path) < path_len:
-          # Continue building paths
-          for neighbor in graph.neighbors(node):
-            if neighbor not in path:
-              queue.append((neighbor, path + [neighbor]))
-  return counts
+  target_size = size * 2 - 1
+  successor_dict = {v: list(graph.successors(v)) for v in graph.nodes}
+  k_subgraphs, processed = [], set()
+  terminal_lookup = {n: graph.out_degree(n) == 0 for n in graph.nodes()} if terminal else {}
+  for node in sorted(graph.nodes(), reverse = True):
+    queue = deque([(tuple([node]), 1 if node % 2 == 0 else 0, 1)])
+    while queue:
+      current_sg, mono_cnt, curr_size = queue.popleft()
+      if current_sg in processed: continue
+      processed.add(current_sg)
+      if curr_size == target_size:
+        if mono_cnt == size and (not terminal or any(terminal_lookup[n] for n in current_sg)):
+          k_subgraphs.append(graph_to_string_int(graph.subgraph(current_sg)))
+        continue
+      current_sg_set = set(current_sg)
+      candidates = [s for n in current_sg for s in successor_dict[n] if s not in current_sg]
+      for candidate in candidates:
+        new_mono = mono_cnt + (1 if candidate % 2 == 0 else 0)
+        if new_mono > size: continue
+        queue.append((tuple(sorted(set(current_sg) | {candidate})), new_mono, curr_size + 1))
+  return dict(Counter(k_subgraphs))
 
 
 @rescue_glycans
@@ -346,20 +332,22 @@ def get_k_saccharides(
    terminal: bool = False # Only count terminal fragments
    ) -> Union[pd.DataFrame, List[List[str]]]: # DataFrame of k-saccharide counts or list of motifs per glycan
   "Extracts k-saccharide fragments from glycan sequences with options for different fragment sizes and positions"
-  if not (isinstance(glycans, list) or isinstance(glycans, set)):
+  if not isinstance(glycans, (list, set)):
     raise TypeError("The input has to be a list or set of glycans")
-  if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
+  if any(k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']):
     raise Exception
+  if not up_to and max(g.count('(')+1 for g in glycans) < size:
+    return [] if just_motifs else pd.DataFrame()
   if up_to:
     wga_letter = pd.DataFrame([{i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(glycans) if i not in linkages} for g in glycans])
   regex = re.compile(r"([ab])(\d)-(\d)")
-  ggraphs = [glycan_to_nxGraph(g) for g in glycans]
-  shadow_graphs = []
-  for g in ggraphs:
+  ggraphs, shadow_graphs = [], []
+  for g_str in glycans:
+    g = glycan_to_nxGraph(g_str)
+    ggraphs.append(g)
     sg = g.copy()
     labels = nx.get_node_attributes(sg, 'string_labels')
-    modified = {n: regex.sub(r"\1\2-?", labels[n]) for n in labels}
-    nx.set_node_attributes(sg, modified, 'string_labels')
+    nx.set_node_attributes(sg, {n: regex.sub(r"\1\2-?", labels[n]) for n in labels}, 'string_labels')
     shadow_graphs.append(sg)
   ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size, terminal = terminal) for g in ggraphs])
   ggraphs = ggraphs.drop(columns = [col for col in ggraphs.columns if '?' in col])
@@ -373,20 +361,19 @@ def get_k_saccharides(
   second_half_cols = cols[org_len:]
   drop_columns = []
   regex = re.compile(r"(\([ab])(\d)-(\d)\)")
-  col_sums = {col: out_matrix[col].sum() for col in cols}
-  col_subs = {col: regex.sub(r"\1\2-?)", col) for col in cols}
-  for col1 in first_half_cols:
-    for col2 in second_half_cols:
-      if col_sums[col1] == col_sums[col2] and col_subs[col1] == col2:
+  col_sums = out_matrix.sum().to_dict()
+  col_map = {regex.sub(r"\1\2-?)", col): col for col in first_half_cols}
+  for col2 in second_half_cols:
+    if col2 in col_map:
+      col1 = col_map[col2]
+      if col_sums[col1] == col_sums[col2]:
         drop_columns.append(col2)
   out_matrix = out_matrix.drop(drop_columns, axis = 1)
-  out_matrix.columns = [remove_unmatched_brackets(g) for g in out_matrix.columns]
-  out_matrix = out_matrix.T.groupby(by = out_matrix.columns).sum().T
+  out_matrix = out_matrix.T.groupby(level = 0).sum().T
   if up_to:
     combined_df= pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
     return combined_df.apply(lambda x: list(combined_df.columns[x > 0]), axis = 1).tolist() if just_motifs else combined_df
-  else:
-    return out_matrix.apply(lambda x: list(out_matrix.columns[x > 0]), axis = 1).tolist() if just_motifs else out_matrix.fillna(0).astype(int)
+  return out_matrix.apply(lambda x: list(out_matrix.columns[x > 0]), axis = 1).tolist() if just_motifs else out_matrix.fillna(0).astype(int)
 
 
 def get_terminal_structures(

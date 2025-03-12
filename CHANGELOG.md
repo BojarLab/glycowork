@@ -42,13 +42,17 @@
 - Allow sets of glycans as inputs in `get_k_saccharides`, in addition to lists of glycans (74d35a0)
 - Made `get_k_saccharides` faster by re-using graphs and using the directed graphs in an optimized way (7c52a0e)
 
+##### Fixed 🐛
+- Fixed an edge case in `get_k_saccharides`, in which choosing a `size` larger than the size of the largest glycan in the input caused an error
+- Fixed `get_k_saccharides` with higher values of `size`, which occasionally produced invalid strings, by refactoring `count_unique_subgraphs_of_size_k` and switching it to use the changed `graph_to_string_int`, to ensure motif validity
+
 ##### Deprecated ⚠️
-- Deprecated `link_find`, will be done by an optimized `get_k_saccharides` instead (since `link_find` relied on `find_isomorphs`) (7c52a0e)
+- Deprecated `link_find`; will be done by an optimized `get_k_saccharides` instead (since `link_find` relied on `find_isomorphs`) (7c52a0e)
 
 #### draw
 ##### Added ✨
 - Added `get_branches_from_graph` to process directed glycan graphs into components for `GlycoDraw` (e56d015)
-- Added the `reverse_highlight` keyword argument to `GlycoDraw`, if you want to highlight everything *except* a certain motif (which means you can highlight discontiguous sequence stretches)
+- Added the `reverse_highlight` keyword argument to `GlycoDraw`, if you want to highlight everything *except* a certain motif (which means you can highlight discontiguous sequence stretches) (f5e3b2f)
 
 ##### Changed 🔄
 - Quantitative highlighting in `GlycoDraw` via the `per_residue` keyword argument will now use individual SNFG-colors instead of a uniform highlight color (07c9c12)
@@ -62,10 +66,12 @@
 ##### Added ✨
 - Added `canonicalize_glycan_graph` to reorder graph nodes in either a length-first or linkage-first manner (7c52a0e)
 - `graph_to_string` and its sub-functions now have new keyword arguments: `canonicalize`, to determine whether transcribed graphs should be re-ordered into a canonicalized IUPAC-condensed and `order_by` to decide whether canonicalization happens in a length-first or linkage-first manner (7c52a0e)
+- Added `glycan_graph_memoize` decorator to cache results from `graph_to_string_int`
 
 ##### Changed 🔄
 - Switched `lru_cache` from `glycan_to_graph` to `glycan_to_nxGraph_int` for better performance and fewer opportunities to mess with the cache (03dfad6)
 - Made `graph_to_string` faster, to accommodate its more central role in the Universal Input framework (7c52a0e)
+- Added a fast-return for disaccharide graphs in `graph_to_string_int`, since no canonicalization/branch sorting is needed
 
 ##### Fixed 🐛
 - Fixed an edge case in `compare_glycans` in which two identical string glycans returned (True, True) if `return_matches == False` (03dfad6)

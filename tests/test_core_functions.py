@@ -1941,6 +1941,7 @@ def test_get_possible_topologies():
     assert len(topologies) > 0
     assert all(isinstance(g, nx.Graph) for g in topologies)
     assert graph_to_string(get_possible_topologies("{6S}Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", exhaustive=True)[0]) == "Neu5Ac(a2-3)Gal6S(b1-3)[Neu5Ac(a2-6)]GalNAc"
+    assert isinstance(get_possible_topologies("Gal(b1-4)GlcNAc"), list)
 
 
 def test_deduplicate_glycans():
@@ -1951,6 +1952,7 @@ def test_deduplicate_glycans():
     ]
     result = deduplicate_glycans(glycans)
     assert len(result) == 2
+    assert deduplicate_glycans(["Man(a1-3)GlcNAc"]) == ["Man(a1-3)GlcNAc"]
 
 
 def test_neighbor_is_branchpoint():
@@ -1960,6 +1962,10 @@ def test_neighbor_is_branchpoint():
     G.add_edges_from([(0,1), (1,2), (2,3), (2,4), (2,5)])
     assert neighbor_is_branchpoint(G, 1)  # Node 1 connected to branch point 2
     assert not neighbor_is_branchpoint(G, 3)  # Node 3 is leaf
+
+
+def test_try_string_conversion():
+    assert try_string_conversion(glycan_to_nxGraph("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc")) == "Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc"
 
 
 def test_subgraph_isomorphism_with_negation():
@@ -2124,6 +2130,7 @@ def test_get_k_saccharides():
     assert "GlcNAc(b1-4)GalNAc" in result
     assert "GlcNAc(b1-6)GalNAc" in result
     assert "GlcNAc(b1-2)GlcNAc" not in result
+    assert get_k_saccharides(['Gal(b1-3)GalNAc'], size=3, just_motifs=True) == []
 
 
 def test_get_terminal_structures():
@@ -2568,6 +2575,8 @@ def test_draw_chem2d():
     # Test with filepath
     draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath="test.svg")
     assert Path("test.svg").exists()
+    draw_chem2d("GlcNAc(b1-4)GlcA", ["GlcNAc"], filepath="test.pdf")
+    assert Path("test.pdf").exists()
     # Test with unsupported glycan
     with patch('glycowork.motif.processing.IUPAC_to_SMILES', side_effect=Exception), pytest.raises(Exception):
         draw_chem2d("InvalidGlycan", ["GlcNAc"])
@@ -2620,6 +2629,8 @@ def test_glycodraw():
     result = GlycoDraw("GlcNAc(b1-4)GlcA", per_residue=[0.8, 0.2], suppress=True)
     assert result is not None
     result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_motif="r[Sia]{,1}-[.]{,1}-([dHex]){,1}-.b3(?=-GalNAc)", suppress=True)
+    assert result is not None
+    result = GlycoDraw("GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)GlcNAc", highlight_motif="Xyl(b1-2)Man", reverse_highlight=True, suppress=True)
     assert result is not None
     # Test with repeat unit
     result = GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat=True, suppress=True)
@@ -2707,7 +2718,7 @@ def test_plot_glycans_excel(tmp_path):
 @pytest.fixture
 def mock_svg_file():
     return """<?xml version="1.0" encoding="UTF-8"?>
-    <svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
         <!-- GlcNAc -->
         <g transform="scale(0.1 -0.1)">
             <text>GlcNAc</text>
@@ -2735,6 +2746,12 @@ def test_annotate_figure(mock_svg_file):
         })
         result = annotate_figure("input.svg", scale_by_DE_res=de_results)
         assert isinstance(result, str)
+        annotate_figure("input.svg", filepath="test.pdf")
+        assert Path("test.pdf").exists()
+        annotate_figure("input.svg", filepath="test.svg")
+        assert Path("test.svg").exists()
+        annotate_figure("input.svg", filepath="test.png")
+        assert Path("test.png").exists()
 
 
 def test_scale_in_range():

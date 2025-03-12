@@ -125,7 +125,7 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
   "Wrapper for converting glycans into networkx graphs; also works with floating substituents"
   if not glycan:
     return nx.DiGraph()
-  if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
+  if any(k in glycan for k in [';', '-D-', 'RES', '=']):
     raise Exception
   termini_list = expand_termini_list(glycan, termini_list) if termini_list else None
   if '{' in glycan:
@@ -156,27 +156,23 @@ def categorical_node_match_wildcard(attr: Union[str, Tuple[str, ...]], # Attribu
                                   default2: str # Default value for secondary attribute
                                  ) -> Callable[[dict, dict], bool]: # Function that matches node attributes
   "Match nodes while handling wildcards and flexible positions"
-  if isinstance(attr, str):
-    def match(data1, data2):
-      data1_labels2, data2_labels2 = data1.get(attr2, default2), data2.get(attr2, default2)
-      if data1_labels2 != data2_labels2 and 'flexible' not in {data1_labels2, data2_labels2}:
-        return False
-      data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
-      comb_labels = data1_labels + data2_labels
-      if "Monosaccharide" in comb_labels and  '-' not in comb_labels:
-        return True
-      if "?1-?" in comb_labels and comb_labels.count('-') == 2:
-        return True
-      if data2_labels.startswith('!') and data1_labels != data2_labels[1:] and '-' not in data1_labels:
-        return True
-      if data1_labels in narrow_wildcard_list and data2_labels in narrow_wildcard_list[data1_labels]:
-        return True
-      elif data2_labels in narrow_wildcard_list and data1_labels in narrow_wildcard_list[data2_labels]:
-        return True
-      return data1_labels == data2_labels
-  else:
-    def match(data1, data2):
-      return all(data1.get(a, d) == data2.get(a, d) for a, d in zip(attr, default))
+  def match(data1, data2):
+    data1_labels2, data2_labels2 = data1.get(attr2, default2), data2.get(attr2, default2)
+    if data1_labels2 != data2_labels2 and 'flexible' not in {data1_labels2, data2_labels2}:
+      return False
+    data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
+    comb_labels = data1_labels + data2_labels
+    if "Monosaccharide" in comb_labels and  '-' not in comb_labels:
+      return True
+    if "?1-?" in comb_labels and comb_labels.count('-') == 2:
+      return True
+    if data2_labels.startswith('!') and data1_labels != data2_labels[1:] and '-' not in data1_labels:
+      return True
+    if data1_labels in narrow_wildcard_list and data2_labels in narrow_wildcard_list[data1_labels]:
+      return True
+    elif data2_labels in narrow_wildcard_list and data1_labels in narrow_wildcard_list[data2_labels]:
+      return True
+    return data1_labels == data2_labels
   return match
 
 
@@ -432,43 +428,41 @@ def canonicalize_glycan_graph(graph: nx.DiGraph,
   # Copy all node attributes to the new graph
   for node, attrs in graph.nodes(data = True):
     canonical_graph.add_node(node, **attrs)
+  # Pre-calculate path lengths and leaf labels
+  path_lengths, leaf_labels = {}, {}
 
-  def longest_path_length(graph, node):
-    if not list(graph.successors(node)):
-      return 0
-    return 1 + max((longest_path_length(graph, child) for child in graph.successors(node)), default = 0)
+  # Calculate values with post-order traversal (children before parents)
+  def calculate_values(node):
+    if node in path_lengths:
+      return path_lengths[node], leaf_labels[node]
+    successors = list(graph.successors(node))
+    if not successors:
+      path_lengths[node] = 0
+      leaf_labels[node] = graph.nodes[node].get("string_labels", "")
+    else:
+      # Process all children first
+      for child in successors:
+        calculate_values(child)
+      # Then calculate for this node
+      path_lengths[node] = 1 + max(path_lengths[child] for child in successors)
+      leaf_labels[node] = min(leaf_labels[child] for child in successors)
+    return path_lengths[node], leaf_labels[node]
 
-  def get_leaf_label(node):
-    """Get the label of the leaf node for alphabetic tie-breaking"""
-    descendants = list(nx.descendants(graph, node))
-    leaves = [n for n in descendants if graph.out_degree(n) == 0]
-    if leaves:
-      return graph.nodes[leaves[0]].get("string_labels", "")
-    return ""
+  # Calculate values for all nodes starting from root
+  calculate_values(root_idx)
 
+  # Sort branches using pre-calculated values
   def sort_branches(node):
-    """Sort branches from a node based on canonicalization rules.
-    Returns a list of children nodes in canonical order (reversed).
-    """
     children = list(graph.successors(node))
     if len(children) < 2:
       return children
     if order_by == "length":
-      # Sort children based on criteria:
-      # 1. Monosaccharide count (descending)
-      # 2. Linkage number (ascending)
-      # 3. Leaf node label (alphabetical)
-      children.sort(key = lambda x: (-(longest_path_length(graph, x)),
-                                get_linkage_number(x, graph), get_leaf_label(x)), reverse = True)
+      children.sort(key = lambda x: (-path_lengths[x], get_linkage_number(x, graph), leaf_labels[x]), reverse = True)
     else:  # order_by == "linkage"
-      # Primary: Linkage number (ascending)
-      # Secondary: Monosaccharide count (descending)
-      # Tertiary: Leaf node label (alphabetical) as final tiebreaker
-      children.sort(key = lambda x: (-get_linkage_number(x, graph), (longest_path_length(graph, x)),
-                                    get_leaf_label(x)), reverse = True)
+      children.sort(key = lambda x: (-get_linkage_number(x, graph), path_lengths[x], leaf_labels[x]), reverse = True)
     return children
 
-  # Recursively build the canonical graph using DFS
+  # Build canonical graph
   def canonicalize_branch(node):
     children = sort_branches(node)
     for child in children:
@@ -480,12 +474,50 @@ def canonicalize_glycan_graph(graph: nx.DiGraph,
   return canonical_graph
 
 
+def glycan_graph_memoize(maxsize = 128):
+  cache, access_order = {}, []
+  def decorator(func):
+    @wraps(func)
+    def wrapper(graph, *args, **kwargs):
+      if len(graph) < 4:
+        return func(graph, *args, **kwargs)
+      labels_vals = tuple(nx.get_node_attributes(graph, "string_labels").values())
+      degrees = tuple(d for _, d in graph.out_degree())
+      kwargs_items = tuple(sorted(kwargs.items()))
+      # Create key
+      key = (hash(labels_vals), hash(degrees), hash(args), hash(kwargs_items))
+      # Check cache
+      if key in cache:
+        # Update LRU order
+        if key in access_order:
+          access_order.remove(key)
+        access_order.append(key)
+        return cache[key]
+      # Compute result
+      result = func(graph, *args, **kwargs)
+      # Manage cache size
+      if len(cache) >= maxsize:
+        oldest = access_order.pop(0)
+        del cache[oldest]
+      # Store result
+      cache[key] = result
+      access_order.append(key)
+      return result
+    return wrapper
+  return decorator
+
+
+@glycan_graph_memoize(maxsize = 128)
 def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
                         canonicalize: bool = True,  # Whether to output canonicalized IUPAC-condensed
                         order_by: str = "length"  # canonicalize by 'length' or 'linkage'
                       ) -> str: # IUPAC-condensed glycan string
   "Convert glycan graph back to IUPAC-condensed format"
-  if canonicalize:
+  if len(graph) == 3:
+    nodes = sorted(list(graph.nodes()))
+    node_labels = nx.get_node_attributes(graph, "string_labels")
+    return f"{node_labels[nodes[0]]}({node_labels[nodes[1]]}){node_labels[nodes[2]]}"
+  if canonicalize and any(d > 1 for _, d in graph.out_degree()):
     graph = canonicalize_glycan_graph(graph, order_by = order_by)
   # Get the root node (highest index)
   root_idx = max(graph.nodes())
@@ -582,18 +614,9 @@ def largest_subgraph(glycan_a: Union[str, nx.DiGraph], # First glycan
   graph_b = ensure_graph(glycan_b)
   ismags = nx.isomorphism.ISMAGS(graph_a, graph_b,
                                  node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-  largest_common_subgraph = list(ismags.largest_common_subgraph())
-  lgs = graph_a.subgraph(list(largest_common_subgraph[0].keys()))
-  if nx.is_weakly_connected(lgs):
-    min_num = min(lgs.nodes())
-    node_dic = {k: k-min_num for k in lgs.nodes()}
-    lgs = nx.relabel_nodes(lgs, node_dic)
-    if lgs:
-      return graph_to_string(lgs)
-    else:
-      return ""
-  else:
-    return ""
+  largest_common_subgraph = list(ismags.largest_common_subgraph(symmetry = False))
+  largest_common_subgraph = [list(sub.keys()) for sub in largest_common_subgraph if list(sub.keys())[0] < list(sub.keys())[1]]
+  return graph_to_string_int(graph_a.subgraph(largest_common_subgraph[0]))
 
 
 def get_possible_topologies(glycan: Union[str, nx.DiGraph], # Glycan with floating substituent
