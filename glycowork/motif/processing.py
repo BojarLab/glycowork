@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import copy
 import json
@@ -7,7 +6,7 @@ from random import choice
 from functools import wraps
 from collections import defaultdict
 from pathlib import Path
-from itertools import permutations, combinations
+from itertools import combinations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
 from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
@@ -53,7 +52,7 @@ CANONICALIZE = re.compile('|'.join(map(re.escape, list(replace_dic.keys()))))
 def min_process_glycans(glycan_list: List[str] # List of glycans in IUPAC-condensed format
                       ) -> List[List[str]]: # List of glycoletter lists
   "Convert list of glycans into a nested lists of glycoletters"
-  return [[x for x in multireplace(k, {'[': '', ']': '', '{': '', '}': '', ')': '('}).split('(') if x] for k in glycan_list]
+  return [k.replace('[', '').replace(']', '').replace('{', '').replace('}', '').replace(')', '(').split('(') for k in glycan_list]
 
 
 def get_lib(glycan_list: List[str] # List of IUPAC-condensed glycan sequences
@@ -791,7 +790,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Anomeric indicator placed behind monosaccharide (e.g., "Galb14GlcNAc")
   glycan = re.sub(r'([A-Z][A-Za-z5]*)([ab])([1-2])(\d)', r'\1\2\3-\4', glycan)
   # Canonicalize usage of brackets and parentheses
-  if bool(re.search(r'\([A-Zd3-9]', glycan)):
+  if bool(re.search(r'\([A-Zd3-9]', glycan)) and not bool(re.search(r'\([ab?]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
   # Canonicalize linkage uncertainty
   # Open linkages with anomeric config specified (e.g., "Mana-")
@@ -815,7 +814,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Missing starting carbon (e.g., "b-4")
   glycan = re.sub(r'(a|b|\?)-(\d)', r'\g<1>1-\2', glycan)
   # If still no '-' in glycan, assume 'a3' type of linkage denomination
-  if '-' not in glycan or bool(re.search(r'[ab][123456](?!\-)', glycan)):
+  if '-' not in glycan or bool(re.search(r'[ab][123456](?![\-PA])', glycan)):
     # Check whether linkages are recorded as b1 or as a3
     if bool(re.search(r"^[^2-6]*1?[^2-6]*$", glycan)):
       glycan = re.sub(r'(a|b)(\d)(?!\-)', r'\g<1>\g<2>-?', glycan)

@@ -195,14 +195,16 @@ def compare_glycans(glycan_a: Union[str, nx.DiGraph], # First glycan to compare
     if glycan_a.count('(') != glycan_b.count('('):
       return (False, None) if return_matches else False
     proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
-    if 'O' in glycan_a + glycan_b:
-      glycan_a, glycan_b = [PTM_REGEX.sub('O', glycan) for glycan in (glycan_a, glycan_b)]
-    g1, g2 = map(glycan_to_nxGraph, (glycan_a, glycan_b))
+    if 'O' in glycan_a or 'O' in glycan_b:
+      glycan_a, glycan_b = PTM_REGEX.sub('O', glycan_a), PTM_REGEX.sub('O', glycan_b)
+    g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
   else:
     if len(glycan_a.nodes) != len(glycan_b.nodes):
       return (False, None) if return_matches else False
     proc = frozenset(nx.get_node_attributes(glycan_a, "string_labels").values()) | frozenset(nx.get_node_attributes(glycan_b, "string_labels").values())
-    g1, g2 = (ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))) if 'O' in ''.join(proc) else (glycan_a, glycan_b)
+    g1, g2 = (ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))) if any('O' in s for s in proc) else (glycan_a, glycan_b)
+  if sorted(d for _, d in g1.out_degree()) != sorted(d for _, d in g2.out_degree()):
+    return (False, None) if return_matches else False
   narrow_wildcard_list = build_wildcard_cache(proc)
   if narrow_wildcard_list:
     matcher = nx.isomorphism.DiGraphMatcher(g1, g2, categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
@@ -258,15 +260,17 @@ def subgraph_isomorphism(glycan: Union[str, nx.DiGraph], # Glycan sequence or gr
     if not count and not return_matches and motif in glycan:
       return True
     motif_comp = min_process_glycans([motif, glycan])
-    if 'O' in glycan + motif:
-      glycan, motif = [PTM_REGEX.sub('O', g) for g in (glycan, motif)]
+    if 'O' in glycan or 'O' in motif:
+      glycan, motif = PTM_REGEX.sub('O', glycan), PTM_REGEX.sub('O', motif)
     g1 = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else None)
     g2 = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else None, termini_list = termini_list)
   else:
     if len(glycan.nodes) < len(motif.nodes):
       return (0, []) if return_matches else 0 if count else False
+    if termini_list:
+      nx.set_node_attributes(motif, dict(zip(motif.nodes(), termini_list)), 'termini')
     motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
-    if 'O' in ''.join(unwrap(motif_comp)):
+    if any('O' in s for s in unwrap(motif_comp)):
       g1, g2 = ptm_wildcard_for_graph(deepcopy(glycan)), ptm_wildcard_for_graph(deepcopy(motif))
     else:
       g1, g2 = glycan, motif

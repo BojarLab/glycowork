@@ -254,6 +254,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("aMan13(aMan16)Man") == "Man(a1-3)[Man(a1-6)]Man"
     assert canonicalize_iupac("bGal13bGalNAc14(aNeuAc23)bGal14Glc") == "Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc"
     assert canonicalize_iupac("Mana12Man") == "Man(a1-2)Man"
+    assert canonicalize_iupac("Rib5P-ol(5-4)Glc6PEtN(b1-3)Gal(b1-3)GalNAc(b1-4)Rib5P-ol") == "Rib5P-ol(5-4)Glc6PEtN(b1-3)Gal(b1-3)GalNAc(b1-4)Rib5P-ol"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -1911,6 +1912,7 @@ def test_subgraph_isomorphism():
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "!Man(a1-3)GlcNAc")
     # Test with termini constraints
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "GlcNAc", termini_list=['terminal'])
+    assert subgraph_isomorphism(glycan_to_nxGraph("Gal(b1-4)GlcNAc"), glycan_to_nxGraph("GlcNAc"), termini_list=['terminal'])
     # Test with narrow linkage ambiguity
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-3/4)GlcNAc") == True
     assert subgraph_isomorphism("Gal(a1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-3/4)GlcNAc") == False

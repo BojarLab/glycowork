@@ -6,7 +6,7 @@ from collections import Counter, deque
 from functools import partial
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-from glycowork.glycan_data.loader import linkages, motif_list, unwrap, replace_every_second, df_species
+from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans
 from glycowork.motif.regex import get_match
@@ -315,11 +315,11 @@ def count_unique_subgraphs_of_size_k(
           k_subgraphs.append(graph_to_string_int(graph.subgraph(current_sg)))
         continue
       current_sg_set = set(current_sg)
-      candidates = [s for n in current_sg for s in successor_dict[n] if s not in current_sg]
+      candidates = [s for n in current_sg_set for s in successor_dict[n] if s not in current_sg_set]
       for candidate in candidates:
         new_mono = mono_cnt + (1 if candidate % 2 == 0 else 0)
         if new_mono > size: continue
-        queue.append((tuple(sorted(set(current_sg) | {candidate})), new_mono, curr_size + 1))
+        queue.append((tuple(sorted(current_sg_set | {candidate})), new_mono, curr_size + 1))
   return dict(Counter(k_subgraphs))
 
 

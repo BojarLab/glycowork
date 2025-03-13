@@ -32,6 +32,7 @@
 - `get_class` can now identify repeating unit glycans and returns "repeat" in this case (74d35a0)
 - `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide (24c8e81, ab42dbb)
 - `canonicalize_iupac` will now use `glycan_to_nxGraph` and `graph_to_string` for branch canonicalization, instead of `choose_correct_isoform`. On average, this works much better and more reliable (7c52a0e)
+- `canonicalize_iupac` is now more robust to (5-6) type linkages and to the associated sugar alcohols, like Rib5P-ol
 
 ##### Deprecated ⚠️
 - Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead (7c52a0e)
@@ -43,8 +44,8 @@
 - Made `get_k_saccharides` faster by re-using graphs and using the directed graphs in an optimized way (7c52a0e)
 
 ##### Fixed 🐛
-- Fixed an edge case in `get_k_saccharides`, in which choosing a `size` larger than the size of the largest glycan in the input caused an error
-- Fixed `get_k_saccharides` with higher values of `size`, which occasionally produced invalid strings, by refactoring `count_unique_subgraphs_of_size_k` and switching it to use the changed `graph_to_string_int`, to ensure motif validity
+- Fixed an edge case in `get_k_saccharides`, in which choosing a `size` larger than the size of the largest glycan in the input caused an error (db7847d)
+- Fixed `get_k_saccharides` with higher values of `size`, which occasionally produced invalid strings, by refactoring `count_unique_subgraphs_of_size_k` and switching it to use the changed `graph_to_string_int`, to ensure motif validity (db7847d)
 
 ##### Deprecated ⚠️
 - Deprecated `link_find`; will be done by an optimized `get_k_saccharides` instead (since `link_find` relied on `find_isomorphs`) (7c52a0e)
@@ -66,12 +67,13 @@
 ##### Added ✨
 - Added `canonicalize_glycan_graph` to reorder graph nodes in either a length-first or linkage-first manner (7c52a0e)
 - `graph_to_string` and its sub-functions now have new keyword arguments: `canonicalize`, to determine whether transcribed graphs should be re-ordered into a canonicalized IUPAC-condensed and `order_by` to decide whether canonicalization happens in a length-first or linkage-first manner (7c52a0e)
-- Added `glycan_graph_memoize` decorator to cache results from `graph_to_string_int`
+- Added `glycan_graph_memoize` decorator to cache results from `graph_to_string_int` (db7847d)
 
 ##### Changed 🔄
 - Switched `lru_cache` from `glycan_to_graph` to `glycan_to_nxGraph_int` for better performance and fewer opportunities to mess with the cache (03dfad6)
 - Made `graph_to_string` faster, to accommodate its more central role in the Universal Input framework (7c52a0e)
-- Added a fast-return for disaccharide graphs in `graph_to_string_int`, since no canonicalization/branch sorting is needed
+- Added a fast-return for disaccharide graphs in `graph_to_string_int`, since no canonicalization/branch sorting is needed (db7847d)
+- `subgraph_isomorphism` is now also fine with people prodiving a separate `termini_list` even when providing graphs as input (though it's still recommended to just input `termini_list` when creating the graphs in the first place)
 
 ##### Fixed 🐛
 - Fixed an edge case in `compare_glycans` in which two identical string glycans returned (True, True) if `return_matches == False` (03dfad6)
