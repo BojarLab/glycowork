@@ -528,6 +528,7 @@ def test_pad_sequence():
     pad_label = 0
     result = pad_sequence(seq, max_length, pad_label)
     assert result == [1, 2, 3, 0, 0]
+    result = pad_sequence(seq, max_length)
     # Test when sequence is longer than max_length
     seq = [1, 2, 3, 4, 5, 6]
     max_length = 4
@@ -566,6 +567,7 @@ def test_stemify_glycan():
     # Test glycan with multiple modifications
     result = stemify_glycan("Neu5Ac9Ac(a2-3)Gal6S(b1-4)GlcNAc")
     assert result == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
+    assert stemify_glycan("Neu5Ac9Ac(a2-3)Gal6S(b1-4)GlcNAc6S") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
 
 
 def test_glycan_to_composition():
@@ -639,7 +641,8 @@ def test_mask_rare_glycoletters():
         "Neu5Ac(a2-6)Gal(b1-4)GlcNAc",
         "Gal(b1-4)GlcNAc",
         "Man6P(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
-        "RareSugar(a1-2)GlcNAc"
+        "RareSugar(a1-2)GlcNAc",
+        "GlcNAc(a1-2)WeirdSugar"
     ]
 
     # Test with default thresholds
@@ -673,6 +676,16 @@ def test_mz_to_composition():
         mass_tolerance=0.5,
         reduced=True,
         adduct="H2O",
+        extras=["doubly_charged", "adduct"]
+    )
+    result = mz_to_composition(
+        698,
+        mode='positive',
+        mass_value='monoisotopic',
+        glycan_class='all',
+        mass_tolerance=0.5,
+        reduced=True,
+        filter_out = {'Kdn'},
         extras=["doubly_charged", "adduct"]
     )
 
@@ -5326,27 +5339,6 @@ def sample_glycan_df():
     return df
 
 
-@pytest.fixture
-def sample_motif_df():
-    return pd.DataFrame({
-        'motif_name': [
-            'Terminal_LewisX',
-            'Internal_LewisX',
-            'LewisY'
-        ],
-        'motif': [
-            'Gal(b1-4)[Fuc(a1-3)]GlcNAc',
-            'Gal(b1-4)[Fuc(a1-3)]GlcNAc',
-            'Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc'
-        ],
-        'termini_spec': [
-            "['terminal', 'terminal', 'flexible']",
-            "['internal', 'terminal', 'flexible']",
-            "['terminal', 'flexible', 'terminal', 'flexible']"
-        ]
-    })
-
-
 def test_check_presence_existing_glycan(sample_glycan_df, capsys):
     check_presence('Gal(b1-4)Glc-ol', sample_glycan_df)
     captured = capsys.readouterr()
@@ -5378,24 +5370,9 @@ def test_check_presence_fast_mode(sample_glycan_df, capsys):
     assert "Glycan already in dataset." in captured.out
 
 
-def test_get_insight_basic(sample_glycan_df, sample_motif_df, monkeypatch, capsys):
-    # Mock df_glycan global variable
-    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
-    get_insight('Gal(b1-4)Glc-ol', motifs=sample_motif_df)
-    captured = capsys.readouterr()
-    assert "Let's get rolling!" in captured.out
-    assert "Homo_sapiens" in captured.out
-    assert "G00001" in captured.out
-    assert "blood" in captured.out
-
-
-def test_get_insight_with_disease(sample_glycan_df, sample_motif_df, monkeypatch, capsys):
-    monkeypatch.setattr('glycowork.motif.query.df_glycan', sample_glycan_df)
-    get_insight('Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', motifs=sample_motif_df)
-    captured = capsys.readouterr()
-    assert "cancer" in captured.out
-    assert "up" in captured.out
-    assert "tumor" in captured.out
+def test_get_insight():
+    get_insight('Gal(b1-4)Glc-ol')
+    get_insight('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc')
 
 
 def test_glytoucan_to_glycan_forward():

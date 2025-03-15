@@ -814,7 +814,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glytoucan_to_glycan([glycan])[0]
   elif not isinstance(glycan, str) or '@' in glycan:
     check_nomenclature(glycan)
-  elif ((glycan[-1].isdigit() and bool(re.search("[A-Z]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B') or glycan.endswith("LacDiNAc")) and 'e' not in glycan and '-' not in glycan:
+  elif ((glycan[-1].isdigit() and bool(re.search("[A-Z]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith(('B', 'LacDiNAc'))) and 'e' not in glycan and '-' not in glycan:
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)

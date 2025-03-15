@@ -165,22 +165,18 @@ def add_customization(
   p.L(x_base+dim, y_base+half_dim)
   drawing.append(p)
   drawing.append(draw.Text(modification, dim*0.35, path = p, fill = col_dict['black'], text_anchor = text_anchor, line_offset = -3.15))
-  if furanose:
+  if furanose or conf:
+    conf_text = ""
+    if conf:
+      conf_dict = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
+      conf_text = conf_dict[conf] if isinstance(conf, str) and conf in conf_dict else conf
+    if furanose:
+      conf_text += "f"
     p = draw.Path(stroke_width = 0)
     p.M(x_base-dim, y_base)
     p.L(x_base+dim, y_base)
     drawing.append(p)
-    drawing.append(draw.Text('f', dim*0.3, path = p, fill = col_dict['black'], text_anchor = text_anchor, center = True))
-  if conf:
-    conf_dict = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
-    p = draw.Path(stroke_width = 0)
-    p.M(x_base-dim, y_base)
-    p.L(x_base+dim, y_base)
-    drawing.append(p)
-    if conf in list(conf_dict.keys()):
-      drawing.append(draw.Text(conf_dict[conf], dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
-    else:
-      drawing.append(draw.Text(conf, dim*0.3, path = p, fill = col_dict['black'], text_anchor= text_anchor, center = True))
+    drawing.append(draw.Text(conf_text, dim*0.3, path = p, fill = col_dict['black'], text_anchor = text_anchor, center = True))
 
 
 def draw_shape(
@@ -363,8 +359,8 @@ def draw_shape(
       drawing.append(draw.Circle(x_base, y_base, 0.15 * dim, fill = 'white',
                                  stroke_width = stroke_w, stroke = col_dict['black']))
   # Handle segmented Hex shapes (04X, 15A, etc.)
-  elif any(x in shape for x in ['04', '15', '02', '13', '24', '35', '25', '03', '14']):
-    use_grey_base = shape in ['04A', '15X', '02X', '13A', '24A', '35A', '14A']
+  elif any(x in shape for x in {'04', '15', '02', '13', '24', '35', '25', '03', '14'}):
+    use_grey_base = shape in {'04A', '15X', '02X', '13A', '24A', '35A', '14A'}
     segment_fill = 'white' if use_grey_base else col_dict['grey']
     # Define angle pairs for each shape type
     angles = {
@@ -384,7 +380,7 @@ def draw_shape(
     points.extend([x_base+inside_hex_dim*cos(radians(end_angle)), y_base-inside_hex_dim*sin(radians(end_angle))])
     drawing.append(draw.Lines(*points, close = True, fill = segment_fill, stroke = col_dict['black'], stroke_width = 0))
     # Draw the dividing line - either center-to-edge or edge-to-edge
-    if shape[:2] in ['25', '03', '14']:
+    if shape[:2] in {'25', '03', '14'}:
       p = draw.Path(stroke_width=stroke_w, stroke=col_dict['black'])
       p.M(x_base+inside_hex_dim*cos(radians(start_angle)), y_base-inside_hex_dim*sin(radians(start_angle)))
       p.L(x_base+inside_hex_dim*cos(radians(end_angle)), y_base-inside_hex_dim*sin(radians(end_angle)))
@@ -397,7 +393,7 @@ def draw_shape(
         drawing.append(p)
     # Draw outline
     draw_hex(x_pos, y_pos, dim, col_dict, drawing, outline_only = True)
-  elif shape in ['Z', 'Y']:
+  elif shape in {'Z', 'Y'}:
     rot = f'rotate({deg} {-abs(x_pos)*dim} {-abs(y_pos)*dim})'
     g = draw.Group(transform = rot)
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
@@ -410,7 +406,7 @@ def draw_shape(
       g.append(draw.Circle(x_base + 0.4 * dim, y_base, 0.15 * dim, fill = 'none',
                            stroke_width = stroke_w, stroke = col_dict['black']))
     drawing.append(g)
-  elif shape in ['B', 'C']:
+  elif shape in {'B', 'C'}:
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
     p.M(x_base, y_base-half_dim)
     p.L(x_base, y_base+half_dim)
@@ -420,7 +416,7 @@ def draw_shape(
     if shape == 'C':
       drawing.append(draw.Circle(x_base - 0.4 * dim, y_base, 0.15 * dim, fill = 'none',
                                  stroke_width = stroke_w, stroke = col_dict['black']))
-  if shape not in ['empty', 'text', 'red_end', 'free', 'Z', 'Y', 'B', 'C'] and not any(x in shape for x in ['04', '15', '02', '13', '24', '35', '25', '03', '14']):
+  if shape not in {'empty', 'text', 'red_end', 'free', 'Z', 'Y', 'B', 'C'} and not any(x in shape for x in {'04', '15', '02', '13', '24', '35', '25', '03', '14'}):
     add_customization(drawing, x_base, y_base, dim, modification, col_dict, conf, furanose, text_anchor)
 
 
@@ -687,13 +683,14 @@ def get_coordinates_and_labels(
       has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(l2_connected_branches))
       has_own_fuc = 'Fuc' in unwrap(l1_main_chain_branches)
       has_bisecting = any('GlcNAc' in b[0] for b in core_branches) and main_sugar[parent_idx] == 'Man' and main_bond[parent_idx-1] == 'β 4'
+      has_triple_branch = len(branch_indices) == 2 and not 'Xyl' in unwrap(core_branches)
       l2_connected_branches = [k for k in l2_connected_branches if k not in [['Fuc'], ['Gal']]]
       max_l2_len = max((len(b) for b in l2_connected_branches), default = 0)
       max_l1_len = max((len(b) for b in l1_main_chain_branches if b not in [['Fuc'], ['Gal']]), default = 0)
       spacing_spec = SPACING + has_fuc*SPACING + has_own_fuc*SPACING + (max_l1_len > 0)*0.25*SPACING
       if (max_l2_len > 0) and (spacing_spec < 2.5 or (has_fuc and has_own_fuc)):
         spacing_spec += 0.5*SPACING
-      if has_bisecting and spacing_spec < 1.1:
+      if (has_bisecting or has_triple_branch) and spacing_spec < 1.1:
         spacing_spec += SPACING
       # Push main chain down after branch point
       for i in range(parent_idx + 1, len(main_sugar)):
@@ -710,10 +707,12 @@ def get_coordinates_and_labels(
     else:
       is_bisecting = branch_sugar[0] in ['GlcNAc'] and main_sugar[parent_idx] == 'Man' and main_bond[parent_idx-1] == 'β 4'
       is_fuc_partner = main_sugar[parent_idx+1] == 'Fuc'
+      parent_branches = [(k, c) for k, c in enumerate(l1_connection) if c[1] == parent_idx]  # + 1 from main chain
+      is_triple_branch = len(parent_branches) == 2 and j == parent_branches[0][0]
       # All other branches go up by spacing amount
       if len(branch_sugar) == 1 and branch_sugar[0] in ['Fuc', 'Xyl']:
         l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] + 2*SPACING
-      elif len(branch_sugar) == 1 and (is_bisecting or is_fuc_partner):
+      elif len(branch_sugar) == 1 and (is_bisecting or is_fuc_partner or is_triple_branch):
         l1_y_pos[j][0] = main_sugar_y_pos[parent_idx]
       elif len(branch_sugar) == 1:
         l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] - SPACING
@@ -1082,7 +1081,7 @@ def GlycoDraw(
     pdb_file: Optional[Union[str, Path]] = None  # only used when draw_method='chem3d'; already existing glycan structure
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
-  if any([k in glycan for k in [';', '-D-', 'RES', '=']]):
+  if any(k in glycan for k in [';', '-D-', 'RES', '=']):
     raise Exception
   if glycan.startswith('Terminal') and glycan not in motif_list.motif_name.values.tolist():
     glycan = glycan.split('_')[-1]
