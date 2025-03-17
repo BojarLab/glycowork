@@ -1123,8 +1123,7 @@ def extend_glycans(glycans: Union[List[str], Set[str]], # Glycans to extend
   new_glycans = set()
   for r in reactions:
     temp_glycans = [f'{{{r}}}{g}' for g in glycans]
-    temp = (topology for g in temp_glycans for topology in get_possible_topologies(g, exhaustive = True, allowed_disaccharides = allowed_disaccharides))
-    new_glycans.update(set(map(graph_to_string, temp)))
+    new_glycans.update(set(topology for g in temp_glycans for topology in get_possible_topologies(g, exhaustive = True, allowed_disaccharides = allowed_disaccharides)))
   return new_glycans
 
 

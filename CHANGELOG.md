@@ -33,6 +33,7 @@
 - `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide (24c8e81, ab42dbb)
 - `canonicalize_iupac` will now use `glycan_to_nxGraph` and `graph_to_string` for branch canonicalization, instead of `choose_correct_isoform`. On average, this works much better and is more reliable (7c52a0e)
 - `canonicalize_iupac` is now more robust to (5-6) type linkages and to the associated sugar alcohols, like Rib5P-ol (7a260ac)
+- `canonicalize_iupac` will now raise a `ValueError` instead of a warning if a glycan string has mismatching brackets
 
 ##### Deprecated ⚠️
 - Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead (7c52a0e)
@@ -74,11 +75,15 @@
 - Made `graph_to_string` faster, to accommodate its more central role in the Universal Input framework (7c52a0e)
 - Added a fast-return for disaccharide graphs in `graph_to_string_int`, since no canonicalization/branch sorting is needed (db7847d)
 - `subgraph_isomorphism` is now also fine with people prodiving a separate `termini_list` even when providing graphs as input (though it's still recommended to just input `termini_list` when creating the graphs in the first place) (7a260ac)
-- `GlycoDraw` will now properly space text within monosaccharide symbols, if there are multiple indicators (like `D` and `f`)
+- `GlycoDraw` will now properly space text within monosaccharide symbols, if there are multiple indicators (like `D` and `f`) (03e502c)
+- `get_possible_topologies` will now raise a `ValueError` instead of a warning when you attempt to use it with an already defined glycan
+- `get_possible_topologies` will now by default return the strings of glycans, except if `return_graphs=True`, in which case the old behavior of returning glycan graphs as NetworkX objects is restored
+- If `get_possible_topologies` is used with dangling modifications (e.g., `{OS}Gal(b1-3)GalNAc`), the new default is now to also try adding the modification at non-terminal residues, even if `exhaustive=False`. The behavior for monosaccharide additions is unchanged.
+- If a glycan string is input into `graph_to_string` (even though you shouldn't do this) it will simply be returned as the string value
 
 ##### Fixed 🐛
 - Fixed an edge case in `compare_glycans` in which two identical string glycans returned (True, True) if `return_matches == False` (03dfad6)
 
 #### tokenization
 ##### Changed 🔄
-- `stemify_glycan` can now deal with even more strongly modified glycans and should be faster too
+- `stemify_glycan` can now deal with even more strongly modified glycans and should be faster too (03e502c)

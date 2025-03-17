@@ -584,6 +584,8 @@ def graph_to_string(graph: nx.DiGraph, # Glycan graph (assumes root node is the 
                     order_by: str = "length"  # canonicalize by 'length' or 'linkage'
                   ) -> str: # IUPAC-condensed glycan string
   "Convert glycan graph back to IUPAC-condensed format, handling disconnected components"
+  if isinstance(graph, str):
+    return graph
   if len(list(nx.weakly_connected_components(graph))) > 1:
     parts = [graph.subgraph(sorted(c)) for c in nx.weakly_connected_components(graph)]
     len_org = len(parts[-1])
@@ -626,14 +628,14 @@ def largest_subgraph(glycan_a: Union[str, nx.DiGraph], # First glycan
 def get_possible_topologies(glycan: Union[str, nx.DiGraph], # Glycan with floating substituent
                           exhaustive: bool = False, # Whether to allow additions at internal positions
                           allowed_disaccharides: Optional[Set[str]] = None, # Permitted disaccharides when creating possible glycans
-                          modification_map: Dict[str, Set[str]] = modification_map # Maps modifications to valid attachments
-                         ) -> List[nx.DiGraph]: # List of possible topology graphs
+                          modification_map: Dict[str, Set[str]] = modification_map, # Maps modifications to valid attachments
+                          return_graphs: bool = False # Whether to return glycan graphs (otherwise return converted strings)
+                         ) -> List[Union[str, nx.DiGraph]]: # List of possible topology strings or graphs
   "Create possible glycan graphs given a floating substituent"
   ggraph = ensure_graph(glycan)
   parts = [ggraph.subgraph(c) for c in nx.weakly_connected_components(ggraph)]
   if len(parts) == 1:
-    print("This glycan already has a defined topology; please don't use this function.")
-    return [parts[0]]
+    raise ValueError("This glycan already has a defined topology; please don't use this function.")
   main_part, floating_part = parts[-1], parts[0]
   dangling_linkage = max(floating_part.nodes())
   is_modification = len(floating_part.nodes()) == 1
@@ -644,7 +646,7 @@ def get_possible_topologies(glycan: Union[str, nx.DiGraph], # Glycan with floati
     dangling_carbon = ggraph.nodes[dangling_linkage]['string_labels'][-1]
     floating_monosaccharide = dangling_linkage - 1
   topologies = []
-  candidate_nodes = [k for k in list(main_part.nodes())[::2] if exhaustive or (main_part.out_degree[k] == 0)]
+  candidate_nodes = [k for k in list(main_part.nodes())[::2] if exhaustive or is_modification or (main_part.out_degree[k] == 0)]
   for k in candidate_nodes:
     neighbor_carbons = [ggraph.nodes[n]['string_labels'][-1] for n in ggraph.neighbors(k) if n < k]
     if dangling_carbon in neighbor_carbons:
@@ -667,7 +669,7 @@ def get_possible_topologies(glycan: Union[str, nx.DiGraph], # Glycan with floati
           continue
     new_graph = nx.convert_node_labels_to_integers(new_graph)
     topologies.append(new_graph)
-  return topologies
+  return topologies if return_graphs else [graph_to_string_int(t) for t in topologies]
 
 
 def possible_topology_check(glycan: Union[str, nx.DiGraph], # Glycan with floating substituent
@@ -676,7 +678,7 @@ def possible_topology_check(glycan: Union[str, nx.DiGraph], # Glycan with floati
                           **kwargs # Arguments passed to compare_glycans
                          ) -> List[Union[str, nx.DiGraph]]: # List of matching glycans
   "Check whether glycan with floating substituent could match glycans from a list"
-  topologies = get_possible_topologies(glycan, exhaustive = exhaustive)
+  topologies = get_possible_topologies(glycan, exhaustive = exhaustive, return_graphs = True)
   ggraphs = map(ensure_graph, glycans)
   return [g for g, ggraph in zip(glycans, ggraphs) if any(compare_glycans(t, ggraph, **kwargs) for t in topologies)]
 

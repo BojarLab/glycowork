@@ -18,68 +18,68 @@ with open(mapping_path) as f:
 
 # for WURCS mapping, for consistency, preferrably the anomer x form
 monosaccharide_mapping = {
-    'a122h-1x_1-5': 'Ara', 
-    'a211h-1x_1-4': 'Araf', 
-    'a1d21m-1x_1-5': 'Col', 
-    'a1221m-1x_1-5': 'Fuc', 
+    'a122h-1x_1-5': 'Ara',
+    'a211h-1x_1-4': 'Araf',
+    'a1d21m-1x_1-5': 'Col',
+    'a1221m-1x_1-5': 'Fuc',
     'a2112m-1x_1-5': 'D-Fuc',
-    'a2112h-1x_1-5': 'Gal', 
-    'a2122h-1x_1-5': 'Glc', 
+    'a2112h-1x_1-5': 'Gal',
+    'a2122h-1x_1-5': 'Glc',
     'a2212h-1x_1-5': 'Gul',
-    'axxxxh-1x_1-5': 'Hex', 
+    'axxxxh-1x_1-5': 'Hex',
     'a2121h-1x_1-5': 'Ido',
-    'Aad21122h-2x_2-6': 'Kdn', 
-    'Aad1122h-2x_2-6': 'Kdo', 
-    'a1122h-1x_1-5': 'Man', 
-    'a2d22m-1x_1-5': 'Par', 
-    'a2211m-1x_1-5': 'Rha', 
+    'Aad21122h-2x_2-6': 'Kdn',
+    'Aad1122h-2x_2-6': 'Kdo',
+    'a1122h-1x_1-5': 'Man',
+    'a2d22m-1x_1-5': 'Par',
+    'a2211m-1x_1-5': 'Rha',
     'a1d22m-1x_1-5': 'Tyv',
-    'a212h-1x_1-5': 'Xyl', 
-    
-    'u2122h_2*N': 'GlcN', 
-    'a2121A-1x_1-5': 'IdoA', 
-    'a2112A-1x_1-5': 'GalA', 
-    'a2122A-1x_1-5': 'GlcA', 
+    'a212h-1x_1-5': 'Xyl',
+
+    'u2122h_2*N': 'GlcN',
+    'a2121A-1x_1-5': 'IdoA',
+    'a2112A-1x_1-5': 'GalA',
+    'a2122A-1x_1-5': 'GlcA',
     'a2112h-1x_1-5_2*N': 'GalN',
-    'a2112h-1x_1-4': 'Galf', 
-    
-    'u2222h_2*NCC/3=O': 'AllNAc', 
-    'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc', 
-    'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc', 
+    'a2112h-1x_1-4': 'Galf',
+
+    'u2222h_2*NCC/3=O': 'AllNAc',
+    'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc',
+    'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc',
     'a2212h-1x_1-5_2*NCC/3=O': 'GulNAc',
-    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc', 
-    'a1122h-1x_1-5_2*NCC/3=O': 'ManNAc', 
+    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc',
+    'a1122h-1x_1-5_2*NCC/3=O': 'ManNAc',
     'a2122x_2*NCC/3=O': 'QuiNAc',
-    
+
     'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Ac',
-    'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gc', 
-    
+    'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gc',
+
     'a2112h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS',
     'a2112h-1x_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GalNAc3S',
-    'a2112h-1x_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S', 
-    'a2112h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GalNAc6S', 
+    'a2112h-1x_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S',
+    'a2112h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GalNAc6S',
     'a2122h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS',
     'a2122h-1x_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GalNAc3S',
     'a2122h-1x_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S',
-    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6S', 
+    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6S',
     'axxxxh-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'HexNAcOS',
     'axxxxh-1x_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'HexNAc3S',
     'axxxxh-1x_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'HexNAc4S',
-    'axxxxh-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'HexNAc6S', 
+    'axxxxh-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'HexNAc6S',
     'a1122h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'ManNAcOS',
     'a1122h-1x_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'ManNAc3S',
     'a1122h-1x_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'ManNAc4S',
-    'a1122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'ManNAc6S',  
-    
+    'a1122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'ManNAc6S',
+
     'h2112h_2*NCC/3=O': 'GalNAc-ol',
     'Aad21122h-2x_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Ac',
-    'a2112h-1x_1-5_3*OC': 'Gal3Me', 
+    'a2112h-1x_1-5_3*OC': 'Gal3Me',
     'a2112h-1x_1-5_6*OSO/3=O/3=O': 'Gal6S',
-    'a2112h-1x_1-5_4*OSO/3=O/3=O': 'Gal4S', 
+    'a2112h-1x_1-5_4*OSO/3=O/3=O': 'Gal4S',
     'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS',
-    'a2122A-1x_1-5_3*OSO/3=O/3=O': 'GlcA3S', 
-    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 
-    'a1122h-1x_1-5_6*OSO/3=O/3=O': 'Man6S', 
+    'a2122A-1x_1-5_3*OSO/3=O/3=O': 'GlcA3S',
+    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P',
+    'a1122h-1x_1-5_6*OSO/3=O/3=O': 'Man6S',
     }
 
 # for canonicalize_iupac
@@ -918,7 +918,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))
     glycan = sorted_floating_bits + glycan[glycan.rfind('}')+1:]
   if glycan.count('[') != glycan.count(']'):
-    print("Warning: Mismatching brackets in formatted glycan string.")
+    raise ValueError(f"Mismatching brackets in formatted glycan string: {glycan}")
   return glycan
 
 

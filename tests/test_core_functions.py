@@ -219,6 +219,7 @@ def test_graph_to_string_int(glycan: str):
 
 
 def test_graph_to_string():
+    assert graph_to_string("Gal(b1-3)GlcNAc") == "Gal(b1-3)GlcNAc"
     # Complex cases
     assert graph_to_string(glycan_to_nxGraph("Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc")) == "Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-6)]GalNAc"
     result = graph_to_string(glycan_to_nxGraph("Gal(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-6)[Gal(a1-3)[Fuc(a1-2)]Gal(b1-4)GlcNAc(b1-3)]GalNAc"))
@@ -271,6 +272,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Gal(b1-4)Glc-olS") == "Gal(b1-4)GlcOS-ol"
     assert canonicalize_iupac("SGalNAc(b1-4)GlcNAc") == "GalNAcOS(b1-4)GlcNAc"
     assert canonicalize_iupac("S-Gal(b1-4)Glc-ol") == "GalOS(b1-4)Glc-ol"
+    assert canonicalize_iupac("SGaNAcb1-4SGlcNac") == "GalNAcOS(b1-4)GlcNAcOS"
     # Test sanitization
     assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
     assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-2)]Man") == "Gal(b1-4)GlcNAc(b1-?)[Gal(b1-4)GlcNAc(b1-?)]Man"
@@ -487,8 +489,11 @@ LIN
 LIN
 1:1o(8+2)2d
 2:2o(8+2)3d""") == "Kdo(a2-8)Kdo(a2-8)Kdo"
-    # Test warnings
-    assert canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol") == "Fuc(a1-3)[Gal(b1-4)Glc-ol"
+    # Test raised errors
+    with pytest.raises(ValueError, match="Mismatching brackets in formatted glycan string"):
+        canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol")
+    with pytest.raises(ValueError, match="Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around."):
+        canonicalize_iupac("O[C@@H]1[C@H](O)[C@@H](O)[C@H](O)[C@@]([H])(CO)O1")
 
 
 def test_constrain_prot():
@@ -1953,10 +1958,13 @@ def test_largest_subgraph():
 def test_get_possible_topologies():
     glycan = "{Neu5Ac(a2-?)}Gal(b1-3)GalNAc"
     topologies = get_possible_topologies(glycan)
+    topologies = get_possible_topologies(glycan, return_graphs=True)
     assert len(topologies) > 0
     assert all(isinstance(g, nx.Graph) for g in topologies)
-    assert graph_to_string(get_possible_topologies("{6S}Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", exhaustive=True)[0]) == "Neu5Ac(a2-3)Gal6S(b1-3)[Neu5Ac(a2-6)]GalNAc"
-    assert isinstance(get_possible_topologies("Gal(b1-4)GlcNAc"), list)
+    assert get_possible_topologies("{6S}Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc")[0] == "Neu5Ac(a2-3)Gal6S(b1-3)[Neu5Ac(a2-6)]GalNAc"
+    assert get_possible_topologies("{OS}Gal(b1-3)GalNAc") == ['GalOS(b1-3)GalNAc', 'Gal(b1-3)GalNAcOS']
+    with pytest.raises(ValueError, match="This glycan already has a defined topology; please don't use this function."):
+        get_possible_topologies("Gal(b1-4)GlcNAc")
 
 
 def test_deduplicate_glycans():
@@ -2355,6 +2363,9 @@ def test_convert_pattern_component():
     result = convert_pattern_component("([Hex|Fuc])+")
     assert isinstance(result, dict)
     assert list(result.values())[0] == [1, 2, 3, 4, 5, 6, 7]
+    result = convert_pattern_component("[Hex|Fuc]?{1}")
+    assert isinstance(result, dict)
+    assert convert_pattern_component(".-.") == ".(?1-?)."
 
 
 def test_reformat_glycan_string():
@@ -2376,6 +2387,10 @@ def test_get_match():
     # Test no match
     pattern = "Hex-Hex-Hex"
     glycan = "Gal(b1-4)GlcNAc"
+    assert get_match(pattern, glycan, return_matches=False) is False
+    # Test no match with positions
+    pattern = "'^HexNAc-HexNAc"
+    glycan = "Gal(b1-4)GlcNAc(b1-4)GlcNAc"
     assert get_match(pattern, glycan, return_matches=False) is False
     # Test pattern with quantifier
     pattern = "Hex-[HexNAc]{1,2}"
@@ -2512,6 +2527,8 @@ def test_filter_matches_by_location():
     result = filter_matches_by_location(matches, ggraph, "internal")
     assert len(result) == 1
     assert result[0] == [1, 2]
+    result = filter_matches_by_location(matches, ggraph, "nonsense")
+    assert len(result) == 1
 
 
 def test_parse_pattern():
