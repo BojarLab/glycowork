@@ -544,7 +544,11 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
     descendants = list(nx.descendants(graph, node))
     if len(descendants) != 1:
       return False
-    return graph.nodes[descendants[0]].get("string_labels", "") in {"Gal", "Man"}
+    tip_string = graph.nodes[descendants[0]].get("string_labels", "")
+    special = tip_string not in {"Gal", "Man"}
+    if special and "GlcNAc" in tip_string:
+      special = special if graph.nodes[node].get("string_labels", "") not in {'b1-3'} else False
+    return special
 
   # Convert to string with a single traversal
   def node_to_string(node):
@@ -561,10 +565,8 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
       # Sort by depth (shallow to deep)
       children = sorted(children, key = lambda x: depths[x])
     else:  # order_by == "linkage"
-      has_single_mono = any(len(nx.descendants(graph, child)) + 1 == 2 for child in children)
-      has_special = any(is_special_branch(graph, child) for child in children)
-      if has_single_mono and not has_special:
-        # Use length-based sorting if single mono branches exist but no special branches
+      if any(is_special_branch(graph, child) for child in children):
+        # Use length-based sorting if special single mono branches exist
         children = sorted(children, key = lambda x: (depths[x], -get_linkage_number(x, graph)))
       else:
         # Use linkage-based sorting in all other cases

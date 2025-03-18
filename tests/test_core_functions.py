@@ -240,6 +240,7 @@ def test_graph_to_string():
                       order_by = "linkage") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert graph_to_string(glycan_to_nxGraph("Fuc(a1-?)[Gal(b1-?)]GlcNAc(b1-2)Man(a1-6)[Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"),
                       order_by = "linkage") == "Man(a1-2)Man(a1-3)[Fuc(a1-?)[Gal(b1-?)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert graph_to_string(glycan_to_nxGraph("Gal(b1-4)GlcNAc(b1-6)[GlcNAc(b1-3)]Gal(b1-4)Glc"), order_by="linkage") == "GlcNAc(b1-3)[Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)Glc"
 
 
 def test_canonicalize_iupac():
