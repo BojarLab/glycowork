@@ -8,14 +8,10 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 from typing import Dict, List, Tuple, Optional, Union, Any
 import networkx as nx
-
-try:
-  import drawsvg as draw
-  from openpyxl.drawing.image import Image as OpenpyxlImage
-  from openpyxl.utils import get_column_letter
-  from PIL import Image
-except ImportError:
-  raise ImportError("<draw dependencies missing; did you do 'pip install glycowork[draw]'?>")
+import drawsvg as draw
+from openpyxl.drawing.image import Image as OpenpyxlImage
+from openpyxl.utils import get_column_letter
+from PIL import Image
 import numpy as np
 import pandas as pd
 import re
