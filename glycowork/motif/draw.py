@@ -12,6 +12,7 @@ import drawsvg as draw
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.utils import get_column_letter
 from PIL import Image
+from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
 import numpy as np
 import pandas as pd
 import re
@@ -110,6 +111,9 @@ sugar_dict = {
   "03X": ['03X', None, None], "14A": ['14A', None, None], "Z": ['Z', None, None], "Y": ['Y', None, None],
   "B": ['B', None, None], "C": ['C', None, None]
 }
+
+
+domon_costello = {'B', 'C', 'Z', 'Y', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A', '25A', '03A', '14X', '25X', '03X', '14A'}
 
 
 def draw_hex(
@@ -344,7 +348,7 @@ def draw_shape(
     drawing.append(draw.Circle(x_base, y_base, dim/2, fill = 'none', stroke_width = stroke_w, stroke = 'none'))
   elif shape == 'text':
     drawing.append(draw.Text(modification, dim*0.35, x_base, y_base, text_anchor = text_anchor, fill = col_dict['black']))
-  elif shape in ['red_end', 'free']:
+  elif shape in {'red_end', 'free'}:
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
     p.M((x_base+0.1*dim), (y_base-0.4*dim))  # Start path at point (-10, 20)
     p.C((x_base-0.3*dim), (y_base-0.1*dim),
@@ -598,7 +602,8 @@ def get_coordinates_and_labels(
   leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
   main_chain = nx.shortest_path(graph.reverse(), leaves[0], root) if leaves else []
   main_label_sugar = [node for node in main_chain if node % 2 == 0]
-  main_sugar = [get_core(node_values[node]) for node in main_chain if node % 2 == 0][::-1]  # Even indices are sugars
+  main_sugar = [node_values[node] for node in main_chain if node % 2 == 0]  # Even indices are sugars
+  main_sugar = [get_core(node) if node not in domon_costello else node for node in main_sugar][::-1]
   main_sugar_modification = [get_modification(node_values[node]).replace('O', '').replace('-ol', '') for node in main_chain if node % 2 == 0][::-1]
   main_bond = [node_values[node] for node in main_chain if node % 2 == 1][::-1]  # Odd indices are bonds
   main_sugar_highlight = [highlight_values[node] for node in main_chain if node % 2 == 0][::-1]
@@ -613,7 +618,7 @@ def get_coordinates_and_labels(
       # Extract sugar and bond labels
       sugar_nodes = branch['sugar_nodes']
       bond_nodes = [m for m in branch['nodes'] if m % 2 == 1]
-      sugar.append([get_core(node_values[n]) for n in sugar_nodes])
+      sugar.append([get_core(node_values[n]) if node_values[n] not in domon_costello else node_values[n] for n in sugar_nodes])
       sugar_mod.append([get_modification(node_values[n]).replace('O', '') for n in sugar_nodes])
       bond.append([node_values[n] for n in bond_nodes])
       connection.append(branch['connection'])
@@ -811,21 +816,19 @@ def is_jupyter() -> bool:
 
 
 def display_svg_with_matplotlib(
-    svg_data: Any # SVG drawing object
+    svg_data: Any, # SVG drawing object
+    chem: bool = False # Whether svg_data comes from RDKit chemical
     ) -> None:
   "Renders SVG using matplotlib for non-Jupyter environments"
-  try:
-    from cairosvg import svg2png
-  except ImportError:
-    return svg_data
   svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
   # Get original SVG dimensions and scale them up
   size_multiplier = 4  # Make everything 4x bigger
   width = svg_data.width if hasattr(svg_data, 'width') else 800
   height = svg_data.height if hasattr(svg_data, 'height') else 800
   # Convert to PNG with larger dimensions
-  png_output = svg2png(bytestring = svg_data, output_width = width * size_multiplier,
-                      output_height = height * size_multiplier, scale = 2.0)
+  png_output = convert_svg_to_png(svg_data, output_width = width * size_multiplier,
+                                  output_height = height * size_multiplier, scale = 2.0, return_bytes = True,
+                                  chem = chem)
   # Use PIL to crop aggressively
   img = Image.open(BytesIO(png_output))
   bbox = img.convert('RGBA').getbbox()
@@ -984,12 +987,8 @@ def draw_chem2d(
         with open(filepath, 'w') as f:
           f.write(svg_data)
     elif filepath.suffix.lower() == '.pdf':
-      try:
-        from cairosvg import svg2pdf
-        svg2pdf(bytestring = svg_data, write_to = str(filepath))
-      except ImportError:
-        raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
-  return SVG(svg_data) if is_jupyter() else display_svg_with_matplotlib(svg_data)
+      convert_svg_to_pdf(svg_data, str(filepath), chem = True)
+  return SVG(svg_data) if is_jupyter() else display_svg_with_matplotlib(svg_data, chem = True)
 
 
 def draw_chem3d(
@@ -1055,7 +1054,7 @@ def draw_chem3d(
                        highlightAtomColors = {k: tuple(int(v[0].lstrip('#')[i:i+2], 16)/255
                                           for i in (0, 2, 4)) for k, v in atom_colors.items()})
     drawer.FinishDrawing()
-    display_svg_with_matplotlib(drawer.GetDrawingText())
+    display_svg_with_matplotlib(drawer.GetDrawingText(), chem = True)
 
 
 @rescue_glycans
@@ -1278,24 +1277,13 @@ def GlycoDraw(
     filepath = Path(filepath)
     filepath = filepath.with_name(filepath.name.replace('?', '_'))
     data = d2.as_svg()
-    data = re.sub(r'<text font-size="17.5" ', r'<text font-size="17.5" font-family="century gothic" font-weight="bold" ', data)
-    data = re.sub(r'<text font-size="20.0" ', r'<text font-size="20" font-family="century gothic" ', data)
-    data = re.sub(r'<text font-size="15.0" ', r'<text font-size="17.5" font-family="century gothic" font-style="italic" ', data)
     if filepath.suffix.lower() == '.svg':
       with open(filepath, 'w', encoding = "utf-8") as f:
         f.write(data)
     elif filepath.suffix.lower() == '.pdf':
-      try:
-        from cairosvg import svg2pdf
-        svg2pdf(bytestring = data, write_to = str(filepath))
-      except:
-        raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
+      convert_svg_to_pdf(data, str(filepath))
     elif filepath.suffix.lower() == '.png':
-      try:
-        from cairosvg import svg2png
-        svg2png(bytestring = data, write_to = str(filepath))
-      except:
-        raise ImportError("You're missing some draw dependencies. Either use .svg or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
+      convert_svg_to_png(data, str(filepath))
   return d2 if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
 
 
@@ -1337,7 +1325,7 @@ def annotate_figure(
     glycan_scale = [y, labels]
 
   # Get svg code
-  svg_tmp = open(svg_input, "r").read()
+  svg_tmp = open(svg_input, "r").read() if '?xml' not in svg_input else svg_input
   # Get all text labels
   label_pattern = re.compile(r'<!--\s*(.*?)\s*-->')
   transform_pattern = re.compile(r'<g transform\s*(.*?)\s*">')
@@ -1386,16 +1374,13 @@ def annotate_figure(
   svg_tmp += '</svg>'
 
   if filepath:
-    try:
-      from cairosvg import svg2pdf, svg2svg, svg2png
-      if filepath.endswith('.pdf'):
-        svg2pdf(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-      elif filepath.endswith('.svg'):
-        svg2svg(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-      elif filepath.endswith('.png'):
-        svg2png(bytestring = svg_tmp, write_to = filepath, dpi = 300)
-    except:
-      raise ImportError("You're missing some draw dependencies. Either don't use filepath or head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
+    if filepath.endswith('.pdf'):
+      convert_svg_to_pdf(svg_tmp, str(filepath))
+    elif filepath.endswith('.svg'):
+      with open(filepath, 'w', encoding = "utf-8") as f:
+        f.write(svg_tmp)
+    elif filepath.endswith('.png'):
+      convert_svg_to_png(svg_tmp, str(filepath))
   else:
     return svg_tmp
 
@@ -1408,10 +1393,6 @@ def plot_glycans_excel(
     compact: bool = False # Use compact style
     ) -> None:
   "Creates Excel file with SNFG glycan images in a new column"
-  try:
-    from cairosvg import svg2png
-  except ImportError:
-    raise ImportError("You're missing some draw dependencies. If you want to use this function, head to https://bojarlab.github.io/glycowork/examples.html#glycodraw-code-snippets to learn more.")
   if isinstance(df, (str, Path)):
     df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   df["SNFG"] = [np.nan for k in range(len(df))]
@@ -1433,10 +1414,8 @@ def plot_glycans_excel(
       width = svg_data.width if hasattr(svg_data, 'width') else 800
       height = svg_data.height if hasattr(svg_data, 'height') else 800
       # Convert SVG data to image
-      temp_bytes = BytesIO()
-      svg2png(bytestring = svg_data.encode('utf-8'), write_to = temp_bytes, output_width = width,
-              output_height = height, scale = 2.0)
-      temp_bytes.seek(0)
+      temp_bytes = BytesIO(convert_svg_to_png(svg_data.encode('utf-8'), output_width = width,
+                         output_height = height, scale = 2.0, return_bytes = True))
       # Load and crop image
       img = Image.open(temp_bytes)
       bbox = img.convert('RGBA').getbbox()

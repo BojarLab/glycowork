@@ -2706,12 +2706,8 @@ def test_plot_glycans_excel(tmp_path):
         'Glycans': ['GlcNAc(b1-4)GlcA', 'Man(a1-3)Man'],
         'Values': [1, 2]
     })
-    # Make sure cairosvg and PIL.Image are available
-    try:
-        from cairosvg import svg2png
-        from PIL import Image
-    except ImportError:
-        pytest.skip("cairosvg or PIL not installed")
+    # Make sure PIL.Image are available
+    from PIL import Image
     # Run the actual function to plot glycans and save to Excel
     plot_glycans_excel(df, str(test_dir))
     # Assert that the output file exists
@@ -2751,40 +2747,53 @@ def test_plot_glycans_excel(tmp_path):
 @pytest.fixture
 def mock_svg_file():
     return """<?xml version="1.0" encoding="UTF-8"?>
-    <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
-        <!-- GlcNAc -->
-        <g transform="scale(0.1 -0.1)">
-            <text>GlcNAc</text>
-        </g>
-    </svg>"""
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="200" height="110" viewBox="-150.0 -55.0 200 110">
+<defs>
+<path d="M-100,0 L0,0" stroke-width="4.0" stroke="#000000" id="d0" />
+<path d="M-50,25.0 L50,25.0" stroke-width="0" id="d1" />
+<path d="M-150,25.0 L-50,25.0" stroke-width="0" id="d2" />
+</defs>
+<g transform="rotate(0 -50.0 0.0)">
+<use xlink:href="#d0" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#d0" startOffset="50%">
+<tspan dy="-0.5em">β 3</tspan>
+</textPath></text>
+<rect x="-25.0" y="-25.0" width="50" height="50" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#d1" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#d1" startOffset="50%"></textPath></text>
+<circle cx="-100" cy="0" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#d2" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#d2" startOffset="50%"></textPath></text>
+</g>
+</svg>"""
 
 
 def test_annotate_figure(mock_svg_file):
-    with patch('builtins.open', Mock(return_value=Mock(read=Mock(return_value=mock_svg_file)))):
-        # Test basic annotation
-        result = annotate_figure("input.svg")
-        assert isinstance(result, str)
-        assert "svg" in result
-        # Test with glycan size
-        result = annotate_figure("input.svg", glycan_size="small")
-        assert isinstance(result, str)
-        # Test with compact mode
-        result = annotate_figure("input.svg", compact=True)
-        assert isinstance(result, str)
-        # Test with differential expression results
-        de_results = pd.DataFrame({
-            'Glycan': ['GlcNAc'],
-            'Log2FC': [2.0],
-            'corr p-val': [0.01]
-        })
-        result = annotate_figure("input.svg", scale_by_DE_res=de_results)
-        assert isinstance(result, str)
-        annotate_figure("input.svg", filepath="test.pdf")
-        assert Path("test.pdf").exists()
-        annotate_figure("input.svg", filepath="test.svg")
-        assert Path("test.svg").exists()
-        annotate_figure("input.svg", filepath="test.png")
-        assert Path("test.png").exists()
+   # Test basic annotation
+    result = annotate_figure(mock_svg_file)
+    assert isinstance(result, str)
+    assert "svg" in result
+    # Test with glycan size
+    result = annotate_figure(mock_svg_file, glycan_size="small")
+    assert isinstance(result, str)
+    # Test with compact mode
+    result = annotate_figure(mock_svg_file, compact=True)
+    assert isinstance(result, str)
+    # Test with differential expression results
+    de_results = pd.DataFrame({
+        'Glycan': ['Gal(b1-3)GalNAc'],
+        'Log2FC': [2.0],
+        'corr p-val': [0.01]
+    })
+    result = annotate_figure(mock_svg_file, scale_by_DE_res=de_results)
+    assert isinstance(result, str)
+    annotate_figure(mock_svg_file, filepath="test.pdf")
+    assert Path("test.pdf").exists()
+    annotate_figure(mock_svg_file, filepath="test.svg")
+    assert Path("test.svg").exists()
+    annotate_figure(mock_svg_file, filepath="test.png")
+    assert Path("test.png").exists()
 
 
 def test_scale_in_range():
@@ -2918,12 +2927,27 @@ def test_draw_bracket():
 
 def test_display_svg_with_matplotlib():
     # Create simple SVG
-    test_svg = draw.Drawing(100, 100)
-    test_svg.append(draw.Circle(50, 50, 20))
-    # Test without cairosvg
-    sys.modules['cairosvg'] = None
-    result = display_svg_with_matplotlib(test_svg)
-    assert result == test_svg
+    test_svg = """<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="200" height="110" viewBox="-150.0 -55.0 200 110">
+<defs>
+<path d="M-100,0 L0,0" stroke-width="4.0" stroke="#000000" id="d0" />
+<path d="M-50,25.0 L50,25.0" stroke-width="0" id="d1" />
+<path d="M-150,25.0 L-50,25.0" stroke-width="0" id="d2" />
+</defs>
+<g transform="rotate(0 -50.0 0.0)">
+<use xlink:href="#d0" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#d0" startOffset="50%">
+<tspan dy="-0.5em">β 3</tspan>
+</textPath></text>
+<rect x="-25.0" y="-25.0" width="50" height="50" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#d1" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#d1" startOffset="50%"></textPath></text>
+<circle cx="-100" cy="0" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#d2" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#d2" startOffset="50%"></textPath></text>
+</g>
+</svg>"""
     # Test with mocked matplotlib
     class MockPlt:
         @staticmethod
