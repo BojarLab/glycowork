@@ -32,7 +32,7 @@ dependencies = [
     "drawSvg~=2.0",
     "Pillow",
     "openpyxl",
-    "glycorender>=0.1.1"
+    "glycorender>=0.1.2"
 ]
 
 [project.urls]

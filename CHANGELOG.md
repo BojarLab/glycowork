@@ -4,7 +4,7 @@
 - All glycan graphs are now directed graphs (`nx.Graph` --> `nx.DiGraph`), flowing from the root (reducing end) to the tips (non-reducing ends), which has led to code changes in quite few functions. Some functions run faster now, yet outputs are unaffected (03dfad6)
 - Added `huggingface_hub>=0.16.0` as a new dependency to facilitate more robust model distribution (22f6b8f)
 - Moved `drawSvg~=2.0`, `Pillow`, and `openpyxl` from the optional `[draw]` install to the dependencies of base glycowork. That allows for the usage of `GlycoDraw` in, e.g., Jupyter environments etc, even if `glycowork[draw]` has not been installed. Since these dependencies are unproblematic, no special install needs to be followed for the base glycowork install (60e51da)
-- Deprecated the optional `[draw]` install completely, by replacing the problematic `cairosvg` dependency with our new & custom renderer `glycorender`, which is now a new base dependency of `glycowork`
+- Deprecated the optional `[draw]` install completely, by replacing the problematic `cairosvg` dependency with our new & custom renderer `glycorender`, which is now a new base dependency of `glycowork` (7c4fbe1)
 
 ## glycan_data
 #### loader
@@ -62,7 +62,7 @@
 - Quantitative highlighting in `GlycoDraw` via the `per_residue` keyword argument will now use individual SNFG-colors instead of a uniform highlight color (07c9c12)
 - Refactored `get_coordinates_and_labels` to be more efficient and generalizable; with this and the new `get_branches_from_graph`, `GlycoDraw` is now capable of drawing even more complex structures accurately (e56d015, 36fbba9)
 - Next to `.svg` and `.pdf`, it is now also possible to save `.png` files with `GlycoDraw` (36fbba9)
-- `display_svg_with_matplotlib` now has the optional `chem` keyword argument to alert our renderer that the .svg comes from RDKit
+- `display_svg_with_matplotlib` now has the optional `chem` keyword argument to alert our renderer that the .svg comes from RDKit (7c4fbe1)
 
 ##### Deprecated ⚠️
 - Deprecated `split_node`, `unique`, `get_indices`, `split_monosaccharide_linkage`, and `glycan_to_skeleton`, since this will now be handled by the changed `get_coordinates_and_labels` (e56d015)
