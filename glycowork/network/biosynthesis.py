@@ -168,9 +168,8 @@ def create_adjacency_matrix(glycans: List[str], # List of glycans
   graphs = [safe_index(g, graph_dic) for g in glycans]
   results = [get_neighbors(g, glycans, graphs, min_size = min_size) for g in graphs]
   if all(not result[0] and not result[1] for result in results):
-    idx = []
-  else:
-    _, idx = zip(*results)
+    return adjacencyMatrix_to_network(df_out.add(df_out.T, fill_value=0)), []
+  _, idx = zip(*results)
   # Fill adjacency matrix
   for j, indices in enumerate(idx):
     for i in indices:
@@ -178,16 +177,15 @@ def create_adjacency_matrix(glycans: List[str], # List of glycans
         df_out.iat[i[0], j] = 1
   # Find connections between virtual nodes that connect observed nodes
   virtual_edges = set(unwrap([find_shared_virtuals(k[0], k[1], graph_dic, min_size = min_size) for k in combinations(glycans, 2)]))
-  new_nodes = list(set([k[1] for k in virtual_edges if k[1] not in df_out.columns]))
-  idx = [i for i, k in enumerate(new_nodes) if any(compare_glycans(safe_index(k, graph_dic), safe_index(j, graph_dic)) for j in df_out.columns)]
-  if idx:
-    sub_new = {new_nodes[k] for k in idx}
-    virtual_edges = [j for j in virtual_edges if j[1] not in sub_new]
-    new_nodes = [n for i, n in enumerate(new_nodes) if i not in idx]
+  new_nodes = set(k[1] for k in virtual_edges if k[1] not in df_out.columns)
+  sub_new = set(n for n in new_nodes if any(compare_glycans(safe_index(n, graph_dic), safe_index(j, graph_dic)) for j in glycans))
+  virtual_edges = [e for e in virtual_edges if e[1] not in sub_new]
+  new_nodes = [n for n in new_nodes if n not in sub_new]
   # Add virtual nodes
-  for k in new_nodes:
-    df_out[k] = 0
-    df_out.loc[k] = 0
+  if new_nodes:
+    new_df = pd.DataFrame(0, index = df_out.index.append(pd.Index(new_nodes)), columns = df_out.columns.append(pd.Index(new_nodes)))
+    new_df.iloc[:len(df_out), :len(df_out)] = df_out.values
+    df_out = new_df
   # Add virtual edges
   for src, dst in virtual_edges:
     df_out.at[src, dst] = 1
