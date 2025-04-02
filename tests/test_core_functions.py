@@ -298,6 +298,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Neup5Aca2-3DGalpb1-4DGlcpNAcb1-3DGalpb1-3DGalpb1-4DGlcpb1-OH") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)Gal(b1-4)Glc"
     assert canonicalize_iupac("DGalp[6S]b1-3DGalpNAca1-OH") == "Gal6S(b1-3)GalNAc"
     assert canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("01Y41Y41M(31M21M21M)61M(31M21M)61M21M") == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("01Y41Y41M(31M21M21M31G)61M(31M21M)61M") == "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("α-D-Manp-(1→3)[α-D-Manp-(1→6)]-β-D-Manp-(1→4)-β-D-GlcpNAc-(1→4)-β-D-GlcpNAc-(1→") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -2746,26 +2748,40 @@ def test_plot_glycans_excel(tmp_path):
 
 @pytest.fixture
 def mock_svg_file():
-    return """<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     width="200" height="110" viewBox="-150.0 -55.0 200 110">
-<defs>
-<path d="M-100,0 L0,0" stroke-width="4.0" stroke="#000000" id="d0" />
-<path d="M-50,25.0 L50,25.0" stroke-width="0" id="d1" />
-<path d="M-150,25.0 L-50,25.0" stroke-width="0" id="d2" />
-</defs>
-<g transform="rotate(0 -50.0 0.0)">
-<use xlink:href="#d0" />
-<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#d0" startOffset="50%">
-<tspan dy="-0.5em">β 3</tspan>
-</textPath></text>
-<rect x="-25.0" y="-25.0" width="50" height="50" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
-<use xlink:href="#d1" />
-<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#d1" startOffset="50%"></textPath></text>
-<circle cx="-100" cy="0" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
-<use xlink:href="#d2" />
-<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#d2" startOffset="50%"></textPath></text>
-</g>
+    return """<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="500" height="500" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <!-- nontransfected_1 -->
+ <g transform="translate(158.979875 703.017187) scale(0.1 -0.1)">
+  <path d="M 0 0 L 10 10" />
+ </g>
+ <!-- nontransfected_2 -->
+ <g transform="translate(343.687875 703.017187) scale(0.1 -0.1)">
+  <path d="M 5 5 L 15 15" />
+ </g>
+ <!-- Neu5Ac(a2-3)Gal(b1-3)GalNAc -->
+ <g transform="translate(486.77 252.656302) scale(0.1 -0.1)">
+  <path d="M 5 5 L 15 15" />
+ </g>
+ <!-- Gal(b1-3)[Neu5Ac(a2-6)]GalNAc -->
+ <g transform="translate(486.77 428.480969) scale(0.1 -0.1)">
+  <path d="M 5 5 L 15 15" />
+ </g>
+ <!-- Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc -->
+ <g transform="translate(486.77 604.305635) scale(0.1 -0.1)">
+  <path d="M 5 5 L 15 15" />
+ </g>
+ <!-- Samples -->
+ <g transform="translate(32.023875 150.666938) scale(0.1 -0.1)">
+  <path d="M 0 0 L 10 10" />
+ </g>
+ <!-- Glycans -->
+ <g transform="translate(130.877438 92.943625) rotate(-90) scale(0.1 -0.1)">
+  <path d="M 0 0 L 10 10" />
+ </g>
+ <!-- glycan -->
+ <g transform="translate(702.904375 441.186437) rotate(-90) scale(0.1 -0.1)">
+  <path d="M 0 0 L 10 10" />
+ </g>
 </svg>"""
 
 
@@ -2782,9 +2798,10 @@ def test_annotate_figure(mock_svg_file):
     assert isinstance(result, str)
     # Test with differential expression results
     de_results = pd.DataFrame({
-        'Glycan': ['Gal(b1-3)GalNAc'],
-        'Log2FC': [2.0],
-        'corr p-val': [0.01]
+        'Glycan': ['Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc',
+                   'Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc'],
+        'Log2FC': [2.0, 1.7, 1.4],
+        'corr p-val': [0.01, 0.03, 0.001]
     })
     result = annotate_figure(mock_svg_file, scale_by_DE_res=de_results)
     assert isinstance(result, str)

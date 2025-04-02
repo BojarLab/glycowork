@@ -315,6 +315,13 @@ def linearcode_to_iupac(linearcode: str # Glycan in LinearCode format
   return multireplace(linearcode.split(';')[0], replace_dic)
 
 
+def linearcode1d_to_iupac(linearcode: str # Glycan in LinearCode-1D format
+                      ) -> str: # Basic IUPAC-condensed format
+  replace_dic = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a'}
+  glycan = multireplace(linearcode[::-1], replace_dic)
+  return '('.join(re.sub(r'([a-zA-Z])(\d)(\d)', r'\1\2-\3)', glycan).replace("Man(a1-4)GlcNAc", "Man(b1-4)GlcNAc").split('(')[:-1])
+
+
 def iupac_extended_to_condensed(iupac_extended: str # Glycan in IUPAC-extended format
                              ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from IUPAC-extended to barebones IUPAC-condensed format"
@@ -800,6 +807,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, GlyTouCanIDs
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
+  elif glycan.startswith('0'):
+    glycan = linearcode1d_to_iupac(glycan)
   elif '-D-' in glycan:
     glycan = iupac_extended_to_condensed(glycan)
   elif 'RES' in glycan:
