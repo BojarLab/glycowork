@@ -257,6 +257,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("bGal13bGalNAc14(aNeuAc23)bGal14Glc") == "Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc"
     assert canonicalize_iupac("Mana12Man") == "Man(a1-2)Man"
     assert canonicalize_iupac("Rib5P-ol(5-4)Glc6PEtN(b1-3)Gal(b1-3)GalNAc(b1-4)Rib5P-ol") == "Rib5P-ol(5-4)Glc6PEtN(b1-3)Gal(b1-3)GalNAc(b1-4)Rib5P-ol"
+    assert canonicalize_iupac("Neu5Ac-α-2,6-Gal-β-1,3-GlcNAc-β-Sp") == "Neu5Ac(a2-6)Gal(b1-3)GlcNAc"
+    assert canonicalize_iupac("GlcNAc-α-1,3-(Glc-α-1,2-Glc-α-1,2)-Gal-α-1,3-Glc-α-Sp") == "Glc(a1-2)Glc(a1-2)[GlcNAc(a1-3)]Gal(a1-3)Glc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"

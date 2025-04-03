@@ -827,6 +827,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
+  glycan = re.sub(r'-([ab])-(\d+),(\d+\)?)-', r'\1\2-\3', glycan)  # Inconsistent usage of dashes and commas, like in Neu5Ac-a-2,6-Gal-b-1,3-GlcNAc
   glycan = re.sub(r'(\d),(\d)(?!l)', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone)
   if '{' in glycan and '}' not in glycan:
     glycan = f'{{{glycan[:glycan.index("{")]}?1-?}}{glycan[glycan.index("{")+1:]}'
@@ -916,7 +917,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a',
                   'Kdn(a1': 'Kdn(a2'}
   glycan = multireplace(glycan, post_process)
-  glycan = re.sub(r'[ab]-$', '', glycan)  # Remove endings like Glcb-
+  glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
   glycan = sanitize_iupac(glycan)
   # Canonicalize branch ordering
   if '[' in glycan and not glycan.startswith('[') and ']' in glycan:
