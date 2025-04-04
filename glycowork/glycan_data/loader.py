@@ -4,10 +4,11 @@ import re
 import json
 import pickle
 import pandas as pd
+import networkx as nx
 from pathlib import Path
 from itertools import chain
 from importlib import resources
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Optional
 from huggingface_hub import hf_hub_download
 
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
@@ -23,6 +24,24 @@ with open(data_path, 'rb') as f:
   lib = pickle.load(f)
 
 
+class GlycoDataFrame(pd.DataFrame):
+  
+  @property
+  def _constructor(self):
+    return GlycoDataFrame
+    
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    
+  def glyco_filter(self, motif: Union[str, nx.DiGraph], # Glycan motif sequence or graph
+                  termini_list: List = [], # List of monosaccharide positions from terminal/internal/flexible
+                  min_count: Optional[int] = 1 # Minimum number of times motif needs to be present to pass
+                  ) -> 'GlycoDataFrame':
+    from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
+    indices = [i for i, g in enumerate(self['glycan']) if subgraph_isomorphism(g, motif, termini_list, count = True) >= min_count]
+    return self.iloc[indices, :].reset_index(drop = True)
+
+
 def __getattr__(name):
   if name == "glycan_binding":
     with resources.files("glycowork.glycan_data").joinpath("glycan_binding.csv").open(encoding = 'utf-8-sig') as f:
@@ -31,12 +50,12 @@ def __getattr__(name):
     return glycan_binding
   elif name == "df_species":
     with resources.files("glycowork.glycan_data").joinpath("v11_df_species.csv").open(encoding = 'utf-8-sig') as f:
-      df_species = pd.read_csv(f)
+      df_species = GlycoDataFrame(pd.read_csv(f))
     globals()[name] = df_species  # Cache it to avoid reloading
     return df_species
   elif name == "df_glycan":
     data_path = this_dir / 'v11_sugarbase.json'
-    df_glycan = serializer.deserialize(data_path)
+    df_glycan = GlycoDataFrame(serializer.deserialize(data_path))
     globals()[name] = df_glycan  # Cache it to avoid reloading
     return df_glycan
   elif name == "lectin_specificity":
@@ -244,7 +263,7 @@ def build_custom_df(df: pd.DataFrame, # df_glycan / sugarbase
   df = df.explode(cols[1:]).reset_index()
   df = df.sort_values([cols[1], 'glycan'], ascending = [True, True])
   df = df.reset_index(drop = True)
-  return df
+  return GlycoDataFrame(df)
 
 
 def download_model(file_id: str # Filename in the HuggingFace repo

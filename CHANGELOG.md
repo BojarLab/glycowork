@@ -10,6 +10,7 @@
 #### loader
 ##### Added ✨
 - Added `HashableDict` class to allow for caching of functions with dicts as inputs (03dfad6)
+- Added `GlycoDataFrame` class to extend `pd.DataFrame` by adding the `.glyco_filter` method, to easily filter glycan dataframes by the occurrence/count of sequence motifs
 
 ##### Changed 🔄
 - Refined motif definition of `Internal_LewisX`/`Internal_Lewis_A`/`i_antigen` in `motif_list`, to exclude `LewisY`/`LewisB`/`I_antigen` from matching/overlapping (07c9c12)
@@ -17,6 +18,7 @@
 - Removed `Nglycolyl_GM2` from `motif_list`; it's captured by `GM2` (07c9c12)
 - Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities (9eeaa3a, 436bf09)
 - `download_model` will now download model weights and representations from the HuggingFace Hub (22f6b8f)
+- `df_species` and `df_glycan` are now of type `GlycoDataFrame`; `build_custom_df` now returns a dataframe of type `GlycoDataFrame`
 
 ### motif
 #### processing
@@ -37,7 +39,7 @@
 - `canonicalize_iupac` will now use `glycan_to_nxGraph` and `graph_to_string` for branch canonicalization, instead of `choose_correct_isoform`. On average, this works much better and is more reliable (7c52a0e)
 - `canonicalize_iupac` is now more robust to (5-6) type linkages and to the associated sugar alcohols, like Rib5P-ol (7a260ac)
 - `canonicalize_iupac` will now raise a `ValueError` instead of a warning if a glycan string has mismatching brackets (b69fced)
-- `canonicalize_iupac` can now handle even more IUPAC-dialects such as `Neu5Ac-α-2,6-Gal-β-1,3-GlcNAc-β-Sp`
+- `canonicalize_iupac` can now handle even more IUPAC-dialects such as `Neu5Ac-α-2,6-Gal-β-1,3-GlcNAc-β-Sp` (cb2c898)
 
 ##### Deprecated ⚠️
 - Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead (7c52a0e)

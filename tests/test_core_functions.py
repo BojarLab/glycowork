@@ -40,7 +40,7 @@ from glycowork.motif.processing import (
     bracket_removal, check_nomenclature, IUPAC_to_SMILES
 )
 from glycowork.glycan_data.loader import (
-    unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict,
+    unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader
 )
@@ -1384,6 +1384,7 @@ def test_build_custom_df():
     assert len(result) > len(df)  # Should expand due to explode
     assert 'glycan' in result.columns
     assert 'Species' in result.columns
+    assert len(df_species[df_species.Genus=='Diceros'].glyco_filter("Neu5Ac(a2-3)[GalNAc(b1-4)]Gal", min_count=2)) > 0
 
 
 def test_dataframe_serializer():
