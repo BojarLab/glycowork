@@ -10,7 +10,7 @@
 #### loader
 ##### Added ✨
 - Added `HashableDict` class to allow for caching of functions with dicts as inputs (03dfad6)
-- Added `GlycoDataFrame` class to extend `pd.DataFrame` by adding the `.glyco_filter` method, to easily filter glycan dataframes by the occurrence/count of sequence motifs
+- Added `GlycoDataFrame` class to extend `pd.DataFrame` by adding the `.glyco_filter` method, to easily filter glycan dataframes by the occurrence/count of sequence motifs (9764b3e)
 
 ##### Changed 🔄
 - Refined motif definition of `Internal_LewisX`/`Internal_Lewis_A`/`i_antigen` in `motif_list`, to exclude `LewisY`/`LewisB`/`I_antigen` from matching/overlapping (07c9c12)
@@ -18,7 +18,7 @@
 - Removed `Nglycolyl_GM2` from `motif_list`; it's captured by `GM2` (07c9c12)
 - Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities (9eeaa3a, 436bf09)
 - `download_model` will now download model weights and representations from the HuggingFace Hub (22f6b8f)
-- `df_species` and `df_glycan` are now of type `GlycoDataFrame`; `build_custom_df` now returns a dataframe of type `GlycoDataFrame`
+- `df_species` and `df_glycan` are now of type `GlycoDataFrame`; `build_custom_df` now returns a dataframe of type `GlycoDataFrame` (9764b3e)
 
 ### motif
 #### processing

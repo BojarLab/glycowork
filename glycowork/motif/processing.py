@@ -317,8 +317,7 @@ def linearcode_to_iupac(linearcode: str # Glycan in LinearCode format
 
 def linearcode1d_to_iupac(linearcode: str # Glycan in LinearCode-1D format
                       ) -> str: # Basic IUPAC-condensed format
-  replace_dic = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a', 'X': 'Xyl(b', 'F': 'Fuc(a',
-                 'M?': 'Man(?', 'L': 'GlcA(b'}
+  replace_dic = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a', 'X': 'Xyl(b', 'F': 'Fuc(a', 'L': 'GlcA(b'}
   glycan = multireplace(linearcode[::-1], replace_dic)
   return '('.join(re.sub(r'([a-zA-Z])(\d)(\d)', r'\1\2-\3)', glycan).replace("Man(a1-4)GlcNAc", "Man(b1-4)GlcNAc").split('(')[:-1])
 
