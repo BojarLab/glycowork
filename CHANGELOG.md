@@ -5,6 +5,7 @@
 - Added `huggingface_hub>=0.16.0` as a new dependency to facilitate more robust model distribution (22f6b8f)
 - Moved `drawSvg~=2.0`, `Pillow`, and `openpyxl` from the optional `[draw]` install to the dependencies of base glycowork. That allows for the usage of `GlycoDraw` in, e.g., Jupyter environments etc, even if `glycowork[draw]` has not been installed. Since these dependencies are unproblematic, no special install needs to be followed for the base glycowork install (60e51da)
 - Deprecated the optional `[draw]` install completely, by replacing the problematic `cairosvg` dependency with our new & custom renderer `glycorender`, which is now a new base dependency of `glycowork` (7c4fbe1)
+- Deprecated `mpld3` and `matplotlib-inline` dependencies; added a new `bokeh` dependency for better interactive plotting in a Jupyter environment
 
 ## glycan_data
 #### loader
@@ -53,7 +54,7 @@
 ##### Fixed 🐛
 - Fixed an edge case in `get_k_saccharides`, in which choosing a `size` larger than the size of the largest glycan in the input caused an error (db7847d)
 - Fixed `get_k_saccharides` with higher values of `size`, which occasionally produced invalid strings, by refactoring `count_unique_subgraphs_of_size_k` and switching it to use the changed `graph_to_string_int`, to ensure motif validity (db7847d)
-- Fixed `preprocess_data`, which was attempting to transform 0-containing dataframes when no transform argument was provided
+- Fixed `preprocess_data`, which was attempting to transform 0-containing dataframes when no transform argument was provided (878701a)
 
 ##### Deprecated ⚠️
 - Deprecated `link_find`; will be done by an optimized `get_k_saccharides` instead (since `link_find` relied on `find_isomorphs`) (7c52a0e)
@@ -95,3 +96,8 @@
 #### tokenization
 ##### Changed 🔄
 - `stemify_glycan` can now deal with even more strongly modified glycans and should be faster too (03e502c)
+
+### network
+#### biosynthesis
+##### Changed 🔄
+- `plot_network` now uses `bokeh` for interactive plotting instead of `mpld3`; changed the default layout algorithm from `kamada_kawai` to `spring`

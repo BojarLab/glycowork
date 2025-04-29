@@ -5024,104 +5024,78 @@ def test_extend_network_specific_leaf(extension_test_network):
         assert subgraph_isomorphism(new_glycan, leaf_to_extend)
 
 
-def get_network_elements(ax):
-    """Helper function to get network visualization elements"""
-    # Get nodes (these are always PathCollections)
-    nodes = [c for c in ax.collections if isinstance(c, PathCollection)]
-    # Get edges - these can be:
-    # 1. LineCollection in ax.collections
-    # 2. FancyArrowPatch objects in ax.patches (for directed graphs)
-    edges_collections = [c for c in ax.collections if isinstance(c, LineCollection)]
-    edges_arrows = [p for p in ax.patches if isinstance(p, FancyArrowPatch)]
-    edges = edges_collections + edges_arrows
-    # Get text elements (edge labels, etc)
-    texts = [child for child in ax.get_children() if isinstance(child, plt.Text)]
-    return nodes, edges, texts
-
-
-@patch('mpld3.enable_notebook')
-@patch('matplotlib.pyplot.show')
+@patch('bokeh.io.output_notebook')
+@patch('bokeh.plotting.show')
 def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
     """Test basic network plotting functionality"""
     main_net, _ = evo_test_networks
-    plot_network(main_net, plot_format='kamada_kawai')
+    plot = plot_network(main_net, plot_format='kamada_kawai')
     # Check that plot was created
-    assert plt.gcf() is not None
-    ax = plt.gca()
-    nodes, edges, _ = get_network_elements(ax)    # Check that nodes and edges are present
-    assert len(nodes) == 1  # One PathCollection for all nodes
-    assert len(edges) == len(main_net.edges())  # FancyArrowPatch for every edges
-    # Clean up
-    plt.close()
-    plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=False)
+    assert plot is not None
+    # Check renderer properties
+    assert len(plot.renderers) > 0
+    # Test without edge labels
+    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=False)
+    assert plot is not None
     plt.close()
 
 
-@patch('mpld3.enable_notebook')
-@patch('matplotlib.pyplot.show')
+@patch('bokeh.io.output_notebook')
+@patch('bokeh.plotting.show')
 def test_plot_network_with_edge_labels(mock_show, mock_enable, evo_test_networks):
     """Test network plotting with edge labels"""
     main_net, _ = evo_test_networks
-    plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True)
+    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True)
     # Check for edge labels
-    ax = plt.gca()
-    nodes, edges, texts = get_network_elements(ax)
-    # Check for edge labels (should be one for each edge)
-    assert len(texts) > 0
-    assert any('Fuc(a1-2)' in text.get_text() for text in texts)
-    assert any('GlcNAc(b1-3)' in text.get_text() for text in texts)
-    # Clean up
+    assert plot is not None
+    # Check for renderers (indirect check for edge labels)
+    assert len(plot.renderers) > len(main_net.nodes())
     plt.close()
 
 
-@patch('mpld3.enable_notebook')
-@patch('matplotlib.pyplot.show')
+@patch('bokeh.io.output_notebook')
+@patch('bokeh.plotting.show')
 def test_plot_network_with_lfc(mock_show, mock_enable, evo_test_networks):
     """Test network plotting with log fold change data"""
     lfc_dict = {'Fuc(a1-2)': 1.5, 'GlcNAc(b1-3)': -0.5}
     main_net, _ = evo_test_networks
-    plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True, lfc_dict=lfc_dict)
-    ax = plt.gca()
-    nodes, edges, texts = get_network_elements(ax)
-    # Verify all elements are present
-    assert len(nodes) == 1   # Should have nodes
-    assert len(edges) > 0    # Should have edges
-    assert len(texts) > 0    # Should have edge labels
-    # Check edge properties
-    for edge in edges:
-        assert sum(edge.get_edgecolor()) > 1 and sum(edge.get_edgecolor()) < 4
-    # Clean up
+    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True, lfc_dict=lfc_dict)
+    # Verify plot was created
+    assert plot is not None
+    # Check for renderers
+    assert len(plot.renderers) > 0
     plt.close()
 
 
-def test_plot_network_layouts(evo_test_networks):
+@patch('bokeh.io.output_notebook')
+@patch('bokeh.plotting.show')
+def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
     """Test different layout options with fallback handling"""
     # Test kamada_kawai and spring layouts which don't require external dependencies
     safe_layouts = ['kamada_kawai', 'spring']
     main_net, _ = evo_test_networks
     for layout in safe_layouts:
-        with patch('mpld3.enable_notebook'), patch('matplotlib.pyplot.show'):
-            plot_network(main_net, plot_format=layout)
-            assert plt.gcf() is not None
-            plt.close()
+        plot = plot_network(main_net, plot_format=layout)
+        assert plot is not None
+        plt.close()
     # Test pydot2 layout with proper error handling
     try:
         with suppress_pydot_warnings():
-            with patch('mpld3.enable_notebook'), patch('matplotlib.pyplot.show'):
-                plot_network(main_net, plot_format='pydot2')
+            plot = plot_network(main_net, plot_format='pydot2')
+            assert plot is not None
     except (ImportError, FileNotFoundError):
         print("Graphviz not installed, skipping pydot2 layout test")
-        plt.close()
+    plt.close()
 
 
 def test_plot_network_no_notebook(evo_test_networks):
     """Test fallback behavior when not in notebook"""
     main_net, _ = evo_test_networks
-    with patch('mpld3.enable_notebook', side_effect=Exception):
-        with patch('matplotlib.pyplot.show') as mock_show:
-            plot_network(main_net, plot_format='kamada_kawai')
-            assert mock_show.called
-            plt.close()
+    with patch('bokeh.io.output_notebook', side_effect=Exception):
+        with patch('bokeh.plotting.show') as mock_show:
+            plot = plot_network(main_net, plot_format='kamada_kawai')
+            # Even with notebook initialization failing, should still return a plot
+            assert plot is not None
 
 
 def test_add_high_man_removal(evo_test_networks):

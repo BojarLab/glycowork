@@ -1,4 +1,3 @@
-import mpld3
 import pickle
 import re
 from pathlib import Path
@@ -10,6 +9,9 @@ from collections import defaultdict, Counter
 from scipy.stats import ttest_rel, ttest_ind
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
+from bokeh.plotting import figure, show
+from bokeh.io import output_notebook
+from bokeh.models import HoverTool, Arrow, NormalHead, LabelSet, ColumnDataSource
 from typing import Dict, List, Set, Union, Optional, Tuple, FrozenSet
 import statsmodels.api as sm
 import networkx as nx
@@ -518,57 +520,98 @@ def construct_network(glycans: List[str], # List of glycans
 
 
 def plot_network(network: nx.DiGraph, # Biosynthetic network
-                plot_format: str = 'pydot2', # Layout type: pydot2/kamada_kawai/spring
+                plot_format: str = 'spring', # Layout type: pydot2/kamada_kawai/spring
                 edge_label_draw: bool = True, # Whether to draw edge labels
                 lfc_dict: Optional[Dict[str, float]] = None # Enzyme:log2FC mapping for edge width
                ) -> None: # Displays plot
   "Visualize biosynthetic network"
-  try:
-    mpld3.enable_notebook()
-  except:
-    print("Not in a notebook environment --> mpld3 doesn't work, so we can't do fancy plotting. Reverting to just plotting the network. Recommended to run this in a notebook.")
-    nx.draw(network)
-    plt.show()
-    return
-  fig, ax = plt.subplots(figsize = (16, 16))
-  # Check whether are values to scale node size by
+  output_notebook()
+  pos = {'pydot2': lambda: nx.nx_pydot.pydot_layout(network, prog = "dot"),
+         'kamada_kawai': lambda: nx.kamada_kawai_layout(network),
+         'spring': lambda: nx.spring_layout(network, k = 0.5, seed = 42)}.get(plot_format, lambda: nx.kamada_kawai_layout(network))()
   node_attributes = nx.get_node_attributes(network, 'abundance')
   node_sizes = list(node_attributes.values()) if node_attributes else [50] * network.number_of_nodes()
-  # Decide on network layout
-  pos = {'pydot2': lambda: nx.nx_pydot.pydot_layout(network, prog = "dot"),
-           'kamada_kawai': lambda: nx.kamada_kawai_layout(network),
-           'spring': lambda: nx.spring_layout(network, k = 1/4)}.get(plot_format, lambda: nx.kamada_kawai_layout(network))()
-  # Check whether there are values to scale node color by
-  node_attributes = nx.get_node_attributes(network, 'origin')
   virtual_attrs = nx.get_node_attributes(network, 'virtual')
-  alpha_map = [0.2 if virtual_attrs.get(node, 0) == 1 else 1 for node in network.nodes()]
-  if node_attributes:
-    scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, ax = ax,
-                                     node_color = list(node_attributes.values()), alpha = alpha_map)
-  else:
-    color_map = ['darkorange' if virtual_attrs.get(node, 0) == 1 else 'cornflowerblue' if virtual_attrs.get(node, 0) == 0 else 'seagreen' for node in network.nodes()]
-    scatter = nx.draw_networkx_nodes(network, pos, node_size = node_sizes, alpha = 0.7,
-                                     node_color = color_map, ax = ax)
+  origin_attrs = nx.get_node_attributes(network, 'origin')
   edge_attributes = nx.get_edge_attributes(network, 'diffs')
-  if edge_label_draw:
-    if lfc_dict:
-      # Map log-fold changes of responsible enzymes onto biosynthetic steps
-      c_list = ['red' if lfc_dict.get(attr, 0) < 0 else 'green' if lfc_dict.get(attr, 0) > 0 else 'cornflowerblue' for attr in edge_attributes.values()]
-      w_list = [abs(lfc_dict.get(attr, 0)) or 1 for attr in edge_attributes.values()]
-      nx.draw_networkx_edges(network, pos, ax = ax, edge_color = c_list, width = w_list)
+  # Prepare node data
+  node_data = {'x': [], 'y': [], 'name': [], 'size': [], 'color': [], 'alpha': []}
+  for node in network.nodes():
+    x, y = pos[node]
+    node_data['x'].append(x)
+    node_data['y'].append(y)
+    node_data['name'].append(str(node))
+    node_data['size'].append(node_sizes[list(network.nodes()).index(node)]/2 if node_sizes else 25)
+    if origin_attrs:
+      node_data['color'].append(origin_attrs.get(node, 'cornflowerblue'))
     else:
-      nx.draw_networkx_edges(network, pos, ax = ax, edge_color = 'cornflowerblue')
-    nx.draw_networkx_edge_labels(network, pos, edge_labels = edge_attributes, ax = ax,
-                                 verticalalignment = 'baseline')
-  else:
-    # Alternatively, color edge by type of monosaccharide that is added
-    c_list = ['cornflowerblue' if 'Glc' in attr else 'yellow' if 'Gal' in attr else 'red' if 'Fuc' in attr else 'mediumorchid' if '5Ac' in attr
-                  else 'turquoise' if '5Gc' in attr else 'silver' for attr in edge_attributes.values()]
-    w_list = [1 if 'b1' in attr else 3 for attr in edge_attributes.values()]
-    nx.draw_networkx_edges(network, pos, ax = ax, edge_color = c_list, width = w_list)
-  ax.axis('off')
-  tooltip = mpld3.plugins.PointLabelTooltip(scatter, labels = list(network.nodes()))
-  mpld3.plugins.connect(fig, tooltip)
+      if virtual_attrs.get(node, 0) == 1:
+        node_data['color'].append('darkorange')
+      elif virtual_attrs.get(node, 0) == 0:
+        node_data['color'].append('cornflowerblue')
+      else:
+        node_data['color'].append('seagreen')
+    node_data['alpha'].append(0.2 if virtual_attrs.get(node, 0) == 1 else 1)
+  node_source = ColumnDataSource(data = node_data)
+  # Create figure
+  p = figure(width = 900, height = 900, x_range = (-1.2, 1.2), y_range = (-1.2, 1.2),
+             tools = "pan,wheel_zoom,box_zoom,reset,save", toolbar_location = "above",
+             x_axis_type = None, y_axis_type = None, background_fill_color = "white")
+  # Add hover tool for nodes
+  node_hover = HoverTool(tooltips = [("Node", "@name")])
+  p.add_tools(node_hover)
+  # Draw nodes
+  p.scatter('x', 'y', size = 'size', color = 'color', alpha = 'alpha',
+           line_color = "#888", line_width = 1, source = node_source)
+  # Draw edges and labels
+  for edge in network.edges():
+    x0, y0 = pos[edge[0]]
+    x1, y1 = pos[edge[1]]
+    attr = edge_attributes.get(edge, '')
+    # Determine edge color and width
+    if edge_label_draw and lfc_dict:
+      if lfc_dict.get(attr, 0) < 0:
+        edge_color = 'red'
+      elif lfc_dict.get(attr, 0) > 0:
+        edge_color = 'green'
+      else:
+        edge_color = 'cornflowerblue'
+      width = abs(lfc_dict.get(attr, 0)) or 1
+    elif not edge_label_draw:
+      if 'Glc' in attr:
+        edge_color = 'cornflowerblue'
+      elif 'Gal' in attr:
+        edge_color = 'yellow'
+      elif 'Fuc' in attr:
+        edge_color = 'red'
+      elif '5Ac' in attr:
+        edge_color = 'mediumorchid'
+      elif '5Gc' in attr:
+        edge_color = 'turquoise'
+      else:
+        edge_color = 'silver'
+      width = 1 if 'b1' in attr else 3
+    else:
+      edge_color = 'cornflowerblue'
+      width = 1
+    # Draw the edge
+    p.segment(x0, y0, x1, y1, color = edge_color, line_width = width)
+    # Add arrowhead
+    arrow = Arrow(end = NormalHead(size = 8, fill_color = edge_color),
+                 x_start = x0, y_start = y0, x_end = x1, y_end = y1,
+                 line_width = width, line_color = edge_color)
+    p.add_layout(arrow)
+    # Add edge labels if enabled
+    if edge_label_draw and attr:
+      mid_x = (x0 + x1) / 2
+      mid_y = (y0 + y1) / 2
+      label_source = ColumnDataSource(data = dict(x = [mid_x], y = [mid_y], text = [attr]))
+      labels = LabelSet(x = 'x', y = 'y', text = 'text', source = label_source,
+                       text_color = 'black', text_font_size = '10pt',
+                       x_offset = 0, y_offset = 0, text_align = 'center')
+      p.add_layout(labels)
+  show(p)
+  return p
 
 
 def network_alignment(network_a: nx.DiGraph, # First network
