@@ -12,6 +12,8 @@ import drawsvg as draw
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.utils import get_column_letter
 from PIL import Image
+from IPython import get_ipython
+from IPython.display import SVG
 from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
 import numpy as np
 import pandas as pd
@@ -809,9 +811,8 @@ def draw_bracket(
 def is_jupyter() -> bool:
   "Detects if code is running in Jupyter notebook environment"
   try:
-    from IPython import get_ipython
     return 'IPKernelApp' in get_ipython().config  # Check if in IPython kernel
-  except (ImportError, AttributeError):
+  except AttributeError:
     return False
 
 
@@ -956,8 +957,6 @@ def draw_chem2d(
     from rdkit.Chem import MolFromSmiles
     from rdkit.Chem.Draw import PrepareMolForDrawing
     from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
-    if is_jupyter():
-      from IPython.display import SVG
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
 

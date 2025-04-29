@@ -25,6 +25,7 @@ dependencies = [
     "seaborn",
     "xgboost",
     "bokeh",
+    "IPython",
     "pandas>=1.3",
     "setuptools>=64.0",
     "huggingface_hub>=0.16.0",

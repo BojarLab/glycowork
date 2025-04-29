@@ -5,13 +5,14 @@
 - Added `huggingface_hub>=0.16.0` as a new dependency to facilitate more robust model distribution (22f6b8f)
 - Moved `drawSvg~=2.0`, `Pillow`, and `openpyxl` from the optional `[draw]` install to the dependencies of base glycowork. That allows for the usage of `GlycoDraw` in, e.g., Jupyter environments etc, even if `glycowork[draw]` has not been installed. Since these dependencies are unproblematic, no special install needs to be followed for the base glycowork install (60e51da)
 - Deprecated the optional `[draw]` install completely, by replacing the problematic `cairosvg` dependency with our new & custom renderer `glycorender`, which is now a new base dependency of `glycowork` (7c4fbe1)
-- Deprecated `mpld3` and `matplotlib-inline` dependencies; added a new `bokeh` dependency for better interactive plotting in a Jupyter environment
+- Deprecated `mpld3` and `matplotlib-inline` dependencies; added new `bokeh` and `IPython` dependencies for better interactive plotting in a Jupyter environment (972c34b)
 
 ## glycan_data
 #### loader
 ##### Added ✨
 - Added `HashableDict` class to allow for caching of functions with dicts as inputs (03dfad6)
 - Added `GlycoDataFrame` class to extend `pd.DataFrame` by adding the `.glyco_filter` method, to easily filter glycan dataframes by the occurrence/count of sequence motifs (9764b3e)
+- Added new curated glycoproteomics dataset: `sorghum_N_PMID39137587`
 
 ##### Changed 🔄
 - Refined motif definition of `Internal_LewisX`/`Internal_Lewis_A`/`i_antigen` in `motif_list`, to exclude `LewisY`/`LewisB`/`I_antigen` from matching/overlapping (07c9c12)
@@ -100,4 +101,4 @@
 ### network
 #### biosynthesis
 ##### Changed 🔄
-- `plot_network` now uses `bokeh` for interactive plotting instead of `mpld3`; changed the default layout algorithm from `kamada_kawai` to `spring`
+- `plot_network` now uses `bokeh` for interactive plotting instead of `mpld3`; changed the default layout algorithm from `kamada_kawai` to `spring` (972c34b)

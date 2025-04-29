@@ -23,7 +23,7 @@ setuptools.setup(
     python_requires='>=3.9',
     install_requires=["scikit-learn", "regex", "networkx>=3.0",
                       "statsmodels", "scipy", "seaborn", "xgboost", "bokeh",
-                      "pandas>=1.3", "setuptools>=64.0",
+                      "pandas>=1.3", "setuptools>=64.0", "IPython",
                       "huggingface_hub>=0.16.0", "drawSvg~=2.0", "Pillow",
                             "openpyxl", "glycorender>=0.1.3"],
     extras_require={'all':["torch_geometric", "torch",

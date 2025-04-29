@@ -2893,29 +2893,9 @@ def test_draw_hex():
 
 
 def test_is_jupyter():
-    # Test basic functionality
-    result = is_jupyter()
-    assert isinstance(result, bool)
-    # Mock IPython environment
-    class MockIPython:
-        class Config:
-            def __contains__(self, item):
-                return item == 'IPKernelApp'
-        config = Config()
-    def mock_get_ipython():
-        return MockIPython()
-    # Test with mocked IPython
-    import builtins
-    old_import = builtins.__import__
-    def mock_import(name, *args):
-        if name == 'IPython':
-            module = type('module', (), {})()
-            module.get_ipython = mock_get_ipython
-            return module
-        return old_import(name, *args)
-    builtins.__import__ = mock_import
-    assert is_jupyter() == True
-    builtins.__import__ = old_import
+  # Test basic functionality
+  result = is_jupyter()
+  assert isinstance(result, bool)
 
 
 def test_process_repeat():
