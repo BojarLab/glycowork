@@ -17,7 +17,6 @@ import statsmodels.api as sm
 import networkx as nx
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from glycowork.glycan_data.loader import unwrap, linkages, lib
 from glycowork.glycan_data.stats import cohen_d, get_alphaN
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism, get_possible_topologies
@@ -493,7 +492,7 @@ def construct_network(glycans: List[str], # List of glycans
           if edge_type == 'monosaccharide':
             elem['diffs'] = edge.split('(')[0]
           elif edge_type == 'enzyme':
-            with resources.open_text("glycowork.network", "monolink_to_enzyme.csv") as f:
+            with resources.files("glycowork.network").joinpath("monolink_to_enzyme.csv").open() as f:
               df_enzyme = pd.read_csv(f, sep = '\t')
             elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme)
   # Remove virtual nodes that are branch isomers of real nodes

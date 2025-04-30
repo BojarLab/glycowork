@@ -586,11 +586,11 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   oxford = re.sub(r'\([^)]*\)', '', oxford).strip().split('/')[0]
   antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-  mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-?)", "S": "Neu5Ac(a2-?)",
-                  "Sg": "Neu5Gc(a2-?)", "Ga": "Gal(a1-?)", "GalNAc": "GalNAc(?1-?)",
-                  "Lac": "Gal(b1-?)GlcNAc(b1-?)", "F": "Fuc(a1-?)", "LacDiNAc": "GalNAc(b1-4)GlcNAc(b1-?)"}
+  mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-3/4)", "S": "Neu5Ac(a2-3/6)",
+                  "Sg": "Neu5Gc(a2-3/6)", "Ga": "Gal(a1-?)", "GalNAc": "GalNAc(?1-?)",
+                  "Lac": "Gal(b1-3/4)GlcNAc(b1-?)", "F": "Fuc(a1-?)", "LacDiNAc": "GalNAc(b1-4)GlcNAc(b1-?)"}
   hardcoded = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
-               "M4": "Man(a1-?)Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M4": "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M9": "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M10": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M11": "Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
@@ -629,7 +629,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
             "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches else 0,
             "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Lac")+3] != "D" else 0,
             "LacDiNAc": 1 if "LacDiN" in oxford_wo_branches else 0}
-  specified_linkages = {'Neu5Ac(a2-?)': oxford[oxford.index("S")+2:] if branches['S'] else []}
+  specified_linkages = {'Neu5Ac(a2-3/6)': oxford[oxford.index("S")+2:] if branches['S'] else []}
   specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v}
   built_branches = []
   while sum(branches.values()) > 0:
@@ -667,14 +667,14 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   if antennae:
     for k, v in antennae.items():
       while v > 0:
-        if "Gal(b1-?)Glc" in iupac:
-          split = iupac.index("Gal(b1-?)Glc")
-          iupac = iupac[:split+len("Gal(b1-?)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-?)"):]
+        if "Gal(b1-3/4)Glc" in iupac:
+          split = iupac.index("Gal(b1-3/4)Glc")
+          iupac = iupac[:split+len("Gal(b1-3/4)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-3/4)"):]
         else:
           split =  iupac.index("GalNAc(b1-4)Glc")
           iupac = iupac[:split+len("GalNAc(b1-4)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("GalNAc(b1-4)"):]
         v -= 1
-  iupac = iupac.replace("GlcNAc(b1-?)[Neu5Ac(a2-?)]Man", "[Neu5Ac(a2-?)]GlcNAc(b1-?)Man")
+  iupac = iupac.replace("GlcNAc(b1-?)[Neu5Ac(a2-3/6)]Man", "[Neu5Ac(a2-3/6)]GlcNAc(b1-?)Man")
   for k, v in specified_linkages.items():
     if v:
       for vv in v:

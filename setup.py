@@ -21,7 +21,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.9',
-    install_requires=["scikit-learn", "regex", "networkx>=3.0",
+    install_requires=["numpy", "matplotlib", "scikit-learn", "networkx>=3.0",
                       "statsmodels", "scipy", "seaborn", "xgboost", "bokeh",
                       "pandas>=1.3", "setuptools>=64.0", "IPython",
                       "huggingface_hub>=0.16.0", "drawSvg~=2.0", "Pillow",

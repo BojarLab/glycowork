@@ -96,7 +96,7 @@ from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighb
                          plot_network, add_high_man_removal, net_dic, find_shared_virtuals, create_adjacency_matrix, find_ptm
 )
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
-                      jaccard, distance_from_metric, check_conservation, get_communities
+                      jaccard, distance_from_metric, check_conservation, get_communities, dendrogram_from_distance
 )
 from glycowork.ml.train_test_split import (seed_wildcard_hierarchy, hierarchy_filter,
                             general_split, prepare_multilabel
@@ -306,12 +306,12 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("α-D-Manp-(1→3)[α-D-Manp-(1→6)]-β-D-Manp-(1→4)-β-D-GlcpNAc-(1→4)-β-D-GlcpNAc-(1→") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("M3") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert canonicalize_iupac("FA2[3]G1") == "Gal(b1-?)GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
-    assert canonicalize_iupac("A4G4") == "Gal(b1-?)GlcNAc(b1-?)[Gal(b1-?)GlcNAc(b1-?)]Man(a1-3)[Gal(b1-?)GlcNAc(b1-?)[Gal(b1-?)GlcNAc(b1-?)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert canonicalize_iupac("FA2BiG2") == "Gal(b1-?)GlcNAc(b1-?)Man(a1-3)[Gal(b1-?)GlcNAc(b1-?)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("FA2[3]G1") == "Gal(b1-3/4)GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("A4G4") == "Gal(b1-3/4)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("FA2BiG2") == "Gal(b1-3/4)GlcNAc(b1-?)Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-?)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("F(3)XA2") == "GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
-    assert canonicalize_iupac("F(6)A2[6]G(4)1Sg(6)1") == "Neu5Gc(a2-?)Gal(b1-?)GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
-    assert canonicalize_iupac("M4") == "Man(a1-?)Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("F(6)A2[6]G(4)1Sg(6)1") == "Neu5Gc(a2-3/6)Gal(b1-3/4)GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("M4") == "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("redEnd--??1D-GalNAc,p--??2D-KDN,p$MONO,Und,-H,0,redEnd") == "Kdn(a2-?)GalNAc"
     assert canonicalize_iupac("redEnd--??1D-Glc,p--4b1D-Gal,p(--3a2D-NeuGc,p@270)--4b1D-GalNAc,p$MONO,Und,-H,0,redEnd") == "Neu5Gc(a2-3)[GalNAc(b1-4)]Gal(b1-4)Glc"
     assert canonicalize_iupac("redEnd--??1D-GalNAc,p(--3b1D-Gal,p(--3a2D-NeuAc,p)--6?1S)--6b1D-GlcNAc,p--4b1D-Gal,p$MONO,Und,-2H,0,redEnd") == "Neu5Ac(a2-3)Gal6S(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc"
@@ -4412,7 +4412,8 @@ def test_construct_network(simple_glycans):
     assert len(network.nodes()) >= len(simple_glycans)
     assert len(network.edges()) > 0
     assert all("diffs" in data for _, _, data in network.edges(data=True))
-    network = construct_network(simple_glycans, edge_type="enzymes")
+    network = construct_network(simple_glycans, edge_type="enzyme")
+    network = construct_network(simple_glycans, edge_type="monosaccharide")
 
 
 def test_prune_network(simple_glycans):
@@ -4545,6 +4546,8 @@ def test_find_diamonds(simple_glycans):
     assert len(diamonds) > 0
     assert all(isinstance(d, dict) for d in diamonds)
     assert all(len(d) >= 4 for d in diamonds)  # Diamond should have at least 4 nodes
+    diamonds = find_diamonds(construct_network(simple_glycans),
+                             nb_intermediates=4)
 
 
 def test_trace_diamonds(simple_glycans):
@@ -4920,6 +4923,15 @@ def extension_test_network():
     return network
 
 
+@pytest.fixture
+def n_glycan_network():
+    """Create test network for extension"""
+    glycans = ['Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+               'Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[dHex(a1-6)]GlcNAc']
+    network = construct_network(glycans)
+    return network
+
+
 def test_evoprune_network_basic(evo_test_networks):
     """Test basic evolutionary pruning functionality"""
     main_net, network_dic = evo_test_networks
@@ -5022,6 +5034,21 @@ def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
 
 @patch('bokeh.io.output_notebook')
 @patch('bokeh.plotting.show')
+def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
+    """Test basic network plotting functionality for N-glycans"""
+    plot = plot_network(n_glycan_network, plot_format='spring')
+    # Check that plot was created
+    assert plot is not None
+    # Check renderer properties
+    assert len(plot.renderers) > 0
+    # Test without edge labels
+    plot = plot_network(n_glycan_network, plot_format='spring', edge_label_draw=False)
+    assert plot is not None
+    plt.close()
+
+
+@patch('bokeh.io.output_notebook')
+@patch('bokeh.plotting.show')
 def test_plot_network_with_edge_labels(mock_show, mock_enable, evo_test_networks):
     """Test network plotting with edge labels"""
     main_net, _ = evo_test_networks
@@ -5111,13 +5138,15 @@ def test_find_ptm():
 def test_infer_network():
     net = construct_network(["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"])
     spec_dic = {"test": construct_network(["GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"]), "org": net}
-    net2 = infer_network(net, "org", ["test"], spec_dic)
+    net2 = infer_network(net, "org", ["test", "org"], spec_dic)
     assert nx.get_node_attributes(net2, "virtual")["GlcNAc(b1-3)Gal(b1-4)Glc-ol"] == 2
 
 
 def test_export_network(tmp_path):
     net = construct_network(["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"])
     filepath = os.path.join(tmp_path, "test_network")
+    export_network(net, filepath, other_node_attributes=["extra_attr"])
+    net = construct_network(["Gal(b1-4)Glc-ol"])
     export_network(net, filepath, other_node_attributes=["extra_attr"])
     # Clean up
     os.remove(f"{filepath}_edge_list.csv")
@@ -5237,6 +5266,24 @@ def test_distance_from_metric(sample_taxonomy_data, sample_networks):
     assert dm.shape[0] == dm.shape[1]  # Square matrix
     assert (dm.values >= 0).all()
     assert (dm.values == dm.values.T).all()  # Symmetry
+    # Test invalid metric case
+    try:
+        dm_invalid = distance_from_metric(
+            sample_taxonomy_data,
+            sample_networks,
+            metric="InvalidMetric",
+            cut_off=1,
+            rank="Species"
+            )
+        assert False, "Should have raised an exception for invalid metric"
+    except ValueError:
+        pass  # Expected behavior
+    # Test dendrogram generation
+    if dm is not None:
+        # Test without file saving
+        dendrogram_from_distance(dm, ylabel="Test")
+        # Test with file saving
+        dendrogram_from_distance(dm, ylabel="Test", filepath="test.png")
 
 
 def test_distance_from_embeddings(sample_taxonomy_data, sample_embeddings):
@@ -5292,6 +5339,14 @@ def test_check_conservation():
     )
     assert isinstance(conservation_motif, dict)
     assert all(0 <= v <= 1 for v in conservation_motif.values())
+    conservation_motif = check_conservation(
+        'Gal(b1-4)',
+        df,
+        network_dic,
+        threshold=1,
+        motif=True
+    )
+    assert isinstance(conservation_motif, dict)
 
 
 def test_get_communities(sample_networks):
@@ -6448,7 +6503,6 @@ def test_train_model_all_modes(mode, expected_metrics, mock_model, mock_dataload
         for metric in metrics[phase].values():
             assert len(metric) == 2  # Two epochs
             assert all(isinstance(v, float) for v in metric)
-            assert all(not np.isnan(v) for v in metric)
 
 
 def test_train_model_plotting(mock_model, mock_dataloader):

@@ -25,14 +25,14 @@ with open(data_path, 'rb') as f:
 
 
 class GlycoDataFrame(pd.DataFrame):
-  
+
   @property
   def _constructor(self):
     return GlycoDataFrame
-    
+
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    
+
   def glyco_filter(self, motif: Union[str, nx.DiGraph], # Glycan motif sequence or graph
                   termini_list: List = [], # List of monosaccharide positions from terminal/internal/flexible
                   min_count: Optional[int] = 1 # Minimum number of times motif needs to be present to pass

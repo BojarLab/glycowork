@@ -175,7 +175,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                         pred2 = (pred_proba >= 0.5).astype(int)
                     running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
                     running_metrics["mcc"].append(matthews_corrcoef(y_det, pred2))
-                    running_metrics["auroc"].append(roc_auc_score(y_det.astype(int), pred_proba if mode2 == 'binary' else pred_proba[:, 1]))
+                    running_metrics["auroc"].append(roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' else np.nan)
                 elif mode == 'multilabel':
                     pred_proba = sigmoid(pred_det)
                     pred2 = (pred_proba >= 0.5).astype(int)

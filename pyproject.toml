@@ -18,6 +18,8 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
+    "numpy",
+    "matplotlib",
     "scikit-learn",
     "networkx>=3.0",
     "statsmodels",
