@@ -92,7 +92,7 @@ def prepare_multilabel(df: pd.DataFrame, # dataframe with one glycan-association
                      ) -> Tuple[List[str], List[List[float]]]: # unique glycans and their label vectors
   "converts a one row per glycan-species/tissue/disease association file to a format of one glycan - all associations"
   glycans = list(set(df[glycan_col].values.tolist()))
-  class_list = list(set(df[rank].values.tolist()))
+  class_list = sorted(list(set(df[rank].values.tolist())))
   labels = [[0.]*len(class_list) for k in range(len(glycans))]
   # Get all class occurrences of glycan to construct multi-label
   for k, glyc in enumerate(glycans):
