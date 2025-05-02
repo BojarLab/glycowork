@@ -31,8 +31,8 @@
 - Added `sanitize_iupac` to detect and fix chemical impossibilities (like two monosaccharides connected via the same hydroxyl group) and fix it (407cd6f, 74d35a0)
 - Added `GLYCAN_MAPPINGS` dictionary to map commonly used glycan names to their IUPAC-condensed sequence (36d33b8)
 - Added `linearcode1d_to_iupac` to support sequences of type `01Y41Y41M(31M21M21M)61M(31M21M)61M21M` in the Universal Input platform (d0eee40)
-- CSDB linear code is now another supported nomenclature in the context of Universal Input and can be used as inputs for functions etc, supported via improvements in `canonicalize_iupac` (8dd34b7)
-- Added `transform_repeat_glycan` to support bringing repeat structures of type `1)Fruf(b2-3)Fruf(b2-` into the glycowork format of `Fruf(b2-3)Fruf(b2-1)Fruf`
+- CSDB linear code is now another supported nomenclature in the context of Universal Input and can be used as inputs for functions etc, supported via improvements in `canonicalize_iupac` (8dd34b7, 36d2a61)
+- Added `transform_repeat_glycan` to support bringing repeat structures of type `1)Fruf(b2-3)Fruf(b2-` into the glycowork format of `Fruf(b2-3)Fruf(b2-1)Fruf` (36d2a61)
 
 ##### Changed 🔄
 - Moved `.motif.query.glytoucan_to_glycan` into `.motif.processing` (eafb218)
@@ -107,7 +107,7 @@
 #### biosynthesis
 ##### Changed 🔄
 - `plot_network` now uses `bokeh` for interactive plotting instead of `mpld3`; changed the default layout algorithm from `kamada_kawai` to `spring` (972c34b)
-- `find_diamonds` and `highlight_network` will now raise actual `ValueError`s instead of printed warnings, if their settings are wrong 
+- `find_diamonds` and `highlight_network` will now raise actual `ValueError`s instead of printed warnings, if their settings are wrong (36d2a61) 
 
 ##### Fixed 🐛
 - Fixed a `DeprecationWarning` about `resources.open_text` in `construct_network` (ba40c73)

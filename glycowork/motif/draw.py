@@ -1213,15 +1213,14 @@ def GlycoDraw(
         floaty_data.append(get_coordinates_and_labels('blank(-)blank', show_linkage = show_linkage, highlight_motif = None))
     y_span = max_y - min_y
     n_floats = len(floaty_bits)
-    floaty_span = n_floats * 2 - 2
-    y_diff = (floaty_span/2) - (y_span/2)
-
+    y_spacing = (y_span / (n_floats - 1)) if n_floats > 1 else 0
     for j, j_val in enumerate(floaty_data):
       floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf, _, _ = j_val[0]
       floaty_sugar_label = ['show' if highlight_motif == None else 'hide' for k in floaty_sugar]
       floaty_bond_label = ['show' if highlight_motif == None else 'hide' for k in floaty_bond]
       floaty_sugar_x_pos = [floaty_sugar_x_pos[k] + max_x + 1 for k in floaty_sugar_x_pos]
-      floaty_sugar_y_pos = [j for _ in floaty_sugar_y_pos]
+      current_y = (min_y + (j * y_spacing)) if n_floats > 1 else ((min_y + max_y) / 2)
+      floaty_sugar_y_pos = [current_y for _ in range(len(floaty_sugar_y_pos))]
       if floaty_sugar != ['blank', 'blank']:
         [add_bond(floaty_sugar_x_pos[k+1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k+1], floaty_sugar_y_pos[k], d, floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar)-1)]
         [add_sugar(floaty_sugar[k], d, floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf, compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
@@ -1230,8 +1229,7 @@ def GlycoDraw(
 
       if fb_count[floaty_bits[j]] > 1:
         x_offset = 0.5 if not compact else 0.75
-        y_offset = 0.75 if not compact else 1.15
-        add_sugar('blank', d, max(floaty_sugar_x_pos)+x_offset, floaty_sugar_y_pos[-1]+y_offset, modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)
+        add_sugar('text', d, max(floaty_sugar_x_pos)+x_offset, floaty_sugar_y_pos[-1], modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)
 
     bracket_x = max_x * (2 if not compact else 1.2) + 1
     bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
