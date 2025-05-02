@@ -413,7 +413,7 @@ class CanonicalizeIUPACDialog(BaseDialog):
     # Input frame
     input_frame = ttk.LabelFrame(master, text="Input Sequences", padding=10)
     input_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-    help_text = "Enter one or more glycan sequences, one per line"
+    #help_text = "Enter one or more glycan sequences, one per line"
     # Text area for input
     self.input_text = ScrolledText(input_frame, height=10, width=50, font=('Courier', 10))
     self.input_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -427,18 +427,18 @@ class CanonicalizeIUPACDialog(BaseDialog):
     button_frame = ttk.Frame(master)
     button_frame.pack(fill=tk.X, padx=10, pady=5)
     # Canonicalize button
-    self.canonicalize_btn = ttk.Button(button_frame, text="Canonicalize", 
-                                      command=self.canonicalize_sequences, 
+    self.canonicalize_btn = ttk.Button(button_frame, text="Canonicalize",
+                                      command=self.canonicalize_sequences,
                                       style='Modern.TButton')
     self.canonicalize_btn.pack(side=tk.LEFT, padx=5)
     # Copy button
-    self.copy_btn = ttk.Button(button_frame, text="Copy Results", 
-                              command=self.copy_to_clipboard, 
+    self.copy_btn = ttk.Button(button_frame, text="Copy Results",
+                              command=self.copy_to_clipboard,
                               style='Modern.TButton')
     self.copy_btn.pack(side=tk.LEFT, padx=5)
     # Clear button
-    self.clear_btn = ttk.Button(button_frame, text="Clear All", 
-                               command=self.clear_all, 
+    self.clear_btn = ttk.Button(button_frame, text="Clear All",
+                               command=self.clear_all,
                                style='Modern.TButton')
     self.clear_btn.pack(side=tk.LEFT, padx=5)
     return self.input_text
@@ -702,7 +702,7 @@ https://bojarlab.github.io/glycowork/"""
                 progress.destroy()
 
     def open_canonicalize_iupac(self):
-        dialog = CanonicalizeIUPACDialog(self.app)
+        _ = CanonicalizeIUPACDialog(self.app)
 
     def run_differential_expression(self, csv_file_path, treatment_indices, control_indices, motifs, output_folder, progress_dialog):
         try:

@@ -236,7 +236,7 @@ def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
     return 'free'
   if glycan.endswith(('1Cer', 'Ins')):
     return 'lipid'
-  if glycan.endswith(('GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc')):
+  if glycan.endswith(('GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc', '[Fuc(a1-3)]GlcNAc')):
     return 'N'
   if re.search(r'(GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S)$', glycan):
     return 'O'
@@ -838,6 +838,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     last_dash = glycan.rindex('-')
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash-1:])) and 'ol' not in glycan and glycan[last_dash+1:] not in lib:
       glycan = glycan[:last_dash]
+  # Anomeric and steric indicators placed before monosaccharide (e.g., "bDGal(1-4)bDGlcNAc")
+  glycan = re.sub(r'([ab])([DL\?])([A-Z][A-Za-z5]*)\((\d)-(\d*\))', r'\3(\1\4-\5', glycan)
   # Anomeric indicator placed before monosaccharide (e.g., "bGal14GlcNAc")
   glycan = re.sub(r'([ab])([A-Z][A-Za-z5]*)(\d)(\d*)', r'\2\1-\4', glycan)
   # Anomeric indicator placed behind monosaccharide (e.g., "Galb14GlcNAc")
@@ -886,6 +888,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycan[:-2] if 'Glcol' not in glycan else f'{glycan[:-2]}-ol'
   if glycan[-1] in 'ab' and glycan[-3:] not in ['Rha', 'Ara']:
     glycan = glycan[:-1]
+  # Remove anomeric and steric indicators at reducing end
+  if '(' in glycan and bool(re.search(r'\)([ab][DL\?][A-Z][A-Za-z5]*)', glycan)):
+    glycan = re.sub(r'\)([ab][DL\?])([A-Z][A-Za-z5]*)', r')\2', glycan)
   # Handle modifications
   if bool(re.search(r'\[([1-9][SP])\]\[([1-9][SP])\][A-Z][^\(^\[]+', glycan)):  # [6S][4S]Gal to Gal4S6S
     glycan = re.sub(r'\[([1-9][SP])\]\[([1-9][SP])\]([A-Z][^\(^\[]+)',
@@ -919,6 +924,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
   glycan = sanitize_iupac(glycan)
+  # Assume every non-lib "monosaccharide" at the reducing end is a modification and glue it to the preceding monosaccharide
+  glycan = re.sub(r'\(([ab\?][1-2])-([1])\)([A-Z][A-Za-z\-]*$)', lambda m: f'{m.group(2)}{m.group(3)}' if m.group(3) not in lib else f'({m.group(1)}-{m.group(2)}){m.group(3)}', glycan)
   # Canonicalize branch ordering
   if '[' in glycan and not glycan.startswith('[') and ']' in glycan:
     from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string

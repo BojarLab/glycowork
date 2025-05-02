@@ -6,8 +6,8 @@
 - Moved `drawSvg~=2.0`, `Pillow`, and `openpyxl` from the optional `[draw]` install to the dependencies of base glycowork. That allows for the usage of `GlycoDraw` in, e.g., Jupyter environments etc, even if `glycowork[draw]` has not been installed. Since these dependencies are unproblematic, no special install needs to be followed for the base glycowork install (60e51da)
 - Deprecated the optional `[draw]` install completely, by replacing the problematic `cairosvg` dependency with our new & custom renderer `glycorender`, which is now a new base dependency of `glycowork` (7c4fbe1)
 - Deprecated `mpld3` and `matplotlib-inline` dependencies; added new `bokeh` and `IPython` base dependencies for better interactive plotting in a Jupyter environment (972c34b, 13b0699)
-- Formally added `numpy` and `matplotlib` to base dependencies
-- Exposed `canonicalize_iupac` to the `glycoworkGUI`
+- Formally added `numpy` and `matplotlib` to base dependencies (ba40c73)
+- Exposed `canonicalize_iupac` to the `glycoworkGUI` (ba40c73)
 
 ## glycan_data
 #### loader
@@ -31,6 +31,7 @@
 - Added `sanitize_iupac` to detect and fix chemical impossibilities (like two monosaccharides connected via the same hydroxyl group) and fix it (407cd6f, 74d35a0)
 - Added `GLYCAN_MAPPINGS` dictionary to map commonly used glycan names to their IUPAC-condensed sequence (36d33b8)
 - Added `linearcode1d_to_iupac` to support sequences of type `01Y41Y41M(31M21M21M)61M(31M21M)61M21M` in the Universal Input platform (d0eee40)
+- CSDB linear code is now another supported nomenclature in the context of Universal Input and can be used as inputs for functions etc, supported via improvements in `canonicalize_iupac`
 
 ##### Changed 🔄
 - Moved `.motif.query.glytoucan_to_glycan` into `.motif.processing` (eafb218)
@@ -44,6 +45,7 @@
 - `canonicalize_iupac` is now more robust to (5-6) type linkages and to the associated sugar alcohols, like Rib5P-ol (7a260ac)
 - `canonicalize_iupac` will now raise a `ValueError` instead of a warning if a glycan string has mismatching brackets (b69fced)
 - `canonicalize_iupac` can now handle even more IUPAC-dialects such as `Neu5Ac-α-2,6-Gal-β-1,3-GlcNAc-β-Sp` (cb2c898)
+- `get_class` will now correctly annotate plant N-glycans with core a1-3 Fuc
 
 ##### Deprecated ⚠️
 - Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead (7c52a0e)
@@ -106,11 +108,11 @@
 - `plot_network` now uses `bokeh` for interactive plotting instead of `mpld3`; changed the default layout algorithm from `kamada_kawai` to `spring` (972c34b)
 
 ##### Fixed 🐛
-- Fixed a `DeprecationWarning` about `resources.open_text` in `construct_network`
+- Fixed a `DeprecationWarning` about `resources.open_text` in `construct_network` (ba40c73)
 
 #### evolution
 ##### Changed 🔄
-- `distance_from_metric` will now raise a `ValueError` if the chosen metric is not yet supported
+- `distance_from_metric` will now raise a `ValueError` if the chosen metric is not yet supported (ba40c73)
 
 ##### Fixed 🐛
-- Fixed a `ClusterWarning` about distance matrix formats in `dendrogram_from_distance`
+- Fixed a `ClusterWarning` about distance matrix formats in `dendrogram_from_distance` (ba40c73)
