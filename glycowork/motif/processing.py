@@ -86,8 +86,8 @@ monosaccharide_mapping = {
 replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                   'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc',
-                 '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho',
-                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
+                 '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'Rhap': 'Rha',
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, list(replace_dic.keys()))))
 
@@ -797,6 +797,18 @@ def sanitize_iupac(glycan: str # Glycan string to check
   return glycan
 
 
+def transform_repeat_glycan(glycan: str # Glycan string to check
+                            ) -> Tuple[str, bool]: # Glycan string with converted repeat structure, if necessary, and whether glycan is repeat
+  """Transform -1)Fruf(b2-3)Fruf(b2- repeat structure into Fruf(b2-3)Fruf(b2-1)Fruf"""
+  if glycan.startswith("-"):
+    match = re.match(r"(-\d+\))(\[[^\]]*\])?([A-Za-z0-9]+)(.*)", glycan)
+    if match:
+      linkage, brackets, first_mono, remainder = match.groups()
+      brackets = brackets or ""
+      return (brackets + first_mono + remainder + linkage + first_mono), True
+  return glycan, False
+
+
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
   "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, and GlyTouCanIDs to standardized IUPAC-condensed format"
@@ -839,7 +851,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash-1:])) and 'ol' not in glycan and glycan[last_dash+1:] not in lib:
       glycan = glycan[:last_dash]
   # Anomeric and steric indicators placed before monosaccharide (e.g., "bDGal(1-4)bDGlcNAc")
-  glycan = re.sub(r'([ab])([DL\?])([A-Z][A-Za-z5]*)\((\d)-(\d*\))', r'\3(\1\4-\5', glycan)
+  glycan = re.sub(r'([ab])([DLX\?])([A-Z][A-Za-z2-9]*)\((\d)-(\d*\))', r'\3(\1\4-\5', glycan)
+  glycan = re.sub(r'([ab])([DLX\?])([A-Z][A-Za-z2-9]*)\((\d)', r'\3(\1\4', glycan)  # for repeats
   # Anomeric indicator placed before monosaccharide (e.g., "bGal14GlcNAc")
   glycan = re.sub(r'([ab])([A-Z][A-Za-z5]*)(\d)(\d*)', r'\2\1-\4', glycan)
   # Anomeric indicator placed behind monosaccharide (e.g., "Galb14GlcNAc")
@@ -889,9 +902,12 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if glycan[-1] in 'ab' and glycan[-3:] not in ['Rha', 'Ara']:
     glycan = glycan[:-1]
   # Remove anomeric and steric indicators at reducing end
-  if '(' in glycan and bool(re.search(r'\)([ab][DL\?][A-Z][A-Za-z5]*)', glycan)):
-    glycan = re.sub(r'\)([ab][DL\?])([A-Z][A-Za-z5]*)', r')\2', glycan)
+  if '(' in glycan and bool(re.search(r'\)([ab][DLX\?][A-Z][A-Za-z5]*)', glycan)):
+    glycan = re.sub(r'\)([ab][DLX\?])([A-Z][A-Za-z5]*)', r')\2', glycan)
   # Handle modifications
+  glycan = re.sub(r'\[([^]]+\([?ab]?\d+-(\d+)\))\]([A-Z][A-Za-z]*)',
+                 lambda m: f"{m.group(3)}{m.group(2)}{m.group(1).split('(')[0]}" if m.group(1).split('(')[0] not in lib else f"[{m.group(1)}]{m.group(3)}",
+                 glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
   if bool(re.search(r'\[([1-9][SP])\]\[([1-9][SP])\][A-Z][^\(^\[]+', glycan)):  # [6S][4S]Gal to Gal4S6S
     glycan = re.sub(r'\[([1-9][SP])\]\[([1-9][SP])\]([A-Z][^\(^\[]+)',
                        lambda m: f"{m.group(3)}{min(m.group(1), m.group(2))}{max(m.group(1), m.group(2))}", glycan)
@@ -926,8 +942,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = sanitize_iupac(glycan)
   # Assume every non-lib "monosaccharide" at the reducing end is a modification and glue it to the preceding monosaccharide
   glycan = re.sub(r'\(([ab\?][1-2])-([1])\)([A-Z][A-Za-z\-]*$)', lambda m: f'{m.group(2)}{m.group(3)}' if m.group(3) not in lib else f'({m.group(1)}-{m.group(2)}){m.group(3)}', glycan)
+  glycan, repeat = transform_repeat_glycan(glycan)
   # Canonicalize branch ordering
-  if '[' in glycan and not glycan.startswith('[') and ']' in glycan:
+  if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
     from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
     glycan = graph_to_string(glycan_to_nxGraph.__wrapped__(glycan))
   if '{' in glycan:

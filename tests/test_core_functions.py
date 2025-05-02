@@ -298,6 +298,10 @@ def test_canonicalize_iupac():
     # Test other nomenclatures
     assert canonicalize_iupac("aDMan(1-2)bDGlcp(1-1)Me") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("aDGlcp(1-2)bDFruf") == "Glc(a1-2)Fruf"
+    assert canonicalize_iupac("-1)bDFruf(2-3)bDFruf(2-") == "Fruf(b2-3)Fruf(b2-1)Fruf"
+    assert canonicalize_iupac("-1)[Ac(1-3)]bDFruf(2-3)bDFruf(2-") == "Fruf3Ac(b2-3)Fruf(b2-1)Fruf3Ac"
+    assert canonicalize_iupac("-2)[aDGalp(1-3)]aDRhap(1-3)bDRhap(1-4)bDGlcp(1-") == "[Gal(a1-3)]Rha(a1-3)Rha(b1-4)Glc(b1-2)Rha"
+    assert canonicalize_iupac("-2)aLRhap(1-3)[bDGlcp(1-2)]aLRhap(1-") == "Rha(a1-3)[Glc(b1-2)]Rha(a1-2)Rha"
     assert canonicalize_iupac("DManpa1-6DManpb1-4DGlcpNAcb1-4[LFucpa1-6]DGlcpNAcb1-OH") == "Man(a1-6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("Neup5Aca2-3DGalpb1-4DGlcpNAcb1-3DGalpb1-3DGalpb1-4DGlcpb1-OH") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)Gal(b1-4)Glc"
     assert canonicalize_iupac("DGalp[6S]b1-3DGalpNAca1-OH") == "Gal6S(b1-3)GalNAc"
@@ -3205,6 +3209,11 @@ def test_preprocess_data():
     df_trans, df_org, g1, g2 = preprocess_data(df, group1, group2, motifs=True)
     assert 'Terminal_LacNAc_type2' in df_trans.index
     assert 'Man' in df_trans.index
+    try:
+        df_trans, df_org, g1, g2 = preprocess_data(df, group1, group2, transform="wrong")
+        return False
+    except ValueError:
+        pass
 
 
 def test_get_pvals_motifs():
@@ -3606,6 +3615,11 @@ def test_get_time_series(sample_time_series_data):
     results = get_time_series(df, impute=False, transform="ALR")
     results = get_time_series(df, impute=False, transform="Nothing")
     results = get_time_series(df, impute=False, motifs=True)
+    try:
+        results = get_time_series(df, impute=False, transform="wrong")
+        return False
+    except:
+        pass
 
 
 def test_get_SparCC():
@@ -4078,6 +4092,11 @@ def test_get_heatmap_basic(sample_df):
     }).set_index('glycan')
     result_presence = get_heatmap(presence_df, datatype='presence')
     result_presence = get_heatmap(presence_df, datatype='presence', motifs=True, feature_set=['exhaustive'])
+    try:
+        result = get_heatmap(sample_df, motifs=True, feature_set=['custom'])
+        return False
+    except ValueError:
+        pass
     plt.close('all')
 
 
@@ -4187,6 +4206,11 @@ def test_get_jtk_basic(sample_jtk_df):
     result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, transform="ALR")
     result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, transform="Nothing")
     assert sum(result.significant) == 2
+    try:
+        result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, transform="wrong")
+        return False
+    except:
+        pass
 
 
 def test_get_jtk_with_motifs(sample_jtk_df):
@@ -4449,6 +4473,34 @@ def test_highlight_network_motif(simple_network):
     assert all("origin" in data for _, data in highlighted.nodes(data=True))
     assert all(data["origin"] in ["limegreen", "darkviolet"]
               for _, data in highlighted.nodes(data=True))
+    highlighted = highlight_network(simple_network, highlight="motif", motif="Gal(b1-4)")
+    highlighted = highlight_network(simple_network, highlight="motif", motif="r.-.")
+    highlighted = highlight_network(simple_network, highlight="species", species='Lama_pacos')
+    try:
+        highlighted = highlight_network(simple_network, highlight="wrong")
+        return False
+    except ValueError:
+        pass
+    try:
+        highlighted = highlight_network(simple_network, highlight="motif")
+        return False
+    except ValueError:
+        pass
+    try:
+        highlighted = highlight_network(simple_network, highlight="species")
+        return False
+    except ValueError:
+        pass
+    try:
+        highlighted = highlight_network(simple_network, highlight="abundance")
+        return False
+    except ValueError:
+        pass
+    try:
+        highlighted = highlight_network(simple_network, highlight="conservation")
+        return False
+    except ValueError:
+        pass
 
 
 def test_highlight_network_abundance(simple_network):
@@ -4521,6 +4573,10 @@ def test_infer_roots():
     glycolipids = {"Neu5Ac(a2-3)Gal(b1-4)Glc", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"}
     roots = infer_roots(frozenset(glycolipids))
     assert "Gal(b1-4)Glc" in roots
+    # Test fallback case (unrecognized glycan class)
+    unknown_glycans = {"XyzUnknownStructure", "SomeOtherUnknownFormat"}
+    roots = infer_roots(frozenset(unknown_glycans))
+    assert len(roots) == 0  # Returns empty frozenset
 
 
 def test_deorphanize_nodes(sample_network):
@@ -4543,13 +4599,18 @@ def test_get_edge_weight_by_abundance(sample_network):
 
 
 def test_find_diamonds(simple_glycans):
-    diamonds = find_diamonds(construct_network(simple_glycans))
+    net = construct_network(simple_glycans)
+    diamonds = find_diamonds(net)
     assert isinstance(diamonds, list)
     assert len(diamonds) > 0
     assert all(isinstance(d, dict) for d in diamonds)
     assert all(len(d) >= 4 for d in diamonds)  # Diamond should have at least 4 nodes
-    diamonds = find_diamonds(construct_network(simple_glycans),
-                             nb_intermediates=4)
+    diamonds = find_diamonds(net_dic['Lama_pacos'], nb_intermediates=4)
+    try:
+        diamonds = find_diamonds(net, nb_intermediates=3)
+        return False
+    except ValueError:
+        pass
 
 
 def test_trace_diamonds(simple_glycans):
@@ -4577,11 +4638,11 @@ def test_get_reaction_flow(sample_network):
     sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
     flow_results = get_maximum_flow(sample_network,
                                   source="Gal(b1-4)Glc-ol")
-    reaction_flows = get_reaction_flow(sample_network, flow_results,
-                                     aggregate="sum")
+    reaction_flows = get_reaction_flow(sample_network, flow_results, aggregate="sum")
     assert isinstance(reaction_flows, dict)
     assert len(reaction_flows) > 0
     assert all(isinstance(v, (int, float)) for v in reaction_flows.values())
+    reaction_flows = get_reaction_flow(sample_network, flow_results, aggregate="mean")
 
 
 def test_process_ptm():
@@ -4613,6 +4674,17 @@ def test_get_differential_biosynthesis(abundance_data):
         analysis="flow",
         paired=True
     )
+    try:
+        results = get_differential_biosynthesis(
+            abundance_data,
+            group1=[1,2],
+            group2=[3,4],
+            analysis="wrong",
+            paired=True
+            )
+        return False
+    except ValueError:
+        pass
 
 
 def test_deorphanize_edge_labels(sample_network):
@@ -4929,6 +5001,8 @@ def extension_test_network():
 def n_glycan_network():
     """Create test network for extension"""
     glycans = ['Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+               'GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+               'Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
                'Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[dHex(a1-6)]GlcNAc']
     network = construct_network(glycans)
     return network
@@ -5137,11 +5211,14 @@ def test_find_ptm():
     assert find_ptm("Gal(b1-4)Gal6S(b1-4)Glc-ol", ["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"], {}, stem_lib)[1] == "6S"
 
 
-def test_infer_network():
+@patch('bokeh.io.output_notebook')
+@patch('bokeh.plotting.show')
+def test_infer_network(mock_show, mock_enable):
     net = construct_network(["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"])
     spec_dic = {"test": construct_network(["GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"]), "org": net}
     net2 = infer_network(net, "org", ["test", "org"], spec_dic)
     assert nx.get_node_attributes(net2, "virtual")["GlcNAc(b1-3)Gal(b1-4)Glc-ol"] == 2
+    plot = plot_network(net2)
 
 
 def test_export_network(tmp_path):

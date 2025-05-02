@@ -763,8 +763,7 @@ def find_diamonds(network: nx.DiGraph, # Biosynthetic network
                 ) -> List[Dict[int, str]]: # List of diamond motifs as diamond node positions mapping to glycans
   "Find diamond-like motifs (A->B,A->C,B->D,C->D) in biosynthetic network"
   if nb_intermediates % 2 > 0:
-    print("nb_intermediates has to be a multiple of 2; please re-try.")
-    return []
+    raise ValueError("nb_intermediates has to be a multiple of 2; please re-try.")
   # Generate matching motif
   path_length = nb_intermediates // 2 + 2 # The length of one of the two paths is half of the number of intermediates + 1 source node + 1 target node
   first_path = list(range(1, path_length + 1))
@@ -876,20 +875,15 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
     network_dic = pickle.load(open(data_path, 'rb'))
   # Determine highlight validity
   if highlight not in ['motif', 'species', 'abundance', 'conservation']:
-    print(f"Invalid highlight argument: {highlight}")
-    return
+    raise ValueError(f"Invalid highlight argument: {highlight}")
   if highlight == 'motif' and motif is None:
-    print("You have to provide a glycan motif to highlight")
-    return
+    raise ValueError("You have to provide a glycan motif to highlight")
   elif highlight == 'species' and species is None:
-    print("You have to provide a species to highlight")
-    return
+    raise ValueError("You have to provide a species to highlight")
   elif highlight == 'abundance' and abundance_df is None:
-    print("You have to provide a dataframe with glycan abundances to highlight")
-    return
+    raise ValueError("You have to provide a dataframe with glycan abundances to highlight")
   elif highlight == 'conservation' and conservation_df is None:
-    print("You have to provide a dataframe with species-glycan associations to check conservation")
-    return
+    raise ValueError("You have to provide a dataframe with species-glycan associations to check conservation")
   network_out = deepcopy(network)
   # Color nodes as to whether they contain the motif (green) or not (violet)
   if highlight == 'motif':

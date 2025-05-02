@@ -1231,7 +1231,7 @@ def GlycoDraw(
       if fb_count[floaty_bits[j]] > 1:
         x_offset = 0.5 if not compact else 0.75
         y_offset = 0.75 if not compact else 1.15
-        add_sugar('blank', d, max(floaty_sugar_x_pos)+x_offset, floaty_sugar_y_pos[-1]+y_offset, modification = str(fb_count[floaty_bits[j]]) + 'x', compact = compact, dim = dim, highlight = highlight)
+        add_sugar('blank', d, max(floaty_sugar_x_pos)+x_offset, floaty_sugar_y_pos[-1]+y_offset, modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)
 
     bracket_x = max_x * (2 if not compact else 1.2) + 1
     bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
