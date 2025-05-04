@@ -32,9 +32,8 @@ dependencies = [
     "setuptools>=64.0",
     "huggingface_hub>=0.16.0",
     "drawSvg~=2.0",
-    "Pillow",
     "openpyxl",
-    "glycorender>=0.1.3"
+    "glycorender>=0.1.4"
 ]
 
 [project.urls]

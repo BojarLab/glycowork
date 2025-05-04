@@ -3,8 +3,9 @@
 ## [1.6.0]
 - All glycan graphs are now directed graphs (`nx.Graph` --> `nx.DiGraph`), flowing from the root (reducing end) to the tips (non-reducing ends), which has led to code changes in quite few functions. Some functions run faster now, yet outputs are unaffected (03dfad6)
 - Added `huggingface_hub>=0.16.0` as a new dependency to facilitate more robust model distribution (22f6b8f)
-- Moved `drawSvg~=2.0`, `Pillow`, and `openpyxl` from the optional `[draw]` install to the dependencies of base glycowork. That allows for the usage of `GlycoDraw` in, e.g., Jupyter environments etc, even if `glycowork[draw]` has not been installed. Since these dependencies are unproblematic, no special install needs to be followed for the base glycowork install (60e51da)
+- Moved `drawSvg~=2.0` and `openpyxl` from the optional `[draw]` install to the dependencies of base glycowork. That allows for the usage of `GlycoDraw` in, e.g., Jupyter environments etc, even if `glycowork[draw]` has not been installed. Since these dependencies are unproblematic, no special install needs to be followed for the base glycowork install (60e51da)
 - Deprecated the optional `[draw]` install completely, by replacing the problematic `cairosvg` dependency with our new & custom renderer `glycorender`, which is now a new base dependency of `glycowork` (7c4fbe1)
+- Moved `Pillow` dependency into `glycorender`
 - Deprecated `mpld3` and `matplotlib-inline` dependencies; added new `bokeh` and `IPython` base dependencies for better interactive plotting in a Jupyter environment (972c34b, 13b0699)
 - Formally added `numpy` and `matplotlib` to base dependencies (ba40c73)
 - Exposed `canonicalize_iupac` to the `glycoworkGUI` (ba40c73)
@@ -31,8 +32,8 @@
 - Added `sanitize_iupac` to detect and fix chemical impossibilities (like two monosaccharides connected via the same hydroxyl group) and fix it (407cd6f, 74d35a0)
 - Added `GLYCAN_MAPPINGS` dictionary to map commonly used glycan names to their IUPAC-condensed sequence (36d33b8)
 - Added `linearcode1d_to_iupac` to support sequences of type `01Y41Y41M(31M21M21M)61M(31M21M)61M21M` in the Universal Input platform (d0eee40)
-- CSDB linear code is now another supported nomenclature in the context of Universal Input and can be used as inputs for functions etc, supported via improvements in `canonicalize_iupac` (8dd34b7, 36d2a61, 69c00e1)
-- Added `transform_repeat_glycan` to support bringing repeat structures of type `1)Fruf(b2-3)Fruf(b2-` into the glycowork format of `Fruf(b2-3)Fruf(b2-1)Fruf` (36d2a61)
+- CSDB linear code is now another supported nomenclature in the context of Universal Input and can be used as inputs for functions etc, supported via improvements in `canonicalize_iupac` (8dd34b7, 36d2a61, 69c00e1, 2d8fdfd)
+- Added `transform_repeat_glycan` to support bringing repeat structures of type `1)Fruf(b2-3)Fruf(b2-` into the glycowork format of `Fruf(b2-3)Fruf(b2-1)Fruf` (36d2a61, 2d8fdfd)
 - Added `nglycan_stub_to_iupac` to support sequences of type `(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2` in the Universal Input platform (69c00e1)
 
 ##### Changed 🔄
@@ -70,6 +71,7 @@
 ##### Added ✨
 - Added `get_branches_from_graph` to process directed glycan graphs into components for `GlycoDraw` (e56d015)
 - Added the `reverse_highlight` keyword argument to `GlycoDraw`, if you want to highlight everything *except* a certain motif (which means you can highlight discontiguous sequence stretches) (f5e3b2f)
+- `GlycoDraw` will now inject ALT text / metadata into all its outputs (displayed or saved as `.pdf`/`.svg`/`.png`) for improved accessibility and to aid curation efforts. The ALT text will be automatically generated and includes appropriate tags, the glycan sequence, and used drawing options. But it can also be overriden, if desired, via the new `alt_text` keyword argument in `GlycoDraw`
 
 ##### Changed 🔄
 - Quantitative highlighting in `GlycoDraw` via the `per_residue` keyword argument will now use individual SNFG-colors instead of a uniform highlight color (07c9c12)
@@ -123,4 +125,4 @@
 ### ml
 #### model_training
 ##### Changed 🔄
-- `training_setup` will now raise a `ValueError` if the chosen mode is not supported
+- `training_setup` will now raise a `ValueError` if the chosen mode is not supported (2d8fdfd)

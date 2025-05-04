@@ -1072,7 +1072,8 @@ def GlycoDraw(
     filepath: Optional[Union[str, Path]] = None, # Output file path
     suppress: bool = False, # Suppress display
     per_residue: List = [], # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
-    pdb_file: Optional[Union[str, Path]] = None  # only used when draw_method='chem3d'; already existing glycan structure
+    pdb_file: Optional[Union[str, Path]] = None,  # only used when draw_method='chem3d'; already existing glycan structure
+    alt_text: Optional[str] = None  # Custom ALT text for accessibility
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
   if any(k in glycan for k in [';', '-D-', 'RES', '=']):
@@ -1171,6 +1172,17 @@ def GlycoDraw(
   height = max(height, width) if vertical else height
   x_ori = -width+(dim/2)+0.5*dim
   y_ori = (-height/2)+(((max_y-abs(min_y))/2)*dim)
+
+  # Generate default ALT text if not provided
+  if alt_text is None:
+    orientation = "vertical" if vertical else "horizontal"
+    style = "compact" if compact else "standard"
+    linkage_info = "with" if show_linkage else "without"
+    alt_text = f"SNFG diagram of {glycan} drawn in {orientation} {style} style {linkage_info} linkage labels."
+    if highlight_motif:
+      alt_text += f" The motif {highlight_motif} is highlighted."
+    if repeat:
+      alt_text += f" Contains repeat unit (n={repeat if isinstance(repeat, (str, int)) and repeat != True else ''})."
 
   # Draw
   d2 = draw.Drawing(width, height, origin = (x_ori, y_ori))
@@ -1274,6 +1286,7 @@ def GlycoDraw(
     filepath = Path(filepath)
     filepath = filepath.with_name(filepath.name.replace('?', '_'))
     data = d2.as_svg()
+    data = data.replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
     if filepath.suffix.lower() == '.svg':
       with open(filepath, 'w', encoding = "utf-8") as f:
         f.write(data)
@@ -1411,7 +1424,7 @@ def plot_glycans_excel(
       width = svg_data.width if hasattr(svg_data, 'width') else 800
       height = svg_data.height if hasattr(svg_data, 'height') else 800
       # Convert SVG data to image
-      temp_bytes = BytesIO(convert_svg_to_png(svg_data.encode('utf-8'), output_width = width,
+      temp_bytes = BytesIO(convert_svg_to_png(svg_data.encode('utf-8').decode('utf-8'), output_width = width,
                          output_height = height, scale = 2.0, return_bytes = True))
       # Load and crop image
       img = Image.open(temp_bytes)
