@@ -37,7 +37,7 @@ from glycowork.motif.processing import (
     glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices,
-    bracket_removal, check_nomenclature, IUPAC_to_SMILES
+    bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono
 )
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
@@ -218,6 +218,14 @@ def test_graph_to_string_int(glycan: str):
     assert nx.is_isomorphic(label, target, node_match=iso.categorical_node_match("string_labels", ""))
 
 
+def test_get_mono():
+    try:
+        get_mono("wrong_wrong")
+        return False
+    except:
+        pass
+
+
 def test_graph_to_string():
     assert graph_to_string("Gal(b1-3)GlcNAc") == "Gal(b1-3)GlcNAc"
     # Complex cases
@@ -303,7 +311,10 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("-2)[aDGalp(1-3)]aDRhap(1-3)bDRhap(1-4)bDGlcp(1-") == "[Gal(a1-3)]Rha(a1-3)Rha(b1-4)Glc(b1-2)Rha"
     assert canonicalize_iupac("-2)aLRhap(1-3)[bDGlcp(1-2)]aLRhap(1-") == "Rha(a1-3)[Glc(b1-2)]Rha(a1-2)Rha"
     assert canonicalize_iupac("-3)[65%Ac(1-2)]bDRibf(1-2)bDRibf(1-6)bXKdof(2-") == "Ribf2Ac(b1-2)Ribf(b1-6)Kdof(b2-3)Ribf2Ac"
-    assert canonicalize_iupac("-2)aLRhap(1-P-4)[Ac(1-2)]bDManpN(1-4)aDGlcp(1-") == "Rha1P(a1-4)ManN2Ac(b1-4)Glc(a1-2)Rha1P"
+    assert canonicalize_iupac("-2)aLRhap(1-P-4)[Ac(1-2)]bDManpN(1-4)aDGlcp(1-") == "Rha1P(a1-4)ManNAc(b1-4)Glc(a1-2)Rha1P"
+    assert canonicalize_iupac("-2)bDGlcpA(1-3)[%Ac(1-2)aL6dTalpN(1-4)bDGlcp(1-4),%Ac(1-2)]aLFucpN(1-") == "GlcA(b1-3)[6dTalNAc(a1-4)Glc(b1-4)]FucNAc(a1-2)GlcA"
+    assert canonicalize_iupac("-3)aLRhap(1-2)aLRhap(1-5)[<<Ac(1-8)|Ac(1-7)>>]bXKdo(2-") == "Rha(a1-2)Rha(a1-5)KdoOAc(b2-3)Rha"
+    assert canonicalize_iupac("-P-2)bDRibf(1-2)xDRib-ol(5-") == "Ribf(b1-2)Rib5P-ol(?5-2)Ribf"
     assert canonicalize_iupac("DManpa1-6DManpb1-4DGlcpNAcb1-4[LFucpa1-6]DGlcpNAcb1-OH") == "Man(a1-6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("Neup5Aca2-3DGalpb1-4DGlcpNAcb1-3DGalpb1-3DGalpb1-4DGlcpb1-OH") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)Gal(b1-4)Glc"
     assert canonicalize_iupac("DGalp[6S]b1-3DGalpNAca1-OH") == "Gal6S(b1-3)GalNAc"
@@ -316,7 +327,9 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("α-D-Manp-(1→3)[α-D-Manp-(1→6)]-β-D-Manp-(1→4)-β-D-GlcpNAc-(1→4)-β-D-GlcpNAc-(1→") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("M3") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("FA2[3]G1") == "Gal(b1-3/4)GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("FA4G3F2") == "Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-?)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-?)]Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-?)[GlcNAc(b1-?)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("A4G4") == "Gal(b1-3/4)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("FA4G3") == "Gal(b1-3/4)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-?)[GlcNAc(b1-?)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("FA2BiG2") == "Gal(b1-3/4)GlcNAc(b1-?)Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-?)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("F(3)XA2") == "GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("F(6)A2[6]G(4)1Sg(6)1") == "Neu5Gc(a2-3/6)Gal(b1-3/4)GlcNAc(b1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
@@ -6147,6 +6160,26 @@ def test_training_setup(_, mock_model):
     assert not isinstance(optimizer, SAM)
     assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
     assert isinstance(criterion, torch.nn.MSELoss)
+    try:
+        optimizer, scheduler, criterion = training_setup(
+        mock_model,
+        lr=0.001,
+        mode='multiclass',
+        num_classes=2
+        )
+        return False
+    except ValueError:
+        pass
+    try:
+        optimizer, scheduler, criterion = training_setup(
+        mock_model,
+        lr=0.001,
+        mode='wrong',
+        num_classes=2
+        )
+        return False
+    except ValueError:
+        pass
 
 
 def test_train_ml_model(mock_xgb_data):

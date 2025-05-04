@@ -417,7 +417,7 @@ def training_setup(model: torch.nn.Module, # graph neural network for analyzing 
     # Choose loss function
     if mode == 'multiclass':
       if num_classes == 2:
-        raise Exception("You have to set the number of classes via num_classes")
+        raise ValueError("You have to set the number of classes via num_classes")
       criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
     elif mode == 'multilabel':
       criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
@@ -426,7 +426,7 @@ def training_setup(model: torch.nn.Module, # graph neural network for analyzing 
     elif mode == 'regression':
       criterion = torch.nn.MSELoss().to(device)
     else:
-      print("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
+      raise ValueError("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
     return optimizer_ft, scheduler, criterion
 
 
