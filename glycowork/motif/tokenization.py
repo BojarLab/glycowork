@@ -381,6 +381,8 @@ def map_to_basic(glycoletter: str, # Monosaccharide or linkage
   for cond, ret in conditions:
     if glycoletter in cond:
       return ret
+  if re.search(r"\d\-\d", glycoletter):
+    return "?1-?"
   g2 = re.sub(r"\d", 'O', glycoletter)
   if 'S' in glycoletter:
     if g2 in {k + 'OS' for k in Hex}:

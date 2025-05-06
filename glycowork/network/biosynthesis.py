@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 from glycowork.glycan_data.loader import unwrap, linkages, lib
 from glycowork.glycan_data.stats import cohen_d, get_alphaN
-from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, subgraph_isomorphism, get_possible_topologies
+from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, graph_to_string_int, subgraph_isomorphism, get_possible_topologies
 from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class
 from glycowork.motif.tokenization import get_stem_lib, glycan_to_composition, map_to_basic
 from glycowork.motif.regex import get_match
@@ -127,7 +127,9 @@ def find_diff(glycan_a: str, # First glycan
   matched = subgraph_isomorphism(graph_larger, graph_smaller, return_matches = True)
   if not isinstance(matched, bool) and matched[0]:
     diff_nodes = set(graph_larger) - set(matched[1][0])
-    diff_string = graph_to_string(graph_larger.subgraph(diff_nodes))
+    if not diff_nodes:
+      return 'disregard'
+    diff_string = graph_to_string_int(graph_larger.subgraph(diff_nodes))
     return 'disregard' if any(ptm in diff_string for ptm in allowed_ptms) else diff_string
   return 'disregard'
 

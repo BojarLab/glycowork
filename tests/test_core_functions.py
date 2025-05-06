@@ -666,6 +666,7 @@ def test_map_to_basic():
     assert map_to_basic("GlcNS") == "HexNS"
     assert map_to_basic("Man6P") == "HexOP"
     assert map_to_basic("GlcNAc6P") == "HexNAcOP"
+    assert map_to_basic("a2-3/6/8/9") == "?1-?"
 
 
 def test_mask_rare_glycoletters():
@@ -4434,6 +4435,9 @@ def test_find_diff():
     assert "GlcNAc" in diff
     assert find_diff(glycan_a, glycan_a, graph_dic) == ""
     assert find_diff(glycan_a, "Gal(b1-3)[GlcNAc(b1-6)]GalNAc", graph_dic) == "disregard"
+    a = "{Fuc(a1-2/3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-4)GlcNAc(b1-2/4/6)[Gal(b1-4)GlcNAc(b1-2/4/6)]Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    b = "{Fuc(a1-2/3/6)}{Neu5Ac(a2-3/6/8)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2/4/6)[GlcNAc(b1-2/4/6)]Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert find_diff(a, b, {}) == "disregard"
 
 
 def test_find_path():
@@ -6620,6 +6624,17 @@ def test_train_model_all_modes(mode, expected_metrics, mock_model, mock_dataload
         for metric in metrics[phase].values():
             assert len(metric) == 2  # Two epochs
             assert all(isinstance(v, float) for v in metric)
+    _ = train_model(
+        mock_model,
+        mock_dataloader,
+        criterion,
+        optimizer,
+        scheduler,
+        num_epochs=2,
+        mode=mode,
+        mode2='multi' if mode != 'regression' else 'binary',
+        return_metrics=False
+    )
 
 
 def test_train_model_plotting(mock_model, mock_dataloader):

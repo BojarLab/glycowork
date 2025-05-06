@@ -5,7 +5,7 @@
 - Added `huggingface_hub>=0.16.0` as a new dependency to facilitate more robust model distribution (22f6b8f)
 - Moved `drawSvg~=2.0` and `openpyxl` from the optional `[draw]` install to the dependencies of base glycowork. That allows for the usage of `GlycoDraw` in, e.g., Jupyter environments etc, even if `glycowork[draw]` has not been installed. Since these dependencies are unproblematic, no special install needs to be followed for the base glycowork install (60e51da)
 - Deprecated the optional `[draw]` install completely, by replacing the problematic `cairosvg` dependency with our new & custom renderer `glycorender`, which is now a new base dependency of `glycowork` (7c4fbe1)
-- Moved `Pillow` dependency into `glycorender`
+- Moved `Pillow` dependency into `glycorender` (793e71f)
 - Deprecated `mpld3` and `matplotlib-inline` dependencies; added new `bokeh` and `IPython` base dependencies for better interactive plotting in a Jupyter environment (972c34b, 13b0699)
 - Formally added `numpy` and `matplotlib` to base dependencies (ba40c73)
 - Exposed `canonicalize_iupac` to the `glycoworkGUI` (ba40c73)
@@ -71,7 +71,7 @@
 ##### Added ✨
 - Added `get_branches_from_graph` to process directed glycan graphs into components for `GlycoDraw` (e56d015)
 - Added the `reverse_highlight` keyword argument to `GlycoDraw`, if you want to highlight everything *except* a certain motif (which means you can highlight discontiguous sequence stretches) (f5e3b2f)
-- `GlycoDraw` will now inject ALT text / metadata into all its outputs (displayed or saved as `.pdf`/`.svg`/`.png`) for improved accessibility and to aid curation efforts. The ALT text will be automatically generated and includes appropriate tags, the glycan sequence, and used drawing options. But it can also be overriden, if desired, via the new `alt_text` keyword argument in `GlycoDraw`
+- `GlycoDraw` will now inject ALT text / metadata into all its outputs (displayed or saved as `.pdf`/`.svg`/`.png`) for improved accessibility and to aid curation efforts. The ALT text will be automatically generated and includes appropriate tags, the glycan sequence, and used drawing options. But it can also be overriden, if desired, via the new `alt_text` keyword argument in `GlycoDraw` (793e71f)
 
 ##### Changed 🔄
 - Quantitative highlighting in `GlycoDraw` via the `per_residue` keyword argument will now use individual SNFG-colors instead of a uniform highlight color (07c9c12)
@@ -105,6 +105,7 @@
 #### tokenization
 ##### Changed 🔄
 - `stemify_glycan` can now deal with even more strongly modified glycans and should be faster too (03e502c)
+- `map_to_basic` can now deal with any linkage, even those never before seen in glycans
 
 ### network
 #### biosynthesis
@@ -114,6 +115,7 @@
 
 ##### Fixed 🐛
 - Fixed a `DeprecationWarning` about `resources.open_text` in `construct_network` (ba40c73)
+- Fixed an edge case in `find_diff` when related but dissimilar glycans are used as input 
 
 #### evolution
 ##### Changed 🔄
