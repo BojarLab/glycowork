@@ -306,6 +306,9 @@ def IUPAC_to_SMILES(glycan_list: List[str] # List of IUPAC-condensed glycans
   return [convert(g)[0][1] for g in glycan_list]
 
 
+iupac_to_smiles = IUPAC_to_SMILES
+
+
 def linearcode_to_iupac(linearcode: str # Glycan in LinearCode format
                       ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from LinearCode to barebones IUPAC-condensed format"
@@ -818,7 +821,7 @@ def transform_repeat_glycan(glycan: str # Glycan string to check
       phospho = phospho or ""
       glycan = brackets + first_mono + remainder + phospho + linkage + first_mono
       glycan = re.sub(r'(\w+)\(([\w\?])(\d+)-P-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}P({m.group(2)}{m.group(3)}-{m.group(4)})", glycan)
-      return glycan.replace('Rib-ol5P', 'Rib5P-ol'), True
+      return re.sub(r"-ol(\d+)P", r"\1P-ol", glycan), True
   return glycan, False
 
 
@@ -923,8 +926,11 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'\d{,2}%', '', glycan)  # [50%Ac(a1-2)] into [Ac(a1-2)]
   glycan = re.sub(r'(?<!\d),(?!\d)', '][', glycan)  # Replace only commas not flanked by digits
   glycan = re.sub(r'<<([A-Za-z0-9]+)\(([ab\?])(\d+)-\d+\)\|([A-Za-z0-9]+)\([ab\?]\d+-\d+\)>>', r'\1(\2\3-?)', glycan)  # <<Rha(a1-3)|Rha(a1-4)>> to Rha(a1-?)
-  glycan = re.sub(r'\[([^]]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z]*)',
-                 lambda m: f"{m.group(3)}{m.group(2)}{m.group(1).split('(')[0]}" if m.group(1).split('(')[0] not in lib else f"[{m.group(1)}]{m.group(3)}",
+  old_glycan = ""
+  while glycan != old_glycan:
+    old_glycan = glycan
+    glycan = re.sub(r'\[([^]]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
+                 lambda m: f"{m.group(3)}{m.group(2)}{m.group(1).split('(')[0]}" if (m.group(1).split('(')[0] not in lib and m.group(1).count('(') == 1) else f"[{m.group(1)}]{m.group(3)}",
                  glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
   glycan = re.sub(r'\[([A-Za-z0-9]+)\(\?(\d+)-(\d+)\)([A-Za-z0-9]+)',
                 lambda m: f"[{m.group(4)}{m.group(3)}{m.group(1)}" if m.group(1) not in lib else f"[{m.group(1)}(?{m.group(2)}-{m.group(3)}){m.group(4)}",
@@ -940,7 +946,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)  # S-Gal to GalS
   # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
   glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
-  glycan = re.sub(r'([c-z])([1-2])-', r'\1(?\2-', glycan)
+  glycan = re.sub(r'(~\([c-z])([1-2])-', r'\1(?\2-', glycan)
   glycan = re.sub(r'-([\?2-9])([A-Z])', r'-\1)\2', glycan)
   glycan = re.sub(r'([\?2-9])([\[\]])', r'\1)\2', glycan)
   # Floating bits
@@ -953,13 +959,13 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = '{'+glycan.replace('+', '}')
   post_process = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a',
-                  'Kdn(a1': 'Kdn(a2', 'N2Ac(': 'NAc(', '(x': '(?'}
+                  'Kdn(a1': 'Kdn(a2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?'}
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
   glycan = sanitize_iupac(glycan)
   # Assume every non-lib "monosaccharide" at the reducing end is a modification and glue it to the preceding monosaccharide
   glycan = re.sub(r'\(([ab\?][1-2])-([1])\)([A-Z][A-Za-z\-]*$)', lambda m: f'{m.group(2)}{m.group(3)}' if m.group(3) not in lib else f'({m.group(1)}-{m.group(2)}){m.group(3)}', glycan)
-  glycan = re.sub(r'(\w+)\(([\w\?])(\d+)-P-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}P({m.group(2)}{m.group(3)}-{m.group(4)})", glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
+  glycan = re.sub(r'([\w-]+)(?:-ol)?\(([\w\?])(\d+)-P-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}P({m.group(2)}{m.group(3)}-{m.group(4)})", glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
   glycan, repeat = transform_repeat_glycan(glycan)
   # Canonicalize branch ordering
   if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:

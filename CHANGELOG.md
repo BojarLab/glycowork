@@ -35,6 +35,7 @@
 - CSDB linear code is now another supported nomenclature in the context of Universal Input and can be used as inputs for functions etc, supported via improvements in `canonicalize_iupac` (8dd34b7, 36d2a61, 69c00e1, 2d8fdfd)
 - Added `transform_repeat_glycan` to support bringing repeat structures of type `1)Fruf(b2-3)Fruf(b2-` into the glycowork format of `Fruf(b2-3)Fruf(b2-1)Fruf` (36d2a61, 2d8fdfd)
 - Added `nglycan_stub_to_iupac` to support sequences of type `(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2` in the Universal Input platform (69c00e1)
+- Added `iupac_to_smiles` alias for `IUPAC_to_SMILES`
 
 ##### Changed 🔄
 - Moved `.motif.query.glytoucan_to_glycan` into `.motif.processing` (eafb218)
@@ -105,7 +106,7 @@
 #### tokenization
 ##### Changed 🔄
 - `stemify_glycan` can now deal with even more strongly modified glycans and should be faster too (03e502c)
-- `map_to_basic` can now deal with any linkage, even those never before seen in glycans
+- `map_to_basic` can now deal with any linkage, even those never before seen in glycans (069faf7)
 
 ### network
 #### biosynthesis
@@ -115,7 +116,7 @@
 
 ##### Fixed 🐛
 - Fixed a `DeprecationWarning` about `resources.open_text` in `construct_network` (ba40c73)
-- Fixed an edge case in `find_diff` when related but dissimilar glycans are used as input 
+- Fixed an edge case in `find_diff` when related but dissimilar glycans are used as input (069faf7)
 
 #### evolution
 ##### Changed 🔄
