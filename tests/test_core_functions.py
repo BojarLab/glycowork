@@ -518,6 +518,12 @@ LIN
 LIN
 1:1o(8+2)2d
 2:2o(8+2)3d""") == "Kdo(a2-8)Kdo(a2-8)Kdo"
+    assert canonicalize_iupac('D0H0') == '4uHexA(?1-?)GlcN'
+    assert canonicalize_iupac('D2S9') == '4uHexA2S(?1-?)GlcNS3S6S'
+    assert canonicalize_iupac('D2a4') == '4uHexA2S(?1-?)GalNAc4S'
+    assert canonicalize_iupac('m7') == '{Man(a1-?)}{Man(a1-?)}{Man(a1-?)}{Man(a1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert canonicalize_iupac('Man-7') == '{Man(a1-?)}{Man(a1-?)}{Man(a1-?)}{Man(a1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert canonicalize_iupac('Man7') == '{Man(a1-?)}{Man(a1-?)}{Man(a1-?)}{Man(a1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     # Test raised errors
     with pytest.raises(ValueError, match="Mismatching brackets in formatted glycan string"):
         canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol")
