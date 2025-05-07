@@ -777,6 +777,26 @@ def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
       print(f'These {msg} are not in our database: {not_found}')
     return result
 
+def parse_high_mannose_shorthand(shorthand_string: str) -> str:
+    "Convert names like Man-6, m7, man 4 into M{x}"
+    pattern = r'^(?:M|Man)[-]?(\d+)$'
+    match = re.fullmatch(pattern, shorthand_string.strip().replace(" ",""), re.IGNORECASE)
+    return f'M{match.group(1)}'
+
+def process_GAG_disaccharide(input_dsc: str) -> str:
+    "Convert disaccharide GAG codes like D2A6 into 4uHexA2S(?1-?)GlcNAc6S"
+    non_red_end_map = {'U': 'HexA', 'D': '4uHexA', 'G': 'GlcA', 'I': 'IdoA', 'g': 'Gal'}
+    non_red_end_sulf = {'0': '', '2': '2S'}
+    hexosamine_map = {'A': 'GlcNAc', 'a': 'GalNAc', 'S': 'GlcNS', 'H': 'GlcN'}
+    hexosamine_sulf = {'0': '', '3': '3S', '4': '4S', '6': '6S', '9': '3S6S', '10': '4S6S'}
+
+    non_red_base = non_red_end_map.get(input_dsc[0])
+    non_red_sulfation = non_red_end_sulf.get(input_dsc[1])
+    hexosamine_base = hexosamine_map.get(input_dsc[2])
+    hexosamine_sulfation = hexosamine_sulf.get(input_dsc[3:])
+    linkage = '(?1-?)'
+
+    return f"{non_red_base}{non_red_sulfation}{linkage}{hexosamine_base}{hexosamine_sulfation}"
 
 def nglycan_stub_to_iupac(nglycan_stub: str # Glycan in a N-glycan stub format
                       ) -> str: # Basic IUPAC-condensed format
@@ -847,6 +867,11 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycam_to_iupac(glycan)
   elif 'End--' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
+  elif bool(re.fullmatch(r'^(?:M|Man)[-\s]?(\d+)$', glycan, re.IGNORECASE)):
+    glycan = parse_high_mannose_shorthand(glycan)
+    glycan = oxford_to_iupac(glycan)
+  elif bool(re.fullmatch(r'^[UDGIg][02][AaSH](0|3|4|6|9|10)$', glycan)):
+    glycan = process_GAG_disaccharide(glycan)
   elif bool(re.match(r'^G\d+', glycan)):
     glycan = glytoucan_to_glycan([glycan])[0]
   elif not isinstance(glycan, str) or '@' in glycan:
