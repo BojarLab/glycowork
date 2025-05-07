@@ -774,20 +774,14 @@ def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
       print(f'These {msg} are not in our database: {not_found}')
     return result
 
-def parse_high_mannose_shorthand(shorthand_string):
-    c="Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    b2="Man(a1-3/6)"
-    b3="Man(a1-3)[Man(a1-6)]"
-    b9="Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]"
-    gp={10:"Glc(a1-3)",11:"Glc(a1-3)Glc(a1-3)",12:"Glc(a1-2)Glc(a1-3)Glc(a1-3)"}
-
+def parse_high_mannose_shorthand(shorthand_string: str) -> str:
+    "Convert names like Man-6, m7, man 4 into M{x}"
     pattern = r'^(?:M|Man)[-]?(\d+)$'
-    match = re.fullmatch(pattern, shorthand_string.strip(), re.IGNORECASE)
-    n = int(match.group(1))
-
-    return ("{Man(a1-?)}"*(n-3) if 4<=n<=8 else gp.get(n,""))+([""]*2+[b2]+[b3]*6+[b9]*4)[n]+c
+    match = re.fullmatch(pattern, shorthand_string.strip().replace(" ",""), re.IGNORECASE)
+    return f'M{match.group(1)}'
 
 def process_GAG_disaccharide(input_dsc: str) -> str:
+    "Convert disaccharide GAG codes like D2A6 into 4uHexA2S(?1-?)GlcNAc6S"
     non_red_end_map = {'U': 'HexA', 'D': '4uHexA', 'G': 'GlcA', 'I': 'IdoA', 'g': 'Gal'}
     non_red_end_sulf = {'0': '', '2': '2S'}
     hexosamine_map = {'A': 'GlcNAc', 'a': 'GalNAc', 'S': 'GlcNS', 'H': 'GlcN'}
@@ -870,8 +864,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycam_to_iupac(glycan)
   elif 'End--' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
-  elif bool(re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', glycan, re.IGNORECASE)):
+  elif bool(re.fullmatch(r'^(?:M|Man)[-\s]?(\d+)$', glycan, re.IGNORECASE)):
     glycan = parse_high_mannose_shorthand(glycan)
+    glycan = oxford_to_iupac(glycan)
   elif bool(re.fullmatch(r'^[UDGIg][02][AaSH](0|3|4|6|9|10)$', glycan)):
     glycan = process_GAG_disaccharide(glycan)
   elif bool(re.match(r'^G\d+', glycan)):
