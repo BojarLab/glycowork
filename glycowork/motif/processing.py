@@ -586,6 +586,9 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
 def oxford_to_iupac(oxford: str # Glycan in Oxford format
                    ) -> str: # Glycan in IUPAC-condensed format
   "Convert glycan from Oxford to IUPAC-condensed format"
+  match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
+  if match:
+    oxford = f'M{match.group(1)}'
   oxford = re.sub(r'\([^)]*\)', '', oxford).strip().split('/')[0]
   antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -759,44 +762,39 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
 def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
                        revert: bool = False # Whether to map glycans to IDs; default:False
                       ) -> List[str]: # List of glycans or IDs
-    "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
-    if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
-      glytoucan_to_glycan.glycan_dict = dict(zip(df_glycan.glytoucan_id, df_glycan.glycan))
-      glytoucan_to_glycan.id_dict = dict(zip(df_glycan.glycan, df_glycan.glytoucan_id))
-    lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
-    result , not_found = [], []
-    for item in ids:
-      if item in lookup:
-        result.append(lookup[item])
-      else:
-        result.append(item)
-        not_found.append(item)
-    # Print missing items if any
-    if not_found:
-      msg = 'glycans' if revert else 'IDs'
-      print(f'These {msg} are not in our database: {not_found}')
-    return result
+  "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
+  if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
+    glytoucan_to_glycan.glycan_dict = dict(zip(df_glycan.glytoucan_id, df_glycan.glycan))
+    glytoucan_to_glycan.id_dict = dict(zip(df_glycan.glycan, df_glycan.glytoucan_id))
+  lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
+  result , not_found = [], []
+  for item in ids:
+    if item in lookup:
+      result.append(lookup[item])
+    else:
+      result.append(item)
+      not_found.append(item)
+  # Print missing items if any
+  if not_found:
+    msg = 'glycans' if revert else 'IDs'
+    print(f'These {msg} are not in our database: {not_found}')
+  return result
 
-def parse_high_mannose_shorthand(shorthand_string: str) -> str:
-    "Convert names like Man-6, m7, man 4 into M{x}"
-    pattern = r'^(?:M|Man)[-]?(\d+)$'
-    match = re.fullmatch(pattern, shorthand_string.strip().replace(" ",""), re.IGNORECASE)
-    return f'M{match.group(1)}'
 
-def process_GAG_disaccharide(input_dsc: str) -> str:
-    "Convert disaccharide GAG codes like D2A6 into 4uHexA2S(?1-?)GlcNAc6S"
-    non_red_end_map = {'U': 'HexA', 'D': '4uHexA', 'G': 'GlcA', 'I': 'IdoA', 'g': 'Gal'}
-    non_red_end_sulf = {'0': '', '2': '2S'}
-    hexosamine_map = {'A': 'GlcNAc', 'a': 'GalNAc', 'S': 'GlcNS', 'H': 'GlcN'}
-    hexosamine_sulf = {'0': '', '3': '3S', '4': '4S', '6': '6S', '9': '3S6S', '10': '4S6S'}
+def GAG_disaccharide_to_iupac(input_dsc: str # Disaccharide structural code (DSC) for GAGs
+                             ) -> str: # Basic IUPAC-condensed format
+  "Convert disaccharide GAG codes like D2A6 into 4uHexA2S(?1-?)GlcNAc6S"
+  non_red_end_map = {'U': 'HexA', 'D': '4uHexA', 'G': 'GlcA', 'I': 'IdoA', 'g': 'Gal'}
+  non_red_end_sulf = {'0': '', '2': '2S'}
+  hexosamine_map = {'A': 'GlcNAc', 'a': 'GalNAc', 'S': 'GlcNS', 'H': 'GlcN'}
+  hexosamine_sulf = {'0': '', '3': '3S', '4': '4S', '6': '6S', '9': '3S6S', '10': '4S6S'}
+  non_red_base = non_red_end_map.get(input_dsc[0])
+  non_red_sulfation = non_red_end_sulf.get(input_dsc[1])
+  hexosamine_base = hexosamine_map.get(input_dsc[2])
+  hexosamine_sulfation = hexosamine_sulf.get(input_dsc[3:])
+  linkage = '(?1-?)'
+  return f"{non_red_base}{non_red_sulfation}{linkage}{hexosamine_base}{hexosamine_sulfation}"
 
-    non_red_base = non_red_end_map.get(input_dsc[0])
-    non_red_sulfation = non_red_end_sulf.get(input_dsc[1])
-    hexosamine_base = hexosamine_map.get(input_dsc[2])
-    hexosamine_sulfation = hexosamine_sulf.get(input_dsc[3:])
-    linkage = '(?1-?)'
-
-    return f"{non_red_base}{non_red_sulfation}{linkage}{hexosamine_base}{hexosamine_sulfation}"
 
 def nglycan_stub_to_iupac(nglycan_stub: str # Glycan in a N-glycan stub format
                       ) -> str: # Basic IUPAC-condensed format
@@ -867,18 +865,15 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycam_to_iupac(glycan)
   elif 'End--' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
-  elif bool(re.fullmatch(r'^(?:M|Man)[-\s]?(\d+)$', glycan, re.IGNORECASE)):
-    glycan = parse_high_mannose_shorthand(glycan)
-    glycan = oxford_to_iupac(glycan)
   elif bool(re.fullmatch(r'^[UDGIg][02][AaSH](0|3|4|6|9|10)$', glycan)):
-    glycan = process_GAG_disaccharide(glycan)
+    glycan = GAG_disaccharide_to_iupac(glycan)
   elif bool(re.match(r'^G\d+', glycan)):
     glycan = glytoucan_to_glycan([glycan])[0]
   elif not isinstance(glycan, str) or '@' in glycan:
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
     glycan = nglycan_stub_to_iupac(glycan)
-  elif ((glycan[-1].isdigit() and bool(re.search("[A-Z]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith(('B', 'LacDiNAc'))) and 'e' not in glycan and '-' not in glycan:
+  elif ((glycan[-1].isdigit() and bool(re.search("[A-Zm]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith(('B', 'LacDiNAc'))) and 'e' not in glycan and ('-' not in glycan or len(glycan) < 6):
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
