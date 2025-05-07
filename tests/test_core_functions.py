@@ -1421,6 +1421,11 @@ def test_build_custom_df():
     assert 'glycan' in result.columns
     assert 'Species' in result.columns
     assert len(df_species[df_species.Genus=='Diceros'].glyco_filter("Neu5Ac(a2-3)[GalNAc(b1-4)]Gal", min_count=2)) > 0
+    try:
+        result = build_custom_df(df, "wrong")
+        return False
+    except:
+        pass
 
 
 def test_dataframe_serializer():
@@ -1679,6 +1684,8 @@ def test_alr_transformation():
     # Test with scale model
     result_scaled = alr_transformation(data, 0, group1, group2, custom_scale=2.0)
     assert result_scaled.shape[0] == data.shape[0] - 1
+    data.columns = ['1_control', '2_control', '3_disease']
+    result_scaled = alr_transformation(data, 0, ['1_control', '2_control', '3_disease'], [], custom_scale={'control':2.0, 'disease':1.0})
 
 
 def test_get_procrustes_scores():
@@ -1695,6 +1702,8 @@ def test_get_procrustes_scores():
     # Test Procrustes analysis
     scores, corr, var = get_procrustes_scores(data, group1, group2)
     assert len(scores) == len(corr) == len(var) == data.shape[0]
+    scores, corr, var = get_procrustes_scores(data, [1, 2], [3, 4])
+    scores, corr, var = get_procrustes_scores(data, group1, group2, paired=True)
 
 
 def test_get_additive_logratio_transformation():
@@ -1776,6 +1785,8 @@ def test_correct_multiple_testing():
     assert len(corrected_pvals) == len(significance) == len(p_values)
     assert all(0 <= p <= 1 for p in corrected_pvals)
     assert all(isinstance(s, bool) for s in significance)
+    corrected_pvals, significance = correct_multiple_testing([], 0.05)
+    assert len(corrected_pvals) == 0
 
 
 def test_partial_corr():
@@ -1787,6 +1798,7 @@ def test_partial_corr():
     corr, p_val = partial_corr(x, y, controls)
     assert -1 <= corr <= 1
     assert 0 <= p_val <= 1
+    corr, p_val = partial_corr(x, y, np.empty(shape=(0,0)))
 
 
 def test_estimate_technical_variance():
@@ -1857,6 +1869,7 @@ def test_get_glycoform_diff():
     assert 'corr p-val' in result.columns
     assert 'significant' in result.columns
     assert 'Effect size' in result.columns
+    result = get_glycoform_diff(result_df, alpha=0.05, level='protein')
 
 
 def test_get_glm():
@@ -1903,6 +1916,8 @@ def test_replace_outliers_with_iqr_bounds():
     result = replace_outliers_with_IQR_bounds(data)
     data = pd.Series(['Neu5Ac', 10, 20, 30, 1, 20, 30, 10])  # 1 is an outlier
     result = replace_outliers_with_IQR_bounds(data)
+    data = pd.Series(['Neu5Ac', 10, 20, 30, -100, 20, 30, 10])  # -100 is an outlier
+    result = replace_outliers_with_IQR_bounds(data)
 
 
 def test_replace_outliers_winsorization():
@@ -1913,6 +1928,11 @@ def test_replace_outliers_winsorization():
     assert len(result) == len(data)
     result = replace_outliers_winsorization(data, cap_side='lower')
     result = replace_outliers_winsorization(data, cap_side='upper')
+    try:
+        result = replace_outliers_winsorization(data, cap_side='wrong')
+        return False
+    except:
+        pass
 
 
 def test_perform_tests_monte_carlo():
@@ -6371,6 +6391,11 @@ def test_init_weights():
     # Test xavier initialization
     init_weights(model, mode='xavier')
     assert not torch.all(model.weight == 0)
+    try:
+        init_weights(model, mode='wrong')
+        return False
+    except:
+        pass
 
 
 # Tests for prep_model
@@ -6529,6 +6554,16 @@ def test_get_lectin_preds(sample_data, mock_models):
     assert 'motif' in df.columns
     assert 'pred' in df.columns
     assert len(df) == len(sample_data['glycans'])
+    try:
+        df = get_lectin_preds(
+        prot=sample_data['protein'],
+        glycans=sample_data['glycans'],
+        model=model,
+        prot_dic=None
+        )
+        return False
+    except:
+        pass
     # Test with background correction
     correction_df = pd.DataFrame({
         'motif': sample_data['glycans'],

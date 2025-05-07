@@ -287,7 +287,7 @@ def init_weights(model: torch.nn.Module, # neural network for analyzing glycans
         elif mode == 'xavier':
             torch.nn.init.xavier_uniform_(model.weight)
         else:
-            print("This initialization option is not supported.")
+            raise ValueError("This initialization option is not supported.")
 
 
 def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_flex", "NSequonPred"], # type of model to create

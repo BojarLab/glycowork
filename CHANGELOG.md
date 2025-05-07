@@ -9,6 +9,7 @@
 - Deprecated `mpld3` and `matplotlib-inline` dependencies; added new `bokeh` and `IPython` base dependencies for better interactive plotting in a Jupyter environment (972c34b, 13b0699)
 - Formally added `numpy` and `matplotlib` to base dependencies (ba40c73)
 - Exposed `canonicalize_iupac` to the `glycoworkGUI` (ba40c73)
+- Implemented submodule lazy loading to speed up package imports & start-up
 
 ## glycan_data
 #### loader
@@ -24,6 +25,10 @@
 - Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities (9eeaa3a, 436bf09)
 - `download_model` will now download model weights and representations from the HuggingFace Hub (22f6b8f)
 - `df_species` and `df_glycan` are now of type `GlycoDataFrame`; `build_custom_df` now returns a dataframe of type `GlycoDataFrame` (9764b3e)
+
+#### stats
+##### Fixed 🐛
+- Fixed a `DeprecationWarning` about implicit indexing in `alr_transformation` when a dict is used for `custom_scale`
 
 ### motif
 #### processing
@@ -130,3 +135,11 @@
 #### model_training
 ##### Changed 🔄
 - `training_setup` will now raise a `ValueError` if the chosen mode is not supported (2d8fdfd)
+
+#### inference
+##### Changed 🔄
+- `get_lectin_preds` will now raise a `ValueError` if no protein:ESM-1b dictionary is provided in non-flex mode
+
+#### models
+##### Changed 🔄
+- `init_weights` will now raise a `ValueError` if the chosen initialization `mode` is not supported

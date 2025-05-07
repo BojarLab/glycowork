@@ -654,11 +654,11 @@ def alr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
     for idx in range(df.shape[1]):
       group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
-      reference_adjusted = reference_values[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = rng)
+      reference_adjusted = reference_values.iloc[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = rng)
       alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted
   alr_transformed = pd.DataFrame(alr_transformed, index = df.index, columns = df.columns)
   alr_transformed = alr_transformed.drop(index = reference_values.name)
-  alr_transformed = alr_transformed.reset_index(drop=True)
+  alr_transformed = alr_transformed.reset_index(drop = True)
   return alr_transformed
 
 
@@ -826,8 +826,7 @@ def partial_corr(x: np.ndarray, # typically values from a column or row
   res_x = x - controls.dot(beta_x)
   res_y = y - controls.dot(beta_y)
   # Compute correlation of residuals
-  corr, pval = spearmanr(res_x, res_y)
-  return corr, pval
+  return spearmanr(res_x, res_y)
 
 
 def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in cols

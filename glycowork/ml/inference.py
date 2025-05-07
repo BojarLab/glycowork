@@ -129,7 +129,7 @@ def get_lectin_preds(prot: str, # protein amino acid sequence
     with resources.files("glycowork.ml").joinpath("glycowork_lectinoracle_background_correction.csv").open(encoding = 'utf-8-sig') as f:
         correction_df = pd.read_csv(f)
   if prot_dic is None and not flex:
-    print("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
+    raise ValueError("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
   preds = unwrap(get_multi_pred(prot, glycans, model, prot_dic,
                          batch_size = batch_size, libr = libr, flex = flex))
   df_pred = pd.DataFrame({'motif': glycans, 'pred': preds})
