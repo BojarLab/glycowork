@@ -9,7 +9,7 @@
 - Deprecated `mpld3` and `matplotlib-inline` dependencies; added new `bokeh` and `IPython` base dependencies for better interactive plotting in a Jupyter environment (972c34b, 13b0699)
 - Formally added `numpy` and `matplotlib` to base dependencies (ba40c73)
 - Exposed `canonicalize_iupac` to the `glycoworkGUI` (ba40c73)
-- Implemented submodule lazy loading to speed up package imports & start-up
+- Implemented submodule lazy loading to speed up package imports & start-up (9bf18f7)
 
 ## glycan_data
 #### loader
@@ -28,7 +28,7 @@
 
 #### stats
 ##### Fixed 🐛
-- Fixed a `DeprecationWarning` about implicit indexing in `alr_transformation` when a dict is used for `custom_scale`
+- Fixed a `DeprecationWarning` about implicit indexing in `alr_transformation` when a dict is used for `custom_scale` (9bf18f7)
 
 ### motif
 #### processing
@@ -42,6 +42,7 @@
 - Added `nglycan_stub_to_iupac` to support sequences of type `(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2` in the Universal Input platform (69c00e1)
 - Added `iupac_to_smiles` alias for `IUPAC_to_SMILES` (cb97593)
 - Added `GAG_disaccharide_to_iupac` to support disaccharide structural code (DSC) for GAGs (e.g., `D2A6`) in the context of Universal Input (0770bcd)
+- Added more WURCS tokens for better support in the context of Universal Input
 
 ##### Changed 🔄
 - Moved `.motif.query.glytoucan_to_glycan` into `.motif.processing` (eafb218)
@@ -138,8 +139,8 @@
 
 #### inference
 ##### Changed 🔄
-- `get_lectin_preds` will now raise a `ValueError` if no protein:ESM-1b dictionary is provided in non-flex mode
+- `get_lectin_preds` will now raise a `ValueError` if no protein:ESM-1b dictionary is provided in non-flex mode (9bf18f7)
 
 #### models
 ##### Changed 🔄
-- `init_weights` will now raise a `ValueError` if the chosen initialization `mode` is not supported
+- `init_weights` will now raise a `ValueError` if the chosen initialization `mode` is not supported (9bf18f7)
