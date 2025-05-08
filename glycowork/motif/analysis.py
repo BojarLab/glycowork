@@ -82,7 +82,7 @@ def preprocess_data(
       df = pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
                                                                  gamma = gamma, custom_scale = custom_scale)], axis = 1)
     else:
-      df.iloc[:,1:] = df.iloc[:,1:] + 0.0000001
+      df.iloc[:, 1:] = df.iloc[:, 1:] + 0.0000001
       df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:], group2, gamma = gamma, custom_scale = custom_scale)
   elif transform == "Nothing":
     pass

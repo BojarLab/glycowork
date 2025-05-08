@@ -792,7 +792,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = linearcode_to_iupac(glycan)
   elif glycan.startswith('0'):
     glycan = linearcode1d_to_iupac(glycan)
-  elif '-D-' in glycan:
+  elif bool(re.match('[^o]-D-', glycan)):
     glycan = iupac_extended_to_condensed(glycan)
   elif 'RES' in glycan:
     glycan = glycoct_to_iupac(glycan)
@@ -839,7 +839,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Open linkages with anomeric config specified (e.g., "Mana-")
   glycan = re.sub(r'([A-Z][a-z]*)([a-b])\-([A-Z])', r'\1\g<2>1-?\3', glycan)
   # Open linkages (e.g., "c-")
-  glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
+  glycan = re.sub(r'([a-z])\-([A-Z][^\-])', r'\1?1-?\2', glycan)
   # Open linkages2 (e.g., "1-")
   glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
   # Missing linkages (e.g., "c)")

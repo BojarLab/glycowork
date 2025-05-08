@@ -125,7 +125,7 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
   "Wrapper for converting glycans into networkx graphs; also works with floating substituents"
   if not glycan:
     return nx.DiGraph()
-  if any(k in glycan for k in [';', '-D-', 'RES', '=']):
+  if any(k in glycan for k in [';', 'β', 'α', 'RES', '=']):
     raise Exception
   termini_list = expand_termini_list(glycan, termini_list) if termini_list else None
   if '{' in glycan:

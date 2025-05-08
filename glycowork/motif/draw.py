@@ -1076,7 +1076,7 @@ def GlycoDraw(
     alt_text: Optional[str] = None  # Custom ALT text for accessibility
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
-  if any(k in glycan for k in [';', '-D-', 'RES', '=']):
+  if any(k in glycan for k in [';', 'β', 'α', 'RES', '=']):
     raise Exception
   if glycan.startswith('Terminal') and glycan not in motif_list.motif_name.values.tolist():
     glycan = glycan.split('_')[-1]

@@ -42,7 +42,7 @@
 - Added `nglycan_stub_to_iupac` to support sequences of type `(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2` in the Universal Input platform (69c00e1)
 - Added `iupac_to_smiles` alias for `IUPAC_to_SMILES` (cb97593)
 - Added `GAG_disaccharide_to_iupac` to support disaccharide structural code (DSC) for GAGs (e.g., `D2A6`) in the context of Universal Input (0770bcd)
-- Added more WURCS tokens for better support in the context of Universal Input, now stored in `wurcs_tokens.json` (b30553f)
+- Added more WURCS tokens for better support in the context of Universal Input, now stored in `wurcs_tokens.json` (b30553f, b94cf6d)
 
 ##### Changed 🔄
 - Moved `.motif.query.glytoucan_to_glycan` into `.motif.processing` (eafb218)

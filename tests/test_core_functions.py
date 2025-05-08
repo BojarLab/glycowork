@@ -303,6 +303,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[GalNAc(a1-3)]Gal(b1-3)]GalNAc") == "Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[GalNAc(a1-3)]Gal(b1-3)]GalNAc"
     assert canonicalize_iupac("Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Xyl(b1-2)][Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc") == "Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
+    assert canonicalize_iupac("Glc(?1-?)[Gal(?1-?)]2,5-Anhydro-D-Tal") == "Gal(?1-?)[Glc(?1-?)]2-5-Anhydro-D-Tal"
     # Test other nomenclatures
     assert canonicalize_iupac("aDMan(1-2)bDGlcp(1-1)Me") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("aDGlcp(1-2)bDFruf") == "Glc(a1-2)Fruf"
@@ -618,6 +619,7 @@ def test_glycan_to_composition():
     # Test basic glycan
     result = glycan_to_composition("Neu5Ac(a2-3)Gal(b1-4)GlcNAc")
     assert result == {'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}
+    #result = glycan_to_composition('Neu5Ac(a2-3/6)Gal(b1-3)GalNAc')
     # Test glycan with sulfation
     result = glycan_to_composition("Neu5Ac(a2-3)Gal6S(b1-4)GlcNAc")
     assert result == {'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1, 'S': 1}
