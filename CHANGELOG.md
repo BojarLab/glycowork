@@ -25,6 +25,7 @@
 - Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities (9eeaa3a, 436bf09)
 - `download_model` will now download model weights and representations from the HuggingFace Hub (22f6b8f)
 - `df_species` and `df_glycan` are now of type `GlycoDataFrame`; `build_custom_df` now returns a dataframe of type `GlycoDataFrame` (9764b3e)
+- `DataFrameSerializer` will now also correctly serialize cells in which lists of strings have been converted into one string (Excel/pandas interplay of complex cells), where we use `ast` to try to literally evaluate them back into lists of strings
 
 #### stats
 ##### Fixed 🐛
@@ -42,8 +43,8 @@
 - Added `nglycan_stub_to_iupac` to support sequences of type `(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2` in the Universal Input platform (69c00e1)
 - Added `iupac_to_smiles` alias for `IUPAC_to_SMILES` (cb97593)
 - Added `GAG_disaccharide_to_iupac` to support disaccharide structural code (DSC) for GAGs (e.g., `D2A6`) in the context of Universal Input (0770bcd)
-- Added more WURCS tokens for better support in the context of Universal Input, now stored in `wurcs_tokens.json` (b30553f, b94cf6d, d1fd4c7)
-- Support monosaccharides without anomeric indicator and phospho-linkages in WURCS
+- Added more WURCS tokens for better support in the context of Universal Input, now stored in `wurcs_tokens.json` (b30553f, b94cf6d, d1fd4c7, 14bbd4d)
+- Support monosaccharides without anomeric indicator and phospho-linkages in WURCS (14bbd4d)
 
 ##### Changed 🔄
 - Moved `.motif.query.glytoucan_to_glycan` into `.motif.processing` (eafb218)

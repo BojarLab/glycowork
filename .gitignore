@@ -132,6 +132,7 @@ tests/*.svg
 tests/*.png
 tests/*.pdf
 tests/*.pt
+tests/*.json
 
 # tools/trust-doc-nbs
 docs_src/.last_checked

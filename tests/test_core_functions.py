@@ -1437,7 +1437,8 @@ def test_dataframe_serializer():
         'strings': ['a', 'b', 'c'],
         'lists': [[1, 2], [3, 4], [5, 6]],
         'dicts': [{'x': 1}, {'y': 2}, {'z': 3}],
-        'nulls': [None, pd.NA, None]
+        'nulls': [None, pd.NA, None],
+        'stringified_lists': ["['d', 'e', 'f']", "['d2', 'e2', 'f2']", "['d3', 'e3', 'f3']"]
     })
     # Test serialization and deserialization
     serializer = DataFrameSerializer()
@@ -1452,6 +1453,9 @@ def test_dataframe_serializer():
     cell_data = {'type': 'list', 'value': ['1', '2', '3']}
     result = serializer._deserialize_cell(cell_data)
     assert result == ['1', '2', '3']
+    serializer.serialize(df, "test.json")
+    df2 = serializer.deserialize("test.json")
+    assert isinstance(df2["stringified_lists"].tolist()[0], list)
 
 
 def test_glycan_binding():

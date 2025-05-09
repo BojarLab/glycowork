@@ -1,6 +1,7 @@
 import os
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 import re
+import ast
 import json
 import pickle
 import pandas as pd
@@ -281,6 +282,19 @@ class DataFrameSerializer:
   @staticmethod
   def _serialize_cell(value: Any) -> Dict[str, Any]:
     """Convert a cell value to a serializable format with type information."""
+    # Check if the value is a string representation of a list
+    if isinstance(value, str) and value.strip().startswith('[') and value.strip().endswith(']'):
+      try:
+        # Try to convert the string to an actual list
+        parsed_value = ast.literal_eval(value)
+        if isinstance(parsed_value, list):
+          return {
+            'type': 'list',
+            'value': [str(item) for item in parsed_value]
+          }
+      except (SyntaxError, ValueError):
+        # If parsing fails, treat it as a regular string
+        pass
     if isinstance(value, list):
       return {
         'type': 'list',
