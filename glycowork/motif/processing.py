@@ -416,6 +416,7 @@ def get_mono(token: str # WURCS monosaccharide token
   "Map WURCS token to monosaccharide with anomeric state"
   hex_or_dhex = 'h' if 'h' in token else 'm'
   token = 'a' + token[1:].replace(hex_or_dhex, f'{hex_or_dhex}-1x_1-5', 1) if token.startswith('u') else token
+  token = f"{token.replace('U', 'a')}-2x_2-6" if 'U' in token else token
   anomer = token[token.index('_')-1] if '_' in token else ''
   if token in monosaccharide_mapping:
     mono = monosaccharide_mapping[token]
@@ -447,7 +448,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
   wurcs = re.sub(pattern, replacement, wurcs)
   wurcs = re.sub(additional_pattern, '?', wurcs)
-  wurcs = re.sub(r'([ab][\d\?])\*OPO\*\/3O\/3\=O', r'\1P', wurcs)  # phospho-linkages
+  wurcs = re.sub(r'([a-z][\d\?])\*OPO\*\/3O\/3\=O', r'\1P', wurcs)  # phospho-linkages
   floating_part, floating_parts = '', []
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -519,7 +520,8 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
       if balance < 0:
         return s[:i] + s[i + 1:]
     return s
-  return remove_first_unmatched_opening_bracket(iupac).replace('1P-', '1-P-')
+  iupac = remove_first_unmatched_opening_bracket(iupac)
+  return re.sub(r'(\d)([P])\-', r'\1-\2-', iupac)
 
 
 def oxford_to_iupac(oxford: str # Glycan in Oxford format

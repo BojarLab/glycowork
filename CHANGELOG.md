@@ -25,7 +25,7 @@
 - Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities (9eeaa3a, 436bf09)
 - `download_model` will now download model weights and representations from the HuggingFace Hub (22f6b8f)
 - `df_species` and `df_glycan` are now of type `GlycoDataFrame`; `build_custom_df` now returns a dataframe of type `GlycoDataFrame` (9764b3e)
-- `DataFrameSerializer` will now also correctly serialize cells in which lists of strings have been converted into one string (Excel/pandas interplay of complex cells), where we use `ast` to try to literally evaluate them back into lists of strings
+- `DataFrameSerializer` will now also correctly serialize cells in which lists of strings have been converted into one string (Excel/pandas interplay of complex cells), where we use `ast` to try to literally evaluate them back into lists of strings (806a47c)
 
 #### stats
 ##### Fixed 🐛
