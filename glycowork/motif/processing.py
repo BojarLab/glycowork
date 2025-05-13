@@ -797,11 +797,11 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = linearcode_to_iupac(glycan)
   elif glycan.startswith('0'):
     glycan = linearcode1d_to_iupac(glycan)
-  elif bool(re.match('[^o]-D-', glycan)):
+  elif bool(re.match('[^o]-[LD]-', glycan)):
     glycan = iupac_extended_to_condensed(glycan)
   elif 'RES' in glycan:
     glycan = glycoct_to_iupac(glycan)
-  elif '=' in glycan:
+  elif 'S=' in glycan:
     glycan = wurcs_to_iupac(glycan)
   elif glycan.endswith('-OH'):
     glycan = glycam_to_iupac(glycan)
@@ -929,6 +929,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'\(([ab\?][1-2])-([1])\)([A-Z][A-Za-z\-]*$)', lambda m: f'{m.group(2)}{m.group(3)}' if m.group(3) not in lib else f'({m.group(1)}-{m.group(2)}){m.group(3)}', glycan)
   glycan = re.sub(r'([\w-]+)(?:-ol)?\(([\w\?])(\d+)-P-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}P({m.group(2)}{m.group(3)}-{m.group(4)})", glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
   glycan, repeat = transform_repeat_glycan(glycan)
+  glycan = re.sub(r"n\=[\d\?\-]+\/", "", glycan)  # Strip out internal repeats such as n=?/
+  glycan = re.sub(r"\/([A-Z])", r"\1", glycan)  # Strip out any remaining / from internal repeats
   # Canonicalize branch ordering
   if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
     from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
