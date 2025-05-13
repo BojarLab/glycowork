@@ -45,7 +45,7 @@ def preprocess_data(
     group2: List[Union[str, int]], # Column indices/names for second group
     experiment: str = "diff", # Type of experiment: "diff" or "anova"
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     paired: bool = False, # Whether samples are paired
     impute: bool = True, # Replace zeros with Random Forest model
     min_samples: float = 0.1, # Min percent of non-zero samples required
@@ -109,7 +109,7 @@ def get_pvals_motifs(
     zscores: bool = True, # Whether data are z-scores
     thresh: float = 1.645, # Threshold to separate positive/negative
     sorting: bool = True, # Sort p-value dataframe
-    feature_set: List[str] = ['exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     multiple_samples: bool = False, # Multiple samples with glycan columns
     motifs: Optional[pd.DataFrame] = None, # Modified motif_list
     custom_motifs: List[str] = [] # Custom motifs if using 'custom' feature set
@@ -190,7 +190,7 @@ def get_representative_substructures(
 def get_heatmap(
     df: Union[pd.DataFrame, str, Path], # Input dataframe or filepath (.csv/.xlsx)
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     transform: str = '', # Transform data before plotting
     datatype: str = 'response', # Data type: 'response' for quantitative values or 'presence' for presence/absence
     rarity_filter: float = 0.05, # Min proportion for non-zero values
@@ -420,7 +420,7 @@ def get_pca(
     df: Union[pd.DataFrame, str, Path], # DataFrame with glycans in rows (col 1), abundances in columns
     groups: Optional[Union[List[int], pd.DataFrame]] = None, # Group labels (e.g., [1,1,1,2,2,2,3,3,3]) or metadata DataFrame with 'id' column
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     pc_x: int = 1, # Principal component for x-axis
     pc_y: int = 2, # Principal component for y-axis
     color: Optional[str] = None, # Column in metadata for color grouping
@@ -509,7 +509,7 @@ def get_differential_expression(
     group1: List[Union[str, int]], # Column indices/names for first group
     group2: List[Union[str, int]], # Column indices/names for second group
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     paired: bool = False, # Whether samples are paired
     impute: bool = True, # Replace zeros with Random Forest model
     sets: bool = False, # Identify clusters of correlated glycans
@@ -710,7 +710,7 @@ def get_glycanova(
     groups: List[Any], # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3])
     impute: bool = True, # Replace zeros with Random Forest model
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     min_samples: float = 0.1, # Min percent of non-zero samples required
     posthoc: bool = True, # Perform Tukey's HSD test post-hoc
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
@@ -848,7 +848,7 @@ def get_time_series(
     df: Union[pd.DataFrame, str, Path], # DataFrame with sample IDs as 'sampleID_timepoint_replicate' in col 1 (e.g., T1_h5_r1)
     impute: bool = True, # Replace zeros with Random Forest model
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     degree: int = 1, # Polynomial degree for regression
     min_samples: float = 0.1, # Min percent of non-zero samples required
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
@@ -903,7 +903,7 @@ def get_jtk(
    interval: int, # Time units between experimental timepoints
    periods: List[int] = [12, 24], # Timepoints per cycle to test
    motifs: bool = False, # Analyze motifs instead of sequences
-   feature_set: List[str] = ['known', 'exhaustive', 'terminal'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+   feature_set: List[str] = ['known', 'exhaustive', 'terminal'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
    gamma: float = 0.1, # Uncertainty parameter for CLR transform
@@ -952,7 +952,7 @@ def get_biodiversity(
     group2: List[Union[str, int]], # Second group indices or additional group labels
     metrics: List[str] = ['alpha', 'beta'], # Diversity metrics to calculate
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
     paired: bool = False, # Whether samples are paired
     permutations: int = 999, # Number of permutations for ANOSIM/PERMANOVA
@@ -1030,7 +1030,7 @@ def get_SparCC(
     df1: Union[pd.DataFrame, str, Path], # First DataFrame with glycans in rows (col 1) and abundances in columns
     df2: Union[pd.DataFrame, str, Path], # Second DataFrame with same format as df1
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
     transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
@@ -1147,7 +1147,7 @@ def get_roc(
     group1: List[Union[str, int]], # First group indices/names
     group2: List[Union[str, int]], # Second group indices/names
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     paired: bool = False, # Whether samples are paired
     impute: bool = True, # Replace zeros with Random Forest model
     min_samples: float = 0.1, # Min percent of non-zero samples required

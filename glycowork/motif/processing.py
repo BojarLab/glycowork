@@ -421,8 +421,9 @@ def get_mono(token: str # WURCS monosaccharide token
   if token in monosaccharide_mapping:
     mono = monosaccharide_mapping[token]
   else:
+    mono = monosaccharide_mapping.get(f"{token}-1x_1-5", None)
     for a in ['a', 'b', 'x']:
-      if a != anomer:
+      if anomer and a != anomer:
         token = token[:token.index('_')-1] + a + token[token.index('_'):]
         mono = monosaccharide_mapping.get(token, None)
         if mono:
@@ -454,7 +455,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
   topology = parts[-1].split('_')
   monosaccharides = '/'.join(parts[1:-2]).strip('[]').split('][')
   connectivity = parts[-2].split('-')
-  connectivity = {chr(97 + i): int(num) for i, num in enumerate(connectivity)}
+  connectivity = {chr(97 + i) if i < 26 else chr(65 + i - 26): int(num) for i, num in enumerate(connectivity)}
   degrees = {c: ''.join(topology).count(c) for c in connectivity}
   inverted_connectivity, iupac_parts = {}, []
   for link in topology:

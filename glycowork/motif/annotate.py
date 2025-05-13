@@ -166,7 +166,7 @@ def annotate_dataset(
     custom_motifs: List = [] # Custom motifs when using 'custom' feature set
     ) -> pd.DataFrame: # DataFrame mapping glycans to presence/absence of motifs
   "Comprehensive glycan annotation combining multiple feature types: structural motifs, graph properties, terminal sequences"
-  if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
+  if any([k in ''.join(glycans) for k in [';', 'β', 'α', 'RES', '=']]):
     raise Exception
   invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive', 'size_branch'}
   if invalid_features:
@@ -334,7 +334,7 @@ def get_k_saccharides(
   "Extracts k-saccharide fragments from glycan sequences with options for different fragment sizes and positions"
   if not isinstance(glycans, (list, set)):
     raise TypeError("The input has to be a list or set of glycans")
-  if any(k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']):
+  if any(k in ''.join(glycans) for k in [';', 'β', 'α', 'RES', '=']):
     raise Exception
   if not up_to and max(g.count('(')+1 for g in glycans) < size:
     return [] if just_motifs else pd.DataFrame()
@@ -382,7 +382,7 @@ def get_terminal_structures(
    ) -> List[str]: # List of terminal structures with linkages
   "Identifies terminal monosaccharide sequences from non-reducing ends of glycan structure"
   if size > 2:
-    print("Please use get_k_saccharides with terminal = True for larger terminal structures")
+    raise ValueError("Please use get_k_saccharides with terminal = True for larger terminal structures")
   ggraph = ensure_graph(glycan)
   nodeDict = dict(ggraph.nodes(data = True))
   temp =  [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' + \

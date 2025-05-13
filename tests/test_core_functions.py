@@ -226,6 +226,10 @@ def test_get_mono():
         pass
 
 
+def test_module_imports():
+    from glycowork.motif import graph, annotate, draw, analysis
+
+
 def test_graph_to_string():
     assert graph_to_string("Gal(b1-3)GlcNAc") == "Gal(b1-3)GlcNAc"
     # Complex cases
@@ -1438,7 +1442,8 @@ def test_dataframe_serializer():
         'lists': [[1, 2], [3, 4], [5, 6]],
         'dicts': [{'x': 1}, {'y': 2}, {'z': 3}],
         'nulls': [None, pd.NA, None],
-        'stringified_lists': ["['d', 'e', 'f']", "['d2', 'e2', 'f2']", "['d3', 'e3', 'f3']"]
+        'stringified_lists': ["['d', 'e', 'f']", "['d2', 'e2', 'f2']", "['d3', 'e3', 'f3']"],
+        'stringified_dicts': ["{'Hex': 1, 'HexNAc': 1}", "{'Hex: 2'}", "{'Neu5Ac': 1}"]
     })
     # Test serialization and deserialization
     serializer = DataFrameSerializer()
@@ -1456,6 +1461,7 @@ def test_dataframe_serializer():
     serializer.serialize(df, "test.json")
     df2 = serializer.deserialize("test.json")
     assert isinstance(df2["stringified_lists"].tolist()[0], list)
+    assert isinstance(df2["stringified_dicts"].tolist()[0], dict)
 
 
 def test_glycan_binding():
@@ -2176,11 +2182,13 @@ def test_annotate_dataset(test_glycans):
     result = annotate_dataset(test_glycans, feature_set=['size_branch'])
     assert result.shape[1] == 6
     result = annotate_dataset(test_glycans, feature_set=['custom', 'terminal2', 'terminal3'], custom_motifs=["Gal(b1-4)GlcNAc"])
+    few_glycans = ["LacNAc", "Ma3(Ma6)Mb4GNb4GN;"]
+    result = annotate_dataset(few_glycans, feature_set=['exhaustive', 'wrong'])
 
 
 def test_get_molecular_properties():
     try:
-        glycans = ["Gal(b1-4)GlcNAc"]
+        glycans = ["Gal(b1-4)GlcNAc", "Neu4Ac5Ac7Ac9Ac(a2-6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"]
         result = get_molecular_properties(glycans, verbose=True, placeholder=True)
         assert isinstance(result, pd.DataFrame)
         assert 'molecular_weight' in result.columns
@@ -2223,6 +2231,13 @@ def test_get_k_saccharides():
     assert "GlcNAc(b1-6)GalNAc" in result
     assert "GlcNAc(b1-2)GlcNAc" not in result
     assert get_k_saccharides(['Gal(b1-3)GalNAc'], size=3, just_motifs=True) == []
+    few_glycans = ["LacNAc", "Ma3(Ma6)Mb4GNb4GN;"]
+    result = get_k_saccharides(few_glycans, just_motifs=True)
+    try:
+        get_k_saccharides(pd.DataFrame(), just_motifs=True)
+        return False
+    except TypeError:
+        pass
 
 
 def test_get_terminal_structures():
@@ -2235,6 +2250,11 @@ def test_get_terminal_structures():
     result = get_terminal_structures(glycan, size=2)
     assert isinstance(result, list)
     assert "Man(b1-4)GlcNAc(b1-4)" in result
+    try:
+        result = get_terminal_structures(glycan, size=3)
+        return False
+    except ValueError:
+        pass
 
 
 def test_create_correlation_network():
@@ -2311,7 +2331,7 @@ def test_load_lectin_lib():
 
 def test_create_lectin_and_motif_mappings():
     lectin_lib = load_lectin_lib()
-    lectin_list = ["WGA", "ConA"]
+    lectin_list = ["WGA", "ConA", "wrong"]
     lectin_mapping, motif_mapping = create_lectin_and_motif_mappings(
         lectin_list, lectin_lib
     )

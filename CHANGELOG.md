@@ -69,6 +69,7 @@
 - Renamed `clean_up_heatmap` to `deduplicate_motifs` (407cd6f)
 - Allow sets of glycans as inputs in `get_k_saccharides`, in addition to lists of glycans (74d35a0)
 - Made `get_k_saccharides` faster by re-using graphs and using the directed graphs in an optimized way (7c52a0e)
+- `get_terminal_structures` will now return an actual `ValueError` when setting `size` to be higher than 2
 
 ##### Fixed 🐛
 - Fixed an edge case in `get_k_saccharides`, in which choosing a `size` larger than the size of the largest glycan in the input caused an error (db7847d)
