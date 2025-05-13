@@ -112,7 +112,7 @@ from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRa
                           init_weights, prep_model, LectinOracle_flex
 )
 from glycowork.ml.inference import (SimpleDataset, sigmoid, glycans_to_emb, get_multi_pred, get_lectin_preds,
-                          get_esm1b_representations, get_Nsequon_preds
+                          get_esmc_representations, get_Nsequon_preds
 )
 device = "cpu"
 if torch.cuda.is_available():
@@ -6351,7 +6351,7 @@ def test_lectin_oracle_forward():
     batch_size = 2
     num_nodes = 4
     # Create dummy inputs
-    prot = torch.randn(batch_size, 1280)
+    prot = torch.randn(batch_size, 960)
     nodes = torch.randint(0, 100, (num_nodes,))
     edge_index = torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.long)
     batch = torch.tensor([0, 0, 1, 1])
@@ -6442,7 +6442,7 @@ def test_prep_model_invalid_inputs(invalid_input):
 def sample_data():
     glycans = ["Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Ac(a2-3)Gal(b1-3)GalNAc"]
     protein = "MAEGEITTFTALTEKFNLPPGNYKKPKLLYCSNGGHFLRILPDGTVDGTRDRSDQHIQLQLSAESVGEVYIKSTETGQYLAMDTDGLLYGSQTPNEECLFLERLEENHYNTYISKKHAEKNWFVGLKKNGSCKRGPRTHYGQKAILFLPLPV"
-    mock_embeddings = np.random.rand(1280).tolist()
+    mock_embeddings = np.random.rand(960).tolist()
     prot_dict = {protein: mock_embeddings}
     return {
         'glycans': glycans,
@@ -6587,23 +6587,25 @@ def test_get_lectin_preds(sample_data, mock_models):
     assert len(df_corrected) == len(sample_data['glycans'])
 
 
-def test_get_esm1b_representations(sample_data):
-    class MockESM1b(torch.nn.Module):
-        def forward(self, tokens, repr_layers, return_contacts):
-            return {"representations": {33: torch.randn(tokens.shape[0], tokens.shape[1], 1280)}}
-    class MockAlphabet:
-        def get_batch_converter(self):
-            def converter(data_list):
-                return None, None, torch.zeros(len(data_list), 1000)
-            return converter
-    model = MockESM1b()
-    alphabet = MockAlphabet()
+def test_get_esmc_representations(sample_data):
+    # It's in fair-esm, nothing we can do about it on our end
+    warnings.filterwarnings("ignore", category=FutureWarning,
+                         message="You are using `torch.load` with `weights_only=False`.*")
+    class MockESMC(torch.nn.Module):
+      def encode(self, protein):
+        return torch.zeros(1, 100, 960)
+      def logits(self, protein_tensor, config):
+        class MockLogitsOutput:
+          def __init__(self):
+            self.embeddings = torch.randn(1, 100, 960)
+        return MockLogitsOutput()
+    model = MockESMC()
     proteins = [sample_data['protein']]
-    result = get_esm1b_representations(proteins, model, alphabet)
+    result = get_esmc_representations(proteins, model)
     assert isinstance(result, dict)
     assert len(result) == len(set(proteins))
     assert all(isinstance(v, list) for v in result.values())
-    assert all(len(v) == 1280 for v in result.values())
+    assert all(len(v) == 960 for v in result.values())
 
 
 def test_get_Nsequon_preds(sample_data, mock_models):

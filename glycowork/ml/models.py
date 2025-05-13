@@ -108,7 +108,7 @@ class LectinOracle(torch.nn.Module):
                  num_classes: int = 1, # number of output classes (>1 for multilabel)
                  data_min: float = -11.355, # minimum observed value in training data
                  data_max: float = 23.892, # maximum observed value in training data
-                 input_size_prot: int = 1280 # dimensionality of protein representations
+                 input_size_prot: int = 960 # dimensionality of protein representations
                 ) -> None:
     "given glycan graphs and protein representations as input, predicts protein-glycan binding"
     super(LectinOracle, self).__init__()
@@ -294,7 +294,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
               num_classes: int, # number of unique classes for classification
               libr: Optional[Dict[str, int]] = None, # dictionary of form glycoletter:index
               trained: bool = False, # whether to use pretrained model
-              hidden_dim: int = 128 # hidden dimension for the model (SweetNet/LectinOracle only)
+              hidden_dim: int = 128 # hidden dimension for the model (SweetNet only)
              ) -> torch.nn.Module: # initialized PyTorch model
     "wrapper to instantiate model, initialize it, and put it on the GPU"
     if libr is None:
@@ -309,7 +309,7 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
         model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
       model = model.to(device)
     elif model_type == 'LectinOracle':
-      model = LectinOracle(len(libr), num_classes = num_classes, input_size_prot = int(10*hidden_dim))
+      model = LectinOracle(len(libr), num_classes = num_classes)
       model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
       if trained:
         model_path = download_model("glycowork_lectinoracle.pt")

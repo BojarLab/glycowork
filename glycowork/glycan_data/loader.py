@@ -20,7 +20,7 @@ this_dir = Path(__file__).parent
 this_filename = Path(__file__).name
 
 # Construct the path to the data file and load it
-data_path = this_dir / 'lib_v11.pkl'
+data_path = this_dir / 'v12_lib.pkl'
 with open(data_path, 'rb') as f:
   lib = pickle.load(f)
 
@@ -45,17 +45,17 @@ class GlycoDataFrame(pd.DataFrame):
 
 def __getattr__(name):
   if name == "glycan_binding":
-    with resources.files("glycowork.glycan_data").joinpath("glycan_binding.csv").open(encoding = 'utf-8-sig') as f:
+    with resources.files("glycowork.glycan_data").joinpath("v12_glycan_binding.csv").open(encoding = 'utf-8-sig') as f:
       glycan_binding = pd.read_csv(f)
     globals()[name] = glycan_binding  # Cache it to avoid reloading
     return glycan_binding
   elif name == "df_species":
-    with resources.files("glycowork.glycan_data").joinpath("v11_df_species.csv").open(encoding = 'utf-8-sig') as f:
+    with resources.files("glycowork.glycan_data").joinpath("v12_df_species.csv").open(encoding = 'utf-8-sig') as f:
       df_species = GlycoDataFrame(pd.read_csv(f))
     globals()[name] = df_species  # Cache it to avoid reloading
     return df_species
   elif name == "df_glycan":
-    data_path = this_dir / 'v11_sugarbase.json'
+    data_path = this_dir / 'v12_sugarbase.json'
     df_glycan = GlycoDataFrame(serializer.deserialize(data_path))
     globals()[name] = df_glycan  # Cache it to avoid reloading
     return df_glycan
@@ -291,6 +291,30 @@ class DataFrameSerializer:
           return {
             'type': 'list',
             'value': [str(item) for item in parsed_value]
+          }
+      except (SyntaxError, ValueError):
+        # If parsing fails, treat it as a regular string
+        pass
+    # Check if the value is a string representation of a dictionary
+    if isinstance(value, str) and value.strip().startswith('{') and value.strip().endswith('}'):
+      try:
+        # Try to convert the string to an actual dictionary
+        parsed_value = ast.literal_eval(value)
+        if isinstance(parsed_value, dict):
+          # Use the appropriate dictionary type handler
+          if all(isinstance(k, str) and isinstance(v, list) for k, v in parsed_value.items()):
+            return {
+              'type': 'str_list_dict',
+              'value': {str(k): [str(item) for item in v] for k, v in parsed_value.items()}
+            }
+          elif all(isinstance(k, str) and isinstance(v, int) for k, v in parsed_value.items()):
+            return {
+              'type': 'str_int_dict',
+              'value': {str(k): int(v) for k, v in parsed_value.items()}
+            }
+          return {
+            'type': 'dict',
+            'value': {str(k): str(v) for k, v in parsed_value.items()}
           }
       except (SyntaxError, ValueError):
         # If parsing fails, treat it as a regular string

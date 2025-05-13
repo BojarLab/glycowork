@@ -144,31 +144,22 @@ def get_lectin_preds(prot: str, # protein amino acid sequence
   return df_pred
 
 
-def get_esm1b_representations(prots: List[str], # list of protein sequences to convert
-                            model: torch.nn.Module, # trained ESM1b model
-                            alphabet: Any # used for converting sequences
-                           ) -> Dict[str, List[float]]: # dict of protein sequence:ESM1b representation
-  "Retrieves ESM1b representations of protein for using them as input for LectinOracle"
-  # model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
-  batch_converter = alphabet.get_batch_converter()
-  unique_prots = list(set(prots))
-  data_list = [
-        ('protein' + str(idx), prot[:min(len(prot), 1000)])
-        for idx, prot in enumerate(unique_prots)
-    ]
-  _, _, batch_tokens = batch_converter(data_list)
-  with torch.no_grad():
-      results = model(batch_tokens, repr_layers = [33], return_contacts = False)
-  token_representations = results["representations"][33]
-  sequence_representations = [
-        token_representations[i, 1:len(seq) + 1].mean(0)
-        for i, (_, seq) in enumerate(data_list)
-    ]
-  prot_dic = {
-        unique_prots[k]: s_rep.tolist()
-        for k, s_rep in enumerate(sequence_representations)
-    }
-  return prot_dic
+def get_esmc_representations(prots: List[str], # list of protein sequences to convert
+                            model: torch.nn.Module, # trained ESMC model
+                           ) -> Dict[str, List[float]]: # dict of protein sequence:ESMC-300M representation
+  "Retrieves ESMC-300M representations of protein for using them as input for LectinOracle"
+  try:
+    from esm.models.esmc import ESMC
+    from esm.sdk.api import ESMProtein, LogitsConfig
+    model = ESMC.from_pretrained("esmc_300m").to(device)
+    def prot_to_ESMC(seq):
+      protein_tensor = model.encode(ESMProtein(sequence = seq))
+      logits_output = model.logits(protein_tensor, LogitsConfig(sequence = True, return_embeddings = True))
+      return torch.mean(logits_output.embeddings, dim = 1).squeeze().tolist()
+    unique_prots = list(set(prots))
+    return {p: prot_to_ESMC(p) for p in unique_prots}
+  except ImportError:
+      raise ImportError("<To use this function, you will need to install fair-esm, which is not a dependency of glycowork>")
 
 
 def get_Nsequon_preds(prots: List[str], # 20 AA + N + 20 AA sequences; replace missing with 'z'

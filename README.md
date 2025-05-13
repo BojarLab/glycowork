@@ -33,8 +33,8 @@ sequence processing and analysis. It offers:
 - Functions for glycan analysis
 - Datasets for model training
 - Full support for IUPAC-condensed string representation. Broad support
-  for IUPAC-extended, LinearCode, Oxford, GlycoCT, WURCS, GLYCAM, and
-  GlycoWorkBench.
+  for IUPAC-extended, LinearCode, Oxford, GlycoCT, WURCS, GLYCAM,
+  CSDB-linear, GlycoWorkBench, and more.
 - Powerful graph-based architecture for in-depth analysis
 
 **Documentation:** <https://bojarlab.github.io/glycowork/>
@@ -73,10 +73,10 @@ freely available to everyone:
 
 - **`df_glycan`**
   - contains ~50,500 unique glycan sequences, including labels such as
-    ~39,500 species associations, ~19,000 tissue associations, and
-    ~2,500 disease associations
+    ~39,500 species associations, ~20,000 tissue associations, and
+    ~1,000 disease associations
 - **`glycan_binding`**
-  - contains \>580,000 protein-glycan binding interactions, from 1,465
+  - contains \>790,000 protein-glycan binding interactions, from \>2,000
     unique glycan-binding proteins
 
 Additionally, we store these trained deep learning models for easy
@@ -84,11 +84,11 @@ usage, which can be retrieved with the `prep_model` function:
 
 - **`LectinOracle`**
   - can be used to predict glycan-binding specificity of a protein,
-    given its ESM-1b representation; from [Lundstrom et al.,
+    given its ESMC representation; from [Lundstrom et al.,
     2021](https://onlinelibrary.wiley.com/doi/10.1002/advs.202103807)
 - **`LectinOracle_flex`**
   - operates the same as LectinOracle but can directly use the raw
-    protein sequence as input (no ESM-1b representation required)
+    protein sequence as input (no ESMC representation required)
 - **`SweetNet`**
   - a graph convolutional neural network trained to predict species from
     glycan, can be used to generate learned glycan representations; from
@@ -192,14 +192,14 @@ from glycowork.motif.annotate import annotate_dataset
 out = annotate_dataset(glycans, feature_set = ['known', 'terminal', 'exhaustive'], condense=True)
 ```
 
-|  | Internal_LewisX | Internal_LewisA | H_antigen_type2 | Chitobiose | Trimannosylcore | Terminal_LacNAc_type1 | Internal_LacNAc_type2 | Terminal_LacNAc_type2 | Terminal_LacdiNAc_type2 | core_fucose | core_fucose(a1-3) | Fuc | Gal | GalNAc | GalNAcOS | GlcNAc | Man | Neu5Ac | Xyl | Fuc(a1-2)Gal | Fuc(a1-3)GlcNAc | Fuc(a1-4)GlcNAc | Fuc(a1-6)GlcNAc | Fuc(a1-?)GlcNAc | Gal(b1-3)GlcNAc | Gal(b1-4)GlcNAc | Gal(b1-?)GlcNAc | GalNAc(b1-4)GlcNAc | GalNAcOS(b1-4)GlcNAc | GlcNAc(b1-2)Man | GlcNAc(b1-4)GlcNAc | GlcNAc(b1-?)Man | Man(a1-3)Man | Man(a1-6)Man | Man(a1-?)Man | Man(b1-4)GlcNAc | Neu5Ac(a2-3)Gal | Xyl(b1-2)Man | Terminal_Fuc(a1-6) | Terminal_GalNAc(b1-4) | Terminal_Man(a1-3) | Terminal_Fuc(a1-2) | Terminal_Gal(b1-4) | Terminal_Neu5Ac(a2-3) | Terminal_Man(a1-6) | Terminal_Gal(b1-3) | Terminal_Fuc(a1-4) | Terminal_GalNAcOS(b1-4) | Terminal_Fuc(a1-3) | Terminal_Xyl(b1-2) | Terminal_Man(a1-?) | Terminal_Fuc(a1-?) | Terminal_GlcNAc(b1-?) | Terminal_Gal(b1-?) |
+|  | Internal_LewisX | Internal_LewisA | H_antigen_type2 | Chitobiose | Trimannosylcore | Terminal_LacNAc_type1 | Internal_LacNAc_type2 | Terminal_LacNAc_type2 | Terminal_LacdiNAc_type2 | core_fucose | core_fucose(a1-3) | Fuc | Gal | GalNAc | GalNAcOS | GlcNAc | Man | Neu5Ac | Xyl | Fuc(a1-2)Gal | Fuc(a1-3)GlcNAc | Fuc(a1-4)GlcNAc | Fuc(a1-6)GlcNAc | Fuc(a1-?)GlcNAc | Gal(b1-3)GlcNAc | Gal(b1-4)GlcNAc | Gal(b1-?)GlcNAc | GalNAc(b1-4)GlcNAc | GalNAcOS(b1-4)GlcNAc | GlcNAc(b1-2)Man | GlcNAc(b1-4)GlcNAc | GlcNAc(b1-?)Man | Man(a1-3)Man | Man(a1-6)Man | Man(a1-?)Man | Man(b1-4)GlcNAc | Neu5Ac(a2-3)Gal | Xyl(b1-2)Man | Terminal_GalNAc(b1-4) | Terminal_Xyl(b1-2) | Terminal_Gal(b1-3) | Terminal_Fuc(a1-2) | Terminal_Fuc(a1-6) | Terminal_Fuc(a1-3) | Terminal_Gal(b1-4) | Terminal_GalNAcOS(b1-4) | Terminal_Neu5Ac(a2-3) | Terminal_Fuc(a1-4) | Terminal_Man(a1-6) | Terminal_Man(a1-3) | Terminal_Gal(b1-?) | Terminal_Fuc(a1-?) | Terminal_GlcNAc(b1-?) | Terminal_Man(a1-?) |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| Neu5Ac(a2-3)Gal(b1-4)\[Fuc(a1-3)\]GlcNAc(b1-2)Man(a1-3)\[Gal(b1-3)\[Fuc(a1-4)\]GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 1 | 0 | 3 | 2 | 0 | 0 | 4 | 3 | 1 | 0 | 0 | 1 | 1 | 1 | 3 | 1 | 1 | 2 | 0 | 0 | 2 | 1 | 2 | 1 | 1 | 2 | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 3 | 0 | 1 |
-| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 |
-| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 |
-| GlcNAc(b1-?)Man(a1-3)\[GlcNAc(b1-?)Man(a1-6)\]\[Xyl(b1-2)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-3)\]GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 4 | 3 | 0 | 1 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 2 | 1 | 1 | 2 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 1 | 2 | 0 |
-| Fuc(a1-2)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)\[Gal(b1-4)GlcNAc(b1-2)Man(a1-3)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 0 | 0 | 1 | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 2 | 2 | 0 | 0 | 4 | 3 | 0 | 0 | 1 | 0 | 0 | 1 | 1 | 0 | 2 | 2 | 0 | 0 | 2 | 1 | 2 | 1 | 1 | 2 | 1 | 0 | 0 | 1 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 1 |
-| GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)\[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 4 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 2 | 1 | 2 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Neu5Ac(a2-3)Gal(b1-4)\[Fuc(a1-3)\]GlcNAc(b1-2)Man(a1-3)\[Gal(b1-3)\[Fuc(a1-4)\]GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 1 | 0 | 3 | 2 | 0 | 0 | 4 | 3 | 1 | 0 | 0 | 1 | 1 | 1 | 3 | 1 | 1 | 2 | 0 | 0 | 2 | 1 | 2 | 1 | 1 | 2 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 1 | 1 | 0 | 0 | 1 | 1 | 0 | 0 | 1 | 3 | 0 | 0 |
+| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 2 |
+| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 2 |
+| GlcNAc(b1-?)Man(a1-3)\[GlcNAc(b1-?)Man(a1-6)\]\[Xyl(b1-2)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-3)\]GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 4 | 3 | 0 | 1 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 2 | 1 | 1 | 2 | 1 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 2 | 0 |
+| Fuc(a1-2)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)\[Gal(b1-4)GlcNAc(b1-2)Man(a1-3)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 0 | 0 | 1 | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 2 | 2 | 0 | 0 | 4 | 3 | 0 | 0 | 1 | 0 | 0 | 1 | 1 | 0 | 2 | 2 | 0 | 0 | 2 | 1 | 2 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 2 | 0 | 0 |
+| GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)\[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 4 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 2 | 1 | 2 | 1 | 1 | 2 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ``` python
 #using graphs, you can easily check whether a glycan contains a specific motif; how about internal Lewis A/X motifs?
@@ -243,15 +243,15 @@ print(composition_to_mass("Hex3HexNAc4"))
     1   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]...          0
     2   GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[Man(a1-6)]...          0
     3   GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Ma...          0
-    4   GlcNAc(b1-2)Man(a1-6)[Man(a1-3)][GlcNAc(b1-4)]...          0
-    5   Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]...          0
-    6   GlcNAc(?1-?)Man(a1-3)[GlcNAc(b1-?)Man(a1-6)]Ma...          0
-    7   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
-    8   GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
-    9   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][G...          0
-    10  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4...          0
-    11  GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-...          0
-    12  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
+    4   GalNAc(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]...          0
+    5   GlcNAc(b1-2)Man(a1-6)[Man(a1-3)][GlcNAc(b1-4)]...          0
+    6   GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-4)][Man(a1-3...          0
+    7   Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]...          0
+    8   GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
+    9   GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Ma...          0
+    10  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-4)Man(a1-6)]Ma...          0
+    11  GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4...          0
+    12  GlcNAc(b1-4)Man(a1-3)[GlcNAc(b1-6)Man(a1-6)]Ma...          0
     13  Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-6)]Man(a1-6)]...          0
     14  GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Ma...          0
 
