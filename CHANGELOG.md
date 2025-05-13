@@ -17,7 +17,7 @@
 - Added `HashableDict` class to allow for caching of functions with dicts as inputs (03dfad6)
 - Added `GlycoDataFrame` class to extend `pd.DataFrame` by adding the `.glyco_filter` method, to easily filter glycan dataframes by the occurrence/count of sequence motifs (9764b3e)
 - Added new curated glycoproteomics dataset: `sorghum_N_PMID39137587` (13b0699)
-- Updated `glycan_binding`, `df_glycan`, `df_species` to be bigger, better, and cleaner
+- Updated `glycan_binding`, `df_glycan`, `df_species` to be bigger, better, and cleaner (e302075)
 
 ##### Changed 🔄
 - Refined motif definition of `Internal_LewisX`/`Internal_Lewis_A`/`i_antigen` in `motif_list`, to exclude `LewisY`/`LewisB`/`I_antigen` from matching/overlapping (07c9c12)
@@ -26,7 +26,7 @@
 - Further curated glycomics datasets stored in `glycomics_data_loader` by introducing the b1-? --> b1-3/4 narrow linkage ambiguities (9eeaa3a, 436bf09)
 - `download_model` will now download model weights and representations from the HuggingFace Hub (22f6b8f)
 - `df_species` and `df_glycan` are now of type `GlycoDataFrame`; `build_custom_df` now returns a dataframe of type `GlycoDataFrame` (9764b3e)
-- `DataFrameSerializer` will now also correctly serialize cells in which (i) lists of strings or (ii) dictionaries have been converted into one string (Excel/pandas interplay of complex cells), where we use `ast` to try to literally evaluate them back into lists of strings (i) / dictionaries (ii) (806a47c)
+- `DataFrameSerializer` will now also correctly serialize cells in which (i) lists of strings or (ii) dictionaries have been converted into one string (Excel/pandas interplay of complex cells), where we use `ast` to try to literally evaluate them back into lists of strings (i) / dictionaries (ii) (806a47c, e302075)
 
 #### stats
 ##### Fixed 🐛
@@ -143,9 +143,9 @@
 #### inference
 ##### Changed 🔄
 - `get_lectin_preds` will now raise a `ValueError` if no protein:ESM-1b dictionary is provided in non-flex mode (9bf18f7)
-- `get_esm1b_representations` is now `get_esmc_representations`, with a slightly changed function signature (e.g., no `alphabet` needed anymore)
+- `get_esm1b_representations` is now `get_esmc_representations`, with a slightly changed function signature (e.g., no `alphabet` needed anymore) (e302075)
 
 #### models
 ##### Changed 🔄
 - `init_weights` will now raise a `ValueError` if the chosen initialization `mode` is not supported (9bf18f7)
-- `LectinOracle` will now use ESMC-300M representations, rather than ESM-1b
+- `LectinOracle` will now use ESMC-300M representations, rather than ESM-1b (e302075)

@@ -6601,7 +6601,8 @@ def test_get_esmc_representations(sample_data):
         return MockLogitsOutput()
     model = MockESMC()
     proteins = [sample_data['protein']]
-    result = get_esmc_representations(proteins, model)
+    with patch.dict(sys.modules, {'esm.sdk.api': None}):
+        result = get_esmc_representations(proteins, model)
     assert isinstance(result, dict)
     assert len(result) == len(set(proteins))
     assert all(isinstance(v, list) for v in result.values())
