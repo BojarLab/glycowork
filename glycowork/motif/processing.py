@@ -645,7 +645,7 @@ def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
                     ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from GLYCAM to IUPAC-condensed format"
   pattern = r'(?:[DL])|(?:\[(\d+[SP]+)\])'
-  glycan = '-'.join(glycan.split('-')[:-1])[:-2]
+  glycan = '-'.join(glycan.split('-')[:-1])[:-2] if '-OH' in glycan else glycan
   glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan)
   return glycan.replace('[', '(').replace(']', ')')
 
@@ -803,7 +803,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycoct_to_iupac(glycan)
   elif 'S=' in glycan:
     glycan = wurcs_to_iupac(glycan)
-  elif glycan.endswith('-OH'):
+  elif glycan.endswith('-OH') or bool(re.search(r'\d[DL][A-Z]', glycan)):
     glycan = glycam_to_iupac(glycan)
   elif 'End--' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
