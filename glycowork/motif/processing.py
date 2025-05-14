@@ -288,6 +288,7 @@ def glycoct_to_iupac_int(glycoct: str, # GlycoCT format string
   residue_dic = {}
   iupac_parts = defaultdict(list)
   degrees = defaultdict(lambda:1)
+  glycoct = glycoct.replace("S1b:", "S\n1b:")
   for line in glycoct.split('\n'):
     if len(line) < 1:
       continue
@@ -695,8 +696,9 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
     converted_glycan = branch_str[:second_brack_end] + ']' + branch_str[second_brack_end:-1] + converted_glycan[double_brack_idx+2:]
   if floaty_parts:  # Add floating parts to final structure
     converted_glycan = ''.join(f"{{{part}}}" for part in floaty_parts) + converted_glycan
-  converted_glycan = re.sub(r'([SP])[\)\(]*\?1-\?\)\[(.*?)\]([^(]+)', r'\2\3O\1', converted_glycan)  # O-sulfate/phosphate case
-  converted_glycan = re.sub(r'([SP])[\)\(]*\?1-(\d)\)\[(.*?)\]([^(]+)', r'\3\4\2\1', converted_glycan)  # numbered sulfate/phosphate
+  converted_glycan = converted_glycan.replace('((', '(').replace('))', ')').replace(')(', '(')
+  converted_glycan = re.sub(r'([SP])[\)\(]*\?1-([\?\d])\)\[(.*?)\]([^(]+)', r'\3\4\2\1', converted_glycan)  # sulfate/phosphate with intervening branch
+  converted_glycan = re.sub(r'\[([SP])[\)\(]*\?1-([\?\d])\)([^(]+)', r'[\3\2\1', converted_glycan)  # sulfate/phosphate
   converted_glycan = converted_glycan.replace('((', '(').replace('))', ')')
   return f"{converted_glycan[:-6]}-ol" if 'freeEnd' in glycan else converted_glycan[:-6]
 
