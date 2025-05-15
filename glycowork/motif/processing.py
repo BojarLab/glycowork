@@ -530,13 +530,15 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
                    ) -> str: # Glycan in IUPAC-condensed format
   def parse_sialic_acid_bonds(glycan_string):
     result = {'Neu5Ac(a2-3/6)':[],'Neu5Gc(a2-3/6)':[]}
-    for match in re.finditer(r'(Sg?)(\d*)(?![a-z])', glycan_string):
+    pattern = r'(Sg?(?:\(Ac\))?)(\d*)((?:[\[\(][^\]\)]+[\]\)])*)?(\d*)'
+    for match in re.finditer(pattern, glycan_string):
         residue = match.group(1)
-        count = int(match.group(2) or 1)
+        linkages = match.group(3) or ""
+        count = int(match.group(4) or match.group(2) or 1)
         bonds = []
-        for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', glycan_string[match.end():]):
+        for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', linkages):
             if len(bonds) >= count: break
-            if bracket.group(1) == 'Ac':continue 
+            if bracket.group(1) in ['Ac','s']: continue 
             nums = [int(x.strip()) for x in bracket.group(1).split(',')]
             if 2 in nums:
                 for i, n in enumerate(nums):
