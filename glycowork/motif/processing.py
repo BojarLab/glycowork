@@ -644,7 +644,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     temp = ''
     for c in ["S", "G", "A"]:
       if len(branches[c]) > 0:
-        temp += branches[c].pop()
+        temp += branches[c].pop(0)
     if temp:
       built_branches.append(temp)
   i = 0
