@@ -574,16 +574,16 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   
   def balance_mannose_branch_linkages(iupac):
     "Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6"
-    pattern = r'^(.*)(Man\(a1-3\))\[(.*?)(Man\(a1-6\))\](\[[^\]]*\])*(Man\(b1-4\))'
+    pattern = r'^(.*?)((?:\[[^\]]*\])?)(Man\(a1-3\))\[(.*?)(Man\(a1-6\))\](\[[^\]]*\])*(Man\(b1-4\))'
     match = re.search(pattern, iupac)
     if match:
         prefix = match.group(1)
-        branch_a1_3 = re.split(r'[\[\]]', prefix)[-1]
-        branch_a1_6 = match.group(3)
-        
+        bracket_before_a1_3 = match.group(2)
+        branch_a1_3 = re.split(r'[\[\]]', prefix)[-1] + bracket_before_a1_3
+        branch_a1_6 = match.group(4)
+
         if branch_a1_3 != branch_a1_6:
-            # Only replace the core mannoses, not inner ones
-            iupac = prefix + 'Man(a1-3/6)' + '[' + match.group(3) + 'Man(a1-3/6)' + ']' + (match.group(5) or '') + match.group(6) + iupac[match.end():]
+            iupac = prefix + bracket_before_a1_3 + 'Man(a1-3/6)' + '[' + match.group(4) + 'Man(a1-3/6)' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
     return iupac
   
   match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
@@ -873,7 +873,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
     glycan = nglycan_stub_to_iupac(glycan)
-  elif 'e' not in glycan and  (not re.search(r"[a-z1]\-", glycan) or len(glycan) < 6) and ((glycan[-1].isdigit() and re.search("[A-Zm]", glycan)) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith(('B', 'Bi', 'LacDiNAc'))):
+  elif 'e' not in glycan and  (not re.search(r"[a-z1]\-", glycan) or len(glycan) < 6) and ((glycan[-1].isdigit() and re.search("[A-Zm]", glycan)) or (glycan[-2].isdigit() and glycan[-1] in ')]') or glycan.endswith(('B', 'Bi', 'LacDiNAc'))):
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
