@@ -528,12 +528,32 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
 
 def oxford_to_iupac(oxford: str # Glycan in Oxford format
                    ) -> str: # Glycan in IUPAC-condensed format
+  def parse_sialic_acid_bonds(glycan_string):
+    result = {}
+    for match in re.finditer(r'(Sg?)(\d*)(?![a-z])', glycan_string):
+        residue = match.group(1)
+        count = int(match.group(2) or 1)
+        bonds = []
+        for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', glycan_string[match.end():]):
+            if len(bonds) >= count: break   
+            nums = [int(x.strip()) for x in bracket.group(1).split(',')]
+            if 2 in nums:
+                for i, n in enumerate(nums):
+                    if n == 2 and i+1 < len(nums):
+                        bonds.append(f"{nums[i+1]}")
+                    elif i > 0 and nums[i-1] != 2 and i+1 < len(nums) and nums[i+1] == 2:
+                        bonds.append(f"{n}")
+            else:
+                bonds.extend(f"{n}" for n in nums if n in [3, 6, 8])
+        out_res = {'S':'Neu5Ac(a2-3/6)','Sg':'Neu5Gc(a2-3/6)'}[residue]
+        result[out_res] = bonds + ["?"] * (count - len(bonds))
+    return result
   "Convert glycan from Oxford to IUPAC-condensed format"
   match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
   if match:
     oxford = f'M{match.group(1)}'
   oxford = oxford.replace("(s)", "Sulf")
-  oxford = re.sub(r'\([^)]*\)', '', oxford).strip().split('/')[0]
+  oxford = oxford.strip().split('/')[0]
   antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
   mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-3/4)", "S": "Neu5Ac(a2-3/6)",
@@ -582,8 +602,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
             "Gal": int(oxford_wo_branches[oxford_wo_branches.index("Gal")+3]) if "Gal" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Gal")+3].isdigit() else 0,
             "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Lac")+3] != "D" else 0,
             "LacDiNAc": 1 if "LacDiN" in oxford_wo_branches else 0}
-  specified_linkages = {'Neu5Ac(a2-3/6)': oxford[oxford.index("S")+2:] if branches['S'] else []}
-  specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v  and ']' in v}
+  specified_linkages = parse_sialic_acid_bonds(oxford)
   built_branches = []
   while sum(branches.values()) > 0:
     temp = ''
@@ -631,7 +650,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   for k, v in specified_linkages.items():
     if v:
       for vv in v:
-        iupac = iupac.replace(k, k[:-2]+str(vv)+')', 1)
+        iupac = iupac.replace(k, k[:-4]+str(vv)+')', 1)
   while "Neu5Ac(a2-8)G" in iupac:
     iupac = iupac.replace("Neu5Ac(a2-8)G", "G", 1)
     idx = [m.start() for m in re.finditer(r'(?<!8\))Neu5Ac\(a2-[3|6|\?]\)', iupac)][0]
