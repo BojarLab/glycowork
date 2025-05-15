@@ -529,14 +529,14 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
 def oxford_to_iupac(oxford: str # Glycan in Oxford format
                    ) -> str: # Glycan in IUPAC-condensed format
   def parse_sialic_acid_bonds(glycan_string):
-    result = {}
+    result = {'Neu5Ac(a2-3/6)':[],'Neu5Gc(a2-3/6)':[]}
     for match in re.finditer(r'(Sg?)(\d*)(?![a-z])', glycan_string):
         residue = match.group(1)
         count = int(match.group(2) or 1)
         bonds = []
         for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', glycan_string[match.end():]):
-            if len(bonds) >= count: break 
-            if bracket.group(1) == 'Ac':continue    
+            if len(bonds) >= count: break
+            if bracket.group(1) == 'Ac':continue 
             nums = [int(x.strip()) for x in bracket.group(1).split(',')]
             if 2 in nums:
                 for i, n in enumerate(nums):
@@ -596,14 +596,14 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
       floaty += "{Man(a1-?)}"
   oxford_wo_branches = bracket_removal(oxford)
   branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A")+1] != "c" else 0,
-              "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != "a" else 0,
-              "S": int(oxford_wo_branches[oxford_wo_branches.index("S")+1]) if "S" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("S")+1] != "g" else 0}
-  extras = {"Sg": int(oxford_wo_branches[oxford_wo_branches.index("Sg")+2]) if "Sg" in oxford_wo_branches else 0,
-            "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Ga")+2].isdigit() else 0,
+              "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != "a" else 0}
+  extras = {"Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Ga")+2].isdigit() else 0,
             "Gal": int(oxford_wo_branches[oxford_wo_branches.index("Gal")+3]) if "Gal" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Gal")+3].isdigit() else 0,
             "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Lac")+3] != "D" else 0,
             "LacDiNAc": 1 if "LacDiN" in oxford_wo_branches else 0}
   specified_linkages = parse_sialic_acid_bonds(oxford)
+  branches['S'] = len(specified_linkages['Neu5Ac(a2-3/6)'])
+  extras['Sg'] = len(specified_linkages['Neu5Gc(a2-3/6)'])
   built_branches = []
   while sum(branches.values()) > 0:
     temp = ''
