@@ -50,7 +50,7 @@
 ##### Changed 🔄
 - Moved `.motif.query.glytoucan_to_glycan` into `.motif.processing` (eafb218)
 - `canonicalize_iupac` will now use `sanitize_iupac` to auto-fix chemical impossibilities in input glycans (407cd6f)
-- More GlycoWorkBench sequence variants can now be handled via `glycoworkbench_to_iupac`/`canonicalize_iupac` (9eeaa3a, 436bf09, 74d35a0)
+- More GlycoWorkBench sequence variants can now be handled via `glycoworkbench_to_iupac`/`canonicalize_iupac` (9eeaa3a, 436bf09, 74d35a0, 87fd540)
 - `canonicalize_iupac` and most glycowork functions now also support common names, like "LacNAc" or "2'-FL", in the Universal Input framework, thanks to `GLYCAN_MAPPINGS` (36d33b8, ab42dbb)
 - `get_class` can now identify repeating unit glycans and returns "repeat" in this case (74d35a0)
 - `canonicalize_iupac` can now handle even more IUPAC-dialects, like `aMan13(aMan16)Man`, where the anomeric state is declared before the monosaccharide (24c8e81, ab42dbb)
@@ -60,7 +60,8 @@
 - `canonicalize_iupac` can now handle even more IUPAC-dialects such as `Neu5Ac-α-2,6-Gal-β-1,3-GlcNAc-β-Sp` (cb2c898)
 - `get_class` will now correctly annotate plant N-glycans with core a1-3 Fuc (8dd34b7)
 - Rare GLYCAM variants without "-OH" at the end can now also be handled by `glycam_to_iupac` (207a050)
-- Support single-monosaccharide glycans in GlycoCT within `glycoct_to_iupac`
+- Support single-monosaccharide glycans in GlycoCT within `glycoct_to_iupac` (87fd540)
+- Support variant sulfate notations in `oxford_to_iupac`
 
 ##### Deprecated ⚠️
 - Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead (7c52a0e)

@@ -532,20 +532,23 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
   if match:
     oxford = f'M{match.group(1)}'
+  oxford = oxford.replace("(s)", "Sulf")
   oxford = re.sub(r'\([^)]*\)', '', oxford).strip().split('/')[0]
   antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
   mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-3/4)", "S": "Neu5Ac(a2-3/6)",
-                  "Sg": "Neu5Gc(a2-3/6)", "Ga": "Gal(a1-?)", "GalNAc": "GalNAc(?1-?)",
+                  "Sg": "Neu5Gc(a2-3/6)", "Ga": "Gal(a1-?)", "Gal": "Gal(?1-?)", "GalNAc": "GalNAc(?1-?)",
                   "Lac": "Gal(b1-3/4)GlcNAc(b1-?)", "F": "Fuc(a1-3/4)", "LacDiNAc": "GalNAc(b1-4)GlcNAc(b1-?)"}
   hardcoded = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M4": "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M9": "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M9Gluc1": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M10": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M11": "Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M12": "Glc(a1-2)Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"}
   if oxford in hardcoded:
     return hardcoded[oxford]
+  oxford = oxford.replace("[SO4-2]", "Sulf")
   if "Sulf" in oxford:
     sulf = oxford[oxford.index("Sulf")+4]
     sulf = int(sulf) if sulf.isdigit() else 1
@@ -575,11 +578,12 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
               "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != "a" else 0,
               "S": int(oxford_wo_branches[oxford_wo_branches.index("S")+1]) if "S" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("S")+1] != "g" else 0}
   extras = {"Sg": int(oxford_wo_branches[oxford_wo_branches.index("Sg")+2]) if "Sg" in oxford_wo_branches else 0,
-            "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches else 0,
+            "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Ga")+2].isdigit() else 0,
+            "Gal": int(oxford_wo_branches[oxford_wo_branches.index("Gal")+3]) if "Gal" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Gal")+3].isdigit() else 0,
             "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Lac")+3] != "D" else 0,
             "LacDiNAc": 1 if "LacDiN" in oxford_wo_branches else 0}
   specified_linkages = {'Neu5Ac(a2-3/6)': oxford[oxford.index("S")+2:] if branches['S'] else []}
-  specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v}
+  specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v  and ']' in v}
   built_branches = []
   while sum(branches.values()) > 0:
     temp = ''
@@ -639,6 +643,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   while sulf > 0:
     iupac = iupac.replace("Gal(", "GalOS(", 1)
     sulf -= 1
+  iupac = iupac.replace("GlcNAc(b1-?)Man", "GlcNAc(b1-2)Man")
   return floaty + iupac.strip('[]')
 
 
@@ -817,7 +822,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
     glycan = nglycan_stub_to_iupac(glycan)
-  elif ((glycan[-1].isdigit() and bool(re.search("[A-Zm]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith(('B', 'LacDiNAc'))) and 'e' not in glycan and ('-' not in glycan or len(glycan) < 6):
+  elif 'e' not in glycan and  (not re.search(r"[a-z1]\-", glycan) or len(glycan) < 6) and ((glycan[-1].isdigit() and re.search("[A-Zm]", glycan)) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith(('B', 'Bi', 'LacDiNAc'))):
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
