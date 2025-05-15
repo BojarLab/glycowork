@@ -535,7 +535,8 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
         count = int(match.group(2) or 1)
         bonds = []
         for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', glycan_string[match.end():]):
-            if len(bonds) >= count: break   
+            if len(bonds) >= count: break 
+            if bracket.group(1) == 'Ac':continue    
             nums = [int(x.strip()) for x in bracket.group(1).split(',')]
             if 2 in nums:
                 for i, n in enumerate(nums):
