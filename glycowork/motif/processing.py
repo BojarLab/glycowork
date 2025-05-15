@@ -528,9 +528,10 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
 
 def oxford_to_iupac(oxford: str # Glycan in Oxford format
                    ) -> str: # Glycan in IUPAC-condensed format
+  
   def parse_sialic_acid_bonds(glycan_string):
     result = {'Neu5Ac(a2-3/6)':[],'Neu5Gc(a2-3/6)':[]}
-    pattern = r'(Sg?(?:\(Ac\))?)(\d*)((?:[\[\(][^\]\)]+[\]\)])*)?(\d*)'
+    pattern = r'(Sg?(?:)?)(\d*)((?:[\[\(][^\]\)]+[\]\)])*)?(\d*)'
     for match in re.finditer(pattern, glycan_string):
         residue = match.group(1)
         linkages = match.group(3) or ""
@@ -538,7 +539,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
         bonds = []
         for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', linkages):
             if len(bonds) >= count: break
-            if bracket.group(1) in ['Ac','s']: continue 
+            if bracket.group(1) in ['Ac','s']: break 
             nums = [int(x.strip()) for x in bracket.group(1).split(',')]
             if 2 in nums:
                 for i, n in enumerate(nums):
@@ -551,6 +552,20 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
         out_res = {'S':'Neu5Ac(a2-3/6)','Sg':'Neu5Gc(a2-3/6)'}[residue]
         result[out_res] = bonds + ["?"] * (count - len(bonds))
     return result
+  
+  def balance_mannose_branch_linkages(iupac):
+    pattern = r'^(.*)(Man\(a1-3\))\[(.*?)(Man\(a1-6\))\](\[[^\]]*\])*(Man\(b1-4\))'
+    match = re.search(pattern, iupac)
+    if match:
+        prefix = match.group(1)
+        branch_a1_3 = re.split(r'[\[\]]', prefix)[-1]
+        branch_a1_6 = match.group(3)
+        
+        if branch_a1_3 != branch_a1_6:
+            # Only replace the core mannoses, not inner ones
+            iupac = prefix + 'Man(a1-3/6)' + '[' + match.group(3) + 'Man(a1-3/6)' + ']' + (match.group(5) or '') + match.group(6) + iupac[match.end():]
+    return iupac
+  
   "Convert glycan from Oxford to IUPAC-condensed format"
   match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
   if match:
@@ -666,6 +681,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     iupac = iupac.replace("Gal(", "GalOS(", 1)
     sulf -= 1
   iupac = iupac.replace("GlcNAc(b1-?)Man", "GlcNAc(b1-2)Man")
+  iupac = balance_mannose_branch_linkages(iupac)
   return floaty + iupac.strip('[]')
 
 
