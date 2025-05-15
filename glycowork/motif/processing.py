@@ -529,11 +529,68 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
 def oxford_to_iupac(oxford: str # Glycan in Oxford format
                    ) -> str: # Glycan in IUPAC-condensed format
   "Convert glycan from Oxford to IUPAC-condensed format"
+  
+  def parse_sialic_acid_bonds(glycan_string):
+      "Extracts sialic acids and their linkages from the Oxford string"
+      result = []
+      pattern = r'(Sg?(?:)?)(\d*)((?:[\[\(][^\]\)]+[\]\)])*)?(\d*)'
+      for match in re.finditer(pattern, glycan_string):
+          residue = match.group(1)
+          linkages = match.group(3) or ""
+          count = int(match.group(4) or match.group(2) or 1)
+          bonds = []
+          for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', linkages):
+              if len(bonds) >= count: break
+              if bracket.group(1) in ['Ac','s']: break 
+              nums = [int(x.strip()) for x in bracket.group(1).split(',')]
+              if 2 in nums:
+                  for i, n in enumerate(nums):
+                      if n == 2 and i+1 < len(nums):
+                          bonds.append(f"{nums[i+1]}")
+                      elif i > 0 and nums[i-1] != 2 and i+1 < len(nums) and nums[i+1] == 2:
+                          bonds.append(f"{n}")
+              else:
+                  bonds.extend(f"{n}" for n in nums if n in [3, 6, 8])
+          out_res = {'S':'Neu5Ac','Sg':'Neu5Gc'}[residue]
+          bonds = bonds + ["3/6"] * (count - len(bonds))
+          for bond in bonds:
+              result.append(f"{out_res}(a2-{bond})")
+      return result
+  
+  def parse_galactose_info(sequence):
+      "Extracts antennary galactose residues and their linkages from the Oxford string"
+      pattern = r'(?<!S)G(?![a-z])(?:\(([^)]+)\))?(?:\[[^\]]+\])?(\d*)(?:\(([^)]+)\))?'
+      match = re.search(pattern, sequence)
+      if match:
+          bond_str = match.group(1) or match.group(3)
+          count = int(match.group(2)) if match.group(2) else 1
+          if bond_str:
+              bonds = [f'Gal(b1-{x.strip()})' for x in bond_str.split(',')]
+              return bonds + ['Gal(b1-3/4)'] * (count - len(bonds))
+          else:
+              return ['Gal(b1-3/4)' for x in range(count)]
+      else:
+          return []
+  
+  def balance_mannose_branch_linkages(iupac):
+    "Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6"
+    pattern = r'^(.*?)((?:\[[^\]]*\])?)(Man\(a1-3\))\[(.*?)(Man\(a1-6\))\](\[[^\]]*\])*(Man\(b1-4\))'
+    match = re.search(pattern, iupac)
+    if match:
+        prefix = match.group(1)
+        bracket_before_a1_3 = match.group(2)
+        branch_a1_3 = re.split(r'[\[\]]', prefix)[-1] + bracket_before_a1_3
+        branch_a1_6 = match.group(4)
+
+        if branch_a1_3 != branch_a1_6:
+            iupac = prefix + bracket_before_a1_3 + 'Man(a1-3/6)' + '[' + match.group(4) + 'Man(a1-3/6)' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
+    return iupac
+  
   match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
   if match:
     oxford = f'M{match.group(1)}'
   oxford = oxford.replace("(s)", "Sulf")
-  oxford = re.sub(r'\([^)]*\)', '', oxford).strip().split('/')[0]
+  oxford = oxford.strip().split('/')[0]
   antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
   mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-3/4)", "S": "Neu5Ac(a2-3/6)",
@@ -574,23 +631,20 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     for m in range(M_count):
       floaty += "{Man(a1-?)}"
   oxford_wo_branches = bracket_removal(oxford)
-  branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A")+1] != "c" else 0,
-              "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != "a" else 0,
-              "S": int(oxford_wo_branches[oxford_wo_branches.index("S")+1]) if "S" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("S")+1] != "g" else 0}
-  extras = {"Sg": int(oxford_wo_branches[oxford_wo_branches.index("Sg")+2]) if "Sg" in oxford_wo_branches else 0,
-            "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Ga")+2].isdigit() else 0,
+  branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A")+1] != "c" else 0}
+  extras = {"Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Ga")+2].isdigit() else 0,
             "Gal": int(oxford_wo_branches[oxford_wo_branches.index("Gal")+3]) if "Gal" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Gal")+3].isdigit() else 0,
             "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Lac")+3] != "D" else 0,
             "LacDiNAc": 1 if "LacDiN" in oxford_wo_branches else 0}
-  specified_linkages = {'Neu5Ac(a2-3/6)': oxford[oxford.index("S")+2:] if branches['S'] else []}
-  specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v  and ']' in v}
+  branches['G'] = parse_galactose_info(oxford)
+  branches['S'] = parse_sialic_acid_bonds(oxford)
+  branches['A'] = ['GlcNAc(b1-?)' for x in range(branches['A'])]
   built_branches = []
-  while sum(branches.values()) > 0:
+  while sum([len(x) for x in branches.values()]) > 0:
     temp = ''
     for c in ["S", "G", "A"]:
-      if branches[c] > 0:
-        temp += mapping_dict[c]
-        branches[c] -= 1
+      if len(branches[c]) > 0:
+        temp += branches[c].pop(0)
     if temp:
       built_branches.append(temp)
   i = 0
@@ -628,10 +682,6 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
           iupac = iupac[:split+len("GalNAc(b1-4)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("GalNAc(b1-4)"):]
         v -= 1
   iupac = iupac.replace("GlcNAc(b1-?)[Neu5Ac(a2-3/6)]Man", "[Neu5Ac(a2-3/6)]GlcNAc(b1-?)Man")
-  for k, v in specified_linkages.items():
-    if v:
-      for vv in v:
-        iupac = iupac.replace(k, k[:-2]+str(vv)+')', 1)
   while "Neu5Ac(a2-8)G" in iupac:
     iupac = iupac.replace("Neu5Ac(a2-8)G", "G", 1)
     idx = [m.start() for m in re.finditer(r'(?<!8\))Neu5Ac\(a2-[3|6|\?]\)', iupac)][0]
@@ -644,6 +694,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     iupac = iupac.replace("Gal(", "GalOS(", 1)
     sulf -= 1
   iupac = iupac.replace("GlcNAc(b1-?)Man", "GlcNAc(b1-2)Man")
+  iupac = balance_mannose_branch_linkages(iupac)
   return floaty + iupac.strip('[]')
 
 
@@ -822,7 +873,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
     glycan = nglycan_stub_to_iupac(glycan)
-  elif 'e' not in glycan and  (not re.search(r"[a-z1]\-", glycan) or len(glycan) < 6) and ((glycan[-1].isdigit() and re.search("[A-Zm]", glycan)) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith(('B', 'Bi', 'LacDiNAc'))):
+  elif 'e' not in glycan and  (not re.search(r"[a-z1]\-", glycan) or len(glycan) < 6) and ((glycan[-1].isdigit() and re.search("[A-Zm]", glycan)) or (glycan[-2].isdigit() and glycan[-1] in ')]') or glycan.endswith(('B', 'Bi', 'LacDiNAc'))):
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)

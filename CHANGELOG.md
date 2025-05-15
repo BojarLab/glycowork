@@ -62,6 +62,7 @@
 - Rare GLYCAM variants without "-OH" at the end can now also be handled by `glycam_to_iupac` (207a050)
 - Support single-monosaccharide glycans in GlycoCT within `glycoct_to_iupac` (87fd540)
 - Support variant sulfate notations in `oxford_to_iupac`
+- Improved parsing of Sialic acid linkage specification in `oxford_to_iupac` (7721966)
 
 ##### Deprecated ⚠️
 - Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead (7c52a0e)
