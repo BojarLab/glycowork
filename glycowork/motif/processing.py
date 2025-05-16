@@ -571,21 +571,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
               return ['Gal(b1-3/4)' for x in range(count)]
       else:
           return []
-  
-  # def balance_mannose_branch_linkages(iupac):
-  #   "Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6"
-  #   pattern = r'^(.*?)((?:\[[^\]]*\])?)(Man\(a1-3\))\[(.*?)(Man\(a1-6\))\](\[[^\]]*\])*(Man\(b1-4\))'
-  #   match = re.search(pattern, iupac)
-  #   if match:
-  #       prefix = match.group(1)
-  #       bracket_before_a1_3 = match.group(2)
-  #       branch_a1_3 = re.split(r'[\[\]]', prefix)[-1] + bracket_before_a1_3
-  #       branch_a1_6 = match.group(4)
 
-  #       if branch_a1_3 != branch_a1_6:
-  #           iupac = prefix + bracket_before_a1_3 + 'Man(a1-3/6)' + '[' + match.group(4) + 'Man(a1-3/6)' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
-  #   return iupac
-  
   def balance_mannose_branch_linkages(iupac, antenna_number=None):
     """
     Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6.
