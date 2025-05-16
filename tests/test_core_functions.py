@@ -347,6 +347,9 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("A2G2S2(2,3)") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("FA4G3S1B") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-?)[GlcNAc(b1-?)]Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("A2G1G[SO4-2]1S1") == "Neu5Ac(a2-3/6)GalOS(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac('A2[6]G1')	== 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert canonicalize_iupac('A2B[3]G1') == 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert canonicalize_iupac('F(6)A2[6]G(4)1Sg(6)1') == 'Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
     assert canonicalize_iupac('D0H0') == '4uHexA(?1-?)GlcN'
     assert canonicalize_iupac('D2S9') == '4uHexA2S(?1-?)GlcNS3S6S'
     assert canonicalize_iupac('D2a4') == '4uHexA2S(?1-?)GalNAc4S'
