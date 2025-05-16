@@ -572,20 +572,45 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
       else:
           return []
   
-  def balance_mannose_branch_linkages(iupac):
-    "Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6"
+  # def balance_mannose_branch_linkages(iupac):
+  #   "Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6"
+  #   pattern = r'^(.*?)((?:\[[^\]]*\])?)(Man\(a1-3\))\[(.*?)(Man\(a1-6\))\](\[[^\]]*\])*(Man\(b1-4\))'
+  #   match = re.search(pattern, iupac)
+  #   if match:
+  #       prefix = match.group(1)
+  #       bracket_before_a1_3 = match.group(2)
+  #       branch_a1_3 = re.split(r'[\[\]]', prefix)[-1] + bracket_before_a1_3
+  #       branch_a1_6 = match.group(4)
+
+  #       if branch_a1_3 != branch_a1_6:
+  #           iupac = prefix + bracket_before_a1_3 + 'Man(a1-3/6)' + '[' + match.group(4) + 'Man(a1-3/6)' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
+  #   return iupac
+  
+  def balance_mannose_branch_linkages(iupac, antenna_number=None):
+    """
+    Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6.
+    If antenna_number is provided, assigns that number to the longest branch.
+    Args:
+        iupac: IUPAC string notation
+        antenna_number: Optional preferred antenna number (3 or 6)
+    """
     pattern = r'^(.*?)((?:\[[^\]]*\])?)(Man\(a1-3\))\[(.*?)(Man\(a1-6\))\](\[[^\]]*\])*(Man\(b1-4\))'
     match = re.search(pattern, iupac)
     if match:
         prefix = match.group(1)
         bracket_before_a1_3 = match.group(2)
-        branch_a1_3 = re.split(r'[\[\]]', prefix)[-1] + bracket_before_a1_3
-        branch_a1_6 = match.group(4)
+        branch_a1_3_content = re.split(r'[\[\]]', prefix)[-1] + bracket_before_a1_3
+        branch_a1_6_content = match.group(4)
 
-        if branch_a1_3 != branch_a1_6:
-            iupac = prefix + bracket_before_a1_3 + 'Man(a1-3/6)' + '[' + match.group(4) + 'Man(a1-3/6)' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
+        if branch_a1_3_content != branch_a1_6_content:
+            if antenna_number is None:
+                iupac = prefix + bracket_before_a1_3 + 'Man(a1-3/6)' + '[' + match.group(4) + 'Man(a1-3/6)' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
+            elif antenna_number:
+                antenna_number = int(antenna_number)
+                long_num, short_num = (6, 3) if (len(branch_a1_3_content) >= len(branch_a1_6_content)) ^ (antenna_number == 3) else (3, 6)
+                iupac = prefix + bracket_before_a1_3 + f'Man(a1-{long_num})' + '[' + match.group(4) + f'Man(a1-{short_num})' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
     return iupac
-  
+
   match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
   if match:
     oxford = f'M{match.group(1)}'
@@ -694,8 +719,10 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     iupac = iupac.replace("Gal(", "GalOS(", 1)
     sulf -= 1
   iupac = iupac.replace("GlcNAc(b1-?)Man", "GlcNAc(b1-2)Man")
-  iupac = balance_mannose_branch_linkages(iupac)
+  antenna_number = match.group(2) if (match := re.search(r'A\d+(B)?\[([36])\]', oxford)) else None
+  iupac = balance_mannose_branch_linkages(iupac,antenna_number)
   return floaty + iupac.strip('[]')
+
 
 
 def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
