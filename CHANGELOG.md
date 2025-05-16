@@ -58,6 +58,7 @@
 - `canonicalize_iupac` is now more robust to (5-6) type linkages and to the associated sugar alcohols, like Rib5P-ol (7a260ac)
 - `canonicalize_iupac` will now raise a `ValueError` instead of a warning if a glycan string has mismatching brackets (b69fced)
 - `canonicalize_iupac` can now handle even more IUPAC-dialects such as `Neu5Ac-α-2,6-Gal-β-1,3-GlcNAc-β-Sp` (cb2c898)
+- `canonicalize_iupac` can now handle α,β before linkage parentheses (a2acb2c)
 - `get_class` will now correctly annotate plant N-glycans with core a1-3 Fuc (8dd34b7)
 - Rare GLYCAM variants without "-OH" at the end can now also be handled by `glycam_to_iupac` (207a050)
 - Support single-monosaccharide glycans in GlycoCT within `glycoct_to_iupac` (87fd540)

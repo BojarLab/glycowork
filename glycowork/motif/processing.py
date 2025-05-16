@@ -889,6 +889,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   elif 'e' not in glycan and  (not re.search(r"[a-z1]\-", glycan) or len(glycan) < 6) and ((glycan[-1].isdigit() and re.search("[A-Zm]", glycan)) or (glycan[-2].isdigit() and glycan[-1] in ')]') or glycan.endswith(('B', 'Bi', 'LacDiNAc'))):
     glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
+  # Anomeric indicator placed before parentheses
+  if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
+    glycan = re.sub(r'([βα])(\()', r'\2\1', glycan)
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
   glycan = re.sub(r'-([ab])-(\d+),(\d+\)?)-', r'\1\2-\3', glycan)  # Inconsistent usage of dashes and commas, like in Neu5Ac-a-2,6-Gal-b-1,3-GlcNAc
   glycan = re.sub(r'(\d),(\d)(?!l)', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone)
