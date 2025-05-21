@@ -541,7 +541,9 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
           bonds = []
           for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', linkages):
               if len(bonds) >= count: break
-              if bracket.group(1) in ['Ac','s']: break 
+              if 'Ac' in bracket.group(1):
+                residue = residue+'Ac'
+                break
               nums = [int(x.strip()) for x in bracket.group(1).split(',')]
               if 2 in nums:
                   for i, n in enumerate(nums):
@@ -551,7 +553,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
                           bonds.append(f"{n}")
               else:
                   bonds.extend(f"{n}" for n in nums if n in [3, 6, 8])
-          out_res = {'S':'Neu5Ac','Sg':'Neu5Gc'}[residue]
+          out_res = {'S':'Neu5Ac','Sg':'Neu5Gc','SAc':'Neu5AcOAc','SgAc':'Neu5GcOAc'}[residue]
           bonds = bonds + ["3/6"] * (count - len(bonds))
           for bond in bonds:
               result.append(f"{out_res}(a2-{bond})")
