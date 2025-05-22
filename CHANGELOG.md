@@ -62,9 +62,9 @@
 - `get_class` will now correctly annotate plant N-glycans with core a1-3 Fuc (8dd34b7)
 - Rare GLYCAM variants without "-OH" at the end can now also be handled by `glycam_to_iupac` (207a050)
 - Support single-monosaccharide glycans in GlycoCT within `glycoct_to_iupac` (87fd540)
-- Support variant sulfate notations in `oxford_to_iupac`
-- Improved parsing of Sialic acid linkage specification in `oxford_to_iupac` (7721966)
-- Added Oxford preferred antenna parsing in `oxford_to_iupac` (3ea72a3)
+- Support variant sulfate notations in `oxford_to_iupac` (b35fc0e)
+- Improved parsing of Sialic acid linkage specification in `oxford_to_iupac` (06ea51f)
+- Added Oxford preferred antenna parsing in `oxford_to_iupac` (013456f)
 - Added Sialic acid Acetyl modification parsing in `oxford_to_iupac` (c402bf2)
 
 ##### Deprecated ⚠️
