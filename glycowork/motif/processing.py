@@ -529,7 +529,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
 def oxford_to_iupac(oxford: str # Glycan in Oxford format
                    ) -> str: # Glycan in IUPAC-condensed format
   "Convert glycan from Oxford to IUPAC-condensed format"
-  
+
   def parse_sialic_acid_bonds(glycan_string):
       "Extracts sialic acids and their linkages from the Oxford string"
       result = []
@@ -541,7 +541,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
           bonds = []
           for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', linkages):
               if len(bonds) >= count: break
-              if bracket.group(1) in ['Ac','s']: break 
+              if bracket.group(1) in ['Ac','s']: break
               nums = [int(x.strip()) for x in bracket.group(1).split(',')]
               if 2 in nums:
                   for i, n in enumerate(nums):
@@ -556,7 +556,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
           for bond in bonds:
               result.append(f"{out_res}(a2-{bond})")
       return result
-  
+
   def parse_galactose_info(sequence):
       "Extracts antennary galactose residues and their linkages from the Oxford string"
       pattern = r'(?<!S)G(?![a-z])(?:\(([^)]+)\))?(?:\[[^\]]+\])?(\d*)(?:\(([^)]+)\))?'

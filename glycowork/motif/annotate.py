@@ -101,6 +101,8 @@ def get_molecular_properties(
       c = pcp.get_compounds(s, 'smiles')[0]
       if c.cid is None:
         compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0]) if placeholder else failed_requests.append(s)
+        if placeholder:
+          succeeded_requests.append(dummy)
       else:
         compounds_list.append(c)
         succeeded_requests.append(g)
