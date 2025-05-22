@@ -543,8 +543,9 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
               if len(bonds) >= count: break
               if 'Ac' in bracket.group(1):
                 residue = residue+'Ac'
-                break
-              nums = [int(x.strip()) for x in bracket.group(1).split(',')]
+                nums = [int(x.strip()) for x in str(bracket.group(1)).split(',') if x!='Ac']
+              else:
+                nums = [int(x.strip()) for x in bracket.group(1).split(',')]
               if 2 in nums:
                   for i, n in enumerate(nums):
                       if n == 2 and i+1 < len(nums):
@@ -888,8 +889,19 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
     glycan = nglycan_stub_to_iupac(glycan)
-  elif 'e' not in glycan and  (not re.search(r"[a-z1]\-", glycan) or len(glycan) < 6) and ((glycan[-1].isdigit() and re.search("[A-Zm]", glycan)) or (glycan[-2].isdigit() and glycan[-1] in ')]') or glycan.endswith(('B', 'Bi', 'LacDiNAc'))):
-    glycan = oxford_to_iupac(glycan)
+  elif  bool (
+        # Matches mannose shorthand
+        bool(re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', glycan, re.IGNORECASE)) or 
+        # Must contain only letters,numbers,brackets,commas,and hyphens
+        (bool(re.fullmatch(r'[A-Za-z0-9()\[\],-]+', glycan)) and
+        # Must contain at least one digit
+        bool(re.search(r'[1-9]', glycan)) and
+        # Must contain at least one core Oxford structure
+        bool(re.search(r'(A\d+|G\d+|S[g]?\d+|F|B[i]?|M\d+)', glycan)) and 
+        # Must not contain (letter) digit hyphen digit in paretheses
+        not re.search(r'\(([a-z]?\d-\d)\)', glycan))
+    ):
+      glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   # Anomeric indicator placed before parentheses
   if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
