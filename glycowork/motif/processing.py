@@ -541,8 +541,11 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
           bonds = []
           for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', linkages):
               if len(bonds) >= count: break
-              if bracket.group(1) in ['Ac','s']: break
-              nums = [int(x.strip()) for x in bracket.group(1).split(',')]
+              if 'Ac' in bracket.group(1):
+                residue = residue+'Ac'
+                nums = [int(x.strip()) for x in str(bracket.group(1)).split(',') if x!='Ac']
+              else:
+                nums = [int(x.strip()) for x in bracket.group(1).split(',')]
               if 2 in nums:
                   for i, n in enumerate(nums):
                       if n == 2 and i+1 < len(nums):
@@ -551,7 +554,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
                           bonds.append(f"{n}")
               else:
                   bonds.extend(f"{n}" for n in nums if n in [3, 6, 8])
-          out_res = {'S':'Neu5Ac','Sg':'Neu5Gc'}[residue]
+          out_res = {'S':'Neu5Ac','Sg':'Neu5Gc','SAc':'Neu5AcOAc','SgAc':'Neu5GcOAc'}[residue]
           bonds = bonds + ["3/6"] * (count - len(bonds))
           for bond in bonds:
               result.append(f"{out_res}(a2-{bond})")
@@ -886,8 +889,13 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
     glycan = nglycan_stub_to_iupac(glycan)
-  elif 'e' not in glycan and  (not re.search(r"[a-z1]\-", glycan) or len(glycan) < 6) and ((glycan[-1].isdigit() and re.search("[A-Zm]", glycan)) or (glycan[-2].isdigit() and glycan[-1] in ')]') or glycan.endswith(('B', 'Bi', 'LacDiNAc'))):
-    glycan = oxford_to_iupac(glycan)
+  elif bool(
+    # Matches mannose shorthand
+    bool(re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', glycan, re.IGNORECASE)) or
+    # Combined: valid chars + has digit + has Oxford structure + no unwanted pattern
+    bool(re.fullmatch(r'^(?=.*[1-9])(?=.*(?:A\d+|G\d+|S[g]?\d+|F|B[i]?|M\d+))(?!.*\([a-z]?\d-\d\))(?!.*F[a-z])[A-Za-z0-9()\[\],-]+$', glycan))
+  ):
+      glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   # Anomeric indicator placed before parentheses
   if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):

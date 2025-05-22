@@ -65,6 +65,7 @@
 - Support variant sulfate notations in `oxford_to_iupac` (b35fc0e)
 - Improved parsing of Sialic acid linkage specification in `oxford_to_iupac` (06ea51f)
 - Added Oxford preferred antenna parsing in `oxford_to_iupac` (013456f)
+- Added Sialic acid Acetyl modification parsing in `oxford_to_iupac` (c402bf2)
 
 ##### Deprecated ⚠️
 - Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead (7c52a0e)
