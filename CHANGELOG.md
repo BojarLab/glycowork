@@ -58,7 +58,7 @@
 - `canonicalize_iupac` is now more robust to (5-6) type linkages and to the associated sugar alcohols, like Rib5P-ol (7a260ac)
 - `canonicalize_iupac` will now raise a `ValueError` instead of a warning if a glycan string has mismatching brackets (b69fced)
 - `canonicalize_iupac` can now handle even more IUPAC-dialects such as `Neu5Ac-α-2,6-Gal-β-1,3-GlcNAc-β-Sp` (cb2c898)
-- `canonicalize_iupac` can now handle α,β before linkage parentheses (a2acb2c)
+- `canonicalize_iupac` can now handle α,β before linkage parentheses (70b2f61)
 - `get_class` will now correctly annotate plant N-glycans with core a1-3 Fuc (8dd34b7)
 - Rare GLYCAM variants without "-OH" at the end can now also be handled by `glycam_to_iupac` (207a050)
 - Support single-monosaccharide glycans in GlycoCT within `glycoct_to_iupac` (87fd540)
@@ -81,6 +81,7 @@
 - Fixed an edge case in `get_k_saccharides`, in which choosing a `size` larger than the size of the largest glycan in the input caused an error (db7847d)
 - Fixed `get_k_saccharides` with higher values of `size`, which occasionally produced invalid strings, by refactoring `count_unique_subgraphs_of_size_k` and switching it to use the changed `graph_to_string_int`, to ensure motif validity (db7847d)
 - Fixed `preprocess_data`, which was attempting to transform 0-containing dataframes when no transform argument was provided (878701a)
+- Fixed an issue in `get_molecular_properties` in which failed requests with `placeholder` set to False could lead to a size mismatch in preparing the output dataframe (106d0b0)
 
 ##### Deprecated ⚠️
 - Deprecated `link_find`; will be done by an optimized `get_k_saccharides` instead (since `link_find` relied on `find_isomorphs`) (7c52a0e)
