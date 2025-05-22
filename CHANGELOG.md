@@ -80,7 +80,7 @@
 - Fixed an edge case in `get_k_saccharides`, in which choosing a `size` larger than the size of the largest glycan in the input caused an error (db7847d)
 - Fixed `get_k_saccharides` with higher values of `size`, which occasionally produced invalid strings, by refactoring `count_unique_subgraphs_of_size_k` and switching it to use the changed `graph_to_string_int`, to ensure motif validity (db7847d)
 - Fixed `preprocess_data`, which was attempting to transform 0-containing dataframes when no transform argument was provided (878701a)
-- Fixed an issue in `get_molecular_properties` in which failed requests with `placeholder` set to False could lead to a size mismatch in preparing the output dataframe
+- Fixed an issue in `get_molecular_properties` in which failed requests with `placeholder` set to False could lead to a size mismatch in preparing the output dataframe (106d0b0)
 
 ##### Deprecated ⚠️
 - Deprecated `link_find`; will be done by an optimized `get_k_saccharides` instead (since `link_find` relied on `find_isomorphs`) (7c52a0e)

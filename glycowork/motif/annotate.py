@@ -95,7 +95,7 @@ def get_molecular_properties(
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
   if placeholder:
     dummy = IUPAC_to_SMILES(['Glc'])[0]
-  compounds_list,, succeeded_requests, failed_requests = [], [], []
+  compounds_list, succeeded_requests, failed_requests = [], [], []
   for s, g in zip(*[IUPAC_to_SMILES(glycan_list), glycan_list]):
     try:
       c = pcp.get_compounds(s, 'smiles')[0]
