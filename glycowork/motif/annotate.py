@@ -95,14 +95,17 @@ def get_molecular_properties(
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
   if placeholder:
     dummy = IUPAC_to_SMILES(['Glc'])[0]
-  compounds_list, failed_requests = [], []
-  for s in IUPAC_to_SMILES(glycan_list):
+  compounds_list, succeeded_requests, failed_requests = [], [], []
+  for s, g in zip(*[IUPAC_to_SMILES(glycan_list), glycan_list]):
     try:
       c = pcp.get_compounds(s, 'smiles')[0]
       if c.cid is None:
         compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0]) if placeholder else failed_requests.append(s)
+        if placeholder:
+          succeeded_requests.append(dummy)
       else:
         compounds_list.append(c)
+        succeeded_requests.append(g)
     except:
       failed_requests.append(s)
   if verbose and len(failed_requests) >= 1:
@@ -116,7 +119,7 @@ def get_molecular_properties(
                                                             'bond_stereo_count', 'defined_bond_stereo_count',
                                                             'undefined_bond_stereo_count', 'covalent_unit_count'])
   df = df.reset_index(drop = True)
-  df.index = glycan_list
+  df.index = succeeded_requests
   return df
 
 
