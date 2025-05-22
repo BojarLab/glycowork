@@ -889,18 +889,12 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
     glycan = nglycan_stub_to_iupac(glycan)
-  elif  bool (
-        # Matches mannose shorthand
-        bool(re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', glycan, re.IGNORECASE)) or 
-        # Must contain only letters,numbers,brackets,commas,and hyphens
-        (bool(re.fullmatch(r'[A-Za-z0-9()\[\],-]+', glycan)) and
-        # Must contain at least one digit
-        bool(re.search(r'[1-9]', glycan)) and
-        # Must contain at least one core Oxford structure
-        bool(re.search(r'(A\d+|G\d+|S[g]?\d+|F|B[i]?|M\d+)', glycan)) and 
-        # Must not contain (letter) digit hyphen digit in paretheses
-        not re.search(r'\(([a-z]?\d-\d)\)', glycan))
-    ):
+  elif bool(
+    # Matches mannose shorthand
+    bool(re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', glycan, re.IGNORECASE)) or
+    # Combined: valid chars + has digit + has Oxford structure + no unwanted pattern
+    bool(re.fullmatch(r'^(?=.*[1-9])(?=.*(?:A\d+|G\d+|S[g]?\d+|F|B[i]?|M\d+))(?!.*\([a-z]?\d-\d\))[A-Za-z0-9()\[\],-]+$', glycan))
+  ):
       glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   # Anomeric indicator placed before parentheses
