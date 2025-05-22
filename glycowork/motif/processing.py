@@ -893,7 +893,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     # Matches mannose shorthand
     bool(re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', glycan, re.IGNORECASE)) or
     # Combined: valid chars + has digit + has Oxford structure + no unwanted pattern
-    bool(re.fullmatch(r'^(?=.*[1-9])(?=.*(?:A\d+|G\d+|S[g]?\d+|F|B[i]?|M\d+))(?!.*\([a-z]?\d-\d\))[A-Za-z0-9()\[\],-]+$', glycan))
+    bool(re.fullmatch(r'^(?=.*[1-9])(?=.*(?:A\d+|G\d+|S[g]?\d+|F|B[i]?|M\d+))(?!.*\([a-z]?\d-\d\))(?!.*F[a-z])[A-Za-z0-9()\[\],-]+$', glycan))
   ):
       glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
