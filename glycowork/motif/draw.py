@@ -1073,11 +1073,14 @@ def GlycoDraw(
     suppress: bool = False, # Suppress display
     per_residue: List = [], # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
     pdb_file: Optional[Union[str, Path]] = None,  # only used when draw_method='chem3d'; already existing glycan structure
-    alt_text: Optional[str] = None  # Custom ALT text for accessibility
+    alt_text: Optional[str] = None,  # Custom ALT text for accessibility
+    libr: dict = None  # Can be modified for drawing too exotic monosaccharides
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
   if any(k in glycan for k in [';', 'β', 'α', 'RES', '=']):
     raise Exception
+  if libr is None:
+    libr = lib
   if glycan.startswith('Terminal') and glycan not in motif_list.motif_name.values.tolist():
     glycan = glycan.split('_')[-1]
   if glycan in motif_list.motif_name.values.tolist():
@@ -1111,7 +1114,7 @@ def GlycoDraw(
     draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')
 
-  if not in_lib(draw_this, expand_lib(lib, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
+  if not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
     raise Exception('Did you enter a real glycan or motif?')
 
   data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
@@ -1219,7 +1222,7 @@ def GlycoDraw(
     floaty_bits = list(set(floaty_bits))
     floaty_data = []
     for k, k_val in enumerate(floaty_bits):
-      if in_lib(min_process_glycans([k_val])[0][0], lib):
+      if in_lib(min_process_glycans([k_val])[0][0], libr):
         floaty_data.append(get_coordinates_and_labels(k_val, show_linkage = show_linkage, highlight_motif = None))
       else:
         floaty_data.append(get_coordinates_and_labels('blank(-)blank', show_linkage = show_linkage, highlight_motif = None))

@@ -23,10 +23,26 @@ with open(mapping_path) as f:
 replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                   'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', 'Talp': 'Tal',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep',
-                 '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
-                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe',
+                 '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?'}
-CANONICALIZE = re.compile('|'.join(map(re.escape, list(replace_dic.keys()))))
+CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
+
+
+def rescue_glycans(func: Callable # Function to wrap
+                 ) -> Callable: # Wrapped function handling formatting issues
+  "Decorator for handling malformed glycan sequences"
+  @wraps(func)
+  def wrapper(*args, **kwargs):
+    try:
+      # Try running the original function
+      return func(*args, **kwargs)
+    except Exception:
+      # If an error occurs, attempt to rescue the glycan sequences
+      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
+      # After rescuing, attempt to run the function again
+      return func(*rescued_args, **kwargs)
+  return wrapper
 
 
 def min_process_glycans(glycan_list: List[str] # List of glycans in IUPAC-condensed format
@@ -231,7 +247,8 @@ def canonicalize_composition(comp: str # Composition in Hex5HexNAc4Fuc1Neu5Ac2 o
   return comp_dict
 
 
-def IUPAC_to_SMILES(glycan_list: List[str] # List of IUPAC-condensed glycans
+@rescue_glycans
+def IUPAC_to_SMILES(glycan_list: Union[str, List[str]] # List of IUPAC-condensed glycans or single glycan
                    ) -> List[str]: # List of corresponding SMILES strings
   "Convert list of IUPAC-condensed glycans to isomeric SMILES using GlyLES"
   try:
@@ -239,7 +256,7 @@ def IUPAC_to_SMILES(glycan_list: List[str] # List of IUPAC-condensed glycans
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
   if not isinstance(glycan_list, list):
-    raise TypeError("Input must be a list")
+    glycan_list = [glycan_list]
   return [convert(g)[0][1] for g in glycan_list]
 
 
@@ -713,11 +730,10 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   return floaty + iupac.strip('[]')
 
 
-
 def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
                     ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from GLYCAM to IUPAC-condensed format"
-  pattern = r'(?:[DL])|(?:\[(\d+[SP]+)\])'
+  pattern = r'(?:^[DL]|(?<=\d)[DL]|(?<=[\[\]])[DL])|(?:\[(\d+[SPC]+)\])'
   glycan = '-'.join(glycan.split('-')[:-1])[:-2] if '-OH' in glycan else glycan
   glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan)
   return glycan.replace('[', '(').replace(']', ')')
@@ -1024,22 +1040,6 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if glycan.count('[') != glycan.count(']'):
     raise ValueError(f"Mismatching brackets in formatted glycan string: {glycan}")
   return glycan
-
-
-def rescue_glycans(func: Callable # Function to wrap
-                 ) -> Callable: # Wrapped function handling formatting issues
-  "Decorator for handling malformed glycan sequences"
-  @wraps(func)
-  def wrapper(*args, **kwargs):
-    try:
-      # Try running the original function
-      return func(*args, **kwargs)
-    except Exception:
-      # If an error occurs, attempt to rescue the glycan sequences
-      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
-      # After rescuing, attempt to run the function again
-      return func(*rescued_args, **kwargs)
-  return wrapper
 
 
 def rescue_compositions(func: Callable # Function to wrap

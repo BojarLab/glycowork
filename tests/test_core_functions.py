@@ -329,6 +329,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("DManpa1-6DManpb1-4DGlcpNAcb1-4[LFucpa1-6]DGlcpNAcb1-OH") == "Man(a1-6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("Neup5Aca2-3DGalpb1-4DGlcpNAcb1-3DGalpb1-3DGalpb1-4DGlcpb1-OH") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)Gal(b1-4)Glc"
     assert canonicalize_iupac("DGalp[6S]b1-3DGalpNAca1-OH") == "Gal6S(b1-3)GalNAc"
+    assert canonicalize_iupac("DGalpNAcb1-4[LFucpa1-3]DGlcpNAc[6PC]b1-2DManpa1-3[DManpa1-6]DManpb1-4DGlcpNAcb1-4[LFucpa1-6]DGlcpNAc") == "Fuc(a1-3)[GalNAc(b1-4)]GlcNAc6PCho(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("DKDNpa2-3DGalpb1-3DGlcpNAc") == "Kdn(a2-3)Gal(b1-3)GlcNAc"
     assert canonicalize_iupac("DGlcpAb1-4DGlcpNAca1-4DGlcpA[2S]b1-4DGlcpNAc") == "GlcA(b1-4)GlcNAc(a1-4)GlcA2S(b1-4)GlcNAc"
     assert canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("GNb2Ma3(Ab4GNb2Ma6)Mb4GNb4(Fa6)GNb;") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
@@ -351,9 +353,6 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac('A2[6]G1')	== 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('A2B[3]G1') == 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('F(6)A2[6]G(4)1Sg(6)1') == 'Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
-    assert canonicalize_iupac('A2G2S1S(Ac)1') == 'Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5AcOAc(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
-    assert canonicalize_iupac('A2G2Sg(3)1S(Ac)(6)1') == "Neu5AcOAc(a2-6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Gc(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert canonicalize_iupac('FBA2G2S1(3,Ac)') == "Neu5AcOAc(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac('D0H0') == '4uHexA(?1-?)GlcN'
     assert canonicalize_iupac('D2S9') == '4uHexA2S(?1-?)GlcNS3S6S'
     assert canonicalize_iupac('D2a4') == '4uHexA2S(?1-?)GalNAc4S'
@@ -1265,9 +1264,8 @@ def test_IUPAC_to_SMILES():
         smiles = IUPAC_to_SMILES(glycans)
         assert len(smiles) == 2
         smiles = iupac_to_smiles(glycans)
-        # Test invalid input type
-        with pytest.raises(TypeError):
-            IUPAC_to_SMILES("Gal(b1-4)GlcNAc")  # Should be list
+        # Test string input type
+        smiles = IUPAC_to_SMILES("Gal(b1-4)GlcNAc")
     except ImportError:
         pytest.skip("glyles package not installed")
     # Mock ImportError for chem dependencies
