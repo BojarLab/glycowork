@@ -68,6 +68,7 @@
 - Added Sialic acid Acetyl modification parsing in `oxford_to_iupac` (c402bf2)
 - enabled usage of single strings, next to lists, in `iupac_to_smiles` (8c5aa64)
 - `glycam_to_iupac` can now handle KDN tokens and more exotic modifications (8c5aa64)
+- `iupac_to_smiles` can now auto-use Universal Input, if used with a single-string input
 
 ##### Deprecated ⚠️
 - Deprecated `find_isomorphs` and `choose_correct_isoform`; this will be done (and better) by the new `canonicalize_glycan_graph` instead (7c52a0e)

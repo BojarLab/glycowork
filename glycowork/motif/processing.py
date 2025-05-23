@@ -22,10 +22,10 @@ with open(mapping_path) as f:
 # for canonicalize_iupac
 replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
                   'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', 'Talp': 'Tal',
-                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep',
+                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara',
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn',
-                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', '9Aa': '9Aca'}
+                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
 
 
@@ -256,7 +256,10 @@ def IUPAC_to_SMILES(glycan_list: Union[str, List[str]] # List of IUPAC-condensed
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
   if not isinstance(glycan_list, list):
     glycan_list = [glycan_list]
-  return [convert(g)[0][1] for g in glycan_list]
+  res = [convert(g)[0][1] for g in glycan_list]
+  if len(res) == 1 and res[0] == '':
+    return [convert(canonicalize_iupac(g))[0][1] for g in glycan_list]
+  return res
 
 
 iupac_to_smiles = IUPAC_to_SMILES
@@ -732,9 +735,9 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
 def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
                     ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from GLYCAM to IUPAC-condensed format"
-  pattern = r'(?:^[DL]|(?<=\d)[DL]|(?<=[\[\]])[DL])|(?:\[(\d+[SPCMeA]+)\])'
+  pattern = r'(?:^[DL]|(?<=\d)[DL]|(?<=[\[\]])[DL])|(?:\[(\d+[SPCMeA\d]+)\])'
   glycan = '-'.join(glycan.split('-')[:-1])[:-2] if '-OH' in glycan else glycan
-  glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan)
+  glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan.replace(',', ''))
   return glycan.replace('[', '(').replace(']', ')')
 
 
@@ -916,6 +919,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
     glycan = re.sub(r'([βα])(\()', r'\2\1', glycan)
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
+  glycan = re.sub(r'(\d)A($|a)', r'\1Ac\2', glycan)  # 9Aa into 9Aca
   glycan = re.sub(r'-([ab])-(\d+),(\d+\)?)-', r'\1\2-\3', glycan)  # Inconsistent usage of dashes and commas, like in Neu5Ac-a-2,6-Gal-b-1,3-GlcNAc
   glycan = re.sub(r'(\d),(\d)(?!l)', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone)
   if '{' in glycan and '}' not in glycan:

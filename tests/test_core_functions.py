@@ -331,9 +331,12 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("DGalp[6S]b1-3DGalpNAca1-OH") == "Gal6S(b1-3)GalNAc"
     assert canonicalize_iupac("DGalpNAcb1-4[LFucpa1-3]DGlcpNAc[6PC]b1-2DManpa1-3[DManpa1-6]DManpb1-4DGlcpNAcb1-4[LFucpa1-6]DGlcpNAc") == "Fuc(a1-3)[GalNAc(b1-4)]GlcNAc6PCho(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("DKDNpa2-3DGalpb1-3DGlcpNAc") == "Kdn(a2-3)Gal(b1-3)GlcNAc"
+    assert canonicalize_iupac("DGalp[3S,6S]b1-4DGlcpNAca1-OH") == "Gal3S6S(b1-4)GlcNAc"
+    assert canonicalize_iupac("DGalpa1-2[DManpa1-3DRhapa1-3][LRhap[2Me,3Me]a1-2[DArapb1-3]LRhapb1-4DXylpb1-4]LFucpa1-3[DXylpb1-4]DGlcpa1-OH") == "Rha2Me3Me(a1-2)[Ara(b1-3)]Rha(b1-4)Xyl(b1-4)[Man(a1-3)Rha(a1-3)][Gal(a1-2)]Fuc(a1-3)[Xyl(b1-4)]Glc"
     assert canonicalize_iupac("DGlcpAb1-4DGlcpNAca1-4DGlcpA[2S]b1-4DGlcpNAc") == "GlcA(b1-4)GlcNAc(a1-4)GlcA2S(b1-4)GlcNAc"
     assert canonicalize_iupac("DManpa1-2DGlcpA[4Me]b1-4DGalpAa1-4DGlcpAb1-4DGlcp") == "Man(a1-2)GlcA4Me(b1-4)GalA(a1-4)GlcA(b1-4)Glc"
     assert canonicalize_iupac("DNeup5Ac[9A]a2-3DGalpb1-4[LFucpa1-3]DGlcpNAc") == "Neu5Ac9Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"
+    assert canonicalize_iupac("DGlcpNAcb1-2[DGlcpa1-3]LRhapa1-2LRhapa1-3LRhap[2A]a1-OH") == "GlcNAc(b1-2)[Glc(a1-3)]Rha(a1-2)Rha(a1-3)Rha2Ac"
     assert canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("GNb2Ma3(Ab4GNb2Ma6)Mb4GNb4(Fa6)GNb;") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M)61M(31M21M)61M21M") == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -1268,6 +1271,8 @@ def test_IUPAC_to_SMILES():
         smiles = iupac_to_smiles(glycans)
         # Test string input type
         smiles = IUPAC_to_SMILES("Gal(b1-4)GlcNAc")
+        smiles = iupac_to_smiles("F(3)XA2")
+        assert '@' in smiles[0]
     except ImportError:
         pytest.skip("glyles package not installed")
     # Mock ImportError for chem dependencies

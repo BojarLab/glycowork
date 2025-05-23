@@ -640,7 +640,7 @@ def get_coordinates_and_labels(
   l3_bond = process_bonds(l3_bond)
 
   # Main chain x
-  if main_sugar[-1]  == 'Fuc' or (main_sugar[-1] == 'Xyl' and main_bond[-1] == 'β 2'):
+  if main_sugar[-1]  == 'Fuc' or (main_sugar[-1] == 'Xyl' and len(main_bond) > 0 and main_bond[-1] == 'β 2'):
     main_sugar_x_pos[-1] -= 1
 
   # Calculate x positions for branches
