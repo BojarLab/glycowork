@@ -25,7 +25,7 @@ replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep',
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn',
-                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?'}
+                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', '9Aa': '9Aca'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
 
 
@@ -247,7 +247,6 @@ def canonicalize_composition(comp: str # Composition in Hex5HexNAc4Fuc1Neu5Ac2 o
   return comp_dict
 
 
-@rescue_glycans
 def IUPAC_to_SMILES(glycan_list: Union[str, List[str]] # List of IUPAC-condensed glycans or single glycan
                    ) -> List[str]: # List of corresponding SMILES strings
   "Convert list of IUPAC-condensed glycans to isomeric SMILES using GlyLES"
@@ -733,7 +732,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
 def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
                     ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from GLYCAM to IUPAC-condensed format"
-  pattern = r'(?:^[DL]|(?<=\d)[DL]|(?<=[\[\]])[DL])|(?:\[(\d+[SPC]+)\])'
+  pattern = r'(?:^[DL]|(?<=\d)[DL]|(?<=[\[\]])[DL])|(?:\[(\d+[SPCMeA]+)\])'
   glycan = '-'.join(glycan.split('-')[:-1])[:-2] if '-OH' in glycan else glycan
   glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan)
   return glycan.replace('[', '(').replace(']', ')')
