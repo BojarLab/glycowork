@@ -640,7 +640,7 @@ def get_coordinates_and_labels(
   l3_bond = process_bonds(l3_bond)
 
   # Main chain x
-  if main_sugar[-1]  == 'Fuc' or (main_sugar[-1] == 'Xyl' and len(main_bond) > 0 and main_bond[-1] == 'β 2'):
+  if (main_sugar[-1]  == 'Fuc' and len(main_bond) > 1) or (main_sugar[-1] == 'Xyl' and len(main_bond) > 1 and main_bond[-1] == 'β 2'):
     main_sugar_x_pos[-1] -= 1
 
   # Calculate x positions for branches
@@ -664,7 +664,7 @@ def get_coordinates_and_labels(
   l3_x_pos = calculate_x_positions(l3_sugar, l3_connection, l2_x_pos, level = 3)
 
   # Initialize y positions - ALL START AT Y=0 (except Fuc)
-  main_sugar_y_pos = [2 if s == "Fuc" and i == len(main_sugar)-1 else 0 for i, s in enumerate(main_sugar)]
+  main_sugar_y_pos = [2 if s == "Fuc" and i == len(main_sugar)-1 and draw_this.count('(') > 1 else 0 for i, s in enumerate(main_sugar)]
   l1_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l1_sugar]
   l2_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l2_sugar]
   l3_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l3_sugar]
@@ -709,12 +709,15 @@ def get_coordinates_and_labels(
       l1_y_pos[j] = [-2*SPACING] * len(branch_sugar)
     else:
       is_bisecting = branch_sugar[0] in ['GlcNAc'] and main_sugar[parent_idx] == 'Man' and main_bond[parent_idx-1] == 'β 4'
+      is_leading_xyl = main_sugar[-1] == 'Xyl'
       is_fuc_partner = main_sugar[parent_idx+1] == 'Fuc'
       parent_branches = [(k, c) for k, c in enumerate(l1_connection) if c[1] == parent_idx]  # + 1 from main chain
       is_triple_branch = len(parent_branches) == 2 and j == parent_branches[0][0]
       # All other branches go up by spacing amount
       if len(branch_sugar) == 1 and branch_sugar[0] in ['Fuc', 'Xyl']:
         l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] + 2*SPACING
+      elif is_leading_xyl and j == 0:
+        l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] + SPACING
       elif len(branch_sugar) == 1 and (is_bisecting or is_fuc_partner or is_triple_branch):
         l1_y_pos[j][0] = main_sugar_y_pos[parent_idx]
       elif len(branch_sugar) == 1:

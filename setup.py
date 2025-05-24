@@ -25,7 +25,7 @@ setuptools.setup(
                       "statsmodels", "scipy", "seaborn", "xgboost", "bokeh",
                       "pandas>=1.3", "setuptools>=64.0", "IPython",
                       "huggingface_hub>=0.16.0", "drawSvg~=2.0", "Pillow",
-                            "openpyxl", "glycorender>=0.1.3"],
+                            "openpyxl", "glycorender>=0.1.5"],
     extras_require={'all':["torch_geometric", "torch",
                            "glyles", "pubchempy", "requests", "py3Dmol"],
                     'dev':["torch_geometric", "torch",

@@ -2787,6 +2787,8 @@ def test_glycodraw():
     # Test name recognition
     result = GlycoDraw("Terminal_LewisX", suppress=True)
     assert result is not None
+    result = GlycoDraw("DManpa1-3[DManpa1-6][DXylpb1-2]DManpb1-4DGlcpNAcb1-4[LFucpa1-3]DGlcpNAca1-OH", suppress=True)
+    assert result is not None
     # Test file saving
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.svg")
     assert Path("test.svg").exists()
