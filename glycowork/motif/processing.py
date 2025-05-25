@@ -18,6 +18,9 @@ with open(mapping_path) as f:
 mapping_path = Path(__file__).parent / "wurcs_tokens.json"
 with open(mapping_path) as f:
   monosaccharide_mapping = json.load(f)
+mapping_path = Path(__file__).parent / "backup_gids.json"
+with open(mapping_path) as f:
+  BACKUP_G_IDS = json.load(f)
 
 # for canonicalize_iupac
 replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
@@ -902,7 +905,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   elif bool(re.fullmatch(r'^[UDGIg][02][AaSH](0|3|4|6|9|10)$', glycan)):
     glycan = GAG_disaccharide_to_iupac(glycan)
   elif bool(re.match(r'^G\d+', glycan)):
-    glycan = glytoucan_to_glycan([glycan])[0]
+    glycan = glytoucan_to_glycan([BACKUP_G_IDS.get(glycan, glycan)])[0]
   elif not isinstance(glycan, str) or '@' in glycan:
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
