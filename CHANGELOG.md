@@ -161,3 +161,7 @@
 ##### Changed 🔄
 - `init_weights` will now raise a `ValueError` if the chosen initialization `mode` is not supported (9bf18f7)
 - `LectinOracle` will now use ESMC-300M representations, rather than ESM-1b (e302075)
+
+#### train_test_split
+##### Fixed 🐛
+- Fixed `class_list` order in  `prepare_multilabel` to ensure reproducibility (8119796)
