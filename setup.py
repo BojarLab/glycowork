@@ -22,7 +22,7 @@ setuptools.setup(
     ],
     python_requires='>=3.9',
     install_requires=["numpy", "matplotlib", "scikit-learn", "networkx>=3.0",
-                      "statsmodels", "scipy", "seaborn", "xgboost", "bokeh",
+                      "statsmodels", "scipy", "seaborn", "bokeh",
                       "pandas>=1.3", "setuptools>=64.0", "IPython",
                       "huggingface_hub>=0.16.0", "drawSvg~=2.0",
                             "openpyxl", "glycorender>=0.1.5"],
@@ -30,6 +30,6 @@ setuptools.setup(
                            "glyles", "pubchempy", "requests", "py3Dmol"],
                     'dev':["torch_geometric", "torch",
                            "glyles", "pubchempy", "requests", "py3Dmol", "pytest"],
-                    'ml':["torch_geometric", "torch"],
+                    'ml':["torch_geometric", "torch", "xgboost"],
                     'chem':["glyles", "pubchempy", "requests", "py3Dmol"]},
 )
