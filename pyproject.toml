@@ -13,7 +13,6 @@ authors = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent"
 ]
 requires-python = ">=3.9"
@@ -70,4 +69,12 @@ chem = [
 
 [tool.setuptools]
 include-package-data = true
-package-data = {"*" = ["*.csv", "*.pkl", "*.jpg", "*.pt", "*.json"]}
+# This is a workaround for https://github.com/astral-sh/uv/issues/9513
+license-files = []
+
+[tool.setuptools.packages.find]
+include = ["glycowork*"]
+exclude = ["index_files*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.csv", "*.pkl", "*.jpg", "*.pt", "*.json"]

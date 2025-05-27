@@ -24,7 +24,7 @@ setuptools.setup(
     install_requires=["numpy", "matplotlib", "scikit-learn", "networkx>=3.0",
                       "statsmodels", "scipy", "seaborn", "xgboost", "bokeh",
                       "pandas>=1.3", "setuptools>=64.0", "IPython",
-                      "huggingface_hub>=0.16.0", "drawSvg~=2.0", "Pillow",
+                      "huggingface_hub>=0.16.0", "drawSvg~=2.0",
                             "openpyxl", "glycorender>=0.1.5"],
     extras_require={'all':["torch_geometric", "torch",
                            "glyles", "pubchempy", "requests", "py3Dmol"],

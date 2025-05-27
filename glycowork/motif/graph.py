@@ -88,8 +88,7 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
                         ) -> nx.DiGraph: # NetworkX graph object of glycan
   "Convert glycans into networkx graphs"
   if isinstance(libr, dict):
-    libr = HashableDict(libr)  # Convert to HashableDict for consistency and user friendlyness
-  
+    libr = HashableDict(libr)  # Convert to HashableDict for consistency and user friendliness
   # This allows to make glycan graphs of motifs ending in a linkage
   cache = glycan.endswith(')')
   if cache:
@@ -195,7 +194,7 @@ def compare_glycans(glycan_a: Union[str, nx.DiGraph], # First glycan to compare
   if glycan_a == glycan_b:
     return ((True, {i: i for i in range(len(glycan_a.nodes))}) if return_matches else True) if isinstance(glycan_a, nx.DiGraph) else (True, None) if return_matches else True
   if isinstance(glycan_a, str) and isinstance(glycan_b, str):
-    if glycan_a.count("[") != glycan_b("[") or glycan_a.count('(') != glycan_b.count('('):
+    if glycan_a.count('(') != glycan_b.count('(') or glycan_a.count("[") != glycan_b.count("[") :
       return (False, None) if return_matches else False
     proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
     if 'O' in glycan_a or 'O' in glycan_b:
