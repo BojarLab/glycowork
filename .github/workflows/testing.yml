@@ -1,9 +1,6 @@
-# This is a basic workflow to help you get started with Actions
 name: Testing
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events to the main and dev branches
   push:
     branches:
       - main
@@ -14,9 +11,7 @@ on:
       - dev
   workflow_dispatch:  # make is manually start-able
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "test"
   test:
     runs-on: 'ubuntu-latest'
     steps:
@@ -24,11 +19,26 @@ jobs:
 
       - name: Setup Miniforge
         uses: conda-incubator/setup-miniconda@v3
+        id: setup-miniforge
+        continue-on-error: true
         with:
           python-version: '3.9'
           miniforge-version: latest
           activate-environment: MPP
           use-mamba: true
+          channels: conda-forge,defaults
+          channel-priority: strict
+
+      - name: Retry Setup Miniforge
+        uses: conda-incubator/setup-miniconda@v3
+        if: steps.setup-miniforge.outcome == 'failure'
+        with:
+          python-version: '3.9'
+          miniforge-version: latest
+          activate-environment: MPP
+          use-mamba: true
+          channels: conda-forge,defaults
+          channel-priority: strict
 
       - name: Install environment
         shell: bash -l {0}

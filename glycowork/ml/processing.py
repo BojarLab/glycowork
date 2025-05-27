@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Union
 from glycowork.motif.graph import glycan_to_nxGraph
 from glycowork.motif.tokenization import map_to_basic
 from glycowork.motif.processing import de_wildcard_glycoletter
-from glycowork.glycan_data.loader import lib
+from glycowork.glycan_data.loader import lib, HashableDict
 
 try:
   import torch
@@ -59,8 +59,8 @@ def dataset_to_graphs(glycan_list: List[str], # list of IUPAC-condensed glycan s
   "wrapper function to convert a whole list of glycans into a graph dataset"
   if libr is None:
     libr = lib
-  glycan_cache = {}
-  data = []
+  libr = HashableDict(libr)
+  glycan_cache, data = {}, []
   for glycan, label in zip(glycan_list, labels):
     if glycan not in glycan_cache:
         nx_graph = glycan_to_nxGraph(glycan, libr = libr)
@@ -90,8 +90,7 @@ def dataset_to_dataloader(glycan_list: List[str], # list of IUPAC-condensed glyc
   if libr is None:
     libr = lib
   # Converting glycans and labels to PyTorch Geometric Data objects
-  glycan_graphs = dataset_to_graphs(glycan_list, labels,
-                                    libr = libr, label_type = label_type)
+  glycan_graphs = dataset_to_graphs(glycan_list, labels, libr = libr, label_type = label_type)
   # Adding (optional) extra feature to the Data objects
   if extra_feature is not None:
     for graph, feature in zip(glycan_graphs, extra_feature):

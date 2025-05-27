@@ -33,9 +33,9 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          omega_squared, get_glycoform_diff, process_glm_results, partial_corr, estimate_technical_variance,
                                          perform_tests_monte_carlo)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
-from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, link_find, create_correlation_network,
+from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network, get_k_saccharides,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
-                                      create_lectin_and_motif_mappings, lectin_motif_scoring, clean_up_heatmap)
+                                      create_lectin_and_motif_mappings, lectin_motif_scoring, deduplicate_motifs)
 from glycowork.motif.graph import subgraph_isomorphism
 
 
@@ -45,7 +45,7 @@ def preprocess_data(
     group2: List[Union[str, int]], # Column indices/names for second group
     experiment: str = "diff", # Type of experiment: "diff" or "anova"
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     paired: bool = False, # Whether samples are paired
     impute: bool = True, # Replace zeros with Random Forest model
     min_samples: float = 0.1, # Min percent of non-zero samples required
@@ -76,12 +76,13 @@ def preprocess_data(
   if transform is None:
     transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
   if transform == "ALR":
-    df = get_additive_logratio_transformation(df, group1 if experiment == "diff" else df.columns[1:], group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
+    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
   elif transform == "CLR":
     if monte_carlo and not motifs:
       df = pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
                                                                  gamma = gamma, custom_scale = custom_scale)], axis = 1)
     else:
+      df.iloc[:, 1:] = df.iloc[:, 1:] + 0.0000001
       df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:], group2, gamma = gamma, custom_scale = custom_scale)
   elif transform == "Nothing":
     pass
@@ -108,7 +109,7 @@ def get_pvals_motifs(
     zscores: bool = True, # Whether data are z-scores
     thresh: float = 1.645, # Threshold to separate positive/negative
     sorting: bool = True, # Sort p-value dataframe
-    feature_set: List[str] = ['exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     multiple_samples: bool = False, # Multiple samples with glycan columns
     motifs: Optional[pd.DataFrame] = None, # Modified motif_list
     custom_motifs: List[str] = [] # Custom motifs if using 'custom' feature set
@@ -118,7 +119,6 @@ def get_pvals_motifs(
       df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
     # Reformat to allow for proper annotation in all samples
     if multiple_samples:
-      df = df.drop('target', axis = 1, errors = 'ignore').T.reset_index()
       df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
     if not zscores:
       means = df.iloc[:, 1:].mean()
@@ -126,13 +126,11 @@ def get_pvals_motifs(
       df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / (std_devs + 1e-6)
     # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
-                                motifs = motifs, feature_set = feature_set, condense = True,
-                                custom_motifs = custom_motifs)
+                                motifs = motifs, feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
     # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
       df = df.set_index(glycan_col_name)
-      df_motif = pd.concat([pd.concat([df.iloc[:, k],
-                                   df_motif], axis = 1).dropna() for k in range(len(df.columns))], axis = 0)
+      df_motif = pd.concat([pd.concat([df.iloc[:, k], df_motif], axis = 1).dropna() for k in range(len(df.columns))], axis = 0)
       cols = df_motif.columns.tolist()[1:] + [df_motif.columns.tolist()[0]]
       df_motif = df_motif[cols]
     else:
@@ -192,9 +190,9 @@ def get_representative_substructures(
 def get_heatmap(
     df: Union[pd.DataFrame, str, Path], # Input dataframe or filepath (.csv/.xlsx)
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     transform: str = '', # Transform data before plotting
-    datatype: str = 'response', # Data type: 'response' or 'presence'
+    datatype: str = 'response', # Data type: 'response' for quantitative values or 'presence' for presence/absence
     rarity_filter: float = 0.05, # Min proportion for non-zero values
     filepath: Union[str, Path] = '', # Path to save plot
     index_col: str = 'glycan', # Column to use as index
@@ -231,7 +229,7 @@ def get_heatmap(
       df_motif = df_motif.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df_motif.shape[0]), 1]), axis = 1)
       df = df_motif.T.fillna(0) @ df
       df = df.apply(lambda col: col / col.sum()).T
-      df = clean_up_heatmap(df.T)
+      df = deduplicate_motifs(df.T)
   df = df.dropna(axis = 1)
   if not (df < 0).any().any():
     df /= df.sum()
@@ -249,8 +247,7 @@ def get_heatmap(
   plt.ylabel('Glycans' if not motifs else 'Motifs')
   plt.tight_layout()
   if filepath and not return_plot:
-    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300,
-                bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
     plt.close(g.fig)
   elif return_plot:
     return g
@@ -275,9 +272,8 @@ def plot_embeddings(
       label_list = [label_list[i] for i in idx]
     # Get all glycan embeddings
     if emb is None:
-      if not Path('glycan_representations_v1_4.pkl').exists():
-          download_model("https://drive.google.com/file/d/1--tf0kyea9jFLfffUtICKkyIw36E9hJ3/view?usp=sharing", local_path = 'glycan_representations_v1_4.pkl')
-      emb = pickle.load(open('glycan_representations_v1_4.pkl', 'rb'))
+      model_path = download_model("glycan_representations.pkl")
+      emb = pickle.load(open(model_path, 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
     embs = emb.values if isinstance(emb, pd.DataFrame) else np.vstack([emb[g] for g in glycans])
     # Calculate t-SNE of embeddings
@@ -300,8 +296,7 @@ def plot_embeddings(
       plt.legend(bbox_to_anchor = (1.05, 1), loc = 2, borderaxespad = 0.)
     plt.tight_layout()
     if filepath:
-      plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300,
-                  bbox_inches = 'tight')
+      plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
     plt.show()
 
 
@@ -322,7 +317,7 @@ def characterize_monosaccharide(
   if rank is not None and focus is not None:
     df = df[df[rank] == focus]
   # Get all disaccharides for linkage analysis
-  pool_in = unwrap([link_find(k) for k in df[glycan_col_name]])
+  pool_in = unwrap(get_k_saccharides(df[glycan_col_name].tolist(), just_motifs = True))
   pool_in = [k.replace('(', '*').replace(')', '*') for k in pool_in]
   pool_in_split = [k.split('*') for k in pool_in]
   pool, sugars = [], []
@@ -386,8 +381,7 @@ def characterize_monosaccharide(
     if len(cou_k2) > 1:
       cou_df2 = pd.DataFrame({'monosaccharides': cou_k2, 'counts': cou_v2})
       sns.histplot(data = cou_df2, x = 'monosaccharides', weights = 'counts',
-                     hue = 'monosaccharides', shrink = 0.8, legend = False,
-                     ax = a0, palette = palette, alpha = 0.75)
+                     hue = 'monosaccharides', shrink = 0.8, legend = False, ax = a0, palette = palette, alpha = 0.75)
     else:
       sns.barplot(x = cou_k2, y = cou_v2, ax = a0, color = "cornflowerblue")
     sns.despine(left = True, bottom = True)
@@ -398,8 +392,7 @@ def characterize_monosaccharide(
   fig.suptitle(f'Characterizing {sugar}')
   fig.tight_layout()
   if filepath:
-    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300,
-                  bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
   plt.show()
 
 
@@ -427,7 +420,7 @@ def get_pca(
     df: Union[pd.DataFrame, str, Path], # DataFrame with glycans in rows (col 1), abundances in columns
     groups: Optional[Union[List[int], pd.DataFrame]] = None, # Group labels (e.g., [1,1,1,2,2,2,3,3,3]) or metadata DataFrame with 'id' column
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     pc_x: int = 1, # Principal component for x-axis
     pc_y: int = 2, # Principal component for y-axis
     color: Optional[str] = None, # Column in metadata for color grouping
@@ -468,8 +461,7 @@ def get_pca(
   ax = sns.scatterplot(x = pc_x-1, y = pc_y-1, data = df_pca, hue = color, style = shape)
   if color or shape:
     plt.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
-  ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
-           ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
+  ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance', ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
   # save to file
   if filepath:
     plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
@@ -517,7 +509,7 @@ def get_differential_expression(
     group1: List[Union[str, int]], # Column indices/names for first group
     group2: List[Union[str, int]], # Column indices/names for second group
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     paired: bool = False, # Whether samples are paired
     impute: bool = True, # Replace zeros with Random Forest model
     sets: bool = False, # Identify clusters of correlated glycans
@@ -705,8 +697,7 @@ def get_volcano(
       plt.text(x[i], y[i], labels[i])
   # Save to file
   if filepath:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
-                  bbox_inches = 'tight')
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
     if annotate_volcano:
       from glycowork.motif.draw import annotate_figure
       annotate_figure(filepath, filepath = filepath.split('.')[0]+'.pdf', scale_by_DE_res = df_res,
@@ -719,7 +710,7 @@ def get_glycanova(
     groups: List[Any], # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3])
     impute: bool = True, # Replace zeros with Random Forest model
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     min_samples: float = 0.1, # Min percent of non-zero samples required
     posthoc: bool = True, # Perform Tukey's HSD test post-hoc
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
@@ -825,8 +816,7 @@ def get_meta_analysis(
       ax.spines['right'].set_visible(False)
       ax.spines['top'].set_visible(False)
       plt.tight_layout()
-      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
-                    bbox_inches = 'tight')
+      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
     return combined_effect_size, p_value
 
 
@@ -858,7 +848,7 @@ def get_time_series(
     df: Union[pd.DataFrame, str, Path], # DataFrame with sample IDs as 'sampleID_timepoint_replicate' in col 1 (e.g., T1_h5_r1)
     impute: bool = True, # Replace zeros with Random Forest model
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     degree: int = 1, # Polynomial degree for regression
     min_samples: float = 0.1, # Min percent of non-zero samples required
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
@@ -913,7 +903,7 @@ def get_jtk(
    interval: int, # Time units between experimental timepoints
    periods: List[int] = [12, 24], # Timepoints per cycle to test
    motifs: bool = False, # Analyze motifs instead of sequences
-   feature_set: List[str] = ['known', 'exhaustive', 'terminal'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+   feature_set: List[str] = ['known', 'exhaustive', 'terminal'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
    custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
    transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
    gamma: float = 0.1, # Uncertainty parameter for CLR transform
@@ -962,7 +952,7 @@ def get_biodiversity(
     group2: List[Union[str, int]], # Second group indices or additional group labels
     metrics: List[str] = ['alpha', 'beta'], # Diversity metrics to calculate
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ['exhaustive', 'known'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
     paired: bool = False, # Whether samples are paired
     permutations: int = 999, # Number of permutations for ANOSIM/PERMANOVA
@@ -1040,7 +1030,7 @@ def get_SparCC(
     df1: Union[pd.DataFrame, str, Path], # First DataFrame with glycans in rows (col 1) and abundances in columns
     df2: Union[pd.DataFrame, str, Path], # Second DataFrame with same format as df1
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
     transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
@@ -1157,7 +1147,7 @@ def get_roc(
     group1: List[Union[str, int]], # First group indices/names
     group2: List[Union[str, int]], # Second group indices/names
     motifs: bool = False, # Analyze motifs instead of sequences
-    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive/known/terminal1/terminal2/terminal3/chemical/graph/custom/size_branch
+    feature_set: List[str] = ["known", "exhaustive"], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     paired: bool = False, # Whether samples are paired
     impute: bool = True, # Replace zeros with Random Forest model
     min_samples: float = 0.1, # Min percent of non-zero samples required
@@ -1323,12 +1313,10 @@ def get_glycoshift_per_site(
   df = df.reset_index()
   results = [
         clr_transformation(group_df[group1 + group2], group1, group2, gamma = gamma, custom_scale = custom_scale)
-        .assign(Glycosite = glycosite)
-        for glycosite, group_df in df.groupby('Glycosite')
+        .assign(Glycosite = glycosite) for glycosite, group_df in df.groupby('Glycosite')
     ]
   df = pd.concat(results, ignore_index = True)
   df = pd.concat([df, preserved_data.reset_index(drop = True)], axis = 1)
-  df_long = pd.melt(df, id_vars = ['Glycosite', 'Glycoform'] + glycan_features,
-                  var_name = 'Sample', value_name = 'Abundance')
+  df_long = pd.melt(df, id_vars = ['Glycosite', 'Glycoform'] + glycan_features, var_name = 'Sample', value_name = 'Abundance')
   df_long['Condition'] = df_long['Sample'].apply(lambda x: 0 if x in group1 else 1)
   return process_glm_results(df_long, alpha, glycan_features)

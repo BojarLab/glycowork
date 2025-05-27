@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from importlib import resources
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 import math
 try:
     import torch
@@ -53,8 +53,7 @@ def glycans_to_emb(glycans: List[str], # list of glycans in IUPAC-condensed
       libr = lib
     # Preparing dataset for PyTorch
     glycan_loader = dataset_to_dataloader(glycans, range(len(glycans)),
-                                          libr = libr, batch_size = batch_size,
-                                          shuffle = False)
+                                          libr = libr, batch_size = batch_size, shuffle = False)
     res = []
     model = model.eval()
     # Get predictions for each mini-batch
@@ -130,10 +129,9 @@ def get_lectin_preds(prot: str, # protein amino acid sequence
     with resources.files("glycowork.ml").joinpath("glycowork_lectinoracle_background_correction.csv").open(encoding = 'utf-8-sig') as f:
         correction_df = pd.read_csv(f)
   if prot_dic is None and not flex:
-    print("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
+    raise ValueError("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
   preds = unwrap(get_multi_pred(prot, glycans, model, prot_dic,
-                         batch_size = batch_size, libr = libr,
-                         flex = flex))
+                         batch_size = batch_size, libr = libr, flex = flex))
   df_pred = pd.DataFrame({'motif': glycans, 'pred': preds})
   if background_correction:
     correction_dict = {motif: pred for motif, pred in zip(correction_df['motif'], correction_df['pred'])}
@@ -146,31 +144,33 @@ def get_lectin_preds(prot: str, # protein amino acid sequence
   return df_pred
 
 
-def get_esm1b_representations(prots: List[str], # list of protein sequences to convert
-                            model: torch.nn.Module, # trained ESM1b model
-                            alphabet: Any # used for converting sequences
-                           ) -> Dict[str, List[float]]: # dict of protein sequence:ESM1b representation
-  "Retrieves ESM1b representations of protein for using them as input for LectinOracle"
-  # model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
-  batch_converter = alphabet.get_batch_converter()
+def get_esmc_representations(prots: List[str], # list of protein sequences to convert
+                            model: torch.nn.Module, # trained ESMC model
+                           ) -> Dict[str, List[float]]: # dict of protein sequence:ESMC-300M representation
+  "Retrieves ESMC-300M representations of protein for using them as input for LectinOracle"
+  #from esm.models.esmc import ESMC
+  #model = ESMC.from_pretrained("esmc_300m").to(device)
+  try:
+    from esm.sdk.api import ESMProtein, LogitsConfig
+    use_esm_api = True
+  except ImportError:
+    use_esm_api = False
+    # Only raise the error if we're not in a testing context
+    if not hasattr(model, 'encode') or not hasattr(model, 'logits'):
+      raise ImportError("<To use this function, you will need to install fair-esm, which is not a dependency of glycowork>")
+
+  def prot_to_ESMC(seq):
+    if use_esm_api:
+      protein_tensor = model.encode(ESMProtein(sequence = seq))
+      logits_output = model.logits(protein_tensor, LogitsConfig(sequence = True, return_embeddings = True))
+    else:
+      # For test scenarios with mock model
+      protein_tensor = model.encode(seq)
+      logits_output = model.logits(protein_tensor, None)
+    return torch.mean(logits_output.embeddings, dim = 1).squeeze().tolist()
+
   unique_prots = list(set(prots))
-  data_list = [
-        ('protein' + str(idx), prot[:min(len(prot), 1000)])
-        for idx, prot in enumerate(unique_prots)
-    ]
-  _, _, batch_tokens = batch_converter(data_list)
-  with torch.no_grad():
-      results = model(batch_tokens, repr_layers = [33], return_contacts = False)
-  token_representations = results["representations"][33]
-  sequence_representations = [
-        token_representations[i, 1:len(seq) + 1].mean(0)
-        for i, (_, seq) in enumerate(data_list)
-    ]
-  prot_dic = {
-        unique_prots[k]: s_rep.tolist()
-        for k, s_rep in enumerate(sequence_representations)
-    }
-  return prot_dic
+  return {p: prot_to_ESMC(p) for p in unique_prots}
 
 
 def get_Nsequon_preds(prots: List[str], # 20 AA + N + 20 AA sequences; replace missing with 'z'

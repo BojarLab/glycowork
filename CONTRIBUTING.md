@@ -63,11 +63,9 @@ pytest
 
 * Docs are automatically created from the notebooks in the nbs folder.
 
-## Wishlist for future glycowork updates (last update: 2025-02-13)
+## Wishlist for future glycowork updates (last update: 2025-03-25)
 
 ### Urgent
-
-* more, and more informative, error messages
 
 ### At some point
 
@@ -76,4 +74,4 @@ pytest
 * characterize_monosaccharide only factors in subsequent sequence context; make it possible (as an option) to also consider upstream sequence context
 * implement multiple sequence alignment and other substitution matrices
 * parallelize motif matching
-* refactor glycan graphs to be directed graphs & treat linkages as edges (would mean a *lot* of downstream fixes/refactoring)
+* refactor glycan graphs to treat linkages as edges (would mean a *lot* of downstream fixes/refactoring)

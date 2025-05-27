@@ -5,7 +5,7 @@ import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 from typing import Dict, List, Union, Optional, Callable
-from scipy.spatial.distance import cosine
+from scipy.spatial.distance import cosine, squareform
 from scipy.cluster.hierarchy import dendrogram, linkage
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -90,8 +90,7 @@ def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and t
   metric_funcs = {"Jaccard": jaccard}
   dist_func = metric_funcs.get(metric)
   if dist_func is None:
-    print("Not a defined metric. At the moment, only 'Jaccard' is available as a metric.")
-    return
+    raise ValueError("Not a defined metric. At the moment, only 'Jaccard' is available as a metric.")
   # Get all objects to calculate distance between
   value_counts = df[rank].value_counts()
   valid_ranks = value_counts.index[value_counts >= cut_off]
@@ -106,7 +105,7 @@ def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.
                           ) -> None: # Displays or saves dendrogram plot
   "Plot dendrogram from distance matrix"
   # Hierarchical clustering on the distance matrix
-  Z = linkage(dm)
+  Z = linkage(squareform(dm.values))
   plt.figure(figsize = (10, 10))
   plt.title('Hierarchical Clustering Dendrogram')
   plt.xlabel('Distance')

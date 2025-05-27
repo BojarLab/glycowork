@@ -1,54 +1,57 @@
-import numpy as np
 import pandas as pd
 import copy
+import json
 import re
 from random import choice
 from functools import wraps
 from collections import defaultdict
-from itertools import permutations, combinations
+from pathlib import Path
+from itertools import combinations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
-from glycowork.glycan_data.loader import (unwrap, multireplace,
+from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
-
-# for WURCS mapping
-monosaccharide_mapping = {
-    'a2122h-1b_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1a_1-5_2*NCC/3=O': 'GalNAc',
-    'a1122h-1b_1-5': 'Man', 'Aad21122h-2a_2-6_5*NCC/3=O': 'Neu5Ac',
-    'a1122h-1a_1-5': 'Man', 'a2112h-1b_1-5': 'Gal', 'Aad21122h-2a_2-6_5*NCCO/3=O': 'Neu5Gc',
-    'a2112h-1b_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS', 'a2112h-1b_1-5_2*NCC/3=O': 'GalNAc',
-    'a1221m-1a_1-5': 'Fuc', 'a2122h-1b_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6S', 'a212h-1b_1-5': 'Xyl',
-    'axxxxh-1b_1-5_2*NCC/3=O': 'HexNAc', 'a2122h-1x_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1x_1-5': 'Gal',
-    'Aad21122h-2a_2-6': 'Kdn', 'a2122h-1a_1-5_2*NCC/3=O': 'GlcNAc', 'a2112h-1a_1-5': 'Gal', 'a2112h-1a_1-5_2*N': 'GalN',
-    'a1122h-1x_1-5': 'Man', 'Aad21122h-2x_2-6_5*NCCO/3=O': 'Neu5Gc', 'Aad21122h-2x_2-6_5*NCC/3=O': 'Neu5Ac',
-    'a1221m-1x_1-5': 'Fuc', 'a212h-1x_1-5': 'Xyl', 'a122h-1x_1-5': 'Ara', 'a2122A-1b_1-5': 'GlcA', 'a1d22m-1a_1-5': 'Tyv',
-    'a2112h-1b_1-5_3*OC': 'Gal3Me', 'a1122h-1a_1-5_2*NCC/3=O': 'ManNAc', 'a2122h-1x_1-5': 'Glc', 'a2122x_2*NCC/3=O': 'QuiNAc',
-    'axxxxh-1x_1-5_2*NCC/3=O': 'HexNAc', 'axxxxh-1x_1-5': 'Hex', 'a2112h-1b_1-4': 'Galf', 'a2112h-1b_1-5_6*OSO/3=O/3=O': 'Gal6S',
-    'a2122h-1x_1-5_2*NCC/3=O_6*OSO/3=O/3=O': 'GlcNAc6S', 'a2112h-1x_1-5_2*NCC/3=O': 'GalNAc', 'a2212h-1b_1-5': 'Gul',
-    'axxxxh-1a_1-5_2*NCC/3=O': 'HexNAc', 'Aad21122h-2a_2-6_4*OCC/3=O_5*NCC/3=O': 'Neu4Ac5Ac',
-    'a2112h-1b_1-5_4*OSO/3=O/3=O': 'Gal4S', 'a2122h-1b_1-5_2*NCC/3=O_3*OSO/3=O/3=O': 'GlcNAc3S',
-    'a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O': 'GalNAc4S', 'a2122A-1x_1-5_?*OSO/3=O/3=O': 'GlcAOS',
-    'a2122A-1b_1-5_3*OSO/3=O/3=O': 'GlcA3S', 'a2211m-1x_1-5': 'Rha', 'a1122h-1b_1-5_2*NCC/3=O': 'ManNAc',
-    'a1122h-1x_1-5_6*PO/2O/2=O': 'Man6P', 'a1122h-1a_1-5_6*OSO/3=O/3=O': 'Man6S', 'a2112h-1x_1-5_2*NCC/3=O_?*OSO/3=O/3=O': 'GalNAcOS',
-    'a2121A-1a_1-5': 'IdoA', 'a2112A-1a_1-5': 'GalA', 'a211h-1a_1-4': 'Araf', 'a2d22m-1x_1-5': 'Par', 'a2112m-1a_1-5': 'D-Fuc',
-    'u2222h_2*NCC/3=O': 'AllNAc', 'a1d21m-1a_1-5': 'Col', 'Aad1122h-2a_2-6': 'Kdo', 'u2122h_2*N': 'GlcN', 'a2121h-1a_1-5': 'Ido'
-    }
+mapping_path = Path(__file__).parent / "common_names.json"
+with open(mapping_path) as f:
+  GLYCAN_MAPPINGS = json.load(f)
+mapping_path = Path(__file__).parent / "wurcs_tokens.json"
+with open(mapping_path) as f:
+  monosaccharide_mapping = json.load(f)
+mapping_path = Path(__file__).parent / "backup_gids.json"
+with open(mapping_path) as f:
+  BACKUP_G_IDS = json.load(f)
 
 # for canonicalize_iupac
-replace_dic = {'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
-                  'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',
-                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc',
-                 '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho',
-                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1',
-                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?'}
-CANONICALIZE = re.compile('|'.join(map(re.escape, list(replace_dic.keys()))))
+replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
+                  'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', 'Talp': 'Tal',
+                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara',
+                 '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn',
+                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul'}
+CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
+
+
+def rescue_glycans(func: Callable # Function to wrap
+                 ) -> Callable: # Wrapped function handling formatting issues
+  "Decorator for handling malformed glycan sequences"
+  @wraps(func)
+  def wrapper(*args, **kwargs):
+    try:
+      # Try running the original function
+      return func(*args, **kwargs)
+    except Exception:
+      # If an error occurs, attempt to rescue the glycan sequences
+      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
+      # After rescuing, attempt to run the function again
+      return func(*rescued_args, **kwargs)
+  return wrapper
 
 
 def min_process_glycans(glycan_list: List[str] # List of glycans in IUPAC-condensed format
                       ) -> List[List[str]]: # List of glycoletter lists
   "Convert list of glycans into a nested lists of glycoletters"
-  return [[x for x in multireplace(k, {'[': '', ']': '', '{': '', '}': '', ')': '('}).split('(') if x] for k in glycan_list]
+  return [k.replace('[', '').replace(']', '').replace('{', '').replace('}', '').replace(')', '(').split('(') for k in glycan_list]
 
 
 def get_lib(glycan_list: List[str] # List of IUPAC-condensed glycan sequences
@@ -125,78 +128,6 @@ def bracket_removal(glycan_part: str # Residual part of glycan from glycan_to_gr
   return glycan_part
 
 
-def find_isomorphs(glycan: str # Glycan in IUPAC-condensed format
-                 ) -> List[str]: # List of isomorphic glycan notations
-  "Returns a set of isomorphic glycans by swapping branches"
-  if '[' not in glycan or ']' not in glycan or glycan.index('[') == 0:
-    return [glycan]
-  floaty = False
-  if '{' in glycan:
-    floaty = glycan[:glycan.rindex('}')+1]
-    glycan = glycan[glycan.rindex('}')+1:]
-  out_list = {glycan}
-  # Starting branch swapped with next side branch
-  out_list.add(re.sub(r'^(.*?)\[((?:[^\[\]]|\[[^\[\]]*\])*)\]', r'\2[\1]', glycan, 1))
-  if not bool(re.search(r'\[[^\]]+\[', glycan[find_nth(glycan, ']', 2):])) and bool(re.search(r'\[[^\]]+\[', glycan[:find_nth(glycan, '[', 3)])):
-    out_list.add(re.sub(r'^(.*?)\[(.*?)(\])((?:[^\[\]]|\[[^\[\]]*\])*)\]', r'\2\3\4[\1]', glycan, 1))
-  # Swap nested side branches deep within the sequence
-  temp = set()
-  for k in out_list:
-    # Find side branch that contains another side branch
-    if bool(re.search(r'\[([^\[\]]*)\[([^\[\]]*)\]([^\[\]]*)\]', k)):
-      temp.add(re.sub(r'\[([^\[\]]*)\[([^\[\]]*)\]([^\[\]]*)\]', r'[\2[\1]\3]', k))
-  out_list.update(temp)
-  # Match main chain followed by a complete branched structure before the final residue
-  temp = set()
-  main_vs_branch = r'^((?:[^\[\]]|\[[^\[\]]*\])*?)\[((?:[^\[\]]|\[[^\[\]]*\])*?)\]([^\[\]]+)$'
-  for k in out_list:
-    if re.search(main_vs_branch, k):
-      temp.add(re.sub(main_vs_branch, r'\2[\1]\3', k))
-  out_list.update(temp)
-  temp = {re.sub(r'(.*Man\(a1-[36]\))\[(.*Man\(a1-[36]\))\](Man\(b1-4\).*)', r'\2[\1]\3', k) for k in out_list}
-  out_list.update(temp)
-  # Double branch swap
-  temp = {re.sub(r'(?<!\[)\[((?:[^[\]]|\[[^[\]]*\])*?)\]\[((?:[^[\]]|\[[^[\]]*\])*?)\]', r'[\2][\1]', k) for k in out_list if '][' in k}
-  out_list.update(temp)
-  temp = {re.sub(r'\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]',  r'[\2][\1]', k) for k in out_list if '][' in k}
-  out_list.update(temp)
-  temp = {re.sub(r'(.*)\[((?:[^[\]]|\[[^[\]]*\])*)\]\[((?:[^[\]]|\[[^[\]]*\])*)\]([A-Z][^[\]]*?)$', r'\1[\3][\2]\4', k) for k in out_list if '][' in k}
-  out_list.update(temp)
-  # Triple branch handling
-  temp = set()
-  for k in out_list:
-    if k.count('[') >= 3 and k.count('][') >= 2:
-      groups = re.finditer(r'((?:^[^[]+|^)\[[^[\]]*\]\[[^[\]]*\]\[[^[\]]*\](?=[A-Z]|$))', k)
-      for g in groups:
-        branch_section = g.group(1)
-        if not bool(re.search(r'\[[^\]]+\[', branch_section)):
-          m = re.search(r'^(.*?)\[(.*?)\]\[(.*?)\]\[(.*?)\]', branch_section)
-          if m:
-            main, b1, b2, b3 = m.groups()
-            branches = [main, b1, b2, b3]
-            # Generate all 24 permutations
-            for p in permutations(range(4)):
-              # First element is main chain (no brackets), rest get brackets
-              result = k[:g.start(1)] + branches[p[0]]
-              for idx in p[1:]:
-                result += f"[{branches[idx]}]"
-              result += k[g.end(1):]
-              temp.add(result)
-  out_list.update(temp)
-  temp = set()
-  # Starting branch swapped with next side branch again to also include double branch swapped isomorphs
-  for k in out_list:
-    if k.index(']') > k.index('['):
-      temp.add(re.sub(r'^(.*?)\[((?:[^\[\]]|\[[^\[\]]*\])*?)\]((?:\[[^\[\]]*\])*?)([A-Z][a-z0-9]*[A-Z]?[a-z0-9]*\([ab?][1-2]-[1-9?]\))', r'\2[\1]\3\4', k, 1))
-      if k.count('[') > 1 and k.index('[') > 0 and find_nth(k, '[', 2) > k.index(']') and (find_nth(k, ']', 2) < find_nth(k, '[', 3) or k.count('[') == 2):
-        temp.add(re.sub(r'^(.*?)\[(.*?)\](.*?)\[(.*?)\]', r'\4[\1[\2]\3]', k, 1))
-  out_list.update(temp)
-  out_list = {k for k in out_list if not any([j in k for j in ['[[', ']]']]) and k.index(']') > k.index('[')}
-  if floaty:
-    out_list = {floaty+k for k in out_list}
-  return list(out_list)
-
-
 def presence_to_matrix(df: pd.DataFrame, # DataFrame with glycan occurrence
                       glycan_col_name: str = 'glycan', # Column name for glycans
                       label_col_name: str = 'Species' # Column name for labels
@@ -231,157 +162,6 @@ def get_matching_indices(
     print(f"Unmatched opening delimiters at positions: {[p for p in stack]}")
 
 
-def choose_correct_isoform(glycans: Union[List[str], str], # Glycans in IUPAC-condensed nomenclature
-                         reverse: bool = False, # Return non-correct isomers instead
-                         order_by: str = 'length' # Order criterion for branches: 'length' or 'linkage'
-                        ) -> Union[str, List[str]]: # Correct isomer (str) or non-correct isomers (List[str])
-  "Given a list of glycan branch isomers, returns the correct isomer"
-  if isinstance(glycans, str):
-    glycans = find_isomorphs(glycans)
-  glycans = sorted(list(set(glycans)))
-  if '?' in ''.join(glycans) and not reverse:
-    min_questions = min(glycan.count('?') for glycan in glycans)
-    glycans = [glycan for glycan in glycans if glycan.count('?') == min_questions]
-  if len(glycans) == 1 or not any(['[' in g for g in glycans]):
-    return [] if reverse else sorted(glycans, key = lambda x: x.count('x'))[0]
-  floaty = False
-  if '{' in glycans[0]:
-    floaty = glycans[0][:glycans[0].rindex('}')+1]
-    glycans = [k[k.rindex('}')+1:] for k in glycans]
-  if order_by == 'length':
-    # Heuristic: main chain should contain the most monosaccharides of all chains
-    mains = [bracket_removal(g).count('(') for g in glycans]
-    max_mains = max(mains)
-    glycans2 = [g for k, g in enumerate(glycans) if mains[k] == max_mains]
-  else:  # order_by == 'linkage'
-    glycans2 = glycans.copy()
-
-  def is_special_single_branch(branch: str) -> bool:
-    """Check if a single-monosaccharide branch contains GlcNAc(b1-4) or Xyl(b1-2)"""
-    return branch.count('(') == 1 and ('GlcNAc(b1-4)' in branch or 'Xyl(b1-2)' in branch)
-
-  def compare_branches(branch1: str, branch2: str, use_linkage: bool = False) -> bool:
-    """Compare two branches and return True if they're in wrong order.
-        use_linkage=True forces linkage-based comparison regardless of branch types."""
-    count1, count2 = branch1.count('('), branch2.count('(')
-    pos1 = int(branch1[-2] if branch1[-2].isdigit() else '9')
-    pos2 = int(branch2[-2] if branch2[-2].isdigit() else '9')
-    if use_linkage:
-      return pos1 > pos2
-    # If either branch is a single monosaccharide
-    if count1 == 1 or count2 == 1:
-      # If either is a special single branch, use linkage ordering
-      if is_special_single_branch(branch1) or is_special_single_branch(branch2):
-        return pos1 > pos2
-      # Non-special single branches: use length ordering
-      return (count1 < count2) or (count1 == count2 and pos1 > pos2)
-    # Neither is single monosaccharide: use linkage ordering
-    return pos1 > pos2
-
-  def kill_noncanonical(glycans):
-    kill_list = set()
-    for g in glycans:
-      paren_counts = [0]  # Stack of counts for each nesting level
-      current_count = 0
-      for c in g:
-        if c == '(':
-          current_count += 1
-          paren_counts[-1] = current_count  # Update current level's count
-        elif c == '[':
-          paren_counts.append(0)  # Start new branch level
-          current_count = 0  # Reset for new branch
-        elif c == ']':
-          if current_count > paren_counts[-2]:  # Compare with parent branch
-            kill_list.add(g)
-          current_count = paren_counts[-2]  # Return to parent branch's count
-          paren_counts.pop()  # Remove current branch level
-      if '][' in g:
-        if any(sum(1 for c in left if c == '(') < sum(1 for c in right if c == '(') for match in re.finditer(r'\[([^\[\]]*)\]\[([^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*)\]', g) if (left := match.group(1)) and (right := match.group(2))):
-          kill_list.add(g)
-    return [g for g in glycans if g not in kill_list]
-
-  # Handle neighboring branches
-  kill_list = set()
-  for g in glycans2:
-    if '][' in g:
-      # First try triple branches
-      triple_match = re.search(r'\[([^[\]]+)\]\[([^[\]]+)\]\[([^[\]]+)\]', g)
-      if triple_match:
-        branches = list(triple_match.groups())
-        if order_by == 'length':
-          counts = [m.count('(') for m in branches]
-          positions = [int(m[-2]) if m[-2].isdigit() else 9 for m in branches]
-          # Check if branches are not in descending order by length
-          for i in range(len(counts)-1):
-            if counts[i] < counts[i+1]:
-              kill_list.add(g)
-              break
-            # If equal lengths, check positions
-            elif counts[i] == counts[i+1] and positions[i] > positions[i+1]:
-              kill_list.add(g)
-              break
-        else:  # order_by == 'linkage'
-          for i in range(len(branches)-1):
-            if compare_branches(branches[i], branches[i+1]):
-              kill_list.add(g)
-              break
-      else:  # Fall back to pair checking
-        pair_match = re.search(r'\[([^[\]]+)\]\[([^[\]]+)\]', g)
-        if pair_match:
-          branch1, branch2 = pair_match.group(1), pair_match.group(2)
-          if order_by == 'length':
-            count1, count2 = branch1.count('('), branch2.count('(')
-            pos1 = int(branch1[-2] if branch1[-2].isdigit() else '9')
-            pos2 = int(branch2[-2] if branch2[-2].isdigit() else '9')
-            if count1 < count2:
-              kill_list.add(g)
-            elif count1 == count2 and pos1 > pos2:
-              kill_list.add(g)
-          else:  # order_by == 'linkage'
-            if compare_branches(branch1, branch2):
-              kill_list.add(g)
-  if order_by == "linkage":
-    for g in glycans2:
-      if g[:g.index('[')].count('(') == 1 and g[g.index('['):g.index(']')].count('(') > 1 and g.count('[') > 1 and g.startswith('F'):
-        kill_list.add(g)
-      if pair_match := re.search(r'\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]\[((?:[^[\]]|\[(?:[^[\]]|\[[^[\]]*\])*\])*)\]', g):
-        if compare_branches(pair_match.group(1), pair_match.group(2)):
-          kill_list.add(g)
-  glycans2 = [k for k in glycans2 if k not in kill_list]
-  # Choose the isoform with the longest main chain before the branch & or the branch ending in the smallest number if all lengths are equal
-  if len(glycans2) > 1:
-    candidates = {k: list(get_matching_indices(k, '[', ']')) for k in glycans2}
-    prefix = [min_process_glycans([k[j[0]:j[1]] for j in v]) for k, v in candidates.items()]
-    prefix = [np.argmax([len(j) for j in k]) for k in prefix]
-    prefix = [k[:candidates[k][prefix[i]][0]] for i, k in enumerate(candidates.keys())]
-    prefix = [k[:k.rfind('[')] if k.endswith('][') else k for k in prefix]
-    for i, p in enumerate(prefix):
-      if p.endswith(']'):
-        prefix[i] = p[:p.rfind('[')]
-    prefix_proc = min_process_glycans(prefix)
-    branch_endings = [k[-1][-1] if k[-1][-1].isdigit() else 10 for k in prefix_proc]
-    if len(set(branch_endings)) == 1:
-      branch_endings = [k[k.index('[')-2] if k[k.index('[')-2].isdigit() else 10 for k in prefix] if ']' in prefix[0] else [ord(k[0][0]) for k in prefix_proc]
-    branch_endings = [int(k) for k in branch_endings]
-    min_ending = min(branch_endings)
-    glycans2 = [g for k, g in enumerate(glycans2) if branch_endings[k] == min_ending]
-    if len(glycans2) > 1:
-      glycans2 = kill_noncanonical(glycans2) or glycans2 if order_by == "length" else glycans2
-      correct_isoform = sorted(glycans2, key = lambda x: sum((10 if num == '?' else int(num)) * (len(re.findall(r'(\d+|\?)\)[\[\]]', x))-i) \
-                                                           for i, num in enumerate(re.findall(r'(\d+|\?)\)[\[\]]', x))))[0] # take the one with lowest sum of num)[ and num)]
-    else:
-      correct_isoform = glycans2[0]
-  else:
-    correct_isoform = glycans2[0]
-  if floaty:
-    correct_isoform = floaty + correct_isoform
-  if reverse:
-    if correct_isoform in glycans:
-      glycans.remove(correct_isoform)
-    correct_isoform = glycans
-  return correct_isoform
-
-
 def enforce_class(glycan: str, # Glycan in IUPAC-condensed nomenclature
                  glycan_class: str, # Glycan class (O, N, free, or lipid)
                  conf: Optional[float] = None, # Prediction confidence to override class
@@ -404,13 +184,15 @@ def enforce_class(glycan: str, # Glycan in IUPAC-condensed nomenclature
 
 
 def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
-            ) -> str: # Glycan class (O, N, free, lipid, lipid/free, or empty)
+            ) -> str: # Glycan class (repeat, O, N, free, lipid, lipid/free, or empty)
   "Determines glycan class"
+  if glycan.startswith('['):
+    return 'repeat'
   if glycan.endswith('-ol'):
     return 'free'
   if glycan.endswith(('1Cer', 'Ins')):
     return 'lipid'
-  if glycan.endswith(('GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc')):
+  if glycan.endswith(('GlcNAc(b1-4)GlcNAc', '[Fuc(a1-6)]GlcNAc', '[Fuc(a1-3)]GlcNAc')):
     return 'N'
   if re.search(r'(GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S)$', glycan):
     return 'O'
@@ -468,7 +250,7 @@ def canonicalize_composition(comp: str # Composition in Hex5HexNAc4Fuc1Neu5Ac2 o
   return comp_dict
 
 
-def IUPAC_to_SMILES(glycan_list: List[str] # List of IUPAC-condensed glycans
+def IUPAC_to_SMILES(glycan_list: Union[str, List[str]] # List of IUPAC-condensed glycans or single glycan
                    ) -> List[str]: # List of corresponding SMILES strings
   "Convert list of IUPAC-condensed glycans to isomeric SMILES using GlyLES"
   try:
@@ -476,8 +258,14 @@ def IUPAC_to_SMILES(glycan_list: List[str] # List of IUPAC-condensed glycans
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
   if not isinstance(glycan_list, list):
-    raise TypeError("Input must be a list")
-  return [convert(g)[0][1] for g in glycan_list]
+    glycan_list = [glycan_list]
+  res = [convert(g)[0][1] for g in glycan_list]
+  if len(res) == 1 and res[0] == '':
+    return [convert(canonicalize_iupac(g))[0][1] for g in glycan_list]
+  return res
+
+
+iupac_to_smiles = IUPAC_to_SMILES
 
 
 def linearcode_to_iupac(linearcode: str # Glycan in LinearCode format
@@ -487,6 +275,13 @@ def linearcode_to_iupac(linearcode: str # Glycan in LinearCode format
                  'GalN': 'GalNAc', 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
                  'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac'}
   return multireplace(linearcode.split(';')[0], replace_dic)
+
+
+def linearcode1d_to_iupac(linearcode: str # Glycan in LinearCode-1D format
+                      ) -> str: # Basic IUPAC-condensed format
+  replace_dic = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a', 'X': 'Xyl(b', 'F': 'Fuc(a', 'L': 'GlcA(b'}
+  glycan = multireplace(linearcode[::-1], replace_dic)
+  return '('.join(re.sub(r'([a-zA-Z])(\d)(\d)', r'\1\2-\3)', glycan).replace("Man(a1-4)GlcNAc", "Man(b1-4)GlcNAc").split('(')[:-1])
 
 
 def iupac_extended_to_condensed(iupac_extended: str # Glycan in IUPAC-extended format
@@ -515,6 +310,7 @@ def glycoct_to_iupac_int(glycoct: str, # GlycoCT format string
   residue_dic = {}
   iupac_parts = defaultdict(list)
   degrees = defaultdict(lambda:1)
+  glycoct = glycoct.replace("S1b:", "S\n1b:")
   for line in glycoct.split('\n'):
     if len(line) < 1:
       continue
@@ -641,20 +437,23 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
 def get_mono(token: str # WURCS monosaccharide token
            ) -> str: # Monosaccharide with anomeric state
   "Map WURCS token to monosaccharide with anomeric state"
-  token = 'a' + token[1:].replace('h', 'h-1x_1-5', 1) if token.startswith('u') else token
-  anomer = token[token.index('_')-1]
+  hex_or_dhex = 'h' if 'h' in token else 'm'
+  token = 'a' + token[1:].replace(hex_or_dhex, f'{hex_or_dhex}-1x_1-5', 1) if token.startswith('u') else token
+  token = f"{token.replace('U', 'a')}-2x_2-6" if 'U' in token else token
+  anomer = token[token.index('_')-1] if '_' in token else ''
   if token in monosaccharide_mapping:
     mono = monosaccharide_mapping[token]
   else:
+    mono = monosaccharide_mapping.get(f"{token}-1x_1-5", None)
     for a in ['a', 'b', 'x']:
-      if a != anomer:
+      if anomer and a != anomer:
         token = token[:token.index('_')-1] + a + token[token.index('_'):]
         mono = monosaccharide_mapping.get(token, None)
         if mono:
           break
     if not mono:
       raise Exception(f"Token {token} not recognized.")
-  mono += anomer if anomer in ['a', 'b'] else '?'
+  mono += anomer if anomer and anomer in ['a', 'b'] else '?'
   return mono
 
 
@@ -673,12 +472,13 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
   wurcs = re.sub(pattern, replacement, wurcs)
   wurcs = re.sub(additional_pattern, '?', wurcs)
+  wurcs = re.sub(r'([a-z][\d\?])\*OPO\*\/3O\/3\=O', r'\1P', wurcs)  # phospho-linkages
   floating_part, floating_parts = '', []
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
   monosaccharides = '/'.join(parts[1:-2]).strip('[]').split('][')
   connectivity = parts[-2].split('-')
-  connectivity = {chr(97 + i): int(num) for i, num in enumerate(connectivity)}
+  connectivity = {chr(97 + i) if i < 26 else chr(65 + i - 26): int(num) for i, num in enumerate(connectivity)}
   degrees = {c: ''.join(topology).count(c) for c in connectivity}
   inverted_connectivity, iupac_parts = {}, []
   for link in topology:
@@ -744,26 +544,104 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
       if balance < 0:
         return s[:i] + s[i + 1:]
     return s
-  return remove_first_unmatched_opening_bracket(iupac)
+  iupac = remove_first_unmatched_opening_bracket(iupac)
+  return re.sub(r'(\d)([P])\-', r'\1-\2-', iupac)
 
 
 def oxford_to_iupac(oxford: str # Glycan in Oxford format
                    ) -> str: # Glycan in IUPAC-condensed format
   "Convert glycan from Oxford to IUPAC-condensed format"
-  oxford = re.sub(r'\([^)]*\)', '', oxford).strip().split('/')[0]
+
+  def parse_sialic_acid_bonds(glycan_string):
+      "Extracts sialic acids and their linkages from the Oxford string"
+      result = []
+      pattern = r'(Sg?(?:)?)(\d*)((?:[\[\(][^\]\)]+[\]\)])*)?(\d*)'
+      for match in re.finditer(pattern, glycan_string):
+          residue = match.group(1)
+          linkages = match.group(3) or ""
+          count = int(match.group(4) or match.group(2) or 1)
+          bonds = []
+          for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', linkages):
+              if len(bonds) >= count: break
+              if 'Ac' in bracket.group(1):
+                residue = residue+'Ac'
+                nums = [int(x.strip()) for x in str(bracket.group(1)).split(',') if x!='Ac']
+              else:
+                nums = [int(x.strip()) for x in bracket.group(1).split(',')]
+              if 2 in nums:
+                  for i, n in enumerate(nums):
+                      if n == 2 and i+1 < len(nums):
+                          bonds.append(f"{nums[i+1]}")
+                      elif i > 0 and nums[i-1] != 2 and i+1 < len(nums) and nums[i+1] == 2:
+                          bonds.append(f"{n}")
+              else:
+                  bonds.extend(f"{n}" for n in nums if n in [3, 6, 8])
+          out_res = {'S':'Neu5Ac','Sg':'Neu5Gc','SAc':'Neu5AcOAc','SgAc':'Neu5GcOAc'}[residue]
+          bonds = bonds + ["3/6"] * (count - len(bonds))
+          for bond in bonds:
+              result.append(f"{out_res}(a2-{bond})")
+      return result
+
+  def parse_galactose_info(sequence):
+      "Extracts antennary galactose residues and their linkages from the Oxford string"
+      pattern = r'(?<!S)G(?![a-z])(?:\(([^)]+)\))?(?:\[[^\]]+\])?(\d*)(?:\(([^)]+)\))?'
+      match = re.search(pattern, sequence)
+      if match:
+          bond_str = match.group(1) or match.group(3)
+          count = int(match.group(2)) if match.group(2) else 1
+          if bond_str:
+              bonds = [f'Gal(b1-{x.strip()})' for x in bond_str.split(',')]
+              return bonds + ['Gal(b1-3/4)'] * (count - len(bonds))
+          else:
+              return ['Gal(b1-3/4)' for x in range(count)]
+      else:
+          return []
+
+  def balance_mannose_branch_linkages(iupac, antenna_number=None):
+    """
+    Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6.
+    If antenna_number is provided, assigns that number to the longest branch.
+    Args:
+        iupac: IUPAC string notation
+        antenna_number: Optional preferred antenna number (3 or 6)
+    """
+    pattern = r'^(.*?)((?:\[[^\]]*\])?)(Man\(a1-3\))\[(.*?)(Man\(a1-6\))\](\[[^\]]*\])*(Man\(b1-4\))'
+    match = re.search(pattern, iupac)
+    if match:
+        prefix = match.group(1)
+        bracket_before_a1_3 = match.group(2)
+        branch_a1_3_content = re.split(r'[\[\]]', prefix)[-1] + bracket_before_a1_3
+        branch_a1_6_content = match.group(4)
+
+        if branch_a1_3_content != branch_a1_6_content:
+            if antenna_number is None:
+                iupac = prefix + bracket_before_a1_3 + 'Man(a1-3/6)' + '[' + match.group(4) + 'Man(a1-3/6)' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
+            elif antenna_number:
+                antenna_number = int(antenna_number)
+                long_num, short_num = (6, 3) if (len(branch_a1_3_content) >= len(branch_a1_6_content)) ^ (antenna_number == 3) else (3, 6)
+                iupac = prefix + bracket_before_a1_3 + f'Man(a1-{long_num})' + '[' + match.group(4) + f'Man(a1-{short_num})' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
+    return iupac
+
+  match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
+  if match:
+    oxford = f'M{match.group(1)}'
+  oxford = oxford.replace("(s)", "Sulf")
+  oxford = oxford.strip().split('/')[0]
   antennae = {}
   iupac = "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-  mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-?)", "S": "Neu5Ac(a2-?)",
-                  "Sg": "Neu5Gc(a2-?)", "Ga": "Gal(a1-?)", "GalNAc": "GalNAc(?1-?)",
-                  "Lac": "Gal(b1-?)GlcNAc(b1-?)", "F": "Fuc(a1-?)", "LacDiNAc": "GalNAc(b1-4)GlcNAc(b1-?)"}
+  mapping_dict = {"A": "GlcNAc(b1-?)", "G": "Gal(b1-3/4)", "S": "Neu5Ac(a2-3/6)",
+                  "Sg": "Neu5Gc(a2-3/6)", "Ga": "Gal(a1-?)", "Gal": "Gal(?1-?)", "GalNAc": "GalNAc(?1-?)",
+                  "Lac": "Gal(b1-3/4)GlcNAc(b1-?)", "F": "Fuc(a1-3/4)", "LacDiNAc": "GalNAc(b1-4)GlcNAc(b1-?)"}
   hardcoded = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
-               "M4": "Man(a1-?)Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M4": "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M9": "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M9Gluc1": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M10": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M11": "Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M12": "Glc(a1-2)Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"}
   if oxford in hardcoded:
     return hardcoded[oxford]
+  oxford = oxford.replace("[SO4-2]", "Sulf")
   if "Sulf" in oxford:
     sulf = oxford[oxford.index("Sulf")+4]
     sulf = int(sulf) if sulf.isdigit() else 1
@@ -789,22 +667,20 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     for m in range(M_count):
       floaty += "{Man(a1-?)}"
   oxford_wo_branches = bracket_removal(oxford)
-  branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A")+1] != "c" else 0,
-              "G": int(oxford_wo_branches[oxford_wo_branches.index("G")+1]) if "G" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("G")+1] != "a" else 0,
-              "S": int(oxford_wo_branches[oxford_wo_branches.index("S")+1]) if "S" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("S")+1] != "g" else 0}
-  extras = {"Sg": int(oxford_wo_branches[oxford_wo_branches.index("Sg")+2]) if "Sg" in oxford_wo_branches else 0,
-            "Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches else 0,
+  branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A")+1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A")+1] != "c" else 0}
+  extras = {"Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga")+2]) if "Ga" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Ga")+2].isdigit() else 0,
+            "Gal": int(oxford_wo_branches[oxford_wo_branches.index("Gal")+3]) if "Gal" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Gal")+3].isdigit() else 0,
             "Lac": int(oxford_wo_branches[oxford_wo_branches.index("Lac")+3]) if "Lac" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Lac")+3] != "D" else 0,
             "LacDiNAc": 1 if "LacDiN" in oxford_wo_branches else 0}
-  specified_linkages = {'Neu5Ac(a2-?)': oxford[oxford.index("S")+2:] if branches['S'] else []}
-  specified_linkages = {k: [int(n) for n in v[:v.index(']')].split(',')] for k, v in specified_linkages.items() if v}
+  branches['G'] = parse_galactose_info(oxford)
+  branches['S'] = parse_sialic_acid_bonds(oxford)
+  branches['A'] = ['GlcNAc(b1-?)' for x in range(branches['A'])]
   built_branches = []
-  while sum(branches.values()) > 0:
+  while sum([len(x) for x in branches.values()]) > 0:
     temp = ''
     for c in ["S", "G", "A"]:
-      if branches[c] > 0:
-        temp += mapping_dict[c]
-        branches[c] -= 1
+      if len(branches[c]) > 0:
+        temp += branches[c].pop(0)
     if temp:
       built_branches.append(temp)
   i = 0
@@ -834,18 +710,14 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   if antennae:
     for k, v in antennae.items():
       while v > 0:
-        if "Gal(b1-?)Glc" in iupac:
-          split = iupac.index("Gal(b1-?)Glc")
-          iupac = iupac[:split+len("Gal(b1-?)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-?)"):]
+        if "Gal(b1-3/4)Glc" in iupac:
+          split = iupac.index("Gal(b1-3/4)Glc")
+          iupac = iupac[:split+len("Gal(b1-3/4)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("Gal(b1-3/4)"):]
         else:
           split =  iupac.index("GalNAc(b1-4)Glc")
           iupac = iupac[:split+len("GalNAc(b1-4)")] + "[" + mapping_dict[k] + "]" + iupac[split+len("GalNAc(b1-4)"):]
         v -= 1
-  iupac = iupac.replace("GlcNAc(b1-?)[Neu5Ac(a2-?)]Man", "[Neu5Ac(a2-?)]GlcNAc(b1-?)Man")
-  for k, v in specified_linkages.items():
-    if v:
-      for vv in v:
-        iupac = iupac.replace(k, k[:-2]+str(vv)+')', 1)
+  iupac = iupac.replace("GlcNAc(b1-?)[Neu5Ac(a2-3/6)]Man", "[Neu5Ac(a2-3/6)]GlcNAc(b1-?)Man")
   while "Neu5Ac(a2-8)G" in iupac:
     iupac = iupac.replace("Neu5Ac(a2-8)G", "G", 1)
     idx = [m.start() for m in re.finditer(r'(?<!8\))Neu5Ac\(a2-[3|6|\?]\)', iupac)][0]
@@ -857,22 +729,34 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   while sulf > 0:
     iupac = iupac.replace("Gal(", "GalOS(", 1)
     sulf -= 1
+  iupac = iupac.replace("GlcNAc(b1-?)Man", "GlcNAc(b1-2)Man")
+  antenna_number = match.group(2) if (match := re.search(r'A\d+(B)?\[([36])\]', oxford)) else None
+  iupac = balance_mannose_branch_linkages(iupac,antenna_number)
   return floaty + iupac.strip('[]')
 
 
 def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
                     ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from GLYCAM to IUPAC-condensed format"
-  pattern = r'(?:[DL])|(?:\[(\d+[SP]+)\])'
-  glycan = '-'.join(glycan.split('-')[:-1])[:-2]
-  glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan)
+  pattern = r'(?:^[DL]|(?<=\d)[DL]|(?<=[\[\]])[DL])|(?:\[(\d+[SPCMeA\d]+)\])'
+  glycan = '-'.join(glycan.split('-')[:-1])[:-2] if '-OH' in glycan else glycan
+  glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan.replace(',', ''))
   return glycan.replace('[', '(').replace(']', ')')
 
 
 def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
                             ) -> str: # Basic IUPAC-condensed format
-  """Convert GlycoWorkbench nomenclature to IUPAC-condensed format."""
-  glycan = glycan.replace('D-', '').replace('L-', '')  # Remove D- and L- prefixes
+  """Convert GlycoWorkBench nomenclature to IUPAC-condensed format."""
+  glycan = glycan.replace('D-', '').replace('L-', '').replace("--?[", '')  # Remove D- and L- prefixes
+  repeat_pattern = r'--(\d+)\[(.*?)\]'
+  main_part = glycan.split('$MONO')[0]
+  while re.search(repeat_pattern, main_part):
+    match = re.search(repeat_pattern, main_part)
+    repeat_count = int(match.group(1))
+    repeat_unit = match.group(2)
+    expanded = repeat_unit * repeat_count
+    main_part = main_part[:match.start()] + expanded + main_part[match.end():]
+  glycan = (main_part + glycan[glycan.index('$MONO'):] if '$MONO' in glycan else main_part).replace("--?]", '')
   # Handle floating parts if present
   floaty_parts = []
   if '}' in glycan:
@@ -888,22 +772,75 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
       processed_monos = [f"{x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})".strip('-') for x in new_float.split('--') if x]
       floaty_parts.append(''.join(processed_monos[::-1]))
   # Process main glycan structure
-  split_monos = [x for x in glycan.split('$MONO')[0].split('--')[1:]]
-  split_monos[-1] = split_monos[-1] + ',p'
+  split_monos = [x for x in glycan.split('$MONO')[0].split('--')[1:] if x != '?']
+  if ',' not in split_monos[-1]:
+    split_monos[-1] = split_monos[-1] + ',p'
   # Convert monosaccharides to IUPAC format
-  converted_monos = [f"{x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})"+"".join(re.findall("[()]+", y)).replace("(","]").replace(")","[") for x, y in zip(split_monos, glycan.split('--'))]
+  converted_monos = [f"{x[1:]}(?1-?)" if re.match(r"^\?[A-Z]", x) else
+                     f"{x.split(',')[0][3:]}{'f' if ',f' in x else ''}({x[1]}{x[2]}-{x[0]})" +
+                     "".join(re.findall("[()]+", y)).replace("(","]").replace(")","[")
+                     for x, y in zip(split_monos, glycan.split('--'))]
   converted_glycan = ''.join(converted_monos[::-1])
   # Fix double branch notation if present
   if ']]' in converted_glycan:
     double_brack_idx = converted_glycan.index(']]')
-    branch_str = converted_glycan[:double_brack_idx+2]
+    branch_str = converted_glycan[:double_brack_idx + 2]
     second_brack_end = [(m.start(0), m.end(0)) for m in re.finditer(re.escape('['), branch_str)][-1][0]
     converted_glycan = branch_str[:second_brack_end] + ']' + branch_str[second_brack_end:-1] + converted_glycan[double_brack_idx+2:]
   if floaty_parts:  # Add floating parts to final structure
     converted_glycan = ''.join(f"{{{part}}}" for part in floaty_parts) + converted_glycan
-  converted_glycan = re.sub(r'([SP])[\)\(]*\?1-\?\)\[(.*?)\]([^(]+)', r'\2\3O\1', converted_glycan)  # O-sulfate/phosphate case
-  converted_glycan = re.sub(r'([SP])[\)\(]*\?1-(\d)\)\[(.*?)\]([^(]+)', r'\3\4\2\1', converted_glycan)  # numbered sulfate/phosphate
+  converted_glycan = converted_glycan.replace('((', '(').replace('))', ')').replace(')(', '(')
+  converted_glycan = re.sub(r'([SP])[\)\(]*\?1-([\?\d])\)\[(.*?)\]([^(]+)', r'\3\4\2\1', converted_glycan)  # sulfate/phosphate with intervening branch
+  converted_glycan = re.sub(r'\[([SP])[\)\(]*\?1-([\?\d])\)([^(]+)', r'[\3\2\1', converted_glycan)  # sulfate/phosphate
+  converted_glycan = converted_glycan.replace('((', '(').replace('))', ')')
   return f"{converted_glycan[:-6]}-ol" if 'freeEnd' in glycan else converted_glycan[:-6]
+
+
+def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
+                       revert: bool = False # Whether to map glycans to IDs; default:False
+                      ) -> List[str]: # List of glycans or IDs
+  "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
+  if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
+    glytoucan_to_glycan.glycan_dict = dict(zip(df_glycan.glytoucan_id, df_glycan.glycan))
+    glytoucan_to_glycan.id_dict = dict(zip(df_glycan.glycan, df_glycan.glytoucan_id))
+  lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
+  result , not_found = [], []
+  for item in ids:
+    if item in lookup:
+      result.append(lookup[item])
+    else:
+      result.append(item)
+      not_found.append(item)
+  # Print missing items if any
+  if not_found:
+    msg = 'glycans' if revert else 'IDs'
+    print(f'These {msg} are not in our database: {not_found}')
+  return result
+
+
+def GAG_disaccharide_to_iupac(input_dsc: str # Disaccharide structural code (DSC) for GAGs
+                             ) -> str: # Basic IUPAC-condensed format
+  "Convert disaccharide GAG codes like D2A6 into 4uHexA2S(?1-?)GlcNAc6S"
+  non_red_end_map = {'U': 'HexA', 'D': '4uHexA', 'G': 'GlcA', 'I': 'IdoA', 'g': 'Gal'}
+  non_red_end_sulf = {'0': '', '2': '2S'}
+  hexosamine_map = {'A': 'GlcNAc', 'a': 'GalNAc', 'S': 'GlcNS', 'H': 'GlcN'}
+  hexosamine_sulf = {'0': '', '3': '3S', '4': '4S', '6': '6S', '9': '3S6S', '10': '4S6S'}
+  non_red_base = non_red_end_map.get(input_dsc[0])
+  non_red_sulfation = non_red_end_sulf.get(input_dsc[1])
+  hexosamine_base = hexosamine_map.get(input_dsc[2])
+  hexosamine_sulfation = hexosamine_sulf.get(input_dsc[3:])
+  linkage = '(?1-?)'
+  return f"{non_red_base}{non_red_sulfation}{linkage}{hexosamine_base}{hexosamine_sulfation}"
+
+
+def nglycan_stub_to_iupac(nglycan_stub: str # Glycan in a N-glycan stub format
+                      ) -> str: # Basic IUPAC-condensed format
+  "Convert glycan from N-glycan stub to barebones IUPAC-condensed format"
+  nglycan_stub = nglycan_stub.replace("(Man)3(GlcNAc)2", "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc").replace("Deoxyhexose", "Fuc")
+  parts_dict, nglycan_stub = nglycan_stub.split('+')
+  parts_dict = {x.split(')')[0].replace('(', ''): int(x.split(')')[1]) for x in re.findall(r'\([^)]+\)\d+', parts_dict)}
+  parts = ''.join([f"{{{p}(?1-?)}}" * v for p, v in parts_dict.items()])
+  return f"{parts}{nglycan_stub}"
 
 
 def check_nomenclature(glycan: str # Glycan string to check
@@ -915,30 +852,78 @@ def check_nomenclature(glycan: str # Glycan string to check
     raise ValueError("Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around.")
 
 
+def sanitize_iupac(glycan: str # Glycan string to check
+                   ) -> str: # Sanitized glycan string
+  """Sanitize IUPAC glycan sequence by identifying and correcting chemical impossibilities."""
+  # Handle NAc special case (any sugar with NAc can't have linkage at position 2)
+  glycan = re.sub(r'([A-Za-z]+)\(([ab?][1-2])-2\)([A-Za-z]+NAc)', r'\1(\2-?)\3', glycan)
+  # Handle modifications (can't have a linkage to a position that's modified)
+  glycan = re.sub(r'\(([ab?][1-2])-(\d)\)([A-Za-z]+\2[A-Z])', r'(\1-?)\3', glycan)
+  # Handle branched cases with same linkage position
+  for match in re.finditer(r'([A-Za-z]+)\(([ab?][1-2])-(\d)\)\[((?:[A-Za-z]+\([ab?][1-2]-\d\))*)([A-Za-z]+)\(([ab?][1-2])-(\3)\)\]', glycan):
+    glycan = glycan.replace(match.group(0), f'{match.group(1)}({match.group(2)}-?)[{match.group(4)}{match.group(5)}({match.group(6)}-?)]')
+  return glycan
+
+
+def transform_repeat_glycan(glycan: str # Glycan string to check
+                            ) -> Tuple[str, bool]: # Glycan string with converted repeat structure, if necessary, and whether glycan is repeat
+  """Transform -1)Fruf(b2-3)Fruf(b2- repeat structure into Fruf(b2-3)Fruf(b2-1)Fruf"""
+  if glycan.startswith("-"):
+    match = re.match(r"(-P)?(-\d+\))(\[[^\]]*\])?([A-Za-z0-9]+)(.*)", glycan)
+    if match:
+      phospho, linkage, brackets, first_mono, remainder = match.groups()
+      brackets = brackets or ""
+      phospho = phospho or ""
+      glycan = brackets + first_mono + remainder + phospho + linkage + first_mono
+      glycan = re.sub(r'(\w+)\(([\w\?])(\d+)-P-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}P({m.group(2)}{m.group(3)}-{m.group(4)})", glycan)
+      return re.sub(r"-ol(\d+)P", r"\1P-ol", glycan), True
+  return glycan, False
+
+
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
-  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, and GlycoWorkBench to standardized IUPAC-condensed format"
-  glycan = glycan.strip()
-  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench
+  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, and GlyTouCanIDs to standardized IUPAC-condensed format"
+  glycan = glycan.strip().replace('–', '-').replace(' ', '')
+  mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
+  if mapped_glycan:
+    return mapped_glycan
+  # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, GlyTouCanIDs
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
-  elif '-D-' in glycan:
+  elif glycan.startswith('0'):
+    glycan = linearcode1d_to_iupac(glycan)
+  elif bool(re.match('[^o]-[LD]-', glycan)):
     glycan = iupac_extended_to_condensed(glycan)
   elif 'RES' in glycan:
     glycan = glycoct_to_iupac(glycan)
-  elif '=' in glycan:
+  elif 'S=' in glycan:
     glycan = wurcs_to_iupac(glycan)
-  elif glycan.endswith('-OH'):
+  elif glycan.endswith('-OH') or bool(re.search(r'\d[DL][A-Z]', glycan)):
     glycan = glycam_to_iupac(glycan)
-  elif '$MONO' in glycan:
+  elif 'End--' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
+  elif bool(re.fullmatch(r'^[UDGIg][02][AaSH](0|3|4|6|9|10)$', glycan)):
+    glycan = GAG_disaccharide_to_iupac(glycan)
+  elif bool(re.match(r'^G\d+', glycan)):
+    glycan = glytoucan_to_glycan([BACKUP_G_IDS.get(glycan, glycan)])[0]
   elif not isinstance(glycan, str) or '@' in glycan:
     check_nomenclature(glycan)
-    return
-  elif ((glycan[-1].isdigit() and bool(re.search("[A-Z]", glycan))) or (glycan[-2].isdigit() and glycan[-1] == ']') or glycan.endswith('B') or glycan.endswith("LacDiNAc")) and 'e' not in glycan and '-' not in glycan:
-    glycan = oxford_to_iupac(glycan)
+  elif "(Man)3(GlcNAc)2" in glycan:
+    glycan = nglycan_stub_to_iupac(glycan)
+  elif bool(
+    # Matches mannose shorthand
+    bool(re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', glycan, re.IGNORECASE)) or
+    # Combined: valid chars + has digit + has Oxford structure + no unwanted pattern
+    bool(re.fullmatch(r'^(?=.*[1-9])(?=.*(?:A\d+|G\d+|S[g]?\d+|F|B[i]?|M\d+))(?!.*\([a-z]?\d-\d\))(?!.*F[a-z])[A-Za-z0-9()\[\],-]+$', glycan))
+  ):
+      glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
+  # Anomeric indicator placed before parentheses
+  if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
+    glycan = re.sub(r'([βα])(\()', r'\2\1', glycan)
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
+  glycan = re.sub(r'(\d)A($|a)', r'\1Ac\2', glycan)  # 9Aa into 9Aca
+  glycan = re.sub(r'-([ab])-(\d+),(\d+\)?)-', r'\1\2-\3', glycan)  # Inconsistent usage of dashes and commas, like in Neu5Ac-a-2,6-Gal-b-1,3-GlcNAc
   glycan = re.sub(r'(\d),(\d)(?!l)', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone)
   if '{' in glycan and '}' not in glycan:
     glycan = f'{{{glycan[:glycan.index("{")]}?1-?}}{glycan[glycan.index("{")+1:]}'
@@ -949,14 +934,21 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     last_dash = glycan.rindex('-')
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash-1:])) and 'ol' not in glycan and glycan[last_dash+1:] not in lib:
       glycan = glycan[:last_dash]
+  # Anomeric and steric indicators placed before monosaccharide (e.g., "bDGal(1-4)bDGlcNAc")
+  glycan = re.sub(r'([abx\?])([DLX\?])([A-Z1-9][A-Za-z2-9\-]*)\((\d)-(\d*\))', r'\3(\1\4-\5', glycan)
+  glycan = re.sub(r'([abx\?])([DLX\?])([A-Z1-9][A-Za-z2-9\-]*)\((\d)', r'\3(\1\4', glycan)  # for repeats
+  # Anomeric indicator placed before monosaccharide (e.g., "bGal14GlcNAc")
+  glycan = re.sub(r'([ab])([A-Z][A-Za-z5]*)(\d)(\d*)', r'\2\1-\4', glycan)
+  # Anomeric indicator placed behind monosaccharide (e.g., "Galb14GlcNAc")
+  glycan = re.sub(r'([A-Z][A-Za-z5]*)([ab])([1-2])(\d)', r'\1\2\3-\4', glycan)
   # Canonicalize usage of brackets and parentheses
-  if bool(re.search(r'\([A-Zd3-9]', glycan)):
+  if bool(re.search(r'\([A-Zd3-9]', glycan)) and not bool(re.search(r'\([ab?]', glycan)):
     glycan = glycan.replace('(', '[').replace(')', ']')
   # Canonicalize linkage uncertainty
   # Open linkages with anomeric config specified (e.g., "Mana-")
   glycan = re.sub(r'([A-Z][a-z]*)([a-b])\-([A-Z])', r'\1\g<2>1-?\3', glycan)
   # Open linkages (e.g., "c-")
-  glycan = re.sub(r'([a-z])\-([A-Z])', r'\1?1-?\2', glycan)
+  glycan = re.sub(r'([a-z])\-([A-Z][^\-])', r'\1?1-?\2', glycan)
   # Open linkages2 (e.g., "1-")
   glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
   # Missing linkages (e.g., "c)")
@@ -974,7 +966,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Missing starting carbon (e.g., "b-4")
   glycan = re.sub(r'(a|b|\?)-(\d)', r'\g<1>1-\2', glycan)
   # If still no '-' in glycan, assume 'a3' type of linkage denomination
-  if '-' not in glycan or bool(re.search(r'[ab][123456](?!\-)', glycan)):
+  if '-' not in glycan or bool(re.search(r'[ab][123456](?![\-PA])', glycan)):
     # Check whether linkages are recorded as b1 or as a3
     if bool(re.search(r"^[^2-6]*1?[^2-6]*$", glycan)):
       glycan = re.sub(r'(a|b)(\d)(?!\-)', r'\g<1>\g<2>-?', glycan)
@@ -993,23 +985,34 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycan[:-2] if 'Glcol' not in glycan else f'{glycan[:-2]}-ol'
   if glycan[-1] in 'ab' and glycan[-3:] not in ['Rha', 'Ara']:
     glycan = glycan[:-1]
+  # Remove anomeric and steric indicators at reducing end
+  if '(' in glycan and bool(re.search(r'\)([ab][DLX\?][A-Z][A-Za-z5]*)', glycan)):
+    glycan = re.sub(r'\)([ab][DLX\?])([A-Z][A-Za-z5]*)', r')\2', glycan)
   # Handle modifications
-  if bool(re.search(r'\[([1-9][SP])\]\[([1-9][SP])\][A-Z][^\(^\[]+', glycan)):  # [6S][4S]Gal to Gal4S6S
-    glycan = re.sub(r'\[([1-9][SP])\]\[([1-9][SP])\]([A-Z][^\(^\[]+)',
-                       lambda m: f"{m.group(3)}{min(m.group(1), m.group(2))}{max(m.group(1), m.group(2))}", glycan)
-  if bool(re.search(r'\[[1-9]?[SP]\][A-Z][^\(^\[]+', glycan)):  # [S]Gal to GalS
-    glycan = re.sub(r'\[([1-9]?[SP])\]([A-Z][^\(^\[]+)', r'\2\1', glycan)
-  if bool(re.search(r'(\)|\]|^)[1-9]?[SP][A-Z][^\(^\[]+', glycan)):  # )SGal to )GalS
-    glycan = re.sub(r'([1-9]?[SP])([A-Z][^\(^\[]+)', r'\2\1', glycan)
-  if bool(re.search(r'\-ol[0-9]?[SP]', glycan)):  # Gal-olS to GalS-ol
-    glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)
-  if bool(re.search(r'(\[|\)|\]|\^)[1-9]?[SP](?!en)[A-Za-z]+', glycan)):  # SGalNAc to GalNAcS
-    glycan = re.sub(r'([1-9]?[SP])(?!en)([A-Za-z]+)', r'\2\1', glycan)
-  if bool(re.search(r'[1-9]?[SP]-[A-Za-n]+', glycan)):  # S-Gal to GalS
-    glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)
+  glycan = re.sub(r'\d{,2}%', '', glycan)  # [50%Ac(a1-2)] into [Ac(a1-2)]
+  glycan = re.sub(r'(?<!\d),(?!\d)', '][', glycan)  # Replace only commas not flanked by digits
+  glycan = re.sub(r'<<([A-Za-z0-9]+)\(([ab\?])(\d+)-\d+\)\|([A-Za-z0-9]+)\([ab\?]\d+-\d+\)>>', r'\1(\2\3-?)', glycan)  # <<Rha(a1-3)|Rha(a1-4)>> to Rha(a1-?)
+  old_glycan = ""
+  while glycan != old_glycan:
+    old_glycan = glycan
+    glycan = re.sub(r'\[([^]]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
+                 lambda m: f"{m.group(3)}{m.group(2)}{m.group(1).split('(')[0]}" if (m.group(1).split('(')[0] not in lib and m.group(1).count('(') == 1) else f"[{m.group(1)}]{m.group(3)}",
+                 glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
+  glycan = re.sub(r'\[([A-Za-z0-9]+)\(\?(\d+)-(\d+)\)([A-Za-z0-9]+)',
+                lambda m: f"[{m.group(4)}{m.group(3)}{m.group(1)}" if m.group(1) not in lib else f"[{m.group(1)}(?{m.group(2)}-{m.group(3)}){m.group(4)}",
+                glycan)  # [Ac(?1-2)Rha to [Rha2Ac
+  glycan = re.sub(r'\[([1-9][SP])\]\[([1-9][SP])\]([A-Z][^\(^\[]+)',
+                lambda m: f"{m.group(3)}{min(m.group(1), m.group(2))}{max(m.group(1), m.group(2))}",
+                glycan)  # [6S][4S]Gal to Gal4S6S
+  glycan = re.sub(r'\?([A-Z])', r'O\1', glycan)  # Kdo?Ac to KdoOAc
+  glycan = re.sub(r'\[([1-9]?[SP])\]([A-Z][^\(^\[]+)', r'\2\1', glycan)  # [S]Gal to GalS
+  glycan = re.sub(r'(\)|\]|^)([1-9]?[SP])([A-Z][^\(^\[]+)', r'\1\3\2', glycan)  # )SGal to )GalS
+  glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)  # Gal-olS to GalS-ol
+  glycan = re.sub(r'(\[|\)|\]|^)([1-9]?[SP])(?!en)([A-Za-z]+)', r'\1\3\2', glycan)  # SGalNAc to GalNAcS
+  glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)  # S-Gal to GalS
   # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
   glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
-  glycan = re.sub(r'([c-z])([1-2])-', r'\1(?\2-', glycan)
+  glycan = re.sub(r'(~\([c-z])([1-2])-', r'\1(?\2-', glycan)
   glycan = re.sub(r'-([\?2-9])([A-Z])', r'-\1)\2', glycan)
   glycan = re.sub(r'([\?2-9])([\[\]])', r'\1)\2', glycan)
   # Floating bits
@@ -1022,35 +1025,27 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = '{'+glycan.replace('+', '}')
   post_process = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a',
-                  'Kdn(a1': 'Kdn(a2'}
+                  'Kdn(a1': 'Kdn(a2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?'}
   glycan = multireplace(glycan, post_process)
-  glycan = re.sub(r'[ab]-$', '', glycan)  # Remove endings like Glcb-
+  glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
+  glycan = sanitize_iupac(glycan)
+  # Assume every non-lib "monosaccharide" at the reducing end is a modification and glue it to the preceding monosaccharide
+  glycan = re.sub(r'\(([ab\?][1-2])-([1])\)([A-Z][A-Za-z\-]*$)', lambda m: f'{m.group(2)}{m.group(3)}' if m.group(3) not in lib else f'({m.group(1)}-{m.group(2)}){m.group(3)}', glycan)
+  glycan = re.sub(r'([\w-]+)(?:-ol)?\(([\w\?])(\d+)-P-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}P({m.group(2)}{m.group(3)}-{m.group(4)})", glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
+  glycan, repeat = transform_repeat_glycan(glycan)
+  glycan = re.sub(r"n\=[\d\?\-]+\/", "", glycan)  # Strip out internal repeats such as n=?/
+  glycan = re.sub(r"\/([A-Z])", r"\1", glycan)  # Strip out any remaining / from internal repeats
   # Canonicalize branch ordering
-  if '[' in glycan and not glycan.startswith('['):
-    glycan = choose_correct_isoform(glycan)
+  if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
+    from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
+    glycan = graph_to_string(glycan_to_nxGraph.__wrapped__(glycan))
   if '{' in glycan:
     floating_bits = re.findall(r'\{.*?\}', glycan)
     sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))
     glycan = sorted_floating_bits + glycan[glycan.rfind('}')+1:]
   if glycan.count('[') != glycan.count(']'):
-    print("Warning: Mismatching brackets in formatted glycan string.")
+    raise ValueError(f"Mismatching brackets in formatted glycan string: {glycan}")
   return glycan
-
-
-def rescue_glycans(func: Callable # Function to wrap
-                 ) -> Callable: # Wrapped function handling formatting issues
-  "Decorator for handling malformed glycan sequences"
-  @wraps(func)
-  def wrapper(*args, **kwargs):
-    try:
-      # Try running the original function
-      return func(*args, **kwargs)
-    except Exception:
-      # If an error occurs, attempt to rescue the glycan sequences
-      rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
-      # After rescuing, attempt to run the function again
-      return func(*rescued_args, **kwargs)
-  return wrapper
 
 
 def rescue_compositions(func: Callable # Function to wrap

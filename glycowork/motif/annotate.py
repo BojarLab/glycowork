@@ -2,51 +2,21 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import re
-from collections import defaultdict
+from collections import Counter, deque
 from functools import partial
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-from glycowork.glycan_data.loader import linkages, motif_list, unwrap, replace_every_second, remove_unmatched_brackets, df_species
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check
-from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, find_isomorphs, rescue_glycans
+from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans
 from glycowork.motif.regex import get_match
 
 
-def link_find(
-    glycan: str # IUPAC-condensed glycan sequence
-    ) -> List[str]: # List of unique disaccharide motifs
-  "Extracts all disaccharide motifs from a glycan sequence, handling branching and isomorphs"
-  if '}' in glycan:
-    glycan = glycan[glycan.rindex('}')+1:]
-  disaccharides = set()
-  for iso in find_isomorphs(glycan):  # Get different string representations of the same glycan
-    variants = [iso]
-    if '[' in iso:
-      # For each string representation, search and remove branches
-      if bool(re.search(r"\[[^\[\]]+\[[^\[\]]+\][^\]]+\]", iso)):
-        b_re = re.sub(r"\[[^\[\]]+\[[^\[\]]+\][^\]]+\]", '', iso)
-        b_re = re.sub(r"\[[^\]]+\]", '', b_re)
-      else:
-        b_re = re.sub(r"\[[^\]]+\]", '', iso)
-      variants.append(b_re)
-    # From this linear glycan part, chunk away disaccharides and re-format them
-    for variant in variants:
-      parts = unwrap([k.split(')') for k in variant.split('(')])
-      for i in range(0, len(parts) - 2, 2):
-        tri_part = '*'.join(parts[i:i+3])
-        # Check for invalid bracket patterns around linkages
-        if '*[' not in tri_part and '*][' not in tri_part:
-          mono1 = parts[i].replace('[', '').replace(']', '')
-          mono2 = parts[i+2].replace('[', '').replace(']', '')
-          disaccharides.add(f"{mono1}({parts[i+1]}){mono2}")
-  return list(disaccharides)
-
-
 def annotate_glycan(
-    glycan: Union[str, nx.Graph], # IUPAC-condensed glycan sequence or NetworkX graph
+    glycan: Union[str, nx.DiGraph], # IUPAC-condensed glycan sequence or NetworkX graph
     motifs: Optional[pd.DataFrame] = None, # Motif dataframe (name + sequence); defaults to motif_list
     termini_list: List = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
-    gmotifs: Optional[List[nx.Graph]] = None # Precalculated motif graphs for speed
+    gmotifs: Optional[List[nx.DiGraph]] = None # Precalculated motif graphs for speed
     ) -> pd.DataFrame: # DataFrame with motif counts for the glycan
   "Counts occurrences of known motifs in a glycan structure using subgraph isomorphism"
   if motifs is None:
@@ -70,11 +40,11 @@ def annotate_glycan(
 
 
 def annotate_glycan_topology_uncertainty(
-    glycan: Union[str, nx.Graph], # IUPAC-condensed glycan sequence or NetworkX graph
+    glycan: Union[str, nx.DiGraph], # IUPAC-condensed glycan sequence or NetworkX graph
     feasibles: Optional[Set[str]] = None, # Set of potential full topology glycans; defaults to mammalian glycans
     motifs: Optional[pd.DataFrame] = None, # Motif dataframe (name + sequence); defaults to motif_list
     termini_list: List = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
-    gmotifs: Optional[List[nx.Graph]] = None # Precalculated motif graphs for speed
+    gmotifs: Optional[List[nx.DiGraph]] = None # Precalculated motif graphs for speed
     ) -> pd.DataFrame: # DataFrame with motif counts considering topology uncertainty
   "Annotates glycan motifs while handling uncertain topologies by comparing against physiological structures"
   if motifs is None:
@@ -125,14 +95,17 @@ def get_molecular_properties(
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
   if placeholder:
     dummy = IUPAC_to_SMILES(['Glc'])[0]
-  compounds_list, failed_requests = [], []
-  for s in IUPAC_to_SMILES(glycan_list):
+  compounds_list, succeeded_requests, failed_requests = [], [], []
+  for s, g in zip(*[IUPAC_to_SMILES(glycan_list), glycan_list]):
     try:
       c = pcp.get_compounds(s, 'smiles')[0]
       if c.cid is None:
         compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0]) if placeholder else failed_requests.append(s)
+        if placeholder:
+          succeeded_requests.append(dummy)
       else:
         compounds_list.append(c)
+        succeeded_requests.append(g)
     except:
       failed_requests.append(s)
   if verbose and len(failed_requests) >= 1:
@@ -146,7 +119,7 @@ def get_molecular_properties(
                                                             'bond_stereo_count', 'defined_bond_stereo_count',
                                                             'undefined_bond_stereo_count', 'covalent_unit_count'])
   df = df.reset_index(drop = True)
-  df.index = glycan_list
+  df.index = succeeded_requests
   return df
 
 
@@ -196,7 +169,7 @@ def annotate_dataset(
     custom_motifs: List = [] # Custom motifs when using 'custom' feature set
     ) -> pd.DataFrame: # DataFrame mapping glycans to presence/absence of motifs
   "Comprehensive glycan annotation combining multiple feature types: structural motifs, graph properties, terminal sequences"
-  if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
+  if any([k in ''.join(glycans) for k in [';', 'β', 'α', 'RES', '=']]):
     raise Exception
   invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive', 'size_branch'}
   if invalid_features:
@@ -272,7 +245,7 @@ def annotate_dataset(
     return pd.concat(shopping_cart, axis = 1)
 
 
-def clean_up_heatmap(
+def deduplicate_motifs(
     df: pd.DataFrame # DataFrame with glycan motifs as rows, samples as columns
     ) -> pd.DataFrame: # DataFrame with redundant motifs removed
   "Removes redundant motif entries from glycan abundance data while preserving the most informative labels"
@@ -298,7 +271,7 @@ def quantify_motifs(
    glycans: List[str], # List of IUPAC-condensed glycan sequences
    feature_set: List[str], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
    custom_motifs: List = [], # Custom motifs when using 'custom' feature set
-   remove_redundant: bool = True # Remove redundant motifs via clean_up_heatmap
+   remove_redundant: bool = True # Remove redundant motifs via deduplicate_motifs
    ) -> pd.DataFrame: # DataFrame with motif abundances (motifs as columns, samples as rows)
   "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences"
   if isinstance(df, str):
@@ -321,65 +294,67 @@ def quantify_motifs(
     else:
       collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
   df = pd.DataFrame(collect_dic)
-  return df if not remove_redundant else clean_up_heatmap(df.T)
+  return df if not remove_redundant else deduplicate_motifs(df.T)
 
 
 def count_unique_subgraphs_of_size_k(
-   graph: nx.Graph, # NetworkX graph of a glycan
+   graph: nx.DiGraph, # NetworkX graph of a glycan
    size: int = 2, # Number of monosaccharides per subgraph
    terminal: bool = False # Only count terminal subgraphs
    ) -> Dict[str, float]: # Dictionary mapping k-saccharide sequences to counts
   "Identifies and counts unique connected subgraphs of specified size from glycan structure"
-  size = size + (size-1)
-  paths = nx.all_pairs_shortest_path(graph, cutoff = size-1)
-  labels = nx.get_node_attributes(graph, 'string_labels')
-  counts = defaultdict(int)
-  for _, path_dict in paths:
-    for path in path_dict.values():
-      if len(path) == size:
-        if terminal:
-          if graph.degree[min(path)] != 1:
-            continue
-        if labels[path[0]][0] not in {'a', 'b', '?', '('}:
-          path_sorted = sorted(path)
-          path_str = ""
-          path_str_list = []
-          for index, node in enumerate(path_sorted):
-            prefix = ""
-            # Check degree and add prefix accordingly
-            degree = graph.degree[node]
-            if degree == 1 and node > 0 and index > 0 and node != len(graph)-1:
-              prefix = "["
-            elif degree > 2 or (degree == 2 and node == len(graph)-1):
-              prefix = "]"
-            path_str_list.append(prefix + labels[node])
-          path_str = '('.join(path_str_list)
-          path_str = replace_every_second(path_str, '(', ')')
-          path_str = path_str[:path_str.index('[')+1].replace('[', '') + path_str[path_str.index('['):] if '[' in path_str else path_str.replace(']', '')
-          counts[path_str] += 0.5
-  return counts
+  target_size = size * 2 - 1
+  successor_dict = {v: list(graph.successors(v)) for v in graph.nodes}
+  k_subgraphs, processed = [], set()
+  terminal_lookup = {n: graph.out_degree(n) == 0 for n in graph.nodes()} if terminal else {}
+  for node in sorted(graph.nodes(), reverse = True):
+    queue = deque([(tuple([node]), 1 if node % 2 == 0 else 0, 1)])
+    while queue:
+      current_sg, mono_cnt, curr_size = queue.popleft()
+      if current_sg in processed: continue
+      processed.add(current_sg)
+      if curr_size == target_size:
+        if mono_cnt == size and (not terminal or any(terminal_lookup[n] for n in current_sg)):
+          k_subgraphs.append(graph_to_string_int(graph.subgraph(current_sg)))
+        continue
+      current_sg_set = set(current_sg)
+      candidates = [s for n in current_sg_set for s in successor_dict[n] if s not in current_sg_set]
+      for candidate in candidates:
+        new_mono = mono_cnt + (1 if candidate % 2 == 0 else 0)
+        if new_mono > size: continue
+        queue.append((tuple(sorted(current_sg_set | {candidate})), new_mono, curr_size + 1))
+  return dict(Counter(k_subgraphs))
 
 
 @rescue_glycans
 def get_k_saccharides(
-   glycans: List[str], # List of IUPAC-condensed glycan sequences
+   glycans: Union[List[str], Set[str]], # List or set of IUPAC-condensed glycan sequences
    size: int = 2, # Number of monosaccharides per fragment
    up_to: bool = False, # Include fragments up to size k (adds monosaccharides)
    just_motifs: bool = False, # Return nested list of motifs instead of count DataFrame
    terminal: bool = False # Only count terminal fragments
    ) -> Union[pd.DataFrame, List[List[str]]]: # DataFrame of k-saccharide counts or list of motifs per glycan
   "Extracts k-saccharide fragments from glycan sequences with options for different fragment sizes and positions"
-  if not isinstance(glycans, list):
-    raise TypeError("The input has to be a list of glycans")
-  if any([k in ''.join(glycans) for k in [';', '-D-', 'RES', '=']]):
+  if not isinstance(glycans, (list, set)):
+    raise TypeError("The input has to be a list or set of glycans")
+  if any(k in ''.join(glycans) for k in [';', 'β', 'α', 'RES', '=']):
     raise Exception
+  if not up_to and max(g.count('(')+1 for g in glycans) < size:
+    return [] if just_motifs else pd.DataFrame()
   if up_to:
     wga_letter = pd.DataFrame([{i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(glycans) if i not in linkages} for g in glycans])
-  regex = re.compile(r"\(([ab])(\d)-(\d)\)")
-  shadow_glycans = [regex.sub(r"(\1\2-?)", g) for g in glycans]
-  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g), size = size, terminal = terminal) for g in glycans])
+  regex = re.compile(r"([ab])(\d)-(\d)")
+  ggraphs, shadow_graphs = [], []
+  for g_str in glycans:
+    g = glycan_to_nxGraph(g_str)
+    ggraphs.append(g)
+    sg = g.copy()
+    labels = nx.get_node_attributes(sg, 'string_labels')
+    nx.set_node_attributes(sg, {n: regex.sub(r"\1\2-?", labels[n]) for n in labels}, 'string_labels')
+    shadow_graphs.append(sg)
+  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size, terminal = terminal) for g in ggraphs])
   ggraphs = ggraphs.drop(columns = [col for col in ggraphs.columns if '?' in col])
-  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(glycan_to_nxGraph(g), size = size, terminal = terminal) for g in shadow_glycans])
+  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size, terminal = terminal) for g in shadow_graphs])
   org_len = ggraphs.shape[1]
   out_matrix = pd.concat([ggraphs, shadow_glycans], axis = 1).reset_index(drop = True)
   out_matrix = out_matrix.loc[:, ~out_matrix.columns.duplicated()].copy()
@@ -389,35 +364,34 @@ def get_k_saccharides(
   second_half_cols = cols[org_len:]
   drop_columns = []
   regex = re.compile(r"(\([ab])(\d)-(\d)\)")
-  col_sums = {col: out_matrix[col].sum() for col in cols}
-  col_subs = {col: regex.sub(r"\1\2-?)", col) for col in cols}
-  for col1 in first_half_cols:
-    for col2 in second_half_cols:
-      if col_sums[col1] == col_sums[col2] and col_subs[col1] == col2:
+  col_sums = out_matrix.sum().to_dict()
+  col_map = {regex.sub(r"\1\2-?)", col): col for col in first_half_cols}
+  for col2 in second_half_cols:
+    if col2 in col_map:
+      col1 = col_map[col2]
+      if col_sums[col1] == col_sums[col2]:
         drop_columns.append(col2)
   out_matrix = out_matrix.drop(drop_columns, axis = 1)
-  out_matrix.columns = [remove_unmatched_brackets(g) for g in out_matrix.columns]
-  out_matrix = out_matrix.T.groupby(by = out_matrix.columns).sum().T
+  out_matrix = out_matrix.T.groupby(level = 0).sum().T
   if up_to:
     combined_df= pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
     return combined_df.apply(lambda x: list(combined_df.columns[x > 0]), axis = 1).tolist() if just_motifs else combined_df
-  else:
-    return out_matrix.apply(lambda x: list(out_matrix.columns[x > 0]), axis = 1).tolist() if just_motifs else out_matrix.fillna(0).astype(int)
+  return out_matrix.apply(lambda x: list(out_matrix.columns[x > 0]), axis = 1).tolist() if just_motifs else out_matrix.fillna(0).astype(int)
 
 
 def get_terminal_structures(
-   glycan: Union[str, nx.Graph], # IUPAC-condensed glycan sequence or NetworkX graph
+   glycan: Union[str, nx.DiGraph], # IUPAC-condensed glycan sequence or NetworkX graph
    size: int = 1 # Number of monosaccharides in terminal fragment (1 or 2)
    ) -> List[str]: # List of terminal structures with linkages
   "Identifies terminal monosaccharide sequences from non-reducing ends of glycan structure"
   if size > 2:
-    print("Please use get_k_saccharides with terminal = True for larger terminal structures")
+    raise ValueError("Please use get_k_saccharides with terminal = True for larger terminal structures")
   ggraph = ensure_graph(glycan)
   nodeDict = dict(ggraph.nodes(data = True))
   temp =  [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' + \
    ''.join([nodeDict.get(k+1+j+i, {'string_labels': ''})['string_labels']+'('+nodeDict.get(k+2+j+i, {'string_labels': ''})['string_labels']+')' \
             for i, j in enumerate(range(1, size))]) for k in list(ggraph.nodes())[:-1] if \
-          ggraph.degree[k] == 1 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages]
+          ggraph.out_degree[k] == 0 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages]
   return [g.replace('()', '') for g in temp]
 
 

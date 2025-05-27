@@ -1,13 +1,16 @@
+import os
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 import re
+import ast
 import json
 import pickle
 import pandas as pd
+import networkx as nx
 from pathlib import Path
 from itertools import chain
 from importlib import resources
-from typing import Any, Dict, List, Union
-
-import requests
+from typing import Any, Dict, List, Union, Optional
+from huggingface_hub import hf_hub_download
 
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
   motif_list = pd.read_csv(f)
@@ -17,25 +20,43 @@ this_dir = Path(__file__).parent
 this_filename = Path(__file__).name
 
 # Construct the path to the data file and load it
-data_path = this_dir / 'lib_v11.pkl'
+data_path = this_dir / 'v12_lib.pkl'
 with open(data_path, 'rb') as f:
   lib = pickle.load(f)
 
 
+class GlycoDataFrame(pd.DataFrame):
+
+  @property
+  def _constructor(self):
+    return GlycoDataFrame
+
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+
+  def glyco_filter(self, motif: Union[str, nx.DiGraph], # Glycan motif sequence or graph
+                  termini_list: List = [], # List of monosaccharide positions from terminal/internal/flexible
+                  min_count: Optional[int] = 1 # Minimum number of times motif needs to be present to pass
+                  ) -> 'GlycoDataFrame':
+    from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
+    indices = [i for i, g in enumerate(self['glycan']) if subgraph_isomorphism(g, motif, termini_list, count = True) >= min_count]
+    return self.iloc[indices, :].reset_index(drop = True)
+
+
 def __getattr__(name):
   if name == "glycan_binding":
-    with resources.files("glycowork.glycan_data").joinpath("glycan_binding.csv").open(encoding = 'utf-8-sig') as f:
+    with resources.files("glycowork.glycan_data").joinpath("v12_glycan_binding.csv").open(encoding = 'utf-8-sig') as f:
       glycan_binding = pd.read_csv(f)
     globals()[name] = glycan_binding  # Cache it to avoid reloading
     return glycan_binding
   elif name == "df_species":
-    with resources.files("glycowork.glycan_data").joinpath("v11_df_species.csv").open(encoding = 'utf-8-sig') as f:
-      df_species = pd.read_csv(f)
+    with resources.files("glycowork.glycan_data").joinpath("v12_df_species.csv").open(encoding = 'utf-8-sig') as f:
+      df_species = GlycoDataFrame(pd.read_csv(f))
     globals()[name] = df_species  # Cache it to avoid reloading
     return df_species
   elif name == "df_glycan":
-    data_path = this_dir / 'v11_sugarbase.json'
-    df_glycan = serializer.deserialize(data_path)
+    data_path = this_dir / 'v12_sugarbase.json'
+    df_glycan = GlycoDataFrame(serializer.deserialize(data_path))
     globals()[name] = df_glycan  # Cache it to avoid reloading
     return df_glycan
   elif name == "lectin_specificity":
@@ -80,12 +101,12 @@ linkages = {
   '?2-?', '?1-2', '?1-3', '?1-4', '?1-6', '?2-3', '?2-6', '?2-8'
   }
 Hex = {'Glc', 'Gal', 'Man', 'Ins', 'Galf', 'Hex'}
-HexOS = [f"{h}OS" for h in Hex]
+HexOS = {f"{h}OS" for h in Hex}
 dHex = {'Fuc', 'Qui', 'Rha', 'dHex'}
 HexA = {'GlcA', 'ManA', 'GalA', 'IdoA', 'HexA'}
 HexN = {'GlcN', 'ManN', 'GalN', 'HexN'}
 HexNAc = {'GlcNAc', 'GalNAc', 'ManNAc', 'HexNAc'}
-HexNAcOS = [f"{h}OS" for h in HexNAc]
+HexNAcOS = {f"{h}OS" for h in HexNAc}
 Pen = {'Ara', 'Xyl', 'Rib', 'Lyx', 'Pen'}
 Sia = {'Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia'}
 modification_map = {'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'},
@@ -243,24 +264,15 @@ def build_custom_df(df: pd.DataFrame, # df_glycan / sugarbase
   df = df.explode(cols[1:]).reset_index()
   df = df.sort_values([cols[1], 'glycan'], ascending = [True, True])
   df = df.reset_index(drop = True)
-  return df
+  return GlycoDataFrame(df)
 
 
-def download_model(file_id: str, # Google Drive file ID
-                  local_path: Union[str, Path] = 'model_weights.pt' # where to save model file
-                 ) -> None:
-  "Download the model weights file from Google Drive"
-  file_id = file_id.split('/d/')[1].split('/view')[0]
-  url = f'https://drive.google.com/uc?id={file_id}'
-  response = requests.get(url, stream = True, timeout = 30)
-  if response.status_code == 200:
-    with open(local_path, 'wb') as f:
-      for chunk in response.iter_content(chunk_size = 8192):
-        f.write(chunk)
-    print("Download completed.")
-  else:
-    print(f"Download failed. Status code: {response.status_code}")
+def download_model(file_id: str # Filename in the HuggingFace repo
+                 ) -> str:  # file path to cached model
+  "Download the model weights file from HuggingFace Hub"
+  file_path = hf_hub_download(repo_id = "DBojar/glycowork_models", filename = file_id)
   print("Download completed.")
+  return file_path
 
 
 class DataFrameSerializer:
@@ -270,6 +282,43 @@ class DataFrameSerializer:
   @staticmethod
   def _serialize_cell(value: Any) -> Dict[str, Any]:
     """Convert a cell value to a serializable format with type information."""
+    # Check if the value is a string representation of a list
+    if isinstance(value, str) and value.strip().startswith('[') and value.strip().endswith(']'):
+      try:
+        # Try to convert the string to an actual list
+        parsed_value = ast.literal_eval(value)
+        if isinstance(parsed_value, list):
+          return {
+            'type': 'list',
+            'value': [str(item) for item in parsed_value]
+          }
+      except (SyntaxError, ValueError):
+        # If parsing fails, treat it as a regular string
+        pass
+    # Check if the value is a string representation of a dictionary
+    if isinstance(value, str) and value.strip().startswith('{') and value.strip().endswith('}'):
+      try:
+        # Try to convert the string to an actual dictionary
+        parsed_value = ast.literal_eval(value)
+        if isinstance(parsed_value, dict):
+          # Use the appropriate dictionary type handler
+          if all(isinstance(k, str) and isinstance(v, list) for k, v in parsed_value.items()):
+            return {
+              'type': 'str_list_dict',
+              'value': {str(k): [str(item) for item in v] for k, v in parsed_value.items()}
+            }
+          elif all(isinstance(k, str) and isinstance(v, int) for k, v in parsed_value.items()):
+            return {
+              'type': 'str_int_dict',
+              'value': {str(k): int(v) for k, v in parsed_value.items()}
+            }
+          return {
+            'type': 'dict',
+            'value': {str(k): str(v) for k, v in parsed_value.items()}
+          }
+      except (SyntaxError, ValueError):
+        # If parsing fails, treat it as a regular string
+        pass
     if isinstance(value, list):
       return {
         'type': 'list',
@@ -382,3 +431,13 @@ def share_neighbor(edges, node1, node2):
    neighbors1 = set(v2 for v1, v2 in edges if v1 == node1) | set(v1 for v1, v2 in edges if v2 == node1)
    neighbors2 = set(v2 for v1, v2 in edges if v1 == node2) | set(v1 for v1, v2 in edges if v2 == node2)
    return bool(neighbors1 & neighbors2)
+
+
+class HashableDict(dict):
+  def __hash__(self):
+      return hash(tuple(sorted(self.items())))
+
+  def __eq__(self, other):
+      if isinstance(other, HashableDict):
+          return tuple(sorted(self.items())) == tuple(sorted(other.items()))
+      return False

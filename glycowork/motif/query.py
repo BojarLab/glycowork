@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from typing import List, Optional
+from typing import Optional
 
 from glycowork.glycan_data.loader import motif_list, df_glycan
 from glycowork.motif.graph import compare_glycans
@@ -45,19 +45,3 @@ def get_insight(glycan: str, # Glycan in IUPAC-condensed format
                     disease_sample[k]) for k in range(len(disease))])
             )
     print("\nThat's all we can do for you at this point!")
-
-
-def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
-                       revert: bool = False # Whether to map glycans to IDs; default:False
-                      ) -> List[str]: # List of glycans or IDs
-    "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
-    if revert:
-        ids = [df_glycan.glytoucan_id.values.tolist()[np.where(df_glycan.glycan.values == k)[0][0]] if k in df_glycan.glycan.values else k for k in ids]
-        if any([k not in df_glycan.glycan.values.tolist() for k in ids]):
-            print('These glycans are not in our database: ' + str([k for k in ids if k not in df_glycan.glycan]))
-        return ids
-    else:
-        glycans = [df_glycan.glycan.values.tolist()[np.where(df_glycan.glytoucan_id.values == k)[0][0]] if k in df_glycan.glytoucan_id.values else k for k in ids]
-        if any([k not in df_glycan.glytoucan_id.values for k in ids]):
-            print('These IDs are not in our database: ' + str([k for k in ids if k not in df_glycan.glytoucan_id]))
-        return glycans

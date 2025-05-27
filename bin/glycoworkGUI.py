@@ -9,7 +9,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 from glycowork.motif.draw import GlycoDraw, plot_glycans_excel
 from glycowork.motif.analysis import get_differential_expression, get_heatmap, get_lectin_array
-
+from glycowork.motif.processing import canonicalize_iupac
 
 class BaseDialog(simpledialog.Dialog):
     def __init__(self, parent, title=None):
@@ -407,6 +407,84 @@ class LectinArrayAnalysisDialog(BaseDialog):
         self.result = (file_path, treatment, control, self.paired_var.get(), output_path)
 
 
+class CanonicalizeIUPACDialog(BaseDialog):
+  def body(self, master):
+    self.title("Canonicalize IUPAC Sequences")
+    # Input frame
+    input_frame = ttk.LabelFrame(master, text="Input Sequences", padding=10)
+    input_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+    #help_text = "Enter one or more glycan sequences, one per line"
+    # Text area for input
+    self.input_text = ScrolledText(input_frame, height=10, width=50, font=('Courier', 10))
+    self.input_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+    # Output frame
+    output_frame = ttk.LabelFrame(master, text="Canonicalized Sequences", padding=10)
+    output_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+    # Text area for output with readonly state
+    self.output_text = ScrolledText(output_frame, height=10, width=50, font=('Courier', 10), state='disabled')
+    self.output_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+    # Buttons frame
+    button_frame = ttk.Frame(master)
+    button_frame.pack(fill=tk.X, padx=10, pady=5)
+    # Canonicalize button
+    self.canonicalize_btn = ttk.Button(button_frame, text="Canonicalize",
+                                      command=self.canonicalize_sequences,
+                                      style='Modern.TButton')
+    self.canonicalize_btn.pack(side=tk.LEFT, padx=5)
+    # Copy button
+    self.copy_btn = ttk.Button(button_frame, text="Copy Results",
+                              command=self.copy_to_clipboard,
+                              style='Modern.TButton')
+    self.copy_btn.pack(side=tk.LEFT, padx=5)
+    # Clear button
+    self.clear_btn = ttk.Button(button_frame, text="Clear All",
+                               command=self.clear_all,
+                               style='Modern.TButton')
+    self.clear_btn.pack(side=tk.LEFT, padx=5)
+    return self.input_text
+
+  def canonicalize_sequences(self):
+    # Get input text
+    input_sequences = self.input_text.get(1.0, tk.END).strip().split('\n')
+    results = []
+    errors = []
+    # Process each sequence
+    for i, seq in enumerate(input_sequences):
+      seq = seq.strip()
+      if not seq:
+        continue
+      try:
+        canonical = canonicalize_iupac(seq)
+        results.append(f"{canonical}")
+      except Exception as e:
+        errors.append(f"Error in sequence {i+1} ({seq}): {str(e)}")
+    # Update output text
+    self.output_text.config(state='normal')
+    self.output_text.delete(1.0, tk.END)
+    if results:
+      self.output_text.insert(tk.END, '\n'.join(results))
+    if errors:
+      self.output_text.insert(tk.END, '\n\n' + '\n'.join(errors), 'ERROR')
+    self.output_text.config(state='disabled')
+
+  def copy_to_clipboard(self):
+    output_text = self.output_text.get(1.0, tk.END).strip()
+    if output_text:
+      self.app.clipboard_clear()
+      self.app.clipboard_append(output_text)
+      messagebox.showinfo("Success", "Results copied to clipboard")
+
+  def clear_all(self):
+    self.input_text.delete(1.0, tk.END)
+    self.output_text.config(state='normal')
+    self.output_text.delete(1.0, tk.END)
+    self.output_text.config(state='disabled')
+
+  def apply(self):
+    # Just close the dialog when OK is pressed
+    pass
+
+
 class GlycoworkGUI:
     def __init__(self):
         self.app = tk.Tk()
@@ -444,6 +522,7 @@ class GlycoworkGUI:
         tools = [
             ("GlycoDraw", "Draw individual glycans", self.open_glyco_draw),
             ("Batch Draw", "Draw glycans from Excel/CSV", self.open_glyco_draw_excel),
+            ("Canonicalize IUPAC", "Standardize glycan sequences", self.open_canonicalize_iupac),
             ("Differential Expression", "Analyze differential expression", self.open_differential_expression),
             ("Heatmap", "Generate heatmap visualization", self.open_get_heatmap),
             ("Lectin Array", "Perform lectin array analysis", self.open_lectin_array)
@@ -521,7 +600,7 @@ class GlycoworkGUI:
         self.app.mainloop()
 
     def show_about_info(self):
-        about_message = """glycowork v1.5
+        about_message = """glycowork v1.6
 
 For more information and citation, please refer to:
 Thomès, L., et al. (2021). Glycowork: A Python package for glycan data science
@@ -621,6 +700,9 @@ https://bojarlab.github.io/glycowork/"""
                 messagebox.showerror("Error", error_msg)
             finally:
                 progress.destroy()
+
+    def open_canonicalize_iupac(self):
+        _ = CanonicalizeIUPACDialog(self.app)
 
     def run_differential_expression(self, csv_file_path, treatment_indices, control_indices, motifs, output_folder, progress_dialog):
         try:

@@ -133,44 +133,13 @@ def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
     stem_lib = get_stem_lib(libr)
   if '(' not in glycan:
     return get_core(glycan)
-  clean_list = list(stem_lib.values())
-  compiled_re = re.compile('^[0-9]+(-[0-9]+)+$')
-  for k in reversed(list(stem_lib.keys())[:-1]):
-    # For each monosaccharide, check whether it's modified
-    if ((k not in clean_list) and (k in glycan) and not (k.startswith(('a', 'b', '?'))) and not (compiled_re.match(k))):
-      county = 0
-      # Go at it until all modifications are stemified
-      while ((k in glycan) and (sum(1 for s in clean_list if k in s) <= 1)) and county < 5:
-        county += 1
-        rindex_pos = glycan.rindex('(')
-        glycan_start = glycan[:rindex_pos]
-        glycan_part = glycan_start
-        # Narrow it down to the offending monosaccharide
-        if k in glycan_start:
-          index_pos = glycan_start.index(k)
-          cut = glycan_start[index_pos:]
-          try:
-            cut = cut.split('(', 1)[0]
-          except IndexError:
-            pass
-          # Replace offending monosaccharide with stemified monosaccharide
-          if cut not in clean_list:
-            glycan_part = glycan_start[:index_pos] + stem_lib[k]
-        # Check to see whether there is anything after the modification that should be appended
-        try:
-          glycan_mid = glycan_start[index_pos + len(k):]
-          if ((cut not in clean_list) and (len(glycan_mid) > 0)):
-            glycan_part = glycan_part + glycan_mid
-        except:
-          pass
-        # Handling the reducing end
-        glycan_end = glycan[rindex_pos:]
-        if k in glycan_end:
-          filt = ']' if ']' in glycan_end else ')'
-          cut = glycan_end[glycan_end.index(filt)+1:]
-          if cut not in clean_list:
-            glycan_end = glycan_end[:glycan_end.index(filt)+1] + stem_lib[k]
-        glycan = glycan_part + glycan_end
+  sorted_keys = sorted(stem_lib.keys(), key = len, reverse = True)
+  clean_values = set(list(stem_lib.values()))
+  for key in sorted_keys:
+    if key in glycan and '-' not in key:
+      glycan = glycan.replace(key, stem_lib[key])
+      if set(min_process_glycans([glycan])[0]).issubset(clean_values):
+        return glycan
   return glycan
 
 
@@ -412,6 +381,8 @@ def map_to_basic(glycoletter: str, # Monosaccharide or linkage
   for cond, ret in conditions:
     if glycoletter in cond:
       return ret
+  if re.search(r"\d\-\d", glycoletter):
+    return "?1-?"
   g2 = re.sub(r"\d", 'O', glycoletter)
   if 'S' in glycoletter:
     if g2 in {k + 'OS' for k in Hex}:
