@@ -1,7 +1,7 @@
 # Changelog
 
 ## [1.7.0]
-- Moved `xgboost` dependency into the optional `[ml]` install
+- Moved `xgboost` dependency into the optional `[ml]` install (0c62acf)
 
 ### motif
 #### graph
