@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # Project metadata
 [project]
 name = "glycowork"
-version = "1.6.0"
+version = "1.6.1"
 description = "Package for processing and analyzing glycans"
 readme = "README.md"
 authors = [
@@ -13,7 +13,6 @@ authors = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent"
 ]
 requires-python = ">=3.9"
@@ -25,7 +24,6 @@ dependencies = [
     "statsmodels",
     "scipy",
     "seaborn",
-    "xgboost",
     "bokeh",
     "IPython",
     "pandas>=1.3",
@@ -33,7 +31,7 @@ dependencies = [
     "huggingface_hub>=0.16.0",
     "drawSvg~=2.0",
     "openpyxl",
-    "glycorender>=0.1.5"
+    "glycorender[png]==0.2.0"
 ]
 
 [project.urls]
@@ -43,6 +41,7 @@ Homepage = "https://github.com/BojarLab/glycowork"
 all = [
     "torch_geometric",
     "torch",
+    "xgboost",
     "glyles",
     "pubchempy",
     "requests",
@@ -51,6 +50,7 @@ all = [
 dev = [
     "torch_geometric",
     "torch",
+    "xgboost",
     "glyles",
     "pubchempy",
     "requests",
@@ -59,7 +59,8 @@ dev = [
 ]
 ml = [
     "torch_geometric",
-    "torch"
+    "torch",
+    "xgboost"
 ]
 chem = [
     "glyles",
@@ -70,4 +71,12 @@ chem = [
 
 [tool.setuptools]
 include-package-data = true
-package-data = {"*" = ["*.csv", "*.pkl", "*.jpg", "*.pt", "*.json"]}
+# This is a workaround for https://github.com/astral-sh/uv/issues/9513
+license-files = []
+
+[tool.setuptools.packages.find]
+include = ["glycowork*"]
+exclude = ["index_files*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.csv", "*.pkl", "*.jpg", "*.pt", "*.json"]

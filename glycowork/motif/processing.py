@@ -23,7 +23,7 @@ with open(mapping_path) as f:
   BACKUP_G_IDS = json.load(f)
 
 # for canonicalize_iupac
-replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc',
+replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')',
                   'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', 'Talp': 'Tal',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara',
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
@@ -924,7 +924,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
   glycan = re.sub(r'(\d)A($|a)', r'\1Ac\2', glycan)  # 9Aa into 9Aca
   glycan = re.sub(r'-([ab])-(\d+),(\d+\)?)-', r'\1\2-\3', glycan)  # Inconsistent usage of dashes and commas, like in Neu5Ac-a-2,6-Gal-b-1,3-GlcNAc
-  glycan = re.sub(r'(\d),(\d)(?!l)', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone)
+  glycan = re.sub(r'(\d),(\d)(?![l-])', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone) or '-' (for Anhydro)
   if '{' in glycan and '}' not in glycan:
     glycan = f'{{{glycan[:glycan.index("{")]}?1-?}}{glycan[glycan.index("{")+1:]}'
   if '{' in glycan and '(' not in glycan:
@@ -948,7 +948,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Open linkages with anomeric config specified (e.g., "Mana-")
   glycan = re.sub(r'([A-Z][a-z]*)([a-b])\-([A-Z])', r'\1\g<2>1-?\3', glycan)
   # Open linkages (e.g., "c-")
-  glycan = re.sub(r'([a-z])\-([A-Z][^\-])', r'\1?1-?\2', glycan)
+  glycan = re.sub(r'([a-np-z])\-([A-Z][^\-])', r'\1?1-?\2', glycan)
   # Open linkages2 (e.g., "1-")
   glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
   # Missing linkages (e.g., "c)")
@@ -966,12 +966,12 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Missing starting carbon (e.g., "b-4")
   glycan = re.sub(r'(a|b|\?)-(\d)', r'\g<1>1-\2', glycan)
   # If still no '-' in glycan, assume 'a3' type of linkage denomination
-  if '-' not in glycan or bool(re.search(r'[ab][123456](?![\-PA])', glycan)):
+  if '-' not in glycan or bool(re.search(r'(?<![hr])[ab][123456](?![\-PA])', glycan)):
     # Check whether linkages are recorded as b1 or as a3
     if bool(re.search(r"^[^2-6]*1?[^2-6]*$", glycan)):
       glycan = re.sub(r'(a|b)(\d)(?!\-)', r'\g<1>\g<2>-?', glycan)
     else:
-      glycan = re.sub(r'(?<!h)(a|b)(\d)(?!\-)', r'\g<1>1-\g<2>', glycan)
+      glycan = re.sub(r'(?<![hr])(a|b)(\d)(?!\-)', r'\g<1>1-\g<2>', glycan)
   # Introduce parentheses for linkages
   if '(' not in glycan and len(glycan) > 6:
     for k in range(1, glycan.count('-')+1):
@@ -995,7 +995,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   old_glycan = ""
   while glycan != old_glycan:
     old_glycan = glycan
-    glycan = re.sub(r'\[([^]]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
+    glycan = re.sub(r'\[([^]^-]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
                  lambda m: f"{m.group(3)}{m.group(2)}{m.group(1).split('(')[0]}" if (m.group(1).split('(')[0] not in lib and m.group(1).count('(') == 1) else f"[{m.group(1)}]{m.group(3)}",
                  glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
   glycan = re.sub(r'\[([A-Za-z0-9]+)\(\?(\d+)-(\d+)\)([A-Za-z0-9]+)',
@@ -1008,7 +1008,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'\[([1-9]?[SP])\]([A-Z][^\(^\[]+)', r'\2\1', glycan)  # [S]Gal to GalS
   glycan = re.sub(r'(\)|\]|^)([1-9]?[SP])([A-Z][^\(^\[]+)', r'\1\3\2', glycan)  # )SGal to )GalS
   glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)  # Gal-olS to GalS-ol
-  glycan = re.sub(r'(\[|\)|\]|^)([1-9]?[SP])(?!en)([A-Za-z]+)', r'\1\3\2', glycan)  # SGalNAc to GalNAcS
+  glycan = re.sub(r'(\[|\)|\]|^)([1-9]?[SP])(?!en)([A-Z][A-Za-z]*)', r'\1\3\2', glycan)  # SGalNAc to GalNAcS
   glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)  # S-Gal to GalS
   # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
   glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
