@@ -1,7 +1,8 @@
 # Changelog
 
-## [1.7.0]
+## [1.6.1]
 - Moved `xgboost` dependency into the optional `[ml]` install (0c62acf)
+- `glycowork` now no longer has a `svglib` dependency, due to improvements in `glycorender`, requiring `glycorender[png]>=0.2.0` (4cad68f)
 
 ### motif
 #### graph
@@ -13,3 +14,7 @@
 
 ##### Fixed 🐛
 ##### Deprecated ⚠️
+
+#### processing
+##### Changed 🔄
+- `canonicalize_iupac` can now handle some more variations, such as double-anomeric linkages (`(a2-1b)`), and will leave modification-containing-seeming monosaccharides (e.g., `Psif`, `Sorf`) intact

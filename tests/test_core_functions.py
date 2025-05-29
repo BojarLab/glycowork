@@ -272,6 +272,9 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Neu5Ac-α-2,6-Gal-β-1,3-GlcNAc-β-Sp") == "Neu5Ac(a2-6)Gal(b1-3)GlcNAc"
     assert canonicalize_iupac("GlcNAc-α-1,3-(Glc-α-1,2-Glc-α-1,2)-Gal-α-1,3-Glc-α-Sp") == "Glc(a1-2)Glc(a1-2)[GlcNAc(a1-3)]Gal(a1-3)Glc"
     assert canonicalize_iupac('GlcNAcβ(1-2)Manα(1-3)[Neu5Acα(2-6)Galβ(1-4)GlcNAcβ(1-2)Manα(1-6)]Manβ(1-4)GlcNAcβ(1-4)[Fucα(1-6)]GlcNAc' ) ==  'Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
+    assert canonicalize_iupac("Sorf(a2-1b)[L-Glc(b1-6)]L-Tal") == "Sorf(a2-1)[L-Glc(b1-6)]L-Tal"
+    assert canonicalize_iupac("Psif(a2-1b)Glc") == "Psif(a2-1)Glc"
+    assert canonicalize_iupac("Glc(a1-4)2,3-Anhydro-Man(a1-4)Glc(a1-4)Glc") == "Glc(a1-4)2,3-Anhydro-Man(a1-4)Glc(a1-4)Glc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -289,6 +292,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("SGalNAc(b1-4)GlcNAc") == "GalNAcOS(b1-4)GlcNAc"
     assert canonicalize_iupac("S-Gal(b1-4)Glc-ol") == "GalOS(b1-4)Glc-ol"
     assert canonicalize_iupac("SGaNAcb1-4SGlcNac") == "GalNAcOS(b1-4)GlcNAcOS"
+    assert canonicalize_iupac("Rha(a1-2)Ara4S") == "Rha(a1-2)Ara4S"
+    assert canonicalize_iupac("GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc") == "GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc"
     # Test sanitization
     assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
     assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-2)]Man") == "Gal(b1-4)GlcNAc(b1-?)[Gal(b1-4)GlcNAc(b1-?)]Man"
@@ -308,7 +313,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[GalNAc(a1-3)]Gal(b1-3)]GalNAc") == "Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[GalNAc(a1-3)]Gal(b1-3)]GalNAc"
     assert canonicalize_iupac("Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Xyl(b1-2)][Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc") == "Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
-    assert canonicalize_iupac("Glc(?1-?)[Gal(?1-?)]2,5-Anhydro-D-Tal") == "Gal(?1-?)[Glc(?1-?)]2-5-Anhydro-D-Tal"
+    assert canonicalize_iupac("Glc(?1-?)[Gal(?1-?)]2,5-Anhydro-D-Tal") == "Gal(?1-?)[Glc(?1-?)]2,5-Anhydro-D-Tal"
     # Test other nomenclatures
     assert canonicalize_iupac("aDMan(1-2)bDGlcp(1-1)Me") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("aDGlcp(1-2)bDFruf") == "Glc(a1-2)Fruf"
@@ -4145,7 +4150,7 @@ def sample_glycoshift_df():
 def test_characterize_monosaccharide_basic():
     """Test basic functionality of characterize_monosaccharide"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        characterize_monosaccharide('Man', rank="Class", focus="Mammalia")
+        characterize_monosaccharide('Man', rank="Class", focus="Actinopterygii")
         mock_savefig.assert_not_called()
 
 
@@ -4159,14 +4164,14 @@ def test_characterize_monosaccharide_with_custom_df(sample_df):
 def test_characterize_monosaccharide_with_bond_mode():
     """Test characterize_monosaccharide in bond mode"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        characterize_monosaccharide('a1-3', mode='bond', rank="Class", focus="Mammalia")
+        characterize_monosaccharide('a1-3', mode='bond', rank="Class", focus="Actinopterygii")
         mock_savefig.assert_not_called()
 
 
 def test_characterize_monosaccharide_with_modifications():
     """Test characterize_monosaccharide with modifications enabled"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        characterize_monosaccharide('Man', modifications=True, rank="Class", focus="Mammalia")
+        characterize_monosaccharide('Man', modifications=True, rank="Class", focus="Actinopterygii")
         mock_savefig.assert_not_called()
 
 
