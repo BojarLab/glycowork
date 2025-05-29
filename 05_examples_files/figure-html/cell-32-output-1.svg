@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="600" height="360.0" viewBox="-550.0 -205.0 600 360.0">
+<defs>
+<path d="M-50.0,25.0 L50.0,25.0" stroke-width="0" id="AXK25lgf0" />
+<path d="M-110.0,25.0 L-10.0,25.0" stroke-width="0" id="AXK25lgf1" />
+<path d="M-170.0,25.0 L-70.0,25.0" stroke-width="0" id="AXK25lgf2" />
+<path d="M-229.99999999999997,70.0 L-129.99999999999997,70.0" stroke-width="0" id="AXK25lgf3" />
+<path d="M-290.0,70.0 L-190.0,70.0" stroke-width="0" id="AXK25lgf4" />
+<path d="M-350.0,70.0 L-250.0,70.0" stroke-width="0" id="AXK25lgf5" />
+<path d="M-229.99999999999997,-19.999999999999993 L-129.99999999999997,-19.999999999999993" stroke-width="0" id="AXK25lgf6" />
+<path d="M-290.0,10.0 L-190.0,10.0" stroke-width="0" id="AXK25lgf7" />
+<path d="M-350.0,10.0 L-250.0,10.0" stroke-width="0" id="AXK25lgf8" />
+<path d="M-290.0,-50.0 L-190.0,-50.0" stroke-width="0" id="AXK25lgf9" />
+<path d="M-350.0,-50.0 L-250.0,-50.0" stroke-width="0" id="AXK25lgf10" />
+</defs>
+<g transform="rotate(0 -250.0 -25.0)">
+<path d="M-60.0,0.0 L0.0,0.0" stroke-width="4.0" stroke="#000000" />
+<path d="M-120.0,0.0 L-60.0,0.0" stroke-width="4.0" stroke="#000000" />
+<path d="M-179.99999999999997,44.99999999999999 L-120.0,0.0" stroke-width="4.0" stroke="#000000" />
+<path d="M-240.0,44.99999999999999 L-179.99999999999997,44.99999999999999" stroke-width="4.0" stroke="#000000" />
+<path d="M-300.0,44.99999999999999 L-240.0,44.99999999999999" stroke-width="4.0" stroke="#000000" />
+<path d="M-240.0,-15.0 L-179.99999999999997,-44.99999999999999" stroke-width="4.0" stroke="#000000" />
+<path d="M-300.0,-15.0 L-240.0,-15.0" stroke-width="4.0" stroke="#000000" />
+<path d="M-179.99999999999997,-44.99999999999999 L-120.0,0.0" stroke-width="4.0" stroke="#000000" />
+<path d="M-300.0,-75.0 L-240.0,-75.0" stroke-width="4.0" stroke="#000000" />
+<path d="M-240.0,-75.0 L-179.99999999999997,-44.99999999999999" stroke-width="4.0" stroke="#000000" />
+<rect x="-25.0" y="-25.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf0" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf0" startOffset="50%"></textPath></text>
+<rect x="-85.0" y="-25.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf1" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf1" startOffset="50%"></textPath></text>
+<circle cx="-120.0" cy="0.0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf2" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf2" startOffset="50%"></textPath></text>
+<circle cx="-179.99999999999997" cy="44.99999999999999" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf3" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf3" startOffset="50%"></textPath></text>
+<circle cx="-240.0" cy="44.99999999999999" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf4" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf4" startOffset="50%"></textPath></text>
+<circle cx="-300.0" cy="44.99999999999999" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf5" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf5" startOffset="50%"></textPath></text>
+<circle cx="-179.99999999999997" cy="-44.99999999999999" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf6" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf6" startOffset="50%"></textPath></text>
+<circle cx="-240.0" cy="-15.0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf7" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf7" startOffset="50%"></textPath></text>
+<circle cx="-300.0" cy="-15.0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf8" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf8" startOffset="50%"></textPath></text>
+<circle cx="-240.0" cy="-75.0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf9" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf9" startOffset="50%"></textPath></text>
+<circle cx="-300.0" cy="-75.0" r="25.0" fill="#058F60" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#AXK25lgf10" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#AXK25lgf10" startOffset="50%"></textPath></text>
+</g>
+</svg>
