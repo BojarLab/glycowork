@@ -9,8 +9,6 @@ from io import BytesIO
 from typing import Dict, List, Tuple, Optional, Union, Any
 import networkx as nx
 import drawsvg as draw
-from openpyxl.drawing.image import Image as OpenpyxlImage
-from openpyxl.utils import get_column_letter
 from PIL import Image
 from IPython import get_ipython
 from IPython.display import SVG
@@ -1409,6 +1407,8 @@ def plot_glycans_excel(
     compact: bool = False # Use compact style
     ) -> None:
   "Creates Excel file with SNFG glycan images in a new column"
+  from openpyxl.drawing.image import Image as OpenpyxlImage
+  from openpyxl.utils import get_column_letter
   if isinstance(df, (str, Path)):
     df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   df["SNFG"] = [np.nan for k in range(len(df))]

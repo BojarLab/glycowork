@@ -10,7 +10,6 @@ from pathlib import Path
 from itertools import chain
 from importlib import resources
 from typing import Any, Dict, List, Union, Optional
-from huggingface_hub import hf_hub_download
 
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
   motif_list = pd.read_csv(f)
@@ -270,6 +269,7 @@ def build_custom_df(df: pd.DataFrame, # df_glycan / sugarbase
 def download_model(file_id: str # Filename in the HuggingFace repo
                  ) -> str:  # file path to cached model
   "Download the model weights file from HuggingFace Hub"
+  from huggingface_hub import hf_hub_download
   file_path = hf_hub_download(repo_id = "DBojar/glycowork_models", filename = file_id)
   print("Download completed.")
   return file_path
