@@ -884,6 +884,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
   "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, and GlyTouCanIDs to standardized IUPAC-condensed format"
   glycan = glycan.strip().replace('–', '-').replace(' ', '')
+  glycan = re.sub(r'^(["\'])(.*?)\1$', r'\2', glycan)
   mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
   if mapped_glycan:
     return mapped_glycan
