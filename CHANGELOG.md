@@ -19,3 +19,7 @@
 #### draw
 ##### Changed 🔄
 - `openpyxl` will now only be imported upon running `plot_glycans_excel`, making it technically run-time optional and improving package start-up time
+
+#### processing
+##### Fixed 🐛
+- Fixed capitalisation in mapping of IGG N-glycan codes to account for `.lower()` call in `canonicalize_iupac`
