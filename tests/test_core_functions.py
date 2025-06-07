@@ -343,6 +343,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("DManpa1-2DGlcpA[4Me]b1-4DGalpAa1-4DGlcpAb1-4DGlcp") == "Man(a1-2)GlcA4Me(b1-4)GalA(a1-4)GlcA(b1-4)Glc"
     assert canonicalize_iupac("DNeup5Ac[9A]a2-3DGalpb1-4[LFucpa1-3]DGlcpNAc") == "Neu5Ac9Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("DGlcpNAcb1-2[DGlcpa1-3]LRhapa1-2LRhapa1-3LRhap[2A]a1-OH") == "GlcNAc(b1-2)[Glc(a1-3)]Rha(a1-2)Rha(a1-3)Rha2Ac"
+    assert canonicalize_iupac("LDmanpHepa1-OME") == "LDManHep1Me"
     assert canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("GNb2Ma3(Ab4GNb2Ma6)Mb4GNb4(Fa6)GNb;") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M)61M(31M21M)61M21M") == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
