@@ -24,7 +24,7 @@ with open(mapping_path) as f:
 
 # for canonicalize_iupac
 replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')',
-                  'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', 'Talp': 'Tal',
+                  'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', 'Talp': 'Tal', 'manp': 'man',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara',
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn',
@@ -738,8 +738,9 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
 def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
                     ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from GLYCAM to IUPAC-condensed format"
-  pattern = r'(?:^[DL]|(?<=\d)[DL]|(?<=[\[\]])[DL])|(?:\[(\d+[SPCMeA\d]+)\])'
-  glycan = '-'.join(glycan.split('-')[:-1])[:-2] if '-OH' in glycan else glycan
+  pattern = r'(?:^[DL](?!Dman)|(?<=\d)[DL]|(?<=[\[\]])[DL])|(?:\[(\d+[SPCMeA\d]+)\])'
+  glycan = glycan.replace('-OME', '1Me')
+  glycan = glycan[:-5] if glycan.endswith('-OH') else glycan
   glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan.replace(',', ''))
   return glycan.replace('[', '(').replace(']', ')')
 
@@ -884,6 +885,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
   "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, and GlyTouCanIDs to standardized IUPAC-condensed format"
   glycan = glycan.strip().replace('–', '-').replace(' ', '')
+  glycan = re.sub(r'^(["\'])(.*?)\1$', r'\2', glycan)
   mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
   if mapped_glycan:
     return mapped_glycan
@@ -898,7 +900,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycoct_to_iupac(glycan)
   elif 'S=' in glycan:
     glycan = wurcs_to_iupac(glycan)
-  elif glycan.endswith('-OH') or bool(re.search(r'\d[DL][A-Z]', glycan)):
+  elif glycan.endswith(('-OH', '-OME')) or bool(re.search(r'\d[DL][A-Z]', glycan)):
     glycan = glycam_to_iupac(glycan)
   elif 'End--' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
@@ -1025,7 +1027,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = '{'+glycan.replace('+', '}')
   post_process = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a',
-                  'Kdn(a1': 'Kdn(a2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?'}
+                  'Kdn(a1': 'Kdn(a2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?', 'manHep': 'ManHep'}
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
   glycan = sanitize_iupac(glycan)

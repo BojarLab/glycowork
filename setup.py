@@ -5,7 +5,7 @@ with open("README.md", "r", encoding = "utf-8") as fh:
 
 setuptools.setup(
     name="glycowork",
-    version="1.6.1",
+    version="1.6.2",
     author="Daniel Bojar",
     author_email="daniel.bojar@gu.se",
     description="Package for processing and analyzing glycans",
@@ -25,7 +25,7 @@ setuptools.setup(
                       "statsmodels", "scipy", "seaborn", "bokeh",
                       "pandas>=1.3", "setuptools>=64.0", "IPython",
                       "huggingface_hub>=0.16.0", "drawSvg~=2.0",
-                            "openpyxl", "glycorender[png]==0.2.0"],
+                            "openpyxl", "glycorender[png]~=0.2.0"],
     extras_require={'all':["torch_geometric", "torch",
                            "glyles", "pubchempy", "requests", "py3Dmol"],
                     'dev':["torch_geometric", "torch",
