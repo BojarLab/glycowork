@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.7.0]
+## [1.6.2]
 
 ### glycan_data
 #### loader
@@ -23,10 +23,11 @@
 #### processing
 ##### Added ✨
 - `canonicalize_iupac` now removes extraneous quote marks around input glycans (fbe454c)
+- Added more milk oligosaccharide common names to the Universal Input pipeline as recognized by `canonicalize_iupac`
 
 ##### Changed 🔄
-- `canonicalize_iupac` will now recognize `GLYCAM` sequences terminating in `-OME`
+- `canonicalize_iupac` will now recognize `GLYCAM` sequences terminating in `-OME` (6430ebb)
 
 ##### Fixed 🐛
 - Fixed capitalisation in mapping of IGG N-glycan codes to account for `.lower()` call in `canonicalize_iupac` (48fb211)
-- Fixed variant `LDManHep` handling in `canonicalize_iupac`
+- Fixed variant `LDManHep` handling in `canonicalize_iupac` (6430ebb)
