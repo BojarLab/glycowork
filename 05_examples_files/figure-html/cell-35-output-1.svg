@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="300" height="435.0" viewBox="-250.0 -167.5 300 435.0">
+<defs>
+<path d="M-100,62.5 L0,0" stroke-width="4.0" stroke="#000000" id="k6J5uk1X0" />
+<path d="M-100,162.5 L-100,62.5" stroke-width="4.0" stroke="#000000" id="k6J5uk1X1" />
+<path d="M-200,-62.5 L-100,-62.5" stroke-width="4.0" stroke="#000000" id="k6J5uk1X2" />
+<path d="M-200,62.5 L-100,62.5" stroke-width="4.0" stroke="#000000" id="k6J5uk1X3" />
+<path d="M-100,-62.5 L0,0" stroke-width="4.0" stroke="#000000" id="k6J5uk1X4" />
+<radialGradient cx="0" cy="0" r="58.75" gradientUnits="userSpaceOnUse" id="k6J5uk1X5">
+<stop offset="0" stop-color="darkgoldenrod" stop-opacity="0.10400000000000002" />
+<stop offset="0.6" stop-color="darkgoldenrod" stop-opacity="0.04160000000000001" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-50,25.0 L50,25.0" stroke-width="0" id="k6J5uk1X6" />
+<radialGradient cx="-100" cy="62.5" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="k6J5uk1X7">
+<stop offset="0" stop-color="darkgoldenrod" stop-opacity="0.312" />
+<stop offset="0.6" stop-color="darkgoldenrod" stop-opacity="0.12480000000000001" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-150,87.5 L-50,87.5" stroke-width="0" id="k6J5uk1X8" />
+<radialGradient cx="-100" cy="162.5" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="k6J5uk1X9">
+<stop offset="0" stop-color="firebrick" stop-opacity="0.7200000000000001" />
+<stop offset="0.6" stop-color="firebrick" stop-opacity="0.28800000000000003" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-150,187.5 L-50,187.5" stroke-width="0" id="k6J5uk1X10" />
+<radialGradient cx="-200" cy="62.5" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="k6J5uk1X11">
+<stop offset="0" stop-color="purple" stop-opacity="0.5599999999999999" />
+<stop offset="0.6" stop-color="purple" stop-opacity="0.22399999999999998" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-250,87.5 L-150,87.5" stroke-width="0" id="k6J5uk1X12" />
+<radialGradient cx="-100" cy="-62.5" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="k6J5uk1X13">
+<stop offset="0" stop-color="purple" stop-opacity="0.4" />
+<stop offset="0.6" stop-color="purple" stop-opacity="0.16000000000000003" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-150,-37.5 L-50,-37.5" stroke-width="0" id="k6J5uk1X14" />
+<radialGradient cx="-200" cy="-62.5" r="55.00000000000001" gradientUnits="userSpaceOnUse" id="k6J5uk1X15">
+<stop offset="0" stop-color="purple" stop-opacity="0.16000000000000003" />
+<stop offset="0.6" stop-color="purple" stop-opacity="0.06400000000000002" />
+<stop offset="1" stop-color="white" stop-opacity="0" />
+</radialGradient>
+<path d="M-250,-37.5 L-150,-37.5" stroke-width="0" id="k6J5uk1X16" />
+</defs>
+<g transform="rotate(0 -100.0 50.0)">
+<use xlink:href="#k6J5uk1X0" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#k6J5uk1X0" startOffset="50%">
+<tspan dy="-0.5em">β 3</tspan>
+</textPath></text>
+<use xlink:href="#k6J5uk1X1" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#k6J5uk1X1" startOffset="50%">
+<tspan dy="-0.5em">α 2</tspan>
+</textPath></text>
+<use xlink:href="#k6J5uk1X2" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#k6J5uk1X2" startOffset="50%">
+<tspan dy="-0.5em">α 8</tspan>
+</textPath></text>
+<use xlink:href="#k6J5uk1X3" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#k6J5uk1X3" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#k6J5uk1X4" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#k6J5uk1X4" startOffset="50%">
+<tspan dy="-0.5em">α 6</tspan>
+</textPath></text>
+<circle cx="0" cy="0" r="58.75" fill="url(#k6J5uk1X5)" />
+<rect x="-25.0" y="-25.0" width="50" height="50" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#k6J5uk1X6" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#k6J5uk1X6" startOffset="50%"></textPath></text>
+<circle cx="-100" cy="62.5" r="55.00000000000001" fill="url(#k6J5uk1X7)" />
+<circle cx="-100" cy="62.5" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#k6J5uk1X8" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#k6J5uk1X8" startOffset="50%"></textPath></text>
+<circle cx="-100" cy="162.5" r="55.00000000000001" fill="url(#k6J5uk1X9)" />
+<path d="M-125.0,184.15063509461098 L-100,140.84936490538902 L-75.0,184.15063509461098 Z" fill="#C23537" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#k6J5uk1X10" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#k6J5uk1X10" startOffset="50%"></textPath></text>
+<circle cx="-200" cy="62.5" r="55.00000000000001" fill="url(#k6J5uk1X11)" />
+<path d="M-200,87.5 L-175.0,62.5 L-200,37.5 L-225.0,62.5 Z" fill="#A15989" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#k6J5uk1X12" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#k6J5uk1X12" startOffset="50%"></textPath></text>
+<circle cx="-100" cy="-62.5" r="55.00000000000001" fill="url(#k6J5uk1X13)" />
+<path d="M-100,-37.5 L-75.0,-62.5 L-100,-87.5 L-125.0,-62.5 Z" fill="#A15989" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#k6J5uk1X14" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#k6J5uk1X14" startOffset="50%"></textPath></text>
+<circle cx="-200" cy="-62.5" r="55.00000000000001" fill="url(#k6J5uk1X15)" />
+<path d="M-200,-37.5 L-175.0,-62.5 L-200,-87.5 L-225.0,-62.5 Z" fill="#A15989" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#k6J5uk1X16" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#k6J5uk1X16" startOffset="50%"></textPath></text>
+</g>
+</svg>

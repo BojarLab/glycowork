@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="700" height="510.0" viewBox="-650.0 -205.0 700 510.0">
+<defs>
+<path d="M-100,0 L0,0" stroke-width="4.0" stroke="#D9D9D9" id="buMwpWDJ0" />
+<path d="M-200,0 L-100,0" stroke-width="4.0" stroke="#D9D9D9" id="buMwpWDJ1" />
+<path d="M-300,100.0 L-200,0" stroke-width="4.0" stroke="#D9D9D9" id="buMwpWDJ2" />
+<path d="M-400,100.0 L-300,100.0" stroke-width="4.0" stroke="#D9D9D9" id="buMwpWDJ3" />
+<path d="M-500,100.0 L-400,100.0" stroke-width="4.0" stroke="#000000" id="buMwpWDJ4" />
+<path d="M-600,100.0 L-500,100.0" stroke-width="4.0" stroke="#D9D9D9" id="buMwpWDJ5" />
+<path d="M-400,-100.0 L-300,-100.0" stroke-width="4.0" stroke="#D9D9D9" id="buMwpWDJ6" />
+<path d="M-500,-100.0 L-400,-100.0" stroke-width="4.0" stroke="#000000" id="buMwpWDJ7" />
+<path d="M-400,200.0 L-400,100.0" stroke-width="4.0" stroke="#000000" id="buMwpWDJ8" />
+<path d="M-300,-100.0 L-200,0" stroke-width="4.0" stroke="#D9D9D9" id="buMwpWDJ9" />
+<path d="M0,-100 L0,0" stroke-width="4.0" stroke="#D9D9D9" id="buMwpWDJ10" />
+<path d="M-400,0.0 L-400,-100.0" stroke-width="4.0" stroke="#000000" id="buMwpWDJ11" />
+<path d="M-50,25.0 L50,25.0" stroke-width="0" id="buMwpWDJ12" />
+<path d="M-150,25.0 L-50,25.0" stroke-width="0" id="buMwpWDJ13" />
+<path d="M-250,25.0 L-150,25.0" stroke-width="0" id="buMwpWDJ14" />
+<path d="M-350,125.0 L-250,125.0" stroke-width="0" id="buMwpWDJ15" />
+<path d="M-450,125.0 L-350,125.0" stroke-width="0" id="buMwpWDJ16" />
+<path d="M-550,125.0 L-450,125.0" stroke-width="0" id="buMwpWDJ17" />
+<path d="M-650,125.0 L-550,125.0" stroke-width="0" id="buMwpWDJ18" />
+<path d="M-450,225.0 L-350,225.0" stroke-width="0" id="buMwpWDJ19" />
+<path d="M-350,-75.0 L-250,-75.0" stroke-width="0" id="buMwpWDJ20" />
+<path d="M-450,-75.0 L-350,-75.0" stroke-width="0" id="buMwpWDJ21" />
+<path d="M-550,-75.0 L-450,-75.0" stroke-width="0" id="buMwpWDJ22" />
+<path d="M-50,-75.0 L50,-75.0" stroke-width="0" id="buMwpWDJ23" />
+<path d="M-450,25.0 L-350,25.0" stroke-width="0" id="buMwpWDJ24" />
+</defs>
+<g transform="rotate(0 -300.0 50.0)">
+<use xlink:href="#buMwpWDJ0" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#buMwpWDJ0" startOffset="50%">
+<tspan dy="-0.5em">β 4</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ1" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#buMwpWDJ1" startOffset="50%">
+<tspan dy="-0.5em">β 4</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ2" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#buMwpWDJ2" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ3" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#buMwpWDJ3" startOffset="50%">
+<tspan dy="-0.5em">β 2</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ4" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#buMwpWDJ4" startOffset="50%">
+<tspan dy="-0.5em">β 4</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ5" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#buMwpWDJ5" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ6" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#buMwpWDJ6" startOffset="50%">
+<tspan dy="-0.5em">β 2</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ7" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#buMwpWDJ7" startOffset="50%">
+<tspan dy="-0.5em">β 3</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ8" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#buMwpWDJ8" startOffset="50%">
+<tspan dy="-0.5em">α 3</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ9" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#buMwpWDJ9" startOffset="50%">
+<tspan dy="-0.5em">α 6</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ10" />
+<text font-size="20.0" text-anchor="middle" fill="#D9D9D9" valign="middle"><textPath xlink:href="#buMwpWDJ10" startOffset="50%">
+<tspan dy="-0.5em">α 6</tspan>
+</textPath></text>
+<use xlink:href="#buMwpWDJ11" />
+<text font-size="20.0" text-anchor="middle" fill="#000000" valign="middle"><textPath xlink:href="#buMwpWDJ11" startOffset="50%">
+<tspan dy="-0.5em">α 4</tspan>
+</textPath></text>
+<rect x="-25.0" y="-25.0" width="50" height="50" fill="#CDE7EF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#buMwpWDJ12" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#buMwpWDJ12" startOffset="50%"></textPath></text>
+<rect x="-125.0" y="-25.0" width="50" height="50" fill="#CDE7EF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#buMwpWDJ13" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#buMwpWDJ13" startOffset="50%"></textPath></text>
+<circle cx="-200" cy="0" r="25.0" fill="#CDE9DF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#buMwpWDJ14" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#buMwpWDJ14" startOffset="50%"></textPath></text>
+<circle cx="-300" cy="100.0" r="25.0" fill="#CDE9DF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#buMwpWDJ15" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#buMwpWDJ15" startOffset="50%"></textPath></text>
+<rect x="-425.0" y="75.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#buMwpWDJ16" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#buMwpWDJ16" startOffset="50%"></textPath></text>
+<circle cx="-500" cy="100.0" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#buMwpWDJ17" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#buMwpWDJ17" startOffset="50%"></textPath></text>
+<path d="M-600,125.0 L-575.0,100.0 L-600,75.0 L-625.0,100.0 Z" fill="#F1E6ED" stroke="#D9D9D9" stroke-width="2.0" />
+<use xlink:href="#buMwpWDJ18" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#buMwpWDJ18" startOffset="50%"></textPath></text>
+<path d="M-425.0,221.65063509461098 L-400,178.34936490538902 L-375.0,221.65063509461098 Z" fill="#C23537" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#buMwpWDJ19" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#buMwpWDJ19" startOffset="50%"></textPath></text>
+<circle cx="-300" cy="-100.0" r="25.0" fill="#CDE9DF" stroke-width="2.0" stroke="#D9D9D9" />
+<use xlink:href="#buMwpWDJ20" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#buMwpWDJ20" startOffset="50%"></textPath></text>
+<rect x="-425.0" y="-125.0" width="50" height="50" fill="#0385AE" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#buMwpWDJ21" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#buMwpWDJ21" startOffset="50%"></textPath></text>
+<circle cx="-500" cy="-100.0" r="25.0" fill="#FCC326" stroke-width="2.0" stroke="#000000" />
+<use xlink:href="#buMwpWDJ22" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#buMwpWDJ22" startOffset="50%"></textPath></text>
+<path d="M-25.0,-78.34936490538904 L0,-121.65063509461096 L25.0,-78.34936490538904 Z" fill="#F7E0E0" stroke="#D9D9D9" stroke-width="2.0" />
+<use xlink:href="#buMwpWDJ23" />
+<text font-size="17.5" fill="#D9D9D9" text-anchor="middle"><textPath xlink:href="#buMwpWDJ23" startOffset="50%"></textPath></text>
+<path d="M-425.0,21.650635094610966 L-400,-21.650635094610966 L-375.0,21.650635094610966 Z" fill="#C23537" stroke="#000000" stroke-width="2.0" />
+<use xlink:href="#buMwpWDJ24" />
+<text font-size="17.5" fill="#000000" text-anchor="middle"><textPath xlink:href="#buMwpWDJ24" startOffset="50%"></textPath></text>
+</g>
+</svg>
