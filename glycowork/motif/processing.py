@@ -30,7 +30,9 @@ replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
-
+COMMON_ENANTIOMER = {"L-Fuc": "Fuc", "D-Gal": "Gal", "D-Man": "Man", "D-Glc": "Glc", "L-Alt": "Alt", "L-All": "All", "L-Ara": "Ara", "D-Gul": "Gul", "D-Lyx": "Lyx",
+                  "D-Oli": "Oli", "D-Qui": "Qui", "L-Rha": "Rha", "D-Psi": "Psi", "L-Ido": "Ido", "D-Fru": "Fru", "D-Rib": "Rib", "L-Sor": "Sor", "D-Tag": "Tag", "D-Tal": "Tal", "D-6dTal": "6dTal",
+                  "D-Xyl": "Xyl", "D-Mur": "Mur", "D-Neu": "Neu", "D-Kdn": "Kdn", "D-Kdo": "Kdo"}
 
 def rescue_glycans(func: Callable # Function to wrap
                  ) -> Callable: # Wrapped function handling formatting issues
@@ -289,10 +291,10 @@ def iupac_extended_to_condensed(iupac_extended: str # Glycan in IUPAC-extended f
   "Convert glycan from IUPAC-extended to barebones IUPAC-condensed format"
   # Find all occurrences of the pattern and apply the changes
   def replace_pattern(match):
-    # Move the α or β after the next opening parenthesis
-    return f"{match.group('after')}{match.group('alpha_beta')}"
-  # The regular expression looks for α-D- or β-D- followed by any characters until an open parenthesis
-  pattern = re.compile(r"(?P<alpha_beta>[αβßab\?])-[DL]-(?P<after>[^\)]*\()")
+    # Move the α or β after the next opening parenthesis, KEEP D-/L-
+    return f"{match.group('dl')}-{match.group('after')}{match.group('alpha_beta')}"
+  # Modified pattern to capture D-/L- separately
+  pattern = re.compile(r"(?P<alpha_beta>[αβßab\?])-(?P<dl>[DL])-(?P<after>[^\)]*\()")
   # Substitute the pattern in the string with our replace_pattern function
   adjusted_string = pattern.sub(replace_pattern, iupac_extended)
   adjusted_string = re.sub(r"-\(", "(", adjusted_string)
@@ -738,17 +740,24 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
 def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
                     ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from GLYCAM to IUPAC-condensed format"
-  pattern = r'(?:^[DL](?!Dman)|(?<=\d)[DL]|(?<=[\[\]])[DL])|(?:\[(\d+[SPCMeA\d]+)\])'
+  # Convert single D/L to D-/L- format instead of stripping
+  pattern = r'(?:^([DL])(?!Dman)|(?<=\d)([DL])|(?<=[\[\]])([DL]))|(?:\[(\d+[SPCMeA\d]+)\])'
+  def replacement(match):
+    if match.group(4):  # modification group
+      return match.group(4)
+    else:  # D/L group - convert to D-/L- format
+      dl = match.group(1) or match.group(2) or match.group(3)
+      return f"{dl}-"
   glycan = glycan.replace('-OME', '1Me')
   glycan = glycan[:-5] if glycan.endswith('-OH') else glycan
-  glycan = re.sub(pattern, lambda m: m.group(1) if m.group(1) else '', glycan.replace(',', ''))
+  glycan = re.sub(pattern, replacement, glycan.replace(',', ''))
   return glycan.replace('[', '(').replace(']', ')')
 
 
 def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
                             ) -> str: # Basic IUPAC-condensed format
   """Convert GlycoWorkBench nomenclature to IUPAC-condensed format."""
-  glycan = glycan.replace('D-', '').replace('L-', '').replace("--?[", '')  # Remove D- and L- prefixes
+  glycan = glycan.replace("--?[", '')
   repeat_pattern = r'--(\d+)\[(.*?)\]'
   main_part = glycan.split('$MONO')[0]
   while re.search(repeat_pattern, main_part):
@@ -870,7 +879,7 @@ def transform_repeat_glycan(glycan: str # Glycan string to check
                             ) -> Tuple[str, bool]: # Glycan string with converted repeat structure, if necessary, and whether glycan is repeat
   """Transform -1)Fruf(b2-3)Fruf(b2- repeat structure into Fruf(b2-3)Fruf(b2-1)Fruf"""
   if glycan.startswith("-"):
-    match = re.match(r"(-P)?(-\d+\))(\[[^\]]*\])?([A-Za-z0-9]+)(.*)", glycan)
+    match = re.match(r"(-P)?(-\d+\))(\[[^\]]*\])?([A-Za-z0-9-]+)(.*)", glycan)
     if match:
       phospho, linkage, brackets, first_mono, remainder = match.groups()
       brackets = brackets or ""
@@ -924,6 +933,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
     glycan = re.sub(r'([βα])(\()', r'\2\1', glycan)
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
+  glycan = multireplace(glycan, COMMON_ENANTIOMER)
   glycan = re.sub(r'(\d)A($|a)', r'\1Ac\2', glycan)  # 9Aa into 9Aca
   glycan = re.sub(r'-([ab])-(\d+),(\d+\)?)-', r'\1\2-\3', glycan)  # Inconsistent usage of dashes and commas, like in Neu5Ac-a-2,6-Gal-b-1,3-GlcNAc
   glycan = re.sub(r'(\d),(\d)(?![l-])', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone) or '-' (for Anhydro)
@@ -937,8 +947,11 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash-1:])) and 'ol' not in glycan and glycan[last_dash+1:] not in lib:
       glycan = glycan[:last_dash]
   # Anomeric and steric indicators placed before monosaccharide (e.g., "bDGal(1-4)bDGlcNAc")
-  glycan = re.sub(r'([abx\?])([DLX\?])([A-Z1-9][A-Za-z2-9\-]*)\((\d)-(\d*\))', r'\3(\1\4-\5', glycan)
-  glycan = re.sub(r'([abx\?])([DLX\?])([A-Z1-9][A-Za-z2-9\-]*)\((\d)', r'\3(\1\4', glycan)  # for repeats
+  glycan = re.sub(r'([abx\?])([DLX\?])([A-Z1-9][A-Za-z2-9\-]*)\((\d)-(\d*\))',
+                lambda m: f"{m.group(2)}-{m.group(3)}({m.group(1)}{m.group(4)}-{m.group(5)}" if m.group(2) in 'DL' else f"{m.group(3)}({m.group(1)}{m.group(4)}-{m.group(5)}", glycan)
+  glycan = re.sub(r'([abx\?])([DLX\?])([A-Z1-9][A-Za-z2-9\-]*)\((\d)',
+                lambda m: f"{m.group(2)}-{m.group(3)}({m.group(1)}{m.group(4)}" if m.group(2) in 'DL' else f"{m.group(3)}({m.group(1)}{m.group(4)}", glycan)  # for repeats
+  glycan = multireplace(glycan, COMMON_ENANTIOMER)
   # Anomeric indicator placed before monosaccharide (e.g., "bGal14GlcNAc")
   glycan = re.sub(r'([ab])([A-Z][A-Za-z5]*)(\d)(\d*)', r'\2\1-\4', glycan)
   # Anomeric indicator placed behind monosaccharide (e.g., "Galb14GlcNAc")
@@ -1000,9 +1013,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = re.sub(r'\[([^]^-]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
                  lambda m: f"{m.group(3)}{m.group(2)}{m.group(1).split('(')[0]}" if (m.group(1).split('(')[0] not in lib and m.group(1).count('(') == 1) else f"[{m.group(1)}]{m.group(3)}",
                  glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
-  glycan = re.sub(r'\[([A-Za-z0-9]+)\(\?(\d+)-(\d+)\)([A-Za-z0-9]+)',
-                lambda m: f"[{m.group(4)}{m.group(3)}{m.group(1)}" if m.group(1) not in lib else f"[{m.group(1)}(?{m.group(2)}-{m.group(3)}){m.group(4)}",
-                glycan)  # [Ac(?1-2)Rha to [Rha2Ac
+  glycan = re.sub(r'\[([A-Za-z0-9]+)\(\?(\d+)-(\d+)\)([DL]-)?([A-Za-z0-9]+)',
+              lambda m: f"[{m.group(4) or ''}{m.group(5)}{m.group(3)}{m.group(1)}" if m.group(1) not in lib else f"[{m.group(1)}(?{m.group(2)}-{m.group(3)}){m.group(4) or ''}{m.group(5)}",
+              glycan)  # [Ac(?1-2)D-Rha to [D-Rha2Ac
   glycan = re.sub(r'\[([1-9][SP])\]\[([1-9][SP])\]([A-Z][^\(^\[]+)',
                 lambda m: f"{m.group(3)}{min(m.group(1), m.group(2))}{max(m.group(1), m.group(2))}",
                 glycan)  # [6S][4S]Gal to Gal4S6S
