@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import drawsvg as draw
 import warnings
+import importlib
 import matplotlib
 matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
 import matplotlib.pyplot as plt
@@ -208,6 +209,52 @@ GLYCAN_TEST_CASES = [
     "{Neu5Ac(a2-?)}Gal(b1-?)GlcNAc(b1-2)[Gal(b1-?)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-?)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
     "{Fuc(a1-?)}{Neu5Ac(a2-?)}Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc",
 ]
+
+
+def test_torch_import_error():
+  # Store original module states
+  original_processing = sys.modules.get('glycowork.ml.processing')
+  original_models = sys.modules.get('glycowork.ml.models')
+  original_inference = sys.modules.get('glycowork.ml.inference')
+  original_model_training = sys.modules.get('glycowork.ml.model_training')
+  try:
+    # Remove modules if they exist
+    if 'glycowork.ml.processing' in sys.modules:
+      del sys.modules['glycowork.ml.processing']
+    if 'glycowork.ml.models' in sys.modules:
+      del sys.modules['glycowork.ml.models']
+    if 'glycowork.ml.inference' in sys.modules:
+      del sys.modules['glycowork.ml.inference']
+    if 'glycowork.ml.model_training' in sys.modules:
+      del sys.modules['glycowork.ml.model_training']
+    # Patch the imports to fail
+    with patch.dict('sys.modules', {'torch': None, 'torch_geometric': None, 'torch_geometric.loader': None, 'torch_geometric.utils': None, 'torch_geometric.utils.convert': None}):
+      with pytest.raises(ImportError, match="torch or torch_geometric missing"):
+        importlib.import_module('glycowork.ml.processing')
+      with pytest.raises(ImportError, match="torch or torch_geometric missing"):
+        importlib.import_module('glycowork.ml.models')
+      with pytest.raises(ImportError, match="torch missing;"):
+        importlib.import_module('glycowork.ml.inference')
+      with pytest.raises(ImportError, match="torch missing;"):
+        importlib.import_module('glycowork.ml.model_training')
+  finally:
+    # Restore original states
+    if original_processing is not None:
+      sys.modules['glycowork.ml.processing'] = original_processing
+    elif 'glycowork.ml.processing' in sys.modules:
+      del sys.modules['glycowork.ml.processing']
+    if original_models is not None:
+      sys.modules['glycowork.ml.models'] = original_models
+    elif 'glycowork.ml.models' in sys.modules:
+      del sys.modules['glycowork.ml.models']
+    if original_inference is not None:
+      sys.modules['glycowork.ml.inference'] = original_inference
+    elif 'glycowork.ml.inference' in sys.modules:
+      del sys.modules['glycowork.ml.inference']
+    if original_model_training is not None:
+      sys.modules['glycowork.ml.model_training'] = original_model_training
+    elif 'glycowork.ml.model_training' in sys.modules:
+      del sys.modules['glycowork.ml.model_training']
 
 
 @pytest.mark.parametrize("glycan", GLYCAN_TEST_CASES)
@@ -5953,6 +6000,16 @@ def test_split_data_to_train(mock_glycan_dataset, mock_library):
     val_batch = next(iter(loaders['val']))
     assert hasattr(val_batch, 'y')
     assert hasattr(val_batch, 'train_idx')
+    loaders = split_data_to_train(
+        train_glycans,
+        val_glycans,
+        train_labels,
+        val_labels,
+        batch_size=1,
+        extra_feature_train=extra_train,
+        extra_feature_val=extra_val,
+        augment_prob=0.5
+    )
 
 
 def test_dataset_to_graphs_caching(mock_glycan_dataset, mock_library):
@@ -6218,6 +6275,23 @@ def test_sam_optimizer_zero_grad():
     # Test zero_grad
     sam.zero_grad()
     assert all(p.grad is None or torch.all(p.grad == 0) for p in model.parameters())
+
+
+def test_gsam_gradient_decompose_coverage():
+  """Minimal test to cover _gradient_decompose method for GSAM"""
+  model = nn.Linear(2, 1).to(device)
+  x = torch.randn(4, 2, device=device)
+  y = torch.randn(4, 1, device=device)
+  criterion = nn.MSELoss()
+  optimizer = SAM(model.parameters(), torch.optim.SGD, lr=0.1, alpha=0.1)
+  assert optimizer.minimize_surrogate_gap == True
+  optimizer.zero_grad()
+  loss1 = criterion(model(x), y)
+  loss1.backward()
+  optimizer.first_step(zero_grad=True)
+  loss2 = criterion(model(x), y)
+  loss2.backward()
+  optimizer.second_step(zero_grad=True)
 
 
 @patch('torch.cuda.is_available', return_value=False)
@@ -6598,6 +6672,18 @@ def test_get_multi_pred(sample_data, mock_models):
         background_correction=True,
         correction_df=correction_df,
         flex=True
+    )
+    correction_df = pd.DataFrame({
+        'motif': sample_data['glycans'][:-1],
+        'pred': pd.Series([0.1], dtype=np.float64)
+    })
+    results_corrected = get_multi_pred(
+        prot=sample_data['protein'],
+        glycans=sample_data['glycans'],
+        model=model,
+        prot_dic=sample_data['prot_dict'],
+        background_correction=True,
+        correction_df=correction_df
     )
 
 
