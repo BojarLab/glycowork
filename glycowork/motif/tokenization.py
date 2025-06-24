@@ -436,7 +436,7 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
     while mod in glycan:
       diff_moieties[info['diff_moiety']] += 1
       glycan = glycan.replace(mod, info['replacement'])
-  composition = Counter(sorted([map_to_basic(stem_libr[k]) for k in min_process_glycans([glycan])[0]]))
+  composition = Counter(sorted([map_to_basic(stem_libr[re.sub(r"/\d", "", k)]) for k in min_process_glycans([glycan])[0]]))
   composition.update(diff_moieties)
   for mod in ('Me', 'S', 'P', 'PCho', 'PEtN'):
     if mod in glycan:

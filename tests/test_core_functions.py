@@ -717,6 +717,7 @@ def test_glycan_to_mass():
     assert abs(glycan_to_mass("Neu5Az9Ac(a2-3)Gal(b1-4)Glc") - 717.2320056) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "C2H4O2") - 693.2325546) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "-C2H4O2") - 573.1905546) < 0.1
+    assert abs(glycan_to_mass("GalOS(b1-3)GalNAc4/6S") - 543.0563546) < 0.1
 
 
 def test_calculate_adduct_mass():
@@ -2071,6 +2072,7 @@ def test_compare_glycans():
     assert not compare_glycans("Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc")
     # Test with PTM wildcards
     assert compare_glycans("Gal6S(b1-4)GlcNAc", "GalOS(b1-4)GlcNAc")
+    assert compare_glycans("Gal6S(b1-3)GalNAc4S", "GalOS(b1-3)GalNAc4/6S")
     res, mappy = compare_glycans('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc', graph_to_string(glycan_to_nxGraph('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc'), order_by='linkage'), return_matches=True)
 
 

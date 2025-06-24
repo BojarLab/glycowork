@@ -10,7 +10,7 @@ from scipy.sparse.linalg import eigsh
 from functools import lru_cache, wraps
 
 
-PTM_REGEX = re.compile(r"(?<!Neu)(?<=\D)\d+(?=\D)")
+PTM_REGEX = re.compile(r"(?<!Neu)(?<=\D)(\d+/\d+|\d+)(?=\D)")
 NEGATION_REGEX = re.compile(r'(!\w+\([^)]+\))')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
 
@@ -30,7 +30,7 @@ def memoize_node_match(func):
 @memoize_node_match
 def build_wildcard_cache(proc: set) -> dict:
     """Precompute all possible wildcard expansions"""
-    return {k: get_possible_linkages(k) for k in proc if '?' in k or '/' in k} | \
+    return {k: get_possible_linkages(k) for k in proc if '?' in k or ('/' in k and '-' in k)} | \
            {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!')}
 
 

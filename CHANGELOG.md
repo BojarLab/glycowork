@@ -1,6 +1,7 @@
 # Changelog
 
 ## [1.7.0]
+- `glycowork` is now compatible with specifying narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`)
 
 ### motif
 #### processing
@@ -12,3 +13,11 @@
 
 ##### Fixed 🐛
 ##### Deprecated ⚠️
+
+#### processing
+##### Changed 🔄
+- `glycan_to_composition` is now compatible with the new narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`)
+
+#### graph
+##### Changed 🔄
+- `compare_glycans` is now compatible with the new narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`)
