@@ -9,9 +9,6 @@ from collections import defaultdict, Counter
 from scipy.stats import ttest_rel, ttest_ind
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
-from bokeh.plotting import figure, show
-from bokeh.io import output_notebook
-from bokeh.models import HoverTool, Arrow, NormalHead, LabelSet, ColumnDataSource
 from typing import Dict, List, Set, Union, Optional, Tuple, FrozenSet
 import statsmodels.api as sm
 import networkx as nx
@@ -526,7 +523,13 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                 lfc_dict: Optional[Dict[str, float]] = None # Enzyme:log2FC mapping for edge width
                ) -> None: # Displays plot
   "Visualize biosynthetic network"
-  output_notebook()
+  from bokeh.plotting import figure, show
+  from bokeh.io import output_notebook
+  from bokeh.models import HoverTool, Arrow, NormalHead, LabelSet, ColumnDataSource
+  try:
+    output_notebook()
+  except (ImportError, RuntimeError, Exception):
+    pass
   pos = {'pydot2': lambda: nx.nx_pydot.pydot_layout(network, prog = "dot"),
          'kamada_kawai': lambda: nx.kamada_kawai_layout(network),
          'spring': lambda: nx.spring_layout(network, k = 0.5, seed = 42)}.get(plot_format, lambda: nx.kamada_kawai_layout(network))()

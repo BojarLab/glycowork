@@ -21,6 +21,9 @@ with open(mapping_path) as f:
 mapping_path = Path(__file__).parent / "backup_gids.json"
 with open(mapping_path) as f:
   BACKUP_G_IDS = json.load(f)
+mapping_path = Path(__file__).parent / "glyconnect_to_glytoucan.json"
+with open(mapping_path) as f:
+  GLYCONNECT_TO_GLYTOUCAN = json.load(f)
 
 # for canonicalize_iupac
 replace_dic = {'αα': 'a', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')',
@@ -892,7 +895,10 @@ def transform_repeat_glycan(glycan: str # Glycan string to check
 
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
-  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, and GlyTouCanIDs to standardized IUPAC-condensed format"
+  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
+  if isinstance(glycan, int):
+    glycan = str(glycan)
+    glycan = GLYCONNECT_TO_GLYTOUCAN.get(glycan, glycan)
   glycan = glycan.strip().replace('–', '-').replace(' ', '')
   glycan = re.sub(r'^(["\'])(.*?)\1$', r'\2', glycan)
   mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
