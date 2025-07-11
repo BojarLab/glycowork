@@ -2820,6 +2820,8 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-?)]Man(a1-?)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-?)]Man(a1-?)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", suppress=True)
     assert result is not None
+    result = GlycoDraw("{Neu5Ac(a2-3)}{Neu5Ac(a2-6)}Gal", suppress=True)
+    assert result is not None
     # Test vertical orientation
     result = GlycoDraw("GlcNAc(b1-4)GlcA", vertical=True, suppress=True)
     assert result is not None

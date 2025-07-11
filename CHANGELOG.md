@@ -12,9 +12,8 @@
 
 ##### Changed 🔄
 - `canonicalize_iupac` and its parsers will now leave the `D-/L-` prefixes in monosaccharides, which will then be centrally homogenized with `COMMON_ENANTIOMER`, for a more refined and detailed output (bb7575c)
-- `canonicalize_iupac` now considers more IUPAC variations, such as `Neu5,9Ac` instead of `Neu5,9Ac2`
+- `canonicalize_iupac` now considers more IUPAC variations, such as `Neu5,9Ac` instead of `Neu5,9Ac2` (a764897)
 
-##### Fixed 🐛
 ##### Deprecated ⚠️
 
 #### processing
@@ -24,3 +23,7 @@
 #### graph
 ##### Changed 🔄
 - `compare_glycans` is now compatible with the new narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`) (ec290e8)
+
+#### draw
+##### Fixed 🐛
+- fixeed overlap in floating substituents in `GlycoDraw` if glycan had fewer branching levels than unique floating substituents

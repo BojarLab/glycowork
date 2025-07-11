@@ -1163,6 +1163,7 @@ def GlycoDraw(
   max_y = max(unwrap(l3_y_pos)+unwrap(l2_y_pos)+unwrap(l1_y_pos)+main_sugar_y_pos)
   min_y = min(unwrap(l3_y_pos)+unwrap(l2_y_pos)+unwrap(l1_y_pos)+main_sugar_y_pos)
   max_x = max(unwrap(l3_x_pos)+unwrap(l2_x_pos)+unwrap(l1_x_pos)+main_sugar_x_pos)
+  y_span = max_y - min_y
 
   # Canvas size
   width = ((((max_x+1)*2)-1)*dim)+dim
@@ -1172,6 +1173,10 @@ def GlycoDraw(
     width += max(len_one_gw, len_multiple_gw)
   if len(floaty_bits) > len(set(floaty_bits)):
     width += dim
+  if len(floaty_bits) > y_span:
+    y_span += 1.0
+    max_y += 0.5
+    min_y -= 0.5
   height = ((((max(abs(min_y), max_y)+1)*2)-1)*dim)+60
   height = max(height, width) if vertical else height
   x_ori = -width+(dim/2)+0.5*dim
@@ -1227,7 +1232,6 @@ def GlycoDraw(
         floaty_data.append(get_coordinates_and_labels(k_val, show_linkage = show_linkage, highlight_motif = None))
       else:
         floaty_data.append(get_coordinates_and_labels('blank(-)blank', show_linkage = show_linkage, highlight_motif = None))
-    y_span = max_y - min_y
     n_floats = len(floaty_bits)
     y_spacing = (y_span / (n_floats - 1)) if n_floats > 1 else 0
     for j, j_val in enumerate(floaty_data):
