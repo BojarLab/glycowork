@@ -522,7 +522,15 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     nth = (indices[0] if indices else 0) + 1
     overlap = parts.split(')')[-1]
     ignore = True if degrees[src] > 2 or (degrees[src] == 2 and src == 'a') else False
-    idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)
+    if '-' + overlap in iupac:  # Check if there's a risk of matching within prefixed names
+      linkage_pattern = ')' + overlap  # Use linkage pattern to avoid matching within prefixed names like L-Man
+      idx = find_nth_reverse(iupac, linkage_pattern, nth, ignore_branches = ignore)
+      if idx != -1:
+        idx += 1  # Adjust for the ')' we added
+      else:
+        idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)
+    else:
+      idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)  # No prefix risk, use normal matching
     prefix = '[' if degrees[tgt] == 1 else ''
     suffix = ']' if (degrees[src] > 2 and degrees_for_brackets[src] < degrees[src]) or (degrees[src] == 2 and degrees_for_brackets[src] < degrees[src] and src == 'a') or (degrees[src] > 3 and degrees[tgt] == 1) or (degrees[tgt] == 1 and src =='a')  else ''
     iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
@@ -1052,7 +1060,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = sanitize_iupac(glycan)
   # Assume every non-lib "monosaccharide" at the reducing end is a modification and glue it to the preceding monosaccharide
   glycan = re.sub(r'\(([ab\?][1-2])-([1])\)([A-Z][A-Za-z\-]*$)', lambda m: f'{m.group(2)}{m.group(3)}' if m.group(3) not in lib else f'({m.group(1)}-{m.group(2)}){m.group(3)}', glycan)
-  glycan = re.sub(r'([\w-]+)(?:-ol)?\(([\w\?])(\d+)-P-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}P({m.group(2)}{m.group(3)}-{m.group(4)})", glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
+  glycan = re.sub(r'([\w-]+)(?:-ol)?\(([\w\?])(\d+)-([PS])-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}{m.group(4)}({m.group(2)}{m.group(3)}-{m.group(5)})", glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
   glycan, repeat = transform_repeat_glycan(glycan)
   glycan = re.sub(r"n\=[\d\?\-]+\/", "", glycan)  # Strip out internal repeats such as n=?/
   glycan = re.sub(r"\/([A-Z])", r"\1", glycan)  # Strip out any remaining / from internal repeats
