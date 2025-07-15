@@ -477,7 +477,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
   wurcs = re.sub(pattern, replacement, wurcs)
   wurcs = re.sub(additional_pattern, '?', wurcs)
-  wurcs = re.sub(r'([a-z][\d\?])\*OPO\*\/3O\/3\=O', r'\1P', wurcs)  # phospho-linkages
+  wurcs = re.sub(r'([a-z][\d\?])\*O([PS])O\*\/3(=?)O\/3\=O', r'\1\2', wurcs)  # phospho/sulfo-linkages
   floating_part, floating_parts = '', []
   parts = wurcs.split('/')
   topology = parts[-1].split('_')
@@ -550,7 +550,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
         return s[:i] + s[i + 1:]
     return s
   iupac = remove_first_unmatched_opening_bracket(iupac)
-  return re.sub(r'(\d)([P])\-', r'\1-\2-', iupac)
+  return re.sub(r'(\d)([PS])\-', r'\1-\2-', iupac)
 
 
 def oxford_to_iupac(oxford: str # Glycan in Oxford format

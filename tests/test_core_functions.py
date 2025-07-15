@@ -410,7 +410,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("A2G2S2(2,3)") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("FA4G3S1B") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-?)[GlcNAc(b1-?)]Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("A2G1G[SO4-2]1S1") == "Neu5Ac(a2-3/6)GalOS(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert canonicalize_iupac('A2[6]G1')	== 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert canonicalize_iupac('A2[6]G1') == 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('A2B[3]G1') == 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('F(6)A2[6]G(4)1Sg(6)1') == 'Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
     assert canonicalize_iupac('D0H0') == '4uHexA(?1-?)GlcN'
@@ -447,6 +447,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("WURCS=2.0/6,9,8/[a2122h-1a_1-5_2*NCC/3=O][a1221m-1a_1-5][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a212h-1b_1-5][a1122h-1a_1-5]/1-2-3-4-5-6-3-6-3/a3-b1_a4-c1_c4-d1_d2-e1_d3-f1_d6-h1_f2-g1_h2-i1") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/7,19,18/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O]/1-2-3-4-2-5-6-7-2-6-2-4-2-5-6-2-5-6-7/a4-b1_b4-c1_c3-d1_c4-k1_c6-l1_d2-e1_d4-i1_e3-f1_e4-g1_i4-j1_l2-m1_l6-p1_m3-n1_m4-o1_p3-q1_p4-r1_h2-g3|g6_s2-r3|r6 ") == "Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/2,2,1/[a1122h-1x_1-5][a2122h-1a_1-5_2*NCC/3=O]/1-2/a6-b1*OPO*/3O/3=O") == "GlcNAc1P(a1-6)Man"
+    assert canonicalize_iupac("WURCS=2.0/1,2,1/[a2122h-1b_1-5]/1-1/a4-b1*OSO*/3=O/3=O") == "Glc(b1-S-4)Glc"
     assert canonicalize_iupac("G07426YY") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("G96417BZ") == "Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G26039ES") == "Gal(b1-4)Glc-ol"

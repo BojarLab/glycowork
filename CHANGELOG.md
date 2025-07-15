@@ -19,6 +19,7 @@
 #### processing
 ##### Changed 🔄
 - `glycan_to_composition` is now compatible with the new narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`) (ec290e8)
+- `wurcs_to_iupac` can now process sulfur linkages (e.g., `Glc(b1-S-4)Glc`)
 
 #### graph
 ##### Changed 🔄
@@ -26,4 +27,4 @@
 
 #### draw
 ##### Fixed 🐛
-- fixeed overlap in floating substituents in `GlycoDraw` if glycan had fewer branching levels than unique floating substituents
+- fixeed overlap in floating substituents in `GlycoDraw` if glycan had fewer branching levels than unique floating substituents (daade78)
