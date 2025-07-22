@@ -1,4 +1,5 @@
 from pathlib import Path
+import inspect
 import pickle
 import pandas as pd
 import numpy as np
@@ -840,7 +841,7 @@ def get_glycan_change_over_time(
       # Calculate the residuals
       residuals = glycan_abundance - np.polyval(coefficients, time)
       # Perform F-test to get p_value
-      _, p_value = f_oneway(glycan_abundance, residuals)
+      _, p_value = f_oneway(glycan_abundance, residuals, **({'equal_var': False} if 'equal_var' in inspect.signature(f_oneway).parameters else {}))
     return coefficients, p_value
 
 
@@ -898,7 +899,7 @@ def get_time_series(
 
 
 def get_jtk(
-   df_in: Union[pd.DataFrame, str, Path], # DataFrame with molecules in rows (col 0), then groups arranged by ascending timepoints
+   df_in: Union[pd.DataFrame, str, Path], # DataFrame with glycans in rows (first column), then groups arranged by ascending timepoints
    timepoints: int, # Number of timepoints (each must have same number of replicates)
    interval: int, # Time units between experimental timepoints
    periods: List[int] = [12, 24], # Timepoints per cycle to test

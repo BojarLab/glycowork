@@ -18,6 +18,7 @@ from statsmodels.tools.sm_exceptions import ConvergenceWarning
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import copy
+import inspect
 rng = np.random.default_rng(42)
 np.random.seed(0)
 
@@ -585,12 +586,12 @@ def anosim(df: pd.DataFrame, # square distance matrix
 def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
                            group_labels: List[str] # list of group membership for each sample
                           ) -> Optional[Tuple[float, float]]: # F statistic and p-value if groups have >1 sample, None otherwise
-  "Performs an ANOVA on the respective alpha diversity distance"
+  "Performs an ANOVA on the respective alpha diversity distance (Welch's ANOVA if scipy>=1.16)"
   group_counts = Counter(group_labels)
   if all(count > 1 for count in group_counts.values()):
     stat_outputs = pd.DataFrame({'group': group_labels, 'diversity': df.squeeze()})
     grouped_diversity = stat_outputs.groupby('group')['diversity'].apply(list).tolist()
-    stats = f_oneway(*grouped_diversity)
+    stats = f_oneway(*grouped_diversity, **({'equal_var': False} if 'equal_var' in inspect.signature(f_oneway).parameters else {}))
     return stats
 
 

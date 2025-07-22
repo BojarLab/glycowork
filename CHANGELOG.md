@@ -4,6 +4,11 @@
 - `glycowork` is now compatible with specifying narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`) (ec290e8)
 - made the `bokeh` dependency runtime-optional by importing it just-in-time for `plot_network` (ea9929e)
 
+### glycan_data
+#### stats
+##### Added ✨
+- Alpha biodiversity calculation in `alpha_biodiversity_stats` now performs Welch's ANOVA instead of ANOVA if `scipy>=1.16`
+
 ### motif
 #### processing
 ##### Added ✨
@@ -13,6 +18,7 @@
 ##### Changed 🔄
 - `canonicalize_iupac` and its parsers will now leave the `D-/L-` prefixes in monosaccharides, which will then be centrally homogenized with `COMMON_ENANTIOMER`, for a more refined and detailed output (bb7575c)
 - `canonicalize_iupac` now considers more IUPAC variations, such as `Neu5,9Ac` instead of `Neu5,9Ac2` (a764897)
+- `wurcs_to_iupac` now supports more tokens (d9d6e57)
 
 ##### Deprecated ⚠️
 
@@ -20,7 +26,7 @@
 ##### Changed 🔄
 - `glycan_to_composition` is now compatible with the new narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`) (ec290e8)
 - `wurcs_to_iupac` can now process sulfur linkages (e.g., `Glc(b1-S-4)Glc`) (88b2d54)
-- `wurcs_to_iupac` is now more robust to prefixes (e.g., `L-`, `6-deoxy-`, etc)
+- `wurcs_to_iupac` is now more robust to prefixes (e.g., `L-`, `6-deoxy-`, etc) (ac171c5)
 
 #### graph
 ##### Changed 🔄
@@ -29,3 +35,7 @@
 #### draw
 ##### Fixed 🐛
 - fixed overlap in floating substituents in `GlycoDraw` if glycan had fewer branching levels than unique floating substituents (daade78)
+
+#### analysis
+##### Added ✨
+- ANOVA-based time series analysis in `get_time_series` now performs Welch's ANOVA instead of ANOVA if `scipy>=1.16`
