@@ -7,7 +7,8 @@
 ### glycan_data
 #### stats
 ##### Added ✨
-- Alpha biodiversity calculation in `alpha_biodiversity_stats` now performs Welch's ANOVA instead of ANOVA if `scipy>=1.16`
+- Alpha biodiversity calculation in `alpha_biodiversity_stats` now performs Welch's ANOVA instead of ANOVA if `scipy>=1.16` (ab73368)
+- ALR transformation functions now also expose the `random_state` keyword argument for reproducible seeding
 
 ### motif
 #### processing
@@ -38,4 +39,5 @@
 
 #### analysis
 ##### Added ✨
-- ANOVA-based time series analysis in `get_time_series` now performs Welch's ANOVA instead of ANOVA if `scipy>=1.16`
+- ANOVA-based time series analysis in `get_time_series` now performs Welch's ANOVA instead of ANOVA if `scipy>=1.16` (ab73368)
+- All `analysis` endpoint functions can now be directly seeded, without having to pre-transform data, with the newly exposed `random_state` keyword argument

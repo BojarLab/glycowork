@@ -636,26 +636,28 @@ def alr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
                       group1: List[Union[str, int]], # column indices/names for first group of samples, usually control
                       group2: List[Union[str, int]], # column indices/names for second group of samples
                       gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
-                      custom_scale: Union[float, Dict] = 0 # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict for multivariate)
+                      custom_scale: Union[float, Dict] = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict for multivariate)
+                      random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
                      ) -> pd.DataFrame: # ALR-transformed dataframe
   "Given a reference feature, performs additive log-ratio transformation (ALR) on the data"
+  local_rng = np.random.default_rng(random_state) if random_state is not None else rng
   reference_values = df.iloc[reference_component_index, :]
   alr_transformed = np.zeros_like(df.values)
   group1i = [df.columns.get_loc(c) for c in group1]
   group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
   if not isinstance(custom_scale, dict):
     if custom_scale:
-      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, random_state = rng, size = len(group1i)), axis = 1)
+      alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = len(group1i)), axis = 1)
     else:
       alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i])
     scale_adjustment = np.log2(custom_scale) if custom_scale else 0
-    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values.iloc[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, random_state = rng, size = len(group2i)), axis = 1)
+    alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values.iloc[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, random_state = local_rng, size = len(group2i)), axis = 1)
   else:
     gamma = max(gamma, 0.1)
     for idx in range(df.shape[1]):
       group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
       scale_factor = custom_scale.get(group_id, 1)
-      reference_adjusted = reference_values.iloc[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = rng)
+      reference_adjusted = reference_values.iloc[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = local_rng)
       alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted
   alr_transformed = pd.DataFrame(alr_transformed, index = df.index, columns = df.columns)
   alr_transformed = alr_transformed.drop(index = reference_values.name)
@@ -667,14 +669,16 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
                          group1: List[Union[str, int]], # column indices/names for first group of samples, usually control
                          group2: List[Union[str, int]], # column indices/names for second group of samples
                          paired: bool = False, # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                         custom_scale: Union[float, Dict] = 0 # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict)
+                         custom_scale: Union[float, Dict] = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict)
+                          random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
                         ) -> Tuple[List[float], List[float], List[float]]: # (Procrustes scores, correlations, variances)
   "For each feature, estimates its value as ALR reference component"
+  local_rng = np.random.default_rng(random_state) if random_state is not None else rng
   if isinstance(group1[0], int):
     group1 = [df.columns.tolist()[k] for k in group1]
     group2 = [df.columns.tolist()[k] for k in group2]
   df = df.iloc[:, 1:].astype(float)
-  ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale)
+  ref_matrix = clr_transformation(df, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng)
   df = np.log2(df)
   if group2:
     if paired:
@@ -687,7 +691,7 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
   else:
     variances = abs(df[group1].var(axis = 1))
   procrustes_corr = [1 - procrustes(ref_matrix.drop(ref_matrix.index[i]),
-                                    alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale))[2] for i in range(df.shape[0])]
+                                    alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng))[2] for i in range(df.shape[0])]
   return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
 
@@ -696,20 +700,22 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
                                        group2: List[Union[str, int]], # column indices/names for second group of samples
                                        paired: bool = False, # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                                        gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
-                                       custom_scale: Union[float, Dict] = 0 # ratio total signal group2/group1 for scale model
+                                       custom_scale: Union[float, Dict] = 0, # ratio total signal group2/group1 for scale model
+                                       random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
                                       ) -> pd.DataFrame: # ALR-transformed dataframe
   "Identifies ALR reference component and transforms data according to ALR"
-  scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired, custom_scale = custom_scale)
+  local_rng = np.random.default_rng(random_state) if random_state is not None else rng
+  scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired, custom_scale = custom_scale, random_state = local_rng)
   ref_component = np.argmax(scores)
   ref_component_string = df.iloc[:, 0].values[ref_component]
   print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
   if procrustes_corr[ref_component] < 0.9 or variances[ref_component] > 0.1:
     print("Metrics of chosen reference component not good enough for ALR; switching to CLR instead.")
-    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale)
+    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale, random_state = local_rng)
     return df
   glycans = df.iloc[:, 0].values.tolist()
   glycans = glycans[:ref_component] + glycans[ref_component+1:]
-  alr = alr_transformation(np.log2(df.iloc[:, 1:]), ref_component, group1, group2, gamma = gamma, custom_scale = custom_scale)
+  alr = alr_transformation(np.log2(df.iloc[:, 1:]), ref_component, group1, group2, gamma = gamma, custom_scale = custom_scale, random_state = local_rng)
   alr.insert(loc = 0, column = 'glycan', value = glycans)
   return alr
 

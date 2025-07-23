@@ -54,7 +54,8 @@ def preprocess_data(
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
     custom_scale: Union[float, Dict] = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
-    monte_carlo: bool = False # Use Monte Carlo for technical variation
+    monte_carlo: bool = False, # Use Monte Carlo simulation to control for technical variation (will take longer to run)
+    random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
     ) -> Tuple[pd.DataFrame, pd.DataFrame, List[Union[str, int]], List[Union[str, int]]]: # (transformed df, untransformed df, group1 labels, group2 labels)
   "Preprocesses glycomics data by handling missing values with Random Forest imputation, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
   if isinstance(df, (str, Path)):
@@ -77,14 +78,14 @@ def preprocess_data(
   if transform is None:
     transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
   if transform == "ALR":
-    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale)
+    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale, random_state = random_state)
   elif transform == "CLR":
     if monte_carlo and not motifs:
       df = pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
                                                                  gamma = gamma, custom_scale = custom_scale)], axis = 1)
     else:
       df.iloc[:, 1:] = df.iloc[:, 1:] + 0.0000001
-      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:], group2, gamma = gamma, custom_scale = custom_scale)
+      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:], group2, gamma = gamma, custom_scale = custom_scale, random_state = random_state)
   elif transform == "Nothing":
     pass
   else:
@@ -524,13 +525,14 @@ def get_differential_expression(
     custom_scale: Union[float, Dict] = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     glycoproteomics: bool = False, # Whether data is from glycoproteomics
     level: str = 'peptide', # Analysis level for glycoproteomics
-    monte_carlo: bool = False # Use Monte Carlo for technical variation
+    monte_carlo: bool = False, # Use Monte Carlo for technical variation
+    random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
     ) -> pd.DataFrame: # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
   "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs, impute = impute,
                                                min_samples = min_samples, transform = transform, feature_set = feature_set,
                                                paired = paired, gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,
-                                               monte_carlo = monte_carlo)
+                                               monte_carlo = monte_carlo, random_state = random_state)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
   alpha = get_alphaN(len(group1+group2))
   # Variance-based filtering of features
@@ -717,14 +719,15 @@ def get_glycanova(
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
     transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
-    custom_scale: float = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    custom_scale: float = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
     ) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]: # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     if len(set(groups)) < 3:
       raise ValueError("You have fewer than three groups. We suggest get_differential_expression for those cases. ANOVA is for >= three groups.")
     df, _, groups, _ = preprocess_data(df, groups, [], experiment = "anova", motifs = motifs, impute = impute,
                                       min_samples = min_samples, transform = transform, feature_set = feature_set,
-                                      gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs)
+                                      gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs, random_state = random_state)
     results, posthoc_results = [], {}
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(groups))
@@ -959,13 +962,14 @@ def get_biodiversity(
     permutations: int = 999, # Number of permutations for ANOSIM/PERMANOVA
     transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
-    custom_scale: Union[float, Dict] = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    custom_scale: Union[float, Dict] = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
     ) -> pd.DataFrame: # DataFrame with diversity indices and test statistics
   "Calculates alpha (Shannon/Simpson) and beta (ANOSIM/PERMANOVA) diversity measures from glycomics data"
   experiment = "diff" if group2 else "anova"
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = False,
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
-                                               custom_scale = custom_scale, custom_motifs = custom_motifs)
+                                               custom_scale = custom_scale, custom_motifs = custom_motifs, random_state = random_state)
   shopping_cart = []
   group_sizes = group1 if not group2 else len(group1)*[1]+len(group2)*[2]
   group_counts = Counter(group_sizes)
@@ -1157,13 +1161,14 @@ def get_roc(
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
     custom_scale: Union[float, Dict] = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     filepath: Union[str, Path] = '', # Path to save ROC plot
-    multi_score: bool = False # Find best multi-glycan score
+    multi_score: bool = False, # Find best multi-glycan score
+    random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
     ) -> Union[List[Tuple[str, float]], Dict[Any, Tuple[str, float]], Tuple[LogisticRegression, float]]: # (Feature scores with ROC AUC values)
   "Calculates ROC curves and AUC scores for glycans/motifs or multi-glycan classifiers"
   experiment = "diff" if group2 else "anova"
   df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = impute,
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
-                                               custom_scale = custom_scale, custom_motifs = custom_motifs)
+                                               custom_scale = custom_scale, custom_motifs = custom_motifs, random_state = random_state)
   if multi_score:
     return multi_feature_scoring(df, group1, group2, filepath = filepath)
   auc_scores = {}
@@ -1299,11 +1304,12 @@ def get_glycoshift_per_site(
     impute: bool = True, # Replace zeros with Random Forest model
     min_samples: float = 0.2, # Min percent of non-zero samples required
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
-    custom_scale: Union[float, Dict] = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    custom_scale: Union[float, Dict] = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+    random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
     ) -> pd.DataFrame: # DataFrame with GLM coefficients and FDR-corrected p-values
   "Analyzes site-specific glycosylation changes in glycoproteomics data using generalized linear models (GLM) with compositional data normalization"
   df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = False, impute = impute,
-                                               min_samples = min_samples, transform = "Nothing", paired = paired)
+                                               min_samples = min_samples, transform = "Nothing", paired = paired, random_state = random_state)
   alpha = get_alphaN(len(group1 + group2))
   df, glycan_features = process_for_glycoshift(df)
   necessary_columns = ['Glycoform'] + glycan_features
