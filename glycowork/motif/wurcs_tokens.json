@@ -161,7 +161,7 @@
 
     "a2112A-1x_1-5_2*NC=O": "GalANFo",
     "h2112x_1-5_2*NCC/3=O": "GalNAc-ol",
-    "h2122x_1-5*N*": "Glc-ol-N 🚩",
+    "h2122x_1-5*N*": "Glc-ol-N",
     "h2122x_3*NCC/3=O": "Glc3NAc-ol",
 
     "a2222A-1x_1-5": "AllA",
@@ -895,7 +895,7 @@
     "axxxxm-1x_1-5_3*OCC/3=O": "6dHex3Ac",
     "axxxxm-1x_1-5_4*NC=O": "6dHex4NFo",
     "axxxxh-1x_1-5_3*N": "Hex3N",
-    "axxxxm-1x_1-5_4*N": "Hex4N",
+    "axxxxm-1x_1-5_4*N": "6dHex4N",
     "axxxxh-1x_1-5_6*N": "Hex6N",
     "axxxxm-1x_1-5_2*N": "6dHexN",
     "axxxxh-1x_1-5_6*S": "Hex6SH",
@@ -983,6 +983,7 @@
     "a1122h-1x_1-5_3*OC": "Man3Me",
     "a1122h-1x_1-?_3*OC": "Man3Me",
     "a2211h-1x_1-5_3*OC": "L-Man3Me",
+    "a2211h-1x_1-5_6*OC": "L-Man6Me",
     "a1122h-1x_1-5_4*OC": "Man4Me",
     "a1122h-1x_1-5_6*OC": "Man6Me",
     "a1122h-1x_1-5_?*OC": "ManOMe",
@@ -1130,7 +1131,6 @@
     "a2211m-1x_1-?_3*OC": "Rha3Me",
     "a3344m-1x_1-5_3*OC": "Rha3Me",
     "a2211m-1x_1-5_4*OC": "Rha4Me",
-    "a2211h-1x_1-5_6*OC": "Rha6Me",
     "a2211m-1x_1-5_2*OC_3*OC": "Rha2Me3Me",
     "a2211m-1x_1-?_2*OC_3*OC": "Rha2Me3Me",
     "a2211m-1x_1-5_2*OC_4*OC": "Rha2Me4Me",
