@@ -13,6 +13,9 @@
 ##### Changed 🔄
 - `canonicalize_iupac` and its parsers will now leave the `D-/L-` prefixes in monosaccharides, which will then be centrally homogenized with `COMMON_ENANTIOMER`, for a more refined and detailed output (bb7575c)
 - `canonicalize_iupac` now considers more IUPAC variations, such as `Neu5,9Ac` instead of `Neu5,9Ac2` (a764897)
+- `canonicalize_iupac` no longer strips trailing `-Cer` (45437b3)
+- `canonicalize_iupac` now handles `alpha` and `beta` (45437b3)
+- `glycoworkbench_to_iupac` is now trigged by presence of either `End--` or `u--` (45437b3)
 
 ##### Deprecated ⚠️
 
