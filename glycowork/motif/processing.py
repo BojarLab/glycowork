@@ -925,7 +925,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = wurcs_to_iupac(glycan)
   elif glycan.endswith(('-OH', '-OME')) or bool(re.search(r'\d[DL][A-Z]', glycan)):
     glycan = glycam_to_iupac(glycan)
-  elif 'End--' in glycan:
+  elif 'End--' in glycan or 'u--' in glycan:
     glycan = glycoworkbench_to_iupac(glycan)
   elif bool(re.fullmatch(r'^[UDGIg][02][AaSH](0|3|4|6|9|10)$', glycan)):
     glycan = GAG_disaccharide_to_iupac(glycan)
@@ -948,7 +948,11 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = re.sub(r'([βα])(\()', r'\2\1', glycan)
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
   glycan = multireplace(glycan, COMMON_ENANTIOMER)
+  # Usage of entire words for anomeric indicators
+  glycan = glycan.replace('alpha','a').replace('beta','b')
   glycan = re.sub(r'(\d)A($|a)', r'\1Ac\2', glycan)  # 9Aa into 9Aca
+  # Usage of dash in  ceramide reducing end
+  glycan = glycan.replace('-Cer','1Cer')
   glycan = re.sub(r'-([ab])-(\d+),(\d+\)?)-', r'\1\2-\3', glycan)  # Inconsistent usage of dashes and commas, like in Neu5Ac-a-2,6-Gal-b-1,3-GlcNAc
   glycan = re.sub(r'(\d),(\d)(?![l-])', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone) or '-' (for Anhydro)
   if '{' in glycan and '}' not in glycan:
