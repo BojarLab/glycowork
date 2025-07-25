@@ -317,14 +317,6 @@ class SAM(torch.optim.Optimizer):
         if zero_grad:
             self.zero_grad()
 
-    @torch.no_grad()
-    def step(self, closure: Optional[Callable] = None) -> None:
-        assert closure is not None, "Sharpness Aware Minimization requires closure, but it was not provided"
-        closure = torch.enable_grad()(closure)  # The closure should do a full forward-backward pass
-        self.first_step(zero_grad = True)
-        closure()
-        self.second_step()
-
     def _gradient_decompose(self) -> None:
         coeff_nomin, coeff_denom = 0.0, 0.0
         for group in self.param_groups:

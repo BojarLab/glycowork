@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import drawsvg as draw
 import warnings
+import importlib
 import matplotlib
 matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
 import matplotlib.pyplot as plt
@@ -210,6 +211,52 @@ GLYCAN_TEST_CASES = [
 ]
 
 
+def test_torch_import_error():
+  # Store original module states
+  original_processing = sys.modules.get('glycowork.ml.processing')
+  original_models = sys.modules.get('glycowork.ml.models')
+  original_inference = sys.modules.get('glycowork.ml.inference')
+  original_model_training = sys.modules.get('glycowork.ml.model_training')
+  try:
+    # Remove modules if they exist
+    if 'glycowork.ml.processing' in sys.modules:
+      del sys.modules['glycowork.ml.processing']
+    if 'glycowork.ml.models' in sys.modules:
+      del sys.modules['glycowork.ml.models']
+    if 'glycowork.ml.inference' in sys.modules:
+      del sys.modules['glycowork.ml.inference']
+    if 'glycowork.ml.model_training' in sys.modules:
+      del sys.modules['glycowork.ml.model_training']
+    # Patch the imports to fail
+    with patch.dict('sys.modules', {'torch': None, 'torch_geometric': None, 'torch_geometric.loader': None, 'torch_geometric.utils': None, 'torch_geometric.utils.convert': None}):
+      with pytest.raises(ImportError, match="torch or torch_geometric missing"):
+        importlib.import_module('glycowork.ml.processing')
+      with pytest.raises(ImportError, match="torch or torch_geometric missing"):
+        importlib.import_module('glycowork.ml.models')
+      with pytest.raises(ImportError, match="torch missing;"):
+        importlib.import_module('glycowork.ml.inference')
+      with pytest.raises(ImportError, match="torch missing;"):
+        importlib.import_module('glycowork.ml.model_training')
+  finally:
+    # Restore original states
+    if original_processing is not None:
+      sys.modules['glycowork.ml.processing'] = original_processing
+    elif 'glycowork.ml.processing' in sys.modules:
+      del sys.modules['glycowork.ml.processing']
+    if original_models is not None:
+      sys.modules['glycowork.ml.models'] = original_models
+    elif 'glycowork.ml.models' in sys.modules:
+      del sys.modules['glycowork.ml.models']
+    if original_inference is not None:
+      sys.modules['glycowork.ml.inference'] = original_inference
+    elif 'glycowork.ml.inference' in sys.modules:
+      del sys.modules['glycowork.ml.inference']
+    if original_model_training is not None:
+      sys.modules['glycowork.ml.model_training'] = original_model_training
+    elif 'glycowork.ml.model_training' in sys.modules:
+      del sys.modules['glycowork.ml.model_training']
+
+
 @pytest.mark.parametrize("glycan", GLYCAN_TEST_CASES)
 def test_graph_to_string_int(glycan: str):
     """This test assumes that the function gylcan_to_graph_int is correct."""
@@ -276,6 +323,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Sorf(a2-1b)[L-Glc(b1-6)]L-Tal") == "Sorf(a2-1)[L-Glc(b1-6)]L-Tal"
     assert canonicalize_iupac("Psif(a2-1b)Glc") == "Psif(a2-1)Glc"
     assert canonicalize_iupac("Glc(a1-4)2,3-Anhydro-Man(a1-4)Glc(a1-4)Glc") == "Glc(a1-4)2,3-Anhydro-Man(a1-4)Glc(a1-4)Glc"
+    assert canonicalize_iupac("NeuAcalpha2-3Galbeta1-3GalNAcbeta1-4(NeuAcalpha2-8NeuGcalpha2-3)Galbeta1-4Glcbeta-Cer") == "Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Gc(a2-3)]Gal(b1-4)Glc1Cer"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -295,6 +343,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("SGaNAcb1-4SGlcNac") == "GalNAcOS(b1-4)GlcNAcOS"
     assert canonicalize_iupac("Rha(a1-2)Ara4S") == "Rha(a1-2)Ara4S"
     assert canonicalize_iupac("GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc") == "GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc"
+    assert canonicalize_iupac("Gal4,6Pyr") == "Gal4Pyr6Pyr"
     # Test sanitization
     assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
     assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-2)]Man") == "Gal(b1-4)GlcNAc(b1-?)[Gal(b1-4)GlcNAc(b1-?)]Man"
@@ -314,17 +363,17 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[GalNAc(a1-3)]Gal(b1-3)]GalNAc") == "Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)[GalNAc(a1-3)]Gal(b1-3)]GalNAc"
     assert canonicalize_iupac("Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Xyl(b1-2)][Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc") == "Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
-    assert canonicalize_iupac("Glc(?1-?)[Gal(?1-?)]2,5-Anhydro-D-Tal") == "Gal(?1-?)[Glc(?1-?)]2,5-Anhydro-D-Tal"
+    assert canonicalize_iupac("Glc(?1-?)[Gal(?1-?)]2,5-Anhydro-Tal") == "Gal(?1-?)[Glc(?1-?)]2,5-Anhydro-Tal"
     # Test other nomenclatures
     assert canonicalize_iupac("aDMan(1-2)bDGlcp(1-1)Me") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("aDGlcp(1-2)bDFruf") == "Glc(a1-2)Fruf"
     assert canonicalize_iupac("-1)bDFruf(2-3)bDFruf(2-") == "Fruf(b2-3)Fruf(b2-1)Fruf"
     assert canonicalize_iupac("-1)[Ac(1-3)]bDFruf(2-3)bDFruf(2-") == "Fruf3Ac(b2-3)Fruf(b2-1)Fruf3Ac"
-    assert canonicalize_iupac("-2)[aDGalp(1-3)]aDRhap(1-3)bDRhap(1-4)bDGlcp(1-") == "[Gal(a1-3)]Rha(a1-3)Rha(b1-4)Glc(b1-2)Rha"
+    assert canonicalize_iupac("-2)[aDGalp(1-3)]aDRhap(1-3)bDRhap(1-4)bDGlcp(1-") == "[Gal(a1-3)]D-Rha(a1-3)D-Rha(b1-4)Glc(b1-2)D-Rha"
     assert canonicalize_iupac("-2)aLRhap(1-3)[bDGlcp(1-2)]aLRhap(1-") == "Rha(a1-3)[Glc(b1-2)]Rha(a1-2)Rha"
     assert canonicalize_iupac("-3)[65%Ac(1-2)]bDRibf(1-2)bDRibf(1-6)bXKdof(2-") == "Ribf2Ac(b1-2)Ribf(b1-6)Kdof(b2-3)Ribf2Ac"
     assert canonicalize_iupac("-2)aLRhap(1-P-4)[Ac(1-2)]bDManpN(1-4)aDGlcp(1-") == "Rha1P(a1-4)ManNAc(b1-4)Glc(a1-2)Rha1P"
-    assert canonicalize_iupac("-2)bDGlcpA(1-3)[%Ac(1-2)aL6dTalpN(1-4)bDGlcp(1-4),%Ac(1-2)]aLFucpN(1-") == "GlcA(b1-3)[6dTalNAc(a1-4)Glc(b1-4)]FucNAc(a1-2)GlcA"
+    assert canonicalize_iupac("-2)bDGlcpA(1-3)[%Ac(1-2)aL6dTalpN(1-4)bDGlcp(1-4),%Ac(1-2)]aLFucpN(1-") == "GlcA(b1-3)[L-6dTalNAc(a1-4)Glc(b1-4)]FucNAc(a1-2)GlcA"
     assert canonicalize_iupac("-3)aLRhap(1-2)aLRhap(1-5)[<<Ac(1-8)|Ac(1-7)>>]bXKdo(2-") == "Rha(a1-2)Rha(a1-5)KdoOAc(b2-3)Rha"
     assert canonicalize_iupac("-P-2)bDRibf(1-2)xDRib-ol(5-") == "Ribf(b1-2)Rib5P-ol(?5-2)Ribf"
     assert canonicalize_iupac("-8)[%Ac(1-7),Ac(1-5)]aXNeup(2-") == "Neu5Ac7Ac(a2-8)Neu5Ac7Ac"
@@ -338,7 +387,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("DGalpNAcb1-4[LFucpa1-3]DGlcpNAc[6PC]b1-2DManpa1-3[DManpa1-6]DManpb1-4DGlcpNAcb1-4[LFucpa1-6]DGlcpNAc") == "Fuc(a1-3)[GalNAc(b1-4)]GlcNAc6PCho(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("DKDNpa2-3DGalpb1-3DGlcpNAc") == "Kdn(a2-3)Gal(b1-3)GlcNAc"
     assert canonicalize_iupac("DGalp[3S,6S]b1-4DGlcpNAca1-OH") == "Gal3S6S(b1-4)GlcNAc"
-    assert canonicalize_iupac("DGalpa1-2[DManpa1-3DRhapa1-3][LRhap[2Me,3Me]a1-2[DArapb1-3]LRhapb1-4DXylpb1-4]LFucpa1-3[DXylpb1-4]DGlcpa1-OH") == "Rha2Me3Me(a1-2)[Ara(b1-3)]Rha(b1-4)Xyl(b1-4)[Man(a1-3)Rha(a1-3)][Gal(a1-2)]Fuc(a1-3)[Xyl(b1-4)]Glc"
+    assert canonicalize_iupac("DGalpa1-2[DManpa1-3DRhapa1-3][LRhap[2Me,3Me]a1-2[DArapb1-3]LRhapb1-4DXylpb1-4]LFucpa1-3[DXylpb1-4]DGlcpa1-OH") == "Rha2Me3Me(a1-2)[D-Ara(b1-3)]Rha(b1-4)Xyl(b1-4)[Man(a1-3)D-Rha(a1-3)][Gal(a1-2)]Fuc(a1-3)[Xyl(b1-4)]Glc"
     assert canonicalize_iupac("DGlcpAb1-4DGlcpNAca1-4DGlcpA[2S]b1-4DGlcpNAc") == "GlcA(b1-4)GlcNAc(a1-4)GlcA2S(b1-4)GlcNAc"
     assert canonicalize_iupac("DManpa1-2DGlcpA[4Me]b1-4DGalpAa1-4DGlcpAb1-4DGlcp") == "Man(a1-2)GlcA4Me(b1-4)GalA(a1-4)GlcA(b1-4)Glc"
     assert canonicalize_iupac("DNeup5Ac[9A]a2-3DGalpb1-4[LFucpa1-3]DGlcpNAc") == "Neu5Ac9Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"
@@ -349,6 +398,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("01Y41Y41M(31M21M21M)61M(31M21M)61M21M") == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M31G)61M(31M21M)61M") == "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("β-L-Galp-(1→4)-β-D-GlcpNAc-(1→") == "L-Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("α-D-Manp-(1→3)[α-D-Manp-(1→6)]-β-D-Manp-(1→4)-β-D-GlcpNAc-(1→4)-β-D-GlcpNAc-(1→") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("M3") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -362,7 +412,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("A2G2S2(2,3)") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("FA4G3S1B") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc(b1-?)]Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-?)[GlcNAc(b1-?)]Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("A2G1G[SO4-2]1S1") == "Neu5Ac(a2-3/6)GalOS(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert canonicalize_iupac('A2[6]G1')	== 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert canonicalize_iupac('A2[6]G1') == 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('A2B[3]G1') == 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('F(6)A2[6]G(4)1Sg(6)1') == 'Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
     assert canonicalize_iupac('D0H0') == '4uHexA(?1-?)GlcN'
@@ -385,11 +435,12 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("redEnd--?a1D-GalNAc,p(--6b1D-GlcNAc,p)--3b1D-Gal,p--??1D-GlcNAc,p(--??1L-Fuc,p)--??1S$MONO,Und,-H,0,redEnd") == "Fuc(a1-?)GlcNAcOS(?1-?)Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
     assert canonicalize_iupac("freeEnd--?b1D-GlcNAc,p(--6a1L-Fuc,p)--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--??1D-GlcNAc,p--??1D-Gal,p--??2D-NeuAc,p)--??1D-GlcNAc,p--??1D-Gal,p--??2D-NeuAc,p--??2D-NeuAc,p)--6a1D-Man,p(--??1D-Man,p)--??1D-Man,p$MONO,Und,-2H,0,freeEnd") == "Neu5Ac(a2-?)Neu5Ac(a2-?)Gal(?1-?)GlcNAc(?1-?)[Neu5Ac(a2-?)Gal(?1-?)GlcNAc(?1-?)]Man(a1-3)[Man(?1-?)[Man(?1-?)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol"
     assert canonicalize_iupac('freeEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315)--4b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315$MONO,Und,-2H,0,freeEnd')  == 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol'
-    assert canonicalize_iupac("freeEnd--?D-GalNAc--3b1D-GlcNAc,p(--3a1D-Gal,p)--4a1D-Fuc,p$MONO,perMe,Na,0,freeEnd") == "Gal(a1-3)[Fuc(a1-4)]GlcNAc(b1-3)GalNAc-ol"
+    assert canonicalize_iupac("freeEnd--?D-GalNAc--3b1D-GlcNAc,p(--3a1D-Gal,p)--4a1D-Fuc,p$MONO,perMe,Na,0,freeEnd") == "Gal(a1-3)[D-Fuc(a1-4)]GlcNAc(b1-3)GalNAc-ol"
     assert canonicalize_iupac("freeEnd--??1D-Qui(--2b1D-Glc,p)--4b1D-Qui,p") == "Glc(b1-2)[Qui(b1-4)]Qui-ol"
     assert canonicalize_iupac("freeEnd--?[--4b1L-Rha,p--3a1D-Glc,p((--3a1L-Rha,p)--4b1D-Glc,p--?])--6b1D-Glc,p") == "Rha(a1-3)[Glc(b1-4)][Glc(b1-6)]Glc(a1-3)Rha-ol"
     assert canonicalize_iupac("freeEnd--?b1D-GlcNAc,p(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p--2b1D-GlcNAc,p--4b1D-GalNAc,p--??1S)--6a1D-Man,p(--3a1D-Man,p)--6a1D-Man,p)--6a1L-Fuc,p$MONO,perMe,Na,0,freeEnd") == "GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol"
     assert canonicalize_iupac("freeEnd--??1L-Ara--5[--5a1L-Ara,f--?]--5a1L-Ara,f$MONO,perMe,Na,0,freeEnd") == "Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Ara-ol"
+    assert canonicalize_iupac("EtOH=28.0000u--?b1D-Glc,p--4b1D-Gal,p(--4b1D-GalNAc,p--3b1D-Gal,p)--3a2D-NeuAc,p}--?a2D-NeuAc,p$MONO,Und,-H,0,EtOH=28.0000u") == "{Neu5Ac(a2-?)}Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc"
     assert canonicalize_iupac("WURCS=2.0/5,7,6/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O]/1-2-3-4-2-5-4/a4-b1_b4-c1_c3-d1_c6-g1_d2-e1_e4-f1") == "GalNAc4S(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/8,15,14/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O][Aad21122h-2a_2-6_5*NCC/3=O]/1-2-3-4-2-5-6-7-8-4-2-5-6-8-5/a4-b1_a6-o1_b4-c1_c3-d1_c6-j1_d2-e1_e3-f1_e4-g1_h8-i2_j2-k1_k3-l1_k4-m1_h2-g3|g6_n2-m3|m6 ") == "Neu5Ac(a2-8)Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/3,5,4/[a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5]/1-1-2-3-3/a4-b1_b4-c1_c3-d1_c6-e1") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -399,10 +450,14 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("WURCS=2.0/6,9,8/[a2122h-1a_1-5_2*NCC/3=O][a1221m-1a_1-5][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a212h-1b_1-5][a1122h-1a_1-5]/1-2-3-4-5-6-3-6-3/a3-b1_a4-c1_c4-d1_d2-e1_d3-f1_d6-h1_f2-g1_h2-i1") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/7,19,18/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O]/1-2-3-4-2-5-6-7-2-6-2-4-2-5-6-2-5-6-7/a4-b1_b4-c1_c3-d1_c4-k1_c6-l1_d2-e1_d4-i1_e3-f1_e4-g1_i4-j1_l2-m1_l6-p1_m3-n1_m4-o1_p3-q1_p4-r1_h2-g3|g6_s2-r3|r6 ") == "Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/2,2,1/[a1122h-1x_1-5][a2122h-1a_1-5_2*NCC/3=O]/1-2/a6-b1*OPO*/3O/3=O") == "GlcNAc1P(a1-6)Man"
+    assert canonicalize_iupac("WURCS=2.0/1,2,1/[a2122h-1b_1-5]/1-1/a4-b1*OSO*/3=O/3=O") == "Glc1S(b1-4)Glc"
+    assert canonicalize_iupac("WURCS=2.0/4,8,7/[a1211h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a2211h-1a_1-5][a1122h-1a_1-5]/1-2-3-3-3-3-4-4/a4-b1_b3-c1_b6-e1_c2-d1_e3-f1_e6-g1_g2-h1") == "Man(a1-2)Man(a1-6)[L-Man(a1-3)]L-Man(a1-6)[L-Man(a1-2)L-Man(a1-3)]Man(b1-4)L-GlcNAc"
     assert canonicalize_iupac("G07426YY") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("G96417BZ") == "Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G26039ES") == "Gal(b1-4)Glc-ol"
     assert canonicalize_iupac("G02923VP") == "GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac(782) == "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"
+    assert canonicalize_iupac(72) == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)[Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)]Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
     assert canonicalize_iupac("RES 1b:a-lgal-HEX-1:5|6:d") == "Fuc"
     assert canonicalize_iupac("""RES
 1b:b-dglc-HEX-1:5
@@ -669,6 +724,7 @@ def test_glycan_to_mass():
     assert abs(glycan_to_mass("Neu5Az9Ac(a2-3)Gal(b1-4)Glc") - 717.2320056) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "C2H4O2") - 693.2325546) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "-C2H4O2") - 573.1905546) < 0.1
+    assert abs(glycan_to_mass("GalOS(b1-3)GalNAc4/6S") - 543.0563546) < 0.1
 
 
 def test_calculate_adduct_mass():
@@ -1180,8 +1236,8 @@ def test_linearcode_to_iupac():
 
 
 def test_iupac_extended_to_condensed():
-    assert iupac_extended_to_condensed("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'Galp(β1→4)GlcpNAc'
-    assert iupac_extended_to_condensed("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'Neup5Ac(α2→3)Galp(β1→4)GlcpNAc'
+    assert iupac_extended_to_condensed("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'D-Galp(β1→4)D-GlcpNAc'
+    assert iupac_extended_to_condensed("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'D-Neup5Ac(α2→3)D-Galp(β1→4)D-GlcpNAc'
 
 
 def test_get_class():
@@ -2023,6 +2079,7 @@ def test_compare_glycans():
     assert not compare_glycans("Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc")
     # Test with PTM wildcards
     assert compare_glycans("Gal6S(b1-4)GlcNAc", "GalOS(b1-4)GlcNAc")
+    assert compare_glycans("Gal6S(b1-3)GalNAc4S", "GalOS(b1-3)GalNAc4/6S")
     res, mappy = compare_glycans('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc', graph_to_string(glycan_to_nxGraph('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc'), order_by='linkage'), return_matches=True)
 
 
@@ -2767,6 +2824,8 @@ def test_glycodraw():
     result = GlycoDraw("Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc", suppress=True)
     assert result is not None
     result = GlycoDraw("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-?)]Man(a1-?)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-?)]Man(a1-?)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", suppress=True)
+    assert result is not None
+    result = GlycoDraw("{Neu5Ac(a2-3)}{Neu5Ac(a2-6)}Gal", suppress=True)
     assert result is not None
     # Test vertical orientation
     result = GlycoDraw("GlcNAc(b1-4)GlcA", vertical=True, suppress=True)
@@ -5952,6 +6011,16 @@ def test_split_data_to_train(mock_glycan_dataset, mock_library):
     val_batch = next(iter(loaders['val']))
     assert hasattr(val_batch, 'y')
     assert hasattr(val_batch, 'train_idx')
+    loaders = split_data_to_train(
+        train_glycans,
+        val_glycans,
+        train_labels,
+        val_labels,
+        batch_size=1,
+        extra_feature_train=extra_train,
+        extra_feature_val=extra_val,
+        augment_prob=0.5
+    )
 
 
 def test_dataset_to_graphs_caching(mock_glycan_dataset, mock_library):
@@ -6217,6 +6286,23 @@ def test_sam_optimizer_zero_grad():
     # Test zero_grad
     sam.zero_grad()
     assert all(p.grad is None or torch.all(p.grad == 0) for p in model.parameters())
+
+
+def test_gsam_gradient_decompose_coverage():
+  """Minimal test to cover _gradient_decompose method for GSAM"""
+  model = nn.Linear(2, 1).to(device)
+  x = torch.randn(4, 2, device=device)
+  y = torch.randn(4, 1, device=device)
+  criterion = nn.MSELoss()
+  optimizer = SAM(model.parameters(), torch.optim.SGD, lr=0.1, alpha=0.1)
+  assert optimizer.minimize_surrogate_gap == True
+  optimizer.zero_grad()
+  loss1 = criterion(model(x), y)
+  loss1.backward()
+  optimizer.first_step(zero_grad=True)
+  loss2 = criterion(model(x), y)
+  loss2.backward()
+  optimizer.second_step(zero_grad=True)
 
 
 @patch('torch.cuda.is_available', return_value=False)
@@ -6597,6 +6683,18 @@ def test_get_multi_pred(sample_data, mock_models):
         background_correction=True,
         correction_df=correction_df,
         flex=True
+    )
+    correction_df = pd.DataFrame({
+        'motif': sample_data['glycans'][:-1],
+        'pred': pd.Series([0.1], dtype=np.float64)
+    })
+    results_corrected = get_multi_pred(
+        prot=sample_data['protein'],
+        glycans=sample_data['glycans'],
+        model=model,
+        prot_dic=sample_data['prot_dict'],
+        background_correction=True,
+        correction_df=correction_df
     )
 
 
