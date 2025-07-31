@@ -24,7 +24,7 @@ with open(mapping_path) as f:
 mapping_path = Path(__file__).parent / "glyconnect_to_glytoucan.json"
 with open(mapping_path) as f:
   GLYCONNECT_TO_GLYTOUCAN = json.load(f)
-  
+
 # for canonicalize_iupac
 replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')',
                   'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',  '5,9Ac': '5Ac9Ac', '4,5Ac': '4Ac5Ac', 'Talp': 'Tal', 'manp': 'man',

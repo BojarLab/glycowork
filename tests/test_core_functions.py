@@ -2842,6 +2842,8 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)GlcNAc", highlight_motif="Xyl(b1-2)Man", reverse_highlight=True, suppress=True)
     assert result is not None
+    result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_linkages=[0, 3], suppress=True)
+    assert result is not None
     # Test with repeat unit
     result = GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat=True, suppress=True)
     assert result is not None

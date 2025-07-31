@@ -429,7 +429,8 @@ def add_bond(
     label: str = '', # Bond label text
     dim: float = 50, # Base dimension for scaling
     compact: bool = False, # Use compact drawing style
-    highlight: str = 'show' # Highlight state: 'show' or 'hide'
+    highlight: str = 'show', # Highlight state: 'show' or 'hide'
+    color_highlight:  bool = False # Whether to highlight this linkage in red
     ) -> None:
   "Draws glycosidic bond line with optional label between specified coordinates"
   col_dict = col_dict_transparent if highlight == 'hide' else col_dict_base
@@ -437,7 +438,8 @@ def add_bond(
   y_scaling = 0.6 if compact else 1
   x_start, x_stop = [-x * scaling_factor * dim for x in (x_start, x_stop)]
   y_start, y_stop = [y * y_scaling * dim for y in (y_start, y_stop)]
-  p = draw.Path(stroke_width = 0.08*dim, stroke = col_dict['black'],)
+  final_width = 0.12*dim if color_highlight else 0.08*dim
+  p = draw.Path(stroke_width = final_width, stroke = col_dict['snfg_red'] if color_highlight else col_dict['black'],)
   p.M(x_start, y_start).L(x_stop, y_stop)
   drawing.append(p)
   if label and label != '-':
@@ -884,6 +886,42 @@ def process_per_residue(
   return main_chain_indices[::-1], l1_indices, l2_indices
 
 
+def process_per_linkage(
+    draw_this: str, # reordered IUPAC-condensed glycan sequence
+    highlight_linkages: List[int], # Which linkages to highlight
+    glycan: str, # original IUPAC-condensed glycan sequence
+    ) -> Tuple[List[bool], List[List[bool]], List[List[bool]]]: # (main chain values, side chain values, branched side chain values)
+  "Maps which linkages to highlight to main chain, side chains, and branched side chains"
+  per_linkage = [i in highlight_linkages for i in range(glycan.count('('))]
+  if glycan != draw_this:
+    g1 = glycan_to_nxGraph(glycan)
+    g2 = glycan_to_nxGraph(draw_this)
+    _, mappy = compare_glycans(g2, g1, return_matches = True)
+    per_linkage = [per_linkage[mappy[i*2]//2] for i in range(len(per_linkage))]
+  temp = re.sub(r'\([^)]*\)', 'x', draw_this) + 'x'
+  temp = re.sub(r'[^x\[\]]', '', temp)
+  main_chain_indices, l1_indices = [], []
+  l2_indices, l1_stack = [], []
+  idx = 0
+  for char in temp[:-1]:
+    if char == '[':
+      l1_stack.append([])
+    elif char == ']':
+      if len(l1_stack) == 1:
+        l1_indices.append(l1_stack.pop())
+      else:
+        l2_indices.append(l1_stack.pop())
+    elif char == 'x':
+      if l1_stack:
+        l1_stack[-1].append(per_linkage[idx])
+      else:
+        main_chain_indices.append(per_linkage[idx])
+      idx += 1
+  l1_indices = [k[::-1] for k in l1_indices if k]
+  l2_indices = [k[::-1] for k in l2_indices if k]
+  return main_chain_indices[::-1], l1_indices, l2_indices
+
+
 mono_list = ['Glc', 'GlcNAc', 'GlcA', 'Man', 'ManNAc', 'Gal', 'GalNAc', 'Gul', 'GulNAc',
                  'Alt', 'AltNAc', 'All', 'AllNAc', 'Neu5Ac', 'Tal', 'TalNAc', 'Neu5Gc', 'Ido', 'IdoNAc', 'IdoA', 'Fuc']
 
@@ -1066,6 +1104,7 @@ def GlycoDraw(
     dim: float = 50, # Base dimension for scaling
     highlight_motif: Optional[str] = None, # Motif to highlight
     highlight_termini_list: List = [], # Terminal positions (from 'terminal', 'internal', and 'flexible')
+    highlight_linkages: Optional[List[int]] = None, # Which linkages to highlight in a different color; indices, starting from 0, in glycan
     reverse_highlight: bool = False, # Whether to highlight everything EXCEPT highlight_motif
     repeat: Optional[Union[bool, int, str]] = None, # Repeat unit specification (True: n units, int: # of units, str: range of units)
     repeat_range: Optional[List[int]] = None, # Repeat unit range
@@ -1093,6 +1132,8 @@ def GlycoDraw(
   draw_this = graph_to_string(glycan_to_nxGraph(glycan), order_by = "linkage") if not glycan.startswith('[') else glycan
   if per_residue:
     main_per_residue, side_per_residue, branched_side_per_residue = process_per_residue(draw_this, per_residue, glycan)
+  if highlight_linkages:
+    main_per_linkage, side_per_linkage, branched_side_per_linkage = process_per_linkage(draw_this, highlight_linkages, glycan)
   if compact:
     show_linkage = False
   if isinstance(highlight_motif, str) and highlight_motif.startswith('r'):
@@ -1199,17 +1240,17 @@ def GlycoDraw(
   d = draw.Group(transform = f'rotate({deg} {x_ori+0.5*width} {y_ori+0.5*height})')
 
   # Bond main chain
-  [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k]) for k in range(len(main_sugar)-1)]
+  [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = main_per_linkage[k] if highlight_linkages else False) for k in range(len(main_sugar)-1)]
   # Bond branch
-  [add_bond(l1_x_pos[b_idx][s_idx+1], l1_x_pos[b_idx][s_idx], l1_y_pos[b_idx][s_idx+1], l1_y_pos[b_idx][s_idx], d, l1_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l1_bond_label[b_idx][s_idx+1]) for b_idx in range(len(l1_sugar)) for s_idx in range(len(l1_sugar[b_idx])-1) if len(l1_sugar[b_idx]) > 1]
+  [add_bond(l1_x_pos[b_idx][s_idx+1], l1_x_pos[b_idx][s_idx], l1_y_pos[b_idx][s_idx+1], l1_y_pos[b_idx][s_idx], d, l1_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l1_bond_label[b_idx][s_idx+1], color_highlight = side_per_linkage[b_idx][s_idx+1] if highlight_linkages else False) for b_idx in range(len(l1_sugar)) for s_idx in range(len(l1_sugar[b_idx])-1) if len(l1_sugar[b_idx]) > 1]
   # Bond branch to main chain
-  [add_bond(l1_x_pos[k][0], main_sugar_x_pos[l1_connection[k][1]], l1_y_pos[k][0], main_sugar_y_pos[l1_connection[k][1]], d, l1_bond[k][0], dim = dim, compact = compact, highlight = l1_bond_label[k][0]) for k in range(len(l1_sugar))]
+  [add_bond(l1_x_pos[k][0], main_sugar_x_pos[l1_connection[k][1]], l1_y_pos[k][0], main_sugar_y_pos[l1_connection[k][1]], d, l1_bond[k][0], dim = dim, compact = compact, highlight = l1_bond_label[k][0], color_highlight = side_per_linkage[k][0] if highlight_linkages else False) for k in range(len(l1_sugar))]
   # Bond branch branch
-  [add_bond(l2_x_pos[b_idx][s_idx+1], l2_x_pos[b_idx][s_idx], l2_y_pos[b_idx][s_idx+1], l2_y_pos[b_idx][s_idx], d, l2_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l2_bond_label[b_idx][s_idx+1]) for b_idx in range(len(l2_sugar)) for s_idx in range(len(l2_sugar[b_idx])-1) if len(l2_sugar[b_idx]) > 1]
+  [add_bond(l2_x_pos[b_idx][s_idx+1], l2_x_pos[b_idx][s_idx], l2_y_pos[b_idx][s_idx+1], l2_y_pos[b_idx][s_idx], d, l2_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l2_bond_label[b_idx][s_idx+1], color_highlight = branched_side_per_linkage[b_idx][s_idx+1] if highlight_linkages else False) for b_idx in range(len(l2_sugar)) for s_idx in range(len(l2_sugar[b_idx])-1) if len(l2_sugar[b_idx]) > 1]
   # Bond branch branch branch
   [add_bond(l3_x_pos[b_idx][s_idx+1], l3_x_pos[b_idx][s_idx], l3_y_pos[b_idx][s_idx+1], l3_y_pos[b_idx][s_idx], d, l3_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l3_bond_label[b_idx][s_idx+1]) for b_idx in range(len(l3_sugar)) for s_idx in range(len(l3_sugar[b_idx])-1) if len(l3_sugar[b_idx]) > 1]
   # Bond branch_branch to branch
-  [add_bond(l2_x_pos[k][0], l1_x_pos[l2_connection[k][0]][l2_connection[k][1]], l2_y_pos[k][0], l1_y_pos[l2_connection[k][0]][l2_connection[k][1]], d, l2_bond[k][0], dim = dim, compact = compact, highlight = l2_bond_label[k][0]) for k in range(len(l2_sugar))]
+  [add_bond(l2_x_pos[k][0], l1_x_pos[l2_connection[k][0]][l2_connection[k][1]], l2_y_pos[k][0], l1_y_pos[l2_connection[k][0]][l2_connection[k][1]], d, l2_bond[k][0], dim = dim, compact = compact, highlight = l2_bond_label[k][0], color_highlight = branched_side_per_linkage[k][0] if highlight_linkages else False) for k in range(len(l2_sugar))]
   # Bond branch_branch_branch to branch_branch
   [add_bond(l3_x_pos[k][0], l2_x_pos[l3_connection[k][0]][l3_connection[k][1]], l3_y_pos[k][0], l2_y_pos[l3_connection[k][0]][l3_connection[k][1]], d, l3_bond[k][0], dim = dim, compact = compact, highlight = l3_bond_label[k][0]) for k in range(len(l3_sugar))]
 
