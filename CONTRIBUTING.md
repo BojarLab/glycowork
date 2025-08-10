@@ -2,8 +2,10 @@
 
 ## How to get started
 
-Before anything else, use `nbdev` to install the git hooks that run automatic scripts during each commit to strip the notebooks of superfluous metadata (and avoid merge conflicts). After cloning the repository, run the following command inside it:
+After cloning this repository, install it as an editable package using `pip` (the `all` and `dev` options are needed to run the test suite later), then install `nbdev`'s Git hooks:
+
 ```
+pip install -e ".[all,dev]"
 nbdev_install_hooks
 ```
 
@@ -21,7 +23,7 @@ nbdev_install_hooks
 
 ## PR submission guidelines
 
-* Before submitting a PR, run these commands locally (note that you will have to have `glycowork[all]` installed, to cover all tests), that will run all tests and return any errors that may have occurred:
+* Before submitting a PR, run these commands locally to check that all tests are passing:
 
 ```
 nbdev_prepare
