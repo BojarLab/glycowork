@@ -2,7 +2,7 @@
 
 ## How to get started
 
-Before anything else, please install `nbdev2` and install the git hooks that run automatic scripts during each commit and merge to strip the notebooks of superfluous metadata (and avoid merge conflicts). After cloning the repository, run the following command inside it:
+Before anything else, please install `nbdev` and install the git hooks that run automatic scripts during each commit and merge to strip the notebooks of superfluous metadata (and avoid merge conflicts). After cloning the repository, run the following command inside it:
 ```
 nbdev_install_hooks
 ```
