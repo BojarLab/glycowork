@@ -48,6 +48,7 @@ all = [
     "py3Dmol"
 ]
 dev = [
+    "nbdev",
     "torch_geometric",
     "torch",
     "xgboost",
