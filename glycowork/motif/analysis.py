@@ -425,8 +425,9 @@ def get_pca(
     feature_set: List[str] = ['known', 'exhaustive'], # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
     pc_x: int = 1, # Principal component for x-axis
     pc_y: int = 2, # Principal component for y-axis
-    color: Optional[str] = None, # Column in metadata for color grouping
-    shape: Optional[str] = None, # Column in metadata for shape grouping
+    color: Optional[str] = None, # Column in metadata for color grouping; recommended to be categorical
+    shape: Optional[str] = None, # Column in metadata for shape grouping; recommended to be categorical
+    size: Optional[str] = None, # Column in metadata for point size control; recommended to be scalar
     filepath: Union[str, Path] = '', # Path to save plot
     custom_motifs: List[str] = [], # Custom motifs if using 'custom' feature set
     transform: Optional[str] = None, # Transformation type: "CLR" or "ALR"
@@ -460,8 +461,8 @@ def get_pca(
   if isinstance(groups, list):
     color = groups
   # make plot
-  ax = sns.scatterplot(x = pc_x-1, y = pc_y-1, data = df_pca, hue = color, style = shape)
-  if color or shape:
+  ax = sns.scatterplot(x = pc_x-1, y = pc_y-1, data = df_pca, hue = color, style = shape, size = size)
+  if color or shape or size:
     plt.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
   ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance', ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
   # save to file
