@@ -2271,6 +2271,7 @@ def test_annotate_dataset(test_glycans):
     result = annotate_dataset(test_glycans, feature_set=['custom', 'terminal2', 'terminal3'], custom_motifs=["Gal(b1-4)GlcNAc"])
     few_glycans = ["LacNAc", "Ma3(Ma6)Mb4GNb4GN;"]
     result = annotate_dataset(few_glycans, feature_set=['exhaustive', 'wrong'])
+    assert "Oglycan_core6" not in annotate_dataset(["Fuc(a1-2)Gal(b1-3)GalNAc", "Gal(b1-3)[GlcNAc(b1-6)]GalNAc"],  condense=True).columns
 
 
 def test_get_molecular_properties():
