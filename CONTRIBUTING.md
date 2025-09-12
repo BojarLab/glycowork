@@ -9,6 +9,8 @@ pip install -e ".[all,dev]"
 nbdev_install_hooks
 ```
 
+To run `nbdev_prepare` later on, you'll need Quarto installed. If you don't have it installed already, you can [install Quarto from here](https://quarto.org/docs/get-started/).
+
 ## Did you find a bug?
 
 * Ensure the bug was not already reported by searching on GitHub under Issues.
