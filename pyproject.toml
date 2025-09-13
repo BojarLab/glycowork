@@ -42,7 +42,7 @@ all = [
     "torch_geometric",
     "torch",
     "xgboost",
-    "glyles",
+    "glyles~=1.2.3a0",
     "pubchempy",
     "requests",
     "py3Dmol"
@@ -52,7 +52,7 @@ dev = [
     "torch_geometric",
     "torch",
     "xgboost",
-    "glyles",
+    "glyles~=1.2.3a0",
     "pubchempy",
     "requests",
     "py3Dmol",
@@ -64,7 +64,7 @@ ml = [
     "xgboost"
 ]
 chem = [
-    "glyles",
+    "glyles~=1.2.3a0",
     "pubchempy",
     "requests",
     "py3Dmol"
