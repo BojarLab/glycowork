@@ -909,6 +909,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = GLYCONNECT_TO_GLYTOUCAN.get(glycan, glycan)
   glycan = glycan.strip().replace('–', '-').replace(' ', '')
   glycan = re.sub(r'^(["\'])(.*?)\1$', r'\2', glycan)
+  mapped_glycan = glycan in lib
+  if mapped_glycan:
+    return glycan
   mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
   if mapped_glycan:
     return mapped_glycan
