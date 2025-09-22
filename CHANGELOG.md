@@ -2,12 +2,13 @@
 
 ## [1.7.0]
 - The required version for `glyles`, when using the `[chem]` or `[all]` optional installs, has been bumped up to `1.2.3a0` to resolve dependency conflicts (27eb990)
+- Added new glycomics, glycoproteomics, and lectin microarray datasets (5558f1e)
+- Added link to `canonicalize` web app into README
 
 ### motif
 #### draw
 ##### Added ✨
 - `GlycoDraw` now has the new keyword argument `highlight_linkages`, which will draw selected linkages in red and thicker (6b60a53)
-
 
 ##### Deprecated ⚠️
 
@@ -21,4 +22,4 @@
 
 #### processing
 ##### Changed 🔄
-- Using `canonicalize_iupac` on a monosaccharide contained in `lib` now has an early return, preventing overlapping name spaces with the common names
+- Using `canonicalize_iupac` on a monosaccharide contained in `lib` now has an early return, preventing overlapping name spaces with the common names (040cbc8)
