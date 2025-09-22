@@ -23,3 +23,4 @@
 #### processing
 ##### Changed 🔄
 - Using `canonicalize_iupac` on a monosaccharide contained in `lib` now has an early return, preventing overlapping name spaces with the common names (040cbc8)
+- Added support for old 'z' uncertainty notation in `canonicalize_iupac` via `replace_dic`

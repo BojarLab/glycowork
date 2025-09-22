@@ -310,6 +310,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("{Gal(b1-4)}{Neu5Ac(a2-3)}Gal(b1-4)[Fuc(a1-3)]GlcNAc") == "{Neu5Ac(a2-3)}{Gal(b1-4)}Fuc(a1-3)[Gal(b1-4)]GlcNAc"
     assert canonicalize_iupac("Fucα2Galβ1-4GlcNAcβ1-3(NeuAcα2-3Galβ1-4GlcNAcβ1-6)Galβ1-4GlcNAcol") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("Fucα1-2Galβ1-4GlcNAcβ1-3(Fucα1-2Galβ1-4GlcNAcβ1-6)Galβ1-4GlcNAcβ1-3Galβ1-4Glcβ-") == "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"
+    assert canonicalize_iupac("Gal(z1-z)Gal(b1-3)GalNAc") == "Gal(?1-?)Gal(b1-3)GalNAc"
+    assert canonicalize_iupac("Neu5Ac(a2-z)Gal(b1-3)GalNAc") == "Neu5Ac(a2-?)Gal(b1-3)GalNAc"
     assert canonicalize_iupac("Neu5Aca2-3Galb1-3{Neu5Aca2-6}GalNAc") == "Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc"
     assert canonicalize_iupac("Gal(a1-2)[Man(a1-3)D-Rha(a1-3)][Rha2Me3Me(a1-2)D-Ara(b1-3)Rha(b1-4)Xyl(b1-4)]Fuc(a1-3)[Xyl(b1-4)]Glc") == "Rha2Me3Me(a1-2)D-Ara(b1-3)Rha(b1-4)Xyl(b1-4)[Man(a1-3)D-Rha(a1-3)][Gal(a1-2)]Fuc(a1-3)[Xyl(b1-4)]Glc"
     assert canonicalize_iupac("bGal14GlcNAc") == "Gal(b1-4)GlcNAc"
