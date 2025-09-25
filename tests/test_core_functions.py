@@ -396,10 +396,12 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("DNeup5Ac[9A]a2-3DGalpb1-4[LFucpa1-3]DGlcpNAc") == "Neu5Ac9Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("DGlcpNAcb1-2[DGlcpa1-3]LRhapa1-2LRhapa1-3LRhap[2A]a1-OH") == "GlcNAc(b1-2)[Glc(a1-3)]Rha(a1-2)Rha(a1-3)Rha2Ac"
     assert canonicalize_iupac("LDmanpHepa1-OME") == "LDManHep1Me"
+    assert canonicalize_iupac("NNb3Ab;") == "Neu5Ac(b2-3)Gal"
     assert canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("GNb2Ma3(Ab4GNb2Ma6)Mb4GNb4(Fa6)GNb;") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M)61M(31M21M)61M21M") == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M31G)61M(31M21M)61M") == "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("a-D-Manp-(1-3)-b-D-Manp") == "Man(a1-3)Man"
     assert canonicalize_iupac("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("β-L-Galp-(1→4)-β-D-GlcpNAc-(1→") == "L-Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc"
@@ -1239,8 +1241,8 @@ def test_linearcode_to_iupac():
 
 
 def test_iupac_extended_to_condensed():
-    assert iupac_extended_to_condensed("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'D-Galp(β1→4)D-GlcpNAc'
-    assert iupac_extended_to_condensed("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'D-Neup5Ac(α2→3)D-Galp(β1→4)D-GlcpNAc'
+    assert iupac_extended_to_condensed("β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'D-Gal(β1→4)D-GlcpNAc'
+    assert iupac_extended_to_condensed("α-D-Neup5Ac-(2→3)-β-D-Galp-(1→4)-β-D-GlcpNAc-(1→") == 'D-Neup5Ac(α2→3)D-Gal(β1→4)D-GlcpNAc'
 
 
 def test_get_class():

@@ -3,7 +3,7 @@
 ## [1.7.0]
 - The required version for `glyles`, when using the `[chem]` or `[all]` optional installs, has been bumped up to `1.2.3a0` to resolve dependency conflicts (27eb990)
 - Added new glycomics, glycoproteomics, and lectin microarray datasets (5558f1e)
-- Added link to `canonicalize` web app into README
+- Added link to `canonicalize` web app into README (3c862db)
 
 ### motif
 #### draw
@@ -23,4 +23,6 @@
 #### processing
 ##### Changed 🔄
 - Using `canonicalize_iupac` on a monosaccharide contained in `lib` now has an early return, preventing overlapping name spaces with the common names (040cbc8)
-- Added support for old 'z' uncertainty notation in `canonicalize_iupac` via `replace_dic`
+- Added support for old 'z' uncertainty notation in `canonicalize_iupac` via `replace_dic` (b079ece)
+- Support C2-inference for beta-linked sialic acid in `canonicalize_iupac`
+- Support CarbBank IUPAC dialect in `canonicalize_iupac`

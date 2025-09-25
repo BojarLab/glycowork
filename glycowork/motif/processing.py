@@ -292,6 +292,8 @@ def linearcode1d_to_iupac(linearcode: str # Glycan in LinearCode-1D format
 def iupac_extended_to_condensed(iupac_extended: str # Glycan in IUPAC-extended format
                              ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from IUPAC-extended to barebones IUPAC-condensed format"
+  iupac_extended = re.sub(r'p-\(', '(', iupac_extended)  # Remove 'p-(' -> '('
+  iupac_extended = re.sub(r'\)-', ')', iupac_extended)   # Remove ')-' -> ')'
   # Find all occurrences of the pattern and apply the changes
   def replace_pattern(match):
     # Move the α or β after the next opening parenthesis, KEEP D-/L-
@@ -300,10 +302,14 @@ def iupac_extended_to_condensed(iupac_extended: str # Glycan in IUPAC-extended f
   pattern = re.compile(r"(?P<alpha_beta>[αβßab\?])-(?P<dl>[DL])-(?P<after>[^\)]*\()")
   # Substitute the pattern in the string with our replace_pattern function
   adjusted_string = pattern.sub(replace_pattern, iupac_extended)
+  # Handle reducing end sugar (no parentheses after)
+  adjusted_string = re.sub(r'([ab\?αβ])-([DL])-([A-Za-z]+)p?$', r'\2-\3', adjusted_string)
   adjusted_string = re.sub(r"-\(", "(", adjusted_string)
   adjusted_string = re.sub(r"\)-", ")", adjusted_string)
   adjusted_string = re.sub(r"\]-", "]", adjusted_string)
-  return adjusted_string[:adjusted_string.rindex('(')]
+  if re.search(r'\([ab\?αβ]\d+[→-]?$', adjusted_string):
+    return adjusted_string[:adjusted_string.rindex('(')]
+  return adjusted_string
 
 
 def glycoct_to_iupac_int(glycoct: str, # GlycoCT format string
@@ -1056,9 +1062,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     elif '-' not in prefix:
       glycan = glycan.replace('+', '(?1-?)+')
     glycan = '{'+glycan.replace('+', '}')
-  post_process = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'Fuc(?': 'Fuc(a',
+  post_process = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'u5Ac(b1': 'u5Ac(b2', 'u5Gc(b1': 'u5Gc(b2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a',
-                  'Kdn(a1': 'Kdn(a2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?', 'manHep': 'ManHep'}
+                  'Kdn(a1': 'Kdn(a2', 'Kdn(b1': 'Kdn(b2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?', 'manHep': 'ManHep'}
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
   glycan = sanitize_iupac(glycan)
