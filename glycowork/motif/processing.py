@@ -27,7 +27,7 @@ with open(mapping_path) as f:
 
 # for canonicalize_iupac
 replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')',
-                  'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac',  '5,9Ac': '5Ac9Ac', '4,5Ac': '4Ac5Ac', 'Talp': 'Tal', 'manp': 'man',
+                 'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', '4,5Ac': '4Ac5Ac', 'Talp': 'Tal', 'manp': 'man',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara',
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn',
@@ -955,12 +955,16 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Anomeric indicator placed before parentheses
   if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
     glycan = re.sub(r'([βα])(\()', r'\2\1', glycan)
+  ac_multi = r'\d+(?:,\d+)+Ac\d*|\d+Ac\d*(?:,\d+Ac\d*)+'  # Neu9,5Ac to Neu5Ac9Ac
+  glycan = re.sub(ac_multi, lambda m: ''.join(n+'Ac' for n in sorted(re.findall(r'\d+(?=,|Ac)', m.group()), key=int)), glycan)
+  ac_to_nac = r'Ac\((?:\?1|1)-2\)(?P<prefix>[abx\?]?(?:[DL]-?)?)(?P<base>[A-Z][a-z]{2,})(?P<pflag>p)?N\b'  # Ac(1-2)bDGlcpN to bDGlcNAc
+  glycan = re.sub(ac_to_nac, lambda m: f"{m.group('prefix') or ''}{m.group('base')}{m.group('pflag') or ''}NAc", glycan)
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
   glycan = multireplace(glycan, COMMON_ENANTIOMER)
   glycan = re.sub(r'(\d)A($|a)', r'\1Ac\2', glycan)  # 9Aa into 9Aca
   glycan = re.sub(r'-([ab])-(\d+),(\d+\)?)-', r'\1\2-\3', glycan)  # Inconsistent usage of dashes and commas, like in Neu5Ac-a-2,6-Gal-b-1,3-GlcNAc
   glycan = re.sub(r'([A-Za-z]+\d+),(\d+)Pyr', r'\1Pyr\2Pyr', glycan)  # Gal4,6Pyr into Gal4Pyr6Pyr
-  glycan = re.sub(r'(\d),(\d)(?![l-])', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone) or '-' (for Anhydro)
+  glycan = re.sub(r'(\d),(\d)(?![l-]|Ac)', r'\1-\2', glycan)  # Replace commas between numbers unless followed by 'l' (for lactone), '-' (for Anhydro), or 'Ac'
   if '{' in glycan and '}' not in glycan:
     glycan = f'{{{glycan[:glycan.index("{")]}?1-?}}{glycan[glycan.index("{")+1:]}'
   if '{' in glycan and '(' not in glycan:
