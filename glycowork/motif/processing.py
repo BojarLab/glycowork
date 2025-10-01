@@ -906,6 +906,22 @@ def transform_repeat_glycan(glycan: str # Glycan string to check
       return re.sub(r"-ol(\d+)P", r"\1P-ol", glycan), True
   return glycan, False
 
+def looks_like_linearcode(glycan: str) -> bool:
+    glycan=glycan.strip()
+    if not glycan or '-' in glycan or any(sig in glycan for sig in ('RES','S=','@')): return False
+    if ';' in glycan: return True
+    if re.search(r'[^A-Za-z0-9\[\]\(\),/;? =%]',glycan): return False
+    BASE=r'(?:GN|AN|NN|NJ|G|A|M|N|K|W|L|I|H|F|X|B|R|U|O|P|E)'; MOD=r'(?:Q|PE|IN|ME|N|T|P|PC|PYR|S|SH|EP)'
+    BR=rf'(?:\[(?:\d+(?:{MOD})|(?:{BASE})[abx?]\d+(?:/\d+)?)\])?'
+    PAT=re.compile(rf'{BASE}{BR}[abx?](?:\d+(?:/\d+)?|\?)',re.ASCII)
+    d=0
+    for ch in glycan:
+        if ch=='(': d+=1
+        elif ch==')':
+            d-=1
+            if d<0: return False
+    if d: return False
+    return bool(PAT.search(glycan))
 
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
@@ -944,6 +960,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
     glycan = nglycan_stub_to_iupac(glycan)
+  elif looks_like_linearcode(glycan):
+    glycan = linearcode_to_iupac(glycan)
   elif bool(
     # Matches mannose shorthand
     bool(re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', glycan, re.IGNORECASE)) or
