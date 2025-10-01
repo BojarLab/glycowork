@@ -1,49 +1,28 @@
 # Changelog
 
-## [1.6.3]
-- `glycowork` is now compatible with specifying narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`) (ec290e8)
-- made the `bokeh` dependency runtime-optional by importing it just-in-time for `plot_network` (ea9929e)
-
-### glycan_data
-#### stats
-##### Added ✨
-- Alpha biodiversity calculation in `alpha_biodiversity_stats` now performs Welch's ANOVA instead of ANOVA if `scipy>=1.16` (ab73368)
-- ALR transformation functions now also expose the `random_state` keyword argument for reproducible seeding (23cafe7)
+## [1.7.0]
+- The required version for `glyles`, when using the `[chem]` or `[all]` optional installs, has been bumped up to `1.2.3a0` to resolve dependency conflicts (27eb990)
+- Added new glycomics, glycoproteomics, and lectin microarray datasets (5558f1e)
+- Added link to `canonicalize` web app into README (3c862db)
 
 ### motif
-#### processing
-##### Added ✨
-- `COMMON_ENANTIOMER` dict to track the implicit enantiomer state (e.g., we write `Gal` instead of `D-Gal` but we do note the deviation `L-Gal`) (bb7575c)
-- `GLYCONNECT_TO_GLYTOUCAN` dict to support GlyConnect IDs as input to Universal Input / `canonicalize_iupac` (ea9929e)
-
-##### Changed 🔄
-- `canonicalize_iupac` and its parsers will now leave the `D-/L-` prefixes in monosaccharides, which will then be centrally homogenized with `COMMON_ENANTIOMER`, for a more refined and detailed output (bb7575c)
-- `canonicalize_iupac` now considers more IUPAC variations, such as `Neu5,9Ac` instead of `Neu5,9Ac2` (a764897)
-- `canonicalize_iupac` no longer strips trailing `-Cer` (d8c948b)
-- `canonicalize_iupac` now handles `alpha` and `beta` (d8c948b)
-- `glycoworkbench_to_iupac` is now trigged by presence of either `End--` or `u--` (d8c948b)
-- `wurcs_to_iupac` now supports more tokens (d9d6e57)
-- `canonicalize_iupac` now supports `Gal4,6Pyr` modifications
-- `wurcs_to_iupac` can now process sulfur linkages (e.g., `Glc(b1-S-4)Glc`) (88b2d54)
-- `wurcs_to_iupac` is now more robust to prefixes (e.g., `L-`, `6-deoxy-`, etc) (ac171c5)
-- `wurcs_to_iupac` can now deal with ultra-long glycans (i.e., a-z, A-Z, aa-az, and aA-aZ)
-
-#### tokenization
-##### Changed 🔄
-- `glycan_to_composition` is now compatible with the new narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`) (ec290e8)
-
-#### graph
-##### Changed 🔄
-- `compare_glycans` is now compatible with the new narrow modification ambiguities (e.g., `Gal(b1-3)GalNAc4/6S`) (ec290e8)
-
 #### draw
-##### Fixed 🐛
-- fixed overlap in floating substituents in `GlycoDraw` if glycan had fewer branching levels than unique floating substituents (daade78)
+##### Added ✨
+- `GlycoDraw` now has the new keyword argument `highlight_linkages`, which will draw selected linkages in red and thicker (6b60a53)
+
+##### Deprecated ⚠️
 
 #### analysis
 ##### Added ✨
-- ANOVA-based time series analysis in `get_time_series` now performs Welch's ANOVA instead of ANOVA if `scipy>=1.16` (ab73368)
-- All `analysis` endpoint functions can now be directly seeded, without having to pre-transform data, with the newly exposed `random_state` keyword argument (23cafe7)
+- `get_pca` now has the new keyword argument `size`, to let users control the size of points with a scalar column in the provided meta-data (ab7669c)
 
+#### graph
+##### Fixed 🐛
+- Fixed an issue in `subgraph_isomorphism_with_negation`, where motif graphs were only shallowly copied, potentially causing graph mutation during processing and leading to too permissive matching in `annotate_dataset` and higher-level functions (8b75aae)
 
-##### Deprecated ⚠️
+#### processing
+##### Changed 🔄
+- Using `canonicalize_iupac` on a monosaccharide contained in `lib` now has an early return, preventing overlapping name spaces with the common names (040cbc8)
+- Added support for old 'z' uncertainty notation in `canonicalize_iupac` via `replace_dic` (b079ece)
+- Support C2-inference for beta-linked sialic acid in `canonicalize_iupac`
+- Support CarbBank IUPAC dialect in `canonicalize_iupac`

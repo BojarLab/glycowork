@@ -314,11 +314,12 @@ def subgraph_isomorphism_with_negation(glycan: Union[str, nx.DiGraph], # Glycan 
     motif_stub = motif.replace(negated_part, to_replace).replace('[]', '')
     negated_part_clean = glycan_to_nxGraph(negated_part.replace('!', ''))
   else:
-    motif_stub = motif.copy()
+    motif_copy = deepcopy(motif)
+    motif_stub = motif_copy.copy()
     negated_nodes = {n for n, data in motif.nodes(data = True) if '!' in data.get('string_labels', '')}
     negated_nodes.update({node + 1 for node in negated_nodes if node + 1 in motif_stub})
     motif_stub.remove_nodes_from(negated_nodes)
-    negated_part_clean = nx.subgraph(motif, negated_nodes)
+    negated_part_clean = motif_copy.subgraph(negated_nodes).copy()
     for node in negated_part_clean.nodes():
       negated_part_clean.nodes[node]['string_labels'] = negated_part_clean.nodes[node]['string_labels'].replace('!', '')
   res = subgraph_isomorphism.__wrapped__(glycan, motif_stub, termini_list = termini_list, count = count, return_matches = True)
