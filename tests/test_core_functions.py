@@ -6939,7 +6939,7 @@ def test_gifflar(class_mode):
     out = train_model(
         model,
         {"train": train_dl, "val": test_dl},
-        criterion=torch.nn.CrossEntropyLoss(),
+        criterion=torch.nn.BCEWithLogitsLoss() if class_mode == "binary" else torch.nn.CrossEntropyLoss(),
         optimizer=optim,
         scheduler=ReduceLROnPlateau(optim, mode='min', patience=5, factor=0.5),
         num_epochs=2,
