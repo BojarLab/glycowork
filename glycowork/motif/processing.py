@@ -288,7 +288,7 @@ def linearcode_to_iupac(linearcode: str # Glycan in LinearCode format
   return multireplace(linearcode.split(';')[0], replace_dic)
 
 
-def linearcode1d_to_iupac(linearcode: str # Glycan in LinearCode-1D format
+def glyseeker_to_iupac(linearcode: str # Glycan in Glyseeker format
                       ) -> str: # Basic IUPAC-condensed format
   replace_dic = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a', 'X': 'Xyl(b', 'F': 'Fuc(a', 'L': 'GlcA(b'}
   glycan = multireplace(linearcode[::-1], replace_dic)
@@ -955,7 +955,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
   elif glycan.startswith('0'):
-    glycan = linearcode1d_to_iupac(glycan)
+    glycan = glyseeker_to_iupac(glycan)
   elif bool(re.match('[^o]-[LD]-', glycan)):
     glycan = iupac_extended_to_condensed(glycan)
   elif 'RES' in glycan:
