@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+
+from glycowork.ml.gifflar.hetero import HeteroDataBatch
 try:
     import xgboost as xgb
     import torch
@@ -88,7 +90,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                dataloaders: Dict[str, torch.utils.data.DataLoader], # dict with 'train' and 'val' loaders
                criterion: torch.nn.Module, # PyTorch loss function
                optimizer: torch.optim.Optimizer, # PyTorch optimizer, has to be SAM if mode != "regression"
-               scheduler: torch.optim.lr_scheduler._LRScheduler, # PyTorch learning rate decay
+               scheduler: torch.optim.lr_scheduler.LRScheduler, # PyTorch learning rate decay
                num_epochs: int = 25, # number of epochs for training
                patience: int = 50, # epochs without improvement until early stop
                mode: str = 'classification', # 'classification', 'multilabel', or 'regression'
@@ -127,18 +129,28 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
 
             for data in dataloaders[phase]:
                 # Get all relevant node attributes
-                x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
+                if isinstance(data, HeteroDataBatch):
+                    x, y, edge_index, batch = data, data["y"], None, None
+                else:
+                    x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
+                x = x.to(device)
+                
+                if mode == 'multilabel':
+                    y = y.view(len(y), -1).to(device)
+                elif mode == "regression":
+                    y = y.view(-1, 1).to(device)
+                else:
+                    y = y.long().to(device)
+                
+                if hasattr(edge_index, "to"):
+                    edge_index = edge_index.to(device)
+                if hasattr(batch, "to"):
+                    batch = batch.to(device)
+                
                 prot = getattr(data, 'train_idx', None)
                 if prot is not None:
-                    prot = prot.view(max(batch) + 1, -1).to(device)
-                x = x.to(device)
-                if mode == 'multilabel':
-                    y = y.view(max(batch) + 1, -1).to(device)
-                else:
-                    y = y.to(device)
-                y = y.view(-1, 1) if mode == 'regression' else y
-                edge_index = edge_index.to(device)
-                batch = batch.to(device)
+                    prot = prot.view(len(y), -1).to(device)
+
                 optimizer.zero_grad()
 
                 with torch.set_grad_enabled(phase == 'train'):
@@ -146,11 +158,13 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
                         enable_running_stats(model)
                     pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
+                    if mode2 == "multi":
+                        pred = pred.softmax(dim=-1)
                     loss = criterion(pred, y)
 
                     if phase == 'train':
                         loss.backward()
-                        if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
+                        if hasattr(optimizer, "first_step"):
                             optimizer.first_step(zero_grad = True)
                             # Second forward pass
                             disable_running_stats(model)
@@ -162,7 +176,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
 
                 # Collecting relevant metrics
                 running_metrics["loss"].append(loss.item())
-                running_metrics["weights"].append(batch.max().cpu() + 1)
+                running_metrics["weights"].append(len(y))
 
                 y_det = y.detach().cpu().numpy()
                 pred_det = pred.cpu().detach().numpy()
