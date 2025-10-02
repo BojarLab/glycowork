@@ -37,6 +37,12 @@ COMMON_ENANTIOMER = {"L-Fuc": "Fuc", "D-Gal": "Gal", "D-Man": "Man", "D-Glc": "G
                   "D-Oli": "Oli", "D-Qui": "Qui", "L-Rha": "Rha", "D-Psi": "Psi", "L-Ido": "Ido", "D-Fru": "Fru", "D-Rib": "Rib", "L-Sor": "Sor", "D-Tag": "Tag", "D-Tal": "Tal", "D-6dTal": "6dTal",
                   "D-Xyl": "Xyl", "D-Mur": "Mur", "D-Neu": "Neu", "D-Kdn": "Kdn", "D-Kdo": "Kdo"}
 
+OXFORD_MANN_ONLY=re.compile(r"\A(?:M|Man)-?\d+\Z",re.IGNORECASE)
+OXFORD_HAS_NONZERO_DIGIT=re.compile(r"[1-9]")
+OXFORD_FORBIDDEN_IUPAC=re.compile(r"\([a-z]?\d-\d\)")
+OXFORD_REQ_TOKEN=re.compile(r"(?:A\d+|G\d+|Sg?\d+|F(?:\(\d\))?|F\d+|Bi?|M\d+|H\d+|N\d+|E\d+|L\d+|Lac(?:DiNAc)?\d+|GalNAc\d+|GlcNAc\d+|GlcN\d+|Gluc\d+|Sulf)")
+OXFORD_BODY=re.compile(r"\A(?:[A-Za-z0-9-]+|\((?:3|4|6|2,3|2,6|Ac|Ac1|s)\)|\[(?:[368](?:,[368]){0,3}|SO4-2)\]|,)+\Z",re.VERBOSE)
+
 def rescue_glycans(func: Callable # Function to wrap
                  ) -> Callable: # Wrapped function handling formatting issues
   "Decorator for handling malformed glycan sequences"
@@ -923,6 +929,14 @@ def looks_like_linearcode(glycan: str) -> bool:
     if d: return False
     return bool(PAT.search(glycan))
 
+def looks_like_oxford(glycan:str)->bool:
+    if glycan=="Bi":return True
+    if OXFORD_MANN_ONLY.fullmatch(glycan):return True
+    if not OXFORD_HAS_NONZERO_DIGIT.search(glycan):return False
+    if OXFORD_FORBIDDEN_IUPAC.search(glycan):return False
+    if not OXFORD_REQ_TOKEN.search(glycan):return False
+    return bool(OXFORD_BODY.fullmatch(glycan))
+
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
   "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
@@ -962,12 +976,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = nglycan_stub_to_iupac(glycan)
   elif looks_like_linearcode(glycan):
     glycan = linearcode_to_iupac(glycan)
-  elif bool(
-    # Matches mannose shorthand
-    bool(re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', glycan, re.IGNORECASE)) or
-    # Combined: valid chars + has digit + has Oxford structure + no unwanted pattern
-    bool(re.fullmatch(r'^(?=.*[1-9])(?=.*(?:A\d+|G\d+|S[g]?\d+|F|B[i]?|M\d+))(?!.*\([a-z]?\d-\d\))(?!.*F[a-z])[A-Za-z0-9()\[\],-]+$', glycan))
-  ):
+  elif looks_like_oxford(glycan):
       glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   # Anomeric indicator placed before parentheses
