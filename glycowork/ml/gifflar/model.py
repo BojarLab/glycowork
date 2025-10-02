@@ -1,3 +1,5 @@
+from typing import Union
+
 import torch
 from torch import nn
 from torch_geometric.nn import HeteroConv, GINConv, global_mean_pool
@@ -68,8 +70,8 @@ class GIFFLAR(nn.Module):
             nn.Dropout(0.2),
             nn.Linear(embed_dim // 2, output_dim),
         )
-    
-    def forward(self, batch: HeteroDataBatch, embeddings: bool = False, *args, **kwargs) -> torch.Tensor | dict:
+
+    def forward(self, batch: HeteroDataBatch, embeddings: bool = False, *args, **kwargs) -> Union[torch.Tensor, dict]:
         """
         Compute the node embeddings.
 

@@ -1,5 +1,6 @@
 import copy
 from collections import defaultdict
+from typing import Optional
 
 import torch
 import glyles
@@ -218,7 +219,7 @@ def nx2mol(G: nx.Graph, sanitize=True) -> Chem.Mol:
     return mol
 
 
-def clean_tree(tree: nx.Graph) -> nx.Graph | None:
+def clean_tree(tree: nx.Graph) -> Optional[nx.Graph]:
     """
     Clean the tree from unnecessary node features and store only the IUPAC name.
 
@@ -239,7 +240,7 @@ def clean_tree(tree: nx.Graph) -> nx.Graph | None:
     return tree
 
 
-def iupac2mol(iupac: str) -> HeteroData | None:
+def iupac2mol(iupac: str) -> Optional[HeteroData]:
     """
     Convert a glycan stored given as IUPAC-condensed string into an RDKit molecule while keeping the information of
     which atom and which bond belongs to which monosaccharide.

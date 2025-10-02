@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Union, Optional
 
 import torch
 from torch_geometric.data import HeteroData
@@ -49,7 +49,7 @@ class HeteroDataBatch:
         return getattr(self, item)
 
 
-def determine_concat_dim(tensors: list[torch.Tensor]) -> int | None:
+def determine_concat_dim(tensors: list[torch.Tensor]) -> Optional[int]:
     """
     Determine the dimension along which a list of tensors can be concatenated.
 
@@ -69,7 +69,7 @@ def determine_concat_dim(tensors: list[torch.Tensor]) -> int | None:
     return concat_dim
 
 
-def hetero_collate(data: list[list[HeteroData]] | list[HeteroData] | None, *args, **kwargs) -> HeteroDataBatch:
+def hetero_collate(data: Optional[Union[list[list[HeteroData]], list[HeteroData]]], *args, **kwargs) -> HeteroDataBatch:
     """
     Collate a list of HeteroData objects to a batch thereof.
 
