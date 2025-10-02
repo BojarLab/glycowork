@@ -22,6 +22,11 @@ from unittest.mock import Mock, patch, MagicMock, mock_open
 from torch_geometric.data import Data
 from collections import Counter
 from contextlib import contextmanager
+import random
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import DataLoader
+from glycowork.ml.gifflar.data import iupac2mol, HeteroDataset
+from glycowork.ml.gifflar.hetero import hetero_collate
 from glycowork.glycan_data.data_entry import check_presence
 from glycowork.motif.query import get_insight
 from glycowork.motif.tokenization import (
@@ -43,7 +48,7 @@ from glycowork.motif.processing import (
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets,
-    strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader
+    strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan
 )
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
@@ -6879,3 +6884,62 @@ def test_train_model_plotting(mock_model, mock_dataloader):
             mode2='multi',
             return_metrics=False
         )
+
+
+def test_gifflar():
+    BATCH_SIZE = 8
+    NUM_WORKERS = 1
+
+    df = df_glycan[df_glycan["glycan_type"].isin(["N", "O", "free"])][["glycan", "glycan_type"]]
+    df["label"] = df["glycan_type"].apply(lambda x: 0 if x == "N" else 1 if x == "O" else 2)
+
+    train, test = [], []
+    for i, (_, row) in enumerate(df.head(100).iterrows()):
+        print(f"\r{i}/{len(df)}", end="")
+        try:
+            d = iupac2mol(row["glycan"])
+        except Exception as e:
+            continue
+        if d is None:
+            continue
+        d["y"] = torch.tensor([row["label"]], dtype=torch.float)
+        d["ID"] = i
+        if random.random() < 0.8:
+            train.append(d)
+        else:
+            test.append(d)
+
+    train_dl = DataLoader(
+        HeteroDataset(train),
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        collate_fn=hetero_collate, # type: ignore
+        num_workers=NUM_WORKERS,
+        persistent_workers=True,
+        drop_last=len(train) % BATCH_SIZE == 1
+    )
+
+    test_dl = DataLoader(
+        HeteroDataset(test),
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        collate_fn=hetero_collate, # type: ignore
+        num_workers=NUM_WORKERS,
+        persistent_workers=True,
+        drop_last=len(test) % BATCH_SIZE == 1,
+    )
+
+    model = prep_model("GIFFLAR", num_classes=3, trained=False)
+    optim = torch.optim.Adam(model.parameters())
+    out = train_model(
+        model,
+        {"train": train_dl, "val": test_dl},
+        criterion=torch.nn.CrossEntropyLoss(),
+        optimizer=optim,
+        scheduler=ReduceLROnPlateau(optim, mode='min', patience=5, factor=0.5),
+        num_epochs=2,
+        mode='classification',
+        mode2='multi',
+        return_metrics=False,
+    )
+    assert out is not None

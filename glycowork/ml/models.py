@@ -1,4 +1,5 @@
 from typing import Dict, Optional, Tuple, Union, Literal
+import warnings
 
 import numpy as np
 try:
@@ -12,6 +13,7 @@ try:
 except ImportError:
   raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 from glycowork.glycan_data.loader import lib, download_model
+from glycowork.ml.gifflar.model import GIFFLAR
 
 
 class SweetNet(torch.nn.Module):
@@ -290,7 +292,7 @@ def init_weights(model: torch.nn.Module, # neural network for analyzing glycans
             raise ValueError("This initialization option is not supported.")
 
 
-def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_flex", "NSequonPred"], # type of model to create
+def prep_model(model_type: Literal["SweetNet", "GIFFLAR", "LectinOracle", "LectinOracle_flex", "NSequonPred"], # type of model to create
               num_classes: int, # number of unique classes for classification
               libr: Optional[Dict[str, int]] = None, # dictionary of form glycoletter:index
               trained: bool = False, # whether to use pretrained model
@@ -307,6 +309,11 @@ def prep_model(model_type: Literal["SweetNet", "LectinOracle", "LectinOracle_fle
           raise ValueError("Hidden dimension must be 128 for pretrained model")
         model_path = download_model("glycowork_sweetnet_species.pt")
         model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
+      model = model.to(device)
+    elif model_type == 'GIFFLAR':
+      model = GIFFLAR(feat_dim = 128, embed_dim = 128, output_dim = num_classes, num_layers = 8)
+      if trained:
+        warnings.warn("No pretrained GIFFLAR model is currently available. The model will be randomly initialized.")
       model = model.to(device)
     elif model_type == 'LectinOracle':
       model = LectinOracle(len(libr), num_classes = num_classes)
