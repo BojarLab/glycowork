@@ -140,7 +140,10 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                 elif mode == "regression":
                     y = y.view(-1, 1).to(device)
                 else:
-                    y = y.long().to(device)
+                    if isinstance(criterion, torch.nn.BCEWithLogitsLoss):
+                        y = y.float().to(device)
+                    else:
+                        y = y.long().to(device)
                 
                 if hasattr(edge_index, "to"):
                     edge_index = edge_index.to(device)

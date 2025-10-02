@@ -1,7 +1,10 @@
 from typing import Any, Union, Optional
 
-import torch
-from torch_geometric.data import HeteroData
+try:
+    import torch
+    from torch_geometric.data import HeteroData
+except ImportError:
+    raise ImportError("<torch or torch_geometric missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model?>")
 
 
 class HeteroDataBatch:

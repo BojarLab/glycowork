@@ -1,8 +1,11 @@
 from typing import Union
 
-import torch
-from torch import nn
-from torch_geometric.nn import HeteroConv, GINConv, global_mean_pool
+try:
+    import torch
+    from torch import nn
+    from torch_geometric.nn import HeteroConv, GINConv, global_mean_pool
+except ImportError:
+    raise ImportError("<torch or torch_geometric missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model?>")
 
 from glycowork.ml.gifflar.hetero import HeteroDataBatch
 from glycowork.ml.gifflar.data import atom_map, bond_map, lib_map

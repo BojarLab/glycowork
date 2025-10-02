@@ -5,14 +5,21 @@ from typing import Optional
 import torch
 import glyles
 import networkx as nx
-from rdkit import Chem
-from rdkit.Chem import rdDepictor
-from torch.utils.data import Dataset
-from torch_geometric.data import HeteroData
-from torch_geometric.transforms.base_transform import BaseTransform
+try:
+    from rdkit import Chem
+    from rdkit.Chem import rdDepictor
+except ImportError:
+    raise ImportError("<rdkit missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model?>")
+try:
+    from torch.utils.data import Dataset
+    from torch_geometric.data import HeteroData
+    from torch_geometric.transforms.base_transform import BaseTransform
+except ImportError:
+    raise ImportError("<torch or torch_geometric missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model?>")
 from glyles.glycans.utils import smiles2mol
 from glyles.glycans.factory.factory import MonomerFactory
 from glyles.glycans.poly.merger import Merger
+
 from glycowork.glycan_data.loader import lib
 
 # unknown, values...
