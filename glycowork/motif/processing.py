@@ -40,6 +40,7 @@ COMMON_ENANTIOMER = {"L-Fuc": "Fuc", "D-Gal": "Gal", "D-Man": "Man", "D-Glc": "G
 OXFORD_MANN_ONLY = re.compile(r"\A(?:M|Man)-?\d+\Z", re.IGNORECASE)
 OXFORD_HAS_NONZERO_DIGIT = re.compile(r"[1-9]")
 OXFORD_FORBIDDEN_IUPAC = re.compile(r"\([a-z]?\d-\d\)")
+OXFORD_FORBIDDEN_LINKAGE = re.compile(r"[ab]\d")
 OXFORD_REQ_TOKEN = re.compile(r"(?:A\d+|G\d+|Sg?\d+|F(?:\(\d\))?|F\d+|Bi?|M\d+|H\d+|N\d+|E\d+|L\d+|Lac(?:DiNAc)?\d+|GalNAc\d+|GlcNAc\d+|GlcN\d+|Gluc\d+|Sulf)")
 OXFORD_BODY = re.compile(r"\A(?:[A-Za-z0-9-]+|\((?:3|4|6|2,3|2,6|Ac|Ac1|s)\)|\[(?:[368](?:,[368]){0,3}|SO4-2)\]|,)+\Z", re.VERBOSE)
 
@@ -912,6 +913,7 @@ def transform_repeat_glycan(glycan: str # Glycan string to check
       return re.sub(r"-ol(\d+)P", r"\1P-ol", glycan), True
   return glycan, False
 
+
 def looks_like_linearcode(glycan: str) -> bool:
   glycan = glycan.strip()
   if not glycan or '-' in glycan or any(sig in glycan for sig in ('RES', 'S=', '@')):
@@ -944,11 +946,14 @@ def looks_like_oxford(glycan: str) -> bool:
     return True
   if not OXFORD_HAS_NONZERO_DIGIT.search(glycan):
     return False
+  if OXFORD_FORBIDDEN_LINKAGE.search(glycan):
+    return False
   if OXFORD_FORBIDDEN_IUPAC.search(glycan):
     return False
   if not OXFORD_REQ_TOKEN.search(glycan):
     return False
   return bool(OXFORD_BODY.fullmatch(glycan))
+
 
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
