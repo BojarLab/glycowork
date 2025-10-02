@@ -6886,12 +6886,17 @@ def test_train_model_plotting(mock_model, mock_dataloader):
         )
 
 
-def test_gifflar():
+@pytest.mark.parametrize("class_mode", ["binary", "multi"])
+def test_gifflar(class_mode):
     BATCH_SIZE = 8
     NUM_WORKERS = 1
 
-    df = df_glycan[df_glycan["glycan_type"].isin(["N", "O", "free"])][["glycan", "glycan_type"]]
-    df["label"] = df["glycan_type"].apply(lambda x: 0 if x == "N" else 1 if x == "O" else 2)
+    if class_mode == "binary":
+        df = df_glycan[df_glycan["glycan_type"].isin(["O", "free"])][["glycan", "glycan_type"]]
+        df["label"] = df["glycan_type"].apply(lambda x: 0 if x == "O" else 1)
+    else:
+        df = df_glycan[df_glycan["glycan_type"].isin(["N", "O", "free"])][["glycan", "glycan_type"]]
+        df["label"] = df["glycan_type"].apply(lambda x: 0 if x == "N" else 1 if x == "O" else 2)
 
     train, test = [], []
     for i, (_, row) in enumerate(df.head(100).iterrows()):
@@ -6929,7 +6934,7 @@ def test_gifflar():
         drop_last=len(test) % BATCH_SIZE == 1,
     )
 
-    model = prep_model("GIFFLAR", num_classes=3, trained=False)
+    model = prep_model("GIFFLAR", num_classes=1 if class_mode == "binary" else 3, trained=False)
     optim = torch.optim.Adam(model.parameters())
     out = train_model(
         model,
@@ -6939,7 +6944,7 @@ def test_gifflar():
         scheduler=ReduceLROnPlateau(optim, mode='min', patience=5, factor=0.5),
         num_epochs=2,
         mode='classification',
-        mode2='multi',
+        mode2=class_mode,
         return_metrics=False,
     )
     assert out is not None

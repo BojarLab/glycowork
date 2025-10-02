@@ -113,59 +113,6 @@ class HeteroDataset(Dataset):
         return self.data_list[idx]
 
 
-def masked2nx(smiles: str, mask: list[int]) -> nx.Graph:
-    """
-    Convert a SMILES string with masked monosaccharide IDs into a networkx.Graph while keeping the information of which atom
-    and which bond belongs to which monosaccharide.
-
-    Args:
-        smiles: The SMILES string of the molecule to convert
-        mask: A list of integers indicating the monosaccharide ID for each atom in the SMILES string
-
-    Returns:
-        The converted molecule in networkx represented by the input SMILES string
-    """
-    mol = smiles2mol(smiles)
-    tmp1, i, read_atom, read_atom_index = defaultdict(list), 0, "", -1
-    for i in range(len(smiles)):
-        # check for uppercase, i.e., atoms
-        if smiles[i].isupper() or "c":
-            # save if it's an element, ie starts with uppercase or is a aromatic c
-            if read_atom != "" and (read_atom[0].isupper() or read_atom == "c"):
-                tmp1[read_atom] += [mask[read_atom_index]]
-            # read current atom
-            read_atom = smiles[i]
-            read_atom_index = i
-        # extent current element
-        elif smiles[i].isalpha():
-            read_atom += smiles[i]
-    if read_atom != "" and (read_atom[0].isupper() or read_atom == "c"):
-        tmp1[read_atom] += [mask[read_atom_index]]
-
-    atom_counter = defaultdict(int)
-    G = nx.Graph()
-    for atom in mol.GetAtoms():
-        elem = atom.GetSymbol()
-        G.add_node(
-            atom.GetIdx(),
-            atomic_num=elem,
-            formal_charge=atom.GetFormalCharge(),
-            chiral_tag=atom.GetChiralTag(),
-            is_aromatic=atom.GetIsAromatic(),
-            mono_id=tmp1[elem][atom_counter[elem]],
-        )
-        atom_counter[elem] += 1
-    for bond in mol.GetBonds():
-        start = bond.GetBeginAtomIdx()
-        G.add_edge(
-            start,
-            bond.GetEndAtomIdx(),
-            bond_type=bond.GetBondType(),
-            mono_id=G.nodes[start]["mono_id"],
-        )
-    return G
-
-
 def nx2mol(G: nx.Graph, sanitize=True) -> Chem.Mol:
     """
     Convert a molecules from a networkx.Graph to RDKit.
