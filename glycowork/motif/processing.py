@@ -37,11 +37,11 @@ COMMON_ENANTIOMER = {"L-Fuc": "Fuc", "D-Gal": "Gal", "D-Man": "Man", "D-Glc": "G
                   "D-Oli": "Oli", "D-Qui": "Qui", "L-Rha": "Rha", "D-Psi": "Psi", "L-Ido": "Ido", "D-Fru": "Fru", "D-Rib": "Rib", "L-Sor": "Sor", "D-Tag": "Tag", "D-Tal": "Tal", "D-6dTal": "6dTal",
                   "D-Xyl": "Xyl", "D-Mur": "Mur", "D-Neu": "Neu", "D-Kdn": "Kdn", "D-Kdo": "Kdo"}
 
-OXFORD_MANN_ONLY=re.compile(r"\A(?:M|Man)-?\d+\Z",re.IGNORECASE)
-OXFORD_HAS_NONZERO_DIGIT=re.compile(r"[1-9]")
-OXFORD_FORBIDDEN_IUPAC=re.compile(r"\([a-z]?\d-\d\)")
-OXFORD_REQ_TOKEN=re.compile(r"(?:A\d+|G\d+|Sg?\d+|F(?:\(\d\))?|F\d+|Bi?|M\d+|H\d+|N\d+|E\d+|L\d+|Lac(?:DiNAc)?\d+|GalNAc\d+|GlcNAc\d+|GlcN\d+|Gluc\d+|Sulf)")
-OXFORD_BODY=re.compile(r"\A(?:[A-Za-z0-9-]+|\((?:3|4|6|2,3|2,6|Ac|Ac1|s)\)|\[(?:[368](?:,[368]){0,3}|SO4-2)\]|,)+\Z",re.VERBOSE)
+OXFORD_MANN_ONLY = re.compile(r"\A(?:M|Man)-?\d+\Z", re.IGNORECASE)
+OXFORD_HAS_NONZERO_DIGIT = re.compile(r"[1-9]")
+OXFORD_FORBIDDEN_IUPAC = re.compile(r"\([a-z]?\d-\d\)")
+OXFORD_REQ_TOKEN = re.compile(r"(?:A\d+|G\d+|Sg?\d+|F(?:\(\d\))?|F\d+|Bi?|M\d+|H\d+|N\d+|E\d+|L\d+|Lac(?:DiNAc)?\d+|GalNAc\d+|GlcNAc\d+|GlcN\d+|Gluc\d+|Sulf)")
+OXFORD_BODY = re.compile(r"\A(?:[A-Za-z0-9-]+|\((?:3|4|6|2,3|2,6|Ac|Ac1|s)\)|\[(?:[368](?:,[368]){0,3}|SO4-2)\]|,)+\Z", re.VERBOSE)
 
 def rescue_glycans(func: Callable # Function to wrap
                  ) -> Callable: # Wrapped function handling formatting issues
@@ -326,7 +326,7 @@ def glycoct_to_iupac_int(glycoct: str, # GlycoCT format string
   # Dictionaries to hold the mapping of residues and linkages
   residue_dic = {}
   iupac_parts = defaultdict(list)
-  degrees = defaultdict(lambda:1)
+  degrees = defaultdict(lambda: 1)
   glycoct = glycoct.replace("S1b:", "S\n1b:")
   for line in glycoct.split('\n'):
     if len(line) < 1:
@@ -589,7 +589,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
           for bracket in re.finditer(r'[\[\(]([^\]\)]+)[\]\)]', linkages):
               if len(bonds) >= count: break
               if 'Ac' in bracket.group(1):
-                residue = residue+'Ac'
+                residue = residue + 'Ac'
                 nums = [int(x.strip()) for x in str(bracket.group(1)).split(',') if x!='Ac']
               else:
                 nums = [int(x.strip()) for x in bracket.group(1).split(',')]
@@ -622,7 +622,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
       else:
           return []
 
-  def balance_mannose_branch_linkages(iupac, antenna_number=None):
+  def balance_mannose_branch_linkages(iupac, antenna_number = None):
     """
     Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6.
     If antenna_number is provided, assigns that number to the longest branch.
@@ -913,29 +913,42 @@ def transform_repeat_glycan(glycan: str # Glycan string to check
   return glycan, False
 
 def looks_like_linearcode(glycan: str) -> bool:
-    glycan=glycan.strip()
-    if not glycan or '-' in glycan or any(sig in glycan for sig in ('RES','S=','@')): return False
-    if ';' in glycan: return True
-    if re.search(r'[^A-Za-z0-9\[\]\(\),/;? =%]',glycan): return False
-    BASE=r'(?:GN|AN|NN|NJ|G|A|M|N|K|W|L|I|H|F|X|B|R|U|O|P|E)'; MOD=r'(?:Q|PE|IN|ME|N|T|P|PC|PYR|S|SH|EP)'
-    BR=rf'(?:\[(?:\d+(?:{MOD})|(?:{BASE})[abx?]\d+(?:/\d+)?)\])?'
-    PAT=re.compile(rf'{BASE}{BR}[abx?](?:\d+(?:/\d+)?|\?)',re.ASCII)
-    d=0
-    for ch in glycan:
-        if ch=='(': d+=1
-        elif ch==')':
-            d-=1
-            if d<0: return False
-    if d: return False
-    return bool(PAT.search(glycan))
+  glycan = glycan.strip()
+  if not glycan or '-' in glycan or any(sig in glycan for sig in ('RES', 'S=', '@')):
+    return False
+  if ';' in glycan:
+    return True
+  if re.search(r'[^A-Za-z0-9\[\]\(\),/;? =%]', glycan):
+    return False
+  base = r'(?:GN|AN|NN|NJ|G|A|M|N|K|W|L|I|H|F|X|B|R|U|O|P|E)'
+  mod = r'(?:Q|PE|IN|ME|N|T|P|PC|PYR|S|SH|EP)'
+  br = rf'(?:\[(?:\d+(?:{mod})|(?:{base})[abx?]\d+(?:/\d+)?)\])?'
+  pattern = re.compile(rf'{base}{br}[abx?](?:\d+(?:/\d+)?|\?)', re.ASCII)
+  depth = 0
+  for ch in glycan:
+    if ch == '(':
+      depth += 1
+    elif ch == ')':
+      depth -= 1
+      if depth < 0:
+        return False
+  if depth:
+    return False
+  return bool(pattern.search(glycan))
 
-def looks_like_oxford(glycan:str)->bool:
-    if glycan=="Bi":return True
-    if OXFORD_MANN_ONLY.fullmatch(glycan):return True
-    if not OXFORD_HAS_NONZERO_DIGIT.search(glycan):return False
-    if OXFORD_FORBIDDEN_IUPAC.search(glycan):return False
-    if not OXFORD_REQ_TOKEN.search(glycan):return False
-    return bool(OXFORD_BODY.fullmatch(glycan))
+
+def looks_like_oxford(glycan: str) -> bool:
+  if glycan == "Bi":
+    return True
+  if OXFORD_MANN_ONLY.fullmatch(glycan):
+    return True
+  if not OXFORD_HAS_NONZERO_DIGIT.search(glycan):
+    return False
+  if OXFORD_FORBIDDEN_IUPAC.search(glycan):
+    return False
+  if not OXFORD_REQ_TOKEN.search(glycan):
+    return False
+  return bool(OXFORD_BODY.fullmatch(glycan))
 
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
