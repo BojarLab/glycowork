@@ -5,18 +5,20 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-from glycowork.ml.gifflar.hetero import HeteroDataBatch
 try:
-    import xgboost as xgb
-    import torch
-    import torch.nn.functional as F
-    # Choose the correct computing architecture
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda:0"
+  import xgboost as xgb
+  import torch
+  import torch.nn.functional as F
+  # Choose the correct computing architecture
+  device = "cpu"
+  if torch.cuda.is_available():
+    device = "cuda:0"
 except ImportError:
-    raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
+  raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
+try:
+  from glycowork.ml.processing import HeteroDataBatch
+except ImportError:
+  raise ImportError("<torch or torch_geometric or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error, \
     label_ranking_average_precision_score, ndcg_score, roc_auc_score, mean_absolute_error, r2_score
 from glycowork.motif.annotate import annotate_dataset
@@ -53,7 +55,6 @@ class EarlyStopping:
         '''Saves model when validation loss decrease.'''
         if self.verbose:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-        # torch.save(model.state_dict(), 'drive/My Drive/checkpoint.pt')
         self.val_loss_min = val_loss
 
 
@@ -98,35 +99,28 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                return_metrics: bool = False, # whether to return metrics
               ) -> Union[torch.nn.Module, tuple[torch.nn.Module, dict[str, dict[str, list[float]]]]]: # best model from training and the training and validation metrics
     "trains a deep learning model on predicting glycan properties"
-
     since = time.time()
     early_stopping = EarlyStopping(patience=patience, verbose=True)
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float("inf")
     best_lead_metric = float("inf")
-
     if mode == 'classification':
         blank_metrics = {"loss": [], "acc": [], "mcc": [], "auroc": []}
     elif mode == 'multilabel':
         blank_metrics = {"loss": [], "acc": [], "mcc": [], "lrap": [], "ndcg": []}
     else:
         blank_metrics = {"loss": [], "mse": [], "mae": [], "r2": []}
-
     metrics = {"train": copy.deepcopy(blank_metrics), "val": copy.deepcopy(blank_metrics)}
-
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
-
         for phase in ['train', 'val']:
             if phase == 'train':
                 model.train()
             else:
                 model.eval()
-
             running_metrics = copy.deepcopy(blank_metrics)
             running_metrics["weights"] = []
-
             for data in dataloaders[phase]:
                 # Get all relevant node attributes
                 if isinstance(data, HeteroDataBatch):
@@ -134,7 +128,6 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                 else:
                     x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
                 x = x.to(device)
-                
                 if mode == 'multilabel':
                     y = y.view(len(y), -1).to(device)
                 elif mode == "regression":
@@ -144,18 +137,14 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                         y = y.float().to(device)
                     else:
                         y = y.long().to(device)
-                
                 if hasattr(edge_index, "to"):
                     edge_index = edge_index.to(device)
                 if hasattr(batch, "to"):
                     batch = batch.to(device)
-                
                 prot = getattr(data, 'train_idx', None)
                 if prot is not None:
                     prot = prot.view(len(y), -1).to(device)
-
                 optimizer.zero_grad()
-
                 with torch.set_grad_enabled(phase == 'train'):
                     # First forward pass
                     if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
@@ -164,7 +153,6 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     if mode2 == "multi":
                         pred = pred.softmax(dim=-1)
                     loss = criterion(pred, y)
-
                     if phase == 'train':
                         loss.backward()
                         if hasattr(optimizer, "first_step"):
@@ -176,11 +164,9 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                             optimizer.second_step(zero_grad = True)
                         else:
                             optimizer.step()
-
                 # Collecting relevant metrics
                 running_metrics["loss"].append(loss.item())
                 running_metrics["weights"].append(len(y))
-
                 y_det = y.detach().cpu().numpy()
                 pred_det = pred.cpu().detach().numpy()
                 if mode == 'classification':
@@ -204,26 +190,22 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     running_metrics["mse"].append(mean_squared_error(y_det, pred_det))
                     running_metrics["mae"].append(mean_absolute_error(y_det, pred_det))
                     running_metrics["r2"].append(r2_score(y_det, pred_det))
-
             # Averaging metrics at end of epoch
             for key in running_metrics:
                 if key == "weights":
                     continue
                 metrics[phase][key].append(np.average(running_metrics[key], weights = running_metrics["weights"]))
-
             if mode == 'classification':
                 print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["acc"][-1], metrics[phase]["mcc"][-1]))
             elif mode == 'multilabel':
                 print('{} Loss: {:.4f} LRAP: {:.4f} NDCG: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["acc"][-1], metrics[phase]["mcc"][-1]))
             else:
                 print('{} Loss: {:.4f} MSE: {:.4f} MAE: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["mse"][-1], metrics[phase]["mae"][-1]))
-
             # Keep best model state_dict
             if phase == "val":
                 if metrics[phase]["loss"][-1] <= best_loss:
                     best_loss = metrics[phase]["loss"][-1]
                     best_model_wts = copy.deepcopy(model.state_dict())
-
                     # Extract the lead metric (ACC, LRAP, or MSE) of the new best model
                     if mode == 'classification':
                         best_lead_metric = metrics[phase]["acc"][-1]
@@ -231,19 +213,16 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                         best_lead_metric = metrics[phase]["lrap"][-1]
                     else:
                         best_lead_metric = metrics[phase]["mse"][-1]
-
                 # Check Early Stopping & adjust learning rate if needed
                 early_stopping(metrics[phase]["loss"][-1], model)
                 if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     scheduler.step(metrics[phase]["loss"][-1])
                 else:
                     scheduler.step()
-
         if early_stopping.early_stop:
             print("Early stopping")
             break
         print()
-
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
@@ -254,32 +233,29 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
     else:
         print('Best val loss: {:4f}, best MSE score: {:.4f}'.format(best_loss, best_lead_metric))
     model.load_state_dict(best_model_wts)
-
     if return_metrics:
         return model, metrics
-
     # Plot loss & score over the course of training
     _, _ = plt.subplots(nrows=2, ncols=1)
     plt.subplot(2, 1, 1)
     plt.plot(range(epoch + 1), metrics["val"]["loss"])
     plt.title('Model Training')
     plt.ylabel('Validation Loss')
-    plt.legend(['Validation Loss'], loc='best')
-
+    plt.legend(['Validation Loss'], loc = 'best')
     plt.subplot(2, 1, 2)
     plt.xlabel('Number of Epochs')
     if mode == 'classification':
         plt.plot(range(epoch + 1), metrics["val"]["acc"])
         plt.ylabel('Validation Accuracy')
-        plt.legend(['Validation Accuracy'], loc='best')
+        plt.legend(['Validation Accuracy'], loc = 'best')
     elif mode == 'multilabel':
         plt.plot(range(epoch + 1), metrics["val"]["lrap"])
         plt.ylabel('Validation LRAP')
-        plt.legend(['Validation LRAP'], loc='best')
+        plt.legend(['Validation LRAP'], loc = 'best')
     else:
         plt.plot(range(epoch + 1), metrics["val"]["mse"])
         plt.ylabel('Validation MSE')
-        plt.legend(['Validation MSE'], loc='best')
+        plt.legend(['Validation MSE'], loc = 'best')
     return model
 
 

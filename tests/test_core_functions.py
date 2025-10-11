@@ -25,8 +25,6 @@ from contextlib import contextmanager
 import random
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from glycowork.ml.gifflar.data import iupac2mol, HeteroDataset
-from glycowork.ml.gifflar.hetero import hetero_collate
 from glycowork.glycan_data.data_entry import check_presence
 from glycowork.motif.query import get_insight
 from glycowork.motif.tokenization import (
@@ -107,8 +105,8 @@ from glycowork.network.evolution import (calculate_distance_matrix, distance_fro
 from glycowork.ml.train_test_split import (seed_wildcard_hierarchy, hierarchy_filter,
                             general_split, prepare_multilabel
 )
-from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset,
-                       dataset_to_graphs, dataset_to_dataloader, split_data_to_train
+from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset, iupac2mol, HeteroDataset,
+                       dataset_to_graphs, dataset_to_dataloader, split_data_to_train, hetero_collate
 )
 from glycowork.ml.model_training import (EarlyStopping, sigmoid, disable_running_stats,
                           enable_running_stats, train_model, SAM, Poly1CrossEntropyLoss, training_setup,
@@ -6890,32 +6888,31 @@ def test_train_model_plotting(mock_model, mock_dataloader):
 
 @pytest.mark.parametrize("class_mode", ["binary", "multi"])
 def test_gifflar(class_mode):
+    from sklearn.model_selection import train_test_split
     BATCH_SIZE = 8
     NUM_WORKERS = 1
-
     if class_mode == "binary":
         df = df_glycan[df_glycan["glycan_type"].isin(["O", "free"])][["glycan", "glycan_type"]]
         df["label"] = df["glycan_type"].apply(lambda x: 0 if x == "O" else 1)
     else:
         df = df_glycan[df_glycan["glycan_type"].isin(["N", "O", "free"])][["glycan", "glycan_type"]]
         df["label"] = df["glycan_type"].apply(lambda x: 0 if x == "N" else 1 if x == "O" else 2)
-
     train, test = [], []
-    for i, (_, row) in enumerate(df.head(100).iterrows()):
-        print(f"\r{i}/{len(df)}", end="")
-        try:
-            d = iupac2mol(row["glycan"])
-        except Exception as e:
-            continue
-        if d is None:
-            continue
-        d["y"] = torch.tensor([row["label"]], dtype=torch.float)
-        d["ID"] = i
-        if random.random() < 0.8:
-            train.append(d)
-        else:
-            test.append(d)
-
+    valid_samples = []
+    for i, (_, row) in enumerate(df.sample(100, random_state=42).iterrows()):
+      try:
+        d = iupac2mol(row["glycan"])
+      except Exception as e:
+        continue
+      if d is None:
+        continue
+      d["y"] = torch.tensor([row["label"]], dtype=torch.float)
+      d["ID"] = i
+      d["label_for_split"] = row["label"]
+      valid_samples.append(d)
+    train, test = train_test_split(valid_samples, test_size=0.2, random_state=42, stratify=[d["label_for_split"] for d in valid_samples])
+    for d in train + test:
+      del d["label_for_split"]
     train_dl = DataLoader(
         HeteroDataset(train),
         batch_size=BATCH_SIZE,
@@ -6925,7 +6922,6 @@ def test_gifflar(class_mode):
         persistent_workers=True,
         drop_last=len(train) % BATCH_SIZE == 1
     )
-
     test_dl = DataLoader(
         HeteroDataset(test),
         batch_size=BATCH_SIZE,
@@ -6935,7 +6931,6 @@ def test_gifflar(class_mode):
         persistent_workers=True,
         drop_last=len(test) % BATCH_SIZE == 1,
     )
-
     model = prep_model("GIFFLAR", num_classes=1 if class_mode == "binary" else 3, trained=False)
     optim = torch.optim.Adam(model.parameters())
     out = train_model(

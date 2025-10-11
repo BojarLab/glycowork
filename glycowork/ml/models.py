@@ -1,19 +1,21 @@
 from typing import Dict, Optional, Tuple, Union, Literal
 import warnings
-
 import numpy as np
 try:
-    import torch
-    import torch.nn.functional as F
-    from torch_geometric.nn import GraphConv
-    from torch_geometric.nn import global_mean_pool as gap
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda:0"
+  import torch
+  import torch.nn.functional as F
+  from torch_geometric.nn import GraphConv, HeteroConv, GINConv
+  from torch_geometric.nn import global_mean_pool as gap
+  device = "cpu"
+  if torch.cuda.is_available():
+    device = "cuda:0"
 except ImportError:
   raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
+try:
+  from glycowork.ml.processing import HeteroDataBatch, atom_map, bond_map
+except ImportError:
+  raise ImportError("<torch or torch_geometric or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
 from glycowork.glycan_data.loader import lib, download_model
-from glycowork.ml.gifflar.model import GIFFLAR
 
 
 class SweetNet(torch.nn.Module):
@@ -27,7 +29,6 @@ class SweetNet(torch.nn.Module):
         self.conv1 = GraphConv(hidden_dim, hidden_dim)
         self.conv2 = GraphConv(hidden_dim, hidden_dim)
         self.conv3 = GraphConv(hidden_dim, hidden_dim)
-
         # Node embedding
         self.item_embedding = torch.nn.Embedding(num_embeddings=lib_size+1, embedding_dim=hidden_dim)
         # Fully connected part
@@ -44,20 +45,16 @@ class SweetNet(torch.nn.Module):
         # Getting node features
         x = self.item_embedding(x)
         x = x.squeeze(1)
-
         # Graph convolution operations
         x = F.leaky_relu(self.conv1(x, edge_index))
         x = F.leaky_relu(self.conv2(x, edge_index))
         x = F.leaky_relu(self.conv3(x, edge_index))
         x = gap(x, batch)
-
         # Fully connected part
         x = self.act1(self.bn1(self.lin1(x)))
         x_out = self.bn2(self.lin2(x))
         x = F.dropout(self.act2(x_out), p = 0.5, training = self.training)
-
         x = self.lin3(x).squeeze(1)
-
         if inference:
           return x, x_out
         else:
@@ -120,15 +117,12 @@ class LectinOracle(torch.nn.Module):
     self.num_classes = num_classes
     self.data_min = data_min
     self.data_max = data_max
-
     # Graph convolution operations for the glycan
     self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
     self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
     # Node embedding for the glycan
-    self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
-                                             embedding_dim = self.hidden_size)
-
+    self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1, embedding_dim = self.hidden_size)
     # Fully connected part for the protein
     self.prot_encoder1 = torch.nn.Linear(self.input_size_prot, 400)
     self.prot_encoder2 = torch.nn.Linear(400, 128)
@@ -138,7 +132,6 @@ class LectinOracle(torch.nn.Module):
     self.dp_prot2 = torch.nn.Dropout(0.1)
     self.act_prot1 = torch.nn.LeakyReLU()
     self.act_prot2 = torch.nn.LeakyReLU()
-
     # Combined fully connected part
     self.fc1 = torch.nn.Linear(128+self.hidden_size, int(np.round(self.hidden_size/2)))
     self.fc2 = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
@@ -152,23 +145,18 @@ class LectinOracle(torch.nn.Module):
     # Fully connected part for the protein
     embedded_prot = self.bn_prot1(self.act_prot1(self.dp_prot1(self.prot_encoder1(prot))))
     embedded_prot = self.bn_prot2(self.act_prot2(self.dp_prot2(self.prot_encoder2(embedded_prot))))
-
     # Getting glycan node features
     x = self.item_embedding(nodes)
     x = x.squeeze(1)
-
     # Glycan graph convolution operations
     x = F.leaky_relu(self.conv1(x, edge_index))
     x = F.leaky_relu(self.conv2(x, edge_index))
     x = F.leaky_relu(self.conv3(x, edge_index))
     x = gap(x, batch)
-
     # Combining results from protein and glycan
     h_n = torch.cat((embedded_prot, x), 1)
-
     # Fully connected part
     h_n = self.act1(self.bn1(self.fc1(h_n)))
-
     x1 = self.fc2(self.dp1(h_n))
     x2 = self.fc2(self.dp1(h_n))
     x3 = self.fc2(self.dp1(h_n))
@@ -177,9 +165,7 @@ class LectinOracle(torch.nn.Module):
     x6 = self.fc2(self.dp1(h_n))
     x7 = self.fc2(self.dp1(h_n))
     x8 = self.fc2(self.dp1(h_n))
-
     out = self.sigmoid(torch.mean(torch.stack([x1, x2, x3, x4, x5, x6, x7, x8]), dim = 0))
-
     if inference:
       return out, embedded_prot, x
     else:
@@ -202,15 +188,12 @@ class LectinOracle_flex(torch.nn.Module):
     self.num_classes = num_classes
     self.data_min = data_min
     self.data_max = data_max
-
     # Graph convolution operations for the glycan
     self.conv1 = GraphConv(self.hidden_size, self.hidden_size)
     self.conv2 = GraphConv(self.hidden_size, self.hidden_size)
     self.conv3 = GraphConv(self.hidden_size, self.hidden_size)
     # Node embedding for the glycan
-    self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1,
-                                             embedding_dim = self.hidden_size)
-
+    self.item_embedding = torch.nn.Embedding(num_embeddings = self.input_size_glyco+1, embedding_dim = self.hidden_size)
     # ESM-1b mimicking
     self.fc1 = torch.nn.Linear(self.input_size_prot, 4000)
     self.fc2 = torch.nn.Linear(4000, 2000)
@@ -221,7 +204,6 @@ class LectinOracle_flex(torch.nn.Module):
     self.act2 = torch.nn.LeakyReLU()
     self.bn1 = torch.nn.BatchNorm1d(4000)
     self.bn2 = torch.nn.BatchNorm1d(2000)
-
     # Fully connected part for the protein
     self.prot_encoder1 = torch.nn.Linear(1280, 400)
     self.prot_encoder2 = torch.nn.Linear(400, 128)
@@ -231,7 +213,6 @@ class LectinOracle_flex(torch.nn.Module):
     self.bn_prot2 = torch.nn.BatchNorm1d(128)
     self.act_prot1 = torch.nn.LeakyReLU()
     self.act_prot2 = torch.nn.LeakyReLU()
-
     # Combined fully connected part
     self.dp1_n = torch.nn.Dropout(0.5)
     self.fc1_n = torch.nn.Linear(128+self.hidden_size, int(np.round(self.hidden_size/2)))
@@ -274,6 +255,72 @@ class LectinOracle_flex(torch.nn.Module):
       return out, embedded_prot, x
     else:
       return out
+
+
+def get_gin_layer(input_dim: int,  # input dimension of the GIN layer
+                  output_dim: int  # output dimension of the GIN layer
+                  ) -> GINConv:  # GIN layer with the specified input and output dimensions
+  """Get a GIN layer with the specified input and output dimensions"""
+  return GINConv(
+    torch.nn.Sequential(
+      torch.nn.Linear(input_dim, output_dim),
+      torch.nn.PReLU(),
+      torch.nn.Dropout(0.2),
+      torch.nn.BatchNorm1d(output_dim),
+    )
+  )
+
+
+class GIFFLAR(torch.nn.Module):
+  def __init__(self,
+    feat_dim: int,  # Dimension of initial atom/bond/monosacch features
+    embed_dim: int,  # Dimension of embeddings of each GNN layer
+    output_dim: int,  # Dimension of the output, e.g., num_classes for classification
+    num_layers: int,  # Number of GNN layers
+    ):
+    """Initialize the GIFFLAR model"""
+    super(GIFFLAR, self).__init__()
+    self.atom_embedding = torch.nn.Embedding(len(atom_map) + 1, feat_dim)
+    self.bond_embedding = torch.nn.Embedding(len(bond_map) + 1, feat_dim)
+    self.mono_embedding = torch.nn.Embedding(len(lib) + 1, feat_dim)
+    dims = [feat_dim] + [embed_dim] * num_layers
+    self.convs = torch.nn.ModuleList()
+    for i in range(num_layers):
+      self.convs.append(HeteroConv({key: get_gin_layer(dims[i], dims[i + 1]) for key in [("atoms", "coboundary", "atoms"), ("atoms", "to", "bonds"), ("bonds", "to", "monosacchs"), ("bonds", "boundary", "bonds"), ("monosacchs", "boundary", "monosacchs")]}))
+    self.head = torch.nn.Sequential(
+      torch.nn.Linear(embed_dim, embed_dim // 2),
+      torch.nn.PReLU(),
+      torch.nn.Dropout(0.2),
+      torch.nn.Linear(embed_dim // 2, output_dim),
+    )
+
+  def forward(self,
+              batch: HeteroDataBatch,  # batch of data to process
+              embeddings: bool = False,  # Whether to return embeddings or predictions
+              *args, **kwargs
+              ) -> Union[torch.Tensor, dict]:  # node embeddings
+    """Compute the node embeddings"""
+    batch.x_dict["atoms"] = self.atom_embedding.forward(batch.x_dict["atoms"])
+    batch.x_dict["bonds"] = self.bond_embedding.forward(batch.x_dict["bonds"])
+    batch.x_dict["monosacchs"] = self.mono_embedding.forward(batch.x_dict["monosacchs"])
+    for conv in self.convs:
+      batch.x_dict = conv(batch.x_dict, batch.edge_index_dict)
+    graph_embed = self.pool(batch.x_dict, batch.batch_dict)
+    pred = self.head(graph_embed).squeeze()
+    if embeddings:
+      return {
+        "node_embed": batch.x_dict,
+        "graph_embed": graph_embed,
+        "pred": pred
+        }
+    return pred
+
+  def pool(self,
+           nodes: dict,  # node embeddings
+           batch_ids: dict  # batch IDs for each node
+           ) -> torch.Tensor:  # graph-level embedding
+    """Pool the node embeddings to get a graph-level embedding """
+    return gap(torch.concat([nodes["atoms"], nodes["bonds"], nodes["monosacchs"]], dim = 0), torch.concat([batch_ids["atoms"], batch_ids["bonds"], batch_ids["monosacchs"]], dim = 0))
 
 
 def init_weights(model: torch.nn.Module, # neural network for analyzing glycans
