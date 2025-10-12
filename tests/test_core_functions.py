@@ -6933,6 +6933,10 @@ def test_gifflar(class_mode):
     )
     model = prep_model("GIFFLAR", num_classes=1 if class_mode == "binary" else 3, trained=False)
     optim = torch.optim.Adam(model.parameters())
+    batch = next(iter(train_dl))
+    assert batch is not None
+    assert hasattr(batch, 'x_dict')
+    assert hasattr(batch, 'edge_index_dict')
     out = train_model(
         model,
         {"train": train_dl, "val": test_dl},

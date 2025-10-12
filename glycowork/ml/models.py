@@ -19,86 +19,84 @@ from glycowork.glycan_data.loader import lib, download_model
 
 
 class SweetNet(torch.nn.Module):
-    def __init__(self, lib_size: int, # number of unique tokens for graph nodes
-                 num_classes: int = 1, # number of output classes (>1 for multilabel)
-                 hidden_dim: int = 128 # dimension of hidden layers
-                ) -> None:
-        "given glycan graphs as input, predicts properties via a graph neural network"
-        super(SweetNet, self).__init__()
-        # Convolution operations on the graph
-        self.conv1 = GraphConv(hidden_dim, hidden_dim)
-        self.conv2 = GraphConv(hidden_dim, hidden_dim)
-        self.conv3 = GraphConv(hidden_dim, hidden_dim)
-        # Node embedding
-        self.item_embedding = torch.nn.Embedding(num_embeddings=lib_size+1, embedding_dim=hidden_dim)
-        # Fully connected part
-        self.lin1 = torch.nn.Linear(hidden_dim, 1024)
-        self.lin2 = torch.nn.Linear(1024, 128)
-        self.lin3 = torch.nn.Linear(128, num_classes)
-        self.bn1 = torch.nn.BatchNorm1d(1024)
-        self.bn2 = torch.nn.BatchNorm1d(128)
-        self.act1 = torch.nn.LeakyReLU()
-        self.act2 = torch.nn.LeakyReLU()
+  def __init__(self, lib_size: int, # number of unique tokens for graph nodes
+             num_classes: int = 1, # number of output classes (>1 for multilabel)
+             hidden_dim: int = 128 # dimension of hidden layers
+            ) -> None:
+    "given glycan graphs as input, predicts properties via a graph neural network"
+    super(SweetNet, self).__init__()
+    # Convolution operations on the graph
+    self.conv1 = GraphConv(hidden_dim, hidden_dim)
+    self.conv2 = GraphConv(hidden_dim, hidden_dim)
+    self.conv3 = GraphConv(hidden_dim, hidden_dim)
+    # Node embedding
+    self.item_embedding = torch.nn.Embedding(num_embeddings=lib_size+1, embedding_dim=hidden_dim)
+    # Fully connected part
+    self.lin1 = torch.nn.Linear(hidden_dim, 1024)
+    self.lin2 = torch.nn.Linear(1024, 128)
+    self.lin3 = torch.nn.Linear(128, num_classes)
+    self.bn1 = torch.nn.BatchNorm1d(1024)
+    self.bn2 = torch.nn.BatchNorm1d(128)
+    self.act1 = torch.nn.LeakyReLU()
+    self.act2 = torch.nn.LeakyReLU()
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
-                inference: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        # Getting node features
-        x = self.item_embedding(x)
-        x = x.squeeze(1)
-        # Graph convolution operations
-        x = F.leaky_relu(self.conv1(x, edge_index))
-        x = F.leaky_relu(self.conv2(x, edge_index))
-        x = F.leaky_relu(self.conv3(x, edge_index))
-        x = gap(x, batch)
-        # Fully connected part
-        x = self.act1(self.bn1(self.lin1(x)))
-        x_out = self.bn2(self.lin2(x))
-        x = F.dropout(self.act2(x_out), p = 0.5, training = self.training)
-        x = self.lin3(x).squeeze(1)
-        if inference:
-          return x, x_out
-        else:
-          return x
+  def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
+            inference: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    # Getting node features
+    x = self.item_embedding(x).squeeze(1)
+    # Graph convolution operations
+    x = F.leaky_relu(self.conv1(x, edge_index))
+    x = F.leaky_relu(self.conv2(x, edge_index))
+    x = F.leaky_relu(self.conv3(x, edge_index))
+    x = gap(x, batch)
+    # Fully connected part
+    x = self.act1(self.bn1(self.lin1(x)))
+    x_out = self.bn2(self.lin2(x))
+    x = F.dropout(self.act2(x_out), p = 0.5, training = self.training)
+    x = self.lin3(x).squeeze(1)
+    if inference:
+      return x, x_out
+    else:
+      return x
 
 
 class NSequonPred(torch.nn.Module):
-    def __init__(self) -> None:
-        "given an ESM1b representation of N and 20 AA up + downstream, predicts whether it's a sequon"
-        super(NSequonPred, self).__init__()
-        self.fc1 = torch.nn.Linear(1280, 512)
-        self.fc2 = torch.nn.Linear(512, 256)
-        self.fc3 = torch.nn.Linear(256, 64)
-        self.fc4 = torch.nn.Linear(64, 1)
-        self.bn1 = torch.nn.BatchNorm1d(512)
-        self.bn2 = torch.nn.BatchNorm1d(256)
-        self.bn3 = torch.nn.BatchNorm1d(64)
+  def __init__(self) -> None:
+    "given an ESM1b representation of N and 20 AA up + downstream, predicts whether it's a sequon"
+    super(NSequonPred, self).__init__()
+    self.fc1 = torch.nn.Linear(1280, 512)
+    self.fc2 = torch.nn.Linear(512, 256)
+    self.fc3 = torch.nn.Linear(256, 64)
+    self.fc4 = torch.nn.Linear(64, 1)
+    self.bn1 = torch.nn.BatchNorm1d(512)
+    self.bn2 = torch.nn.BatchNorm1d(256)
+    self.bn3 = torch.nn.BatchNorm1d(64)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-      x = F.dropout(F.rrelu(self.bn1(self.fc1(x))), p = 0.2, training = self.training)
-      x = F.dropout(F.rrelu(self.bn2(self.fc2(x))), p = 0.2, training = self.training)
-      x = F.dropout(F.rrelu(self.bn3(self.fc3(x))), p = 0.1, training = self.training)
-      x = self.fc4(x)
-      return x
+  def forward(self, x: torch.Tensor) -> torch.Tensor:
+    x = F.dropout(F.rrelu(self.bn1(self.fc1(x))), p = 0.2, training = self.training)
+    x = F.dropout(F.rrelu(self.bn2(self.fc2(x))), p = 0.2, training = self.training)
+    x = F.dropout(F.rrelu(self.bn3(self.fc3(x))), p = 0.1, training = self.training)
+    return self.fc4(x)
 
 
 def sigmoid_range(x: torch.Tensor, # input tensor
                  low: float, # lower bound of range
                  high: float # upper bound of range
                 ) -> torch.Tensor: # sigmoid transformed tensor in range (low,high)
-    "Sigmoid function with range `(low, high)`"
-    return torch.sigmoid(x) * (high - low) + low
+  "Sigmoid function with range `(low, high)`"
+  return torch.sigmoid(x) * (high - low) + low
 
 
 class SigmoidRange(torch.nn.Module):
-    def __init__(self, low: float, # lower bound of range
-                 high: float # upper bound of range
-                ) -> None:
-      "Sigmoid module with range `(low, high)`"
-      super(SigmoidRange, self).__init__()
-      self.low, self.high = low, high
+  def __init__(self, low: float, # lower bound of range
+             high: float # upper bound of range
+            ) -> None:
+    "Sigmoid module with range `(low, high)`"
+    super(SigmoidRange, self).__init__()
+    self.low, self.high = low, high
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return sigmoid_range(x, self.low, self.high)
+  def forward(self, x: torch.Tensor) -> torch.Tensor:
+    return sigmoid_range(x, self.low, self.high)
 
 
 class LectinOracle(torch.nn.Module):
@@ -327,16 +325,16 @@ def init_weights(model: torch.nn.Module, # neural network for analyzing glycans
                 mode: str = 'sparse', # initialization algorithm: 'sparse', 'kaiming', 'xavier'
                 sparsity: float = 0.1 # proportion of sparsity after initialization
                ) -> None:
-    "initializes linear layers of PyTorch model with a weight initialization"
-    if isinstance(model, torch.nn.Linear):
-        if mode == 'sparse':
-            torch.nn.init.sparse_(model.weight, sparsity = sparsity)
-        elif mode == 'kaiming':
-            torch.nn.init.kaiming_uniform_(model.weight)
-        elif mode == 'xavier':
-            torch.nn.init.xavier_uniform_(model.weight)
-        else:
-            raise ValueError("This initialization option is not supported.")
+  "initializes linear layers of PyTorch model with a weight initialization"
+  if isinstance(model, torch.nn.Linear):
+    if mode == 'sparse':
+      torch.nn.init.sparse_(model.weight, sparsity = sparsity)
+    elif mode == 'kaiming':
+      torch.nn.init.kaiming_uniform_(model.weight)
+    elif mode == 'xavier':
+      torch.nn.init.xavier_uniform_(model.weight)
+    else:
+      raise ValueError("This initialization option is not supported.")
 
 
 def prep_model(model_type: Literal["SweetNet", "GIFFLAR", "LectinOracle", "LectinOracle_flex", "NSequonPred"], # type of model to create
@@ -345,44 +343,44 @@ def prep_model(model_type: Literal["SweetNet", "GIFFLAR", "LectinOracle", "Lecti
               trained: bool = False, # whether to use pretrained model
               hidden_dim: int = 128 # hidden dimension for the model (SweetNet only)
              ) -> torch.nn.Module: # initialized PyTorch model
-    "wrapper to instantiate model, initialize it, and put it on the GPU"
-    if libr is None:
-      libr = lib
-    if model_type == 'SweetNet':
-      model = SweetNet(len(libr), num_classes = num_classes, hidden_dim = hidden_dim)
-      model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
-      if trained:
-        if hidden_dim != 128:
-          raise ValueError("Hidden dimension must be 128 for pretrained model")
-        model_path = download_model("glycowork_sweetnet_species.pt")
-        model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
-      model = model.to(device)
-    elif model_type == 'GIFFLAR':
-      model = GIFFLAR(feat_dim = 128, embed_dim = 128, output_dim = num_classes, num_layers = 8)
-      if trained:
-        warnings.warn("No pretrained GIFFLAR model is currently available. The model will be randomly initialized.")
-      model = model.to(device)
-    elif model_type == 'LectinOracle':
-      model = LectinOracle(len(libr), num_classes = num_classes)
-      model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
-      if trained:
-        model_path = download_model("glycowork_lectinoracle.pt")
-        model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
-      model = model.to(device)
-    elif model_type == 'LectinOracle_flex':
-      model = LectinOracle_flex(len(libr), num_classes = num_classes)
-      model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
-      if trained:
-        model_path = download_model("glycowork_lectinoracle_flex.pt")
-        model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
-      model = model.to(device)
-    elif model_type == 'NSequonPred':
-      model = NSequonPred()
-      model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
-      if trained:
-        model_path = download_model("NSequonPred_batch32.pt")
-        model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
-      model = model.to(device)
-    else:
-      print("Invalid Model Type")
-    return model
+  "wrapper to instantiate model, initialize it, and put it on the GPU"
+  if libr is None:
+    libr = lib
+  if model_type == 'SweetNet':
+    model = SweetNet(len(libr), num_classes = num_classes, hidden_dim = hidden_dim)
+    model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
+    if trained:
+      if hidden_dim != 128:
+        raise ValueError("Hidden dimension must be 128 for pretrained model")
+      model_path = download_model("glycowork_sweetnet_species.pt")
+      model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
+    model = model.to(device)
+  elif model_type == 'GIFFLAR':
+    model = GIFFLAR(feat_dim = 128, embed_dim = 128, output_dim = num_classes, num_layers = 8)
+    if trained:
+      warnings.warn("No pretrained GIFFLAR model is currently available. The model will be randomly initialized.")
+    model = model.to(device)
+  elif model_type == 'LectinOracle':
+    model = LectinOracle(len(libr), num_classes = num_classes)
+    model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
+    if trained:
+      model_path = download_model("glycowork_lectinoracle.pt")
+      model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
+    model = model.to(device)
+  elif model_type == 'LectinOracle_flex':
+    model = LectinOracle_flex(len(libr), num_classes = num_classes)
+    model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
+    if trained:
+      model_path = download_model("glycowork_lectinoracle_flex.pt")
+      model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
+    model = model.to(device)
+  elif model_type == 'NSequonPred':
+    model = NSequonPred()
+    model = model.apply(lambda module: init_weights(module, mode = 'xavier'))
+    if trained:
+      model_path = download_model("NSequonPred_batch32.pt")
+      model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
+    model = model.to(device)
+  else:
+    print("Invalid Model Type")
+  return model

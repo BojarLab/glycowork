@@ -1,6 +1,5 @@
 import networkx as nx
 from copy import deepcopy
-from collections import defaultdict
 from random import getrandbits, random
 from typing import Any, Dict, List, Optional, Union
 from glycowork.motif.graph import glycan_to_nxGraph
@@ -18,7 +17,6 @@ except ImportError:
   raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 try:
   import glyles
-  from glyles.glycans.utils import smiles2mol
   from glyles.glycans.factory.factory import MonomerFactory
   from glyles.glycans.poly.merger import Merger
   from rdkit import Chem
@@ -167,24 +165,9 @@ class HeteroDataBatch:
             v[key] = value.to(device)
     return self
 
-  def __getitem__(self,
-                  item: str  # Name of the queries attribute
-                  ) -> Any:  # queries attribute
+  def __getitem__(self,item: str) -> Any:
     """Get attribute from the object"""
     return getattr(self, item)
-
-
-def determine_concat_dim(tensors: list[torch.Tensor]  # list of tensors to check
-                         ) -> Optional[int]:  # dimension along which the tensors can be concatenated, or None if they cannot be concatenated
-  """Determine the dimension along which a list of tensors can be concatenated"""
-  if len(tensors[0].shape) == 1:
-    return 0
-  concat_dim = None
-  if all(tensor.shape[1] == tensors[0].shape[1] for tensor in tensors):
-    concat_dim = 0  # Concatenate along rows (dim 0)
-  elif all(tensor.shape[0] == tensors[0].shape[0] for tensor in tensors):
-    concat_dim = 1  # Concatenate along columns (dim 1)
-  return concat_dim
 
 
 def hetero_collate(data: Optional[Union[list[list[HeteroData]], list[HeteroData]]],  # list of HeteroData objects
@@ -193,7 +176,6 @@ def hetero_collate(data: Optional[Union[list[list[HeteroData]], list[HeteroData]
   """Collate a list of HeteroData objects to a batch thereof"""
   if data is None:
     raise ValueError("No data provided for collation.")
-  # If, for whatever reason the input is a list of lists, fix that
   if isinstance(data[0], list):
     data = data[0]
   # Extract all valid node types and edge types
@@ -203,13 +185,13 @@ def hetero_collate(data: Optional[Union[list[list[HeteroData]], list[HeteroData]
   x_dict, batch_dict, edge_index_dict, edge_attr_dict = {}, {}, {}, {}
   # Store the node counts to offset edge indices when collating
   node_counts = {node_type: [0] for node_type in node_types}
-  kwargs = {key: [] for key in {"y", "ID"}}
+  batch_kwargs = {"y": [], "ID": []}
   for d in data:
-    for key in kwargs:  # Collect all length-queryable fields
+    for key in batch_kwargs:  # Collect all length-queryable fields
       try:
         if not hasattr(d[key], "__len__") or len(d[key]) != 0:
-          kwargs[key].append(d[key])
-      except Exception as e:
+          batch_kwargs[key].append(d[key])
+      except Exception:
         pass
     # Compute the offsets for each node type for sample identification after batching
     for node_type in node_types:
@@ -230,22 +212,27 @@ def hetero_collate(data: Optional[Union[list[list[HeteroData]], list[HeteroData]
       if hasattr(d[edge_type], "edge_attr"):
         tmp_edge_attr.append(d[edge_type].edge_attr)
     # Collate the edge information
-    if len(tmp_edge_index) != 0:
+    if tmp_edge_index:
       edge_index_dict[edge_type] = torch.cat(tmp_edge_index, dim = 1)
-    if len(tmp_edge_attr) != 0:
+    if tmp_edge_attr:
       edge_attr_dict[edge_type] = torch.cat(tmp_edge_attr, dim = 0)
   # Remove all incompletely given data and concat lists of tensors into single tensors
   num_nodes = {node_type: x_dict[node_type].shape[0] for node_type in node_types}
-  for key, value in list(kwargs.items()):
+  for key, value in list(batch_kwargs.items()):
     if len(value) != len(data):
-      del kwargs[key]
+      del batch_kwargs[key]
     elif isinstance(value[0], torch.Tensor):
-      dim = determine_concat_dim(value)
-      if dim is None:
+      if len(value[0].shape) == 1:
+        dim = 0
+      elif all(t.shape[1] == value[0].shape[1] for t in value):
+        dim = 0
+      elif all(t.shape[0] == value[0].shape[0] for t in value):
+        dim = 1
+      else:
         raise ValueError(f"Tensors for key {key} cannot be concatenated.")
-      kwargs[key] = torch.cat(value, dim = dim)
+      batch_kwargs[key] = torch.cat(value, dim = dim)
   # Finally create and return the HeteroDataBatch
-  return HeteroDataBatch(x_dict = x_dict, edge_index_dict = edge_index_dict, edge_attr_dict = edge_attr_dict, num_nodes = num_nodes, batch_dict = batch_dict, **kwargs)
+  return HeteroDataBatch(x_dict = x_dict, edge_index_dict = edge_index_dict, edge_attr_dict = edge_attr_dict, num_nodes = num_nodes, batch_dict = batch_dict, **batch_kwargs)
 
 
 class GIFFLARTransform(BaseTransform):
@@ -258,32 +245,28 @@ class GIFFLARTransform(BaseTransform):
     data["atoms"].x = torch.tensor([atom_map.get(atom.GetAtomicNum(), 1) for atom in data["mol"].GetAtoms()])
     data["atoms"].num_nodes = len(data["atoms"].x)
     # Prepare all data that can be extracted from one iteration over all bonds
-    data["bonds"].x = []
-    data["atoms", "coboundary", "atoms"].edge_index = []
-    data["atoms", "to", "bonds"].edge_index = []
-    data["bonds", "to", "monosacchs"].edge_index = []
+    bonds_x, atoms_coboundary, atoms_to_bonds, bonds_to_monosacchs = [], [], [], []
     # Fill all bond-related information
     for bond in data["mol"].GetBonds():
-      data["bonds"].x.append(bond_map.get(bond.GetBondDir(), 1))
-      data["atoms", "coboundary", "atoms"].edge_index += [(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()), (bond.GetEndAtomIdx(), bond.GetBeginAtomIdx())]
-      data["atoms", "to", "bonds"].edge_index += [(bond.GetBeginAtomIdx(), bond.GetIdx()), (bond.GetEndAtomIdx(), bond.GetIdx())]
-      data["bonds", "to", "monosacchs"].edge_index.append((bond.GetIdx(), bond.GetIntProp("mono_id")))
+      bonds_x.append(bond_map.get(bond.GetBondDir(), 1))
+      b_idx, e_idx, idx = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), bond.GetIdx()
+      atoms_coboundary.extend([(b_idx, e_idx), (e_idx, b_idx)])
+      atoms_to_bonds.extend([(b_idx, idx), (e_idx, idx)])
+      bonds_to_monosacchs.append((idx, bond.GetIntProp("mono_id")))
     # Transform the data into tensors
-    data["bonds"].x = torch.tensor(data["bonds"].x)
-    data["bonds"].num_nodes = len(data["bonds"].x)
-    data["atoms", "coboundary", "atoms"].edge_index = torch.tensor(data["atoms", "coboundary", "atoms"].edge_index, dtype = torch.long).t()
-    data["atoms", "to", "bonds"].edge_index = torch.tensor(data["atoms", "to", "bonds"].edge_index, dtype = torch.long).t()
-    data["bonds", "to", "monosacchs"].edge_index = torch.tensor(data["bonds", "to", "monosacchs"].edge_index, dtype = torch.long).t()
+    data["bonds"].x = torch.tensor(bonds_x)
+    data["bonds"].num_nodes = len(bonds_x)
+    data["atoms", "coboundary", "atoms"].edge_index = torch.tensor(atoms_coboundary, dtype = torch.long).t()
+    data["atoms", "to", "bonds"].edge_index = torch.tensor(atoms_to_bonds, dtype = torch.long).t()
+    data["bonds", "to", "monosacchs"].edge_index = torch.tensor(bonds_to_monosacchs, dtype = torch.long).t()
     # Compute both types of linkages between bonds
     data["bonds", "boundary", "bonds"].edge_index = torch.tensor([(bond1.GetIdx(), bond2.GetIdx()) for atom in data["mol"].GetAtoms() for bond1 in atom.GetBonds() for bond2 in atom.GetBonds() if bond1.GetIdx() != bond2.GetIdx()], dtype = torch.long).t()
     data["bonds", "coboundary", "bonds"].edge_index = torch.tensor([(bond1, bond2) for ring in data["mol"].GetRingInfo().BondRings() for bond1 in ring for bond2 in ring if bond1 != bond2], dtype = torch.long).t()
     # Set up the monosaccharide information; This does not make sense. The monomer-ids are categorical features
     data["monosacchs"].x = torch.tensor([lib.get(data["tree"].nodes[node]["name"], 1) for node in data["tree"].nodes])
     data["monosacchs"].num_nodes = len(data["monosacchs"].x)
-    data["monosacchs", "boundary", "monosacchs"].edge_index = []
-    for a, b in data["tree"].edges:
-      data["monosacchs", "boundary", "monosacchs"].edge_index += [(a, b), (b, a)]
-    data["monosacchs", "boundary", "monosacchs"].edge_index = torch.tensor(data["monosacchs", "boundary", "monosacchs"].edge_index, dtype = torch.long).T
+    monosacchs_boundary = [(a, b) for a, b in data["tree"].edges] + [(b, a) for a, b in data["tree"].edges]
+    data["monosacchs", "boundary", "monosacchs"].edge_index = torch.tensor(monosacchs_boundary, dtype = torch.long).t()
     return data
 
 
@@ -309,34 +292,22 @@ def nx2mol(G: nx.Graph,  # graph representing a molecule
   """Convert a molecules from a networkx.Graph to RDKit"""
   # Create the molecule
   mol = Chem.RWMol()
-  # Extract the node attributes
-  atomic_nums = nx.get_node_attributes(G, 'atomic_num')
-  chiral_tags = nx.get_node_attributes(G, 'chiral_tag')
-  formal_charges = nx.get_node_attributes(G, 'formal_charge')
-  node_is_aromatics = nx.get_node_attributes(G, 'is_aromatic')
-  mono_ids = nx.get_node_attributes(G, 'mono_id')
   # Create all atoms based on their representing nodes
   node_to_idx = {}
-  for node in G.nodes():
-    a = Chem.Atom(atomic_nums[node])
-    a.SetChiralTag(chiral_tags[node])
-    a.SetFormalCharge(formal_charges[node])
-    a.SetIsAromatic(node_is_aromatics[node])
-    a.SetIntProp("mono_id", mono_ids[node])
-    idx = mol.AddAtom(a)
-    node_to_idx[node] = idx
+  for node, attrs in G.nodes(data = True):
+    a = Chem.Atom(attrs['atomic_num'])
+    a.SetChiralTag(attrs['chiral_tag'])
+    a.SetFormalCharge(attrs['formal_charge'])
+    a.SetIsAromatic(attrs['is_aromatic'])
+    a.SetIntProp("mono_id", attrs['mono_id'])
+    node_to_idx[node] = mol.AddAtom(a)
   # Extract the edge attributes
   bond_types = nx.get_edge_attributes(G, 'bond_type')
   mono_bond_ids = nx.get_edge_attributes(G, 'mono_id')
   # Connect the atoms based on the edges from the graph
-  for edge in G.edges():
-    first, second = edge
-    ifirst = node_to_idx[first]
-    isecond = node_to_idx[second]
-    bond_type = bond_types[first, second]
-    mono_idx = mono_bond_ids[first, second]
-    idx = mol.AddBond(ifirst, isecond, bond_type) - 1
-    mol.GetBondWithIdx(idx).SetIntProp("mono_id", mono_idx)
+  for first, second, attrs in G.edges(data = True):
+    idx = mol.AddBond(node_to_idx[first], node_to_idx[second], attrs['bond_type']) - 1
+    mol.GetBondWithIdx(idx).SetIntProp("mono_id", attrs['mono_id'])
   if sanitize:
     Chem.SanitizeMol(mol)
   return mol
@@ -374,9 +345,4 @@ def iupac2mol(iupac: str  # IUPAC-condensed string of the glycan to convert
   if len(smiles) < 10 or not isinstance(tree, nx.Graph):
     return None
   tree = clean_tree(tree)
-  data = HeteroData()
-  data["IUPAC"] = iupac
-  data["smiles"] = smiles
-  data["mol"] = mol
-  data["tree"] = tree
-  return data
+  return HeteroData(IUPAC = iupac, smiles = smiles, mol = mol, tree = tree) if tree else None
