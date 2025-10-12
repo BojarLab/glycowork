@@ -45,7 +45,7 @@ def safe_compare(g1: nx.DiGraph, # First glycan graph
   "Compare glycans with error catch, returning False on exception"
   try:
     return compare_glycans(g1, g2)
-  except:
+  except Exception:
     return False
 
 
@@ -452,7 +452,7 @@ def construct_network(glycans: List[str], # List of glycans
       new_nodes.update(set(sum(virtual_edges, ())) - set(network))
       new_edges.extend(virtual_edges)
       new_edge_labels.extend(edge_labels)
-    except:
+    except Exception:
       pass
   network.add_edges_from(new_edges, edge_labels = new_edge_labels)
   virtual_nodes = set(virtual_nodes + add_to_virtuals + list(new_nodes))
@@ -969,7 +969,7 @@ def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
       path_length = nx.shortest_path_length(network, source = source, target = sink)
       try:
         flow_value, flow_dict = nx.maximum_flow(network, source, sink)
-      except:
+      except Exception:
         flow_value, flow_dict = nx.maximum_flow(network, source, sink, flow_func = nx.algorithms.flow.edmonds_karp)
       flow_results[sink] = {
           'flow_value': flow_value * path_length,

@@ -6890,7 +6890,7 @@ def test_train_model_plotting(mock_model, mock_dataloader):
 def test_gifflar(class_mode):
     from sklearn.model_selection import train_test_split
     BATCH_SIZE = 8
-    NUM_WORKERS = 1
+    NUM_WORKERS = 0
     if class_mode == "binary":
         df = df_glycan[df_glycan["glycan_type"].isin(["O", "free"])][["glycan", "glycan_type"]]
         df["label"] = df["glycan_type"].apply(lambda x: 0 if x == "O" else 1)
@@ -6919,7 +6919,7 @@ def test_gifflar(class_mode):
         shuffle=True,
         collate_fn=hetero_collate, # type: ignore
         num_workers=NUM_WORKERS,
-        persistent_workers=True,
+        persistent_workers=False,
         drop_last=len(train) % BATCH_SIZE == 1
     )
     test_dl = DataLoader(
@@ -6928,7 +6928,7 @@ def test_gifflar(class_mode):
         shuffle=False,
         collate_fn=hetero_collate, # type: ignore
         num_workers=NUM_WORKERS,
-        persistent_workers=True,
+        persistent_workers=False,
         drop_last=len(test) % BATCH_SIZE == 1,
     )
     model = prep_model("GIFFLAR", num_classes=1 if class_mode == "binary" else 3, trained=False)

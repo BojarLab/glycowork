@@ -585,7 +585,7 @@ class GlycoworkGUI:
         try:
             icon_path = self.resource_path("glycowork.ico")
             self.app.iconbitmap(icon_path)
-        except:
+        except Exception:
             pass
 
     @staticmethod

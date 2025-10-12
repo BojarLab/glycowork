@@ -301,9 +301,6 @@ def nx2mol(G: nx.Graph,  # graph representing a molecule
     a.SetIsAromatic(attrs['is_aromatic'])
     a.SetIntProp("mono_id", attrs['mono_id'])
     node_to_idx[node] = mol.AddAtom(a)
-  # Extract the edge attributes
-  bond_types = nx.get_edge_attributes(G, 'bond_type')
-  mono_bond_ids = nx.get_edge_attributes(G, 'mono_id')
   # Connect the atoms based on the edges from the graph
   for first, second, attrs in G.edges(data = True):
     idx = mol.AddBond(node_to_idx[first], node_to_idx[second], attrs['bond_type']) - 1
@@ -317,10 +314,10 @@ def clean_tree(tree: nx.Graph  # tree to clean
                ) -> Optional[nx.Graph]:  # cleaned tree
   """Clean the tree from unnecessary node features and store only the IUPAC name"""
   for node in tree.nodes:
-    attributes = deepcopy(tree.nodes[node])
-    if "type" in attributes and isinstance(attributes["type"], glyles.glycans.mono.monomer.Monomer): # type: ignore
+    attrs = deepcopy(tree.nodes[node])
+    if "type" in attrs and isinstance(attrs["type"], glyles.glycans.mono.monomer.Monomer): # type: ignore
       tree.nodes[node].clear()
-      tree.nodes[node].update({"iupac": "".join([x[0] for x in attributes["type"].recipe]), "name": attributes["type"].name, "recipe": attributes["type"].recipe})
+      tree.nodes[node].update({"iupac": "".join([x[0] for x in attrs["type"].recipe]), "name": attrs["type"].name, "recipe": attrs["type"].recipe})
     else:
       return None
   return tree
