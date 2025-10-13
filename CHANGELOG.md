@@ -15,6 +15,10 @@
 
 ##### Deprecated ⚠️
 
+#### draw
+##### Added ✨
+- Added the `reducing_end_label` keyword argument to `GlycoDraw` to display any connected text to the right of the glycan (such as "protein", which will be connected via a regular linkage)
+
 ### ml
 #### model_training
 ##### Changed 🔄

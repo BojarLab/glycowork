@@ -1114,7 +1114,8 @@ def GlycoDraw(
     per_residue: List = [], # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
     pdb_file: Optional[Union[str, Path]] = None,  # only used when draw_method='chem3d'; already existing glycan structure
     alt_text: Optional[str] = None,  # Custom ALT text for accessibility
-    libr: dict = None  # Can be modified for drawing too exotic monosaccharides
+    libr: dict = None,  # Can be modified for drawing too exotic monosaccharides
+    reducing_end_label: Optional[str] = None  # Label to be drawn connected to the reducing end
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
   if any(k in glycan for k in [';', 'β', 'α', 'RES', '=']):
@@ -1204,10 +1205,14 @@ def GlycoDraw(
   max_y = max(unwrap(l3_y_pos)+unwrap(l2_y_pos)+unwrap(l1_y_pos)+main_sugar_y_pos)
   min_y = min(unwrap(l3_y_pos)+unwrap(l2_y_pos)+unwrap(l1_y_pos)+main_sugar_y_pos)
   max_x = max(unwrap(l3_x_pos)+unwrap(l2_x_pos)+unwrap(l1_x_pos)+main_sugar_x_pos)
+  min_x = min(unwrap(l3_x_pos)+unwrap(l2_x_pos)+unwrap(l1_x_pos)+main_sugar_x_pos)
+  if reducing_end_label:
+    min_x = min(min_x, main_sugar_x_pos[0] - 1)
+  x_span = max_x - min_x
   y_span = max_y - min_y
 
   # Canvas size
-  width = ((((max_x+1)*2)-1)*dim)+dim
+  width = ((((x_span+1)*2)-1)*dim)+dim
   if floaty_bits:
     len_one_gw = ((max([len(j) for k in min_process_glycans(floaty_bits) for j in k]) / 6) + 1) * dim
     len_multiple_gw = (max([len(k) for k in min_process_glycans(floaty_bits)], default = 0)+1) * dim
@@ -1220,7 +1225,8 @@ def GlycoDraw(
     min_y -= 0.5
   height = ((((max(abs(min_y), max_y)+1)*2)-1)*dim)+60
   height = max(height, width) if vertical else height
-  x_ori = -width+(dim/2)+0.5*dim
+  x_offset = abs(min_x) * dim * (1.2 if compact else 2) if reducing_end_label else 0
+  x_ori = -width+(dim/2)+0.5*dim+x_offset
   y_ori = (-height/2)+(((max_y-abs(min_y))/2)*dim)
 
   # Generate default ALT text if not provided
@@ -1239,6 +1245,15 @@ def GlycoDraw(
   deg = 90 if vertical else 0
   d = draw.Group(transform = f'rotate({deg} {x_ori+0.5*width} {y_ori+0.5*height})')
 
+  if reducing_end_label:
+    bond_start_x = main_sugar_x_pos[0] - 0.5
+    label_x = main_sugar_x_pos[0] - 0.55 - (len(reducing_end_label) * 0.1)
+    label_y = main_sugar_y_pos[0]
+    add_bond(bond_start_x, main_sugar_x_pos[0], label_y, main_sugar_y_pos[0], d, '-', dim = dim, compact = compact, highlight = main_sugar_label[0])
+    col_dict = col_dict_transparent if main_sugar_label[0] == 'hide' else col_dict_base
+    x_base = -label_x * dim * (1.2 if compact else 2)
+    y_base = label_y * dim * (0.6 if compact else 1)
+    d.append(draw.Text(reducing_end_label, dim*0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
   # Bond main chain
   [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = main_per_linkage[k] if highlight_linkages else False) for k in range(len(main_sugar)-1)]
   # Bond branch
@@ -1411,7 +1426,7 @@ def annotate_figure(
         edit_svg = True
       else:
         pass
-    except:
+    except Exception:
       pass
     # Delete text label, append glycan figure
     if edit_svg:

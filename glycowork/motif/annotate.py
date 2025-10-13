@@ -106,7 +106,7 @@ def get_molecular_properties(
       else:
         compounds_list.append(c)
         succeeded_requests.append(g)
-    except:
+    except Exception:
       failed_requests.append(s)
   if verbose and len(failed_requests) >= 1:
     print('The following SMILES were not found on PubChem:\n')
