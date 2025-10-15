@@ -45,7 +45,10 @@ all = [
     "glyles~=1.2.3a0",
     "pubchempy",
     "requests",
-    "py3Dmol"
+    "py3Dmol",
+    "datasail",
+    "nxontology",
+    "numpy_indexed"
 ]
 dev = [
     "nbdev",
@@ -56,7 +59,10 @@ dev = [
     "pubchempy",
     "requests",
     "py3Dmol",
-    "pytest"
+    "pytest",
+    "datasail",
+    "nxontology",
+    "numpy_indexed"
 ]
 ml = [
     "torch_geometric",
@@ -68,6 +74,11 @@ chem = [
     "pubchempy",
     "requests",
     "py3Dmol"
+]
+gym = [
+    "datasail",
+    "nxontology",
+    "numpy_indexed"
 ]
 
 [tool.setuptools]

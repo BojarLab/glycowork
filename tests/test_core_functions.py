@@ -48,6 +48,7 @@ from glycowork.glycan_data.loader import (
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan
 )
+from glycowork.glycan_data.glycogym import build_glycosylation, build_lgi, build_taxonomy, build_tissue
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
     simpson_diversity_index, get_equivalence_test, sequence_richness,
@@ -6951,3 +6952,28 @@ def test_gifflar(class_mode):
         return_metrics=False,
     )
     assert out is not None
+
+
+def test_glycogym_linkage():
+    df, mapping = build_glycosylation(top_k=100)
+    assert isinstance(df, pd.DataFrame)
+    assert all(a == b for a, b in zip(df.columns, ["IUPAC", "SMILES", "label", "split"]))
+    assert isinstance(mapping, dict)
+    assert all(isinstance(k, str) and isinstance(v, int) for k, v in mapping.items())
+
+
+def test_glycogym_taxonomy():
+    df = build_taxonomy("Kingdom", top_k=100)
+    assert isinstance(df, pd.DataFrame)
+
+
+def test_glycogym_tissue():
+    df = build_tissue(top_k=1000)
+    assert isinstance(df, pd.DataFrame)
+
+
+def test_glycogym_lgi():
+    df_r, df_cl, df_cg = build_lgi(top_k=100)
+    assert isinstance(df_r, pd.DataFrame)
+    assert isinstance(df_cl, pd.DataFrame)
+    assert isinstance(df_cg, pd.DataFrame)
