@@ -15,6 +15,10 @@
 
 ##### Deprecated ⚠️
 
+#### data
+##### Added ✨
+- Added the data processing code for the GlycoGym benchmark collection to create new benchmark releases quickly and to enable local creation of custom GlycoGym-like datasets
+
 #### draw
 ##### Added ✨
 - Added the `reducing_end_label` keyword argument to `GlycoDraw` to display any connected text to the right of the glycan (such as "protein", which will be connected via a regular linkage)
