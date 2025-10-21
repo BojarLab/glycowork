@@ -100,7 +100,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
               ) -> Union[torch.nn.Module, tuple[torch.nn.Module, dict[str, dict[str, list[float]]]]]: # best model from training and the training and validation metrics
     "trains a deep learning model on predicting glycan properties"
     since = time.time()
-    early_stopping = EarlyStopping(patience=patience, verbose=True)
+    early_stopping = EarlyStopping(patience = patience, verbose = True)
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float("inf")
     best_lead_metric = float("inf")
@@ -129,7 +129,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
                 x = x.to(device)
                 if mode == 'multilabel':
-                    y = y.view(len(y), -1).to(device)
+                    y = y.view(max(batch) + 1, -1).to(device)
                 elif mode == "regression":
                     y = y.view(-1, 1).to(device)
                 else:
@@ -143,15 +143,15 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     batch = batch.to(device)
                 prot = getattr(data, 'train_idx', None)
                 if prot is not None:
-                    prot = prot.view(len(y), -1).to(device)
+                    prot = prot.view(max(batch) + 1, -1).to(device)
                 optimizer.zero_grad()
                 with torch.set_grad_enabled(phase == 'train'):
                     # First forward pass
                     if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
                         enable_running_stats(model)
                     pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
-                    if mode2 == "multi":
-                        pred = pred.softmax(dim=-1)
+                    if mode2 == "multi" and mode != "multilabel":
+                        pred = pred.softmax(dim = -1)
                     loss = criterion(pred, y)
                     if phase == 'train':
                         loss.backward()
@@ -216,7 +216,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                         best_lead_metric = metrics[phase]["mse"][-1]
                 # Check Early Stopping & adjust learning rate if needed
                 early_stopping(metrics[phase]["loss"][-1], model)
-                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau) or isinstance(scheduler, WarmupScheduler):
                     scheduler.step(metrics[phase]["loss"][-1])
                 else:
                     scheduler.step()

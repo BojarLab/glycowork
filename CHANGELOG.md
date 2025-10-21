@@ -22,12 +22,12 @@
 ### ml
 #### model_training
 ##### Added ✨
-- Added `WarmupScheduler` class to (by default) have a warming-up period of learning rate schedule (for training stability) in `training_setup`
+- Added `WarmupScheduler` class to (by default) have a warming-up period of learning rate schedule (for training stability) in `training_setup` (469649a)
 
 ##### Changed 🔄
 - `train_model` now supports training GIFFLAR-type glycan models (1a7e720, 18f42e5)
-- `training_setup` has the new `warmup_epochs` keyword argument (default = 5) that determines the length of the learning rate warm-up schedule
-- `train_model` now performs gradient clipping for improved training stability
+- `training_setup` has the new `warmup_epochs` keyword argument (default = 5) that determines the length of the learning rate warm-up schedule (469649a)
+- `train_model` now performs gradient clipping for improved training stability (469649a)
 
 #### models
 ##### Added ✨
