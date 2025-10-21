@@ -155,6 +155,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     loss = criterion(pred, y)
                     if phase == 'train':
                         loss.backward()
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0)
                         if hasattr(optimizer, "first_step"):
                             optimizer.first_step(zero_grad = True)
                             # Second forward pass
@@ -379,6 +380,26 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
         return poly1
 
 
+class WarmupScheduler:
+  def __init__(self, optimizer, base_scheduler, warmup_epochs, is_sam = False):
+    self.optimizer = optimizer.base_optimizer if is_sam else optimizer
+    self.base_scheduler = base_scheduler
+    self.warmup_epochs = warmup_epochs
+    self.current_epoch = 0
+    self.base_lr = self.optimizer.param_groups[0]['lr']
+  def step(self, metrics = None):
+    self.current_epoch += 1
+    if self.current_epoch <= self.warmup_epochs:
+      warmup_factor = self.current_epoch / self.warmup_epochs
+      for param_group in self.optimizer.param_groups:
+        param_group['lr'] = self.base_lr * warmup_factor
+    else:
+      if metrics is not None:
+        self.base_scheduler.step(metrics)
+      else:
+        self.base_scheduler.step()
+
+
 def training_setup(model: torch.nn.Module, # graph neural network for analyzing glycans
                   lr: float, # learning rate
                   lr_patience: int = 4, # epochs before reducing learning rate
@@ -386,19 +407,24 @@ def training_setup(model: torch.nn.Module, # graph neural network for analyzing 
                   weight_decay: float = 0.0001, # regularization parameter
                   mode: str = 'multiclass', # type of prediction task
                   num_classes: int = 2, # number of classes for classification
-                  gsam_alpha: float = 0. # if >0, uses GSAM instead of SAM optimizer
+                  gsam_alpha: float = 0., # if >0, uses GSAM instead of SAM optimizer
+                  warmup_epochs: int = 5  # if >0, uses a learning rate warm-up schedule for training stability
                  ) -> Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler._LRScheduler, torch.nn.Module]: # optimizer, scheduler, criterion
     "prepares optimizer, learning rate scheduler, and loss criterion for model training"
     # Choose optimizer & learning rate scheduler
     if mode in {'multiclass', 'multilabel'}:
       optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, alpha = gsam_alpha, lr = lr,
                            weight_decay = weight_decay)
-      scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
+      base_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
                                                                factor = factor)
     else:
       optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr, weight_decay = weight_decay)
-      scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
+      base_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
                                                                factor = factor)
+    if warmup_epochs > 0:
+      scheduler = WarmupScheduler(optimizer_ft, base_scheduler, warmup_epochs, mode in {'multiclass', 'multilabel'})
+    else:
+      scheduler = base_scheduler
     # Choose loss function
     if mode == 'multiclass':
       if num_classes == 2:

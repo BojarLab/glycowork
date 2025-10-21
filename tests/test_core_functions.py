@@ -110,7 +110,7 @@ from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset, iup
 )
 from glycowork.ml.model_training import (EarlyStopping, sigmoid, disable_running_stats,
                           enable_running_stats, train_model, SAM, Poly1CrossEntropyLoss, training_setup,
-                          train_ml_model, analyze_ml_model, get_mismatch
+                          train_ml_model, analyze_ml_model, get_mismatch, WarmupScheduler
 )
 from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRange, LectinOracle,
                           init_weights, prep_model, LectinOracle_flex
@@ -2294,7 +2294,7 @@ def test_annotate_dataset(test_glycans):
 
 def test_get_molecular_properties():
     try:
-        glycans = ["Gal(b1-4)GlcNAc", "Neu4Ac5Ac7Ac9Ac(a2-6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"]
+        glycans = ["Gal(b1-4)GlcNAc", "Neu4Ac5Ac7Ac9Ac(a2-6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc", "Glc6Madeup(b1-4)Glc"]
         result = get_molecular_properties(glycans, verbose=True, placeholder=True)
         assert isinstance(result, pd.DataFrame)
         assert 'molecular_weight' in result.columns
@@ -6337,6 +6337,16 @@ def test_training_setup(_, mock_model):
         num_classes=3
     )
     assert isinstance(optimizer, SAM)
+    assert isinstance(scheduler, WarmupScheduler)
+    assert isinstance(criterion, Poly1CrossEntropyLoss)
+    optimizer, scheduler, criterion = training_setup(
+        mock_model,
+        lr=0.001,
+        mode='multiclass',
+        num_classes=3,
+        warmup_epochs=0
+    )
+    assert isinstance(optimizer, SAM)
     assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
     assert isinstance(criterion, Poly1CrossEntropyLoss)
     optimizer, scheduler, criterion = training_setup(
@@ -6345,7 +6355,7 @@ def test_training_setup(_, mock_model):
         mode='multilabel'
     )
     assert isinstance(optimizer, SAM)
-    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+    assert isinstance(scheduler, WarmupScheduler)
     assert isinstance(criterion, Poly1CrossEntropyLoss)
     optimizer, scheduler, criterion = training_setup(
         mock_model,
@@ -6353,7 +6363,7 @@ def test_training_setup(_, mock_model):
         mode='binary'
     )
     assert not isinstance(optimizer, SAM)
-    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+    assert isinstance(scheduler, WarmupScheduler)
     assert isinstance(criterion, Poly1CrossEntropyLoss)
     optimizer, scheduler, criterion = training_setup(
         mock_model,
@@ -6361,7 +6371,7 @@ def test_training_setup(_, mock_model):
         mode='regression'
     )
     assert not isinstance(optimizer, SAM)
-    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+    assert isinstance(scheduler, WarmupScheduler)
     assert isinstance(criterion, torch.nn.MSELoss)
     try:
         optimizer, scheduler, criterion = training_setup(
