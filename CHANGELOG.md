@@ -35,4 +35,4 @@
 
 #### inference
 ##### Changed 🔄
-- Added the `multilabel` keyword argument to `glycans_to_emb`, to support inference for multilabel outputs
+- Added the `multilabel` keyword argument to `glycans_to_emb`, to support inference for multilabel outputs (0437583)

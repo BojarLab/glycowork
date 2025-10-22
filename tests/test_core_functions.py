@@ -6356,7 +6356,7 @@ def test_training_setup(_, mock_model):
     )
     assert isinstance(optimizer, SAM)
     assert isinstance(scheduler, WarmupScheduler)
-    assert isinstance(criterion, Poly1CrossEntropyLoss)
+    assert isinstance(criterion, nn.BCEWithLogitsLoss)
     optimizer, scheduler, criterion = training_setup(
         mock_model,
         lr=0.001,
