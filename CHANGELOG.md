@@ -32,3 +32,7 @@
 #### models
 ##### Added ✨
 - The GIFFLAR model can now be requested from `prep_model` via "GIFFLAR" as `model_type` (1a7e720, 18f42e5)
+
+#### inference
+##### Changed 🔄
+- Added the `multilabel` keyword argument to `glycans_to_emb`, to support inference for multilabel outputs

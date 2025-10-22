@@ -6676,6 +6676,10 @@ def test_glycans_to_emb(sample_data, mock_models):
     rep_df = glycans_to_emb(glycans, model, rep=True)
     assert isinstance(rep_df, pd.DataFrame)
     assert len(rep_df) == len(glycans)
+    # Test multilabel mode
+    rep_df = glycans_to_emb(glycans, model, rep=False, multilabel=True)
+    assert isinstance(rep_df, pd.DataFrame)
+    assert len(rep_df) == len(glycans)
     # Test prediction mode
     class_list = ['class1', 'class2']
     preds = glycans_to_emb(glycans, model, rep=False, class_list=class_list)

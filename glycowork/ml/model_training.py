@@ -150,7 +150,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
                         enable_running_stats(model)
                     pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
-                    if mode2 == "multi" and mode != "multilabel":
+                    if mode2 == "multi" and mode != "multilabel" and mode != "regression":
                         pred = pred.softmax(dim = -1)
                     loss = criterion(pred, y)
                     if phase == 'train':
@@ -199,7 +199,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
             if mode == 'classification':
                 print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["acc"][-1], metrics[phase]["mcc"][-1]))
             elif mode == 'multilabel':
-                print('{} Loss: {:.4f} LRAP: {:.4f} NDCG: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["acc"][-1], metrics[phase]["mcc"][-1]))
+                print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["acc"][-1], metrics[phase]["mcc"][-1]))
             else:
                 print('{} Loss: {:.4f} MSE: {:.4f} MAE: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["mse"][-1], metrics[phase]["mae"][-1]))
             # Keep best model state_dict
@@ -431,7 +431,7 @@ def training_setup(model: torch.nn.Module, # graph neural network for analyzing 
         raise ValueError("You have to set the number of classes via num_classes")
       criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
     elif mode == 'multilabel':
-      criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
+      criterion = torch.nn.BCEWithLogitsLoss().to(device)
     elif mode == 'binary':
       criterion = Poly1CrossEntropyLoss(num_classes = 2).to(device)
     elif mode == 'regression':

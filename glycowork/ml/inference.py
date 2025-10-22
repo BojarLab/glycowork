@@ -46,7 +46,8 @@ def glycans_to_emb(glycans: List[str], # list of glycans in IUPAC-condensed
                   libr: Optional[Dict[str, int]] = None, # dictionary of form glycoletter:index
                   batch_size: int = 32, # batch size used during training
                   rep: bool = True, # True returns representations, False returns predicted labels
-                  class_list: Optional[List[str]] = None # list of unique classes to map predictions
+                  class_list: Optional[List[str]] = None, # list of unique classes to map predictions
+                  multilabel = False  # whether to output predictions for a multilabel-task
                  ) -> Union[pd.DataFrame, List[str]]: # dataframe of representations or list of predictions
     "Returns a dataframe of learned representations for a list of glycans"
     if libr is None:
@@ -66,7 +67,7 @@ def glycans_to_emb(glycans: List[str], # list of glycans in IUPAC-condensed
         pred, out = model(x, edge_index, batch, inference = True)
         # Unpacking and combining predictions
         res.extend(out.detach().cpu().numpy()) if rep else res.extend(pred.detach().cpu().numpy())
-    return pd.DataFrame(res) if rep else [class_list[k] for k in np.argmax(res, axis = 1)]
+    return pd.DataFrame(res) if (rep or multilabel) else [class_list[k] for k in np.argmax(res, axis = 1)]
 
 
 def get_multi_pred(prot: str, # protein amino acid sequence
