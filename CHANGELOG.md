@@ -1,6 +1,7 @@
 # Changelog
 
 ## [1.7.0]
+- Added some more lazy loading of drawing-related imports to improve package start-up time
 
 ### motif
 #### processing
@@ -36,3 +37,8 @@
 #### inference
 ##### Changed 🔄
 - Added the `multilabel` keyword argument to `glycans_to_emb`, to support inference for multilabel outputs (0437583)
+
+### glycan_data
+#### loader
+##### Added ✨
+- Added `parse_lines` utility function to parse copy-pasted content from an Excel column into a list

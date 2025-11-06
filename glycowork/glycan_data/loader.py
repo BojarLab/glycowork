@@ -441,3 +441,8 @@ class HashableDict(dict):
       if isinstance(other, HashableDict):
           return tuple(sorted(self.items())) == tuple(sorted(other.items()))
       return False
+
+
+def parse_lines(excel_column_content: list  # content of an Excel column pasted into a list and bookended by triple quotes
+                ) -> list:  # proper list of strings
+  return excel_column_content[0].strip().split('\n')

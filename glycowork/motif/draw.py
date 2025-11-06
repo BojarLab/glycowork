@@ -9,9 +9,6 @@ from io import BytesIO
 from typing import Dict, List, Tuple, Optional, Union, Any
 import networkx as nx
 import drawsvg as draw
-from PIL import Image
-from IPython import get_ipython
-from IPython.display import SVG
 from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
 import numpy as np
 import pandas as pd
@@ -814,6 +811,7 @@ def draw_bracket(
 def is_jupyter() -> bool:
   "Detects if code is running in Jupyter notebook environment"
   try:
+    from IPython import get_ipython
     return 'IPKernelApp' in get_ipython().config  # Check if in IPython kernel
   except AttributeError:
     return False
@@ -824,6 +822,7 @@ def display_svg_with_matplotlib(
     chem: bool = False # Whether svg_data comes from RDKit chemical
     ) -> None:
   "Renders SVG using matplotlib for non-Jupyter environments"
+  from PIL import Image
   svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
   # Get original SVG dimensions and scale them up
   size_multiplier = 4  # Make everything 4x bigger
@@ -996,6 +995,7 @@ def draw_chem2d(
     from rdkit.Chem import MolFromSmiles
     from rdkit.Chem.Draw import PrepareMolForDrawing
     from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
+    from IPython.display import SVG
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
 
@@ -1469,6 +1469,7 @@ def plot_glycans_excel(
   "Creates Excel file with SNFG glycan images in a new column"
   from openpyxl.drawing.image import Image as OpenpyxlImage
   from openpyxl.utils import get_column_letter
+  from PIL import Image
   if isinstance(df, (str, Path)):
     df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
   df["SNFG"] = [np.nan for k in range(len(df))]

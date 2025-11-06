@@ -12,17 +12,14 @@ from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
-mapping_path = Path(__file__).parent / "common_names.json"
-with open(mapping_path) as f:
+_parent = Path(__file__).parent
+with open(_parent / "common_names.json") as f:
   GLYCAN_MAPPINGS = json.load(f)
-mapping_path = Path(__file__).parent / "wurcs_tokens.json"
-with open(mapping_path) as f:
+with open(_parent / "wurcs_tokens.json") as f:
   monosaccharide_mapping = json.load(f)
-mapping_path = Path(__file__).parent / "backup_gids.json"
-with open(mapping_path) as f:
+with open(_parent / "backup_gids.json") as f:
   BACKUP_G_IDS = json.load(f)
-mapping_path = Path(__file__).parent / "glyconnect_to_glytoucan.json"
-with open(mapping_path) as f:
+with open(_parent / "glyconnect_to_glytoucan.json") as f:
   GLYCONNECT_TO_GLYTOUCAN = json.load(f)
 
 # for canonicalize_iupac

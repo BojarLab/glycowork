@@ -115,7 +115,7 @@ def get_multi_pred(prot: str, # protein amino acid sequence
 def get_lectin_preds(prot: str, # protein amino acid sequence
                     glycans: List[str], # list of glycans in IUPAC-condensed
                     model: torch.nn.Module, # trained LectinOracle-type model
-                    prot_dic: Optional[Dict[str, List[float]]] = None, # dict of protein sequence:ESM1b representation
+                    prot_dic: Optional[Dict[str, List[float]]] = None, # dict of protein sequence:ESMC representation
                     background_correction: bool = False, # whether to correct predictions for background
                     correction_df: Optional[pd.DataFrame] = None, # background prediction for glycans
                     batch_size: int = 128, # batch size used during training
@@ -130,7 +130,7 @@ def get_lectin_preds(prot: str, # protein amino acid sequence
     with resources.files("glycowork.ml").joinpath("glycowork_lectinoracle_background_correction.csv").open(encoding = 'utf-8-sig') as f:
         correction_df = pd.read_csv(f)
   if prot_dic is None and not flex:
-    raise ValueError("It seems you did not provide a dictionary of protein:ESM-1b representations. This is necessary.")
+    raise ValueError("It seems you did not provide a dictionary of protein:ESMC representations. This is necessary.")
   preds = unwrap(get_multi_pred(prot, glycans, model, prot_dic,
                          batch_size = batch_size, libr = libr, flex = flex))
   df_pred = pd.DataFrame({'motif': glycans, 'pred': preds})
@@ -141,7 +141,7 @@ def get_lectin_preds(prot: str, # protein amino acid sequence
         if motif in correction_dict:
             df_pred.at[idx, 'pred'] -= correction_dict[motif]
   if sort:
-    df_pred.sort_values('pred', ascending = True, inplace = True)
+    df_pred.sort_values('pred', ascending = False, inplace = True)
   return df_pred
 
 

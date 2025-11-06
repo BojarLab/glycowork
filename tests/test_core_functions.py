@@ -45,7 +45,7 @@ from glycowork.motif.processing import (
 )
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
-    reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets,
+    reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan
 )
 from glycowork.glycan_data.stats import (
@@ -1443,6 +1443,20 @@ def test_hashable_dict():
     assert not isinstance(d3, HashableDict)
     assert d1.__eq__(d3) is False
 
+
+def test_parse_lines():
+    test_list = ["""3FL
+DSLNT
+6SL
+3SL
+DSL
+3SLN
+pLNH
+LNFP-I
+LNT
+LNnT
+"""]
+    assert parse_lines(test_list) == ['3FL', 'DSLNT', '6SL', '3SL', 'DSL', '3SLN', 'pLNH', 'LNFP-I', 'LNT', 'LNnT']
 
 def test_reindex():
     # Create test dataframes
