@@ -353,8 +353,7 @@ def draw_shape(
         (x_base-0.1*dim), (y_base+0.4*dim))
     drawing.append(p)
     if shape == 'red_end':
-      drawing.append(draw.Circle(x_base, y_base, 0.15 * dim, fill = 'white',
-                                 stroke_width = stroke_w, stroke = col_dict['black']))
+      drawing.append(draw.Circle(x_base, y_base, 0.15 * dim, fill = 'white', stroke_width = stroke_w, stroke = col_dict['black']))
   # Handle segmented Hex shapes (04X, 15A, etc.)
   elif any(x in shape for x in {'04', '15', '02', '13', '24', '35', '25', '03', '14'}):
     use_grey_base = shape in {'04A', '15X', '02X', '13A', '24A', '35A', '14A'}
@@ -400,8 +399,7 @@ def draw_shape(
     p.L(x_base+0.4*dim, y_base-half_dim)
     g.append(p)
     if shape == 'Y':
-      g.append(draw.Circle(x_base + 0.4 * dim, y_base, 0.15 * dim, fill = 'none',
-                           stroke_width = stroke_w, stroke = col_dict['black']))
+      g.append(draw.Circle(x_base + 0.4 * dim, y_base, 0.15 * dim, fill = 'none', stroke_width = stroke_w, stroke = col_dict['black']))
     drawing.append(g)
   elif shape in {'B', 'C'}:
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
@@ -411,8 +409,7 @@ def draw_shape(
     p.L(x_base-0.4*dim, y_base+half_dim)
     drawing.append(p)
     if shape == 'C':
-      drawing.append(draw.Circle(x_base - 0.4 * dim, y_base, 0.15 * dim, fill = 'none',
-                                 stroke_width = stroke_w, stroke = col_dict['black']))
+      drawing.append(draw.Circle(x_base - 0.4 * dim, y_base, 0.15 * dim, fill = 'none', stroke_width = stroke_w, stroke = col_dict['black']))
   if shape not in {'empty', 'text', 'red_end', 'free', 'Z', 'Y', 'B', 'C'} and not any(x in shape for x in {'04', '15', '02', '13', '24', '35', '25', '03', '14'}):
     add_customization(drawing, x_base, y_base, dim, modification, col_dict, conf, furanose, text_anchor)
 
@@ -440,8 +437,7 @@ def add_bond(
   p.M(x_start, y_start).L(x_stop, y_stop)
   drawing.append(p)
   if label and label != '-':
-    drawing.append(draw.Text(label, dim*0.4, path = p, text_anchor = 'middle',
-                             fill = col_dict['black'], valign = 'middle', line_offset = -0.5))
+    drawing.append(draw.Text(label, dim*0.4, path = p, text_anchor = 'middle', fill = col_dict['black'], valign = 'middle', line_offset = -0.5))
 
 
 def add_sugar(
@@ -1095,6 +1091,17 @@ def draw_chem3d(
     display_svg_with_matplotlib(drawer.GetDrawingText(), chem = True)
 
 
+class GlycanDrawing:
+  def __init__(self, drawing_obj):
+    self.drawing_obj = drawing_obj
+  def as_svg(self):
+    return self.drawing_obj.as_svg()
+  def save_svg(self, filepath):
+    return self.drawing_obj.save_svg(filepath)
+  def _repr_png_(self):
+    return convert_svg_to_png(self.as_svg(), None, return_bytes = True)
+
+
 @rescue_glycans
 def GlycoDraw(
     glycan: str, # IUPAC-condensed glycan sequence
@@ -1358,7 +1365,7 @@ def GlycoDraw(
       convert_svg_to_pdf(data, str(filepath))
     elif filepath.suffix.lower() == '.png':
       convert_svg_to_png(data, str(filepath))
-  return d2 if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
+  return GlycanDrawing(d2) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
 
 
 def scale_in_range(

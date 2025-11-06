@@ -1,7 +1,7 @@
 # Changelog
 
 ## [1.7.0]
-- Added some more lazy loading of drawing-related imports to improve package start-up time
+- Added some more lazy loading of drawing-related imports to improve package start-up time (b806bdd)
 
 ### motif
 #### processing
@@ -19,6 +19,7 @@
 #### draw
 ##### Added ✨
 - Added the `reducing_end_label` keyword argument to `GlycoDraw` to display any connected text to the right of the glycan (such as "protein", which will be connected via a regular linkage) (c36a1a6)
+- Added the `GlycanDrawing` class to allow `GlycoDraw` to output `glycorender` aesthetics in a Jupyter notebook context
 
 ### ml
 #### model_training
@@ -41,4 +42,4 @@
 ### glycan_data
 #### loader
 ##### Added ✨
-- Added `parse_lines` utility function to parse copy-pasted content from an Excel column into a list
+- Added `parse_lines` utility function to parse copy-pasted content from an Excel column into a list (b806bdd)
