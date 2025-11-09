@@ -71,7 +71,7 @@ from glycowork.motif.annotate import (
     annotate_glycan, annotate_dataset, get_molecular_properties,
     get_k_saccharides, get_terminal_structures, create_correlation_network,
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
-    Lectin, load_lectin_lib, create_lectin_and_motif_mappings,
+    Lectin, load_lectin_lib, create_lectin_and_motif_mappings, get_glycan_similarity,
     lectin_motif_scoring, deduplicate_motifs, quantify_motifs, get_size_branching_features,
     count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty
 )
@@ -2457,6 +2457,11 @@ def test_create_lectin_and_motif_mappings():
     )
     assert isinstance(lectin_mapping, dict)
     assert isinstance(motif_mapping, dict)
+
+
+def test_get_glycan_similarity():
+    assert get_glycan_similarity("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Ac(a2-6)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc") > get_glycan_similarity("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Gc(a2-6)Gal(b1-3)[Neu5Gc(a2-6)]GalNAc")
+
 
 def test_lectin_motif_scoring():
     lectin_lib = load_lectin_lib()

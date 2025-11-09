@@ -21,6 +21,10 @@
 - Added the `reducing_end_label` keyword argument to `GlycoDraw` to display any connected text to the right of the glycan (such as "protein", which will be connected via a regular linkage) (c36a1a6)
 - Added the `GlycanDrawing` class to allow `GlycoDraw` to output `glycorender` aesthetics in a Jupyter notebook context
 
+#### annotate
+##### Added ✨
+- Added the `get_glycan_similarity` function to calculate cosine similarities between glycan motif fingerprints between two glycan sequences
+
 ### ml
 #### model_training
 ##### Added ✨

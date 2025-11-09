@@ -5,6 +5,7 @@ import re
 from collections import Counter, deque
 from functools import partial
 from typing import Dict, List, Optional, Set, Tuple, Union
+from scipy.spatial.distance import cosine
 
 from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int
@@ -606,3 +607,14 @@ def lectin_motif_scoring(
     output.append({"motif": motif, "lectin(s)": ", ".join(lectins),
                        "change": "down" if score < 0 else "up", "score": round(abs(score), ndigits = 2)})
   return pd.DataFrame(output)
+
+
+def get_glycan_similarity(
+  glycan1: Union[str, nx.DiGraph], # IUPAC-condensed glycan sequence or NetworkX graph
+  glycan2: Union[str, nx.DiGraph], # IUPAC-condensed glycan sequence or NetworkX graph
+  motifs: Optional[pd.DataFrame] = None, # Motif dataframe (name + sequence); defaults to motif_list
+  feature_set: List = ['known', 'exhaustive', 'terminal'] # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
+  ) -> float: # Cosine similarity between glycan1 and glycan2
+  "Calculates cosine similarity between two glycans based on their motif count fingerprints"
+  fp = annotate_dataset([glycan1, glycan2], motifs = motifs, feature_set = feature_set)
+  return 1 - cosine(fp.iloc[0].values, fp.iloc[1].values)

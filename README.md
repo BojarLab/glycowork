@@ -20,15 +20,12 @@ glycans are ubiquitous yet often overlooked in biological research.
 - Integral to protein and lipid function
 - Relevant to human diseases
 
-## Challenges in Glycan Analysis
-
-Analyzing glycans is complicated due to their non-linear structures and
-enormous diversity. But that’s where `glycowork` comes in.
-
 ## Introducing glycowork: Your Solution for Glycan-Focused Data Science
 
-Glycowork is a Python package specifically designed to simplify glycan
-sequence processing and analysis. It offers:
+Analyzing glycans is complicated due to their non-linear structures and
+enormous diversity. But that’s where `glycowork` comes in. `glycowork`
+is a Python package specifically designed to simplify glycan sequence
+processing and analysis. It offers:
 
 - Functions for glycan analysis
 - Datasets for model training
@@ -146,10 +143,10 @@ list includes:
 ``` python
 #drawing publication-quality glycan figures
 from glycowork import GlycoDraw
-GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", highlight_motif = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc")
+drawing = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", highlight_motif = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc", suppress=True)
 ```
 
-![](index_files/figure-commonmark/cell-3-output-1.svg)
+![](index_files/figure-commonmark/cell-4-output-1.svg)
 
 ``` python
 #get motifs, graph features, and sequence features of a set of glycan sequences to train models or analyze glycan properties
@@ -195,14 +192,14 @@ from glycowork.motif.annotate import annotate_dataset
 out = annotate_dataset(glycans, feature_set = ['known', 'terminal', 'exhaustive'], condense=True)
 ```
 
-|  | Internal_LewisX | Internal_LewisA | H_antigen_type2 | Chitobiose | Trimannosylcore | Terminal_LacNAc_type1 | Internal_LacNAc_type2 | Terminal_LacNAc_type2 | Terminal_LacdiNAc_type2 | core_fucose | core_fucose(a1-3) | Fuc | Gal | GalNAc | GalNAcOS | GlcNAc | Man | Neu5Ac | Xyl | Fuc(a1-2)Gal | Fuc(a1-3)GlcNAc | Fuc(a1-4)GlcNAc | Fuc(a1-6)GlcNAc | Fuc(a1-?)GlcNAc | Gal(b1-3)GlcNAc | Gal(b1-4)GlcNAc | Gal(b1-?)GlcNAc | GalNAc(b1-4)GlcNAc | GalNAcOS(b1-4)GlcNAc | GlcNAc(b1-2)Man | GlcNAc(b1-4)GlcNAc | Man(a1-3)Man | Man(a1-6)Man | Man(a1-?)Man | Man(b1-4)GlcNAc | Neu5Ac(a2-3)Gal | Xyl(b1-2)Man | Terminal_GalNAcOS(b1-4) | Terminal_Fuc(a1-3) | Terminal_Gal(b1-4) | Terminal_Fuc(a1-4) | Terminal_Fuc(a1-6) | Terminal_Gal(b1-3) | Terminal_Neu5Ac(a2-3) | Terminal_GlcNAc(b1-2) | Terminal_Fuc(a1-2) | Terminal_Man(a1-6) | Terminal_Xyl(b1-2) | Terminal_Man(a1-3) | Terminal_GalNAc(b1-4) | Terminal_Fuc(a1-?) | Terminal_Gal(b1-?) | Terminal_Man(a1-?) |
+|  | Internal_LewisX | Internal_LewisA | H_antigen_type2 | Chitobiose | Trimannosylcore | Terminal_LacNAc_type1 | Internal_LacNAc_type2 | Terminal_LacNAc_type2 | Terminal_LacdiNAc_type2 | core_fucose | core_fucose(a1-3) | Fuc | Gal | GalNAc | GalNAcOS | GlcNAc | Man | Neu5Ac | Xyl | Fuc(a1-2)Gal | Fuc(a1-3)GlcNAc | Fuc(a1-4)GlcNAc | Fuc(a1-6)GlcNAc | Fuc(a1-?)GlcNAc | Gal(b1-3)GlcNAc | Gal(b1-4)GlcNAc | Gal(b1-?)GlcNAc | GalNAc(b1-4)GlcNAc | GalNAcOS(b1-4)GlcNAc | GlcNAc(b1-2)Man | GlcNAc(b1-4)GlcNAc | Man(a1-3)Man | Man(a1-6)Man | Man(a1-?)Man | Man(b1-4)GlcNAc | Neu5Ac(a2-3)Gal | Xyl(b1-2)Man | Terminal_Neu5Ac(a2-3) | Terminal_Fuc(a1-3) | Terminal_Man(a1-6) | Terminal_Gal(b1-3) | Terminal_Man(a1-3) | Terminal_Xyl(b1-2) | Terminal_GalNAcOS(b1-4) | Terminal_Fuc(a1-4) | Terminal_Gal(b1-4) | Terminal_GalNAc(b1-4) | Terminal_Fuc(a1-6) | Terminal_Fuc(a1-2) | Terminal_GlcNAc(b1-2) | Terminal_Gal(b1-?) | Terminal_Fuc(a1-?) | Terminal_Man(a1-?) |
 |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| Neu5Ac(a2-3)Gal(b1-4)\[Fuc(a1-3)\]GlcNAc(b1-2)Man(a1-3)\[Gal(b1-3)\[Fuc(a1-4)\]GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 1 | 0 | 3 | 2 | 0 | 0 | 4 | 3 | 1 | 0 | 0 | 1 | 1 | 1 | 3 | 1 | 1 | 2 | 0 | 0 | 2 | 1 | 1 | 1 | 2 | 1 | 1 | 0 | 0 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 3 | 1 | 0 |
-| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 2 |
-| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 2 |
-| GlcNAc(b1-2)Man(a1-3)\[GlcNAc(b1-2)Man(a1-6)\]\[Xyl(b1-2)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-3)\]GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 4 | 3 | 0 | 1 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 2 | 1 | 1 | 1 | 2 | 1 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 1 | 0 | 0 | 1 | 0 | 0 |
-| Fuc(a1-2)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)\[Gal(b1-4)GlcNAc(b1-2)Man(a1-3)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 0 | 0 | 1 | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 2 | 2 | 0 | 0 | 4 | 3 | 0 | 0 | 1 | 0 | 0 | 1 | 1 | 0 | 2 | 2 | 0 | 0 | 2 | 1 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 2 | 1 | 0 |
-| GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)\[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 4 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 2 | 1 | 1 | 1 | 2 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
+| Neu5Ac(a2-3)Gal(b1-4)\[Fuc(a1-3)\]GlcNAc(b1-2)Man(a1-3)\[Gal(b1-3)\[Fuc(a1-4)\]GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 1 | 1 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 1 | 0 | 3 | 2 | 0 | 0 | 4 | 3 | 1 | 0 | 0 | 1 | 1 | 1 | 3 | 1 | 1 | 2 | 0 | 0 | 2 | 1 | 1 | 1 | 2 | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 1 | 3 | 0 |
+| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 |
+| Man(a1-3)\[Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 |
+| GlcNAc(b1-2)Man(a1-3)\[GlcNAc(b1-2)Man(a1-6)\]\[Xyl(b1-2)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-3)\]GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 4 | 3 | 0 | 1 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 2 | 1 | 1 | 1 | 2 | 1 | 0 | 1 | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 1 | 0 |
+| Fuc(a1-2)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)\[Gal(b1-4)GlcNAc(b1-2)Man(a1-3)\]Man(b1-4)GlcNAc(b1-4)\[Fuc(a1-6)\]GlcNAc | 0 | 0 | 1 | 1 | 1 | 0 | 1 | 1 | 0 | 1 | 0 | 2 | 2 | 0 | 0 | 4 | 3 | 0 | 0 | 1 | 0 | 0 | 1 | 1 | 0 | 2 | 2 | 0 | 0 | 2 | 1 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 1 | 0 | 1 | 2 | 0 |
+| GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)\[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)\]Man(b1-4)GlcNAc(b1-4)GlcNAc | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 4 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 2 | 1 | 1 | 1 | 2 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ``` python
 #using graphs, you can easily check whether a glycan contains a specific motif; how about internal Lewis A/X motifs?
