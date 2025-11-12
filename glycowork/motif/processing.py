@@ -9,7 +9,8 @@ from pathlib import Path
 from itertools import combinations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
 from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
-                                          find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
+                                          find_nth, find_nth_reverse, tag_mono, strip_node_markers,
+                                          lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
 _parent = Path(__file__).parent
@@ -343,7 +344,7 @@ def glycoct_to_iupac_int(glycoct: str, # GlycoCT format string
         clean_mono = multireplace(res_type, mono_replace)
         if suffix:
           clean_mono = clean_mono[:-1] + suffix + clean_mono[-1]
-        residue_dic[res_id] = clean_mono
+        residue_dic[res_id] = tag_mono(clean_mono, f"ct{res_id}")
       #modification
       elif parts[0][-1] == 's':
         tgt = ')' + str(int(parts[0][:-1]))+'n'
@@ -446,6 +447,7 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
   iupac = re.sub(r'([1-9\?O](S|P|Ac|Me))NAc', r'NAc\1', iupac)
   if ']' in iupac and iupac.index(']') < iupac.index('['):
     iupac = iupac.replace(']', '', 1)
+  iupac = strip_node_markers(iupac)
   return iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
 
 
@@ -470,6 +472,27 @@ def get_mono(token: str # WURCS monosaccharide token
       raise Exception(f"Token {token} not recognized.")
   mono += anomer if anomer and anomer in ['a', 'b'] else '?'
   return mono
+
+
+def move_leading_branches_to_end(seq: str) -> str:
+  "Shift any leading bracketed branches (e.g., [Branch]) behind the core residue."
+  if not seq.startswith('['):
+    return seq
+  idx, prefix = 0, []
+  length = len(seq)
+  while idx < length and seq[idx] == '[':
+    depth, j = 1, idx + 1
+    while j < length and depth:
+      if seq[j] == '[':
+        depth += 1
+      elif seq[j] == ']':
+        depth -= 1
+      j += 1
+    if depth != 0: #No matching ']' so bail and keep the string as-is
+      return seq
+    prefix.append(seq[idx:j])
+    idx = j
+  return seq[idx:] + ''.join(prefix)
 
 
 def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
@@ -501,13 +524,15 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
       return get_mono(monosaccharides[0])
     source, target = link.split('-')
     source_index, source_carbon = connectivity[source[:-1]], source[-1]
-    source_mono = get_mono(monosaccharides[int(source_index)-1])
+    source_mono_raw = get_mono(monosaccharides[int(source_index)-1])
     if target[0] == '?':
-      floating_part += f"{'{'}{source_mono}(1-{target[1:]}){'}'}"
+      floating_part += f"{'{'}{source_mono_raw}(1-{target[1:]}){'}'}"
       floating_parts.append(source[0])
       continue
     target_index, target_carbon = connectivity[target[0]], target[1:]
-    target_mono = get_mono(monosaccharides[int(target_index)-1])
+    target_mono_raw = get_mono(monosaccharides[int(target_index)-1])
+    source_mono = tag_mono(source_mono_raw, source[0])
+    target_mono = tag_mono(target_mono_raw, target[0])
     if '*' in target[1:]:  # Ultra-narrow wildcards
       target_carbon = '/'.join(target[1:].split('*'))
       iupac_parts.append((f"{source_mono}({source_carbon}-{target_carbon}){target_mono}", source[0], target[0]))
@@ -516,7 +541,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     else:
       iupac_parts.append((f"{target_mono}({target_carbon}-{source_carbon}){source_mono}", target[0], source[0]))
   degrees_for_brackets = copy.deepcopy(degrees)
-  iupac_parts = sorted(iupac_parts, key = lambda x: x[2])
+  iupac_parts = sorted(iupac_parts, key = lambda x: (degrees[x[1]] == 1, x[2]))
   iupac = iupac_parts[0][0]
   inverted_connectivity.setdefault(connectivity[iupac_parts[0][2]], []).append(iupac_parts[0][2])
   inverted_connectivity.setdefault(connectivity[iupac_parts[0][1]], []).append(iupac_parts[0][1])
@@ -527,23 +552,35 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
   iupac = floating_part + iupac
   for fp in floating_parts:
     inverted_connectivity.setdefault(connectivity[fp], []).append(fp)
+  marker = lambda letter: f"<<{letter}>>"
   for parts, tgt, src in iupac_parts[1:]:
     indices = [k.index(src) for k in inverted_connectivity.values() if src in k]
     nth = (indices[0] if indices else 0) + 1
     overlap = parts.split(')')[-1]
     ignore = True if degrees[src] > 2 or (degrees[src] == 2 and src == 'a') else False
-    if '-' + overlap in iupac:  # Check if there's a risk of matching within prefixed names
-      linkage_pattern = ')' + overlap  # Use linkage pattern to avoid matching within prefixed names like L-Man
-      idx = find_nth_reverse(iupac, linkage_pattern, nth, ignore_branches = ignore)
-      if idx != -1:
-        idx += 1  # Adjust for the ')' we added
-      else:
-        idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)
+    parent_marker = marker(src)
+    if parent_marker in iupac:
+      idx = iupac.index(parent_marker)
+      iupac = iupac[:idx] + iupac[idx+len(parent_marker):]
     else:
-      idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)  # No prefix risk, use normal matching
+      if '-' + overlap in iupac:  # Check if there's a risk of matching within prefixed names
+        linkage_pattern = ')' + overlap  # Use linkage pattern to avoid matching within prefixed names like L-Man
+        idx = find_nth_reverse(iupac, linkage_pattern, nth, ignore_branches = ignore)
+        if idx != -1:
+          idx += 1  # Adjust for the ')' we added
+        else:
+          idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)
+      else:
+        idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)  # No prefix risk, use normal matching
+      if idx == -1:
+        continue
     prefix = '[' if degrees[tgt] == 1 else ''
     suffix = ']' if (degrees[src] > 2 and degrees_for_brackets[src] < degrees[src]) or (degrees[src] == 2 and degrees_for_brackets[src] < degrees[src] and src == 'a') or (degrees[src] > 3 and degrees[tgt] == 1) or (degrees[tgt] == 1 and src =='a')  else ''
-    iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
+    child_marker = marker(tgt)
+    insert_segment = parts.split(')')[0]+')'
+    insert_text = prefix + child_marker + insert_segment + suffix
+    iupac = iupac[:idx] + insert_text + iupac[idx:]
+    iupac = iupac[:idx + len(insert_text)] + parent_marker + iupac[idx + len(insert_text):]
     degrees_for_brackets[src] -= 1
     insertion_idx = iupac[:idx].count(parts.split(')')[0][:-4])
     if insertion_idx > 0:
@@ -568,6 +605,12 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
         return s[:i] + s[i + 1:]
     return s
   iupac = remove_first_unmatched_opening_bracket(iupac)
+  floating_len = len(floating_part)
+  prefix = iupac[:floating_len]
+  core = iupac[floating_len:]
+  core = move_leading_branches_to_end(core)
+  iupac = prefix + core
+  iupac = strip_node_markers(iupac)
   return re.sub(r'(\d)([PS])\-', r'\1-\2-', iupac)
 
 

@@ -129,44 +129,78 @@ def find_nth(haystack: str, # string to search for motif
     n -= 1
   return start
 
+MARKER_REGEX = re.compile(r'<<([A-Za-z0-9]+)>>')
 
-def find_nth_reverse(string: str, # string to search
-                    substring: str, # substring to find
-                    n: int, # n-th occurrence from end
-                    ignore_branches: bool = False # whether to ignore branches when counting
-                   ) -> int: # position of n-th occurrence from end
-  "finds n-th instance of motif from end of string"
-  # Reverse the string and the substring
+
+def tag_mono(mono: str, node: str) -> str:
+  "Attach a unique placeholder to a monosaccharide to preserve node identity."
+  return f"<<{node}>>{mono}"
+
+
+def strip_node_markers(text: str) -> str:
+  "Remove any temporary node markers that were injected via `tag_mono`."
+  return MARKER_REGEX.sub('', text)
+
+
+def find_nth_reverse(string: str,
+                    substring: str,
+                    n: int,
+                    ignore_branches: bool = False) -> int:
+  """
+  Return the position of the n-th occurrence from the end of `substring`
+  within `string`. Prefers tagged residues (see `tag_mono`) when
+  available, but otherwise follows the original reverse-search behaviour.
+  """
+  if not substring or n <= 0:
+    return -1
+
   reversed_string = string[::-1]
-  reversed_substring = substring[::-1]
-  # Initialize the start index for the search
-  start_index = 0
-  # Loop to find the n-th occurrence
-  for i in range(n):
-    # Find the next occurrence index
-    idx = reversed_string.find(reversed_substring, start_index)
-    # If the substring is not found, return -1
+
+  def _reverse_find(needle: str) -> int:
+    """Mirror of the original implementation using reversed strings."""
+    reversed_substring = needle[::-1]
+    start_index = 0
+    # Loop to find the n-th occurrence
+    for _ in range(n):
+      # Find the next occurrence index
+      idx = reversed_string.find(reversed_substring, start_index)
+      # If the substring is not found, return -1
+      if idx == -1:
+        return -1
+      # Update the start index
+      start_index = idx + len(needle)
+    # Calculate and return the original starting index
+    return len(string) - start_index
+
+  idx = -1
+  if substring.startswith('<<'):
+    idx = _reverse_find(substring)
+  else:
+    tagged_pattern = re.compile(rf'(?:<<[A-Za-z0-9]+>>){re.escape(substring)}')
+    tagged_positions = [match.start() for match in tagged_pattern.finditer(string)]
+    if len(tagged_positions) >= n:
+      idx = tagged_positions[-n]
+
+  if idx == -1:
+    idx = _reverse_find(substring)
     if idx == -1:
-      return -1
-    # Update the start index
-    start_index = idx + len(substring)
-  # Calculate and return the original starting index
-  original_start_index = len(string) - start_index
-  if ignore_branches:
-    # Check if there is an immediate branch preceding the match
-    branch_end_idx = original_start_index - 1
-    if branch_end_idx > 0 and string[branch_end_idx] == ']' and string[branch_end_idx - 1] != '[':
-      # Find the start of the immediate branch
-      bracket_count = 1
-      for i in range(branch_end_idx - 1, -1, -1):
-        if string[i] == ']':
-          bracket_count += 1
-        elif string[i] == '[':
-          bracket_count -= 1
-        if bracket_count == 0:
-          original_start_index = i
-          break
-  return original_start_index
+      simple_match = re.search(re.escape(substring) + r'(\([ab\?][12]-[\d\?]+\))', string)
+      if simple_match:
+        idx = _reverse_find(substring + simple_match.group(1))
+  if idx == -1 or not ignore_branches:
+    return idx
+
+  branch_end = idx - 1
+  if branch_end > 0 and string[branch_end] == ']' and string[branch_end - 1] != '[':
+    bracket_depth = 1
+    for i in range(branch_end - 1, -1, -1):
+      if string[i] == ']':
+        bracket_depth += 1
+      elif string[i] == '[':
+        bracket_depth -= 1
+      if bracket_depth == 0:
+        return i
+  return idx
 
 
 def remove_unmatched_brackets(s: str # glycan string in IUPAC-condensed
