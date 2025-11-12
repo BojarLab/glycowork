@@ -828,7 +828,8 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
 
 
 def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
-                       revert: bool = False # Whether to map glycans to IDs; default:False
+                       revert: bool = False, # Whether to map glycans to IDs; default:False
+                       verbose: bool = True # Whether to print missing entries; default:True
                       ) -> List[str]: # List of glycans or IDs
   "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
   if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
@@ -843,7 +844,7 @@ def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
       result.append(item)
       not_found.append(item)
   # Print missing items if any
-  if not_found:
+  if not_found and verbose:
     msg = 'glycans' if revert else 'IDs'
     print(f'These {msg} are not in our database: {not_found}')
   return result
@@ -966,8 +967,13 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
   if mapped_glycan:
     return mapped_glycan
+  if bool(re.match(r'^G\d{5}[A-Z]{2}$', glycan)): #Glytoucan ID hook 
+    glytoucan_in = glycan
+    glycan = glytoucan_to_glycan([BACKUP_G_IDS.get(glycan, glycan)], verbose = False)[0]
+    if glycan == glytoucan_in:
+      return glytoucan_in
   # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, GlyTouCanIDs
-  if ';' in glycan:
+  elif ';' in glycan:
     glycan = linearcode_to_iupac(glycan)
   elif glycan.startswith('0'):
     glycan = glyseeker_to_iupac(glycan)
@@ -983,8 +989,6 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = glycoworkbench_to_iupac(glycan)
   elif bool(re.fullmatch(r'^[UDGIg][02][AaSH](0|3|4|6|9|10)$', glycan)):
     glycan = GAG_disaccharide_to_iupac(glycan)
-  elif bool(re.match(r'^G\d+', glycan)):
-    glycan = glytoucan_to_glycan([BACKUP_G_IDS.get(glycan, glycan)])[0]
   elif not isinstance(glycan, str) or '@' in glycan:
     check_nomenclature(glycan)
   elif "(Man)3(GlcNAc)2" in glycan:
