@@ -867,7 +867,9 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
   converted_glycan = re.sub(r'([SP])[\)\(]*\?1-([\?\d])\)\[(.*?)\]([^(]+)', r'\3\4\2\1', converted_glycan)  # sulfate/phosphate with intervening branch
   converted_glycan = re.sub(r'\[([SP])[\)\(]*\?1-([\?\d])\)([^(]+)', r'[\3\2\1', converted_glycan)  # sulfate/phosphate
   converted_glycan = converted_glycan.replace('((', '(').replace('))', ')')
-  return f"{converted_glycan[:-6]}-ol" if 'freeEnd' in glycan else converted_glycan[:-6]
+  base = converted_glycan[:-6]
+  base = re.sub(r',[pf]$', '', base)
+  return f"{base}-ol" if 'freeEnd' in glycan else base
 
 
 def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
