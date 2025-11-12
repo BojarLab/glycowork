@@ -828,7 +828,8 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
 
 
 def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
-                       revert: bool = False # Whether to map glycans to IDs; default:False
+                       revert: bool = False, # Whether to map glycans to IDs; default:False
+                       verbose: bool = True # Whether to print missing entries; default:True
                       ) -> List[str]: # List of glycans or IDs
   "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
   if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
@@ -841,10 +842,9 @@ def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
       result.append(lookup[item])
     else:
       result.append(item)
-      if revert:
-        not_found.append(item)
+      not_found.append(item)
   # Print missing items if any
-  if not_found:
+  if not_found and verbose:
     msg = 'glycans' if revert else 'IDs'
     print(f'These {msg} are not in our database: {not_found}')
   return result
@@ -969,7 +969,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     return mapped_glycan
   if bool(re.match(r'^G\d{5}[A-Z]{2}$', glycan)): #Glytoucan ID hook 
     glytoucan_in = glycan
-    glycan = glytoucan_to_glycan([BACKUP_G_IDS.get(glycan, glycan)])[0]
+    glycan = glytoucan_to_glycan([BACKUP_G_IDS.get(glycan, glycan)], verbose = False)[0]
     if glycan == glytoucan_in:
       return glytoucan_in
   # Check for different nomenclatures: LinearCode, IUPAC-extended, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, GlyTouCanIDs
