@@ -1,16 +1,20 @@
 # Changelog
 
-## [1.7.0]
+## [1.6.5]
 - Added some more lazy loading of drawing-related imports to improve package start-up time (b806bdd)
 
 ### motif
 #### processing
 ##### Added ✨
+- Added the `verbose` keyword argument (default = True) to `glytoucan_to_glycan`, to suppress the output of non-matched IDs (aa0b9a4)
 
 ##### Changed 🔄
 - Improved the detection of `LinearCode` sequences in `canonicalize_iupac` with the new `looks_like_linearcode` helper function (e26566e)
 - Improved the hook for triggering Oxford nomenclature conversion in `canonicalize_iupac` to be less permissive and faster (c5ae5e5, 25186e5)
 - Renamed `linearcode1d_to_iupac` to `glyseeker_to_iupac` (d44aba1)
+- Improved the hook for checking GlyTouCan IDs in `canonicalize_iupac` by making it more specific (aa0b9a4)
+- Improved `wurcs_to_iupac` handling of complex sequences to have more robust WURCS handling in `canonicalize_iupac` (0f5a5d8)
+- Improved `glycoworkbench_to_iupac` handling of variable reducing ends to have more robust GlycoWorkbench handling in `canonicalize_iupac` (0f5a5d8)
 
 ##### Fixed 🐛
 
@@ -23,7 +27,7 @@
 
 #### annotate
 ##### Added ✨
-- Added the `get_glycan_similarity` function to calculate cosine similarities between glycan motif fingerprints between two glycan sequences
+- Added the `get_glycan_similarity` function to calculate cosine similarities between glycan motif fingerprints between two glycan sequences (bd4d071)
 
 ### ml
 #### model_training

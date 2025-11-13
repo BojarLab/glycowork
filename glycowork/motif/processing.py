@@ -9,8 +9,7 @@ from pathlib import Path
 from itertools import combinations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
 from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
-                                          find_nth, find_nth_reverse,
-                                          lib, HexOS, HexNAcOS,
+                                          find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
 _parent = Path(__file__).parent
@@ -977,7 +976,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
   if mapped_glycan:
     return mapped_glycan
-  if bool(re.match(r'^G\d{5}[A-Z]{2}$', glycan)): #Glytoucan ID hook 
+  if bool(re.match(r'^G\d{5}[A-Z]{2}$', glycan)): #Glytoucan ID hook
     glytoucan_in = glycan
     glycan = glytoucan_to_glycan([BACKUP_G_IDS.get(glycan, glycan)], verbose = False)[0]
     if glycan == glytoucan_in:
