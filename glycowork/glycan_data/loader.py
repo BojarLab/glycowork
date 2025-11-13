@@ -129,6 +129,7 @@ def find_nth(haystack: str, # string to search for motif
     n -= 1
   return start
 
+
 def find_nth_reverse(string: str, # string to search
                     substring: str, # substring to find
                     n: int, # n-th occurrence from end

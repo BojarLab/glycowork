@@ -473,27 +473,6 @@ def get_mono(token: str # WURCS monosaccharide token
   return mono
 
 
-def move_leading_branches_to_end(seq: str) -> str:
-  "Shift any leading bracketed branches (e.g., [Branch]) behind the core residue."
-  if not seq.startswith('['):
-    return seq
-  idx, prefix = 0, []
-  length = len(seq)
-  while idx < length and seq[idx] == '[':
-    depth, j = 1, idx + 1
-    while j < length and depth:
-      if seq[j] == '[':
-        depth += 1
-      elif seq[j] == ']':
-        depth -= 1
-      j += 1
-    if depth != 0: #No matching ']' so bail and keep the string as-is
-      return seq
-    prefix.append(seq[idx:j])
-    idx = j
-  return seq[idx:] + ''.join(prefix)
-
-
 def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
                   ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from WURCS to barebones IUPAC-condensed format"
@@ -566,23 +545,6 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
   for parts, tgt, src in iupac_parts[1:]:
     parent_marker = marker(src)
     idx = iupac.find(parent_marker)
-    if idx == -1:
-      indices = [k.index(src) for k in inverted_connectivity.values() if src in k]
-      nth = (indices[0] if indices else 0) + 1
-      overlap = parts.split(')')[-1]
-      ignore = degrees[src] > 2 or (degrees[src] == 2 and src == 'a')
-      if '-' + overlap in iupac:  # Check if there's a risk of matching within prefixed names
-        linkage_pattern = ')' + overlap  # Use linkage pattern to avoid matching within prefixed names like L-Man
-        idx = find_nth_reverse(iupac, linkage_pattern, nth, ignore_branches = ignore)
-        if idx != -1:
-          idx += 1  # Adjust for the ')' we added
-        else:
-          idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)
-      else:
-        idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)  # No prefix risk, use normal matching
-      if idx == -1:
-        continue
-      iupac = splice(iupac, idx, idx, parent_marker)
     prefix = '[' if degrees[tgt] == 1 else ''
     suffix = ']' if (degrees[src] > 2 and degrees_for_brackets[src] < degrees[src]) or (degrees[src] == 2 and degrees_for_brackets[src] < degrees[src] and src == 'a') or (degrees[src] > 3 and degrees[tgt] == 1) or (degrees[tgt] == 1 and src =='a')  else ''
     child_marker = marker(tgt)
@@ -613,11 +575,6 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
         return s[:i] + s[i + 1:]
     return s
   iupac = remove_first_unmatched_opening_bracket(iupac)
-  floating_len = len(floating_part)
-  prefix = iupac[:floating_len]
-  core = iupac[floating_len:]
-  core = move_leading_branches_to_end(core)
-  iupac = prefix + core
   iupac = re.sub(r'<<[A-Za-z0-9]+>>', '', iupac)
   return re.sub(r'(\d)([PS])\-', r'\1-\2-', iupac)
 
