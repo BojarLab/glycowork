@@ -9,7 +9,8 @@ from pathlib import Path
 from itertools import combinations
 from typing import Dict, List, Set, Union, Optional, Callable, Tuple, Generator
 from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
-                                          find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
+                                          find_nth, find_nth_reverse,
+                                          lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
 _parent = Path(__file__).parent
@@ -475,6 +476,8 @@ def get_mono(token: str # WURCS monosaccharide token
 def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
                   ) -> str: # Basic IUPAC-condensed format
   "Convert glycan from WURCS to barebones IUPAC-condensed format"
+  node_marker = lambda letter: f"<<{letter}>>"
+  splice = lambda text, start, end, repl='': text[:start] + repl + text[end:]
   wurcs = wurcs[wurcs.index('/')+1:]
   pattern = r'\b([a-z])\d(?:\|\1\d)+\}?|\b[a-z](\d)(?:\|[a-z]\2)+\}?'
   additional_pattern = r'\b([a-z])\?(?:\|\w\?)+\}?'
@@ -503,7 +506,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     source_index, source_carbon = connectivity[source[:-1]], source[-1]
     source_mono = get_mono(monosaccharides[int(source_index)-1])
     if target[0] == '?':
-      floating_part += f"{'{'}{source_mono}(1-{target[1:]}){'}'}"
+      floating_part += f"{'{'}{node_marker(source[0])}{source_mono}(1-{target[1:]}){'}'}"
       floating_parts.append(source[0])
       continue
     target_index, target_carbon = connectivity[target[0]], target[1:]
@@ -516,7 +519,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     else:
       iupac_parts.append((f"{target_mono}({target_carbon}-{source_carbon}){source_mono}", target[0], source[0]))
   degrees_for_brackets = copy.deepcopy(degrees)
-  iupac_parts = sorted(iupac_parts, key = lambda x: x[2])
+  iupac_parts = sorted(iupac_parts, key = lambda x: (degrees[x[1]] == 1, x[2]))
   iupac = iupac_parts[0][0]
   inverted_connectivity.setdefault(connectivity[iupac_parts[0][2]], []).append(iupac_parts[0][2])
   inverted_connectivity.setdefault(connectivity[iupac_parts[0][1]], []).append(iupac_parts[0][1])
@@ -527,23 +530,27 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
   iupac = floating_part + iupac
   for fp in floating_parts:
     inverted_connectivity.setdefault(connectivity[fp], []).append(fp)
+  marker = node_marker
+  # Seed markers for the initial disaccharide so later insertions can find both nodes.
+  child_core = iupac_parts[0][0][:iupac_parts[0][0].index(')')+1]
+  child_plain = prefix + child_core + suffix
+  child_marker = marker(iupac_parts[0][1])
+  parent_marker = marker(iupac_parts[0][2])
+  child_start = len(floating_part)
+  child_end = child_start + len(child_plain)
+  child_marked = prefix + child_marker + child_core + suffix
+  iupac = splice(iupac, child_start, child_end, child_marked)
+  parent_insert = child_start + len(child_marked)
+  iupac = splice(iupac, parent_insert, parent_insert, parent_marker)
   for parts, tgt, src in iupac_parts[1:]:
-    indices = [k.index(src) for k in inverted_connectivity.values() if src in k]
-    nth = (indices[0] if indices else 0) + 1
-    overlap = parts.split(')')[-1]
-    ignore = True if degrees[src] > 2 or (degrees[src] == 2 and src == 'a') else False
-    if '-' + overlap in iupac:  # Check if there's a risk of matching within prefixed names
-      linkage_pattern = ')' + overlap  # Use linkage pattern to avoid matching within prefixed names like L-Man
-      idx = find_nth_reverse(iupac, linkage_pattern, nth, ignore_branches = ignore)
-      if idx != -1:
-        idx += 1  # Adjust for the ')' we added
-      else:
-        idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)
-    else:
-      idx = find_nth_reverse(iupac, overlap, nth, ignore_branches = ignore)  # No prefix risk, use normal matching
+    parent_marker = marker(src)
+    idx = iupac.find(parent_marker)
     prefix = '[' if degrees[tgt] == 1 else ''
     suffix = ']' if (degrees[src] > 2 and degrees_for_brackets[src] < degrees[src]) or (degrees[src] == 2 and degrees_for_brackets[src] < degrees[src] and src == 'a') or (degrees[src] > 3 and degrees[tgt] == 1) or (degrees[tgt] == 1 and src =='a')  else ''
-    iupac = iupac[:idx] + prefix + parts.split(')')[0]+')' + suffix + iupac[idx:]
+    child_marker = marker(tgt)
+    insert_segment = parts.split(')')[0]+')'
+    insert_text = prefix + child_marker + insert_segment + suffix
+    iupac = splice(iupac, idx, idx, insert_text)
     degrees_for_brackets[src] -= 1
     insertion_idx = iupac[:idx].count(parts.split(')')[0][:-4])
     if insertion_idx > 0:
@@ -568,6 +575,7 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
         return s[:i] + s[i + 1:]
     return s
   iupac = remove_first_unmatched_opening_bracket(iupac)
+  iupac = re.sub(r'<<[A-Za-z0-9]+>>', '', iupac)
   return re.sub(r'(\d)([PS])\-', r'\1-\2-', iupac)
 
 
@@ -824,7 +832,9 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
   converted_glycan = re.sub(r'([SP])[\)\(]*\?1-([\?\d])\)\[(.*?)\]([^(]+)', r'\3\4\2\1', converted_glycan)  # sulfate/phosphate with intervening branch
   converted_glycan = re.sub(r'\[([SP])[\)\(]*\?1-([\?\d])\)([^(]+)', r'[\3\2\1', converted_glycan)  # sulfate/phosphate
   converted_glycan = converted_glycan.replace('((', '(').replace('))', ')')
-  return f"{converted_glycan[:-6]}-ol" if 'freeEnd' in glycan else converted_glycan[:-6]
+  base = converted_glycan[:-6]
+  base = re.sub(r',[pf]$', '', base)
+  return f"{base}-ol" if 'freeEnd' in glycan else base
 
 
 def glytoucan_to_glycan(ids: List[str], # List of GlyTouCan IDs or glycans
