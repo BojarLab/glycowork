@@ -671,6 +671,34 @@ EDGE        6
             5     6:b1     4:4
             6     7:a1     4:3
 ///""") == "Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("""ENTRY       G00024        Glycan
+NODE        3
+            1   Ser     8     0
+            2   GalNAc     -1     0
+            3   Gal       -10     0
+EDGE        2
+            1     2:a1    1
+            2     3:b1    2:3
+///""") == "Gal(b1-3)GalNAc(a1-?)Ser"
+    assert canonicalize_iupac("""ENTRY       G00012        Glycan
+NODE        8
+            1   Asn        20    -2
+            2   GlcNAc     11    -2
+            3   GlcNAc      2    -2
+            4   Man        -6    -2
+            5   Man       -13     3
+            6   Man       -13    -7
+            7   Man       -20     8
+            8   Man       -20    -2
+EDGE        7
+            1     2:b1    1
+            2     3:b1    2:4
+            3     4:b1    3:4
+            4     5:a1    4:6
+            5     6:a1    4:3
+            6     7:a1    5:6
+            7     8:a1    5:3
+///""") == "Man(a1-3)[Man(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc(b1-?)Asn"
     assert glycoct_to_iupac("""RES
 1b:a-dman-OCT-2:6|1:a|2:keto|3:d
 2b:a-dman-OCT-2:6|1:a|2:keto|3:d
