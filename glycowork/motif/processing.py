@@ -1191,7 +1191,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = '{'+glycan.replace('+', '}')
   post_process = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'u5Ac(b1': 'u5Ac(b2', 'u5Gc(b1': 'u5Gc(b2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a',
-                  'Kdn(a1': 'Kdn(a2', 'Kdn(b1': 'Kdn(b2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?', 'manHep': 'ManHep'}
+                  'Kdn(a1': 'Kdn(a2', 'Kdn(b1': 'Kdn(b2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?', 'manHep': 'ManHep', 'amino': 'N'}
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
   glycan = sanitize_iupac(glycan)
