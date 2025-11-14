@@ -7,6 +7,7 @@
 #### processing
 ##### Added ✨
 - Added the `verbose` keyword argument (default = True) to `glytoucan_to_glycan`, to suppress the output of non-matched IDs (aa0b9a4)
+- Added the `kcf_to_iupac` function to convert the KCF nomenclature into IUPAC-condensed
 
 ##### Changed 🔄
 - Improved the detection of `LinearCode` sequences in `canonicalize_iupac` with the new `looks_like_linearcode` helper function (e26566e)
@@ -15,6 +16,7 @@
 - Improved the hook for checking GlyTouCan IDs in `canonicalize_iupac` by making it more specific (aa0b9a4)
 - Improved `wurcs_to_iupac` handling of complex sequences to have more robust WURCS handling in `canonicalize_iupac` (0f5a5d8)
 - Improved `glycoworkbench_to_iupac` handling of variable reducing ends to have more robust GlycoWorkbench handling in `canonicalize_iupac` (0f5a5d8)
+- `canonicalize_iupac` can now also convert KCF sequences, thanks to the new `kcf_to_iupac` function
 
 ##### Fixed 🐛
 

@@ -23,7 +23,7 @@ with open(_parent / "glyconnect_to_glytoucan.json") as f:
   GLYCONNECT_TO_GLYTOUCAN = json.load(f)
 
 # for canonicalize_iupac
-replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')',
+replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')',
                  'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', '4,5Ac': '4Ac5Ac', 'Talp': 'Tal', 'manp': 'man',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara',
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
@@ -884,6 +884,70 @@ def nglycan_stub_to_iupac(nglycan_stub: str # Glycan in a N-glycan stub format
   return f"{parts}{nglycan_stub}"
 
 
+def kcf_to_iupac(kcf_string: str # Glycan sequence in KCF format
+                ) -> str: # IUPAC-condensed format glycan sequence
+  """Convert KCF format glycan sequence to IUPAC-condensed format"""
+  lines = [line.strip() for line in kcf_string.strip().split('\n') if line.strip() and not line.strip().startswith('///')]
+  nodes, edges = {}, []
+  section = None
+  node_count, edge_count = 0, 0
+  for line in lines:
+    if line.startswith('ENTRY'):
+      continue
+    elif line.startswith('NODE'):
+      section = 'NODE'
+      node_count = int(line.split()[1])
+      continue
+    elif line.startswith('EDGE'):
+      section = 'EDGE'
+      edge_count = int(line.split()[1])
+      continue
+    if section == 'NODE' and len(nodes) < node_count:
+      parts = line.split()
+      node_id = int(parts[0])
+      monosaccharide = parts[1].capitalize()
+      nodes[node_id] = monosaccharide
+    elif section == 'EDGE' and len(edges) < edge_count:
+      parts = line.split()
+      donor_info = parts[1]
+      acceptor_info = parts[2]
+      donor_node = int(donor_info.split(':')[0])
+      linkage_info = donor_info.split(':')[1]
+      anomeric = linkage_info[0]
+      donor_carbon = linkage_info[1:]
+      acceptor_node = int(acceptor_info.split(':')[0])
+      acceptor_carbon = acceptor_info.split(':')[1]
+      edges.append({'donor': donor_node, 'acceptor': acceptor_node, 'anomeric': anomeric, 'donor_carbon': donor_carbon, 'acceptor_carbon': acceptor_carbon})
+  children = {node_id: [] for node_id in nodes}
+  for edge in edges:
+    children[edge['acceptor']].append(edge)
+  reducing_end = None
+  for node_id in nodes:
+    is_donor = any(edge['donor'] == node_id for edge in edges)
+    if not is_donor:
+      reducing_end = node_id
+      break
+  if reducing_end is None:
+    reducing_end = max(nodes.keys())
+  def build_iupac(node_id):
+    monosaccharide = nodes[node_id]
+    node_children = sorted(children[node_id], key=lambda e: int(e['acceptor_carbon']), reverse = True)
+    if not node_children:
+      return monosaccharide
+    child_strings = []
+    for child_edge in node_children:
+      child_iupac = build_iupac(child_edge['donor'])
+      linkage = f"({child_edge['anomeric']}{child_edge['donor_carbon']}-{child_edge['acceptor_carbon']})"
+      child_strings.append(f"{child_iupac}{linkage}")
+    if len(child_strings) == 1:
+      return f"{child_strings[0]}{monosaccharide}"
+    else:
+      main_chain = child_strings[0]
+      branches = '[' + ']['.join(child_strings[1:]) + ']'
+      return f"{main_chain}{branches}{monosaccharide}"
+  return build_iupac(reducing_end)
+
+
 def check_nomenclature(glycan: str # Glycan string to check
                      ) -> None: # Prints reason if not convertible
   "Check whether glycan has correct nomenclature for glycowork"
@@ -964,10 +1028,12 @@ def looks_like_oxford(glycan: str) -> bool:
 
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
-  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
+  "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, KCF, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
   if isinstance(glycan, int):
     glycan = str(glycan)
     glycan = GLYCONNECT_TO_GLYTOUCAN.get(glycan, glycan)
+  if glycan.startswith("ENTRY"):
+    glycan = kcf_to_iupac(glycan)
   glycan = glycan.strip().replace('–', '-').replace(' ', '')
   glycan = re.sub(r'^(["\'])(.*?)\1$', r'\2', glycan)
   mapped_glycan = glycan in lib
@@ -976,7 +1042,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
   if mapped_glycan:
     return mapped_glycan
-  if bool(re.match(r'^G\d{5}[A-Z]{2}$', glycan)): #Glytoucan ID hook
+  if bool(re.match(r'^G\d{5}[A-Z]{2}$', glycan)): #GlyTouCan ID hook
     glytoucan_in = glycan
     glycan = glytoucan_to_glycan([BACKUP_G_IDS.get(glycan, glycan)], verbose = False)[0]
     if glycan == glytoucan_in:
@@ -1005,7 +1071,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   elif looks_like_linearcode(glycan):
     glycan = linearcode_to_iupac(glycan)
   elif looks_like_oxford(glycan):
-      glycan = oxford_to_iupac(glycan)
+    glycan = oxford_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   # Anomeric indicator placed before parentheses
   if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):

@@ -635,6 +635,42 @@ LIN
 2:1o(3+1)3d
 3:3o(2+1)4d
 4:1o(4+1)5d""") == "Col(a1-2)Gal(b1-3)[Col(a1-4)]GlcNAc"
+    assert canonicalize_iupac("""ENTRY     XYZ          Glycan
+NODE      5
+          1     GlcNAc     15.0     7.0
+          2     GlcNAc      8.0     7.0
+          3     Man         1.0     7.0
+          4     Man        -6.0    12.0
+          5     Man        -6.0     2.0
+EDGE      4
+          1     2:b1       1:4
+          2     3:b1       2:4
+          3     5:a1       3:3
+          4     4:a1       3:6
+///""") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("""ENTRY	
+NODE        2
+            1   GalNAc      0     0
+            2   Gal       -10     0
+EDGE        1
+            1     2:a1    1:3""") == "Gal(a1-3)GalNAc"
+    assert canonicalize_iupac("""ENTRY       Fuc_Bis_N        Glycan
+NODE        7
+            1     fuc     12.0     7.0
+            2     glcnac     19.0     2.0
+            3     glcnac     12.0     2.0
+            4     man     5.0     2.0
+            5     man     -2.0     7.0
+            6     glcnac     -2.0     2.0
+            7     man     -2.0     -3.0
+EDGE        6
+            1     1:a1     2:6
+            2     3:b1     2:4
+            3     4:b1     3:4
+            4     5:a1     4:6
+            5     6:b1     4:4
+            6     7:a1     4:3
+///""") == "Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert glycoct_to_iupac("""RES
 1b:a-dman-OCT-2:6|1:a|2:keto|3:d
 2b:a-dman-OCT-2:6|1:a|2:keto|3:d
