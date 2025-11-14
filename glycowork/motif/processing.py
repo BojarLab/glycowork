@@ -911,12 +911,14 @@ def kcf_to_iupac(kcf_string: str # Glycan sequence in KCF format
       parts = line.split()
       donor_info = parts[1]
       acceptor_info = parts[2]
-      donor_node = int(donor_info.split(':')[0])
-      linkage_info = donor_info.split(':')[1]
-      anomeric = linkage_info[0]
-      donor_carbon = linkage_info[1:]
-      acceptor_node = int(acceptor_info.split(':')[0])
-      acceptor_carbon = acceptor_info.split(':')[1]
+      donor_parts = donor_info.split(':')
+      donor_node = int(donor_parts[0])
+      linkage_info = donor_parts[1] if len(donor_parts) > 1 else ''
+      anomeric = linkage_info[0] if linkage_info else '?'
+      donor_carbon = linkage_info[1:] if len(linkage_info) > 1 else '?'
+      acceptor_parts = acceptor_info.split(':')
+      acceptor_node = int(acceptor_parts[0])
+      acceptor_carbon = acceptor_parts[1] if len(acceptor_parts) > 1 and acceptor_parts[1] else '?'
       edges.append({'donor': donor_node, 'acceptor': acceptor_node, 'anomeric': anomeric, 'donor_carbon': donor_carbon, 'acceptor_carbon': acceptor_carbon})
   children = {node_id: [] for node_id in nodes}
   for edge in edges:
@@ -931,7 +933,7 @@ def kcf_to_iupac(kcf_string: str # Glycan sequence in KCF format
     reducing_end = max(nodes.keys())
   def build_iupac(node_id):
     monosaccharide = nodes[node_id]
-    node_children = sorted(children[node_id], key=lambda e: int(e['acceptor_carbon']), reverse = True)
+    node_children = sorted(children[node_id], key=lambda e: int(e['acceptor_carbon']) if e['acceptor_carbon'].isdigit() else -1, reverse = True)
     if not node_children:
       return monosaccharide
     child_strings = []
