@@ -699,6 +699,68 @@ EDGE        7
             6     7:a1    5:6
             7     8:a1    5:3
 ///""") == "Man(a1-3)[Man(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc(b1-?)Asn"
+    assert canonicalize_iupac("""<?xml version="1.0" encoding="UTF-8"?>
+<sugar version="1.0">
+  <residues>
+    <basetype id="1" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <basetype id="2" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <basetype id="3" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <basetype id="4" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <basetype id="5" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <substituent id="6" name="amino" />
+    <basetype id="7" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+  </residues>
+  <linkages>
+    <connection id="1" parent="1" child="2">
+      <linkage id="1" parentType="o" childType="d">
+        <parent pos="3" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="2" parent="1" child="3">
+      <linkage id="2" parentType="o" childType="d">
+        <parent pos="6" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="3" parent="3" child="4">
+      <linkage id="3" parentType="o" childType="d">
+        <parent pos="6" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="4" parent="4" child="5">
+      <linkage id="4" parentType="o" childType="d">
+        <parent pos="3" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="5" parent="5" child="6">
+      <linkage id="5" parentType="d" childType="n">
+        <parent pos="2" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="6" parent="4" child="7">
+      <linkage id="6" parentType="o" childType="d">
+        <parent pos="6" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+  </linkages>
+</sugar>""") == "GlcN(b1-3)[Glc(b1-6)]Glc(b1-6)Glc(b1-6)[Glc(b1-3)]Glc"
     assert glycoct_to_iupac("""RES
 1b:a-dman-OCT-2:6|1:a|2:keto|3:d
 2b:a-dman-OCT-2:6|1:a|2:keto|3:d

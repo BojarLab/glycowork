@@ -449,6 +449,71 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
   return iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
 
 
+def glycoctxml_to_iupac(glycan_xml: str # GlycoCT XML format string
+                       ) -> str: # Basic IUPAC-condensed format
+  """Convert GlycoCT XML format to basic IUPAC-condensed format"""
+  residue_dic = {}
+  iupac_parts = defaultdict(list)
+  degrees = defaultdict(lambda: 1)
+  mono_replace = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu', 'lido': 'Ido', 'dxyl': 'Xyl', 'dara': 'D-Ara', 'lara': 'Ara', 'HEX': 'Hex', 'lman': 'Rha', 'lxyl': 'Col', 'dgul': 'Gul'}
+  sub_replace = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc', 'acetyl': 'OAc', 'methyl': 'OMe', 'amino': 'N'}
+  lines = glycan_xml.split('\n')
+  current_basetype_id = None
+  for i, line in enumerate(lines):
+    if '<basetype' in line:
+      id_match = re.search(r'id="(\d+)"', line)
+      anomer_match = re.search(r'anomer="([^"]+)"', line)
+      if id_match:
+        current_basetype_id = int(id_match.group(1))
+        anomer = anomer_match.group(1).replace('x', '?') if anomer_match else '?'
+        if i+1 < len(lines) and '<stemtype' in lines[i+1]:
+          stemtype_match = re.search(r'type="([^"]+)"', lines[i+1])
+          if stemtype_match:
+            stemtype = stemtype_match.group(1)
+            residue_dic[current_basetype_id] = multireplace(stemtype, mono_replace) + anomer
+    elif '<substituent' in line:
+      id_match = re.search(r'id="(\d+)"', line)
+      name_match = re.search(r'name="([^"]+)"', line)
+      if id_match and name_match:
+        res_id = int(id_match.group(1))
+        residue_dic[res_id] = multireplace(name_match.group(1).lower(), sub_replace)
+    elif '<connection' in line:
+      parent_match = re.search(r'parent="(\d+)"', line)
+      child_match = re.search(r'child="(\d+)"', line)
+      if parent_match and child_match:
+        parent_id = int(parent_match.group(1))
+        child_id = int(child_match.group(1))
+        for j in range(i+1, min(i+10, len(lines))):
+          if 'childType=' in lines[j]:
+            child_type_match = re.search(r'childType="([^"]+)"', lines[j])
+            if child_type_match:
+              child_type = child_type_match.group(1)
+              break
+        for j in range(i+1, min(i+10, len(lines))):
+          if '<parent' in lines[j]:
+            pos_match = re.search(r'pos="([^"]+)"', lines[j])
+            if pos_match:
+              parent_pos = pos_match.group(1)
+              break
+        for j in range(i+1, min(i+10, len(lines))):
+          if '<child' in lines[j]:
+            pos_match = re.search(r'pos="([^"]+)"', lines[j])
+            if pos_match:
+              child_pos = pos_match.group(1)
+              break
+        if child_type == 'n':
+          residue_dic[parent_id] = residue_dic[parent_id][:-1] + residue_dic[child_id] + residue_dic[parent_id][-1]
+        else:
+          iupac_parts[parent_id].append((f"{child_pos}-{parent_pos}", child_id))
+          degrees[parent_id] += 1
+  for r in residue_dic:
+    if r not in degrees:
+      degrees[r] = 1
+  iupac = glycoct_build_iupac(iupac_parts, residue_dic, degrees)
+  pattern = re.compile(r'([ab\?])\(')
+  return pattern.sub(lambda match: f"({match.group(1)}", iupac)
+
+
 def get_mono(token: str # WURCS monosaccharide token
            ) -> str: # Monosaccharide with anomeric state
   "Map WURCS token to monosaccharide with anomeric state"
@@ -1074,6 +1139,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = linearcode_to_iupac(glycan)
   elif looks_like_oxford(glycan):
     glycan = oxford_to_iupac(glycan)
+  elif glycan.startswith('<?xml') or '<sugar' in glycan:
+    glycan = glycoctxml_to_iupac(glycan)
   # Canonicalize usage of monosaccharides and linkages
   # Anomeric indicator placed before parentheses
   if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
