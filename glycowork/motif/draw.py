@@ -663,13 +663,6 @@ def get_coordinates_and_labels(
   l3_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l3_sugar]
 
   SPACING = 1
-
-  def limit_branch_shift(shift_amount, parent_y, branch_len):
-    if branch_len <= 1:
-      return shift_amount
-    min_drop = SPACING + 0.35 * (branch_len - 1)
-    return min(shift_amount, parent_y - min_drop)
-
   # Main chain goes down, branches go up
   branch_points = {conn[1] for conn in l1_connection}
   # For each branch point, main chain beyond it goes down
@@ -723,9 +716,8 @@ def get_coordinates_and_labels(
       elif len(branch_sugar) == 1:
         l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] - SPACING
       else:
-        offset = main_sugar_y_pos[parent_idx + 1] - main_sugar_y_pos[parent_idx] if parent_idx + 1 < len(main_sugar_y_pos) else SPACING
-        parent_y = main_sugar_y_pos[parent_idx]
-        shift_amount = limit_branch_shift(parent_y - offset, parent_y, len(branch_sugar))
+        offset = main_sugar_y_pos[parent_idx + 1] - main_sugar_y_pos[parent_idx]
+        shift_amount = main_sugar_y_pos[parent_idx] - offset
         l1_y_pos[j] = [p + shift_amount for p in l1_y_pos[j]]
 
   def process_branch_level(level_sugar, level_y_pos, level_connection, next_level_sugar, next_level_connection, parent_level_y_pos, parent_level_sugar):
@@ -751,100 +743,38 @@ def get_coordinates_and_labels(
       elif len(level_sugar[j]) == 1 and is_fuc_partner:
         level_y_pos[j][0] = parent_y
       else:
-        offset = parent_level_y_pos[parent_branch][parent_idx+1] - parent_y if parent_idx+1 < len(parent_level_y_pos[parent_branch]) else SPACING
-        shift_amount = limit_branch_shift(parent_y - offset, parent_y, len(level_sugar[j]))
+        offset = parent_level_y_pos[parent_branch][parent_idx+1] - parent_y if parent_idx+1 < len(parent_level_y_pos[parent_branch]) else 0
+        shift_amount = parent_y - offset
         level_y_pos[j] = [p + shift_amount for p in level_y_pos[j]]
     return level_y_pos
 
   l2_y_pos = process_branch_level(l2_sugar, l2_y_pos, l2_connection, l3_sugar, l3_connection, l1_y_pos, l1_sugar)
   l3_y_pos = process_branch_level(l3_sugar, l3_y_pos, l3_connection, [], [], l2_y_pos, l2_sugar)
 
-  def resolve_single_branch_collisions():
-    MIN_SPACING = 1.3
-    def shift_branch(level, branch_idx, delta):
-      if level == 'l1':
-        for i in range(len(l1_y_pos[branch_idx])):
-          l1_y_pos[branch_idx][i] += delta
-        for child_idx, (parent_branch, _) in enumerate(l2_connection):
-          if parent_branch == branch_idx:
-            shift_branch('l2', child_idx, delta)
-      elif level == 'l2':
-        for i in range(len(l2_y_pos[branch_idx])):
-          l2_y_pos[branch_idx][i] += delta
-        for child_idx, (parent_branch, _) in enumerate(l3_connection):
-          if parent_branch == branch_idx:
-            shift_branch('l3', child_idx, delta)
-      elif level == 'l3':
-        for i in range(len(l3_y_pos[branch_idx])):
-          l3_y_pos[branch_idx][i] += delta
-    def collect_entries():
-      entries = []
-      entries += [{'x': x, 'y_ref': main_sugar_y_pos, 'idx': idx, 'adjustable': False, 'y': main_sugar_y_pos[idx], 'level': 'main', 'branch_idx': idx} for idx, x in enumerate(main_sugar_x_pos)]
-      def add_level(level_name, sugars, xs, ys, adjustable_mask):
-        for b_idx, branch in enumerate(sugars):
-          adj = adjustable_mask(b_idx, branch)
-          for s_idx, x in enumerate(xs[b_idx]):
-            entries.append({'x': x, 'y_ref': ys[b_idx], 'idx': s_idx, 'adjustable': adj, 'y': ys[b_idx][s_idx], 'level': level_name, 'branch_idx': b_idx})
-      add_level('l1', l1_sugar, l1_x_pos, l1_y_pos,
-                lambda idx, branch: (((len(branch) > 1) or (branch and branch[0] not in {'Fuc', 'Xyl'}))
-                                     and not (branch == ['Fuc'] and l1_bond[idx] == ['α 6'] and l1_connection[idx][1] == 0)))
-      add_level('l2', l2_sugar, l2_x_pos, l2_y_pos, lambda idx, branch: True)
-      add_level('l3', l3_sugar, l3_x_pos, l3_y_pos, lambda idx, branch: True)
-      return entries
-    for _ in range(64):
-      entries = collect_entries()
-      columns = {}
-      for entry in entries:
-        columns.setdefault(entry['x'], []).append(entry)
-      changed = False
-      for column_entries in columns.values():
-        column_entries.sort(key = lambda ent: ent['y'])
-        for prev, curr in zip(column_entries, column_entries[1:]):
-          diff = curr['y'] - prev['y']
-          if diff < MIN_SPACING:
-            delta = MIN_SPACING - diff
-            can_shift_curr = curr['adjustable'] and curr['level'] != 'main'
-            can_shift_prev = prev['adjustable'] and prev['level'] != 'main'
-            if can_shift_curr and can_shift_prev:
-              shift_branch(prev['level'], prev['branch_idx'], -delta/2)
-              shift_branch(curr['level'], curr['branch_idx'], delta/2)
-              changed = True
-              break
-            elif can_shift_curr:
-              shift_branch(curr['level'], curr['branch_idx'], delta)
-              changed = True
-              break
-            elif can_shift_prev:
-              shift_branch(prev['level'], prev['branch_idx'], -delta)
-              changed = True
-              break
-        if changed:
-          break
-      if not changed:
-        break
+  # Keep long level-1 branches separated so their antennas do not overlap
+  def build_child_map(connections, parent_count):
+    return {i: [idx for idx, (parent_branch, _) in enumerate(connections) if parent_branch == i] for i in range(parent_count)}
 
-  resolve_single_branch_collisions()
+  l1_children = build_child_map(l2_connection, len(l1_sugar)) if l1_sugar else {}
+  l2_children = build_child_map(l3_connection, len(l2_sugar)) if l2_sugar else {}
+  MIN_LONG_BRANCH_GAP = max(1.25, 1.25 * SPACING)
 
-  def enforce_single_residue_offsets():
-    for j, (parent_branch, parent_idx) in enumerate(l1_connection):
-      if len(l1_sugar[j]) != 1:
-        continue
-      sugar = l1_sugar[j][0]
-      parent_y = main_sugar_y_pos[parent_idx]
-      if sugar == 'Fuc' and l1_bond[j] == ['α 6'] and parent_idx == 0:
-        l1_y_pos[j][0] = parent_y - 2*SPACING
-      elif sugar in ['Fuc', 'Xyl']:
-        l1_y_pos[j][0] = parent_y + 2*SPACING
-    for level_sugar, level_y_pos, level_connection, parent_level_y in [
-        (l2_sugar, l2_y_pos, l2_connection, l1_y_pos),
-        (l3_sugar, l3_y_pos, l3_connection, l2_y_pos)]:
-      for j, (parent_branch, parent_idx) in enumerate(level_connection):
-        if len(level_sugar[j]) != 1 or level_sugar[j][0] not in ['Fuc', 'Xyl']:
-          continue
-        parent_y = parent_level_y[parent_branch][parent_idx]
-        level_y_pos[j][0] = parent_y + 2*SPACING
+  def shift_branch_chain(branch_idx, delta):
+    if delta <= 0:
+      return
+    l1_y_pos[branch_idx] = [y + delta for y in l1_y_pos[branch_idx]]
+    for l2_idx in l1_children.get(branch_idx, []):
+      l2_y_pos[l2_idx] = [y + delta for y in l2_y_pos[l2_idx]]
+      for l3_idx in l2_children.get(l2_idx, []):
+        l3_y_pos[l3_idx] = [y + delta for y in l3_y_pos[l3_idx]]
 
-  enforce_single_residue_offsets()
+  long_branch_sequence = sorted([(l1_y_pos[idx][0], idx) for idx, branch in enumerate(l1_sugar) if len(branch) > 1])
+  prev_y = None
+  for current_y, branch_idx in long_branch_sequence:
+    if prev_y is not None and current_y - prev_y < MIN_LONG_BRANCH_GAP:
+      shift_branch_chain(branch_idx, MIN_LONG_BRANCH_GAP - (current_y - prev_y))
+      current_y = l1_y_pos[branch_idx][0]
+    prev_y = current_y
 
   def extract_conformation(sugar_modifications):
     conf_pattern = r'^L-|^D-|(\d,\d+lactone)'
@@ -1310,9 +1240,6 @@ def GlycoDraw(
   min_x = min(unwrap(l3_x_pos)+unwrap(l2_x_pos)+unwrap(l1_x_pos)+main_sugar_x_pos)
   if reducing_end_label:
     min_x = min(min_x, main_sugar_x_pos[0] - 1)
-  padding = 0.25
-  max_y += padding
-  min_y -= padding
   x_span = max_x - min_x
   y_span = max_y - min_y
 
@@ -1386,7 +1313,7 @@ def GlycoDraw(
   highlight = 'show' if highlight_motif == None else 'hide'
   if floaty_bits != []:
     fb_count = {i: floaty_bits.count(i) for i in floaty_bits}
-    floaty_bits = list(set(floaty_bits))
+    floaty_bits = list(dict.fromkeys(floaty_bits))
     floaty_data = []
     for k, k_val in enumerate(floaty_bits):
       if in_lib(min_process_glycans([k_val])[0][0], libr):
