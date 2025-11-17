@@ -30,6 +30,8 @@ replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
+CSDB_COMMENT = re.compile(r'\s*//.*$')
+CSDB_SUBSTITUENT = re.compile(r'\bSubst\b', flags = re.IGNORECASE)
 COMMON_ENANTIOMER = {"L-Fuc": "Fuc", "D-Gal": "Gal", "D-Man": "Man", "D-Glc": "Glc", "L-Alt": "Alt", "L-All": "All", "L-Ara": "Ara", "D-Gul": "Gul", "D-Lyx": "Lyx",
                   "D-Oli": "Oli", "D-Qui": "Qui", "L-Rha": "Rha", "D-Psi": "Psi", "L-Ido": "Ido", "D-Fru": "Fru", "D-Rib": "Rib", "L-Sor": "Sor", "D-Tag": "Tag", "D-Tal": "Tal", "D-6dTal": "6dTal",
                   "D-Xyl": "Xyl", "D-Mur": "Mur", "D-Neu": "Neu", "D-Kdn": "Kdn", "D-Kdo": "Kdo"}
@@ -1102,6 +1104,10 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if glycan.startswith("ENTRY"):
     glycan = kcf_to_iupac(glycan)
   glycan = glycan.strip().replace('–', '-').replace(' ', '')
+  if '//' in glycan:
+    glycan = CSDB_COMMENT.sub('', glycan)
+  if 'Subst' in glycan or 'subst' in glycan:
+    glycan = CSDB_SUBSTITUENT.sub('Substituent', glycan)
   glycan = re.sub(r'^(["\'])(.*?)\1$', r'\2', glycan)
   mapped_glycan = glycan in lib
   if mapped_glycan:

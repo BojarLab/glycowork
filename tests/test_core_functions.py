@@ -375,6 +375,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Xyl(b1-2)][Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc") == "Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("Glc(?1-?)[Gal(?1-?)]2,5-Anhydro-Tal") == "Gal(?1-?)[Glc(?1-?)]2,5-Anhydro-Tal"
     # Test other nomenclatures
+    assert canonicalize_iupac("Ac(1-2)aLFucpN(1-3)[Ac(1-2)]bDGlcpN(1-1)Subst // Subst = 2-(4-(hydroxymethyl)-1,3-dioxolan-2-yl)propane-1,3-diol = SMILES O{1}CC(C1OCC(CO)O1)CO") == "FucNAc(a1-3)GlcNAc1Substituent"
     assert canonicalize_iupac("aDMan(1-2)bDGlcp(1-1)Me") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("aDGlcp(1-2)bDFruf") == "Glc(a1-2)Fruf"
     assert canonicalize_iupac("-1)bDFruf(2-3)bDFruf(2-") == "Fruf(b2-3)Fruf(b2-1)Fruf"
