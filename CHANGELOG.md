@@ -8,7 +8,8 @@
 ##### Added ✨
 - Added the `verbose` keyword argument (default = True) to `glytoucan_to_glycan`, to suppress the output of non-matched IDs (aa0b9a4)
 - Added the `kcf_to_iupac` function to convert the KCF nomenclature into IUPAC-condensed (bfe947c, 37fad0d)
-- Added the `glycoctxml_to_iupac` function to convert the GlycoCT XML nomenclature into IUPAC-condensed
+- Added the `glycoctxml_to_iupac` function to convert the GlycoCT XML nomenclature into IUPAC-condensed (3d967b6)
+- Added the `is_composition` utility function to quickly check whether a string is a composition or a glycan
 
 ##### Changed 🔄
 - Improved the detection of `LinearCode` sequences in `canonicalize_iupac` with the new `looks_like_linearcode` helper function (e26566e)
@@ -18,7 +19,8 @@
 - Improved `wurcs_to_iupac` handling of complex sequences to have more robust WURCS handling in `canonicalize_iupac` (0f5a5d8)
 - Improved `glycoworkbench_to_iupac` handling of variable reducing ends to have more robust GlycoWorkbench handling in `canonicalize_iupac` (0f5a5d8)
 - `canonicalize_iupac` can now also convert KCF sequences, thanks to the new `kcf_to_iupac` function (bfe947c, 37fad0d)
-- `canonicalize_iupac` can now also convert GlycoCT XML sequences, thanks to the new `glycoctxml_to_iupac` function
+- `canonicalize_iupac` can now also convert GlycoCT XML sequences, thanks to the new `glycoctxml_to_iupac` function (3d967b6)
+- Arbitrary chemical substituents from CSDB-linear glycans are now being correctly handled in `canonicalize_iupac`, even if the specific substituent is not yet supported (b71af07)
 
 ##### Fixed 🐛
 
@@ -32,6 +34,9 @@
 #### annotate
 ##### Added ✨
 - Added the `get_glycan_similarity` function to calculate cosine similarities between glycan motif fingerprints between two glycan sequences (bd4d071)
+
+##### Changed 🔄
+- `get_k_saccharides` now has limited support to extract information from inputs that are a mix of sequences and compositions; namely monosaccharide counts, when `up_to = True`
 
 ### ml
 #### model_training

@@ -40,7 +40,7 @@ from glycowork.motif.processing import (
     get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac,
     glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
-    in_lib, get_class, enforce_class, equal_repeats, get_matching_indices,
+    in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles
 )
 from glycowork.glycan_data.loader import (
@@ -1451,6 +1451,10 @@ def test_get_matching_indices2():
     assert list(get_matching_indices(r"[a\]b]", '[', ']'))[0] == (1, 5, 0)
 
 
+def test_is_composition():
+    assert is_composition("NeuGc1Hex4HexNAc4deHex1")
+    assert not is_composition("Neu5Gc(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")
+
 def test_bracket_removal():
     # Test simple branch removal
     assert bracket_removal("Gal(b1-4)[Fuc(a1-3)]GlcNAc") == "Gal(b1-4)GlcNAc"
@@ -2491,6 +2495,8 @@ def test_get_k_saccharides():
         return False
     except TypeError:
         pass
+    result = get_k_saccharides(["NeuGc1Hex4HexNAc3deHex1", "Fuc(a1-2)Gal(b1-3)Gal"], up_to=True)
+    assert "NeuGc1Hex4HexNAc3deHex1" not in result.columns
 
 
 def test_get_terminal_structures():

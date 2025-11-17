@@ -9,7 +9,7 @@ from scipy.spatial.distance import cosine
 
 from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int
-from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans
+from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition
 from glycowork.motif.regex import get_match
 
 
@@ -343,7 +343,15 @@ def get_k_saccharides(
   if not up_to and max(g.count('(')+1 for g in glycans) < size:
     return [] if just_motifs else pd.DataFrame()
   if up_to:
-    wga_letter = pd.DataFrame([{i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(glycans) if i not in linkages} for g in glycans])
+    wga_letter_data = []
+    actual_glycans = [g for g in glycans if not is_composition(g)]
+    for g in glycans:
+      if is_composition(g):
+        comp_dict = canonicalize_composition(g)
+        wga_letter_data.append(comp_dict)
+      else:
+        wga_letter_data.append({i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(actual_glycans) if i not in linkages})
+    wga_letter = pd.DataFrame(wga_letter_data)
   regex = re.compile(r"([ab])(\d)-(\d)")
   ggraphs, shadow_graphs = [], []
   for g_str in glycans:
@@ -375,7 +383,7 @@ def get_k_saccharides(
   out_matrix = out_matrix.drop(drop_columns, axis = 1)
   out_matrix = out_matrix.T.groupby(level = 0).sum().T
   if up_to:
-    combined_df= pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
+    combined_df = pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
     return combined_df.apply(lambda x: list(combined_df.columns[x > 0]), axis = 1).tolist() if just_motifs else combined_df
   return out_matrix.apply(lambda x: list(out_matrix.columns[x > 0]), axis = 1).tolist() if just_motifs else out_matrix.fillna(0).astype(int)
 
