@@ -752,14 +752,17 @@ def get_coordinates_and_labels(
   l3_y_pos = process_branch_level(l3_sugar, l3_y_pos, l3_connection, [], [], l2_y_pos, l2_sugar)
 
   # Keep long level-1 branches separated so their antennas do not overlap
-  def build_child_map(connections, parent_count):
-    return {i: [idx for idx, (parent_branch, _) in enumerate(connections) if parent_branch == i] for i in range(parent_count)}
+  def collect_child_map(connections):
+    child_map = {}
+    for idx, (parent_branch, _) in enumerate(connections):
+      child_map.setdefault(parent_branch, []).append(idx)
+    return child_map
 
-  l1_children = build_child_map(l2_connection, len(l1_sugar)) if l1_sugar else {}
-  l2_children = build_child_map(l3_connection, len(l2_sugar)) if l2_sugar else {}
-  MIN_LONG_BRANCH_GAP = max(1.25, 1.25 * SPACING)
+  l1_children = collect_child_map(l2_connection) if l2_connection else {}
+  l2_children = collect_child_map(l3_connection) if l3_connection else {}
+  MIN_LONG_BRANCH_GAP = 1.25 * max(1.0, SPACING)
 
-  def shift_branch_chain(branch_idx, delta):
+  def offset_branch_stack(branch_idx, delta):
     if delta <= 0:
       return
     l1_y_pos[branch_idx] = [y + delta for y in l1_y_pos[branch_idx]]
@@ -768,13 +771,16 @@ def get_coordinates_and_labels(
       for l3_idx in l2_children.get(l2_idx, []):
         l3_y_pos[l3_idx] = [y + delta for y in l3_y_pos[l3_idx]]
 
-  long_branch_sequence = sorted([(l1_y_pos[idx][0], idx) for idx, branch in enumerate(l1_sugar) if len(branch) > 1])
+  long_branches = [(idx, l1_y_pos[idx][0]) for idx, branch in enumerate(l1_sugar) if len(branch) > 1]
+  long_branches.sort(key = lambda item: item[1])
   prev_y = None
-  for current_y, branch_idx in long_branch_sequence:
-    if prev_y is not None and current_y - prev_y < MIN_LONG_BRANCH_GAP:
-      shift_branch_chain(branch_idx, MIN_LONG_BRANCH_GAP - (current_y - prev_y))
-      current_y = l1_y_pos[branch_idx][0]
-    prev_y = current_y
+  for branch_idx, branch_y in long_branches:
+    if prev_y is not None:
+      gap = branch_y - prev_y
+      if gap < MIN_LONG_BRANCH_GAP:
+        offset_branch_stack(branch_idx, MIN_LONG_BRANCH_GAP - gap)
+        branch_y = l1_y_pos[branch_idx][0]
+    prev_y = branch_y
 
   def extract_conformation(sugar_modifications):
     conf_pattern = r'^L-|^D-|(\d,\d+lactone)'
