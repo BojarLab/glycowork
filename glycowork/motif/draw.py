@@ -1142,7 +1142,8 @@ def GlycoDraw(
     pdb_file: str | Path | None = None,  # only used when draw_method='chem3d'; already existing glycan structure
     alt_text: str | None = None,  # Custom ALT text for accessibility
     libr: dict | None = None,  # Can be modified for drawing too exotic monosaccharides
-    reducing_end_label: str | None = None  # Label to be drawn connected to the reducing end
+    reducing_end_label: str | None = None,  # Label to be drawn connected to the reducing end
+    restrict_vocab: bool = False, # Whether only tokens present in libr can be drawn
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
   if any(k in glycan for k in [';', 'β', 'α', 'RES', '=']):
@@ -1184,7 +1185,7 @@ def GlycoDraw(
     draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
   draw_this = draw_this.replace('*', '')
 
-  if not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
+  if restrict_vocab and not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
     raise Exception('Did you enter a real glycan or motif?')
 
   data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
@@ -1461,9 +1462,9 @@ def annotate_figure(
       current_pos = current_pos.replace('scale(0.1 -0.1)', glycan_size_dict[glycan_size])
       svg_tmp = svg_tmp.replace(match, '')
       if glycan_scale == '':
-        d = GlycoDraw(current_label, compact = compact, suppress = True)
+        d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
       else:
-        d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)], suppress = True)
+        d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)], suppress = True, restrict_vocab = True)
       data = d.as_svg().replace('<?xml version="1.0" encoding="UTF-8"?>\n', '')
       id_matches = re.findall(r'd\d+', data)
       # Reassign element ids to avoid duplicates
@@ -1513,7 +1514,7 @@ def plot_glycans_excel(
       if not isinstance(glycan_structure[0], str):
         glycan_structure = glycan_structure[0][0]
       # Generate glycan image using GlycoDraw
-      svg_data = GlycoDraw(glycan_structure, compact = compact, suppress = True).as_svg()
+      svg_data = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True).as_svg()
       # Get SVG dimensions and scale them
       width = svg_data.width if hasattr(svg_data, 'width') else 800
       height = svg_data.height if hasattr(svg_data, 'height') else 800

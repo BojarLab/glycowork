@@ -3048,7 +3048,7 @@ def test_glycodraw():
     assert Path("test.png").exists()
     # Test invalid glycan
     with pytest.raises(Exception):
-        GlycoDraw("InvalidGlycan")
+        GlycoDraw("InvalidGlycan", restrict_vocab=True)
 
 
 def test_glycodraw_branch_spacing():

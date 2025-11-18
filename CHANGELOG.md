@@ -36,6 +36,7 @@
 
 ##### Changed 🔄
 - Improved branch spacing for complex glycans (i.e., less overlap) within `GlycoDraw` (39ba99c)
+- Added the `restrict_vocab` keyword argument to `GlycoDraw` (default: False) to support drawing of exotic glycans while still facilitating a restricted vocabulary for annotating glycans in figures
 
 #### annotate
 ##### Added ✨
