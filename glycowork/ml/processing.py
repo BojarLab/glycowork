@@ -237,7 +237,7 @@ def hetero_collate(data: list[list[HeteroData]] | list[HeteroData] | None,  # li
 
 class GIFFLARTransform(BaseTransform):
   """Transformation to bring data into a GIFFLAR format"""
-  def __call__(self,
+  def forward(self,
                data: HeteroData  # input data
                ) -> HeteroData:  # transformed data
     """Transform the data into a GIFFLAR format. This means to compute the simplex network and create a heterogenous graph from it"""
