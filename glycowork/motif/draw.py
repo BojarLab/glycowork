@@ -751,6 +751,37 @@ def get_coordinates_and_labels(
   l2_y_pos = process_branch_level(l2_sugar, l2_y_pos, l2_connection, l3_sugar, l3_connection, l1_y_pos, l1_sugar)
   l3_y_pos = process_branch_level(l3_sugar, l3_y_pos, l3_connection, [], [], l2_y_pos, l2_sugar)
 
+  # Keep long level-1 branches separated so their antennas do not overlap
+  def collect_child_map(connections):
+    child_map = {}
+    for idx, (parent_branch, _) in enumerate(connections):
+      child_map.setdefault(parent_branch, []).append(idx)
+    return child_map
+
+  l1_children = collect_child_map(l2_connection) if l2_connection else {}
+  l2_children = collect_child_map(l3_connection) if l3_connection else {}
+  MIN_LONG_BRANCH_GAP = 1.25 * max(1.0, SPACING)
+
+  def offset_branch_stack(branch_idx, delta):
+    if delta <= 0:
+      return
+    l1_y_pos[branch_idx] = [y + delta for y in l1_y_pos[branch_idx]]
+    for l2_idx in l1_children.get(branch_idx, []):
+      l2_y_pos[l2_idx] = [y + delta for y in l2_y_pos[l2_idx]]
+      for l3_idx in l2_children.get(l2_idx, []):
+        l3_y_pos[l3_idx] = [y + delta for y in l3_y_pos[l3_idx]]
+
+  long_branches = [(idx, l1_y_pos[idx][0]) for idx, branch in enumerate(l1_sugar) if len(branch) > 1]
+  long_branches.sort(key = lambda item: item[1])
+  prev_y = None
+  for branch_idx, branch_y in long_branches:
+    if prev_y is not None:
+      gap = branch_y - prev_y
+      if gap < MIN_LONG_BRANCH_GAP:
+        offset_branch_stack(branch_idx, MIN_LONG_BRANCH_GAP - gap)
+        branch_y = l1_y_pos[branch_idx][0]
+    prev_y = branch_y
+
   def extract_conformation(sugar_modifications):
     conf_pattern = r'^L-|^D-|(\d,\d+lactone)'
     if sugar_modifications and isinstance(sugar_modifications[0], list):
@@ -1288,7 +1319,7 @@ def GlycoDraw(
   highlight = 'show' if highlight_motif == None else 'hide'
   if floaty_bits != []:
     fb_count = {i: floaty_bits.count(i) for i in floaty_bits}
-    floaty_bits = list(set(floaty_bits))
+    floaty_bits = list(dict.fromkeys(floaty_bits))
     floaty_data = []
     for k, k_val in enumerate(floaty_bits):
       if in_lib(min_process_glycans([k_val])[0][0], libr):

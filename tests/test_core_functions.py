@@ -3051,6 +3051,20 @@ def test_glycodraw():
         GlycoDraw("InvalidGlycan")
 
 
+def test_glycodraw_branch_spacing():
+    # Verify that heavily branched glycans keep long antennas separated vertically
+    glycan = canonicalize_iupac("FA3F2G3S[3,6,6]3")
+    data = get_coordinates_and_labels(glycan, show_linkage=True, highlight_motif=None,
+                                      termini_list=[], reverse_highlight=False)
+    l1_sugars, l1_y_pos = data[1][0], data[1][2]
+    # Extract y positions for branches that contain multiple residues (long arms)
+    long_branch_starts = sorted(ys[0] for sugars, ys in zip(l1_sugars, l1_y_pos) if len(sugars) > 1)
+    # Need at least two long arms to check spacing
+    assert len(long_branch_starts) >= 2
+    # Require a full symbol height (>=1.0) between each long arm so they do not overlap
+    assert all(abs(b - a) >= 1.0 for a, b in zip(long_branch_starts, long_branch_starts[1:]))
+
+
 @pytest.mark.parametrize("glycan", GLYCAN_TEST_CASES)
 def test_glycodraw_complex(glycan):
     result = GlycoDraw(glycan, suppress=True)
