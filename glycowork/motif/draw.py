@@ -6,7 +6,7 @@ from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices
 import matplotlib.pyplot as plt
 from io import BytesIO
-from typing import Dict, List, Tuple, Optional, Union, Any
+from typing import Any
 import networkx as nx
 import drawsvg as draw
 from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
@@ -117,7 +117,7 @@ def draw_hex(
     x_pos: float, # X coordinate of hexagon center
     y_pos: float, # Y coordinate of hexagon center
     dim: float, # Base dimension for scaling
-    col_dict: Dict[str, str], # Color mapping dictionary
+    col_dict: dict[str, str], # Color mapping dictionary
     drawing: draw.Drawing, # Glycan drawing to be modified
     color: str = 'white', # Fill color
     outline_only: bool = False # Whether to draw only the circumference
@@ -149,7 +149,7 @@ def add_customization(
     y_base: float, # Y coordinate of base position
     dim: float, # Base dimension for scaling
     modification: str, # Text annotation for modifications
-    col_dict: Dict[str, str], # Color mapping dictionary
+    col_dict: dict[str, str], # Color mapping dictionary
     conf: str = None, # Ring configuration text
     furanose: bool = False, # Draw furanose indicator
     text_anchor: str = 'middle' # Text alignment
@@ -181,7 +181,7 @@ def draw_shape(
     color: str, # SNFG color designation
     x_pos: float, # X coordinate of shape center
     y_pos: float, # Y coordinate of shape center
-    col_dict: Dict[str, str], # Color mapping dictionary
+    col_dict: dict[str, str], # Color mapping dictionary
     drawing: draw.Drawing, # Glycan drawing to be modified
     modification: str = '', # Text annotation for modifications
     dim: float = 50, # Base dimension for scaling
@@ -210,7 +210,6 @@ def draw_shape(
     gradient.add_stop(0.6, col_dict_scalar[color], opacity = opacity * 0.4)
     gradient.add_stop(1, 'white', opacity = 0)
     drawing.append(draw.Circle(x_base, y_base, half_dim * radius, fill = gradient))
-
   if shape == 'Hex':
     # Hexose - circle
     drawing.append(draw.Circle(x_base, y_base, half_dim, fill = col_dict[color], stroke_width = stroke_w, stroke = col_dict['black']))
@@ -475,8 +474,8 @@ def add_sugar(
 
 
 def process_bonds(
-    linkage_list: Union[List[str], List[List[str]]] # Glycosidic linkages
-    ) -> Union[List[str], List[List[str]]]: # Formatted linkage text
+    linkage_list: list[str] | list[list[str]] # Glycosidic linkages
+    ) -> list[str] | list[list[str]]: # Formatted linkage text
   "Formats glycosidic linkage text for visualization"
   ALPHA_PATTERN = re.compile(r"^a\d")
   BETA_PATTERN = re.compile(r"^b\d")
@@ -504,7 +503,7 @@ def process_bonds(
 def get_highlight_attribute(
     glycan_graph: nx.DiGraph, # NetworkX glycan graph
     motif_string: str, # Motif to highlight
-    termini_list: List = [], # Terminal position specifications
+    termini_list: list = [], # Terminal position specifications
     reverse_highlight: bool = False # Whether to highlight everything EXCEPT highlight_motif
     ) -> nx.DiGraph: # Graph with highlight attributes
   "Labels nodes in glycan graph based on presence in specified motif"
@@ -530,14 +529,14 @@ def process_repeat(
   return f'blank(?1-{repeat_connection[-1]}){backbone}{repeat_connection[:2]}-?)'
 
 
-def get_branches_from_graph(graph, main_chain, main_chain_sugars):
+def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_sugars: list):
   """Extract branch structures based on paths to lowest node index tips"""
   main_chain_set = set(main_chain)
   all_nodes = main_chain_set.copy()
   main_chain_sugars = sorted(main_chain_sugars, reverse = True)
 
   # Find branch by always following lowest node index
-  def follow_lowest_index_path(start_node):
+  def follow_lowest_index_path(start_node: int):
     path = [start_node]
     current = start_node
     while True:
@@ -552,7 +551,7 @@ def get_branches_from_graph(graph, main_chain, main_chain_sugars):
     bond_nodes = sorted([n for n in path if n % 2 == 1], reverse = True)
     return path, sugar_nodes, bond_nodes
 
-  def add_branch(branch_list, start_node, connection):
+  def add_branch(branch_list: list, start_node: int, connection: tuple):
     path, sugar_nodes, bond_nodes = follow_lowest_index_path(start_node)
     branch_list.append({
       'nodes': path, 'sugar_nodes': sugar_nodes,
@@ -560,7 +559,7 @@ def get_branches_from_graph(graph, main_chain, main_chain_sugars):
     })
     all_nodes.update(path)
 
-  def process_level(parent_level, parent_idx, connect_idx_getter):
+  def process_level(parent_level, parent_idx: int, connect_idx_getter):
     level = []
     for i, branch in enumerate(parent_level):
       for j, node in enumerate(branch['sugar_nodes']):
@@ -583,11 +582,11 @@ def get_branches_from_graph(graph, main_chain, main_chain_sugars):
 
 def get_coordinates_and_labels(
     draw_this: str, # IUPAC-condensed glycan sequence
-    highlight_motif: Optional[str], # Motif to highlight
+    highlight_motif: str | None, # Motif to highlight
     show_linkage: bool = True, # Show linkage labels
-    termini_list: List = [], # Terminal position specifications (from 'terminal', 'internal', and 'flexible')
+    termini_list: list = [], # Terminal position specifications (from 'terminal', 'internal', and 'flexible')
     reverse_highlight: bool = False # Whether to highlight everything EXCEPT highlight_motif
-) -> List[List]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
+) -> list[list]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
   "Calculates drawing coordinates and formats labels for glycan visualization"
   graph = glycan_to_nxGraph(draw_this, termini = 'calc' if termini_list else 'ignore')
   graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list, reverse_highlight = reverse_highlight)
@@ -607,7 +606,7 @@ def get_coordinates_and_labels(
 
   branch_level1, branch_level2, branch_level3 = get_branches_from_graph(graph, main_chain, main_label_sugar)
 
-  def process_branch_data(branches):
+  def process_branch_data(branches: list):
     sugar, sugar_mod, bond, connection, sugar_label, bond_label = [], [], [], [], [], []
     for branch in branches:
       # Extract sugar and bond labels
@@ -637,7 +636,7 @@ def get_coordinates_and_labels(
     main_sugar_x_pos[-1] -= 1
 
   # Calculate x positions for branches
-  def calculate_x_positions(sugars, connections, parent_x_positions, level = 1):
+  def calculate_x_positions(sugars: list, connections: list, parent_x_positions: list, level: int = 1):
     x_positions = []
     for j, branch in enumerate(sugars):
       if level == 1:
@@ -752,7 +751,7 @@ def get_coordinates_and_labels(
   l3_y_pos = process_branch_level(l3_sugar, l3_y_pos, l3_connection, [], [], l2_y_pos, l2_sugar)
 
   # Keep long level-1 branches separated so their antennas do not overlap
-  def collect_child_map(connections):
+  def collect_child_map(connections: list):
     child_map = {}
     for idx, (parent_branch, _) in enumerate(connections):
       child_map.setdefault(parent_branch, []).append(idx)
@@ -762,7 +761,7 @@ def get_coordinates_and_labels(
   l2_children = collect_child_map(l3_connection) if l3_connection else {}
   MIN_LONG_BRANCH_GAP = 1.25 * max(1.0, SPACING)
 
-  def offset_branch_stack(branch_idx, delta):
+  def offset_branch_stack(branch_idx: int, delta: float):
     if delta <= 0:
       return
     l1_y_pos[branch_idx] = [y + delta for y in l1_y_pos[branch_idx]]
@@ -782,7 +781,7 @@ def get_coordinates_and_labels(
         branch_y = l1_y_pos[branch_idx][0]
     prev_y = branch_y
 
-  def extract_conformation(sugar_modifications):
+  def extract_conformation(sugar_modifications: list):
     conf_pattern = r'^L-|^D-|(\d,\d+lactone)'
     if sugar_modifications and isinstance(sugar_modifications[0], list):
       return [[k.group() if k is not None else '' for k in j] for j in [[re.search(conf_pattern, k) for k in j] for j in sugar_modifications]], \
@@ -807,7 +806,7 @@ def get_coordinates_and_labels(
 
 def draw_bracket(
     x: float, # X coordinate
-    y_min_max: List[float], # [Min Y, Max Y] coordinates
+    y_min_max: list[float], # [Min Y, Max Y] coordinates
     drawing: draw.Drawing, # Glycan drawing to be modified
     direction: str = 'right', # Bracket direction ("left", "right")
     dim: float = 50, # Base dimension for scaling
@@ -857,8 +856,7 @@ def display_svg_with_matplotlib(
   height = svg_data.height if hasattr(svg_data, 'height') else 800
   # Convert to PNG with larger dimensions
   png_output = convert_svg_to_png(svg_data, output_width = width * size_multiplier,
-                                  output_height = height * size_multiplier, scale = 2.0, return_bytes = True,
-                                  chem = chem)
+                                  output_height = height * size_multiplier, scale = 2.0, return_bytes = True, chem = chem)
   # Use PIL to crop aggressively
   img = Image.open(BytesIO(png_output))
   bbox = img.convert('RGBA').getbbox()
@@ -879,9 +877,9 @@ def display_svg_with_matplotlib(
 
 def process_per_residue(
     draw_this: str, # reordered IUPAC-condensed glycan sequence
-    per_residue: List[float], # Scalar values per residue
+    per_residue: list[float], # Scalar values per residue
     glycan: str, # original IUPAC-condensed glycan sequence
-    ) -> Tuple[List[float], List[List[float]], List[List[float]]]: # (main chain values, side chain values, branched side chain values)
+    ) -> tuple[list[float], list[list[float]], list[list[float]]]: # (main chain values, side chain values, branched side chain values)
   "Maps per-residue scalar values to main chain, side chains, and branched side chains"
   if glycan != draw_this:
     g1 = glycan_to_nxGraph(glycan)
@@ -914,9 +912,9 @@ def process_per_residue(
 
 def process_per_linkage(
     draw_this: str, # reordered IUPAC-condensed glycan sequence
-    highlight_linkages: List[int], # Which linkages to highlight
+    highlight_linkages: list[int], # Which linkages to highlight
     glycan: str, # original IUPAC-condensed glycan sequence
-    ) -> Tuple[List[bool], List[List[bool]], List[List[bool]]]: # (main chain values, side chain values, branched side chain values)
+    ) -> tuple[list[bool], list[list[bool]], list[list[bool]]]: # (main chain values, side chain values, branched side chain values)
   "Maps which linkages to highlight to main chain, side chains, and branched side chains"
   per_linkage = [i in highlight_linkages for i in range(glycan.count('('))]
   if glycan != draw_this:
@@ -975,7 +973,7 @@ chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
 def get_hit_atoms_and_bonds(
     mol: Any, # RDKit molecule object
     smt: str # SMARTS pattern string
-    ) -> Tuple[List[int], List[int]]: # (matching atom indices, matching bond indices)
+    ) -> tuple[list[int], list[int]]: # (matching atom indices, matching bond indices)
   "Identifies atoms and bonds matching SMARTS pattern in molecule"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
   try:
@@ -995,8 +993,8 @@ def get_hit_atoms_and_bonds(
 
 
 def add_colours_to_map(
-    els: List[int], # Element indices
-    cols: Dict[int, List], # Color map dictionary
+    els: list[int], # Element indices
+    cols: dict[int, list], # Color map dictionary
     col_num: int, # Color index
     alpha: bool = True, # Use alpha-adjusted colors
     hex_codes: bool = True # Return hex color codes
@@ -1012,8 +1010,8 @@ def add_colours_to_map(
 
 def draw_chem2d(
     draw_this: str, # IUPAC-condensed glycan sequence
-    mono_list: List[str], # List of monosaccharides to highlight
-    filepath: Optional[Union[str, Path]] = None # Output file path
+    mono_list: list[str], # List of monosaccharides to highlight
+    filepath: str | Path | None = None # Output file path
     ) -> Any: # IPython SVG display object
   "Creates 2D chemical structure drawing with highlighted monosaccharides using RDKit"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
@@ -1025,10 +1023,8 @@ def draw_chem2d(
     from IPython.display import SVG
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
-
   mol = MolFromSmiles(IUPAC_to_SMILES([draw_this])[0])
   mol = PrepareMolForDrawing(mol)
-
   atom_colors, bond_colors = {}, {}
   for i, smarts in enumerate(IUPAC_to_SMILES(mono_list)):
     atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
@@ -1036,7 +1032,6 @@ def draw_chem2d(
     add_colours_to_map(bonds, bond_colors, i, hex_codes = False)
   atom_colors = {k: v for k, v in atom_colors.items() if len(v) == 1}
   bond_colors = {k: [v[0]] for k, v in bond_colors.items() if len(v) == 1}
-
   d = MolDraw2DSVG(250, 250)
   d.drawOptions().fillHighlights = True
   d.drawOptions().useBWAtomPalette()
@@ -1044,7 +1039,6 @@ def draw_chem2d(
   d.DrawMoleculeWithHighlights(mol, '', atom_colors, bond_colors, {}, {}, -1)
   d.FinishDrawing()
   svg_data = d.GetDrawingText()
-
   if filepath:
     filepath = Path(filepath)
     filepath = filepath.with_name(filepath.name.replace('?', '_'))
@@ -1058,9 +1052,9 @@ def draw_chem2d(
 
 def draw_chem3d(
     draw_this: str, # IUPAC-condensed glycan sequence
-    mono_list: List[str], # List of monosaccharides to highlight
-    filepath: Optional[Union[str, Path]] = None, # Output file path for PDB
-    pdb_file: Optional[Union[str, Path]] = None  # already existing glycan structure
+    mono_list: list[str], # List of monosaccharides to highlight
+    filepath: str | Path | None = None, # Output file path for PDB
+    pdb_file: str | Path | None = None  # already existing glycan structure
     ) -> None:
   "Generates 3D chemical structure model with highlighted monosaccharides using RDKit and py3Dmol"
   # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py and https://github.com/rdkit/rdkit/blob/master/Docs/Book/GettingStartedInPython.rst
@@ -1076,7 +1070,6 @@ def draw_chem3d(
       from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
-
   mol = MolFromSmiles(IUPAC_to_SMILES([draw_this])[0])
   atom_colors, bond_colors = {}, {}
   for i, smarts in enumerate(IUPAC_to_SMILES(mono_list)):
@@ -1084,7 +1077,6 @@ def draw_chem3d(
     add_colours_to_map(atoms, atom_colors, i, alpha = False)
     add_colours_to_map(bonds, bond_colors, i, alpha = False)
   atom_colors = {k: ['#ECECEC'] if len(v) > 1 else v for k, v in atom_colors.items()}
-
   if pdb_file:
     mol = MolFromPDBFile(str(pdb_file))
   else:
@@ -1093,14 +1085,12 @@ def draw_chem3d(
     MMFFOptimizeMolecule(mol)
     mol = RemoveHs(mol)
     print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
-
   if filepath:
     filepath = Path(filepath)
     if filepath.suffix.lower() == '.pdb':
       MolToPDBFile(mol, filepath)
     else:
       print("3D structure can only be saved as .pdb file.")
-
   if is_jupyter():
     v = py3Dmol.view(width = 500, height = 300)
     v.removeAllModels()
@@ -1116,8 +1106,7 @@ def draw_chem3d(
     drawer.drawOptions().addAtomIndices = False
     drawer.drawOptions().bondLineWidth = 2
     drawer.DrawMolecule(mol, highlightAtoms = list(atom_colors.keys()),
-                       highlightAtomColors = {k: tuple(int(v[0].lstrip('#')[i:i+2], 16)/255
-                                          for i in (0, 2, 4)) for k, v in atom_colors.items()})
+                       highlightAtomColors = {k: tuple(int(v[0].lstrip('#')[i:i+2], 16)/255 for i in (0, 2, 4)) for k, v in atom_colors.items()})
     drawer.FinishDrawing()
     display_svg_with_matplotlib(drawer.GetDrawingText(), chem = True)
 
@@ -1140,20 +1129,20 @@ def GlycoDraw(
     compact: bool = False, # Use compact style
     show_linkage: bool = True, # Show linkage labels
     dim: float = 50, # Base dimension for scaling
-    highlight_motif: Optional[str] = None, # Motif to highlight
-    highlight_termini_list: List = [], # Terminal positions (from 'terminal', 'internal', and 'flexible')
-    highlight_linkages: Optional[List[int]] = None, # Which linkages to highlight in a different color; indices, starting from 0, in glycan
+    highlight_motif: str | None = None, # Motif to highlight
+    highlight_termini_list: list = [], # Terminal positions (from 'terminal', 'internal', and 'flexible')
+    highlight_linkages: list[int] | None = None, # Which linkages to highlight in a different color; indices, starting from 0, in glycan
     reverse_highlight: bool = False, # Whether to highlight everything EXCEPT highlight_motif
-    repeat: Optional[Union[bool, int, str]] = None, # Repeat unit specification (True: n units, int: # of units, str: range of units)
-    repeat_range: Optional[List[int]] = None, # Repeat unit range
-    draw_method: Optional[str] = None, # Drawing method: None, 'chem2d', 'chem3d'
-    filepath: Optional[Union[str, Path]] = None, # Output file path
+    repeat: bool | int | str | None = None, # Repeat unit specification (True: n units, int: # of units, str: range of units)
+    repeat_range: list[int] | None = None, # Repeat unit range
+    draw_method: str | None = None, # Drawing method: None, 'chem2d', 'chem3d'
+    filepath: str | Path | None = None, # Output file path
     suppress: bool = False, # Suppress display
-    per_residue: List = [], # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
-    pdb_file: Optional[Union[str, Path]] = None,  # only used when draw_method='chem3d'; already existing glycan structure
-    alt_text: Optional[str] = None,  # Custom ALT text for accessibility
-    libr: dict = None,  # Can be modified for drawing too exotic monosaccharides
-    reducing_end_label: Optional[str] = None  # Label to be drawn connected to the reducing end
+    per_residue: list = [], # Per-residue intensity values (order should be the same as the monosaccharides in glycan string)
+    pdb_file: str | Path | None = None,  # only used when draw_method='chem3d'; already existing glycan structure
+    alt_text: str | None = None,  # Custom ALT text for accessibility
+    libr: dict | None = None,  # Can be modified for drawing too exotic monosaccharides
+    reducing_end_label: str | None = None  # Label to be drawn connected to the reducing end
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
   if any(k in glycan for k in [';', 'β', 'α', 'RES', '=']):
@@ -1400,10 +1389,10 @@ def GlycoDraw(
 
 
 def scale_in_range(
-    listy: List[float], # Numbers to normalize
+    listy: list[float], # Numbers to normalize
     a: float, # Target minimum
     b: float # Target maximum
-    ) -> List[float]: # Normalized numbers
+    ) -> list[float]: # Normalized numbers
   "Normalizes list of numbers to specified range"
   min_val = min(listy)
   max_val = max(listy)
@@ -1413,15 +1402,15 @@ def scale_in_range(
 
 def annotate_figure(
     svg_input: str, # Input SVG file path
-    scale_range: Tuple[int, int] = (25, 80), # Min/max glycan dimensions
+    scale_range: tuple[int, int] = (25, 80), # Min/max glycan dimensions
     compact: bool = False, # Use compact style
     glycan_size: str = 'medium', # Glycan size preset ('small', 'medium', 'large')
-    filepath: Union[str, Path] = '', # Output file path
-    scale_by_DE_res: Optional[pd.DataFrame] = None, # Differential expression results (motif_analysis.get_differential_expression)
+    filepath: str | Path = '', # Output file path
+    scale_by_DE_res: pd.DataFrame | None = None, # Differential expression results (motif_analysis.get_differential_expression)
     x_thresh: float = 1, # X metric threshold
     y_thresh: float = 0.05, # P-value threshold
     x_metric: str = 'Log2FC' # X axis metric ('Log2FC', 'Effect size')
-    ) -> Optional[str]: # Modified SVG code
+    ) -> str | None: # Modified SVG code
   "Replaces text labels with glycan drawings in SVG figure"
   glycan_size_dict = {
       'small': 'scale(0.1 0.1)  translate(0, -74)',
@@ -1498,8 +1487,8 @@ def annotate_figure(
 
 
 def plot_glycans_excel(
-    df: Union[pd.DataFrame, str, Path], # DataFrame or filepath with glycans
-    folder_filepath: Union[str, Path], # Output folder path
+    df: pd.DataFrame | str | Path, # DataFrame or filepath with glycans
+    folder_filepath: str | Path, # Output folder path
     glycan_col_num: int = 0, # Glycan column index
     scaling_factor: float = 0.2, # Image scaling
     compact: bool = False # Use compact style
