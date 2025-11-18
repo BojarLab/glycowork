@@ -335,7 +335,7 @@ def return_unconnected_to_root(network: nx.DiGraph, # Biosynthetic network
 
 
 def deorphanize_nodes(network: nx.DiGraph, # Biosynthetic network
-                     graph_dic: Dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
+                     graph_dic: dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
                      permitted_roots: frozenset[str] = permitted_roots, # Allowed root nodes
                      min_size: int = 1, # Minimum root size; default:1
                      allowed_ptms: frozenset[str] = allowed_ptms # Set of allowed PTMs

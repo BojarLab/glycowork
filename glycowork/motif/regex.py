@@ -191,7 +191,7 @@ def process_complex_pattern(p: str, # Pattern component
                           ggraph: nx.DiGraph, # Glycan graph
                           glycan: str, # Glycan in IUPAC-condensed
                           match_location: str | None # Location to match: start/end/internal
-                         ) -> list[list[int]] | bool] # Match node indices or False
+                         ) -> list[list[int]] | bool: # Match node indices or False
   "Check if complex glycomotif, containing regular expression modifiers, exists in glycan"
   if not any('-' in p_key for p_key in p2.keys()):
     p2_keys = [specify_linkages(replace_patterns(p_key + '-' if p_key[-1].isdigit() or p_key[-1] == '?' else p_key)) for p_key in p2.keys()]
@@ -325,10 +325,10 @@ def parse_pattern(pattern: str # Pattern component from glyco-regular motif
 
 def do_trace(start_pattern: tuple[str, list[list[int]]], # (Pattern, Match indices)
             idx: int, # Current pattern index
-            pattern_matches: List[Tuple[str, List[List[int]]]], # List of (Pattern, Matches)
-            optional_components: Dict[str, Tuple[int, int]], # Pattern to min/max occurrences
-            edges: List[Tuple[int, int]] # Graph edges
-           ) -> Tuple[List[List[int]], List[List[str]]]: # (Match traces, Used patterns)
+            pattern_matches: list[tuple[str, list[list[int]]]], # List of (Pattern, Matches)
+            optional_components: dict[str, tuple[int, int]], # Pattern to min/max occurrences
+            edges: list[tuple[int, int]] # Graph edges
+           ) -> tuple[list[list[int]], list[list[str]]]: # (Match traces, Used patterns)
   "Try to extend current trace through pattern component matches"
   all_traces, all_used_patterns = [], []
   for start_match in start_pattern[1]:
@@ -426,7 +426,7 @@ def compile_pattern(pattern: str # Glyco-regular expression, e.g., "Hex-HexNAc-(
 def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
               glycan: str | nx.DiGraph, # Glycan string or graph
               return_matches: bool = True # Whether to return matches vs boolean
-             ) -> Union[bool, list[str]]: # Match results
+             ) -> bool | list[str]: # Match results
   "Find matches for glyco-regular expression in glycan"
   pattern = pattern[1:] if isinstance(pattern, str) and pattern.startswith('r') else pattern
   global lookahead_snuck_in
