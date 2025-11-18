@@ -2,14 +2,13 @@ import re
 import copy
 import networkx as nx
 from itertools import product, combinations, chain
-from typing import Dict, List, Union, Optional, Tuple
 from glycowork.glycan_data.loader import replace_every_second, unwrap, share_neighbor
 from glycowork.motif.processing import min_process_glycans, bracket_removal, canonicalize_iupac
 from glycowork.motif.graph import graph_to_string, subgraph_isomorphism, compare_glycans, glycan_to_nxGraph
 
 
 def preprocess_pattern(pattern: str # Glyco-regular expression like "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-                     ) -> List[str]: # List of pattern chunks
+                     ) -> list[str]: # List of pattern chunks
   "Transform glyco-regular expression into chunks"
   # Use regular expression to identify the conditional parts and keep other chunks together
   pattern = pattern.replace('.', 'Monosaccharide')
@@ -37,7 +36,7 @@ def replace_patterns(s: str # String to process
 
 
 def process_occurrence(occ_str: str # Content between {} of pattern component
-                     ) -> List[int]: # [min_occurrence, max_occurrence]
+                     ) -> list[int]: # [min_occurrence, max_occurrence]
   "Process min/max occurrence of pattern component"
   occ = occ_str.split(',')
   if len(occ) == 1:
@@ -47,7 +46,7 @@ def process_occurrence(occ_str: str # Content between {} of pattern component
 
 def process_question_mark(s: str, # Original pattern component
                         p: str # Content between [] in pattern
-                       ) -> Tuple[List[int], List[str]]: # ([occurrences], [patterns])
+                       ) -> tuple[list[int], list[str]]: # ([occurrences], [patterns])
   "Process components with lookahead/behind or ? characters"
   if '?<' in s:
     occurrence = [1]
@@ -63,7 +62,7 @@ def process_question_mark(s: str, # Original pattern component
 
 
 def convert_pattern_component(pattern_component: str # Chunk of glyco-regular expression
-                           ) -> Union[str, Dict[str, List[int]]]: # String or dict mapping to occurrences
+                           ) -> str | dict[str, list[int]]: # String or dict mapping to occurrences
   "Process pattern component into string or occurrence dictionary"
   if not any([k in pattern_component for k in ['[', '{', '*', '+', '=', '<!', '?!']]):
     if pattern_component[-1].isdigit() or pattern_component.endswith('?'):
@@ -89,8 +88,8 @@ def convert_pattern_component(pattern_component: str # Chunk of glyco-regular ex
 
 
 def process_main_branch(glycan: str, # Glycan in IUPAC-condensed
-                       glycan_parts: List[str] # List of glycoletters as returned by min_process_glycans
-                      ) -> List[str]: # Node index list with non-main chain nodes as empty strings
+                       glycan_parts: list[str] # List of glycoletters as returned by min_process_glycans
+                      ) -> list[str]: # Node index list with non-main chain nodes as empty strings
   "Extract main chain node indices of glycan"
   glycan_dic = {i: p for i,p in enumerate(glycan_parts)}
   glycan2 = bracket_removal(glycan)
@@ -107,10 +106,10 @@ def process_main_branch(glycan: str, # Glycan in IUPAC-condensed
   return list(glycan_dic.values())
 
 
-def check_negative_look(matches: List[List[int]], # List of node index lists for matches
+def check_negative_look(matches: list[list[int]], # List of node index lists for matches
                        pattern: str, # Glyco-regular expression
                        glycan: str # Glycan in IUPAC-condensed
-                      ) -> List[List[int]]: # Filtered matches
+                      ) -> list[list[int]]: # Filtered matches
   "Filter matches by negative lookahead/behind conditions"
   glycan_parts = min_process_glycans([glycan])[0]
   glycan_parts_main = process_main_branch(glycan, glycan_parts)
@@ -138,10 +137,10 @@ def check_negative_look(matches: List[List[int]], # List of node index lists for
   return [m for i, m in enumerate(matches) if not compare_glycans(target_locs[i], part)]
 
 
-def filter_matches_by_location(matches: List[List[int]], # List of node index lists
+def filter_matches_by_location(matches: list[list[int]], # List of node index lists
                              ggraph: nx.DiGraph, # Glycan graph
-                             match_location: Optional[str] # Location to match: start/end/internal
-                            ) -> List[List[int]]: # Filtered matches
+                             match_location: str | None # Location to match: start/end/internal
+                            ) -> list[list[int]]: # Filtered matches
   "Filter matches by location requirement"
   if matches and matches[0] and matches[0][0] and isinstance(matches[0][0], list):
     matches = unwrap(matches)
@@ -158,8 +157,8 @@ def filter_matches_by_location(matches: List[List[int]], # List of node index li
 
 def process_simple_pattern(p2: nx.DiGraph, # Glycomotif graph
                          ggraph: nx.DiGraph, # Glycan graph
-                         match_location: Optional[str] # Location to match: start/end/internal
-                        ) -> Union[List[List[int]], bool]: # Match node indices or False
+                         match_location: str | None # Location to match: start/end/internal
+                        ) -> list[list[int]] | bool: # Match node indices or False
   "Check if simple glycomotif exists in glycan"
   matched, matches = subgraph_isomorphism(ggraph, p2, return_matches = True)
   if not matched or not matches:
@@ -173,8 +172,8 @@ def process_simple_pattern(p2: nx.DiGraph, # Glycomotif graph
   return [m for m in matches if all(x < y for x, y in zip(m, m[1:]))]
 
 
-def calculate_len_matches_comb(len_matches: List[List[int]] # List of match lengths
-                            ) -> List[int]: # Combined match lengths
+def calculate_len_matches_comb(len_matches: list[list[int]] # List of match lengths
+                            ) -> list[int]: # Combined match lengths
   "Calculate lengths considering combinations of matches"
   if not len_matches:
     return [0]
@@ -188,11 +187,11 @@ def calculate_len_matches_comb(len_matches: List[List[int]] # List of match leng
 
 
 def process_complex_pattern(p: str, # Pattern component
-                          p2: Dict[str, List[int]], # Dict mapping pattern to occurrences
+                          p2: dict[str, list[int]], # Dict mapping pattern to occurrences
                           ggraph: nx.DiGraph, # Glycan graph
                           glycan: str, # Glycan in IUPAC-condensed
-                          match_location: Optional[str] # Location to match: start/end/internal
-                         ) -> Union[List[List[int]], bool]: # Match node indices or False
+                          match_location: str | None # Location to match: start/end/internal
+                         ) -> list[list[int]] | bool] # Match node indices or False
   "Check if complex glycomotif, containing regular expression modifiers, exists in glycan"
   if not any('-' in p_key for p_key in p2.keys()):
     p2_keys = [specify_linkages(replace_patterns(p_key + '-' if p_key[-1].isdigit() or p_key[-1] == '?' else p_key)) for p_key in p2.keys()]
@@ -236,10 +235,10 @@ def process_complex_pattern(p: str, # Pattern component
   return matches
 
 
-def match_it_up(pattern_components: List[str], # Pattern chunks
+def match_it_up(pattern_components: list[str], # Pattern chunks
                 glycan: str, # Glycan in IUPAC-condensed
                 ggraph: nx.DiGraph # Glycan graph
-               ) -> List[Tuple[str, List[List[int]]]]: # [(pattern, matches)]
+               ) -> list[tuple[str, list[list[int]]]]: # [(pattern, matches)]
   "Find pattern component matches in glycan"
   pattern_matches = []
   for p in pattern_components:
@@ -256,10 +255,10 @@ def match_it_up(pattern_components: List[str], # Pattern chunks
   return pattern_matches
 
 
-def all_combinations(nested_list: List[List[int]], # List of match indices
+def all_combinations(nested_list: list[list[int]], # List of match indices
                     min_len: int = 1, # Minimum combination length
                     max_len: int = 2 # Maximum combination length
-                   ) -> List[Tuple[int, ...]]: # Possible index combinations
+                   ) -> list[tuple[int, ...]]: # Possible index combinations
   "Create possible combinations from nested list of matches"
   # Flatten each sublist for intra-list combinations
   if isinstance(nested_list[0][0], int):
@@ -279,13 +278,13 @@ def all_combinations(nested_list: List[List[int]], # List of match indices
   return sorted(intra_list_combinations | inter_list_combinations)
 
 
-def try_matching(current_trace: List[int], # Current match indices
-                all_match_nodes: List[List[int]], # Next component matches
-                edges: List[Tuple[int, int]], # Graph edges
+def try_matching(current_trace: list[int], # Current match indices
+                all_match_nodes: list[list[int]], # Next component matches
+                edges: list[tuple[int, int]], # Graph edges
                 min_occur: int = 1, # Minimum occurrences; default:1
                 max_occur: int = 1, # Maximum occurrences; default:1
                 branch: bool = False # Whether to search different branch for next pattern component; default:False
-               ) -> Union[List[List[int]], bool]: # Extended trace or False
+               ) -> list[list[int]] | bool: # Extended trace or False
   "Try extending current trace to next pattern matches"
   if max_occur == 0 and branch:
     return True
@@ -311,7 +310,7 @@ def try_matching(current_trace: List[int], # Current match indices
 
 
 def parse_pattern(pattern: str # Pattern component from glyco-regular motif
-                ) -> Tuple[int, int]: # (Minimum occurrence, Maximum occurrence)
+                ) -> tuple[int, int]: # (Minimum occurrence, Maximum occurrence)
   "Extract occurrence limits from glyco-regular motif pattern"
   temp = pattern.split('{')[1].split('}')[0].split(',') if '{' in pattern else None
   min_occur, max_occur = (int(temp[0]), int(temp[0])) if temp and len(temp) == 1 else \
@@ -324,7 +323,7 @@ def parse_pattern(pattern: str # Pattern component from glyco-regular motif
   return min_occur, max_occur
 
 
-def do_trace(start_pattern: Tuple[str, List[List[int]]], # (Pattern, Match indices)
+def do_trace(start_pattern: tuple[str, list[list[int]]], # (Pattern, Match indices)
             idx: int, # Current pattern index
             pattern_matches: List[Tuple[str, List[List[int]]]], # List of (Pattern, Matches)
             optional_components: Dict[str, Tuple[int, int]], # Pattern to min/max occurrences
@@ -362,9 +361,9 @@ def do_trace(start_pattern: Tuple[str, List[List[int]]], # (Pattern, Match indic
   return all_traces, all_used_patterns
 
 
-def trace_path(pattern_matches: List[Tuple[str, List[List[int]]]], # [(pattern, matches)]
+def trace_path(pattern_matches: list[tuple[str, list[list[int]]]], # [(pattern, matches)]
               ggraph: nx.DiGraph # Glycan graph
-             ) -> Tuple[List[List[int]], List[List[str]]]: # (traces, used patterns)
+             ) -> tuple[list[list[int]], list[list[str]]]: # (traces, used patterns)
   "Connect pattern component matches into complete traces"
   all_traces, all_used_patterns = [], []
   patterns = [p[0] for p in pattern_matches]
@@ -386,8 +385,8 @@ def trace_path(pattern_matches: List[Tuple[str, List[List[int]]]], # [(pattern, 
   return all_traces, all_used_patterns
 
 
-def fill_missing_in_list(lists: List[List[int]] # Lists of indices
-                       ) -> List[List[int]]: # Lists with gaps filled
+def fill_missing_in_list(lists: list[list[int]] # Lists of indices
+                       ) -> list[list[int]]: # Lists with gaps filled
   "Fill missing integers in lists to make full ranges"
   if lookahead_snuck_in:
     lists = [le[:-1] for le in lists]
@@ -410,24 +409,24 @@ def fill_missing_in_list(lists: List[List[int]] # Lists of indices
   return [list(tpl) for tpl in unique_tuples]
 
 
-def format_retrieved_matches(lists: List[List[int]], # List of traces
+def format_retrieved_matches(lists: list[list[int]], # List of traces
                            ggraph: nx.DiGraph # Glycan graph
-                          ) -> List[str]: # Matching glycan strings
+                          ) -> list[str]: # Matching glycan strings
   "Convert traces into glycan strings"
   return sorted([canonicalize_iupac(graph_to_string(ggraph.subgraph(trace))) for trace in lists if nx.is_weakly_connected(ggraph.subgraph(trace))], key = len, reverse = True)
 
 
 def compile_pattern(pattern: str # Glyco-regular expression, e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-                  ) -> List[str]: # Pre-compiled pattern chunks
+                  ) -> list[str]: # Pre-compiled pattern chunks
   "Pre-compile glyco-regular expression for faster processing"
   pattern = pattern[1:] if pattern.startswith('r') else pattern
   return preprocess_pattern(pattern)
 
 
-def get_match(pattern: Union[str, List[str]], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-              glycan: Union[str, nx.DiGraph], # Glycan string or graph
+def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
+              glycan: str | nx.DiGraph, # Glycan string or graph
               return_matches: bool = True # Whether to return matches vs boolean
-             ) -> Union[bool, List[str]]: # Match results
+             ) -> Union[bool, list[str]]: # Match results
   "Find matches for glyco-regular expression in glycan"
   pattern = pattern[1:] if isinstance(pattern, str) and pattern.startswith('r') else pattern
   global lookahead_snuck_in
@@ -452,9 +451,9 @@ def get_match(pattern: Union[str, List[str]], # Expression or pre-compiled patte
 
 
 def get_match_batch(pattern: str, # Glyco-regular expression; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
-                   glycan_list: List[Union[str, nx.DiGraph]], # List of glycans
+                   glycan_list: list[str | nx.DiGraph], # List of glycans
                    return_matches: bool = True # Whether to return matches vs boolean
-                  ) -> Union[List[bool], List[List[str]]]: # Match results for each glycan
+                  ) -> list[bool] | list[list[str]]: # Match results for each glycan
   "Find glyco-regular expression matches in list of glycans"
   pattern = compile_pattern(pattern)
   return [get_match(pattern, g, return_matches = return_matches) for g in glycan_list]

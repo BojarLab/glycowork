@@ -3,8 +3,8 @@
 ## [1.7.0]
 - Added some more lazy loading of drawing-related imports to improve package start-up time (b806bdd)
 - `glycowork` now requires at least version `0.2.3` of `glycorender[png]` (d51c0eb)
-- `glycowork` now requires `Python>=3.10`, as 3.9 is no longer supported by the Python Foundation
-- switched type hints to native type hints (supported from Python 3.10)
+- `glycowork` now requires `Python>=3.10`, as 3.9 is no longer supported by the Python Foundation (2b8838c)
+- switched type hints to native type hints (supported from Python 3.10) (2b8838c)
 
 ### motif
 #### processing

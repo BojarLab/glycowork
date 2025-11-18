@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-from typing import Dict, List, Union, Optional, Callable
+from typing import Callable
 from scipy.spatial.distance import cosine, squareform
 from scipy.cluster.hierarchy import dendrogram, linkage
 from glycowork.motif.graph import subgraph_isomorphism
@@ -19,9 +19,9 @@ with open(data_path, 'rb') as f:
   net_dic = pickle.load(f)
 
 
-def calculate_distance_matrix(to_compare: Union[Dict[str, List], List], # Objects to compare - dict values must be lists
-                            dist_func: Callable[[List, List], float], # Distance function such as jaccard or cosine
-                            label_list: Optional[List[str]] = None # Column names for distance matrix
+def calculate_distance_matrix(to_compare: dict[str, list] | list, # Objects to compare - dict values must be lists
+                            dist_func: Callable[[list, list], float], # Distance function such as jaccard or cosine
+                            label_list: list[str] | None = None # Column names for distance matrix
                            ) -> pd.DataFrame: # Square distance matrix
   "Calculate pairwise distances between objects using provided metric"
   n = len(to_compare)
@@ -70,8 +70,8 @@ def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) a
   return calculate_distance_matrix(avg_values, cosine, label_list = valid_ranks)
 
 
-def jaccard(list1: Union[List, nx.Graph], # First list/network to compare
-            list2: Union[List, nx.Graph] # Second list/network to compare
+def jaccard(list1: list | nx.Graph, # First list/network to compare
+            list2: list | nx.Graph # Second list/network to compare
            ) -> float: # Jaccard distance
   "Calculate Jaccard distance between two lists/networks"
   intersection = len(set(list1).intersection(list2))
@@ -80,7 +80,7 @@ def jaccard(list1: Union[List, nx.Graph], # First list/network to compare
 
 
 def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and taxonomic info (columns)
-                        networks: List[nx.Graph], # List of networkx networks
+                        networks: list[nx.Graph], # List of networkx networks
                         metric: str = "Jaccard", # Distance metric to use
                         cut_off: int = 10, # Minimum glycans per rank to be included; default:10
                         rank: str = "Species" # Taxonomic rank for grouping; default:Species
@@ -122,17 +122,16 @@ def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.
       show_contracted = True,  # To get a distribution impression in truncated branches
       )
   if len(filepath) > 1:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300,
-                bbox_inches = 'tight')
+    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
 
 
 def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
                       df: pd.DataFrame, # DataFrame with glycans (rows) and taxonomic levels (columns)
-                      network_dic: Optional[Dict[str, nx.Graph]] = None, # Species:biosynthetic network mapping
+                      network_dic: dict[str, nx.Graph] | None = None, # Species:biosynthetic network mapping
                       rank: str = 'Order', # Taxonomic level to assess
                       threshold: int = 5, # Minimum glycans per species to be included
                       motif: bool = False # Whether glycan is a motif vs sequence
-                     ) -> Dict[str, float]: # Taxonomic group-to-conservation mapping
+                     ) -> dict[str, float]: # Taxonomic group-to-conservation mapping
   "Estimate evolutionary conservation of glycans via biosynthetic networks"
   if network_dic is None:
     network_dic = net_dic
@@ -162,9 +161,9 @@ def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
   return conserved
 
 
-def get_communities(network_list: List[nx.Graph], # List of undirected biosynthetic networks
-                   label_list: Optional[List[str]] = None # Labels for community names, running_number + _ + label_list[k]  for network_list[k]; default:range(len(graph_list))
-                  ) -> Dict[str, List[str]]: # Community-to-glycan list mapping
+def get_communities(network_list: list[nx.Graph], # List of undirected biosynthetic networks
+                   label_list: list[str] | None = None # Labels for community names, running_number + _ + label_list[k]  for network_list[k]; default:range(len(graph_list))
+                  ) -> dict[str, list[str]]: # Community-to-glycan list mapping
   "Find communities for each graph in list of graphs"
   if label_list is None:
     label_list = list(range(len(network_list)))
