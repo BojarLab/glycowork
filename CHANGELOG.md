@@ -1,7 +1,10 @@
 # Changelog
 
-## [1.6.5]
+## [1.7.0]
 - Added some more lazy loading of drawing-related imports to improve package start-up time (b806bdd)
+- `glycowork` now requires at least version `0.2.3` of `glycorender[png]` (d51c0eb)
+- `glycowork` now requires `Python>=3.10`, as 3.9 is no longer supported by the Python Foundation
+- switched type hints to native type hints (supported from Python 3.10)
 
 ### motif
 #### processing
@@ -9,7 +12,7 @@
 - Added the `verbose` keyword argument (default = True) to `glytoucan_to_glycan`, to suppress the output of non-matched IDs (aa0b9a4)
 - Added the `kcf_to_iupac` function to convert the KCF nomenclature into IUPAC-condensed (bfe947c, 37fad0d)
 - Added the `glycoctxml_to_iupac` function to convert the GlycoCT XML nomenclature into IUPAC-condensed (3d967b6)
-- Added the `is_composition` utility function to quickly check whether a string is a composition or a glycan
+- Added the `is_composition` utility function to quickly check whether a string is a composition or a glycan (dcd3ffe)
 
 ##### Changed 🔄
 - Improved the detection of `LinearCode` sequences in `canonicalize_iupac` with the new `looks_like_linearcode` helper function (e26566e)
@@ -29,14 +32,14 @@
 #### draw
 ##### Added ✨
 - Added the `reducing_end_label` keyword argument to `GlycoDraw` to display any connected text to the right of the glycan (such as "protein", which will be connected via a regular linkage) (c36a1a6)
-- Added the `GlycanDrawing` class to allow `GlycoDraw` to output `glycorender` aesthetics in a Jupyter notebook context
+- Added the `GlycanDrawing` class to allow `GlycoDraw` to output `glycorender` aesthetics in a Jupyter notebook context (d51c0eb)
 
 #### annotate
 ##### Added ✨
 - Added the `get_glycan_similarity` function to calculate cosine similarities between glycan motif fingerprints between two glycan sequences (bd4d071)
 
 ##### Changed 🔄
-- `get_k_saccharides` now has limited support to extract information from inputs that are a mix of sequences and compositions; namely monosaccharide counts, when `up_to = True`
+- `get_k_saccharides` now has limited support to extract information from inputs that are a mix of sequences and compositions; namely monosaccharide counts, when `up_to = True` (dcd3ffe)
 
 ### ml
 #### model_training

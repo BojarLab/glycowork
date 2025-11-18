@@ -1,7 +1,7 @@
 import networkx as nx
 from copy import deepcopy
 from random import getrandbits, random
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from glycowork.motif.graph import glycan_to_nxGraph
 from glycowork.motif.tokenization import map_to_basic
 from glycowork.motif.processing import de_wildcard_glycoletter
@@ -29,7 +29,7 @@ bond_map = {Chem.BondDir.BEGINDASH: 1, Chem.BondDir.BEGINWEDGE: 2, Chem.BondDir.
 
 
 def augment_glycan(glycan_data: torch.utils.data.Dataset, # glycan as a networkx graph
-                  libr: Dict[str, int], # dictionary of glycoletter:index
+                  libr: dict[str, int], # dictionary of glycoletter:index
                   generalization_prob: float = 0.2 # probability of wildcarding monosaccharides/linkages
                  ) -> torch.utils.data.Dataset: # data object with partially wildcarded glycan
   "Augment a single glycan by wildcarding some of its monosaccharides or linkages"
@@ -45,7 +45,7 @@ def augment_glycan(glycan_data: torch.utils.data.Dataset, # glycan as a networkx
 
 class AugmentedGlycanDataset(torch.utils.data.Dataset):
   def __init__(self, dataset: torch.utils.data.Dataset, # base dataset
-                 libr: Dict[str, int], # dictionary of glycoletter:index
+                 libr: dict[str, int], # dictionary of glycoletter:index
                  augment_prob: float = 0.5, # probability of augmentation
                  generalization_prob: float = 0.2 # probability of wildcarding
                 ) -> None:
@@ -65,11 +65,11 @@ class AugmentedGlycanDataset(torch.utils.data.Dataset):
     return glycan_data
 
 
-def dataset_to_graphs(glycan_list: List[str], # list of IUPAC-condensed glycan sequences
-                     labels: List[Union[float, int]], # list of labels
-                     libr: Optional[Dict[str, int]] = None, # dictionary of glycoletter:index
+def dataset_to_graphs(glycan_list: list[str], # list of IUPAC-condensed glycan sequences
+                     labels: list[float | int], # list of labels
+                     libr: dict[str, int] | None = None, # dictionary of glycoletter:index
                      label_type: torch.dtype = torch.long # tensor type for label
-                    ) -> List[torch.utils.data.Dataset]: # list of node/edge/label data tuples
+                    ) -> list[torch.utils.data.Dataset]: # list of node/edge/label data tuples
   "wrapper function to convert a whole list of glycans into a graph dataset"
   if libr is None:
     libr = lib
@@ -89,13 +89,13 @@ def dataset_to_graphs(glycan_list: List[str], # list of IUPAC-condensed glycan s
   return data
 
 
-def dataset_to_dataloader(glycan_list: List[str], # list of IUPAC-condensed glycans
-                         labels: List[Union[float, int]], # list of labels
-                         libr: Optional[Dict[str, int]] = None, # dictionary of glycoletter:index
+def dataset_to_dataloader(glycan_list: list[str], # list of IUPAC-condensed glycans
+                         labels: list[float | int], # list of labels
+                         libr: dict[str, int] | None = None, # dictionary of glycoletter:index
                          batch_size: int = 32, # samples per batch
                          shuffle: bool = True, # shuffle samples in dataloader
                          drop_last: bool = False, # drop last batch
-                         extra_feature: Optional[List[float]] = None, # additional input features
+                         extra_feature: list[float] | None = None, # additional input features
                          label_type: torch.dtype = torch.long, # tensor type for label
                          augment_prob: float = 0., # probability of data augmentation
                          generalization_prob: float = 0.2 # probability of wildcarding
@@ -114,19 +114,19 @@ def dataset_to_dataloader(glycan_list: List[str], # list of IUPAC-condensed glyc
   return DataLoader(augmented_dataset, batch_size = batch_size, shuffle = shuffle, drop_last = drop_last)
 
 
-def split_data_to_train(glycan_list_train: List[str], # training glycans
-                       glycan_list_val: List[str], # validation glycans
-                       labels_train: List[Union[float, int]], # training labels
-                       labels_val: List[Union[float, int]], # validation labels
-                       libr: Optional[Dict[str, int]] = None, # dictionary of glycoletter:index
+def split_data_to_train(glycan_list_train: list[str], # training glycans
+                       glycan_list_val: list[str], # validation glycans
+                       labels_train: list[float | int], # training labels
+                       labels_val: list[float | int], # validation labels
+                       libr: dict[str, int] | None = None, # dictionary of glycoletter:index
                        batch_size: int = 32, # samples per batch
                        drop_last: bool = False, # drop last batch
-                       extra_feature_train: Optional[List[float]] = None, # additional training features
-                       extra_feature_val: Optional[List[float]] = None, # additional validation features
+                       extra_feature_train: list[float] | None = None, # additional training features
+                       extra_feature_val: list[float] | None = None, # additional validation features
                        label_type: torch.dtype = torch.long, # tensor type for label
                        augment_prob: float = 0., # probability of data augmentation
                        generalization_prob: float = 0.2 # probability of wildcarding
-                      ) -> Dict[str, torch.utils.data.DataLoader]: # dictionary of train/val dataloaders
+                      ) -> dict[str, torch.utils.data.DataLoader]: # dictionary of train/val dataloaders
   "wrapper function to convert split training/test data into dictionary of dataloaders"
   if libr is None:
     libr = lib
@@ -165,12 +165,12 @@ class HeteroDataBatch:
             v[key] = value.to(device)
     return self
 
-  def __getitem__(self,item: str) -> Any:
+  def __getitem__(self, item: str) -> Any:
     """Get attribute from the object"""
     return getattr(self, item)
 
 
-def hetero_collate(data: Optional[Union[list[list[HeteroData]], list[HeteroData]]],  # list of HeteroData objects
+def hetero_collate(data: list[list[HeteroData]] | list[HeteroData] | None,  # list of HeteroData objects
                    *args, **kwargs
                    ) -> HeteroDataBatch:  # HeteroDataBatch object of the collated input samples
   """Collate a list of HeteroData objects to a batch thereof"""
@@ -287,7 +287,7 @@ class HeteroDataset(Dataset):
 
 
 def nx2mol(G: nx.Graph,  # graph representing a molecule
-           sanitize = True  # bool flag indicating to sanitize the resulting molecule (should be True for "production mode" and False when debugging this function)
+           sanitize: bool = True  # bool flag indicating to sanitize the resulting molecule (should be True for "production mode" and False when debugging this function)
            ) -> Chem.Mol:  # converted, sanitized molecules in RDKit represented by the input graph
   """Convert a molecules from a networkx.Graph to RDKit"""
   # Create the molecule
@@ -311,7 +311,7 @@ def nx2mol(G: nx.Graph,  # graph representing a molecule
 
 
 def clean_tree(tree: nx.Graph  # tree to clean
-               ) -> Optional[nx.Graph]:  # cleaned tree
+               ) -> nx.Graph | None:  # cleaned tree
   """Clean the tree from unnecessary node features and store only the IUPAC name"""
   for node in tree.nodes:
     attrs = deepcopy(tree.nodes[node])
@@ -324,7 +324,7 @@ def clean_tree(tree: nx.Graph  # tree to clean
 
 
 def iupac2mol(iupac: str  # IUPAC-condensed string of the glycan to convert
-              ) -> Optional[HeteroData]:  # HeteroData object containing the IUPAC string, the SMILES representation, the RDKit molecule, and the monosaccharide tree
+              ) -> HeteroData | None:  # HeteroData object containing the IUPAC string, the SMILES representation, the RDKit molecule, and the monosaccharide tree
   """Convert a glycan stored given as IUPAC-condensed string into an RDKit molecule while keeping the information of which atom and which bond belongs to which monosaccharide"""
   if "{" in iupac or "?" in iupac:
     return None

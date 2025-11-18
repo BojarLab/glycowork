@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Tuple, Union, Literal
+from typing import Literal
 import warnings
 import numpy as np
 try:
@@ -41,7 +41,7 @@ class SweetNet(torch.nn.Module):
     self.act2 = torch.nn.LeakyReLU()
 
   def forward(self, x: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
-            inference: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+            inference: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
     # Getting node features
     x = self.item_embedding(x).squeeze(1)
     # Graph convolution operations
@@ -139,7 +139,7 @@ class LectinOracle(torch.nn.Module):
     self.sigmoid = SigmoidRange(self.data_min, self.data_max)
 
   def forward(self, prot: torch.Tensor, nodes: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
-              inference: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+              inference: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # Fully connected part for the protein
     embedded_prot = self.bn_prot1(self.act_prot1(self.dp_prot1(self.prot_encoder1(prot))))
     embedded_prot = self.bn_prot2(self.act_prot2(self.dp_prot2(self.prot_encoder2(embedded_prot))))
@@ -220,7 +220,7 @@ class LectinOracle_flex(torch.nn.Module):
     self.sigmoid = SigmoidRange(self.data_min, self.data_max)
 
   def forward(self, prot: torch.Tensor, nodes: torch.Tensor, edge_index: torch.Tensor, batch: torch.Tensor,
-              inference: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+              inference: bool = False) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # ESM-1b mimicking
     prot = self.dp1(self.act1(self.bn1(self.fc1(prot))))
     prot = self.dp2(self.act2(self.bn2(self.fc2(prot))))
@@ -296,7 +296,7 @@ class GIFFLAR(torch.nn.Module):
               batch: HeteroDataBatch,  # batch of data to process
               embeddings: bool = False,  # Whether to return embeddings or predictions
               *args, **kwargs
-              ) -> Union[torch.Tensor, dict]:  # node embeddings
+              ) -> torch.Tensor | dict:  # node embeddings
     """Compute the node embeddings"""
     batch.x_dict["atoms"] = self.atom_embedding.forward(batch.x_dict["atoms"])
     batch.x_dict["bonds"] = self.bond_embedding.forward(batch.x_dict["bonds"])
@@ -339,7 +339,7 @@ def init_weights(model: torch.nn.Module, # neural network for analyzing glycans
 
 def prep_model(model_type: Literal["SweetNet", "GIFFLAR", "LectinOracle", "LectinOracle_flex", "NSequonPred"], # type of model to create
               num_classes: int, # number of unique classes for classification
-              libr: Optional[Dict[str, int]] = None, # dictionary of form glycoletter:index
+              libr: dict[str, int] | None = None, # dictionary of form glycoletter:index
               trained: bool = False, # whether to use pretrained model
               hidden_dim: int = 128 # hidden dimension for the model (SweetNet only)
              ) -> torch.nn.Module: # initialized PyTorch model

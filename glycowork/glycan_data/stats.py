@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import warnings
-from typing import Dict, List, Optional, Tuple, Union
 from collections import Counter
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
@@ -23,10 +22,10 @@ rng = np.random.default_rng(42)
 np.random.seed(0)
 
 
-def cohen_d(x: Union[np.ndarray, List[float]], # comparison group containing numerical data
-           y: Union[np.ndarray, List[float]], # comparison group containing numerical data
+def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical data
+           y: np.ndarray | list[float], # comparison group containing numerical data
            paired: bool = False # whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient)
-          ) -> Tuple[float, float]: # (Cohen's d, variance) where d: 0.2 small; 0.5 medium; 0.8 large effect size
+          ) -> tuple[float, float]: # (Cohen's d, variance) where d: 0.2 small; 0.5 medium; 0.8 large effect size
   "calculates effect size between two groups"
   if paired:
     assert len(x) == len(y), "For paired samples, the size of x and y should be the same"
@@ -49,8 +48,8 @@ def cohen_d(x: Union[np.ndarray, List[float]], # comparison group containing num
   return d, var_d
 
 
-def mahalanobis_distance(x: Union[np.ndarray, pd.DataFrame], # comparison group containing numerical data
-                        y: Union[np.ndarray, pd.DataFrame], # comparison group containing numerical data
+def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
+                        y: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                         paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                        ) -> float: # Mahalanobis distance effect size
   "calculates effect size between two groups in a multivariate comparison"
@@ -68,8 +67,8 @@ def mahalanobis_distance(x: Union[np.ndarray, pd.DataFrame], # comparison group 
   return mahalanobis_d[0][0]
 
 
-def mahalanobis_variance(x: Union[np.ndarray, pd.DataFrame], # comparison group containing numerical data
-                        y: Union[np.ndarray, pd.DataFrame], # comparison group containing numerical data
+def mahalanobis_variance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
+                        y: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                         paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                        ) -> float: # variance of Mahalanobis distance
   "Estimates variance of Mahalanobis distance via bootstrapping"
@@ -93,7 +92,7 @@ def mahalanobis_variance(x: Union[np.ndarray, pd.DataFrame], # comparison group 
 
 
 def variance_stabilization(data: pd.DataFrame, # dataframe with glycans/motifs as indices and samples as columns
-                         groups: Union[List[List[str]], None] = None # list containing lists of column names of samples from same group for group-specific normalization; otherwise global
+                         groups: list[list[str]] | None = None # list containing lists of column names of samples from same group for group-specific normalization; otherwise global
                         ) -> pd.DataFrame: # normalized dataframe in same format as input
   "performs variance stabilization normalization"
   # Apply log1p transformation
@@ -154,7 +153,7 @@ class MissForest:
 
 
 def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences in first col and abundances in subsequent cols
-                        groups: List[List[str]], # nested list of column name lists, one list per group
+                        groups: list[list[str]], # nested list of column name lists, one list per group
                         impute: bool = True, # replaces zeroes with predictions from MissForest
                         min_samples: float = 0.1 # percent of samples that need non-zero values for glycan to be kept
                        ) -> pd.DataFrame: # normalized dataframe in same style as input
@@ -189,7 +188,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
 
 def variance_based_filtering(df: pd.DataFrame, # dataframe with glycans as index and samples in columns
                            min_feature_variance: float = 0.02 # minimum variance to include a feature
-                          ) -> Tuple[pd.DataFrame, pd.DataFrame]: # (filtered df with variance > min, discarded df with variance <= min)
+                          ) -> tuple[pd.DataFrame, pd.DataFrame]: # (filtered df with variance > min, discarded df with variance <= min)
   "Variance-based filtering of features"
   variances = df.var(axis = 1)
   filtered_df = df.loc[variances > min_feature_variance]
@@ -198,7 +197,7 @@ def variance_based_filtering(df: pd.DataFrame, # dataframe with glycans as index
 
 
 class JTKTest:
-  def __init__(self, timepoints: int, periods: List[int], interval: int = 1, replicates: int = 1):
+  def __init__(self, timepoints: int, periods: list[int], interval: int = 1, replicates: int = 1):
     self.group_sizes = np.full(timepoints, replicates)
     self.n = self.group_sizes.sum()
     squared_sizes = np.square(self.group_sizes)
@@ -229,7 +228,7 @@ class JTKTest:
     cf = [ajtkcf[(j - 1) // 2] if j % 2 == 0 else jtkcf[j // 2] for j in range(1, 2 * int(self.max_stat) + 2)]
     return np.array(cf) / (jtkcf[0] or 1)
 
-  def _generate_reference_waveforms(self, timepoints: int) -> Dict[int, List[np.ndarray]]:
+  def _generate_reference_waveforms(self, timepoints: int) -> dict[int, list[np.ndarray]]:
     timerange = np.arange(timepoints) * self.interval
     waveforms = {}
     for period in self.periods:
@@ -245,7 +244,7 @@ class JTKTest:
     matrix = np.sign(np.subtract.outer(cos_r, cos_r))
     return matrix[np.tril_indices(len(cos_r), k = -1)]
 
-  def test(self, values: np.ndarray) -> Tuple[float, int, int, float]:
+  def test(self, values: np.ndarray) -> tuple[float, int, int, float]:
     signs = np.sign(np.subtract.outer(values, values))[np.tril_indices(len(values), k = -1)]
     best_stats = (1.0, self.periods[0], 0, 0)
     for period in self.periods:
@@ -316,10 +315,10 @@ def pi0_tst(p_values: np.ndarray, # array of p-values
   return pi0_estimate
 
 
-def TST_grouped_benjamini_hochberg(identifiers_grouped: Dict[str, List], # dictionary of group : list of glycans
-                                 p_values_grouped: Dict[str, List[float]], # dictionary of group : list of p-values
+def TST_grouped_benjamini_hochberg(identifiers_grouped: dict[str, list], # dictionary of group : list of glycans
+                                 p_values_grouped: dict[str, list[float]], # dictionary of group : list of p-values
                                  alpha: float # significance threshold for testing
-                                ) -> Tuple[Dict[str, float], Dict[str, bool]]: # (glycan:corrected p-value dict, glycan:significant dict)
+                                ) -> tuple[dict[str, float], dict[str, bool]]: # (glycan:corrected p-value dict, glycan:significant dict)
   "perform the two-stage adaptive Benjamini-Hochberg procedure for multiple testing correction"
   # Initialize results
   adjusted_p_values = {}
@@ -355,10 +354,10 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped: Dict[str, List], # dicti
 
 def compare_inter_vs_intra_group(cohort_b: pd.DataFrame, # dataframe of glycans as rows and samples as columns of case samples
                             cohort_a: pd.DataFrame, # dataframe of glycans as rows and samples as columns of control samples
-                            glycans: List[str], # list of glycans in IUPAC-condensed nomenclature
-                            grouped_glycans: Dict[str, List[str]], # dictionary of type group : glycans
+                            glycans: list[str], # list of glycans in IUPAC-condensed nomenclature
+                            grouped_glycans: dict[str, list[str]], # dictionary of type group : glycans
                             paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                           ) -> Tuple[float, float]: # (intra-group correlation, inter-group correlation)
+                           ) -> tuple[float, float]: # (intra-group correlation, inter-group correlation)
   "estimates intra- and inter-group correlation of a given grouping of glycans via a mixed-effects model"
   reverse_lookup = {k: v for v, l in grouped_glycans.items() for k in l}
   if paired:
@@ -453,7 +452,7 @@ def replace_outliers_winsorization(full_row: pd.Series, # row from dataframe, wi
 def hotellings_t2(group1: np.ndarray, # comparison group containing numerical data
                  group2: np.ndarray, # comparison group containing numerical data
                  paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                ) -> Tuple[float, float]: # (F statistic, p-value)
+                ) -> tuple[float, float]: # (F statistic, p-value)
   "Hotelling's T^2 test (the t-test for multivariate comparisons)"
   if paired:
     assert group1.shape == group2.shape, "For paired samples, the size of group1 and group2 should be the same"
@@ -520,11 +519,11 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
 
 
 def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
-                      group1: List[Union[str, int]], # column indices/names for first group of samples, usually control
-                      group2: List[Union[str, int]], # column indices/names for second group of samples
+                      group1: list[str | int], # column indices/names for first group of samples, usually control
+                      group2: list[str | int], # column indices/names for second group of samples
                       gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
-                      custom_scale: Union[float, Dict] = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict for multivariate)
-                      random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
+                      custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict for multivariate)
+                      random_state: int | np.random.Generator | None = None # optional random state for reproducibility
                      ) -> pd.DataFrame: # CLR-transformed dataframe
   "performs the Center Log-Ratio (CLR) Transformation with scale model adjustment"
   local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -552,9 +551,9 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
 
 
 def anosim(df: pd.DataFrame, # square distance matrix
-          group_labels_in: List[str], # list of group membership for each sample
+          group_labels_in: list[str], # list of group membership for each sample
           permutations: int = 999 # number of permutations to perform in ANOSIM test
-         ) -> Tuple[float, float]: # (ANOSIM R statistic [-1 to 1], p-value)
+         ) -> tuple[float, float]: # (ANOSIM R statistic [-1 to 1], p-value)
   "Performs analysis of similarity (ANOSIM) statistical test"
   group_labels = copy.deepcopy(group_labels_in)
   n = df.shape[0]
@@ -584,8 +583,8 @@ def anosim(df: pd.DataFrame, # square distance matrix
 
 
 def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
-                           group_labels: List[str] # list of group membership for each sample
-                          ) -> Optional[Tuple[float, float]]: # F statistic and p-value if groups have >1 sample, None otherwise
+                           group_labels: list[str] # list of group membership for each sample
+                          ) -> tuple[float, float] | None: # F statistic and p-value if groups have >1 sample, None otherwise
   "Performs an ANOVA on the respective alpha diversity distance (Welch's ANOVA if scipy>=1.16)"
   group_counts = Counter(group_labels)
   if all(count > 1 for count in group_counts.values()):
@@ -596,7 +595,7 @@ def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
 
 
 def calculate_permanova_stat(df: pd.DataFrame, # square distance matrix
-                           group_labels: List[str] # list of group membership for each sample
+                           group_labels: list[str] # list of group membership for each sample
                           ) -> float: # F statistic - higher means effect more likely
   "Performs multivariate analysis of variance"
   unique_groups = np.unique(group_labels)
@@ -618,9 +617,9 @@ def calculate_permanova_stat(df: pd.DataFrame, # square distance matrix
 
 
 def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
-                             group_labels: List[str], # list of group membership for each sample
+                             group_labels: list[str], # list of group membership for each sample
                              permutations: int = 999 # number of permutations for test
-                            ) -> Tuple[float, float]: # (F statistic, p-value)
+                            ) -> tuple[float, float]: # (F statistic, p-value)
   "Performs permutational multivariate analysis of variance (PERMANOVA)"
   observed_f = calculate_permanova_stat(df, group_labels)
   permuted_fs = np.zeros(permutations)
@@ -633,11 +632,11 @@ def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
 
 def alr_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
                       reference_component_index: int, # row index of feature to be used as reference
-                      group1: List[Union[str, int]], # column indices/names for first group of samples, usually control
-                      group2: List[Union[str, int]], # column indices/names for second group of samples
+                      group1: list[str | int], # column indices/names for first group of samples, usually control
+                      group2: list[str | int], # column indices/names for second group of samples
                       gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
-                      custom_scale: Union[float, Dict] = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict for multivariate)
-                      random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
+                      custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict for multivariate)
+                      random_state: int | np.random.Generator | None = None # optional random state for reproducibility
                      ) -> pd.DataFrame: # ALR-transformed dataframe
   "Given a reference feature, performs additive log-ratio transformation (ALR) on the data"
   local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -666,12 +665,12 @@ def alr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
 
 
 def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows and samples as columns
-                         group1: List[Union[str, int]], # column indices/names for first group of samples, usually control
-                         group2: List[Union[str, int]], # column indices/names for second group of samples
+                         group1: list[str | int], # column indices/names for first group of samples, usually control
+                         group2: list[str | int], # column indices/names for second group of samples
                          paired: bool = False, # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                         custom_scale: Union[float, Dict] = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict)
-                          random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
-                        ) -> Tuple[List[float], List[float], List[float]]: # (Procrustes scores, correlations, variances)
+                         custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict)
+                          random_state: int | np.random.Generator | None = None # optional random state for reproducibility
+                        ) -> tuple[list[float], list[float], list[float]]: # (Procrustes scores, correlations, variances)
   "For each feature, estimates its value as ALR reference component"
   local_rng = np.random.default_rng(random_state) if random_state is not None else rng
   if isinstance(group1[0], int):
@@ -696,12 +695,12 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
 
 
 def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
-                                       group1: List[Union[str, int]], # column indices/names for first group of samples
-                                       group2: List[Union[str, int]], # column indices/names for second group of samples
+                                       group1: list[str | int], # column indices/names for first group of samples
+                                       group2: list[str | int], # column indices/names for second group of samples
                                        paired: bool = False, # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                                        gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
-                                       custom_scale: Union[float, Dict] = 0, # ratio total signal group2/group1 for scale model
-                                       random_state: Optional[Union[int, np.random.Generator]] = None # optional random state for reproducibility
+                                       custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model
+                                       random_state: int | np.random.Generator | None = None # optional random state for reproducibility
                                       ) -> pd.DataFrame: # ALR-transformed dataframe
   "Identifies ALR reference component and transforms data according to ALR"
   local_rng = np.random.default_rng(random_state) if random_state is not None else rng
@@ -720,10 +719,10 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
   return alr
 
 
-def correct_multiple_testing(pvals: Union[List[float], np.ndarray], # list of raw p-values
+def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-values
                            alpha: float, # p-value threshold for statistical significance
                            correction_method: str = "two-stage" # "two-stage" or "one-stage" Benjamini-Hochberg
-                          ) -> Tuple[List[float], List[bool]]: # (corrected p-values, significance True/False)
+                          ) -> tuple[list[float], list[bool]]: # (corrected p-values, significance True/False)
   "Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure"
   if not isinstance(pvals, list):
     pvals = pvals.tolist()
@@ -741,8 +740,8 @@ def correct_multiple_testing(pvals: Union[List[float], np.ndarray], # list of ra
   return corrpvals, significance
 
 
-def omega_squared(row: Union[pd.Series, np.ndarray], # values for one feature
-                 groups: List[str] # list indicating group membership with indices per column
+def omega_squared(row: pd.Series | np.ndarray, # values for one feature
+                 groups: list[str] # list indicating group membership with indices per column
                 ) -> float: # effect size as omega squared
   "Calculates Omega squared, as an effect size in an ANOVA setting"
   long_df = pd.DataFrame({'value': row, 'group': groups})
@@ -771,8 +770,8 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
 
 
 def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a glycosite
-           glycan_features: List[str] = ['H', 'N', 'A', 'F', 'G'] # extracted glycan features to consider as variables
-          ) -> Tuple[Union[str, str], List[str]]: # (fitted GLM or failure message, list of variables)
+           glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'] # extracted glycan features to consider as variables
+          ) -> tuple[str | str, list[str]]: # (fitted GLM or failure message, list of variables)
   "given glycoform data from a glycosite, constructs & fits a GLM formula for main+interaction effects"
   retained_vars = [c for c in glycan_features if c in group.columns and max(group[c]) > 0]
   if not retained_vars:
@@ -793,7 +792,7 @@ def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a g
 
 def process_glm_results(df: pd.DataFrame, # CLR-transformed glycoproteomics data, rows glycoforms, columns samples
                        alpha: float, # significance threshold
-                       glycan_features: List[str] # extracted glycan features to consider as variables
+                       glycan_features: list[str] # extracted glycan features to consider as variables
                       ) -> pd.DataFrame: # regression coefficients, p-values, and significance for each condition/interaction
   "tests for interaction effects of glycan features and the condition on glycoform abundance via a GLM"
   results = df.groupby('Glycosite', group_keys = False)[df.columns].apply(lambda x: get_glm(x.reset_index(drop = True), glycan_features = glycan_features))
@@ -820,7 +819,7 @@ def partial_corr(x: np.ndarray, # typically values from a column or row
                 y: np.ndarray, # typically values from a column or row
                 controls: np.ndarray, # variables correlated with x or y
                 motifs: bool = False # whether to analyze full sequences or motifs
-               ) -> Tuple[float, float]: # (regularized partial correlation coefficient, p-value from Spearman correlation of residuals)
+               ) -> tuple[float, float]: # (regularized partial correlation coefficient, p-value from Spearman correlation of residuals)
   "Compute regularized partial correlation of x and y, controlling for multiple other variables in controls"
   # Check if we have any controls
   if controls.size == 0 or controls.shape[1] == 0:
@@ -837,11 +836,11 @@ def partial_corr(x: np.ndarray, # typically values from a column or row
 
 
 def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in cols
-                              group1: List[Union[str, int]], # column indices/names for first group of samples
-                              group2: List[Union[str, int]], # column indices/names for second group of samples
+                              group1: list[str | int], # column indices/names for first group of samples
+                              group2: list[str | int], # column indices/names for second group of samples
                               num_instances: int = 128, # number of Monte Carlo instances to sample
                               gamma: float = 0.1, # uncertainty parameter for CLR transformation scale
-                              custom_scale: Union[float, Dict] = 0 # ratio total signal group2/group1 for scale model
+                              custom_scale: float | dict = 0 # ratio total signal group2/group1 for scale model
                              ) -> pd.DataFrame: # transformed df (features, samples*num_instances) with CLR-transformed Monte Carlo instances
   "Monte Carlo sampling from Dirichlet distribution with relative abundances as concentration, followed by CLR transformation"
   df = df.apply(lambda col: (col / col.sum())*5000, axis = 0)
@@ -864,7 +863,7 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
                             group_b: pd.DataFrame, # rows as features, columns as sample instances from one condition
                             num_instances: int = 128, # number of Monte Carlo instances to sample
                             paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                           ) -> Tuple[List[float], List[float], List[float]]: # (uncorrected p-vals, corrected p-vals, effect sizes)
+                           ) -> tuple[list[float], list[float], list[float]]: # (uncorrected p-vals, corrected p-vals, effect sizes)
   "Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, calculate effect sizes"
   num_features, _ = group_a.shape
   avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes = np.zeros(num_features), np.zeros(num_features), np.zeros(num_features)

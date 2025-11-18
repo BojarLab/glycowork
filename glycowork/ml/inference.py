@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from importlib import resources
-from typing import Dict, List, Optional, Tuple, Union
 import math
 try:
     import torch
@@ -17,8 +16,8 @@ from glycowork.ml.processing import dataset_to_dataloader
 
 
 class SimpleDataset:
-  def __init__(self, x: List[float], # input features
-                 y: List[float] # output labels
+  def __init__(self, x: list[float], # input features
+                 y: list[float] # output labels
                 ) -> None:
     "Dataset class for Nsequon prediction"
     self.x = x
@@ -27,7 +26,7 @@ class SimpleDataset:
   def __len__(self) -> int:
     return len(self.x)
 
-  def __getitem__(self, index: int) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
+  def __getitem__(self, index: int) -> tuple[torch.FloatTensor, torch.FloatTensor]:
     inp = self.x[index]
     out = self.y[index]
     return torch.FloatTensor(inp), torch.FloatTensor([out])
@@ -41,29 +40,25 @@ def sigmoid(x: float # input value
   return 1 / (1 + math.exp(-x))
 
 
-def glycans_to_emb(glycans: List[str], # list of glycans in IUPAC-condensed
+def glycans_to_emb(glycans: list[str], # list of glycans in IUPAC-condensed
                   model: torch.nn.Module, # trained graph neural network for analyzing glycans
-                  libr: Optional[Dict[str, int]] = None, # dictionary of form glycoletter:index
+                  libr: dict[str, int] | None = None, # dictionary of form glycoletter:index
                   batch_size: int = 32, # batch size used during training
                   rep: bool = True, # True returns representations, False returns predicted labels
-                  class_list: Optional[List[str]] = None, # list of unique classes to map predictions
+                  class_list: list[str] | None = None, # list of unique classes to map predictions
                   multilabel = False  # whether to output predictions for a multilabel-task
-                 ) -> Union[pd.DataFrame, List[str]]: # dataframe of representations or list of predictions
+                 ) -> pd.DataFrame | list[str]: # dataframe of representations or list of predictions
     "Returns a dataframe of learned representations for a list of glycans"
     if libr is None:
       libr = lib
     # Preparing dataset for PyTorch
-    glycan_loader = dataset_to_dataloader(glycans, range(len(glycans)),
-                                          libr = libr, batch_size = batch_size, shuffle = False)
+    glycan_loader = dataset_to_dataloader(glycans, range(len(glycans)), libr = libr, batch_size = batch_size, shuffle = False)
     res = []
     model = model.eval()
     # Get predictions for each mini-batch
     for data in glycan_loader:
         x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
-        x = x.to(device)
-        y = y.to(device)
-        edge_index = edge_index.to(device)
-        batch = batch.to(device)
+        x, y, edge_index, batch = x.to(device), y.to(device), edge_index.to(device), batch.to(device)
         pred, out = model(x, edge_index, batch, inference = True)
         # Unpacking and combining predictions
         res.extend(out.detach().cpu().numpy()) if rep else res.extend(pred.detach().cpu().numpy())
@@ -71,15 +66,15 @@ def glycans_to_emb(glycans: List[str], # list of glycans in IUPAC-condensed
 
 
 def get_multi_pred(prot: str, # protein amino acid sequence
-                  glycans: List[str], # list of glycans in IUPAC-condensed
+                  glycans: list[str], # list of glycans in IUPAC-condensed
                   model: torch.nn.Module, # trained LectinOracle-type model
-                  prot_dic: Dict[str, List[float]], # dict of protein sequence:ESM1b representation
+                  prot_dic: dict[str, list[float]], # dict of protein sequence:ESM1b representation
                   background_correction: bool = False, # whether to correct predictions for background
-                  correction_df: Optional[pd.DataFrame] = None, # background prediction for glycans
+                  correction_df: pd.DataFrame | None = None, # background prediction for glycans
                   batch_size: int = 128, # batch size used during training
-                  libr: Optional[Dict[str, int]] = None, # dict of glycoletter:index
+                  libr: dict[str, int] | None = None, # dict of glycoletter:index
                   flex: bool = False # LectinOracle (False) or LectinOracle_flex (True)
-                 ) -> List[float]: # predicted binding values
+                 ) -> list[float]: # predicted binding values
   "Inner function to actually get predictions for lectin-glycan binding from LectinOracle-type model"
   if libr is None:
       libr = lib
@@ -90,9 +85,7 @@ def get_multi_pred(prot: str, # protein amino acid sequence
   else:
       rep = prot_dic.get(prot, "new protein, no stored embedding")
       feature = [rep] * len(glycans)
-  train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans),
-                                         libr = libr, batch_size = batch_size, label_type = torch.float,
-                                         shuffle = False, extra_feature = feature)
+  train_loader = dataset_to_dataloader(glycans, [0.99]*len(glycans), libr = libr, batch_size = batch_size, label_type = torch.float, shuffle = False, extra_feature = feature)
   model = model.eval()
   res = []
   # Get predictions for each mini-batch
@@ -103,8 +96,7 @@ def get_multi_pred(prot: str, # protein amino acid sequence
     res.extend(pred.detach().cpu().numpy())
   # Applying background correction of predictions
   if background_correction:
-    correction_df = pd.Series(correction_df.pred.values,
-                              index = correction_df.motif).to_dict()
+    correction_df = pd.Series(correction_df.pred.values, index = correction_df.motif).to_dict()
     bg_res = [correction_df.get(j, 0) for j in glycans]
     if 0 in bg_res:
       print("Warning: not all glycans are in the correction_df; consider adding their background to correction_df")
@@ -113,13 +105,13 @@ def get_multi_pred(prot: str, # protein amino acid sequence
 
 
 def get_lectin_preds(prot: str, # protein amino acid sequence
-                    glycans: List[str], # list of glycans in IUPAC-condensed
+                    glycans: list[str], # list of glycans in IUPAC-condensed
                     model: torch.nn.Module, # trained LectinOracle-type model
-                    prot_dic: Optional[Dict[str, List[float]]] = None, # dict of protein sequence:ESMC representation
+                    prot_dic: dict[str, list[float]] | None = None, # dict of protein sequence:ESMC representation
                     background_correction: bool = False, # whether to correct predictions for background
-                    correction_df: Optional[pd.DataFrame] = None, # background prediction for glycans
+                    correction_df: pd.DataFrame | None = None, # background prediction for glycans
                     batch_size: int = 128, # batch size used during training
-                    libr: Optional[Dict[str, int]] = None, # dict of glycoletter:index
+                    libr: dict[str, int] | None = None, # dict of glycoletter:index
                     sort: bool = True, # whether to sort prediction results descendingly
                     flex: bool = False # LectinOracle (False) or LectinOracle_flex (True)
                    ) -> pd.DataFrame: # glycan sequences and predicted binding
@@ -145,9 +137,9 @@ def get_lectin_preds(prot: str, # protein amino acid sequence
   return df_pred
 
 
-def get_esmc_representations(prots: List[str], # list of protein sequences to convert
+def get_esmc_representations(prots: list[str], # list of protein sequences to convert
                             model: torch.nn.Module, # trained ESMC model
-                           ) -> Dict[str, List[float]]: # dict of protein sequence:ESMC-300M representation
+                           ) -> dict[str, list[float]]: # dict of protein sequence:ESMC-300M representation
   "Retrieves ESMC-300M representations of protein for using them as input for LectinOracle"
   #from esm.models.esmc import ESMC
   #model = ESMC.from_pretrained("esmc_300m").to(device)
@@ -160,7 +152,7 @@ def get_esmc_representations(prots: List[str], # list of protein sequences to co
     if not hasattr(model, 'encode') or not hasattr(model, 'logits'):
       raise ImportError("<To use this function, you will need to install fair-esm, which is not a dependency of glycowork>")
 
-  def prot_to_ESMC(seq):
+  def prot_to_ESMC(seq: str):
     if use_esm_api:
       protein_tensor = model.encode(ESMProtein(sequence = seq))
       logits_output = model.logits(protein_tensor, LogitsConfig(sequence = True, return_embeddings = True))
@@ -174,9 +166,9 @@ def get_esmc_representations(prots: List[str], # list of protein sequences to co
   return {p: prot_to_ESMC(p) for p in unique_prots}
 
 
-def get_Nsequon_preds(prots: List[str], # 20 AA + N + 20 AA sequences; replace missing with 'z'
+def get_Nsequon_preds(prots: list[str], # 20 AA + N + 20 AA sequences; replace missing with 'z'
                      model: torch.nn.Module, # trained NSequonPred-type model
-                     prot_dic: Dict[str, List[float]] # dict of protein sequence:ESM1b representation
+                     prot_dic: dict[str, list[float]] # dict of protein sequence:ESM1b representation
                     ) -> pd.DataFrame: # protein sequences and predicted likelihood
   "Predicts whether an N-sequon will be glycosylated"
   reps = [prot_dic[k] for k in prots]
