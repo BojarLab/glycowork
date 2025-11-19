@@ -120,6 +120,11 @@ def format_modification_label(label: str) -> str:
   return label.replace('Substituent', 'Subst')
 
 
+def normalize_monosaccharide_label(label: str) -> str:
+  "Map unrecognized monosaccharide labels to Unknown for drawing"
+  return label if label in sugar_dict else 'Unknown'
+
+
 def draw_hex(
     x_pos: float, # X coordinate of hexagon center
     y_pos: float, # Y coordinate of hexagon center
@@ -604,7 +609,7 @@ def get_coordinates_and_labels(
   main_chain = nx.shortest_path(graph.reverse(), leaves[0], root) if leaves else []
   main_label_sugar = [node for node in main_chain if node % 2 == 0]
   main_sugar = [node_values[node] for node in main_chain if node % 2 == 0]  # Even indices are sugars
-  main_sugar = [get_core(node) if node not in domon_costello else node for node in main_sugar][::-1]
+  main_sugar = [normalize_monosaccharide_label(get_core(node) if node not in domon_costello else node) for node in main_sugar][::-1]
   main_sugar_modification = [format_modification_label(get_modification(node_values[node]).replace('O', '').replace('-ol', '')) for node in main_chain if node % 2 == 0][::-1]
   main_bond = [node_values[node] for node in main_chain if node % 2 == 1][::-1]  # Odd indices are bonds
   main_sugar_highlight = [highlight_values[node] for node in main_chain if node % 2 == 0][::-1]
@@ -619,7 +624,7 @@ def get_coordinates_and_labels(
       # Extract sugar and bond labels
       sugar_nodes = branch['sugar_nodes']
       bond_nodes = [m for m in branch['nodes'] if m % 2 == 1]
-      sugar.append([get_core(node_values[n]) if node_values[n] not in domon_costello else node_values[n] for n in sugar_nodes])
+      sugar.append([normalize_monosaccharide_label(get_core(node_values[n]) if node_values[n] not in domon_costello else node_values[n]) for n in sugar_nodes])
       sugar_mod.append([format_modification_label(get_modification(node_values[n]).replace('O', '')) for n in sugar_nodes])
       bond.append([node_values[n] for n in bond_nodes])
       connection.append(branch['connection'])
