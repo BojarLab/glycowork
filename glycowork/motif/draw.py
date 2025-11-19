@@ -113,9 +113,16 @@ sugar_dict = {
 domon_costello = {'B', 'C', 'Z', 'Y', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A', '25A', '03A', '14X', '25X', '03X', '14A'}
 
 
-def format_modification_label(label: str) -> str:
-  "Shorten long modification labels for rendering without truncation"
+def format_modification_label(label: str, monosaccharide: str = '') -> str:
+  "Shorten or suppress modification labels for rendering without truncation"
   if not label:
+    return ''
+  has_subst = 'Subst' in label or 'Substituent' in label
+  if has_subst:
+    match = re.search(r'(?:^|[^0-9])([0-9]+)(?:Substituent|Subst)', label)
+    prefix = match.group(1) if match else ''
+    return f"{prefix}Subst" if prefix else 'Subst'
+  if monosaccharide == 'Unknown':
     return ''
   return label.replace('Substituent', 'Subst')
 
@@ -498,7 +505,7 @@ def process_bonds(
     else:
       first, last = linkage[0], linkage[-1]
     if '?' in first and '?' in last: return '?'
-    if '?' in first: return f' {last}'
+    if '?' in first: return f'? {last}'
     if '?' in last:
       if ALPHA_PATTERN.match(linkage): return '\u03B1'
       if BETA_PATTERN.match(linkage): return '\u03B2'
@@ -608,9 +615,17 @@ def get_coordinates_and_labels(
   leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
   main_chain = nx.shortest_path(graph.reverse(), leaves[0], root) if leaves else []
   main_label_sugar = [node for node in main_chain if node % 2 == 0]
-  main_sugar = [node_values[node] for node in main_chain if node % 2 == 0]  # Even indices are sugars
-  main_sugar = [normalize_monosaccharide_label(get_core(node) if node not in domon_costello else node) for node in main_sugar][::-1]
-  main_sugar_modification = [format_modification_label(get_modification(node_values[node]).replace('O', '').replace('-ol', '')) for node in main_chain if node % 2 == 0][::-1]
+  main_sugar_entries = []
+  for node in main_chain:
+    if node % 2 == 0:
+      raw_label = node_values[node]
+      core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
+      normalized_label = normalize_monosaccharide_label(core_label)
+      modification_text = get_modification(raw_label).replace('O', '').replace('-ol', '')
+      formatted_mod = format_modification_label(modification_text, normalized_label)
+      main_sugar_entries.append((normalized_label, formatted_mod))
+  main_sugar = [entry[0] for entry in main_sugar_entries][::-1]
+  main_sugar_modification = [entry[1] for entry in main_sugar_entries][::-1]
   main_bond = [node_values[node] for node in main_chain if node % 2 == 1][::-1]  # Odd indices are bonds
   main_sugar_highlight = [highlight_values[node] for node in main_chain if node % 2 == 0][::-1]
   main_bond_highlight = [highlight_values[node] for node in main_chain if node % 2 == 1][::-1]
@@ -624,8 +639,17 @@ def get_coordinates_and_labels(
       # Extract sugar and bond labels
       sugar_nodes = branch['sugar_nodes']
       bond_nodes = [m for m in branch['nodes'] if m % 2 == 1]
-      sugar.append([normalize_monosaccharide_label(get_core(node_values[n]) if node_values[n] not in domon_costello else node_values[n]) for n in sugar_nodes])
-      sugar_mod.append([format_modification_label(get_modification(node_values[n]).replace('O', '')) for n in sugar_nodes])
+      sugar_labels = []
+      sugar_mods = []
+      for n in sugar_nodes:
+        raw_label = node_values[n]
+        core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
+        normalized_label = normalize_monosaccharide_label(core_label)
+        modification_text = get_modification(raw_label).replace('O', '').replace('-ol', '')
+        sugar_labels.append(normalized_label)
+        sugar_mods.append(format_modification_label(modification_text, normalized_label))
+      sugar.append(sugar_labels)
+      sugar_mod.append(sugar_mods)
       bond.append([node_values[n] for n in bond_nodes])
       connection.append(branch['connection'])
       sugar_label.append([highlight_values[n] for n in sugar_nodes])
