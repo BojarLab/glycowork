@@ -1,0 +1,2312 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>ml – glycowork</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-000f0825b9c55ed21d14970d810c14a9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="ml – glycowork">
+<meta property="og:description" content="Package for processing and analyzing glycans">
+<meta property="og:image" content="https://BojarLab.github.io/glycowork/02_ml_files/figure-html/cell-8-output-1.png">
+<meta property="og:site_name" content="glycowork">
+<meta property="og:image:height" content="470">
+<meta property="og:image:width" content="630">
+<meta name="twitter:title" content="ml – glycowork">
+<meta name="twitter:description" content="Package for processing and analyzing glycans">
+<meta name="twitter:image" content="https://BojarLab.github.io/glycowork/02_ml_files/figure-html/cell-8-output-1.png">
+<meta name="twitter:image-height" content="470">
+<meta name="twitter:image-width" content="630">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">glycowork</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./ml.html">ml</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">glycowork</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Overview</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./glycan_data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">glycan_data</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./ml.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">ml</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./motif.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">motif</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">network</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./examples.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Examples</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#model_training" id="toc-model_training" class="nav-link active" data-scroll-target="#model_training">model_training</a>
+  <ul class="collapse">
+  <li><a href="#earlystopping" id="toc-earlystopping" class="nav-link" data-scroll-target="#earlystopping">EarlyStopping</a></li>
+  <li><a href="#train_model" id="toc-train_model" class="nav-link" data-scroll-target="#train_model">train_model</a></li>
+  <li><a href="#training_setup" id="toc-training_setup" class="nav-link" data-scroll-target="#training_setup">training_setup</a></li>
+  <li><a href="#train_ml_model" id="toc-train_ml_model" class="nav-link" data-scroll-target="#train_ml_model">train_ml_model</a></li>
+  <li><a href="#analyze_ml_model" id="toc-analyze_ml_model" class="nav-link" data-scroll-target="#analyze_ml_model">analyze_ml_model</a></li>
+  <li><a href="#get_mismatch" id="toc-get_mismatch" class="nav-link" data-scroll-target="#get_mismatch">get_mismatch</a></li>
+  </ul></li>
+  <li><a href="#models" id="toc-models" class="nav-link" data-scroll-target="#models">models</a>
+  <ul class="collapse">
+  <li><a href="#sweetnet" id="toc-sweetnet" class="nav-link" data-scroll-target="#sweetnet">SweetNet</a></li>
+  <li><a href="#lectinoracle" id="toc-lectinoracle" class="nav-link" data-scroll-target="#lectinoracle">LectinOracle</a></li>
+  <li><a href="#lectinoracle_flex" id="toc-lectinoracle_flex" class="nav-link" data-scroll-target="#lectinoracle_flex">LectinOracle_flex</a></li>
+  <li><a href="#nsequonpred" id="toc-nsequonpred" class="nav-link" data-scroll-target="#nsequonpred">NSequonPred</a></li>
+  <li><a href="#init_weights" id="toc-init_weights" class="nav-link" data-scroll-target="#init_weights">init_weights</a></li>
+  <li><a href="#prep_model" id="toc-prep_model" class="nav-link" data-scroll-target="#prep_model">prep_model</a></li>
+  </ul></li>
+  <li><a href="#processing" id="toc-processing" class="nav-link" data-scroll-target="#processing">processing</a>
+  <ul class="collapse">
+  <li><a href="#dataset_to_graphs" id="toc-dataset_to_graphs" class="nav-link" data-scroll-target="#dataset_to_graphs">dataset_to_graphs</a></li>
+  <li><a href="#dataset_to_dataloader" id="toc-dataset_to_dataloader" class="nav-link" data-scroll-target="#dataset_to_dataloader">dataset_to_dataloader</a></li>
+  <li><a href="#split_data_to_train" id="toc-split_data_to_train" class="nav-link" data-scroll-target="#split_data_to_train">split_data_to_train</a></li>
+  </ul></li>
+  <li><a href="#inference" id="toc-inference" class="nav-link" data-scroll-target="#inference">inference</a>
+  <ul class="collapse">
+  <li><a href="#glycans_to_emb" id="toc-glycans_to_emb" class="nav-link" data-scroll-target="#glycans_to_emb">glycans_to_emb</a></li>
+  <li><a href="#get_lectin_preds" id="toc-get_lectin_preds" class="nav-link" data-scroll-target="#get_lectin_preds">get_lectin_preds</a></li>
+  <li><a href="#get_nsequon_preds" id="toc-get_nsequon_preds" class="nav-link" data-scroll-target="#get_nsequon_preds">get_Nsequon_preds</a></li>
+  <li><a href="#get_esmc_representations" id="toc-get_esmc_representations" class="nav-link" data-scroll-target="#get_esmc_representations">get_esmc_representations</a></li>
+  </ul></li>
+  <li><a href="#train_test_split" id="toc-train_test_split" class="nav-link" data-scroll-target="#train_test_split">train_test_split</a>
+  <ul class="collapse">
+  <li><a href="#hierarchy_filter" id="toc-hierarchy_filter" class="nav-link" data-scroll-target="#hierarchy_filter">hierarchy_filter</a></li>
+  <li><a href="#general_split" id="toc-general_split" class="nav-link" data-scroll-target="#general_split">general_split</a></li>
+  <li><a href="#prepare_multilabel" id="toc-prepare_multilabel" class="nav-link" data-scroll-target="#prepare_multilabel">prepare_multilabel</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/BojarLab/glycowork/tree/master/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">ml</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<p><code>ml</code> contains the code base to process glycan for machine learning, construct state-of-the-art machine learning models, train them, and analyze trained models + glycan representations. It currently contains the following modules:</p>
+<ul>
+<li><code>model_training</code> contains functions for training machine learning models</li>
+<li><code>models</code> describes some examples for machine learning architectures applicable to glycans</li>
+<li><code>processing</code> contains helper functions to prepare glycan data for model training</li>
+<li><code>inference</code> can be used to analyze trained models, make predictions, or obtain glycan representations</li>
+<li><code>train_test_split</code> contains various data split functions to get appropriate training and test sets</li>
+</ul>
+<section id="model_training" class="level2">
+<h2 class="anchored" data-anchor-id="model_training">model_training</h2>
+<blockquote class="blockquote">
+<p>contains functions for training machine learning models</p>
+</blockquote>
+<hr>
+<section id="earlystopping" class="level3">
+<h3 class="anchored" data-anchor-id="earlystopping">EarlyStopping</h3>
+<blockquote class="blockquote">
+<pre><code> EarlyStopping (patience:int=7, verbose:bool=False)</code></pre>
+</blockquote>
+<p><em>Early stops the training if validation loss doesn’t improve after a given patience</em></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>patience</td>
+<td>int</td>
+<td>7</td>
+<td>epochs to wait after last improvement</td>
+</tr>
+<tr class="even">
+<td>verbose</td>
+<td>bool</td>
+<td>False</td>
+<td>whether to print messages</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>None</strong></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="train_model" class="level3">
+<h3 class="anchored" data-anchor-id="train_model">train_model</h3>
+<blockquote class="blockquote">
+<pre><code> train_model (model:torch.nn.modules.module.Module,
+              dataloaders:dict[str,torch.utils.data.dataloader.DataLoader]
+              , criterion:torch.nn.modules.module.Module,
+              optimizer:torch.optim.optimizer.Optimizer,
+              scheduler:torch.optim.lr_scheduler.LRScheduler,
+              num_epochs:int=25, patience:int=50,
+              mode:str='classification', mode2:str='multi',
+              return_metrics:bool=False)</code></pre>
+</blockquote>
+<p><em>trains a deep learning model on predicting glycan properties</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>model</td>
+<td>Module</td>
+<td></td>
+<td>graph neural network for analyzing glycans</td>
+</tr>
+<tr class="even">
+<td>dataloaders</td>
+<td>dict</td>
+<td></td>
+<td>dict with ‘train’ and ‘val’ loaders</td>
+</tr>
+<tr class="odd">
+<td>criterion</td>
+<td>Module</td>
+<td></td>
+<td>PyTorch loss function</td>
+</tr>
+<tr class="even">
+<td>optimizer</td>
+<td>Optimizer</td>
+<td></td>
+<td>PyTorch optimizer, has to be SAM if mode != “regression”</td>
+</tr>
+<tr class="odd">
+<td>scheduler</td>
+<td>LRScheduler</td>
+<td></td>
+<td>PyTorch learning rate decay</td>
+</tr>
+<tr class="even">
+<td>num_epochs</td>
+<td>int</td>
+<td>25</td>
+<td>number of epochs for training</td>
+</tr>
+<tr class="odd">
+<td>patience</td>
+<td>int</td>
+<td>50</td>
+<td>epochs without improvement until early stop</td>
+</tr>
+<tr class="even">
+<td>mode</td>
+<td>str</td>
+<td>classification</td>
+<td>‘classification’, ‘multilabel’, or ‘regression’</td>
+</tr>
+<tr class="odd">
+<td>mode2</td>
+<td>str</td>
+<td>multi</td>
+<td>‘multi’ or ‘binary’ classification</td>
+</tr>
+<tr class="even">
+<td>return_metrics</td>
+<td>bool</td>
+<td>False</td>
+<td>whether to return metrics</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>torch.nn.modules.module.Module | tuple[torch.nn.modules.module.Module, dict[str, dict[str, list[float]]]]</strong></td>
+<td></td>
+<td><strong>best model from training and the training and validation metrics</strong></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="training_setup" class="level3">
+<h3 class="anchored" data-anchor-id="training_setup">training_setup</h3>
+<blockquote class="blockquote">
+<pre><code> training_setup (model:torch.nn.modules.module.Module, lr:float,
+                 lr_patience:int=4, factor:float=0.2,
+                 weight_decay:float=0.0001, mode:str='multiclass',
+                 num_classes:int=2, gsam_alpha:float=0.0,
+                 warmup_epochs:int=5)</code></pre>
+</blockquote>
+<p><em>prepares optimizer, learning rate scheduler, and loss criterion for model training</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>model</td>
+<td>Module</td>
+<td></td>
+<td>graph neural network for analyzing glycans</td>
+</tr>
+<tr class="even">
+<td>lr</td>
+<td>float</td>
+<td></td>
+<td>learning rate</td>
+</tr>
+<tr class="odd">
+<td>lr_patience</td>
+<td>int</td>
+<td>4</td>
+<td>epochs before reducing learning rate</td>
+</tr>
+<tr class="even">
+<td>factor</td>
+<td>float</td>
+<td>0.2</td>
+<td>factor to multiply lr on reduction</td>
+</tr>
+<tr class="odd">
+<td>weight_decay</td>
+<td>float</td>
+<td>0.0001</td>
+<td>regularization parameter</td>
+</tr>
+<tr class="even">
+<td>mode</td>
+<td>str</td>
+<td>multiclass</td>
+<td>type of prediction task</td>
+</tr>
+<tr class="odd">
+<td>num_classes</td>
+<td>int</td>
+<td>2</td>
+<td>number of classes for classification</td>
+</tr>
+<tr class="even">
+<td>gsam_alpha</td>
+<td>float</td>
+<td>0.0</td>
+<td>if &gt;0, uses GSAM instead of SAM optimizer</td>
+</tr>
+<tr class="odd">
+<td>warmup_epochs</td>
+<td>int</td>
+<td>5</td>
+<td>if &gt;0, uses a learning rate warm-up schedule for training stability</td>
+</tr>
+<tr class="even">
+<td><strong>Returns</strong></td>
+<td><strong>tuple</strong></td>
+<td></td>
+<td><strong>optimizer, scheduler, criterion</strong></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="train_ml_model" class="level3">
+<h3 class="anchored" data-anchor-id="train_ml_model">train_ml_model</h3>
+<blockquote class="blockquote">
+<pre><code> train_ml_model (X_train:pandas.core.frame.DataFrame|list,
+                 X_test:pandas.core.frame.DataFrame|list, y_train:list,
+                 y_test:list, mode:str='classification',
+                 feature_calc:bool=False, return_features:bool=False,
+                 feature_set:list[str]=['known', 'exhaustive'], additional
+                 _features_train:pandas.core.frame.DataFrame|None=None, ad
+                 ditional_features_test:pandas.core.frame.DataFrame|None=N
+                 one)</code></pre>
+</blockquote>
+<p><em>wrapper function to train standard machine learning models on glycans</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>X_train</td>
+<td>pandas.core.frame.DataFrame | list</td>
+<td></td>
+<td>training data/glycans</td>
+</tr>
+<tr class="even">
+<td>X_test</td>
+<td>pandas.core.frame.DataFrame | list</td>
+<td></td>
+<td>test data/glycans</td>
+</tr>
+<tr class="odd">
+<td>y_train</td>
+<td>list</td>
+<td></td>
+<td>training labels</td>
+</tr>
+<tr class="even">
+<td>y_test</td>
+<td>list</td>
+<td></td>
+<td>test labels</td>
+</tr>
+<tr class="odd">
+<td>mode</td>
+<td>str</td>
+<td>classification</td>
+<td>‘classification’ or ‘regression’</td>
+</tr>
+<tr class="even">
+<td>feature_calc</td>
+<td>bool</td>
+<td>False</td>
+<td>calculate motifs from glycans</td>
+</tr>
+<tr class="odd">
+<td>return_features</td>
+<td>bool</td>
+<td>False</td>
+<td>return calculated features</td>
+</tr>
+<tr class="even">
+<td>feature_set</td>
+<td>list</td>
+<td>[‘known’, ‘exhaustive’]</td>
+<td>feature set for annotations</td>
+</tr>
+<tr class="odd">
+<td>additional_features_train</td>
+<td>pandas.core.frame.DataFrame | None</td>
+<td>None</td>
+<td>additional training features</td>
+</tr>
+<tr class="even">
+<td>additional_features_test</td>
+<td>pandas.core.frame.DataFrame | None</td>
+<td>None</td>
+<td>additional test features</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>xgboost.sklearn.XGBModel | tuple[xgboost.sklearn.XGBModel, pandas.core.frame.DataFrame, pandas.core.frame.DataFrame]</strong></td>
+<td></td>
+<td><strong>trained model and optionally features</strong></td>
+</tr>
+</tbody>
+</table>
+<div id="separate-knock" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>human <span class="op">=</span> [<span class="dv">1</span> <span class="cf">if</span> k <span class="op">==</span> <span class="st">'Homo_sapiens'</span> <span class="cf">else</span> <span class="dv">0</span> <span class="cf">for</span> k <span class="kw">in</span> df_species[df_species.Order<span class="op">==</span><span class="st">'Primates'</span>].Species.values.tolist()]</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>X_train, X_test, y_train, y_test <span class="op">=</span> general_split(df_species[df_species.Order<span class="op">==</span><span class="st">'Primates'</span>].glycan.values.tolist(), human)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>model_ft, _, X_test <span class="op">=</span> train_ml_model(X_train, X_test, y_train, y_test, feature_calc <span class="op">=</span> <span class="va">True</span>, feature_set <span class="op">=</span> [<span class="st">'terminal'</span>],</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>                         return_features <span class="op">=</span> <span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+You provided glycans without features but did not specify feature_calc; we'll step in and calculate features with the default feature_set but feel free to re-run and change.
+
+Calculating Glycan Features...
+
+Training model...
+
+Evaluating model...
+Accuracy of trained model on separate validation set: 0.8622183708838822</code></pre>
+</div>
+</div>
+<hr>
+</section>
+<section id="analyze_ml_model" class="level3">
+<h3 class="anchored" data-anchor-id="analyze_ml_model">analyze_ml_model</h3>
+<blockquote class="blockquote">
+<pre><code> analyze_ml_model (model:xgboost.sklearn.XGBModel)</code></pre>
+</blockquote>
+<p><em>plots relevant features for model prediction</em></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>model</td>
+<td>XGBModel</td>
+<td>trained ML model from train_ml_model</td>
+</tr>
+<tr class="even">
+<td><strong>Returns</strong></td>
+<td><strong>None</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<div id="herbal-holmes" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>analyze_ml_model(model_ft)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="02_ml_files/figure-html/cell-8-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+<section id="get_mismatch" class="level3">
+<h3 class="anchored" data-anchor-id="get_mismatch">get_mismatch</h3>
+<blockquote class="blockquote">
+<pre><code> get_mismatch (model:xgboost.sklearn.XGBModel,
+               X_test:pandas.core.frame.DataFrame, y_test:list, n:int=10)</code></pre>
+</blockquote>
+<p><em>analyzes misclassifications of trained machine learning model</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>model</td>
+<td>XGBModel</td>
+<td></td>
+<td>trained ML model from train_ml_model</td>
+</tr>
+<tr class="even">
+<td>X_test</td>
+<td>DataFrame</td>
+<td></td>
+<td>motif dataframe for validation</td>
+</tr>
+<tr class="odd">
+<td>y_test</td>
+<td>list</td>
+<td></td>
+<td>test labels</td>
+</tr>
+<tr class="even">
+<td>n</td>
+<td>int</td>
+<td>10</td>
+<td>number of returned misclassifications</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>list</strong></td>
+<td></td>
+<td><strong>misclassifications and predicted probabilities</strong></td>
+</tr>
+</tbody>
+</table>
+<div id="incredible-basket" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>get_mismatch(model_ft, X_test, y_test)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<pre><code>[('Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.7464433312416077),
+ ('Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+  0.8058189749717712),
+ ('GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+  0.33463266491889954),
+ ('Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.84605872631073),
+ ('Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+  0.8932995200157166),
+ ('Gal(b1-3)[Neu5Ac(a2-6)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.7579687237739563),
+ ('Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+  0.5918893218040466),
+ ('Gal(b1-4)Glc-ol', 0.7464433312416077),
+ ('Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+  0.8849249482154846),
+ ('Neu5Gc(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc1Cer', 0.45778951048851013)]</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="models" class="level2">
+<h2 class="anchored" data-anchor-id="models">models</h2>
+<blockquote class="blockquote">
+<p>describes some examples for machine learning architectures applicable to glycans. The main portal is prep_models which allows users to setup (trained) models by their string names</p>
+</blockquote>
+<hr>
+<section id="sweetnet" class="level3">
+<h3 class="anchored" data-anchor-id="sweetnet">SweetNet</h3>
+<blockquote class="blockquote">
+<pre><code> SweetNet (lib_size:int, num_classes:int=1, hidden_dim:int=128)</code></pre>
+</blockquote>
+<p>*Base class for all neural network modules.</p>
+<p>Your models should also subclass this class.</p>
+<p>Modules can also contain other Modules, allowing them to be nested in a tree structure. You can assign the submodules as regular attributes::</p>
+<pre><code>import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self) -&gt; None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))</code></pre>
+<p>Submodules assigned in this way will be registered, and will also have their parameters converted when you call :meth:<code>to</code>, etc.</p>
+<p>.. note:: As per the example above, an <code>__init__()</code> call to the parent class must be made before assignment on the child.</p>
+<table class="caption-top table">
+<caption>ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool*</caption>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>lib_size</td>
+<td>int</td>
+<td></td>
+<td>number of unique tokens for graph nodes</td>
+</tr>
+<tr class="even">
+<td>num_classes</td>
+<td>int</td>
+<td>1</td>
+<td>number of output classes (&gt;1 for multilabel)</td>
+</tr>
+<tr class="odd">
+<td>hidden_dim</td>
+<td>int</td>
+<td>128</td>
+<td>dimension of hidden layers</td>
+</tr>
+<tr class="even">
+<td><strong>Returns</strong></td>
+<td><strong>None</strong></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="lectinoracle" class="level3">
+<h3 class="anchored" data-anchor-id="lectinoracle">LectinOracle</h3>
+<blockquote class="blockquote">
+<pre><code> LectinOracle (input_size_glyco:int, hidden_size:int=128,
+               num_classes:int=1, data_min:float=-11.355,
+               data_max:float=23.892, input_size_prot:int=960)</code></pre>
+</blockquote>
+<p>*Base class for all neural network modules.</p>
+<p>Your models should also subclass this class.</p>
+<p>Modules can also contain other Modules, allowing them to be nested in a tree structure. You can assign the submodules as regular attributes::</p>
+<pre><code>import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self) -&gt; None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))</code></pre>
+<p>Submodules assigned in this way will be registered, and will also have their parameters converted when you call :meth:<code>to</code>, etc.</p>
+<p>.. note:: As per the example above, an <code>__init__()</code> call to the parent class must be made before assignment on the child.</p>
+<table class="caption-top table">
+<caption>ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool*</caption>
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>input_size_glyco</td>
+<td>int</td>
+<td></td>
+<td>number of unique tokens for graph nodes</td>
+</tr>
+<tr class="even">
+<td>hidden_size</td>
+<td>int</td>
+<td>128</td>
+<td>layer size for graph convolutions</td>
+</tr>
+<tr class="odd">
+<td>num_classes</td>
+<td>int</td>
+<td>1</td>
+<td>number of output classes (&gt;1 for multilabel)</td>
+</tr>
+<tr class="even">
+<td>data_min</td>
+<td>float</td>
+<td>-11.355</td>
+<td>minimum observed value in training data</td>
+</tr>
+<tr class="odd">
+<td>data_max</td>
+<td>float</td>
+<td>23.892</td>
+<td>maximum observed value in training data</td>
+</tr>
+<tr class="even">
+<td>input_size_prot</td>
+<td>int</td>
+<td>960</td>
+<td>dimensionality of protein representations</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>None</strong></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="lectinoracle_flex" class="level3">
+<h3 class="anchored" data-anchor-id="lectinoracle_flex">LectinOracle_flex</h3>
+<blockquote class="blockquote">
+<pre><code> LectinOracle_flex (input_size_glyco:int, hidden_size:int=128,
+                    num_classes:int=1, data_min:float=-11.355,
+                    data_max:float=23.892, input_size_prot:int=1000)</code></pre>
+</blockquote>
+<p>*Base class for all neural network modules.</p>
+<p>Your models should also subclass this class.</p>
+<p>Modules can also contain other Modules, allowing them to be nested in a tree structure. You can assign the submodules as regular attributes::</p>
+<pre><code>import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self) -&gt; None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))</code></pre>
+<p>Submodules assigned in this way will be registered, and will also have their parameters converted when you call :meth:<code>to</code>, etc.</p>
+<p>.. note:: As per the example above, an <code>__init__()</code> call to the parent class must be made before assignment on the child.</p>
+<table class="caption-top table">
+<caption>ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool*</caption>
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>input_size_glyco</td>
+<td>int</td>
+<td></td>
+<td>number of unique tokens for graph nodes</td>
+</tr>
+<tr class="even">
+<td>hidden_size</td>
+<td>int</td>
+<td>128</td>
+<td>layer size for graph convolutions</td>
+</tr>
+<tr class="odd">
+<td>num_classes</td>
+<td>int</td>
+<td>1</td>
+<td>number of output classes (&gt;1 for multilabel)</td>
+</tr>
+<tr class="even">
+<td>data_min</td>
+<td>float</td>
+<td>-11.355</td>
+<td>minimum observed value in training data</td>
+</tr>
+<tr class="odd">
+<td>data_max</td>
+<td>float</td>
+<td>23.892</td>
+<td>maximum observed value in training data</td>
+</tr>
+<tr class="even">
+<td>input_size_prot</td>
+<td>int</td>
+<td>1000</td>
+<td>maximum protein sequence length for padding/cutting</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>None</strong></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="nsequonpred" class="level3">
+<h3 class="anchored" data-anchor-id="nsequonpred">NSequonPred</h3>
+<blockquote class="blockquote">
+<pre><code> NSequonPred ()</code></pre>
+</blockquote>
+<p>*Base class for all neural network modules.</p>
+<p>Your models should also subclass this class.</p>
+<p>Modules can also contain other Modules, allowing them to be nested in a tree structure. You can assign the submodules as regular attributes::</p>
+<pre><code>import torch.nn as nn
+import torch.nn.functional as F
+
+class Model(nn.Module):
+    def __init__(self) -&gt; None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.conv2 = nn.Conv2d(20, 20, 5)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        return F.relu(self.conv2(x))</code></pre>
+<p>Submodules assigned in this way will be registered, and will also have their parameters converted when you call :meth:<code>to</code>, etc.</p>
+<p>.. note:: As per the example above, an <code>__init__()</code> call to the parent class must be made before assignment on the child.</p>
+<p>:ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool*</p>
+<hr>
+</section>
+<section id="init_weights" class="level3">
+<h3 class="anchored" data-anchor-id="init_weights">init_weights</h3>
+<blockquote class="blockquote">
+<pre><code> init_weights (model:torch.nn.modules.module.Module, mode:str='sparse',
+               sparsity:float=0.1)</code></pre>
+</blockquote>
+<p><em>initializes linear layers of PyTorch model with a weight initialization</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>model</td>
+<td>Module</td>
+<td></td>
+<td>neural network for analyzing glycans</td>
+</tr>
+<tr class="even">
+<td>mode</td>
+<td>str</td>
+<td>sparse</td>
+<td>initialization algorithm: ‘sparse’, ‘kaiming’, ‘xavier’</td>
+</tr>
+<tr class="odd">
+<td>sparsity</td>
+<td>float</td>
+<td>0.1</td>
+<td>proportion of sparsity after initialization</td>
+</tr>
+<tr class="even">
+<td><strong>Returns</strong></td>
+<td><strong>None</strong></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="prep_model" class="level3">
+<h3 class="anchored" data-anchor-id="prep_model">prep_model</h3>
+<blockquote class="blockquote">
+<pre><code> prep_model (model_type:Literal['SweetNet','GIFFLAR','LectinOracle','Lecti
+             nOracle_flex','NSequonPred'], num_classes:int,
+             libr:dict[str,int]|None=None, trained:bool=False,
+             hidden_dim:int=128)</code></pre>
+</blockquote>
+<p><em>wrapper to instantiate model, initialize it, and put it on the GPU</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>model_type</td>
+<td>Literal</td>
+<td></td>
+<td>type of model to create</td>
+</tr>
+<tr class="even">
+<td>num_classes</td>
+<td>int</td>
+<td></td>
+<td>number of unique classes for classification</td>
+</tr>
+<tr class="odd">
+<td>libr</td>
+<td>dict[str, int] | None</td>
+<td>None</td>
+<td>dictionary of form glycoletter:index</td>
+</tr>
+<tr class="even">
+<td>trained</td>
+<td>bool</td>
+<td>False</td>
+<td>whether to use pretrained model</td>
+</tr>
+<tr class="odd">
+<td>hidden_dim</td>
+<td>int</td>
+<td>128</td>
+<td>hidden dimension for the model (SweetNet only)</td>
+</tr>
+<tr class="even">
+<td><strong>Returns</strong></td>
+<td><strong>Module</strong></td>
+<td></td>
+<td><strong>initialized PyTorch model</strong></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="processing" class="level2">
+<h2 class="anchored" data-anchor-id="processing">processing</h2>
+<blockquote class="blockquote">
+<p>contains helper functions to prepare glycan data for model training</p>
+</blockquote>
+<hr>
+<section id="dataset_to_graphs" class="level3">
+<h3 class="anchored" data-anchor-id="dataset_to_graphs">dataset_to_graphs</h3>
+<blockquote class="blockquote">
+<pre><code> dataset_to_graphs (glycan_list:list[str], labels:list[float|int],
+                    libr:dict[str,int]|None=None,
+                    label_type:torch.dtype=torch.int64)</code></pre>
+</blockquote>
+<p><em>wrapper function to convert a whole list of glycans into a graph dataset</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>glycan_list</td>
+<td>list</td>
+<td></td>
+<td>list of IUPAC-condensed glycan sequences</td>
+</tr>
+<tr class="even">
+<td>labels</td>
+<td>list</td>
+<td></td>
+<td>list of labels</td>
+</tr>
+<tr class="odd">
+<td>libr</td>
+<td>dict[str, int] | None</td>
+<td>None</td>
+<td>dictionary of glycoletter:index</td>
+</tr>
+<tr class="even">
+<td>label_type</td>
+<td>dtype</td>
+<td>torch.int64</td>
+<td>tensor type for label</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>list</strong></td>
+<td></td>
+<td><strong>list of node/edge/label data tuples</strong></td>
+</tr>
+</tbody>
+</table>
+<div id="quiet-butter" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>dataset_to_graphs([<span class="st">"Neu5Ac(a2-3)Gal(b1-4)Glc"</span>,</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>                  <span class="st">"Fuc(a1-2)Gal(b1-3)GalNAc"</span>], [<span class="dv">1</span>, <span class="dv">0</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<pre><code>[Data(edge_index=[2, 4], labels=[5], string_labels=[5], num_nodes=5, y=1),
+ Data(edge_index=[2, 4], labels=[5], string_labels=[5], num_nodes=5, y=0)]</code></pre>
+</div>
+</div>
+<hr>
+</section>
+<section id="dataset_to_dataloader" class="level3">
+<h3 class="anchored" data-anchor-id="dataset_to_dataloader">dataset_to_dataloader</h3>
+<blockquote class="blockquote">
+<pre><code> dataset_to_dataloader (glycan_list:list[str], labels:list[float|int],
+                        libr:dict[str,int]|None=None, batch_size:int=32,
+                        shuffle:bool=True, drop_last:bool=False,
+                        extra_feature:list[float]|None=None,
+                        label_type:torch.dtype=torch.int64,
+                        augment_prob:float=0.0,
+                        generalization_prob:float=0.2)</code></pre>
+</blockquote>
+<p><em>wrapper function to convert glycans and labels to a torch_geometric DataLoader</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>glycan_list</td>
+<td>list</td>
+<td></td>
+<td>list of IUPAC-condensed glycans</td>
+</tr>
+<tr class="even">
+<td>labels</td>
+<td>list</td>
+<td></td>
+<td>list of labels</td>
+</tr>
+<tr class="odd">
+<td>libr</td>
+<td>dict[str, int] | None</td>
+<td>None</td>
+<td>dictionary of glycoletter:index</td>
+</tr>
+<tr class="even">
+<td>batch_size</td>
+<td>int</td>
+<td>32</td>
+<td>samples per batch</td>
+</tr>
+<tr class="odd">
+<td>shuffle</td>
+<td>bool</td>
+<td>True</td>
+<td>shuffle samples in dataloader</td>
+</tr>
+<tr class="even">
+<td>drop_last</td>
+<td>bool</td>
+<td>False</td>
+<td>drop last batch</td>
+</tr>
+<tr class="odd">
+<td>extra_feature</td>
+<td>list[float] | None</td>
+<td>None</td>
+<td>additional input features</td>
+</tr>
+<tr class="even">
+<td>label_type</td>
+<td>dtype</td>
+<td>torch.int64</td>
+<td>tensor type for label</td>
+</tr>
+<tr class="odd">
+<td>augment_prob</td>
+<td>float</td>
+<td>0.0</td>
+<td>probability of data augmentation</td>
+</tr>
+<tr class="even">
+<td>generalization_prob</td>
+<td>float</td>
+<td>0.2</td>
+<td>probability of wildcarding</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>DataLoader</strong></td>
+<td></td>
+<td><strong>dataloader for training</strong></td>
+</tr>
+</tbody>
+</table>
+<div id="filled-glass" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="bu">next</span>(<span class="bu">iter</span>(dataset_to_dataloader([<span class="st">"Neu5Ac(a2-3)Gal(b1-4)Glc"</span>,</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>                                 <span class="st">"Fuc(a1-2)Gal(b1-3)GalNAc"</span>], [<span class="dv">1</span>, <span class="dv">0</span>])))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<pre><code>DataBatch(edge_index=[2, 8], labels=[10], string_labels=[2], num_nodes=10, y=[2], batch=[10], ptr=[3])</code></pre>
+</div>
+</div>
+<hr>
+</section>
+<section id="split_data_to_train" class="level3">
+<h3 class="anchored" data-anchor-id="split_data_to_train">split_data_to_train</h3>
+<blockquote class="blockquote">
+<pre><code> split_data_to_train (glycan_list_train:list[str],
+                      glycan_list_val:list[str],
+                      labels_train:list[float|int],
+                      labels_val:list[float|int],
+                      libr:dict[str,int]|None=None, batch_size:int=32,
+                      drop_last:bool=False,
+                      extra_feature_train:list[float]|None=None,
+                      extra_feature_val:list[float]|None=None,
+                      label_type:torch.dtype=torch.int64,
+                      augment_prob:float=0.0,
+                      generalization_prob:float=0.2)</code></pre>
+</blockquote>
+<p><em>wrapper function to convert split training/test data into dictionary of dataloaders</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>glycan_list_train</td>
+<td>list</td>
+<td></td>
+<td>training glycans</td>
+</tr>
+<tr class="even">
+<td>glycan_list_val</td>
+<td>list</td>
+<td></td>
+<td>validation glycans</td>
+</tr>
+<tr class="odd">
+<td>labels_train</td>
+<td>list</td>
+<td></td>
+<td>training labels</td>
+</tr>
+<tr class="even">
+<td>labels_val</td>
+<td>list</td>
+<td></td>
+<td>validation labels</td>
+</tr>
+<tr class="odd">
+<td>libr</td>
+<td>dict[str, int] | None</td>
+<td>None</td>
+<td>dictionary of glycoletter:index</td>
+</tr>
+<tr class="even">
+<td>batch_size</td>
+<td>int</td>
+<td>32</td>
+<td>samples per batch</td>
+</tr>
+<tr class="odd">
+<td>drop_last</td>
+<td>bool</td>
+<td>False</td>
+<td>drop last batch</td>
+</tr>
+<tr class="even">
+<td>extra_feature_train</td>
+<td>list[float] | None</td>
+<td>None</td>
+<td>additional training features</td>
+</tr>
+<tr class="odd">
+<td>extra_feature_val</td>
+<td>list[float] | None</td>
+<td>None</td>
+<td>additional validation features</td>
+</tr>
+<tr class="even">
+<td>label_type</td>
+<td>dtype</td>
+<td>torch.int64</td>
+<td>tensor type for label</td>
+</tr>
+<tr class="odd">
+<td>augment_prob</td>
+<td>float</td>
+<td>0.0</td>
+<td>probability of data augmentation</td>
+</tr>
+<tr class="even">
+<td>generalization_prob</td>
+<td>float</td>
+<td>0.2</td>
+<td>probability of wildcarding</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>dict</strong></td>
+<td></td>
+<td><strong>dictionary of train/val dataloaders</strong></td>
+</tr>
+</tbody>
+</table>
+<div id="reduced-female" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>split_data_to_train([<span class="st">"Neu5Ac(a2-3)Gal(b1-4)Glc"</span>, <span class="st">"Fuc(a1-2)Gal(b1-3)GalNAc"</span>],</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>                    [<span class="st">"Neu5Ac(a2-6)Gal(b1-4)Glc"</span>, <span class="st">"Fuc(a1-2)Gal(a1-3)GalNAc"</span>],</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>                    [<span class="dv">1</span>, <span class="dv">0</span>], [<span class="dv">0</span>,<span class="dv">1</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<pre><code>{'train': &lt;torch_geometric.loader.dataloader.DataLoader&gt;,
+ 'val': &lt;torch_geometric.loader.dataloader.DataLoader&gt;}</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="inference" class="level2">
+<h2 class="anchored" data-anchor-id="inference">inference</h2>
+<p><a class="anchor" id="inference"></a> &gt;can be used to analyze trained models, make predictions, or obtain glycan representations</p>
+<hr>
+<section id="glycans_to_emb" class="level3">
+<h3 class="anchored" data-anchor-id="glycans_to_emb">glycans_to_emb</h3>
+<blockquote class="blockquote">
+<pre><code> glycans_to_emb (glycans:list[str], model:torch.nn.modules.module.Module,
+                 libr:dict[str,int]|None=None, batch_size:int=32,
+                 rep:bool=True, class_list:list[str]|None=None,
+                 multilabel=False)</code></pre>
+</blockquote>
+<p><em>Returns a dataframe of learned representations for a list of glycans</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>glycans</td>
+<td>list</td>
+<td></td>
+<td>list of glycans in IUPAC-condensed</td>
+</tr>
+<tr class="even">
+<td>model</td>
+<td>Module</td>
+<td></td>
+<td>trained graph neural network for analyzing glycans</td>
+</tr>
+<tr class="odd">
+<td>libr</td>
+<td>dict[str, int] | None</td>
+<td>None</td>
+<td>dictionary of form glycoletter:index</td>
+</tr>
+<tr class="even">
+<td>batch_size</td>
+<td>int</td>
+<td>32</td>
+<td>batch size used during training</td>
+</tr>
+<tr class="odd">
+<td>rep</td>
+<td>bool</td>
+<td>True</td>
+<td>True returns representations, False returns predicted labels</td>
+</tr>
+<tr class="even">
+<td>class_list</td>
+<td>list[str] | None</td>
+<td>None</td>
+<td>list of unique classes to map predictions</td>
+</tr>
+<tr class="odd">
+<td>multilabel</td>
+<td>bool</td>
+<td>False</td>
+<td>whether to output predictions for a multilabel-task</td>
+</tr>
+<tr class="even">
+<td><strong>Returns</strong></td>
+<td><strong>pandas.core.frame.DataFrame | list[str]</strong></td>
+<td></td>
+<td><strong>dataframe of representations or list of predictions</strong></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="get_lectin_preds" class="level3">
+<h3 class="anchored" data-anchor-id="get_lectin_preds">get_lectin_preds</h3>
+<blockquote class="blockquote">
+<pre><code> get_lectin_preds (prot:str, glycans:list[str],
+                   model:torch.nn.modules.module.Module,
+                   prot_dic:dict[str,list[float]]|None=None,
+                   background_correction:bool=False,
+                   correction_df:pandas.core.frame.DataFrame|None=None,
+                   batch_size:int=128, libr:dict[str,int]|None=None,
+                   sort:bool=True, flex:bool=False)</code></pre>
+</blockquote>
+<p><em>Wrapper that uses LectinOracle-type model for predicting binding of protein to glycans</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>prot</td>
+<td>str</td>
+<td></td>
+<td>protein amino acid sequence</td>
+</tr>
+<tr class="even">
+<td>glycans</td>
+<td>list</td>
+<td></td>
+<td>list of glycans in IUPAC-condensed</td>
+</tr>
+<tr class="odd">
+<td>model</td>
+<td>Module</td>
+<td></td>
+<td>trained LectinOracle-type model</td>
+</tr>
+<tr class="even">
+<td>prot_dic</td>
+<td>dict[str, list[float]] | None</td>
+<td>None</td>
+<td>dict of protein sequence:ESMC representation</td>
+</tr>
+<tr class="odd">
+<td>background_correction</td>
+<td>bool</td>
+<td>False</td>
+<td>whether to correct predictions for background</td>
+</tr>
+<tr class="even">
+<td>correction_df</td>
+<td>pandas.core.frame.DataFrame | None</td>
+<td>None</td>
+<td>background prediction for glycans</td>
+</tr>
+<tr class="odd">
+<td>batch_size</td>
+<td>int</td>
+<td>128</td>
+<td>batch size used during training</td>
+</tr>
+<tr class="even">
+<td>libr</td>
+<td>dict[str, int] | None</td>
+<td>None</td>
+<td>dict of glycoletter:index</td>
+</tr>
+<tr class="odd">
+<td>sort</td>
+<td>bool</td>
+<td>True</td>
+<td>whether to sort prediction results descendingly</td>
+</tr>
+<tr class="even">
+<td>flex</td>
+<td>bool</td>
+<td>False</td>
+<td>LectinOracle (False) or LectinOracle_flex (True)</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>DataFrame</strong></td>
+<td></td>
+<td><strong>glycan sequences and predicted binding</strong></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="get_nsequon_preds" class="level3">
+<h3 class="anchored" data-anchor-id="get_nsequon_preds">get_Nsequon_preds</h3>
+<blockquote class="blockquote">
+<pre><code> get_Nsequon_preds (prots:list[str], model:torch.nn.modules.module.Module,
+                    prot_dic:dict[str,list[float]])</code></pre>
+</blockquote>
+<p><em>Predicts whether an N-sequon will be glycosylated</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 9%">
+<col style="width: 38%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>prots</td>
+<td>list</td>
+<td>20 AA + N + 20 AA sequences; replace missing with ‘z’</td>
+</tr>
+<tr class="even">
+<td>model</td>
+<td>Module</td>
+<td>trained NSequonPred-type model</td>
+</tr>
+<tr class="odd">
+<td>prot_dic</td>
+<td>dict</td>
+<td>dict of protein sequence:ESM1b representation</td>
+</tr>
+<tr class="even">
+<td><strong>Returns</strong></td>
+<td><strong>DataFrame</strong></td>
+<td><strong>protein sequences and predicted likelihood</strong></td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="get_esmc_representations" class="level3">
+<h3 class="anchored" data-anchor-id="get_esmc_representations">get_esmc_representations</h3>
+<blockquote class="blockquote">
+<pre><code> get_esmc_representations (prots:list[str],
+                           model:torch.nn.modules.module.Module)</code></pre>
+</blockquote>
+<p><em>Retrieves ESMC-300M representations of protein for using them as input for LectinOracle</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 9%">
+<col style="width: 38%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>prots</td>
+<td>list</td>
+<td>list of protein sequences to convert</td>
+</tr>
+<tr class="even">
+<td>model</td>
+<td>Module</td>
+<td>trained ESMC model</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>dict</strong></td>
+<td><strong>dict of protein sequence:ESMC-300M representation</strong></td>
+</tr>
+</tbody>
+</table>
+<p>In order to run <code>get_esmc_representations</code>, you first have to run this snippet:</p>
+<p><code>!pip install fair-esm</code> <code>from esm.models.esmc import ESMC</code> <code>model = ESMC.from_pretrained("esmc_300m").to(device)</code></p>
+</section>
+</section>
+<section id="train_test_split" class="level2">
+<h2 class="anchored" data-anchor-id="train_test_split">train_test_split</h2>
+<blockquote class="blockquote">
+<p>contains various data split functions to get appropriate training and test sets</p>
+</blockquote>
+<hr>
+<section id="hierarchy_filter" class="level3">
+<h3 class="anchored" data-anchor-id="hierarchy_filter">hierarchy_filter</h3>
+<blockquote class="blockquote">
+<pre><code> hierarchy_filter (df_in:pandas.core.frame.DataFrame, rank:str='Domain',
+                   min_seq:int=5, wildcard_seed:bool=False,
+                   wildcard_list:list[str]|None=None,
+                   wildcard_name:str|None=None, r:float=0.1,
+                   col:str='glycan')</code></pre>
+</blockquote>
+<p><em>stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>df_in</td>
+<td>DataFrame</td>
+<td></td>
+<td>dataframe of glycan sequences and taxonomic labels</td>
+</tr>
+<tr class="even">
+<td>rank</td>
+<td>str</td>
+<td>Domain</td>
+<td>taxonomic rank to filter</td>
+</tr>
+<tr class="odd">
+<td>min_seq</td>
+<td>int</td>
+<td>5</td>
+<td>minimum glycans per class</td>
+</tr>
+<tr class="even">
+<td>wildcard_seed</td>
+<td>bool</td>
+<td>False</td>
+<td>seed wildcard glycoletters</td>
+</tr>
+<tr class="odd">
+<td>wildcard_list</td>
+<td>list[str] | None</td>
+<td>None</td>
+<td>glycoletters for wildcard</td>
+</tr>
+<tr class="even">
+<td>wildcard_name</td>
+<td>str | None</td>
+<td>None</td>
+<td>wildcard name in IUPAC</td>
+</tr>
+<tr class="odd">
+<td>r</td>
+<td>float</td>
+<td>0.1</td>
+<td>replacement rate</td>
+</tr>
+<tr class="even">
+<td>col</td>
+<td>str</td>
+<td>glycan</td>
+<td>column name for glycans</td>
+</tr>
+<tr class="odd">
+<td><strong>Returns</strong></td>
+<td><strong>tuple</strong></td>
+<td></td>
+<td><strong>train/val splits and mappings</strong></td>
+</tr>
+</tbody>
+</table>
+<div id="latin-gross" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>train_x, val_x, train_y, val_y, id_val, class_list, class_converter <span class="op">=</span> hierarchy_filter(df_species,</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>                                                                                       rank <span class="op">=</span> <span class="st">'Kingdom'</span>)</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(train_x[:<span class="dv">10</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>['Gal(b1-4)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Neu5Ac(a2-3)Gal(b1-3)GlcNAc(a1-2)LDManHep(a1-2)[Glc(b1-4)]LDManHepOPEtN(a1-5)Kdo', 'GlcNAc(b1-2)Man(a1-3)[Man(a1-3)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Gal4S(b1-3)GlcNAc(b1-2)ManOS(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'L-GulNAcA(a1-3)QuiNAc(b1-4)GlcNAcANAlaFo(b1-4)ManNAcANAm(b1-4)L-GulNAcA', 'Neu5Ac(a2-3)Gal(b1-3)GalNAc(a1-3)[Neu5Gc(a2-8)Neu5Gc(a2-6)]GalNAc', '[D-FucNAlaAc(a1-4)]Gal(b1-4)Glc(a1-4)[Glc(a1-2)]Glc(b1-3)GalNAc(b1-3)Gal', 'Galf2Ac(b1-3)GalNAc(b1-3)[Gal(a1-2)]Gal(b1-4)Rib5P-ol(5-3)Gal(a1-3)Gal(b1-6)Galf2Ac', 'Fuc(a1-2)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Man(a1-3/6)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)[Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']</code></pre>
+</div>
+</div>
+<hr>
+</section>
+<section id="general_split" class="level3">
+<h3 class="anchored" data-anchor-id="general_split">general_split</h3>
+<blockquote class="blockquote">
+<pre><code> general_split (glycans:list[str], labels:list[float|int|str],
+                test_size:float=0.2)</code></pre>
+</blockquote>
+<p><em>splits glycans and labels into train / test sets</em></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>glycans</td>
+<td>list</td>
+<td></td>
+<td>list of IUPAC-condensed glycans</td>
+</tr>
+<tr class="even">
+<td>labels</td>
+<td>list</td>
+<td></td>
+<td>list of prediction labels</td>
+</tr>
+<tr class="odd">
+<td>test_size</td>
+<td>float</td>
+<td>0.2</td>
+<td>size of test set</td>
+</tr>
+<tr class="even">
+<td><strong>Returns</strong></td>
+<td><strong>tuple</strong></td>
+<td></td>
+<td><strong>train/test splits</strong></td>
+</tr>
+</tbody>
+</table>
+<div id="statistical-harvest" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>train_x, val_x, train_y, val_y <span class="op">=</span> general_split(df_species.glycan.values.tolist(),</span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>                                              df_species.Species.values.tolist())</span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(train_x[:<span class="dv">10</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>['Neu5Ac(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3/6)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', '[Man(a1-2)Man(a1-2)Man(a1-6)Man(a1-3)Man(a1-2)Man(a1-2)]Man(a1-6)Man(a1-6)[Man(a1-3)Man(a1-2)Man(a1-2)]Man(a1-3)[Man(a1-3)Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Gal(a1-3)Gal(b1-4)GlcNAc(b1-2)[Gal(a1-3)Gal(b1-4)GlcNAc(b1-4/6)]Man(a1-3/6)[Gal(a1-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Qui3NSerAc(b1-3)Ribf(b1-4)Gal(b1-3)GlcNAc(a1-4)Qui3NSerAc', 'Gal(a1-4)Neu5Ac(a2-6)Gal', 'GlcA(?1-?)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'LDManHep(a1-7)LDManHepOP(a1-3)[DDManHepOP(a1-2)DDManHep(a1-4)]LDManHep(a1-5)Kdo', 'Neu5Gc(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Gal(b1-3/4)GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)Gal(b1-4)]Gal(b1-4)Glc-ol']</code></pre>
+</div>
+</div>
+<hr>
+</section>
+<section id="prepare_multilabel" class="level3">
+<h3 class="anchored" data-anchor-id="prepare_multilabel">prepare_multilabel</h3>
+<blockquote class="blockquote">
+<pre><code> prepare_multilabel (df:pandas.core.frame.DataFrame, rank:str='Species',
+                     glycan_col:str='glycan')</code></pre>
+</blockquote>
+<p><em>converts a one row per glycan-species/tissue/disease association file to a format of one glycan - all associations</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 34%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th><strong>Type</strong></th>
+<th><strong>Default</strong></th>
+<th><strong>Details</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>df</td>
+<td>DataFrame</td>
+<td></td>
+<td>dataframe with one glycan-association per row</td>
+</tr>
+<tr class="even">
+<td>rank</td>
+<td>str</td>
+<td>Species</td>
+<td>label column to use</td>
+</tr>
+<tr class="odd">
+<td>glycan_col</td>
+<td>str</td>
+<td>glycan</td>
+<td>column with glycan sequences</td>
+</tr>
+<tr class="even">
+<td><strong>Returns</strong></td>
+<td><strong>tuple</strong></td>
+<td></td>
+<td><strong>unique glycans and their label vectors</strong></td>
+</tr>
+</tbody>
+</table>
+<div id="popular-bailey" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>glycans, labels <span class="op">=</span> prepare_multilabel(df_species[df_species.Order <span class="op">==</span> <span class="st">'Carnivora'</span>])</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(glycans[<span class="dv">50</span>])</span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(labels[<span class="dv">50</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Glc1Cer3S
+[0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</code></pre>
+</div>
+</div>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/BojarLab\.github\.io\/glycowork\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/BojarLab/glycowork/tree/master/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>

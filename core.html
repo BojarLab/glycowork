@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="description" content="Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.">
+
+<title>Overview – glycowork</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-000f0825b9c55ed21d14970d810c14a9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="Overview – glycowork">
+<meta property="og:description" content="Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.">
+<meta property="og:image" content="https://BojarLab.github.io/glycowork/00_core_files/figure-html/cell-5-output-2.png">
+<meta property="og:site_name" content="glycowork">
+<meta property="og:image:height" content="470">
+<meta property="og:image:width" content="624">
+<meta name="twitter:title" content="Overview – glycowork">
+<meta name="twitter:description" content="Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.">
+<meta name="twitter:image" content="https://BojarLab.github.io/glycowork/00_core_files/figure-html/cell-5-output-2.png">
+<meta name="twitter:image-height" content="470">
+<meta name="twitter:image-width" content="624">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">glycowork</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./core.html">Overview</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">glycowork</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Overview</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./glycan_data.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">glycan_data</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./ml.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ml</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./motif.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">motif</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">network</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./examples.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Examples</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
+        
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Overview</h1>
+</div>
+
+<div>
+  <div class="description">
+    Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<p>The analysis of glycans is made difficult by their nonlinearity and their astounding diversity, given the large number of monosaccharides and types of linkages. Glycowork is a Python package designed to process and analyze glycan sequences, with a special emphasis on glycan-focused machine learning. Next to various functions to work with glycans, glycowork also contains some of the largest curated glycan datasets in the field, that can be used for model training, motif comparisons, composition matching, etc.</p>
+<p>Where possible, glycowork uses the IUPAC-condensed nomenclature for glycans. However, since v1.0, glycowork broadly supports IUPAC-extended, LinearCode, Oxford, GlycoCT, KCF, CSDB-linear, GlySeeker, and WURCS as input formats as well. No conversions or special settings are necessary.</p>
+<p>If you do want to use IUPAC-condensed (still recommended), here are some best practices: An example for this would be <code>Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc</code>, in which parentheses enclose the linkage description and brackets indicate branches. Ideally, the longest branch should constitute the main chain and side branches should be ordered ascendingly based on the last linkage of the branch (yet all functions in glycowork can deal with violations to these guidelines). Fragments with unclear attachment points are added within curly brackets. Where possible/known, monosaccharide modifications are indicated by the ring position to which they are attached (e.g., Glc6Me), while the type of connection is given if the exact position is unknown (e.g., GlcOMe). Linkage uncertainty is expressed with a ‘?’ placeholder (e.g., a1-6, ?1-6, a1-?). As suggested in IUPAC-condensed, we omit the D-/L-prefix for the “usual” case and only add it for the rarer option (e.g., Glc vs.&nbsp;L-Glc).</p>
+<p>However, it should be noted that nearly all functions in glycowork operate on pure graphs (facilitated by <code>glycowork.motif.graph.glycan_to_nxGraph</code>), avoiding all ambiguity of the IUPAC nomenclature. We use the IUPAC nomenclature here as a human-readable glycan nomenclature that can be readily used for motif interpretation and user-friendly usage. The conversion to graphs in all end user-functions and operations, such as motif annotation via highly optimized subgraph isomorphism tests, are handled behind the scenes, allowing you to work with glycans in a human-readable format.</p>
+<p>All modules in glycowork, <strong>except</strong> for <code>ml</code>, can be run on any machine. For most parts of <code>ml</code>, however, a GPU is needed to load and run torch_geometric.</p>
+<p>If you want to run <code>glycowork.ml</code> in a Jupyter Notebook (in the cloud or wherever you have a GPU), just install glycowork with its optional dependencies for machine learning:</p>
+<pre><code>!pip install "glycowork[ml]"</code></pre>
+<p>Okay, how about an example! (For more example workflows, head over to the <code>examples</code> section) <br> Let’s say you’re interested in glycans of the plant order Fabales that includes the legumes. Luckily, we’ve got you covered and <code>df_species</code> has &gt;700 glycan sequences that stem from Fabales. So the first step is easy: import <code>df_species</code> from <code>glycowork.glycan_data.loader</code> and filter for Fabales glycans.</p>
+<div id="cell-6" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>df_fabales <span class="op">=</span> df_species[df_species.Order <span class="op">==</span> <span class="st">'Fabales'</span>].reset_index(drop <span class="op">=</span> <span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="cell-7" class="cell">
+<div class="cell-output cell-output-display">
+<style type="text/css">
+#T_c89e5_row0_col0, #T_c89e5_row0_col1, #T_c89e5_row0_col2, #T_c89e5_row0_col3, #T_c89e5_row0_col4, #T_c89e5_row0_col5, #T_c89e5_row0_col6, #T_c89e5_row0_col7, #T_c89e5_row0_col8, #T_c89e5_row1_col0, #T_c89e5_row1_col1, #T_c89e5_row1_col2, #T_c89e5_row1_col3, #T_c89e5_row1_col4, #T_c89e5_row1_col5, #T_c89e5_row1_col6, #T_c89e5_row1_col7, #T_c89e5_row1_col8, #T_c89e5_row2_col0, #T_c89e5_row2_col1, #T_c89e5_row2_col2, #T_c89e5_row2_col3, #T_c89e5_row2_col4, #T_c89e5_row2_col5, #T_c89e5_row2_col6, #T_c89e5_row2_col7, #T_c89e5_row2_col8, #T_c89e5_row3_col0, #T_c89e5_row3_col1, #T_c89e5_row3_col2, #T_c89e5_row3_col3, #T_c89e5_row3_col4, #T_c89e5_row3_col5, #T_c89e5_row3_col6, #T_c89e5_row3_col7, #T_c89e5_row3_col8, #T_c89e5_row4_col0, #T_c89e5_row4_col1, #T_c89e5_row4_col2, #T_c89e5_row4_col3, #T_c89e5_row4_col4, #T_c89e5_row4_col5, #T_c89e5_row4_col6, #T_c89e5_row4_col7, #T_c89e5_row4_col8 {
+  font-size: 11pt;
+  font-family: Helvetica;
+  border-collapse: collapse;
+  border: 1px solid black;
+}
+</style>
+
+<table id="T_c89e5" class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th class="blank level0" data-quarto-table-cell-role="th">&nbsp;</th>
+<th id="T_c89e5_level0_col0" class="col_heading level0 col0" data-quarto-table-cell-role="th">Species</th>
+<th id="T_c89e5_level0_col1" class="col_heading level0 col1" data-quarto-table-cell-role="th">Genus</th>
+<th id="T_c89e5_level0_col2" class="col_heading level0 col2" data-quarto-table-cell-role="th">Family</th>
+<th id="T_c89e5_level0_col3" class="col_heading level0 col3" data-quarto-table-cell-role="th">Order</th>
+<th id="T_c89e5_level0_col4" class="col_heading level0 col4" data-quarto-table-cell-role="th">Class</th>
+<th id="T_c89e5_level0_col5" class="col_heading level0 col5" data-quarto-table-cell-role="th">Phylum</th>
+<th id="T_c89e5_level0_col6" class="col_heading level0 col6" data-quarto-table-cell-role="th">Kingdom</th>
+<th id="T_c89e5_level0_col7" class="col_heading level0 col7" data-quarto-table-cell-role="th">Domain</th>
+<th id="T_c89e5_level0_col8" class="col_heading level0 col8" data-quarto-table-cell-role="th">ref</th>
+</tr>
+<tr class="even">
+<th class="index_name level0" data-quarto-table-cell-role="th">glycan</th>
+<th class="blank col0" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col1" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col2" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col3" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col4" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col5" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col6" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col7" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col8" data-quarto-table-cell-role="th">&nbsp;</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th id="T_c89e5_level0_row0" class="row_heading level0 row0" data-quarto-table-cell-role="th">Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_c89e5_row0_col0" class="data row0 col0">Abrus_precatorius</td>
+<td id="T_c89e5_row0_col1" class="data row0 col1">Abrus</td>
+<td id="T_c89e5_row0_col2" class="data row0 col2">Fabaceae</td>
+<td id="T_c89e5_row0_col3" class="data row0 col3">Fabales</td>
+<td id="T_c89e5_row0_col4" class="data row0 col4">Dicotyledons</td>
+<td id="T_c89e5_row0_col5" class="data row0 col5">Angiosperms</td>
+<td id="T_c89e5_row0_col6" class="data row0 col6">Plantae</td>
+<td id="T_c89e5_row0_col7" class="data row0 col7">Eukarya</td>
+<td id="T_c89e5_row0_col8" class="data row0 col8">gwb</td>
+</tr>
+<tr class="even">
+<th id="T_c89e5_level0_row1" class="row_heading level0 row1" data-quarto-table-cell-role="th">Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_c89e5_row1_col0" class="data row1 col0">Abrus_precatorius</td>
+<td id="T_c89e5_row1_col1" class="data row1 col1">Abrus</td>
+<td id="T_c89e5_row1_col2" class="data row1 col2">Fabaceae</td>
+<td id="T_c89e5_row1_col3" class="data row1 col3">Fabales</td>
+<td id="T_c89e5_row1_col4" class="data row1 col4">Dicotyledons</td>
+<td id="T_c89e5_row1_col5" class="data row1 col5">Angiosperms</td>
+<td id="T_c89e5_row1_col6" class="data row1 col6">Plantae</td>
+<td id="T_c89e5_row1_col7" class="data row1 col7">Eukarya</td>
+<td id="T_c89e5_row1_col8" class="data row1 col8">gwb</td>
+</tr>
+<tr class="odd">
+<th id="T_c89e5_level0_row2" class="row_heading level0 row2" data-quarto-table-cell-role="th">Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)[Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_c89e5_row2_col0" class="data row2 col0">Abrus_precatorius</td>
+<td id="T_c89e5_row2_col1" class="data row2 col1">Abrus</td>
+<td id="T_c89e5_row2_col2" class="data row2 col2">Fabaceae</td>
+<td id="T_c89e5_row2_col3" class="data row2 col3">Fabales</td>
+<td id="T_c89e5_row2_col4" class="data row2 col4">Dicotyledons</td>
+<td id="T_c89e5_row2_col5" class="data row2 col5">Angiosperms</td>
+<td id="T_c89e5_row2_col6" class="data row2 col6">Plantae</td>
+<td id="T_c89e5_row2_col7" class="data row2 col7">Eukarya</td>
+<td id="T_c89e5_row2_col8" class="data row2 col8">gwb</td>
+</tr>
+<tr class="even">
+<th id="T_c89e5_level0_row3" class="row_heading level0 row3" data-quarto-table-cell-role="th">Man(a1-3)Man(a1-6)[Xyl(b1-2)][Man(a1-3)]Man(a1-6)Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_c89e5_row3_col0" class="data row3 col0">Abrus_precatorius</td>
+<td id="T_c89e5_row3_col1" class="data row3 col1">Abrus</td>
+<td id="T_c89e5_row3_col2" class="data row3 col2">Fabaceae</td>
+<td id="T_c89e5_row3_col3" class="data row3 col3">Fabales</td>
+<td id="T_c89e5_row3_col4" class="data row3 col4">Dicotyledons</td>
+<td id="T_c89e5_row3_col5" class="data row3 col5">Angiosperms</td>
+<td id="T_c89e5_row3_col6" class="data row3 col6">Plantae</td>
+<td id="T_c89e5_row3_col7" class="data row3 col7">Eukarya</td>
+<td id="T_c89e5_row3_col8" class="data row3 col8">nan</td>
+</tr>
+<tr class="odd">
+<th id="T_c89e5_level0_row4" class="row_heading level0 row4" data-quarto-table-cell-role="th">Man(a1-3)Man(a1-6)[Xyl(b1-2)][Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_c89e5_row4_col0" class="data row4 col0">Abrus_precatorius</td>
+<td id="T_c89e5_row4_col1" class="data row4 col1">Abrus</td>
+<td id="T_c89e5_row4_col2" class="data row4 col2">Fabaceae</td>
+<td id="T_c89e5_row4_col3" class="data row4 col3">Fabales</td>
+<td id="T_c89e5_row4_col4" class="data row4 col4">Dicotyledons</td>
+<td id="T_c89e5_row4_col5" class="data row4 col5">Angiosperms</td>
+<td id="T_c89e5_row4_col6" class="data row4 col6">Plantae</td>
+<td id="T_c89e5_row4_col7" class="data row4 col7">Eukarya</td>
+<td id="T_c89e5_row4_col8" class="data row4 col8">nan</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Now, if you’re not a plant glycobiologist, that may seem a bit overwhelming to you. But fear not, we can just <strong>plot</strong> glycans. How? Easy: Glycan representations! <br></p>
+<p>Representations or embeddings are really just a bunch of numbers learned by a machine learning model that express similarity. Meaning that if two glycans are similar (in sequence/properties/etc.), the difference between their representations should be small. Or, in other words, they should cluster in a plot. <br></p>
+<p>Now, you might not be in possession of a GPU and/or the wherewithal to train a glycan-focused deep learning model. That’s why <code>glycowork</code> has both trained models and <strong>already calculated</strong> glycan representations waiting for you! And the best thing: you don’t even need to worry about them. You just pass glycan sequences to our functions and <code>glycowork</code> will handle glycan representations behind the scenes. <br></p>
+<p>So, for our Fabales example, we pass our glycan sequences to <code>glycowork.motif.analysis.plot_embeddings</code>, which will retrieve their learned representations, transform them into two dimensions via t-distributed stochastic neighbor embedding (t-SNE), and plot them! If you want, it can even color the resulting scatterplots by a label, for instance the taxonomic family within Fabales.</p>
+<div id="cell-9" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>plot_embeddings(df_fabales.glycan.values.tolist(), label_list <span class="op">=</span> df_fabales.Family.values.tolist())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Download completed.</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="00_core_files/figure-html/cell-5-output-2.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Hmm, interesting. We definitely see clear glycan clusters (remember, every point is one glycan sequence). What’s even cooler is that the families Polygalaceae and Quillajaceae cluster in narrow regions of the whole plot. I wonder what differentiates their glycans from Fabaceae? <br></p>
+<p>If you’re also curious, proceed to the next function. First, we need to convert our data into a count table, with counts of every glycan in every family of Fabales. For this, you can use <code>glycowork.motif.processing.presence_to_matrix</code>, which was designed to work with tables such as <code>df_species</code>. Changing <code>label_col_name</code> to ‘Family’ will for instance generate a count table for all families in Fabales.</p>
+<div id="cell-11" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>df_map <span class="op">=</span> presence_to_matrix(df_fabales, label_col_name <span class="op">=</span> <span class="st">'Family'</span>).T</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="cell-12" class="cell">
+<div class="cell-output cell-output-display">
+<style type="text/css">
+#T_c0841_row0_col0, #T_c0841_row0_col1, #T_c0841_row0_col2, #T_c0841_row0_col3, #T_c0841_row1_col0, #T_c0841_row1_col1, #T_c0841_row1_col2, #T_c0841_row1_col3, #T_c0841_row2_col0, #T_c0841_row2_col1, #T_c0841_row2_col2, #T_c0841_row2_col3, #T_c0841_row3_col0, #T_c0841_row3_col1, #T_c0841_row3_col2, #T_c0841_row3_col3, #T_c0841_row4_col0, #T_c0841_row4_col1, #T_c0841_row4_col2, #T_c0841_row4_col3 {
+  font-size: 11pt;
+  font-family: Helvetica;
+  border-collapse: collapse;
+  border: 1px solid black;
+}
+</style>
+
+<table id="T_c0841" class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th class="index_name level0" data-quarto-table-cell-role="th">Family</th>
+<th id="T_c0841_level0_col0" class="col_heading level0 col0" data-quarto-table-cell-role="th">Fabaceae</th>
+<th id="T_c0841_level0_col1" class="col_heading level0 col1" data-quarto-table-cell-role="th">Fagaceae</th>
+<th id="T_c0841_level0_col2" class="col_heading level0 col2" data-quarto-table-cell-role="th">Polygalaceae</th>
+<th id="T_c0841_level0_col3" class="col_heading level0 col3" data-quarto-table-cell-role="th">Quillajaceae</th>
+</tr>
+<tr class="even">
+<th class="index_name level0" data-quarto-table-cell-role="th">glycan</th>
+<th class="blank col0" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col1" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col2" data-quarto-table-cell-role="th">&nbsp;</th>
+<th class="blank col3" data-quarto-table-cell-role="th">&nbsp;</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th id="T_c0841_level0_row0" class="row_heading level0 row0" data-quarto-table-cell-role="th">Apif(a1-2)Xyl(b1-2)[Glc6Ac(b1-4)]Glc</th>
+<td id="T_c0841_row0_col0" class="data row0 col0">1</td>
+<td id="T_c0841_row0_col1" class="data row0 col1">0</td>
+<td id="T_c0841_row0_col2" class="data row0 col2">0</td>
+<td id="T_c0841_row0_col3" class="data row0 col3">0</td>
+</tr>
+<tr class="even">
+<th id="T_c0841_level0_row1" class="row_heading level0 row1" data-quarto-table-cell-role="th">Ara(a1-2)Ara(a1-6)GlcNAc</th>
+<td id="T_c0841_row1_col0" class="data row1 col0">4</td>
+<td id="T_c0841_row1_col1" class="data row1 col1">0</td>
+<td id="T_c0841_row1_col2" class="data row1 col2">0</td>
+<td id="T_c0841_row1_col3" class="data row1 col3">0</td>
+</tr>
+<tr class="odd">
+<th id="T_c0841_level0_row2" class="row_heading level0 row2" data-quarto-table-cell-role="th">Ara(a1-2)Glc(b1-2)Ara</th>
+<td id="T_c0841_row2_col0" class="data row2 col0">1</td>
+<td id="T_c0841_row2_col1" class="data row2 col1">0</td>
+<td id="T_c0841_row2_col2" class="data row2 col2">0</td>
+<td id="T_c0841_row2_col3" class="data row2 col3">0</td>
+</tr>
+<tr class="even">
+<th id="T_c0841_level0_row3" class="row_heading level0 row3" data-quarto-table-cell-role="th">Ara(a1-2)GlcA</th>
+<td id="T_c0841_row3_col0" class="data row3 col0">3</td>
+<td id="T_c0841_row3_col1" class="data row3 col1">0</td>
+<td id="T_c0841_row3_col2" class="data row3 col2">0</td>
+<td id="T_c0841_row3_col3" class="data row3 col3">0</td>
+</tr>
+<tr class="odd">
+<th id="T_c0841_level0_row4" class="row_heading level0 row4" data-quarto-table-cell-role="th">Ara(a1-2)[Glc(b1-6)]Glc</th>
+<td id="T_c0841_row4_col0" class="data row4 col0">1</td>
+<td id="T_c0841_row4_col1" class="data row4 col1">0</td>
+<td id="T_c0841_row4_col2" class="data row4 col2">0</td>
+<td id="T_c0841_row4_col3" class="data row4 col3">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Okay, we’re ready for some heatmaps! In <code>glycowork.motif.analysis.get_heatmap</code>, we have a function which…makes heatmaps.<br></p>
+<p>Specifically, it will generate clustermaps, that are aiming to cluster samples based on their glycan profile. Calling <code>get_heatmap</code> with <code>df_map</code> without any other arguments will try to cluster the samples based on their full glycan sequences. But we also have the <code>motif</code> mode, which extracts motifs from these glycans and clusters samples based on those. For instance, you can use the <code>known</code> (curated glycan motifs) and the <code>exhaustive</code> (all observed monosaccharides and disaccharides) options. Check out the documentation for more options! <br></p>
+<p>We can immediately see that we have a lot more <em>N</em>-linked glycans in Fabaceae, for instance based on the prominence of Trimannosylcore and Fuc(a1-3)GlcNAc. Glycans from Polygalaceae and Quillajaceae in <code>df_species</code> seem to mainly contain small molecule- and lipid-linked glycans, which of course are quite different from <em>N</em>-linked glycans and are more similar to each other than to glycans from Fabaceae in <code>df_species</code>.</p>
+<div id="cell-14" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>get_heatmap(df_map, motifs <span class="op">=</span> <span class="va">True</span>, feature_set <span class="op">=</span> [<span class="st">'exhaustive'</span>], datatype <span class="op">=</span> <span class="st">'presence'</span>,</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>            show_all <span class="op">=</span> <span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="00_core_files/figure-html/cell-8-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Let’s say you’re interested in a specific glycan from Fabales, <code>GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc</code>. Finding out more about it could be annoying (try to Google anything more complex than a short motif and you run into problems). That’s why we have <code>glycowork.motif.query.get_insight</code>, a function that returns some metadata about that glycan. The nice thing is that you don’t need to bother with database IDs or notational ambiguity, as <code>glycowork</code> will convert that glycan into a graph behind the scenes and search our databases.</p>
+<p>Let’s say you develop an acute interest in the distribution of xylose in plant glycans. In such a situation, one option for further inquiry would be <code>glycowork.motif.analysis.characterize_monosaccharide</code>. This neat little function allows you to get a sense of what a particular monosaccharide is typically directly connected to and which modifications it can acquire. Further, you can filter the results to any taxonomic level you’re interested in! (as long as it’s in <code>df_species</code> or your dataset of interest of course.) <br> So, for xylose in plants, we immediately see Man (in M3X/M3FX structures) and Glc/Xyl (Xyloglucans) as prominent neighbors. Additionally, we note that xylose in plant glycans can be methylated, which is a rather typical modification in plant glycans in general. <br> There is quite a bit more that you can do with <code>characterize_monosaccharide</code>, so have a look at its documentation for all the options!</p>
+<div id="cell-17" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>characterize_monosaccharide(<span class="st">'Xyl'</span>, rank <span class="op">=</span> <span class="st">'Kingdom'</span>, focus <span class="op">=</span> <span class="st">'Plantae'</span>, modifications <span class="op">=</span> <span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="00_core_files/figure-html/cell-9-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>Or how about we switch gears to fish and have a look at how they handle their galactose connections. This is a bit more diverse than with xylose! Note that you can set <code>thresh</code> to 50 (from its default value of 10), to make the plot more legible, if you have many rare modifications and pairings.</p>
+<div id="cell-19" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>characterize_monosaccharide(<span class="st">'Gal'</span>, rank <span class="op">=</span> <span class="st">'Class'</span>, mode <span class="op">=</span> <span class="st">'sugarbond'</span>,</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>                            focus <span class="op">=</span> <span class="st">'Actinopterygii'</span>, modifications <span class="op">=</span> <span class="va">True</span>, thresh <span class="op">=</span> <span class="dv">50</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="00_core_files/figure-html/cell-10-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<p>And that’s just a super-brief glimpse at the really cool functions contained in <code>glycowork</code>! The rest of the documentation describes all functions and what they’re good for. Be sure to check out more, suggest improvements/fixes, and maybe even contribute something yourself. We are looking forward to your discoveries!</p>
+
+
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/BojarLab\.github\.io\/glycowork\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions"><ul><li><a href="https://github.com/BojarLab/glycowork/tree/master/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
