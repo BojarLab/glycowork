@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from typing import Optional
 
 from glycowork.glycan_data.loader import motif_list, df_glycan
 from glycowork.motif.graph import compare_glycans
@@ -8,7 +7,7 @@ from glycowork.motif.annotate import annotate_glycan
 
 
 def get_insight(glycan: str, # Glycan in IUPAC-condensed format
-                motifs: Optional[pd.DataFrame] = None # DataFrame of glycan motifs; default:motif_list
+                motifs: pd.DataFrame | None = None # DataFrame of glycan motifs; default:motif_list
                ) -> None: # Prints glycan meta-information
     "Print meta-information about a glycan"
     if motifs is None:

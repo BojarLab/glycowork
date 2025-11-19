@@ -1,28 +1,69 @@
 # Changelog
 
 ## [1.7.0]
-- The required version for `glyles`, when using the `[chem]` or `[all]` optional installs, has been bumped up to `1.2.3a0` to resolve dependency conflicts (27eb990)
-- Added new glycomics, glycoproteomics, and lectin microarray datasets (5558f1e)
-- Added link to `canonicalize` web app into README (3c862db)
+- Added some more lazy loading of drawing-related imports to improve package start-up time (b806bdd)
+- `glycowork` now requires at least version `0.2.3` of `glycorender[png]` (d51c0eb)
+- `glycowork` now requires `Python>=3.10`, as 3.9 is no longer supported by the Python Foundation (2b8838c)
+- switched type hints to native type hints (supported from Python 3.10) (2b8838c, 9b7b192)
 
 ### motif
-#### draw
+#### processing
 ##### Added ✨
-- `GlycoDraw` now has the new keyword argument `highlight_linkages`, which will draw selected linkages in red and thicker (6b60a53)
+- Added the `verbose` keyword argument (default = True) to `glytoucan_to_glycan`, to suppress the output of non-matched IDs (aa0b9a4)
+- Added the `kcf_to_iupac` function to convert the KCF nomenclature into IUPAC-condensed (bfe947c, 37fad0d)
+- Added the `glycoctxml_to_iupac` function to convert the GlycoCT XML nomenclature into IUPAC-condensed (3d967b6)
+- Added the `is_composition` utility function to quickly check whether a string is a composition or a glycan (dcd3ffe)
+
+##### Changed 🔄
+- Improved the detection of `LinearCode` sequences in `canonicalize_iupac` with the new `looks_like_linearcode` helper function (e26566e)
+- Improved the hook for triggering Oxford nomenclature conversion in `canonicalize_iupac` to be less permissive and faster (c5ae5e5, 25186e5)
+- Renamed `linearcode1d_to_iupac` to `glyseeker_to_iupac` (d44aba1)
+- Improved the hook for checking GlyTouCan IDs in `canonicalize_iupac` by making it more specific (aa0b9a4)
+- Improved `wurcs_to_iupac` handling of complex sequences to have more robust WURCS handling in `canonicalize_iupac` (0f5a5d8)
+- Improved `glycoworkbench_to_iupac` handling of variable reducing ends to have more robust GlycoWorkbench handling in `canonicalize_iupac` (0f5a5d8)
+- `canonicalize_iupac` can now also convert KCF sequences, thanks to the new `kcf_to_iupac` function (bfe947c, 37fad0d)
+- `canonicalize_iupac` can now also convert GlycoCT XML sequences, thanks to the new `glycoctxml_to_iupac` function (3d967b6)
+- Arbitrary chemical substituents from CSDB-linear glycans are now being correctly handled in `canonicalize_iupac`, even if the specific substituent is not yet supported (b71af07)
+
+##### Fixed 🐛
 
 ##### Deprecated ⚠️
 
-#### analysis
+#### draw
 ##### Added ✨
-- `get_pca` now has the new keyword argument `size`, to let users control the size of points with a scalar column in the provided meta-data (ab7669c)
+- Added the `reducing_end_label` keyword argument to `GlycoDraw` to display any connected text to the right of the glycan (such as "protein", which will be connected via a regular linkage) (c36a1a6)
+- Added the `GlycanDrawing` class to allow `GlycoDraw` to output `glycorender` aesthetics in a Jupyter notebook context (d51c0eb)
 
-#### graph
-##### Fixed 🐛
-- Fixed an issue in `subgraph_isomorphism_with_negation`, where motif graphs were only shallowly copied, potentially causing graph mutation during processing and leading to too permissive matching in `annotate_dataset` and higher-level functions (8b75aae)
-
-#### processing
 ##### Changed 🔄
-- Using `canonicalize_iupac` on a monosaccharide contained in `lib` now has an early return, preventing overlapping name spaces with the common names (040cbc8)
-- Added support for old 'z' uncertainty notation in `canonicalize_iupac` via `replace_dic` (b079ece)
-- Support C2-inference for beta-linked sialic acid in `canonicalize_iupac`
-- Support CarbBank IUPAC dialect in `canonicalize_iupac`
+- Improved branch spacing for complex glycans (i.e., less overlap) within `GlycoDraw` (39ba99c)
+- Added the `restrict_vocab` keyword argument to `GlycoDraw` (default: False) to support drawing of exotic glycans while still facilitating a restricted vocabulary for annotating glycans in figures (fcddb36)
+
+#### annotate
+##### Added ✨
+- Added the `get_glycan_similarity` function to calculate cosine similarities between glycan motif fingerprints between two glycan sequences (bd4d071)
+
+##### Changed 🔄
+- `get_k_saccharides` now has limited support to extract information from inputs that are a mix of sequences and compositions; namely monosaccharide counts, when `up_to = True` (dcd3ffe)
+
+### ml
+#### model_training
+##### Added ✨
+- Added `WarmupScheduler` class to (by default) have a warming-up period of learning rate schedule (for training stability) in `training_setup` (469649a)
+
+##### Changed 🔄
+- `train_model` now supports training GIFFLAR-type glycan models (1a7e720, 18f42e5)
+- `training_setup` has the new `warmup_epochs` keyword argument (default = 5) that determines the length of the learning rate warm-up schedule (469649a)
+- `train_model` now performs gradient clipping for improved training stability (469649a)
+
+#### models
+##### Added ✨
+- The GIFFLAR model can now be requested from `prep_model` via "GIFFLAR" as `model_type` (1a7e720, 18f42e5)
+
+#### inference
+##### Changed 🔄
+- Added the `multilabel` keyword argument to `glycans_to_emb`, to support inference for multilabel outputs (0437583)
+
+### glycan_data
+#### loader
+##### Added ✨
+- Added `parse_lines` utility function to parse copy-pasted content from an Excel column into a list (b806bdd)

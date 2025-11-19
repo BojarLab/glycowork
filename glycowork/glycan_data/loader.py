@@ -9,7 +9,7 @@ import networkx as nx
 from pathlib import Path
 from itertools import chain
 from importlib import resources
-from typing import Any, Dict, List, Union, Optional
+from typing import Any
 
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
   motif_list = pd.read_csv(f)
@@ -33,9 +33,9 @@ class GlycoDataFrame(pd.DataFrame):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
 
-  def glyco_filter(self, motif: Union[str, nx.DiGraph], # Glycan motif sequence or graph
-                  termini_list: List = [], # List of monosaccharide positions from terminal/internal/flexible
-                  min_count: Optional[int] = 1 # Minimum number of times motif needs to be present to pass
+  def glyco_filter(self, motif: str | nx.DiGraph, # Glycan motif sequence or graph
+                  termini_list: list = [], # List of monosaccharide positions from terminal/internal/flexible
+                  min_count: int | None = 1 # Minimum number of times motif needs to be present to pass
                   ) -> 'GlycoDataFrame':
     from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
     indices = [i for i, g in enumerate(self['glycan']) if subgraph_isomorphism(g, motif, termini_list, count = True) >= min_count]
@@ -112,8 +112,8 @@ modification_map = {'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'},
                     'OS': {'GlcNAc', 'Gal', 'GalNAc'}}
 
 
-def unwrap(nested_list: List[Any] # list to be flattened
-         ) -> List[Any]: # flattened list
+def unwrap(nested_list: list[Any] # list to be flattened
+         ) -> list[Any]: # flattened list
   "converts a nested list into a flat list"
   return list(chain(*nested_list))
 
@@ -206,7 +206,7 @@ def reindex(df_new: pd.DataFrame, # dataframe with new row order
   return [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
 
 
-def stringify_dict(dicty: Dict[Any, Any] # dictionary to convert
+def stringify_dict(dicty: dict[Any, Any] # dictionary to convert
                  ) -> str: # string of type key:value for sorted items
   "Converts dictionary into a string"
   dicty = dict(sorted(dicty.items()))
@@ -230,7 +230,7 @@ def replace_every_second(string: str, # input string
 
 
 def multireplace(string: str, # string to perform replacements on
-                remove_dic: Dict[str, str] # dict of form to_replace:replace_with
+                remove_dic: dict[str, str] # dict of form to_replace:replace_with
                ) -> str: # modified string
   "Replaces all occurences of items in a string with a given string"
   for k, v in remove_dic.items():
@@ -238,8 +238,8 @@ def multireplace(string: str, # string to perform replacements on
   return string
 
 
-def strip_suffixes(columns: List[Any] # column names
-                 ) -> List[str]: # column names without numerical suffixes
+def strip_suffixes(columns: list[Any] # column names
+                 ) -> list[str]: # column names without numerical suffixes
   "Strip numerical suffixes like .1, .2, etc., from column names"
   return [re.sub(r"\.\d+$", "", str(name)) for name in columns]
 
@@ -280,7 +280,7 @@ class DataFrameSerializer:
   in a version-independent manner."""
 
   @staticmethod
-  def _serialize_cell(value: Any) -> Dict[str, Any]:
+  def _serialize_cell(value: Any) -> dict[str, Any]:
     """Convert a cell value to a serializable format with type information."""
     # Check if the value is a string representation of a list
     if isinstance(value, str) and value.strip().startswith('[') and value.strip().endswith(']'):
@@ -354,7 +354,7 @@ class DataFrameSerializer:
       }
 
   @staticmethod
-  def _deserialize_cell(cell_data: Dict[str, Any]) -> Any:
+  def _deserialize_cell(cell_data: dict[str, Any]) -> Any:
     """Convert a serialized cell back to its original type."""
     if cell_data['type'] == 'list':
       return cell_data['value']
@@ -441,3 +441,9 @@ class HashableDict(dict):
       if isinstance(other, HashableDict):
           return tuple(sorted(self.items())) == tuple(sorted(other.items()))
       return False
+
+
+def parse_lines(excel_column_content: list | str # content of an Excel column pasted into a list and bookended by triple quotes
+                ) -> list:  # proper list of strings
+  inp = excel_column_content[0] if isinstance(excel_column_content, list) else excel_column_content
+  return inp.strip().split('\n')

@@ -22,6 +22,9 @@ from unittest.mock import Mock, patch, MagicMock, mock_open
 from torch_geometric.data import Data
 from collections import Counter
 from contextlib import contextmanager
+import random
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import DataLoader
 from glycowork.glycan_data.data_entry import check_presence
 from glycowork.motif.query import get_insight
 from glycowork.motif.tokenization import (
@@ -37,13 +40,13 @@ from glycowork.motif.processing import (
     get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac,
     glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
-    in_lib, get_class, enforce_class, equal_repeats, get_matching_indices,
+    in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles
 )
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
-    reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets,
-    strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader
+    reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
+    strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan
 )
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
@@ -68,7 +71,7 @@ from glycowork.motif.annotate import (
     annotate_glycan, annotate_dataset, get_molecular_properties,
     get_k_saccharides, get_terminal_structures, create_correlation_network,
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
-    Lectin, load_lectin_lib, create_lectin_and_motif_mappings,
+    Lectin, load_lectin_lib, create_lectin_and_motif_mappings, get_glycan_similarity,
     lectin_motif_scoring, deduplicate_motifs, quantify_motifs, get_size_branching_features,
     count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty
 )
@@ -102,12 +105,12 @@ from glycowork.network.evolution import (calculate_distance_matrix, distance_fro
 from glycowork.ml.train_test_split import (seed_wildcard_hierarchy, hierarchy_filter,
                             general_split, prepare_multilabel
 )
-from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset,
-                       dataset_to_graphs, dataset_to_dataloader, split_data_to_train
+from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset, iupac2mol, HeteroDataset,
+                       dataset_to_graphs, dataset_to_dataloader, split_data_to_train, hetero_collate
 )
 from glycowork.ml.model_training import (EarlyStopping, sigmoid, disable_running_stats,
                           enable_running_stats, train_model, SAM, Poly1CrossEntropyLoss, training_setup,
-                          train_ml_model, analyze_ml_model, get_mismatch
+                          train_ml_model, analyze_ml_model, get_mismatch, WarmupScheduler
 )
 from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRange, LectinOracle,
                           init_weights, prep_model, LectinOracle_flex
@@ -237,6 +240,9 @@ def test_torch_import_error():
         importlib.import_module('glycowork.ml.inference')
       with pytest.raises(ImportError, match="torch missing;"):
         importlib.import_module('glycowork.ml.model_training')
+    with patch.dict('sys.modules', {'glyles': None}):
+      with pytest.raises(ImportError, match="rdkit missing"):
+        importlib.import_module('glycowork.ml.processing')
   finally:
     # Restore original states
     if original_processing is not None:
@@ -317,6 +323,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Neu5Ac(a2-z)Gal(b1-3)GalNAc") == "Neu5Ac(a2-?)Gal(b1-3)GalNAc"
     assert canonicalize_iupac("Neu5Aca2-3Galb1-3{Neu5Aca2-6}GalNAc") == "Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc"
     assert canonicalize_iupac("Gal(a1-2)[Man(a1-3)D-Rha(a1-3)][Rha2Me3Me(a1-2)D-Ara(b1-3)Rha(b1-4)Xyl(b1-4)]Fuc(a1-3)[Xyl(b1-4)]Glc") == "Rha2Me3Me(a1-2)D-Ara(b1-3)Rha(b1-4)Xyl(b1-4)[Man(a1-3)D-Rha(a1-3)][Gal(a1-2)]Fuc(a1-3)[Xyl(b1-4)]Glc"
+    assert canonicalize_iupac("Fuca2Galb3GalNAc") == "Fuc(a1-2)Gal(b1-3)GalNAc"
     assert canonicalize_iupac("bGal14GlcNAc") == "Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("aMan13(aMan16)Man") == "Man(a1-3)[Man(a1-6)]Man"
     assert canonicalize_iupac("bGal13bGalNAc14(aNeuAc23)bGal14Glc") == "Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc"
@@ -371,6 +378,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Xyl(b1-2)][Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc") == "Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("Glc(?1-?)[Gal(?1-?)]2,5-Anhydro-Tal") == "Gal(?1-?)[Glc(?1-?)]2,5-Anhydro-Tal"
     # Test other nomenclatures
+    assert canonicalize_iupac("Ac(1-2)aLFucpN(1-3)[Ac(1-2)]bDGlcpN(1-1)Subst // Subst = 2-(4-(hydroxymethyl)-1,3-dioxolan-2-yl)propane-1,3-diol = SMILES O{1}CC(C1OCC(CO)O1)CO") == "FucNAc(a1-3)GlcNAc1Substituent"
     assert canonicalize_iupac("aDMan(1-2)bDGlcp(1-1)Me") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("aDGlcp(1-2)bDFruf") == "Glc(a1-2)Fruf"
     assert canonicalize_iupac("-1)bDFruf(2-3)bDFruf(2-") == "Fruf(b2-3)Fruf(b2-1)Fruf"
@@ -387,6 +395,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("-6)bDGalf(1-1)xDMan-ol(6-P-3)[aDGlcp(1-2)]bDGalp(1-3)bDGalf(1-3)bDGlcp(1-") == "Galf(b1-1)Man6P-ol(?6-3)[Glc(a1-2)]Gal(b1-3)Galf(b1-3)Glc(b1-6)Galf"
     assert canonicalize_iupac("-6)aDGlcp(1-6)aDGlcp(1-6)[aDGlcp(1-6)/aDGlcp(1-4)/n=?/aDGlcp(1-4)]aDGlcp(1-6)aDGlcp(1-") == "Glc(a1-6)Glc(a1-6)[Glc(a1-6)Glc(a1-4)Glc(a1-4)]Glc(a1-6)Glc(a1-6)Glc"
     assert canonicalize_iupac("bDGlcp(1-3)/bDGlcpA(1-4)bDGlcp(1-3)/n=1-2/bDGlcpA(1-4)bDGlcp") == "Glc(b1-3)GlcA(b1-4)Glc(b1-3)GlcA(b1-4)Glc"
+    assert canonicalize_iupac("%aXKdop(2-4)[xXEtN(1-P-7)]aXKdop(2-4)[aDGlcp(1-2)aDGlcp(1-2)[Ac(1-2)aDGlcpN(1-3)]aDGalp(1-3)aDGlcp(1-3)[aDGlcpN(1-7)aXLDmanHepp(1-7),%P-4)]aXLDmanHepp(1-3)[xXEtN(1-%P-%P-4)]aXLDmanHepp(1-5)]aXKdop") == "Glc(a1-2)Glc(a1-2)[GlcNAc(a1-3)]Gal(a1-3)Glc(a1-3)[GlcN(a1-7)LDManHep(a1-7)][P-4]LDManHep(a1-3)[EtN(?1-PP-4)]LDManHep(a1-5)[Kdo(a2-4)[EtN1P(?1-7)]Kdo(a2-4)]aXKdo"
     assert canonicalize_iupac("DManpa1-6DManpb1-4DGlcpNAcb1-4[LFucpa1-6]DGlcpNAcb1-OH") == "Man(a1-6)Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("Neup5Aca2-3DGalpb1-4DGlcpNAcb1-3DGalpb1-3DGalpb1-4DGlcpb1-OH") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)Gal(b1-4)Glc"
     assert canonicalize_iupac("DGalp[6S]b1-3DGalpNAca1-OH") == "Gal6S(b1-3)GalNAc"
@@ -400,6 +409,11 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("DGlcpNAcb1-2[DGlcpa1-3]LRhapa1-2LRhapa1-3LRhap[2A]a1-OH") == "GlcNAc(b1-2)[Glc(a1-3)]Rha(a1-2)Rha(a1-3)Rha2Ac"
     assert canonicalize_iupac("LDmanpHepa1-OME") == "LDManHep1Me"
     assert canonicalize_iupac("NNb3Ab;") == "Neu5Ac(b2-3)Gal"
+    assert canonicalize_iupac("Ma3(M[6P]a6)Ma6(Ma3)Mb4GNb4GN") == "Man(a1-3)[Man6P(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("Ab4(GNb4GNb3)(Ab4(Fa3)GNb6)Ab4Gb") == "GlcNAc(b1-4)GlcNAc(b1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-6)][Gal(b1-4)]Gal(b1-4)Glc"
+    assert canonicalize_iupac("Ab3ANb4(NNa3)Ab4Gb") == "Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc"
+    assert canonicalize_iupac("A[2P]b3Gb") == "Gal2P(b1-3)Glc"
+    assert canonicalize_iupac("GNb2Ma3(GNb2M[6P]a6)Mb4GNb4GNb") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man6P(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("Ma3(Ma6)Mb4GNb4GN;") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("GNb2Ma3(Ab4GNb2Ma6)Mb4GNb4(Fa6)GNb;") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("01Y41Y41M(31M21M21M)61M(31M21M)61M21M") == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -423,6 +437,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac('A2[6]G1') == 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('A2B[3]G1') == 'Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('F(6)A2[6]G(4)1Sg(6)1') == 'Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc'
+    assert canonicalize_iupac('M12d21)XYZ') == 'M12d21)XYZ'
     assert canonicalize_iupac('D0H0') == '4uHexA(?1-?)GlcN'
     assert canonicalize_iupac('D2S9') == '4uHexA2S(?1-?)GlcNS3S6S'
     assert canonicalize_iupac('D2a4') == '4uHexA2S(?1-?)GalNAc4S'
@@ -448,6 +463,9 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("freeEnd--?[--4b1L-Rha,p--3a1D-Glc,p((--3a1L-Rha,p)--4b1D-Glc,p--?])--6b1D-Glc,p") == "Rha(a1-3)[Glc(b1-4)][Glc(b1-6)]Glc(a1-3)Rha-ol"
     assert canonicalize_iupac("freeEnd--?b1D-GlcNAc,p(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p--2b1D-GlcNAc,p--4b1D-GalNAc,p--??1S)--6a1D-Man,p(--3a1D-Man,p)--6a1D-Man,p)--6a1L-Fuc,p$MONO,perMe,Na,0,freeEnd") == "GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol"
     assert canonicalize_iupac("freeEnd--??1L-Ara--5[--5a1L-Ara,f--?]--5a1L-Ara,f$MONO,perMe,Na,0,freeEnd") == "Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Ara-ol"
+    assert canonicalize_iupac("freeEnd--??1D-GlcNAc,o(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--2b1D-GlcNAc,p--4b1D-Gal,p)--4b1D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-Gal,p)--6a1D-Man,p--2b1D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-Gal,p)--6a1L-Fuc,p$MONO,perMe,Na,0,freeEnd") == "Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol"
+    assert canonicalize_iupac("freeEnd--?D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-GlcNAc,p--4b1D-Man,p((--2b1D-Xyl,p)--3a1D-Man,p--2b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p$MONO,perMe,Na,0,freeEnd") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc-ol"
+    assert canonicalize_iupac("freeEnd--?D-Ara,f--2?1D-Ara,f--5?1D-Man,p--2?1D-Man,p--2?1D-Man,p$MONO,perMe,Na,0,freeEnd") == "Man(?1-2)Man(?1-2)Man(?1-5)D-Araf(?1-2)D-Ara-ol"
     assert canonicalize_iupac("EtOH=28.0000u--?b1D-Glc,p--4b1D-Gal,p(--4b1D-GalNAc,p--3b1D-Gal,p)--3a2D-NeuAc,p}--?a2D-NeuAc,p$MONO,Und,-H,0,EtOH=28.0000u") == "{Neu5Ac(a2-?)}Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc"
     assert canonicalize_iupac("WURCS=2.0/5,7,6/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O]/1-2-3-4-2-5-4/a4-b1_b4-c1_c3-d1_c6-g1_d2-e1_e4-f1") == "GalNAc4S(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/8,15,14/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O][Aad21122h-2a_2-6_5*NCC/3=O]/1-2-3-4-2-5-6-7-8-4-2-5-6-8-5/a4-b1_a6-o1_b4-c1_c3-d1_c6-j1_d2-e1_e3-f1_e4-g1_h8-i2_j2-k1_k3-l1_k4-m1_h2-g3|g6_n2-m3|m6 ") == "Neu5Ac(a2-8)Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
@@ -460,10 +478,12 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("WURCS=2.0/2,2,1/[a1122h-1x_1-5][a2122h-1a_1-5_2*NCC/3=O]/1-2/a6-b1*OPO*/3O/3=O") == "GlcNAc1P(a1-6)Man"
     assert canonicalize_iupac("WURCS=2.0/1,2,1/[a2122h-1b_1-5]/1-1/a4-b1*OSO*/3=O/3=O") == "Glc1S(b1-4)Glc"
     assert canonicalize_iupac("WURCS=2.0/4,8,7/[a1211h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a2211h-1a_1-5][a1122h-1a_1-5]/1-2-3-3-3-3-4-4/a4-b1_b3-c1_b6-e1_c2-d1_e3-f1_e6-g1_g2-h1") == "Man(a1-2)Man(a1-6)[L-Man(a1-3)]L-Man(a1-6)[L-Man(a1-2)L-Man(a1-3)]Man(b1-4)L-GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/6,13,12/[a2122h-1x_1-5_2*NCC/3=O][a1221m-1a_1-5][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a212h-1b_1-5][a1122h-1a_1-5]/1-2-3-4-5-6-6-6-6-6-6-6-6/a3-b1_a4-c1_c4-d1_d2-e1_d3-f1_d6-j1_f3-g1_f6-h1_h2-i1_j3-k1_j6-l1_l2-m1") == "Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-3)[Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("G07426YY") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("G96417BZ") == "Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G26039ES") == "Gal(b1-4)Glc-ol"
     assert canonicalize_iupac("G02923VP") == "GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("G59643LR") == "G59643LR"
     assert canonicalize_iupac(782) == "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"
     assert canonicalize_iupac(72) == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)[Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)]Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
     assert canonicalize_iupac("RES 1b:a-lgal-HEX-1:5|6:d") == "Fuc"
@@ -619,6 +639,132 @@ LIN
 2:1o(3+1)3d
 3:3o(2+1)4d
 4:1o(4+1)5d""") == "Col(a1-2)Gal(b1-3)[Col(a1-4)]GlcNAc"
+    assert canonicalize_iupac("""ENTRY     XYZ          Glycan
+NODE      5
+          1     GlcNAc     15.0     7.0
+          2     GlcNAc      8.0     7.0
+          3     Man         1.0     7.0
+          4     Man        -6.0    12.0
+          5     Man        -6.0     2.0
+EDGE      4
+          1     2:b1       1:4
+          2     3:b1       2:4
+          3     5:a1       3:3
+          4     4:a1       3:6
+///""") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("""ENTRY	
+NODE        2
+            1   GalNAc      0     0
+            2   Gal       -10     0
+EDGE        1
+            1     2:a1    1:3""") == "Gal(a1-3)GalNAc"
+    assert canonicalize_iupac("""ENTRY       Fuc_Bis_N        Glycan
+NODE        7
+            1     fuc     12.0     7.0
+            2     glcnac     19.0     2.0
+            3     glcnac     12.0     2.0
+            4     man     5.0     2.0
+            5     man     -2.0     7.0
+            6     glcnac     -2.0     2.0
+            7     man     -2.0     -3.0
+EDGE        6
+            1     1:a1     2:6
+            2     3:b1     2:4
+            3     4:b1     3:4
+            4     5:a1     4:6
+            5     6:b1     4:4
+            6     7:a1     4:3
+///""") == "Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("""ENTRY       G00024        Glycan
+NODE        3
+            1   Ser     8     0
+            2   GalNAc     -1     0
+            3   Gal       -10     0
+EDGE        2
+            1     2:a1    1
+            2     3:b1    2:3
+///""") == "Gal(b1-3)GalNAc(a1-?)Ser"
+    assert canonicalize_iupac("""ENTRY       G00012        Glycan
+NODE        8
+            1   Asn        20    -2
+            2   GlcNAc     11    -2
+            3   GlcNAc      2    -2
+            4   Man        -6    -2
+            5   Man       -13     3
+            6   Man       -13    -7
+            7   Man       -20     8
+            8   Man       -20    -2
+EDGE        7
+            1     2:b1    1
+            2     3:b1    2:4
+            3     4:b1    3:4
+            4     5:a1    4:6
+            5     6:a1    4:3
+            6     7:a1    5:6
+            7     8:a1    5:3
+///""") == "Man(a1-3)[Man(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc(b1-?)Asn"
+    assert canonicalize_iupac("""<?xml version="1.0" encoding="UTF-8"?>
+<sugar version="1.0">
+  <residues>
+    <basetype id="1" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <basetype id="2" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <basetype id="3" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <basetype id="4" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <basetype id="5" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+    <substituent id="6" name="amino" />
+    <basetype id="7" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+      <stemtype id="1" type="dglc" />
+    </basetype>
+  </residues>
+  <linkages>
+    <connection id="1" parent="1" child="2">
+      <linkage id="1" parentType="o" childType="d">
+        <parent pos="3" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="2" parent="1" child="3">
+      <linkage id="2" parentType="o" childType="d">
+        <parent pos="6" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="3" parent="3" child="4">
+      <linkage id="3" parentType="o" childType="d">
+        <parent pos="6" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="4" parent="4" child="5">
+      <linkage id="4" parentType="o" childType="d">
+        <parent pos="3" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="5" parent="5" child="6">
+      <linkage id="5" parentType="d" childType="n">
+        <parent pos="2" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+    <connection id="6" parent="4" child="7">
+      <linkage id="6" parentType="o" childType="d">
+        <parent pos="6" />
+        <child pos="1" />
+      </linkage>
+    </connection>
+  </linkages>
+</sugar>""") == "GlcN(b1-3)[Glc(b1-6)]Glc(b1-6)Glc(b1-6)[Glc(b1-3)]Glc"
     assert glycoct_to_iupac("""RES
 1b:a-dman-OCT-2:6|1:a|2:keto|3:d
 2b:a-dman-OCT-2:6|1:a|2:keto|3:d
@@ -1308,6 +1454,10 @@ def test_get_matching_indices2():
     assert list(get_matching_indices(r"[a\]b]", '[', ']'))[0] == (1, 5, 0)
 
 
+def test_is_composition():
+    assert is_composition("NeuGc1Hex4HexNAc4deHex1")
+    assert not is_composition("Neu5Gc(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")
+
 def test_bracket_removal():
     # Test simple branch removal
     assert bracket_removal("Gal(b1-4)[Fuc(a1-3)]GlcNAc") == "Gal(b1-4)GlcNAc"
@@ -1433,6 +1583,20 @@ def test_hashable_dict():
     assert not isinstance(d3, HashableDict)
     assert d1.__eq__(d3) is False
 
+
+def test_parse_lines():
+    test_list = ["""3FL
+DSLNT
+6SL
+3SL
+DSL
+3SLN
+pLNH
+LNFP-I
+LNT
+LNnT
+"""]
+    assert parse_lines(test_list) == ['3FL', 'DSLNT', '6SL', '3SL', 'DSL', '3SLN', 'pLNH', 'LNFP-I', 'LNT', 'LNnT']
 
 def test_reindex():
     # Create test dataframes
@@ -2284,7 +2448,7 @@ def test_annotate_dataset(test_glycans):
 
 def test_get_molecular_properties():
     try:
-        glycans = ["Gal(b1-4)GlcNAc", "Neu4Ac5Ac7Ac9Ac(a2-6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"]
+        glycans = ["Gal(b1-4)GlcNAc", "Neu4Ac5Ac7Ac9Ac(a2-6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc", "Glc6Madeup(b1-4)Glc"]
         result = get_molecular_properties(glycans, verbose=True, placeholder=True)
         assert isinstance(result, pd.DataFrame)
         assert 'molecular_weight' in result.columns
@@ -2334,6 +2498,8 @@ def test_get_k_saccharides():
         return False
     except TypeError:
         pass
+    result = get_k_saccharides(["NeuGc1Hex4HexNAc3deHex1", "Fuc(a1-2)Gal(b1-3)Gal"], up_to=True)
+    assert "NeuGc1Hex4HexNAc3deHex1" not in result.columns
 
 
 def test_get_terminal_structures():
@@ -2433,6 +2599,11 @@ def test_create_lectin_and_motif_mappings():
     )
     assert isinstance(lectin_mapping, dict)
     assert isinstance(motif_mapping, dict)
+
+
+def test_get_glycan_similarity():
+    assert get_glycan_similarity("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Ac(a2-6)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc") > get_glycan_similarity("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Gc(a2-6)Gal(b1-3)[Neu5Gc(a2-6)]GalNAc")
+
 
 def test_lectin_motif_scoring():
     lectin_lib = load_lectin_lib()
@@ -2853,6 +3024,8 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_linkages=[0, 3], suppress=True)
     assert result is not None
+    result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", reducing_end_label = "Mucin", suppress=True)
+    assert result is not None
     # Test with repeat unit
     result = GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat=True, suppress=True)
     assert result is not None
@@ -2878,7 +3051,21 @@ def test_glycodraw():
     assert Path("test.png").exists()
     # Test invalid glycan
     with pytest.raises(Exception):
-        GlycoDraw("InvalidGlycan")
+        GlycoDraw("InvalidGlycan", restrict_vocab=True)
+
+
+def test_glycodraw_branch_spacing():
+    # Verify that heavily branched glycans keep long antennas separated vertically
+    glycan = canonicalize_iupac("FA3F2G3S[3,6,6]3")
+    data = get_coordinates_and_labels(glycan, show_linkage=True, highlight_motif=None,
+                                      termini_list=[], reverse_highlight=False)
+    l1_sugars, l1_y_pos = data[1][0], data[1][2]
+    # Extract y positions for branches that contain multiple residues (long arms)
+    long_branch_starts = sorted(ys[0] for sugars, ys in zip(l1_sugars, l1_y_pos) if len(sugars) > 1)
+    # Need at least two long arms to check spacing
+    assert len(long_branch_starts) >= 2
+    # Require a full symbol height (>=1.0) between each long arm so they do not overlap
+    assert all(abs(b - a) >= 1.0 for a, b in zip(long_branch_starts, long_branch_starts[1:]))
 
 
 @pytest.mark.parametrize("glycan", GLYCAN_TEST_CASES)
@@ -5972,6 +6159,11 @@ def test_dataset_to_graphs(mock_glycan_dataset, mock_library):
     assert all(isinstance(data, Data) for data in data_list)
     assert all(hasattr(data, 'y') for data in data_list)
     assert all(data.y.dtype == torch.long for data in data_list)
+    data_list = dataset_to_graphs(
+        glycans[:2],
+        labels[:2],
+        label_type=torch.long
+    )
 
 
 def test_dataset_to_dataloader(mock_glycan_dataset, mock_library):
@@ -5992,6 +6184,13 @@ def test_dataset_to_dataloader(mock_glycan_dataset, mock_library):
     batch = next(iter(dataloader))
     assert hasattr(batch, 'y')
     assert hasattr(batch, 'train_idx')
+    dataloader = dataset_to_dataloader(
+        glycans[:2],
+        labels[:2],
+        batch_size=2,
+        extra_feature=extra_features,
+        augment_prob=0.5
+    )
 
 
 def test_split_data_to_train(mock_glycan_dataset, mock_library):
@@ -6325,6 +6524,16 @@ def test_training_setup(_, mock_model):
         num_classes=3
     )
     assert isinstance(optimizer, SAM)
+    assert isinstance(scheduler, WarmupScheduler)
+    assert isinstance(criterion, Poly1CrossEntropyLoss)
+    optimizer, scheduler, criterion = training_setup(
+        mock_model,
+        lr=0.001,
+        mode='multiclass',
+        num_classes=3,
+        warmup_epochs=0
+    )
+    assert isinstance(optimizer, SAM)
     assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
     assert isinstance(criterion, Poly1CrossEntropyLoss)
     optimizer, scheduler, criterion = training_setup(
@@ -6333,15 +6542,15 @@ def test_training_setup(_, mock_model):
         mode='multilabel'
     )
     assert isinstance(optimizer, SAM)
-    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
-    assert isinstance(criterion, Poly1CrossEntropyLoss)
+    assert isinstance(scheduler, WarmupScheduler)
+    assert isinstance(criterion, nn.BCEWithLogitsLoss)
     optimizer, scheduler, criterion = training_setup(
         mock_model,
         lr=0.001,
         mode='binary'
     )
     assert not isinstance(optimizer, SAM)
-    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+    assert isinstance(scheduler, WarmupScheduler)
     assert isinstance(criterion, Poly1CrossEntropyLoss)
     optimizer, scheduler, criterion = training_setup(
         mock_model,
@@ -6349,7 +6558,7 @@ def test_training_setup(_, mock_model):
         mode='regression'
     )
     assert not isinstance(optimizer, SAM)
-    assert isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau)
+    assert isinstance(scheduler, WarmupScheduler)
     assert isinstance(criterion, torch.nn.MSELoss)
     try:
         optimizer, scheduler, criterion = training_setup(
@@ -6574,6 +6783,8 @@ def test_prep_model(model_type: str, num_classes: int, expected_class: type):
 def test_prep_model_trained():
     model = prep_model("LectinOracle", num_classes=1, trained=True)
     assert isinstance(model, LectinOracle)
+    with pytest.warns(UserWarning, match="No pretrained GIFFLAR model is currently available"):
+      model = prep_model("GIFFLAR", num_classes=1, trained=True)
 
 
 @pytest.mark.parametrize("invalid_input", [
@@ -6652,6 +6863,10 @@ def test_glycans_to_emb(sample_data, mock_models):
     model = mock_models['sweetnet']
     # Test representation mode
     rep_df = glycans_to_emb(glycans, model, rep=True)
+    assert isinstance(rep_df, pd.DataFrame)
+    assert len(rep_df) == len(glycans)
+    # Test multilabel mode
+    rep_df = glycans_to_emb(glycans, model, rep=False, multilabel=True)
     assert isinstance(rep_df, pd.DataFrame)
     assert len(rep_df) == len(glycans)
     # Test prediction mode
@@ -6817,10 +7032,11 @@ def test_train_model_all_modes(mode, expected_metrics, mock_model, mock_dataload
     else:  # multilabel
         criterion = nn.BCEWithLogitsLoss().to(device)
         optimizer = SAM(mock_model.parameters(), torch.optim.SGD, lr=0.1)
-    scheduler = torch.optim.lr_scheduler.StepLR(
+    base_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer.base_optimizer if isinstance(optimizer, SAM) else optimizer,
         step_size=1
     )
+    scheduler = WarmupScheduler(optimizer, base_scheduler, 5, mode in {'multiclass', 'multilabel'})
     # Run training
     _, metrics = train_model(
         mock_model,
@@ -6874,3 +7090,84 @@ def test_train_model_plotting(mock_model, mock_dataloader):
             mode2='multi',
             return_metrics=False
         )
+
+
+def test_hetero_collate_coverage():
+  with pytest.raises(ValueError):
+    hetero_collate(None)
+  class D:
+    def __init__(self, kv):
+      self.kv = kv
+    def __getitem__(self, k):
+      if k in ["atoms","bonds","monosacchs"] or isinstance(k,tuple): 
+        return Mock(num_nodes=1,x=torch.tensor([[1]]),edge_index=torch.tensor([[],[]]),edge_attr=torch.tensor([1]))
+      return self.kv.get(k, torch.tensor([[1]]))
+  hetero_collate([[D({"k1":torch.tensor([[1,2]]),"k2":torch.tensor([[1],[2]])})]])
+  hetero_collate([D({"y":torch.tensor([[1,2]]),"ID":torch.tensor([[1],[2]])}), D({"y":torch.tensor([[3,4]]),"ID":torch.tensor([[3],[4]])})])
+  with pytest.raises(ValueError):
+    hetero_collate([D({"y":torch.tensor([[1,2]])}), D({"y":torch.tensor([[3,4,5],[6,7,8]])})])
+
+
+@pytest.mark.parametrize("class_mode", ["binary", "multi"])
+def test_gifflar(class_mode):
+    from sklearn.model_selection import train_test_split
+    BATCH_SIZE = 8
+    NUM_WORKERS = 0
+    if class_mode == "binary":
+        df = df_glycan[df_glycan["glycan_type"].isin(["O", "free"])][["glycan", "glycan_type"]]
+        df["label"] = df["glycan_type"].apply(lambda x: 0 if x == "O" else 1)
+    else:
+        df = df_glycan[df_glycan["glycan_type"].isin(["N", "O", "free"])][["glycan", "glycan_type"]]
+        df["label"] = df["glycan_type"].apply(lambda x: 0 if x == "N" else 1 if x == "O" else 2)
+    train, test = [], []
+    valid_samples = []
+    for i, (_, row) in enumerate(df.sample(100, random_state=42).iterrows()):
+      try:
+        d = iupac2mol(row["glycan"])
+      except Exception as e:
+        continue
+      if d is None:
+        continue
+      d["y"] = torch.tensor([row["label"]], dtype=torch.float)
+      d["ID"] = i
+      d["label_for_split"] = row["label"]
+      valid_samples.append(d)
+    train, test = train_test_split(valid_samples, test_size=0.2, random_state=42, stratify=[d["label_for_split"] for d in valid_samples])
+    for d in train + test:
+      del d["label_for_split"]
+    train_dl = DataLoader(
+        HeteroDataset(train),
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        collate_fn=hetero_collate, # type: ignore
+        num_workers=NUM_WORKERS,
+        persistent_workers=False,
+        drop_last=len(train) % BATCH_SIZE == 1
+    )
+    test_dl = DataLoader(
+        HeteroDataset(test),
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        collate_fn=hetero_collate, # type: ignore
+        num_workers=NUM_WORKERS,
+        persistent_workers=False,
+        drop_last=len(test) % BATCH_SIZE == 1,
+    )
+    model = prep_model("GIFFLAR", num_classes=1 if class_mode == "binary" else 3, trained=False)
+    optim = torch.optim.Adam(model.parameters())
+    batch = next(iter(train_dl))
+    assert batch is not None
+    assert hasattr(batch, 'x_dict')
+    assert hasattr(batch, 'edge_index_dict')
+    out = train_model(
+        model,
+        {"train": train_dl, "val": test_dl},
+        criterion=torch.nn.BCEWithLogitsLoss() if class_mode == "binary" else torch.nn.CrossEntropyLoss(),
+        optimizer=optim,
+        scheduler=ReduceLROnPlateau(optim, mode='min', patience=5, factor=0.5),
+        num_epochs=2,
+        mode='classification',
+        mode2=class_mode,
+        return_metrics=False,
+    )
+    assert out is not None

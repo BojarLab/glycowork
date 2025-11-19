@@ -1,5 +1,4 @@
 import pandas as pd
-from typing import Optional
 from glycowork.motif.processing import check_nomenclature
 from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
 
@@ -7,7 +6,7 @@ from glycowork.motif.graph import glycan_to_nxGraph, compare_glycans
 def check_presence(glycan: str, # IUPAC-condensed glycan sequence
                   df: pd.DataFrame, # glycan dataframe where glycans are under colname
                   colname: str = 'glycan', # column name containing glycans
-                  name: Optional[str] = None, # name of species of interest
+                  name: str | None = None, # name of species of interest
                   rank: str = 'Species', # column name for filtering
                   fast: bool = False # True uses precomputed glycan graphs
                  ) -> None:

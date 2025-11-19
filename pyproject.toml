@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 # Project metadata
 [project]
-name = "glycowork"
-version = "1.6.3"
+name="glycowork"
+version = "1.7.0"
 description = "Package for processing and analyzing glycans"
 readme = "README.md"
 authors = [
@@ -15,7 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent"
 ]
-requires-python = ">=3.9"
+requires-python=">=3.10"
 dependencies = [
     "numpy",
     "matplotlib",
@@ -31,7 +31,7 @@ dependencies = [
     "huggingface_hub>=0.16.0",
     "drawSvg~=2.0",
     "openpyxl",
-    "glycorender[png]~=0.2.1"
+    "glycorender[png]~=0.2.3"
 ]
 
 [project.urls]

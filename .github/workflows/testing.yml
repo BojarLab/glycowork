@@ -22,7 +22,7 @@ jobs:
         id: setup-miniforge
         continue-on-error: true
         with:
-          python-version: '3.9'
+          python-version: '3.10'
           miniforge-version: latest
           activate-environment: MPP
           use-mamba: true
@@ -33,7 +33,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         if: steps.setup-miniforge.outcome == 'failure'
         with:
-          python-version: '3.9'
+          python-version: '3.10'
           miniforge-version: latest
           activate-environment: MPP
           use-mamba: true

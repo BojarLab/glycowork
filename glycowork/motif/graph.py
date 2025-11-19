@@ -1,6 +1,6 @@
 import re
 from copy import deepcopy
-from typing import Dict, List, Tuple, Set, Union, Optional, Callable
+from typing import Callable
 from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
 from glycowork.motif.processing import min_process_glycans, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
 import numpy as np
@@ -47,7 +47,7 @@ def evaluate_adjacency(glycan_part: str, # Residual part of a glycan from within
 
 
 def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence
-                   ) -> Tuple[Dict[int, str], np.ndarray]: # (Dictionary of node:monosaccharide/linkage, Adjacency matrix)
+                   ) -> tuple[dict[int, str], np.ndarray]: # (Dictionary of node:monosaccharide/linkage, Adjacency matrix)
   "Convert glycans into graphs"
   # Get glycoletters
   glycan_proc = tuple(min_process_glycans([glycan])[0])
@@ -82,9 +82,9 @@ def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence
 
 @lru_cache(maxsize = 128)
 def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
-                         libr: Optional[Union[dict[str, int], HashableDict[str, int]]] = None, # Dictionary of form glycoletter:index
+                         libr: dict[str, int] | HashableDict[str, int] | None = None, # Dictionary of form glycoletter:index
                          termini: str = 'ignore', # How to encode terminal/internal position; options: ignore, calc, provided
-                         termini_list: Optional[tuple[str]] = None # List of positions from terminal/internal/flexible
+                         termini_list: tuple[str] | None = None # List of positions from terminal/internal/flexible
                         ) -> nx.DiGraph: # NetworkX graph object of glycan
   "Convert glycans into networkx graphs"
   if isinstance(libr, dict):
@@ -120,9 +120,9 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
 
 @rescue_glycans
 def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
-                      libr: Optional[HashableDict[str, int]] = None, # Dictionary of form glycoletter:index
+                      libr: HashableDict[str, int] | None = None, # Dictionary of form glycoletter:index
                       termini: str = 'ignore', # How to encode terminal/internal position; options: ignore, calc, provided
-                      termini_list: Optional[Tuple[str]] = None # List of positions from terminal/internal/flexible
+                      termini_list: tuple[str] | None = None # List of positions from terminal/internal/flexible
                      ) -> nx.DiGraph: # NetworkX graph object of glycan
   "Wrapper for converting glycans into networkx graphs; also works with floating substituents"
   if not glycan:
@@ -144,16 +144,16 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
   return g1
 
 
-def ensure_graph(glycan: Union[str, nx.DiGraph], # Glycan in IUPAC-condensed format or as networkx graph
+def ensure_graph(glycan: str | nx.DiGraph, # Glycan in IUPAC-condensed format or as networkx graph
                 **kwargs # Keyword arguments passed to glycan_to_nxGraph
                ) -> nx.DiGraph: # NetworkX graph object of glycan
   "Ensures function compatibility with string glycans and graph glycans"
   return glycan_to_nxGraph(glycan, **kwargs) if isinstance(glycan, str) else glycan
 
 
-def categorical_node_match_wildcard(attr: Union[str, Tuple[str, ...]], # Attribute or tuple of attributes to match
+def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or tuple of attributes to match
                                   default: str, # Default value if attribute is missing
-                                  narrow_wildcard_list: Dict[str, Set[str]], # Dictionary mapping wildcards to possible matches
+                                  narrow_wildcard_list: dict[str, set[str]], # Dictionary mapping wildcards to possible matches
                                   attr2: str, # Secondary attribute to match
                                   default2: str # Default value for secondary attribute
                                  ) -> Callable[[dict, dict], bool]: # Function that matches node attributes
@@ -186,8 +186,8 @@ def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph
   return graph
 
 
-def compare_glycans(glycan_a: Union[str, nx.DiGraph], # First glycan to compare
-                   glycan_b: Union[str, nx.DiGraph], # Second glycan to compare
+def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
+                   glycan_b: str | nx.DiGraph, # Second glycan to compare
                    return_matches: bool = False # Whether to return node mapping between glycans
                   ) -> bool: # True if glycans are same, False if not
   "Check whether two glycans are identical"
@@ -221,9 +221,9 @@ def compare_glycans(glycan_a: Union[str, nx.DiGraph], # First glycan to compare
   return (False, None) if return_matches else False
 
 
-def expand_termini_list(motif: Union[str, nx.DiGraph], # Glycan motif sequence or graph
-                       termini_list: List[str] # List of monosaccharide/linkage positions from terminal/internal/flexible
-                      ) -> Tuple[str]: # Expanded termini list including linkages
+def expand_termini_list(motif: str | nx.DiGraph, # Glycan motif sequence or graph
+                       termini_list: list[str] # List of monosaccharide/linkage positions from terminal/internal/flexible
+                      ) -> tuple[str]: # Expanded termini list including linkages
   "Convert monosaccharide-only termini list into full termini list"
   if len(termini_list[0]) < 2:
     mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
@@ -249,12 +249,12 @@ def handle_negation(original_func: Callable # Function to wrap
 
 
 @handle_negation
-def subgraph_isomorphism(glycan: Union[str, nx.DiGraph], # Glycan sequence or graph
-                        motif: Union[str, nx.DiGraph], # Glycan motif sequence or graph
-                        termini_list: List = [], # List of monosaccharide positions from terminal/internal/flexible
+def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
+                        motif: str | nx.DiGraph, # Glycan motif sequence or graph
+                        termini_list: list = [], # List of monosaccharide positions from terminal/internal/flexible
                         count: bool = False, # Whether to return count instead of presence/absence
                         return_matches: bool = False # Whether to return matched subgraphs as node lists
-                       ) -> Union[bool, int, Tuple[int, List[List[int]]]]: # Boolean presence, count, or (count, matches)
+                       ) -> bool | int | tuple[int, list[list[int]]]: # Boolean presence, count, or (count, matches)
   "Check if motif exists as subgraph in glycan"
   if isinstance(glycan, str) and isinstance(motif, str):
     if motif.count('(') > glycan.count('('):
@@ -301,12 +301,12 @@ def subgraph_isomorphism(glycan: Union[str, nx.DiGraph], # Glycan sequence or gr
     return bool(valid_mappings)
 
 
-def subgraph_isomorphism_with_negation(glycan: Union[str, nx.DiGraph], # Glycan sequence or graph
-                                     motif: Union[str, nx.DiGraph], # Glycan motif sequence or graph
-                                     termini_list: List = [], # List of monosaccharide positions
+def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequence or graph
+                                     motif: str | nx.DiGraph, # Glycan motif sequence or graph
+                                     termini_list: list = [], # List of monosaccharide positions
                                      count: bool = False, # Whether to return count instead of presence/absence
                                      return_matches: bool = False # Whether to return matched subgraphs as node lists
-                                    ) -> Union[bool, int, Tuple[int, List[List[int]]]]: # Boolean presence, count, or (count, matches)
+                                    ) -> bool | int | tuple[int, list[list[int]]]: # Boolean presence, count, or (count, matches)
   "Check if motif exists as subgraph in glycan, handling negation patterns"
   if isinstance(motif, str):
     negated_part = NEGATION_REGEX.search(motif).group(1)
@@ -345,7 +345,7 @@ def subgraph_isomorphism_with_negation(glycan: Union[str, nx.DiGraph], # Glycan 
     return bool(valid_matches)
 
 
-def generate_graph_features(glycan: Union[str, nx.DiGraph], # Glycan sequence or network graph
+def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or network graph
                           glycan_graph: bool = True, # True if input is glycan, False if network
                           label: str = 'network' # Label for output dataframe if glycan_graph=False
                          ) -> pd.DataFrame: # Dataframe of graph features
@@ -481,7 +481,7 @@ def canonicalize_glycan_graph(graph: nx.DiGraph,
   return canonical_graph
 
 
-def glycan_graph_memoize(maxsize = 128):
+def glycan_graph_memoize(maxsize: int = 128):
   cache, access_order = {}, []
   def decorator(func):
     @wraps(func)
@@ -607,7 +607,7 @@ def graph_to_string(graph: nx.DiGraph, # Glycan graph (assumes root node is the 
 
 
 def try_string_conversion(graph: nx.DiGraph # Glycan graph to validate
-                        ) -> Optional[str]: # IUPAC string if valid, None if invalid
+                        ) -> str | None: # IUPAC string if valid, None if invalid
   "Check whether glycan graph describes a valid glycan"
   try:
     temp = graph_to_string(graph)
@@ -617,8 +617,8 @@ def try_string_conversion(graph: nx.DiGraph # Glycan graph to validate
     return None
 
 
-def largest_subgraph(glycan_a: Union[str, nx.DiGraph], # First glycan
-                    glycan_b: Union[str, nx.DiGraph] # Second glycan
+def largest_subgraph(glycan_a: str | nx.DiGraph, # First glycan
+                    glycan_b: str | nx.DiGraph # Second glycan
                    ) -> str: # Largest common subgraph in IUPAC format
   "Find the largest common subgraph of two glycans"
   graph_a = ensure_graph(glycan_a)
@@ -630,12 +630,12 @@ def largest_subgraph(glycan_a: Union[str, nx.DiGraph], # First glycan
   return graph_to_string_int(graph_a.subgraph(largest_common_subgraph[0]))
 
 
-def get_possible_topologies(glycan: Union[str, nx.DiGraph], # Glycan with floating substituent
+def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating substituent
                           exhaustive: bool = False, # Whether to allow additions at internal positions
-                          allowed_disaccharides: Optional[Set[str]] = None, # Permitted disaccharides when creating possible glycans
-                          modification_map: Dict[str, Set[str]] = modification_map, # Maps modifications to valid attachments
+                          allowed_disaccharides: set[str] | None = None, # Permitted disaccharides when creating possible glycans
+                          modification_map: dict[str, set[str]] = modification_map, # Maps modifications to valid attachments
                           return_graphs: bool = False # Whether to return glycan graphs (otherwise return converted strings)
-                         ) -> List[Union[str, nx.DiGraph]]: # List of possible topology strings or graphs
+                         ) -> list[str | nx.DiGraph]: # List of possible topology strings or graphs
   "Create possible glycan graphs given a floating substituent"
   ggraph = ensure_graph(glycan)
   parts = [ggraph.subgraph(c) for c in nx.weakly_connected_components(ggraph)]
@@ -677,19 +677,19 @@ def get_possible_topologies(glycan: Union[str, nx.DiGraph], # Glycan with floati
   return topologies if return_graphs else [graph_to_string_int(t) for t in topologies]
 
 
-def possible_topology_check(glycan: Union[str, nx.DiGraph], # Glycan with floating substituent
-                          glycans: List[Union[str, nx.DiGraph]], # List of glycans to check against
+def possible_topology_check(glycan: str | nx.DiGraph, # Glycan with floating substituent
+                          glycans: list[str | nx.DiGraph], # List of glycans to check against
                           exhaustive: bool = False, # Whether to allow additions at internal positions
                           **kwargs # Arguments passed to compare_glycans
-                         ) -> List[Union[str, nx.DiGraph]]: # List of matching glycans
+                         ) -> list[str | nx.DiGraph]: # List of matching glycans
   "Check whether glycan with floating substituent could match glycans from a list"
   topologies = get_possible_topologies(glycan, exhaustive = exhaustive, return_graphs = True)
   ggraphs = map(ensure_graph, glycans)
   return [g for g, ggraph in zip(glycans, ggraphs) if any(compare_glycans(t, ggraph, **kwargs) for t in topologies)]
 
 
-def deduplicate_glycans(glycans: Union[List[str], Set[str]] # List/set of glycans to deduplicate
-                      ) -> List[str]: # Deduplicated list of glycans
+def deduplicate_glycans(glycans: list[str] | set[str] # List/set of glycans to deduplicate
+                      ) -> list[str]: # Deduplicated list of glycans
   "Remove duplicate glycans from a list/set, even if they have different strings"
   glycans = list(set(glycans) if isinstance(glycans, list) else glycans)
   if len(glycans) <= 1:

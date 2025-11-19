@@ -24,8 +24,8 @@ class BaseDialog(simpledialog.Dialog):
 
         def show_tooltip(event):
             tooltip.lift()
-            x = widget.winfo_rootx() + widget.winfo_width() + 5
-            y = widget.winfo_rooty()
+            x = widget.winfo_x() + widget.winfo_width() + 5
+            y = widget.winfo_y()
             tooltip.place(x=x, y=y)
 
         def hide_tooltip(event):
@@ -188,7 +188,7 @@ class GlycoDrawExcelDialog(BaseDialog):
         self.folder_var = self.add_folder_input(output_frame, 0, "Save Images To:")
         # Display options
         self.compact_var = tk.BooleanVar()
-        ttk.Checkbutton(output_frame, text="Compact Display", variable=self.compact_var).pack(pady=5)
+        ttk.Checkbutton(output_frame, text="Compact Display", variable=self.compact_var).grid(row=1, column=0, pady=5, sticky="w")
         return None
 
     def apply(self):
@@ -585,7 +585,7 @@ class GlycoworkGUI:
         try:
             icon_path = self.resource_path("glycowork.ico")
             self.app.iconbitmap(icon_path)
-        except:
+        except Exception:
             pass
 
     @staticmethod
@@ -600,7 +600,7 @@ class GlycoworkGUI:
         self.app.mainloop()
 
     def show_about_info(self):
-        about_message = """glycowork v1.6
+        about_message = """glycowork v1.7
 
 For more information and citation, please refer to:
 Thomès, L., et al. (2021). Glycowork: A Python package for glycan data science
@@ -644,14 +644,14 @@ https://bojarlab.github.io/glycowork/"""
                 self.log(error_msg, 'ERROR')
                 messagebox.showerror("Error", error_msg)
             finally:
-                if not progress.winfo_exists():
+                if progress.winfo_exists():
                     progress.destroy()
 
     def open_differential_expression(self):
         dialog_result = DifferentialExpressionDialog(self.app)
         if dialog_result.result:
             csv_file_path, treatment_indices, control_indices, motifs, output_folder = dialog_result.result
-            progress_dialog = ProgressDialog(self.app)
+            progress_dialog = ProgressDialog(self.app, "Differential Expression Analysis")
             threading.Thread(target=self.run_differential_expression,
                            args=(csv_file_path, treatment_indices, control_indices,
                                  motifs, output_folder, progress_dialog),
@@ -720,7 +720,7 @@ https://bojarlab.github.io/glycowork/"""
             self.log(error_msg, 'ERROR')
             messagebox.showerror("Error", error_msg)
         finally:
-            if not progress_dialog.winfo_exists():
+            if progress_dialog.winfo_exists():
                 progress_dialog.destroy()
 
 
