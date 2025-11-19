@@ -240,6 +240,9 @@ def test_torch_import_error():
         importlib.import_module('glycowork.ml.inference')
       with pytest.raises(ImportError, match="torch missing;"):
         importlib.import_module('glycowork.ml.model_training')
+    with patch.dict('sys.modules', {'glyles': None}):
+      with pytest.raises(ImportError, match="rdkit missing"):
+        importlib.import_module('glycowork.ml.processing')
   finally:
     # Restore original states
     if original_processing is not None:
@@ -6156,6 +6159,11 @@ def test_dataset_to_graphs(mock_glycan_dataset, mock_library):
     assert all(isinstance(data, Data) for data in data_list)
     assert all(hasattr(data, 'y') for data in data_list)
     assert all(data.y.dtype == torch.long for data in data_list)
+    data_list = dataset_to_graphs(
+        glycans[:2],
+        labels[:2],
+        label_type=torch.long
+    )
 
 
 def test_dataset_to_dataloader(mock_glycan_dataset, mock_library):
@@ -6176,6 +6184,13 @@ def test_dataset_to_dataloader(mock_glycan_dataset, mock_library):
     batch = next(iter(dataloader))
     assert hasattr(batch, 'y')
     assert hasattr(batch, 'train_idx')
+    dataloader = dataset_to_dataloader(
+        glycans[:2],
+        labels[:2],
+        batch_size=2,
+        extra_feature=extra_features,
+        augment_prob=0.5
+    )
 
 
 def test_split_data_to_train(mock_glycan_dataset, mock_library):
@@ -6768,6 +6783,8 @@ def test_prep_model(model_type: str, num_classes: int, expected_class: type):
 def test_prep_model_trained():
     model = prep_model("LectinOracle", num_classes=1, trained=True)
     assert isinstance(model, LectinOracle)
+    with pytest.warns(UserWarning, match="No pretrained GIFFLAR model is currently available"):
+      model = prep_model("GIFFLAR", num_classes=1, trained=True)
 
 
 @pytest.mark.parametrize("invalid_input", [
@@ -7015,10 +7032,11 @@ def test_train_model_all_modes(mode, expected_metrics, mock_model, mock_dataload
     else:  # multilabel
         criterion = nn.BCEWithLogitsLoss().to(device)
         optimizer = SAM(mock_model.parameters(), torch.optim.SGD, lr=0.1)
-    scheduler = torch.optim.lr_scheduler.StepLR(
+    base_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer.base_optimizer if isinstance(optimizer, SAM) else optimizer,
         step_size=1
     )
+    scheduler = WarmupScheduler(optimizer, base_scheduler, 5, mode in {'multiclass', 'multilabel'})
     # Run training
     _, metrics = train_model(
         mock_model,
