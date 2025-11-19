@@ -443,6 +443,7 @@ class HashableDict(dict):
       return False
 
 
-def parse_lines(excel_column_content: list  # content of an Excel column pasted into a list and bookended by triple quotes
+def parse_lines(excel_column_content: list | str # content of an Excel column pasted into a list and bookended by triple quotes
                 ) -> list:  # proper list of strings
-  return excel_column_content[0].strip().split('\n')
+  inp = excel_column_content[0] if isinstance(excel_column_content, list) else excel_column_content
+  return inp.strip().split('\n')

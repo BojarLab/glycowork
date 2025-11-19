@@ -7092,6 +7092,22 @@ def test_train_model_plotting(mock_model, mock_dataloader):
         )
 
 
+def test_hetero_collate_coverage():
+  with pytest.raises(ValueError):
+    hetero_collate(None)
+  class D:
+    def __init__(self, kv):
+      self.kv = kv
+    def __getitem__(self, k):
+      if k in ["atoms","bonds","monosacchs"] or isinstance(k,tuple): 
+        return Mock(num_nodes=1,x=torch.tensor([[1]]),edge_index=torch.tensor([[],[]]),edge_attr=torch.tensor([1]))
+      return self.kv.get(k, torch.tensor([[1]]))
+  hetero_collate([[D({"k1":torch.tensor([[1,2]]),"k2":torch.tensor([[1],[2]])})]])
+  hetero_collate([D({"y":torch.tensor([[1,2]]),"ID":torch.tensor([[1],[2]])}), D({"y":torch.tensor([[3,4]]),"ID":torch.tensor([[3],[4]])})])
+  with pytest.raises(ValueError):
+    hetero_collate([D({"y":torch.tensor([[1,2]])}), D({"y":torch.tensor([[3,4,5],[6,7,8]])})])
+
+
 @pytest.mark.parametrize("class_mode", ["binary", "multi"])
 def test_gifflar(class_mode):
     from sklearn.model_selection import train_test_split
