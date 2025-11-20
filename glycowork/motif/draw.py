@@ -109,9 +109,9 @@ sugar_dict = {
   "B": ['B', None, None], "C": ['C', None, None]
 }
 
-
 domon_costello = {'B', 'C', 'Z', 'Y', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A', '25A', '03A', '14X', '25X', '03X', '14A'}
-SUBSTITUENT_PATTERN = re.compile(r'(?:^|[^0-9])([0-9]+)(?:Substituent|Subst)')
+SUBSTITUENT_PATTERN = re.compile(r'(?:^|[^1-9])([0-9]+)(?:Substituent|Subst)')
+
 
 def draw_hex(
     x_pos: float, # X coordinate of hexagon center
@@ -594,28 +594,24 @@ def get_coordinates_and_labels(
   highlight_values = list(nx.get_node_attributes(graph, 'highlight_labels').values())
 
   parsed_sugars = {}
-  for idx in range(len(node_values)):
+  for idx, raw_label in enumerate(node_values):
     if idx % 2:
       continue
-    raw_label = node_values[idx]
     core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
     normalized_label = core_label if core_label in sugar_dict else 'Unknown'
     modification_text = get_modification(raw_label).replace('O', '').replace('-ol', '')
     if modification_text:
-      base_mod = modification_text.replace('Substituent', 'Subst')
-      match = SUBSTITUENT_PATTERN.search(base_mod) if 'Subst' in base_mod else None
-      formatted_mod = f"{match.group(1)}Subst" if match else (base_mod if ('Subst' in base_mod or normalized_label != 'Unknown') else '')
-    else:
-      formatted_mod = ''
-    parsed_sugars[idx] = (normalized_label, formatted_mod)
+      modification_text = modification_text.replace('Substituent', 'Subst')
+      match = SUBSTITUENT_PATTERN.search(modification_text) if 'Subst' in modification_text else None
+      modification_text = f"{match.group(1)}Subst" if match else (modification_text if ('Subst' in modification_text or normalized_label != 'Unknown') else '')
+    parsed_sugars[idx] = (normalized_label, modification_text)
 
   root = max(graph.nodes())
   leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
   main_chain = nx.shortest_path(graph.reverse(), leaves[0], root) if leaves else []
   main_label_sugar = [node for node in main_chain if node % 2 == 0]
   main_entries = [parsed_sugars[node] for node in main_chain if node % 2 == 0]
-  main_sugar = [label for label, _ in reversed(main_entries)]
-  main_sugar_modification = [mod for _, mod in reversed(main_entries)]
+  main_sugar, main_sugar_modification = map(list, zip(*reversed(main_entries)))
   main_bond = [node_values[node] for node in main_chain if node % 2 == 1][::-1]  # Odd indices are bonds
   main_sugar_highlight = [highlight_values[node] for node in main_chain if node % 2 == 0][::-1]
   main_bond_highlight = [highlight_values[node] for node in main_chain if node % 2 == 1][::-1]
