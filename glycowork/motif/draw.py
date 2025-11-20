@@ -606,11 +606,12 @@ def get_coordinates_and_labels(
     core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
     normalized_label = normalize_monosaccharide_label(core_label)
     modification_text = get_modification(raw_label).replace('O', '').replace('-ol', '')
-    if not modification_text or normalized_label == 'Unknown':
-      formatted_mod = ''
+    if modification_text:
+      base_mod = modification_text.replace('Substituent', 'Subst')
+      match = SUBSTITUENT_PATTERN.search(base_mod) if 'Subst' in base_mod else None
+      formatted_mod = f"{match.group(1)}Subst" if match else (base_mod if ('Subst' in base_mod or normalized_label != 'Unknown') else '')
     else:
-      match = SUBSTITUENT_PATTERN.search(modification_text) if 'Subst' in modification_text else None
-      formatted_mod = f"{match.group(1)}Subst" if match else modification_text.replace('Substituent', 'Subst')
+      formatted_mod = ''
     parsed_sugars[idx] = (normalized_label, formatted_mod)
 
   root = max(graph.nodes())
