@@ -111,7 +111,7 @@ sugar_dict = {
 
 
 domon_costello = {'B', 'C', 'Z', 'Y', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A', '25A', '03A', '14X', '25X', '03X', '14A'}
-
+SUBSTITUENT_PATTERN = re.compile(r'(?:^|[^0-9])([0-9]+)(?:Substituent|Subst)')
 
 def draw_hex(
     x_pos: float, # X coordinate of hexagon center
@@ -592,13 +592,30 @@ def get_coordinates_and_labels(
   graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list, reverse_highlight = reverse_highlight)
   node_values = list(nx.get_node_attributes(graph, 'string_labels').values())
   highlight_values = list(nx.get_node_attributes(graph, 'highlight_labels').values())
+
+  parsed_sugars = {}
+  for idx in range(len(node_values)):
+    if idx % 2:
+      continue
+    raw_label = node_values[idx]
+    core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
+    normalized_label = core_label if core_label in sugar_dict else 'Unknown'
+    modification_text = get_modification(raw_label).replace('O', '').replace('-ol', '')
+    if modification_text:
+      base_mod = modification_text.replace('Substituent', 'Subst')
+      match = SUBSTITUENT_PATTERN.search(base_mod) if 'Subst' in base_mod else None
+      formatted_mod = f"{match.group(1)}Subst" if match else (base_mod if ('Subst' in base_mod or normalized_label != 'Unknown') else '')
+    else:
+      formatted_mod = ''
+    parsed_sugars[idx] = (normalized_label, formatted_mod)
+
   root = max(graph.nodes())
   leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
   main_chain = nx.shortest_path(graph.reverse(), leaves[0], root) if leaves else []
   main_label_sugar = [node for node in main_chain if node % 2 == 0]
-  main_sugar = [node_values[node] for node in main_chain if node % 2 == 0]  # Even indices are sugars
-  main_sugar = [get_core(node) if node not in domon_costello else node for node in main_sugar][::-1]
-  main_sugar_modification = [get_modification(node_values[node]).replace('O', '').replace('-ol', '') for node in main_chain if node % 2 == 0][::-1]
+  main_entries = [parsed_sugars[node] for node in main_chain if node % 2 == 0]
+  main_sugar = [label for label, _ in reversed(main_entries)]
+  main_sugar_modification = [mod for _, mod in reversed(main_entries)]
   main_bond = [node_values[node] for node in main_chain if node % 2 == 1][::-1]  # Odd indices are bonds
   main_sugar_highlight = [highlight_values[node] for node in main_chain if node % 2 == 0][::-1]
   main_bond_highlight = [highlight_values[node] for node in main_chain if node % 2 == 1][::-1]
@@ -612,8 +629,9 @@ def get_coordinates_and_labels(
       # Extract sugar and bond labels
       sugar_nodes = branch['sugar_nodes']
       bond_nodes = [m for m in branch['nodes'] if m % 2 == 1]
-      sugar.append([get_core(node_values[n]) if node_values[n] not in domon_costello else node_values[n] for n in sugar_nodes])
-      sugar_mod.append([get_modification(node_values[n]).replace('O', '') for n in sugar_nodes])
+      sugar_entries = [parsed_sugars[n] for n in sugar_nodes]
+      sugar.append([label for label, _ in sugar_entries])
+      sugar_mod.append([mod for _, mod in sugar_entries])
       bond.append([node_values[n] for n in bond_nodes])
       connection.append(branch['connection'])
       sugar_label.append([highlight_values[n] for n in sugar_nodes])
