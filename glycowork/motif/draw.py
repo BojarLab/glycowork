@@ -113,11 +113,6 @@ sugar_dict = {
 domon_costello = {'B', 'C', 'Z', 'Y', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A', '25A', '03A', '14X', '25X', '03X', '14A'}
 SUBSTITUENT_PATTERN = re.compile(r'(?:^|[^0-9])([0-9]+)(?:Substituent|Subst)')
 
-
-def normalize_monosaccharide_label(label: str) -> str:
-  "Map unrecognized monosaccharide labels to Unknown for drawing"
-  return label if label in sugar_dict else 'Unknown'
-
 def draw_hex(
     x_pos: float, # X coordinate of hexagon center
     y_pos: float, # Y coordinate of hexagon center
@@ -604,7 +599,7 @@ def get_coordinates_and_labels(
       continue
     raw_label = node_values[idx]
     core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
-    normalized_label = normalize_monosaccharide_label(core_label)
+    normalized_label = core_label if core_label in sugar_dict else 'Unknown'
     modification_text = get_modification(raw_label).replace('O', '').replace('-ol', '')
     if modification_text:
       base_mod = modification_text.replace('Substituent', 'Subst')
