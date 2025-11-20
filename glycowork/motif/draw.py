@@ -486,7 +486,7 @@ def process_bonds(
     else:
       first, last = linkage[0], linkage[-1]
     if '?' in first and '?' in last: return '?'
-    if '?' in first: return f'? {last}'
+    if '?' in first: return f' {last}'
     if '?' in last:
       if ALPHA_PATTERN.match(linkage): return '\u03B1'
       if BETA_PATTERN.match(linkage): return '\u03B2'
