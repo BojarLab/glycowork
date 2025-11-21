@@ -11,9 +11,10 @@
 - Unknown base monosaccharides in `GlycoDraw` now correctly default to blank hexagons (89eb687)
 
 ##### Fixed 🐛
+- make sure `reducing_end_label` is perfectly y-centered in `GlycoDraw`
 
 ##### Deprecated ⚠️
 
 #### processing
 ##### Added ✨
-- Added `LacdiNAc` to the `common_names` support in Universal Input
+- Added `LacdiNAc` to the `common_names` support in Universal Input (d1140d1)

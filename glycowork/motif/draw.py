@@ -1294,7 +1294,7 @@ def GlycoDraw(
     add_bond(bond_start_x, main_sugar_x_pos[0], label_y, main_sugar_y_pos[0], d, '-', dim = dim, compact = compact, highlight = main_sugar_label[0])
     col_dict = col_dict_transparent if main_sugar_label[0] == 'hide' else col_dict_base
     x_base = -label_x * dim * (1.2 if compact else 2)
-    y_base = label_y * dim * (0.6 if compact else 1)
+    y_base = label_y * dim * (0.6 if compact else 1) + 5
     d.append(draw.Text(reducing_end_label, dim*0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
   # Bond main chain
   [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = main_per_linkage[k] if highlight_linkages else False) for k in range(len(main_sugar)-1)]
