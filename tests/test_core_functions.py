@@ -6783,13 +6783,17 @@ def test_prep_model(model_type: str, num_classes: int, expected_class: type):
 def test_prep_model_trained():
     model = prep_model("LectinOracle", num_classes=1, trained=True)
     assert isinstance(model, LectinOracle)
+    with warnings.catch_warnings():
+      warnings.simplefilter("ignore", UserWarning)
+      model = prep_model("SweetNet", num_classes=1, trained=True)
+      assert isinstance(model, SweetNet)
     with pytest.warns(UserWarning, match="No pretrained GIFFLAR model is currently available"):
       model = prep_model("GIFFLAR", num_classes=1, trained=True)
 
 
 @pytest.mark.parametrize("invalid_input", [
     {"model_type": "InvalidModel", "num_classes": 1},
-    {"model_type": "SweetNet", "num_classes": 1, "hidden_dim": 64, "trained": True},
+    {"model_type": "SweetNet", "num_classes": 1075, "hidden_dim": 64, "trained": True},
 ])
 
 
