@@ -62,7 +62,7 @@ def rescue_glycans(func: Callable # Function to wrap
 def min_process_glycans(glycan_list: list[str] # List of glycans in IUPAC-condensed format
                       ) -> list[list[str]]: # List of glycoletter lists
   "Convert list of glycans into a nested lists of glycoletters"
-  return [k.replace('[', '').replace(']', '').replace('{', '').replace('}', '').replace(')', '(').split('(') for k in glycan_list]
+  return [[x for x in k.replace('[', '').replace(']', '').replace('{', '(').replace('}', ')').replace(')', '(').split('(') if x] for k in glycan_list]
 
 
 def get_lib(glycan_list: list[str] # List of IUPAC-condensed glycan sequences

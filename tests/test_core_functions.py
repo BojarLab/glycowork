@@ -1200,6 +1200,7 @@ def test_get_lib():
     assert 'GlcNAc' in lib
     assert 'a2-3' in lib
     assert 'b1-4' in lib
+    assert "6S" in get_lib(["{6S}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc"])
 
 
 def test_expand_lib():
