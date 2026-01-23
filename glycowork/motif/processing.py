@@ -8,7 +8,7 @@ from collections import defaultdict
 from pathlib import Path
 from itertools import combinations
 from typing import Callable, Generator
-from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
+from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan, df_species,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
@@ -1367,3 +1367,20 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
 def is_composition(s: str # Either glycan or composition string
                   ) -> bool: # Whether the input is a composition
   return s and s.isalnum() and s[-1].isdigit()
+
+
+def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
+                       species: str = "Homo_sapiens" # Species for biosynthetic inferences
+                      ) -> str: # Maximally inferred glycan string
+  "Infers sequence ambiguities/uncertainties via biosynthetic invariances"
+  tax = df_species[df_species['Species'] == species].iloc[0, 2:9].to_dict()
+  if glycan.endswith("GlcNAc(b1-?)GlcNAc"):
+    glycan.replace("GlcNAc(b1-?)GlcNAc", "GlcNAc(b1-4)GlcNAc")
+  if tax['Kingdom'] == 'Animalia':
+    glycan = glycan.replace("dHex", "Fuc")
+    glycan = glycan.replace("Gal(b1-?)GlcNAc", "Gal(b1-3/4)GlcNAc")
+  if "GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc" in glycan:
+    glycan = glycan.replace("GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc", "GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" if tax['Class'] == 'Mammalia' else "GlcNAc(b1-4)[Fuc(a1-3/6)]GlcNAc")
+  for old, new in [("Neu5Ac(a2-?)Neu5Ac", "Neu5Ac(a2-8)Neu5Ac"), ("Neu5Ac(a2-?)", "Neu5Ac(a2-3/6)"), ("Neu5Gc(a2-?)Neu5Gc", "Neu5Gc(a2-8)Neu5Gc"), ("Neu5Gc(a2-?)", "Neu5Gc(a2-3/6)")]:
+    glycan = glycan.replace(old, new)
+  return glycan

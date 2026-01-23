@@ -41,7 +41,8 @@ from glycowork.motif.processing import (
     glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
-    bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles
+    bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
+    max_specify_glycan
 )
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
@@ -1516,6 +1517,10 @@ def test_IUPAC_to_SMILES():
             IUPAC_to_SMILES(["Gal(b1-4)GlcNAc"])
     finally:
         builtins.__import__ = original_import
+
+
+def test_max_specify_glycan():
+    assert max_specify_glycan("Neu5Ac(a2-?)Gal(b1-?)GlcNAc(b1-2)Man(a1-3)[Gal(b1-?)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
 
 
 def test_unwrap():

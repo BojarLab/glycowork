@@ -18,10 +18,11 @@
 #### processing
 ##### Added ✨
 - Added `LacdiNAc` to the `common_names` support in Universal Input (d1140d1)
+- Added `max_specify_glycan` function to infer sequence ambiguities/uncertainties as best as possible
 
 ##### Fixed 🐛
 - `canonicalize_iupac` is now more robust when handling variant modification dialects in IUPAC-condensed (i.e., not mistaking them for CSDB-linear), such as `Galβ1-3(6SGlcNAcβ1-6)GalNAcol` (046ea12)
-- `min_process_glycans` and `get_lib` now correctly handle glycans with floating modifications, such as `{6S}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc`
+- `min_process_glycans` and `get_lib` now correctly handle glycans with floating modifications, such as `{6S}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc` (68f1e1b)
 
 ### ml
 #### models
