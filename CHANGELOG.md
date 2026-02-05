@@ -1,7 +1,7 @@
 # Changelog
 
 ## [1.7.1]
-- `glycorender` version bump from `0.2.3` to `0.2.4`  (1933574)
+- `glycorender` version bump from `0.2.3` to `0.2.5`  (1933574)
 - upgraded `nbdev2` to `nbdev3` for the documentation (+ removed now unnecessary files)
 
 ### motif

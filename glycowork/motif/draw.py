@@ -1430,6 +1430,9 @@ def annotate_figure(
     x_metric: str = 'Log2FC' # X axis metric ('Log2FC', 'Effect size')
     ) -> str | None: # Modified SVG code
   "Replaces text labels with glycan drawings in SVG figure"
+  import tempfile
+  import fitz
+  import os
   glycan_size_dict = {
       'small': 'scale(0.1 0.1)  translate(0, -74)',
       'medium': 'scale(0.2 0.2)  translate(0, -55)',
@@ -1483,9 +1486,17 @@ def annotate_figure(
         d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
       else:
         d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)], suppress = True, restrict_vocab = True)
-      data = d.as_svg().replace('<?xml version="1.0" encoding="UTF-8"?>\n', '')
+      glycan_svg = d.as_svg()
+      with tempfile.NamedTemporaryFile(suffix = '.pdf', delete = False) as tmp_pdf:
+        tmp_pdf_path = tmp_pdf.name
+      convert_svg_to_pdf(glycan_svg, tmp_pdf_path)
+      doc = fitz.open(tmp_pdf_path)
+      page = doc[0]
+      svg_from_pdf = page.get_svg_image()
+      doc.close()
+      os.unlink(tmp_pdf_path)
+      data = svg_from_pdf.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace('<?xml version="1.0"?>', '')
       id_matches = re.findall(r'd\d+', data)
-      # Reassign element ids to avoid duplicates
       for idx in id_matches:
         data = data.replace(idx, 'd' + str(element_id))
         element_id += 1
