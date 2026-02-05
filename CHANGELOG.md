@@ -1,6 +1,8 @@
 # Changelog
 
 ## [1.7.1]
+- `glycorender` version bump from `0.2.3` to `0.2.4`  (1933574)
+- upgraded `nbdev2` to `nbdev3` for the documentation (+ removed now unnecessary files)
 
 ### motif
 #### draw
@@ -9,11 +11,11 @@
 ##### Changed 🔄
 - Generic substituents will now be properly formatted in `GlycoDraw` (89eb687)
 - Unknown base monosaccharides in `GlycoDraw` now correctly default to blank hexagons (89eb687)
-- Make sure `GlycoDraw` can draw !-containing sequences (e.g., `Internal_LewisA`) even with `restrict_vocab=True`
+- Make sure `GlycoDraw` can draw !-containing sequences (e.g., `Internal_LewisA`) even with `restrict_vocab=True` (1933574)
 
 ##### Fixed 🐛
 - Make sure `reducing_end_label` is perfectly y-centered in `GlycoDraw` (7e9e980)
-- Fixed setting utf-8 as default encoding in `annotate_figure`
+- Fixed setting utf-8 as default encoding in `annotate_figure` (1933574)
 
 ##### Deprecated ⚠️
 
@@ -28,7 +30,7 @@
 
 #### analysis
 ##### Fixed 🐛
-- Fixed temporary file handling in `annotate_volcano=True` in `get_volcano`
+- Fixed temporary file handling in `annotate_volcano=True` in `get_volcano` (1933574)
 
 ### ml
 #### models

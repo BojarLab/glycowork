@@ -6,7 +6,7 @@ After cloning this repository, install it as an editable package using `pip` (th
 
 ```
 pip install -e ".[all,dev]"
-nbdev_install_hooks
+nbdev-install-hooks
 ```
 
 To run `nbdev_prepare` later on, you'll need Quarto installed. If you don't have it installed already, you can [install Quarto from here](https://quarto.org/docs/get-started/).
@@ -28,7 +28,7 @@ To run `nbdev_prepare` later on, you'll need Quarto installed. If you don't have
 * Before submitting a PR, run these commands locally to check that all tests are passing:
 
 ```
-nbdev_prepare
+nbdev-prepare
 cd tests
 pytest
 ```

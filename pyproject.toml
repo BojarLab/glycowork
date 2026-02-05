@@ -81,3 +81,18 @@ exclude = ["index_files*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.csv", "*.pkl", "*.jpg", "*.pt", "*.json"]
+
+[tool.nbdev]
+lib_path = "glycowork"
+lib_name = "glycowork"
+doc_path = "_docs"
+nbs_path = "."
+recursive = false
+tst_flags = "slow"
+repo_name = "glycowork"
+branch = "master"
+git_url = "https://github.com/BojarLab/glycowork/tree/master/"
+custom_sidebar = false
+doc_host = "https://BojarLab.github.io"
+doc_baseurl = "/glycowork/"
+title = "glycowork"
