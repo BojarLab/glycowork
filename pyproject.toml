@@ -31,7 +31,7 @@ dependencies = [
     "huggingface_hub>=0.16.0",
     "drawSvg~=2.0",
     "openpyxl",
-    "glycorender[png]~=0.2.3"
+    "glycorender[png]~=0.2.4"
 ]
 
 [project.urls]

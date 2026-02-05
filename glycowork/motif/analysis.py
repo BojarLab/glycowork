@@ -704,8 +704,11 @@ def get_volcano(
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
     if annotate_volcano:
       from glycowork.motif.draw import annotate_figure
-      annotate_figure(filepath, filepath = filepath.split('.')[0]+'.pdf', scale_by_DE_res = df_res,
-                          y_thresh = y_thresh, x_thresh = x_thresh, x_metric = x_metric)
+      svg_temp = filepath.rsplit('.', 1)[0] + '_temp.svg'
+      plt.savefig(svg_temp, format = 'svg', bbox_inches = 'tight')
+      annotate_figure(svg_temp, filepath = filepath, scale_by_DE_res = df_res, y_thresh = y_thresh, x_thresh = x_thresh, x_metric = x_metric)
+      import os
+      os.remove(svg_temp)
   plt.show()
 
 

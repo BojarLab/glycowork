@@ -1200,7 +1200,10 @@ def GlycoDraw(
   draw_this = draw_this.replace('*', '')
 
   if restrict_vocab and not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
-    raise Exception('Did you enter a real glycan or motif?')
+    if "!" in draw_this:
+      draw_this = re.sub(r'\[?!.*?\)', '', draw_this)
+    else:
+      raise Exception('Did you enter a real glycan or motif?')
 
   data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
 
@@ -1441,7 +1444,7 @@ def annotate_figure(
     glycan_scale = [y, labels]
 
   # Get svg code
-  svg_tmp = open(svg_input, "r").read() if '?xml' not in svg_input else svg_input
+  svg_tmp = open(svg_input, "r", encoding = "utf-8").read() if '?xml' not in svg_input else svg_input
   # Get all text labels
   label_pattern = re.compile(r'<!--\s*(.*?)\s*-->')
   transform_pattern = re.compile(r'<g transform\s*(.*?)\s*">')
@@ -1464,7 +1467,8 @@ def annotate_figure(
     else:
       pass
     try:
-      if in_lib(motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0], lib):
+      glycan = motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0]
+      if in_lib(glycan, lib) or "!" in glycan:
         edit_svg = True
       else:
         pass
@@ -1491,12 +1495,14 @@ def annotate_figure(
 
   if filepath:
     if filepath.endswith('.pdf'):
-      convert_svg_to_pdf(svg_tmp, str(filepath))
+      from glycorender.render import simple_svg_to_pdf
+      simple_svg_to_pdf(svg_tmp, str(filepath))
     elif filepath.endswith('.svg'):
       with open(filepath, 'w', encoding = "utf-8") as f:
         f.write(svg_tmp)
     elif filepath.endswith('.png'):
-      convert_svg_to_png(svg_tmp, str(filepath))
+      from glycorender.render import simple_svg_to_png
+      simple_svg_to_png(svg_tmp, str(filepath))
   else:
     return svg_tmp
 

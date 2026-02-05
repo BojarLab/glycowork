@@ -9,20 +9,26 @@
 ##### Changed 🔄
 - Generic substituents will now be properly formatted in `GlycoDraw` (89eb687)
 - Unknown base monosaccharides in `GlycoDraw` now correctly default to blank hexagons (89eb687)
+- Make sure `GlycoDraw` can draw !-containing sequences (e.g., `Internal_LewisA`) even with `restrict_vocab=True`
 
 ##### Fixed 🐛
-- make sure `reducing_end_label` is perfectly y-centered in `GlycoDraw` (7e9e980)
+- Make sure `reducing_end_label` is perfectly y-centered in `GlycoDraw` (7e9e980)
+- Fixed setting utf-8 as default encoding in `annotate_figure`
 
 ##### Deprecated ⚠️
 
 #### processing
 ##### Added ✨
 - Added `LacdiNAc` to the `common_names` support in Universal Input (d1140d1)
-- Added `max_specify_glycan` function to infer sequence ambiguities/uncertainties as best as possible
+- Added `max_specify_glycan` function to infer sequence ambiguities/uncertainties as best as possible (e2cf92a)
 
 ##### Fixed 🐛
 - `canonicalize_iupac` is now more robust when handling variant modification dialects in IUPAC-condensed (i.e., not mistaking them for CSDB-linear), such as `Galβ1-3(6SGlcNAcβ1-6)GalNAcol` (046ea12)
 - `min_process_glycans` and `get_lib` now correctly handle glycans with floating modifications, such as `{6S}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc` (68f1e1b)
+
+#### analysis
+##### Fixed 🐛
+- Fixed temporary file handling in `annotate_volcano=True` in `get_volcano`
 
 ### ml
 #### models
