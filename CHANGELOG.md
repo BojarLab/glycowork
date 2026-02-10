@@ -6,8 +6,6 @@
 
 ### motif
 #### draw
-##### Added ✨
-
 ##### Changed 🔄
 - Generic substituents will now be properly formatted in `GlycoDraw` (89eb687)
 - Unknown base monosaccharides in `GlycoDraw` now correctly default to blank hexagons (89eb687)
@@ -31,6 +29,13 @@
 #### analysis
 ##### Fixed 🐛
 - Fixed temporary file handling in `annotate_volcano=True` in `get_volcano` (1933574)
+
+#### annotate
+##### Added ✨
+- Added new `get_minimal_ksaccharide_ambiguity` function to find the minimal needed narrow linkage wildcard to encompass all variants in dataset
+
+##### Changed 🔄
+- `feature_set` options `exhaustive` and the `terminal` variants now fully lean into narrow linkage wildcards for dynamically generated wildcards (e.g., `a2-3/6`), instead of the broader `a2-?` versions, which are scoped based on the provided data
 
 ### ml
 #### models

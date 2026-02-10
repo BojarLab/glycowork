@@ -2,7 +2,7 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import re
-from collections import Counter, deque
+from collections import Counter, deque, defaultdict
 from functools import partial
 from scipy.spatial.distance import cosine
 
@@ -219,14 +219,12 @@ def annotate_dataset(
     if 'terminal2' in feature_set:
       bag2 = [get_terminal_structures(glycan, size = 2) for glycan in glycans]
     bag = [a + b for a, b in zip(bag1, bag2)] if (bag1 and bag2) else bag1 + bag2
-    repertoire = set(unwrap(bag))
-    repertoire2 = [re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in repertoire]
-    repertoire2 = set([k for k in repertoire2 if repertoire2.count(k) > 1 and k not in repertoire])
-    repertoire.update(repertoire2)
-    bag_out = pd.DataFrame([{i: j.count(i) for i in repertoire if '?' not in i} for j in bag])
-    shadow_glycans = [[re.sub(r"\(([ab])(\d)-(\d)\)", r"(\1\2-?)", g) for g in b] for b in bag]
-    shadow_bag = pd.DataFrame([{i: j.count(i) for i in repertoire if '?' in i} for j in shadow_glycans])
-    bag_out = pd.concat([bag_out, shadow_bag], axis = 1).reset_index(drop = True)
+    potentials = get_minimal_ksaccharide_ambiguity(glycans, motifs = list(set(unwrap(bag))))
+    new_additions = set(list(potentials.keys()) + list(potentials.values()))
+    gmotifs_terminal = [glycan_to_nxGraph(m) for m in new_additions]
+    ggraphs = [glycan_to_nxGraph(g) for g in glycans]
+    counts_dict = {motif: [subgraph_isomorphism(g, m, count = True) for g in ggraphs] for motif, m in zip(new_additions, gmotifs_terminal)}
+    bag_out = pd.DataFrame(counts_dict).fillna(0).astype(int)
     bag_out.index = glycans
     bag_out.columns = ['Terminal_' + c for c in bag_out.columns]
     shopping_cart.append(bag_out)
@@ -326,6 +324,52 @@ def count_unique_subgraphs_of_size_k(
   return dict(Counter(k_subgraphs))
 
 
+def get_minimal_ksaccharide_ambiguity(
+    glycans: list, # list of glycans in IUPAC-condensed nomenclature
+    size: int = 2, # Number of monosaccharides per fragment
+    terminal: bool = False, # Only count terminal fragments
+    motifs: list = None # Pre-computed motifs (for terminal structures)
+  ) -> dict: # Dictionary of precise-k-saccharide : ideal wildcarded k-saccharide
+  if motifs is None:
+    ksaccharides = {}
+    for g in glycans:
+      graph = glycan_to_nxGraph(g)
+      ksac_dict = count_unique_subgraphs_of_size_k(graph, size = size, terminal = False)
+      for ksac_str in ksac_dict:
+        ksaccharides[ksac_str] = ksaccharides.get(ksac_str, 0) + ksac_dict[ksac_str]
+  else:
+    ksaccharides = {m: 1 for m in motifs}
+  linkage_pattern = re.compile(r'\(([ab?])([0-9?/]+)-([0-9?/]+)\)')
+  backbone_linkages = defaultdict(lambda: defaultdict(lambda: [set(), set(), set()]))
+  for ksac in ksaccharides:
+    backbone = linkage_pattern.sub('(LINK)', ksac)
+    linkages = linkage_pattern.findall(ksac)
+    for i, (anomer, start, end) in enumerate(linkages):
+      if anomer != '?':
+        backbone_linkages[backbone][i][0].add(anomer)
+      for s in start.split('/'):
+        if s != '?':
+          backbone_linkages[backbone][i][1].add(s)
+      for e in end.split('/'):
+        if e != '?':
+          backbone_linkages[backbone][i][2].add(e)
+  result = {}
+  for ksac in ksaccharides:
+    backbone = linkage_pattern.sub('(LINK)', ksac)
+    linkages = linkage_pattern.findall(ksac)
+    reconstructed = backbone
+    for i in range(len(linkages)):
+      anomers, starts, ends = backbone_linkages[backbone][i]
+      anomer = list(anomers)[0] if len(anomers) == 1 else '?'
+      starts_sorted = sorted(starts, key=int) if starts else ['?']
+      ends_sorted = sorted(ends, key=int) if ends else ['?']
+      start = '/'.join(starts_sorted) if len(starts_sorted) > 1 else starts_sorted[0]
+      end = '/'.join(ends_sorted) if len(ends_sorted) > 1 else ends_sorted[0]
+      reconstructed = reconstructed.replace('(LINK)', f'({anomer}{start}-{end})', 1)
+    result[ksac] = reconstructed
+  return result
+
+
 @rescue_glycans
 def get_k_saccharides(
    glycans: list[str] | set[str], # List or set of IUPAC-condensed glycan sequences
@@ -339,7 +383,7 @@ def get_k_saccharides(
     raise TypeError("The input has to be a list or set of glycans")
   if any(k in ''.join(glycans) for k in [';', 'β', 'α', 'RES', '=']):
     raise Exception
-  if not up_to and max(g.count('(')+1 for g in glycans) < size:
+  if not up_to and max(g.count('(') + 1 for g in glycans) < size:
     return [] if just_motifs else pd.DataFrame()
   if up_to:
     wga_letter_data = []
@@ -349,42 +393,23 @@ def get_k_saccharides(
         comp_dict = canonicalize_composition(g)
         wga_letter_data.append(comp_dict)
       else:
-        wga_letter_data.append({i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(actual_glycans) if i not in linkages})
+        wga_letter_data.append(
+          {i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(actual_glycans) if i not in linkages})
     wga_letter = pd.DataFrame(wga_letter_data)
-  regex = re.compile(r"([ab])(\d)-(\d)")
-  ggraphs, shadow_graphs = [], []
-  for g_str in glycans:
-    g = glycan_to_nxGraph(g_str)
-    ggraphs.append(g)
-    sg = g.copy()
-    labels = nx.get_node_attributes(sg, 'string_labels')
-    nx.set_node_attributes(sg, {n: regex.sub(r"\1\2-?", labels[n]) for n in labels}, 'string_labels')
-    shadow_graphs.append(sg)
-  ggraphs = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size, terminal = terminal) for g in ggraphs])
-  ggraphs = ggraphs.drop(columns = [col for col in ggraphs.columns if '?' in col])
-  shadow_glycans = pd.DataFrame([count_unique_subgraphs_of_size_k(g, size = size, terminal = terminal) for g in shadow_graphs])
-  org_len = ggraphs.shape[1]
-  out_matrix = pd.concat([ggraphs, shadow_glycans], axis = 1).reset_index(drop = True)
-  out_matrix = out_matrix.loc[:, ~out_matrix.columns.duplicated()].copy()
-  # Throw out redundant columns
-  cols = out_matrix.columns.tolist()
-  first_half_cols = cols[:org_len]
-  second_half_cols = cols[org_len:]
-  drop_columns = []
-  regex = re.compile(r"(\([ab])(\d)-(\d)\)")
-  col_sums = out_matrix.sum().to_dict()
-  col_map = {regex.sub(r"\1\2-?)", col): col for col in first_half_cols}
-  for col2 in second_half_cols:
-    if col2 in col_map:
-      col1 = col_map[col2]
-      if col_sums[col1] == col_sums[col2]:
-        drop_columns.append(col2)
-  out_matrix = out_matrix.drop(drop_columns, axis = 1)
-  out_matrix = out_matrix.T.groupby(level = 0).sum().T
+  counts_dict = {}
+  ggraphs = [glycan_to_nxGraph(g) for g in glycans]
+  for s in range(2, size + 1):
+    potentials = get_minimal_ksaccharide_ambiguity(glycans, size = s, terminal = terminal)
+    new_additions = [(addy, glycan_to_nxGraph(addy)) for addy in set(list(potentials.keys()) + list(potentials.values()))]
+    for n, m in new_additions:
+      counts_dict[n] = [subgraph_isomorphism(g, m, count = True) for g in ggraphs] # to-do: this doesn't propagate the terminal keyword arg, used in terminal3
+  df_counts = pd.DataFrame(counts_dict)
   if up_to:
-    combined_df = pd.concat([wga_letter, out_matrix], axis = 1).fillna(0).astype(int)
-    return combined_df.apply(lambda x: list(combined_df.columns[x > 0]), axis = 1).tolist() if just_motifs else combined_df
-  return out_matrix.apply(lambda x: list(out_matrix.columns[x > 0]), axis = 1).tolist() if just_motifs else out_matrix.fillna(0).astype(int)
+    combined_df = pd.concat([wga_letter, df_counts], axis = 1).fillna(0).astype(int)
+    return combined_df.apply(lambda x: list(combined_df.columns[x > 0]),
+                             axis = 1).tolist() if just_motifs else combined_df
+  return df_counts.apply(lambda x: list(df_counts.columns[x > 0]),
+                         axis = 1).tolist() if just_motifs else df_counts.fillna(0).astype(int)
 
 
 def get_terminal_structures(
