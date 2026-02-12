@@ -212,13 +212,16 @@ def annotate_dataset(
     shopping_cart.append(temp)
   if 'chemical' in feature_set:
     shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
-  if 'terminal' in feature_set or 'terminal1' in feature_set or 'terminal2' in feature_set:
-    bag1, bag2 = [], []
+  if 'terminal' in feature_set or 'terminal1' in feature_set or 'terminal2' in feature_set or 'terminal3' in feature_set:
+    bag1, bag2, bag3 = [], [], []
     if 'terminal' in feature_set or 'terminal1' in feature_set:
       bag1 = list(map(get_terminal_structures, glycans))
     if 'terminal2' in feature_set:
       bag2 = [get_terminal_structures(glycan, size = 2) for glycan in glycans]
-    bag = [a + b for a, b in zip(bag1, bag2)] if (bag1 and bag2) else bag1 + bag2
+    if 'terminal3' in feature_set:
+      bag3 = [get_terminal_structures(glycan, size = 3) for glycan in glycans]
+    bags = [b for b in [bag1, bag2, bag3] if b]
+    bag = [sum(items, []) for items in zip(*bags)] if bags else []
     potentials = get_minimal_ksaccharide_ambiguity(glycans, motifs = list(set(unwrap(bag))))
     new_additions = set(list(potentials.keys()) + list(potentials.values()))
     gmotifs_terminal = [glycan_to_nxGraph(m) for m in new_additions]
@@ -228,11 +231,6 @@ def annotate_dataset(
     bag_out.index = glycans
     bag_out.columns = ['Terminal_' + c for c in bag_out.columns]
     shopping_cart.append(bag_out)
-  if 'terminal3' in feature_set:
-    temp = get_k_saccharides(glycans, size = 3, terminal = True)
-    temp.index = glycans
-    temp.columns = ['Terminal_' + c for c in temp.columns]
-    shopping_cart.append(temp)
   if 'size_branch' in feature_set:
     shopping_cart.append(get_size_branching_features(glycans))
   if condense:
@@ -402,30 +400,40 @@ def get_k_saccharides(
     potentials = get_minimal_ksaccharide_ambiguity(glycans, size = s, terminal = terminal)
     new_additions = [(addy, glycan_to_nxGraph(addy)) for addy in set(list(potentials.keys()) + list(potentials.values()))]
     for n, m in new_additions:
-      counts_dict[n] = [subgraph_isomorphism(g, m, count = True) for g in ggraphs] # to-do: this doesn't propagate the terminal keyword arg, used in terminal3
+      counts_dict[n] = [subgraph_isomorphism(g, m, count = True) for g in ggraphs]
   df_counts = pd.DataFrame(counts_dict)
   if up_to:
     combined_df = pd.concat([wga_letter, df_counts], axis = 1).fillna(0).astype(int)
-    return combined_df.apply(lambda x: list(combined_df.columns[x > 0]),
-                             axis = 1).tolist() if just_motifs else combined_df
-  return df_counts.apply(lambda x: list(df_counts.columns[x > 0]),
-                         axis = 1).tolist() if just_motifs else df_counts.fillna(0).astype(int)
+    return combined_df.apply(lambda x: list(combined_df.columns[x > 0]), axis = 1).tolist() if just_motifs else combined_df
+  return df_counts.apply(lambda x: list(df_counts.columns[x > 0]), axis = 1).tolist() if just_motifs else df_counts.fillna(0).astype(int)
 
 
 def get_terminal_structures(
    glycan: str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
-   size: int = 1 # Number of monosaccharides in terminal fragment (1 or 2)
+   size: int = 1 # Number of monosaccharides in terminal fragment (1 or higher)
    ) -> list[str]: # List of terminal structures with linkages
   "Identifies terminal monosaccharide sequences from non-reducing ends of glycan structure"
-  if size > 2:
-    raise ValueError("Please use get_k_saccharides with terminal = True for larger terminal structures")
   ggraph = ensure_graph(glycan)
   nodeDict = dict(ggraph.nodes(data = True))
-  temp =  [nodeDict[k]['string_labels']+'('+nodeDict[k+1]['string_labels']+')' + \
-   ''.join([nodeDict.get(k+1+j+i, {'string_labels': ''})['string_labels']+'('+nodeDict.get(k+2+j+i, {'string_labels': ''})['string_labels']+')' \
-            for i, j in enumerate(range(1, size))]) for k in list(ggraph.nodes())[:-1] if \
-          ggraph.out_degree[k] == 0 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages]
-  return [g.replace('()', '') for g in temp]
+  result = []
+  for k in list(ggraph.nodes())[:-1]:
+    if ggraph.out_degree[k] == 0 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages:
+      structure = nodeDict[k]['string_labels'] + '(' + nodeDict[k+1]['string_labels'] + ')'
+      current_linkage = k + 1
+      for _ in range(size - 1):
+        preds = list(ggraph.predecessors(current_linkage))
+        if not preds:
+          break
+        next_mono = preds[0]
+        structure += nodeDict[next_mono]['string_labels']
+        if next_mono + 1 in nodeDict:
+          structure += '(' + nodeDict[next_mono + 1]['string_labels'] + ')'
+          current_linkage = next_mono + 1
+        else:
+          break
+      if structure.replace('()', '').count('(') >= size - 1:
+        result.append(structure.replace('()', ''))
+  return result
 
 
 def create_correlation_network(

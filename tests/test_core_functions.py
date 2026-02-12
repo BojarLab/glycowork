@@ -2469,6 +2469,8 @@ def test_get_k_saccharides():
     # Test basic functionality
     result = get_k_saccharides(glycans, size=2)
     assert isinstance(result, pd.DataFrame)
+    result = get_k_saccharides(glycans, size = 2, terminal=True)
+    assert isinstance(result, pd.DataFrame)
     # Test with up_to=True
     result = get_k_saccharides(glycans, size=2, up_to=True)
     assert isinstance(result, pd.DataFrame)
@@ -2519,11 +2521,8 @@ def test_get_terminal_structures():
     result = get_terminal_structures(glycan, size=2)
     assert isinstance(result, list)
     assert "Man(b1-4)GlcNAc(b1-4)" in result
-    try:
-        result = get_terminal_structures(glycan, size=3)
-        return False
-    except ValueError:
-        pass
+    result = get_terminal_structures(glycan, size=3)
+    assert "Man(b1-4)GlcNAc(b1-4)GlcNAc" in result
 
 
 def test_create_correlation_network():

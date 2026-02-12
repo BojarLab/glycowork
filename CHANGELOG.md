@@ -32,10 +32,15 @@
 
 #### annotate
 ##### Added ✨
-- Added new `get_minimal_ksaccharide_ambiguity` function to find the minimal needed narrow linkage wildcard to encompass all variants in dataset
+- Added new `get_minimal_ksaccharide_ambiguity` function to find the minimal needed narrow linkage wildcard to encompass all variants in dataset (8a0bbce)
 
 ##### Changed 🔄
-- `feature_set` options `exhaustive` and the `terminal` variants now fully lean into narrow linkage wildcards for dynamically generated wildcards (e.g., `a2-3/6`), instead of the broader `a2-?` versions, which are scoped based on the provided data
+- `feature_set` options `exhaustive` and the `terminal` variants now fully lean into narrow linkage wildcards for dynamically generated wildcards (e.g., `a2-3/6`), instead of the broader `a2-?` versions, which are scoped based on the provided data (8a0bbce)
+- `get_terminal_structures` can now be used for any `size` value, not only 1 and 2
+- `annotate_dataset` will now internally use `get_terminal_structures` for the `terminal3` feature-set keyword
+
+##### Fixed 🐛
+- Fixed topologically incorrect disaccharides in `get_terminal_structures` output
 
 ### ml
 #### models
