@@ -3,7 +3,7 @@
 ## [1.7.1]
 - `glycorender` version bump from `0.2.3` to `0.2.5`  (1933574)
 - upgraded `nbdev2` to `nbdev3` for the documentation (+ removed now unnecessary files) (eb3f727)
-- improved start-up time of the package (i.e., time at first import in a session)
+- improved start-up time of the package (i.e., time at first import in a session) (10a39f0)
 
 ### motif
 #### draw

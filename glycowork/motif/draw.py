@@ -1536,7 +1536,7 @@ def plot_glycans_excel(
     compact: bool = False # Use compact style
     ) -> None:
   "Creates Excel file with SNFG glycan images in a new column"
-  convert_svg_to_pdf, convert_svg_to_png = _get_glycorender()
+  _, convert_svg_to_png = _get_glycorender()
   from openpyxl.drawing.image import Image as OpenpyxlImage
   from openpyxl.utils import get_column_letter
   from PIL import Image
