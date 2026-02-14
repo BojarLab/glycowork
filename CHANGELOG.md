@@ -27,6 +27,9 @@
 - `min_process_glycans` and `get_lib` now correctly handle glycans with floating modifications, such as `{6S}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc` (68f1e1b)
 
 #### analysis
+##### Changed 🔄
+- `characterize_monosaccharide` is now much faster
+
 ##### Fixed 🐛
 - Fixed temporary file handling in `annotate_volcano=True` in `get_volcano` (1933574)
 
@@ -36,12 +39,14 @@
 
 ##### Changed 🔄
 - `feature_set` options `exhaustive` and the `terminal` variants now fully lean into narrow linkage wildcards for dynamically generated wildcards (e.g., `a2-3/6`), instead of the broader `a2-?` versions, which are scoped based on the provided data (8a0bbce)
-- `get_terminal_structures` can now be used for any `size` value, not only 1 and 2
-- `annotate_dataset` will now internally use `get_terminal_structures` for the `terminal3` feature-set keyword
+- `get_terminal_structures` can now be used for any `size` value, not only 1 and 2 (ef353fb)
+- `annotate_dataset` will now internally use `get_terminal_structures` for the `terminal3` feature-set keyword (ef353fb)
 
 ##### Fixed 🐛
-- Fixed topologically incorrect disaccharides in `get_terminal_structures` output
+- Fixed topologically incorrect disaccharides in `get_terminal_structures` output (ef353fb)
 
 ### ml
 #### models
 - When using `prep_model` with `trained=True` on `SweetNet`-type models, the function now auto-corrects the `num_classes` value, if a wrong output dimension is provided (i.e., if it clashes with the trained model) (ccf2d34)
+##### Fixed 🐛
+- Fixed warning message in `train_ml_model` about not specifying `feature_calc`

@@ -163,18 +163,24 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
     if data1_labels2 != data2_labels2 and 'flexible' not in {data1_labels2, data2_labels2}:
       return False
     data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
-    comb_labels = data1_labels + data2_labels
-    if "Monosaccharide" in comb_labels and  '-' not in comb_labels:
+    if data1_labels == data2_labels:
       return True
-    if "?1-?" in comb_labels and comb_labels.count('-') == 2:
-      return True
-    if data2_labels.startswith('!') and data1_labels != data2_labels[1:] and '-' not in data1_labels:
-      return True
-    if data1_labels in narrow_wildcard_list and data2_labels in narrow_wildcard_list[data1_labels]:
-      return True
-    elif data2_labels in narrow_wildcard_list and data1_labels in narrow_wildcard_list[data2_labels]:
-      return True
-    return data1_labels == data2_labels
+    if "Monosaccharide" in data1_labels or "Monosaccharide" in data2_labels:
+      if '-' not in data1_labels and '-' not in data2_labels:
+        return True
+    if data1_labels == "?1-?" or data2_labels == "?1-?":
+      if data1_labels.count('-') + data2_labels.count('-') == 2:
+        return True
+    if data2_labels.startswith('!'):
+      if data1_labels != data2_labels[1:] and '-' not in data1_labels:
+        return True
+    if data1_labels in narrow_wildcard_list:
+      if data2_labels in narrow_wildcard_list[data1_labels]:
+        return True
+    if data2_labels in narrow_wildcard_list:
+      if data1_labels in narrow_wildcard_list[data2_labels]:
+        return True
+    return False
   return match
 
 
@@ -488,25 +494,21 @@ def glycan_graph_memoize(maxsize: int = 128):
     def wrapper(graph, *args, **kwargs):
       if len(graph) < 4:
         return func(graph, *args, **kwargs)
-      labels_vals = tuple(nx.get_node_attributes(graph, "string_labels").values())
-      degrees = tuple(d for _, d in graph.out_degree())
+      node_ids = sorted(graph.nodes())
+      labels_vals = tuple(graph.nodes[n]["string_labels"] for n in node_ids)
+      degrees = tuple(graph.out_degree(n) for n in node_ids)
+      edges = tuple(sorted(graph.edges()))
       kwargs_items = tuple(sorted(kwargs.items()))
-      # Create key
-      key = (hash(labels_vals), hash(degrees), hash(args), hash(kwargs_items))
-      # Check cache
+      key = (labels_vals, degrees, edges, args, kwargs_items)
       if key in cache:
-        # Update LRU order
         if key in access_order:
           access_order.remove(key)
         access_order.append(key)
         return cache[key]
-      # Compute result
       result = func(graph, *args, **kwargs)
-      # Manage cache size
       if len(cache) >= maxsize:
         oldest = access_order.pop(0)
         del cache[oldest]
-      # Store result
       cache[key] = result
       access_order.append(key)
       return result
