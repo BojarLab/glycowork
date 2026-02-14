@@ -2,7 +2,8 @@
 
 ## [1.7.1]
 - `glycorender` version bump from `0.2.3` to `0.2.5`  (1933574)
-- upgraded `nbdev2` to `nbdev3` for the documentation (+ removed now unnecessary files)
+- upgraded `nbdev2` to `nbdev3` for the documentation (+ removed now unnecessary files) (eb3f727)
+- improved start-up time of the package (i.e., time at first import in a session)
 
 ### motif
 #### draw
@@ -28,7 +29,7 @@
 
 #### analysis
 ##### Changed 🔄
-- `characterize_monosaccharide` is now much faster
+- `characterize_monosaccharide` is now much faster (0de71c5)
 
 ##### Fixed 🐛
 - Fixed temporary file handling in `annotate_volcano=True` in `get_volcano` (1933574)
@@ -49,4 +50,4 @@
 #### models
 - When using `prep_model` with `trained=True` on `SweetNet`-type models, the function now auto-corrects the `num_classes` value, if a wrong output dimension is provided (i.e., if it clashes with the trained model) (ccf2d34)
 ##### Fixed 🐛
-- Fixed warning message in `train_ml_model` about not specifying `feature_calc`
+- Fixed warning message in `train_ml_model` about not specifying `feature_calc` (0de71c5)

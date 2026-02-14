@@ -9,7 +9,6 @@ from io import BytesIO
 from typing import Any
 import networkx as nx
 import drawsvg as draw
-from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
 import numpy as np
 import pandas as pd
 import re
@@ -111,6 +110,11 @@ sugar_dict = {
 
 domon_costello = {'B', 'C', 'Z', 'Y', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A', '25A', '03A', '14X', '25X', '03X', '14A'}
 SUBSTITUENT_PATTERN = re.compile(r'(?:^|[^1-9])([0-9]+)(?:Substituent|Subst)')
+
+
+def _get_glycorender():
+  from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
+  return convert_svg_to_pdf, convert_svg_to_png
 
 
 def draw_hex(
@@ -862,6 +866,7 @@ def display_svg_with_matplotlib(
     chem: bool = False # Whether svg_data comes from RDKit chemical
     ) -> None:
   "Renders SVG using matplotlib for non-Jupyter environments"
+  _, convert_svg_to_png = _get_glycorender()
   from PIL import Image
   svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
   # Get original SVG dimensions and scale them up
@@ -1060,6 +1065,7 @@ def draw_chem2d(
         with open(filepath, 'w') as f:
           f.write(svg_data)
     elif filepath.suffix.lower() == '.pdf':
+      convert_svg_to_pdf, _ = _get_glycorender()
       convert_svg_to_pdf(svg_data, str(filepath), chem = True)
   return SVG(svg_data) if is_jupyter() else display_svg_with_matplotlib(svg_data, chem = True)
 
@@ -1133,6 +1139,7 @@ class GlycanDrawing:
   def save_svg(self, filepath):
     return self.drawing_obj.save_svg(filepath)
   def _repr_png_(self):
+    _, convert_svg_to_png = _get_glycorender()
     return convert_svg_to_png(self.as_svg(), None, return_bytes = True)
 
 
@@ -1400,8 +1407,10 @@ def GlycoDraw(
       with open(filepath, 'w', encoding = "utf-8") as f:
         f.write(data)
     elif filepath.suffix.lower() == '.pdf':
+      convert_svg_to_pdf, _ = _get_glycorender()
       convert_svg_to_pdf(data, str(filepath))
     elif filepath.suffix.lower() == '.png':
+      _, convert_svg_to_png = _get_glycorender()
       convert_svg_to_png(data, str(filepath))
   return GlycanDrawing(d2) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
 
@@ -1430,6 +1439,7 @@ def annotate_figure(
     x_metric: str = 'Log2FC' # X axis metric ('Log2FC', 'Effect size')
     ) -> str | None: # Modified SVG code
   "Replaces text labels with glycan drawings in SVG figure"
+  convert_svg_to_pdf, _ = _get_glycorender()
   import tempfile
   import fitz
   import os
@@ -1526,6 +1536,7 @@ def plot_glycans_excel(
     compact: bool = False # Use compact style
     ) -> None:
   "Creates Excel file with SNFG glycan images in a new column"
+  convert_svg_to_pdf, convert_svg_to_png = _get_glycorender()
   from openpyxl.drawing.image import Image as OpenpyxlImage
   from openpyxl.utils import get_column_letter
   from PIL import Image
