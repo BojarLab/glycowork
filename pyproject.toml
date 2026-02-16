@@ -96,3 +96,4 @@ custom_sidebar = false
 doc_host = "https://BojarLab.github.io"
 doc_baseurl = "/glycowork/"
 title = "glycowork"
+description = "Package for processing and analyzing glycans"
