@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 # Project metadata
 [project]
-name="glycowork"
-version = "1.7.0"
+name = "glycowork"
+version = "1.7.1"
 description = "Package for processing and analyzing glycans"
 readme = "README.md"
 authors = [
@@ -15,7 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent"
 ]
-requires-python=">=3.10"
+requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "matplotlib",
@@ -31,7 +31,7 @@ dependencies = [
     "huggingface_hub>=0.16.0",
     "drawSvg~=2.0",
     "openpyxl",
-    "glycorender[png]~=0.2.3"
+    "glycorender[png]~=0.2.5"
 ]
 
 [project.urls]
@@ -81,3 +81,18 @@ exclude = ["index_files*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.csv", "*.pkl", "*.jpg", "*.pt", "*.json"]
+
+[tool.nbdev]
+lib_path = "glycowork"
+lib_name = "glycowork"
+doc_path = "_docs"
+nbs_path = "."
+recursive = false
+tst_flags = "slow"
+repo_name = "glycowork"
+branch = "master"
+git_url = "https://github.com/BojarLab/glycowork/tree/master/"
+custom_sidebar = false
+doc_host = "https://BojarLab.github.io"
+doc_baseurl = "/glycowork/"
+title = "glycowork"

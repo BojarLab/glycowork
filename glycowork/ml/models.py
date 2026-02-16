@@ -347,6 +347,9 @@ def prep_model(model_type: Literal["SweetNet", "GIFFLAR", "LectinOracle", "Lecti
   if libr is None:
     libr = lib
   if model_type == 'SweetNet':
+    if trained and num_classes != 1075:
+      warnings.warn(f"Trained SweetNet model uses 1075 classes (multilabel setting). Overriding num_classes={num_classes} with 1075.")
+      num_classes = 1075
     model = SweetNet(len(libr), num_classes = num_classes, hidden_dim = hidden_dim)
     model = model.apply(lambda module: init_weights(module, mode = 'sparse'))
     if trained:

@@ -1,5 +1,8 @@
 project:
   type: website
+  render:
+    - "*.ipynb"
+    - "!CONTRIBUTING.md"
 
 format:
   html:

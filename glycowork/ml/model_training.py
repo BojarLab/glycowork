@@ -459,9 +459,9 @@ def train_ml_model(X_train: pd.DataFrame | list, # training data/glycans
     elif mode == 'regression':
       model = xgb.XGBRegressor(random_state = 42, n_estimators = 100, objective = 'reg:squarederror')
     # Get features
-    if isinstance(X_train, list) and isinstance(X_train[0], str):
+    if isinstance(X_train, list) and isinstance(X_train[0], str) and not feature_calc:
       feature_calc = True
-      print("\nYou provided glycans without features but did not specify feature_calc; we'll step in and calculate features with the default feature_set but feel free to re-run and change.")
+      print("\nYou provided glycans without features but did not specify feature_calc; we'll step in and calculate features with the current feature_set but feel free to re-run and change.")
     if feature_calc:
       print("\nCalculating Glycan Features...")
       X_train = annotate_dataset(X_train, feature_set = feature_set, condense = True)

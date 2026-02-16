@@ -1,5 +1,4 @@
 [run]
 omit = 
-    setup.py
     */glycowork/glycowork/*.py
     */__init__.py

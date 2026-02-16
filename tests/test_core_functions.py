@@ -41,7 +41,8 @@ from glycowork.motif.processing import (
     glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
-    bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles
+    bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
+    max_specify_glycan
 )
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
@@ -336,6 +337,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Psif(a2-1b)Glc") == "Psif(a2-1)Glc"
     assert canonicalize_iupac("Glc(a1-4)2,3-Anhydro-Man(a1-4)Glc(a1-4)Glc") == "Glc(a1-4)2,3-Anhydro-Man(a1-4)Glc(a1-4)Glc"
     assert canonicalize_iupac("NeuAcalpha2-3Galbeta1-3GalNAcbeta1-4(NeuAcalpha2-8NeuGcalpha2-3)Galbeta1-4Glcbeta-Cer") == "Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Gc(a2-3)]Gal(b1-4)Glc1Cer"
+    assert canonicalize_iupac("Galβ1-3(6SGlcNAcβ1-6)GalNAcol") == "Gal(b1-3)[GlcNAc6S(b1-6)]GalNAc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -1199,6 +1201,7 @@ def test_get_lib():
     assert 'GlcNAc' in lib
     assert 'a2-3' in lib
     assert 'b1-4' in lib
+    assert "6S" in get_lib(["{6S}{Neu5Ac(a2-3)}Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc"])
 
 
 def test_expand_lib():
@@ -1514,6 +1517,10 @@ def test_IUPAC_to_SMILES():
             IUPAC_to_SMILES(["Gal(b1-4)GlcNAc"])
     finally:
         builtins.__import__ = original_import
+
+
+def test_max_specify_glycan():
+    assert max_specify_glycan("Neu5Ac(a2-?)Gal(b1-?)GlcNAc(b1-2)Man(a1-3)[Gal(b1-?)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
 
 
 def test_unwrap():
@@ -2462,6 +2469,8 @@ def test_get_k_saccharides():
     # Test basic functionality
     result = get_k_saccharides(glycans, size=2)
     assert isinstance(result, pd.DataFrame)
+    result = get_k_saccharides(glycans, size = 2, terminal=True)
+    assert isinstance(result, pd.DataFrame)
     # Test with up_to=True
     result = get_k_saccharides(glycans, size=2, up_to=True)
     assert isinstance(result, pd.DataFrame)
@@ -2512,11 +2521,8 @@ def test_get_terminal_structures():
     result = get_terminal_structures(glycan, size=2)
     assert isinstance(result, list)
     assert "Man(b1-4)GlcNAc(b1-4)" in result
-    try:
-        result = get_terminal_structures(glycan, size=3)
-        return False
-    except ValueError:
-        pass
+    result = get_terminal_structures(glycan, size=3)
+    assert "Man(b1-4)GlcNAc(b1-4)GlcNAc" in result
 
 
 def test_create_correlation_network():
@@ -3041,6 +3047,8 @@ def test_glycodraw():
     result = GlycoDraw("Terminal_LewisX", suppress=True)
     assert result is not None
     result = GlycoDraw("DManpa1-3[DManpa1-6][DXylpb1-2]DManpb1-4DGlcpNAcb1-4[LFucpa1-3]DGlcpNAca1-OH", suppress=True)
+    assert result is not None
+    result = GlycoDraw("Internal_LewisA", restrict_vocab=True, suppress=True)
     assert result is not None
     # Test file saving
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.svg")
@@ -6783,13 +6791,17 @@ def test_prep_model(model_type: str, num_classes: int, expected_class: type):
 def test_prep_model_trained():
     model = prep_model("LectinOracle", num_classes=1, trained=True)
     assert isinstance(model, LectinOracle)
+    with warnings.catch_warnings():
+      warnings.simplefilter("ignore", UserWarning)
+      model = prep_model("SweetNet", num_classes=1, trained=True)
+      assert isinstance(model, SweetNet)
     with pytest.warns(UserWarning, match="No pretrained GIFFLAR model is currently available"):
       model = prep_model("GIFFLAR", num_classes=1, trained=True)
 
 
 @pytest.mark.parametrize("invalid_input", [
     {"model_type": "InvalidModel", "num_classes": 1},
-    {"model_type": "SweetNet", "num_classes": 1, "hidden_dim": 64, "trained": True},
+    {"model_type": "SweetNet", "num_classes": 1075, "hidden_dim": 64, "trained": True},
 ])
 
 

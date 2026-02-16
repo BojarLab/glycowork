@@ -9,7 +9,6 @@ from io import BytesIO
 from typing import Any
 import networkx as nx
 import drawsvg as draw
-from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
 import numpy as np
 import pandas as pd
 import re
@@ -109,8 +108,13 @@ sugar_dict = {
   "B": ['B', None, None], "C": ['C', None, None]
 }
 
-
 domon_costello = {'B', 'C', 'Z', 'Y', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A', '25A', '03A', '14X', '25X', '03X', '14A'}
+SUBSTITUENT_PATTERN = re.compile(r'(?:^|[^1-9])([0-9]+)(?:Substituent|Subst)')
+
+
+def _get_glycorender():
+  from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
+  return convert_svg_to_pdf, convert_svg_to_png
 
 
 def draw_hex(
@@ -592,13 +596,26 @@ def get_coordinates_and_labels(
   graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list, reverse_highlight = reverse_highlight)
   node_values = list(nx.get_node_attributes(graph, 'string_labels').values())
   highlight_values = list(nx.get_node_attributes(graph, 'highlight_labels').values())
+
+  parsed_sugars = {}
+  for idx, raw_label in enumerate(node_values):
+    if idx % 2:
+      continue
+    core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
+    normalized_label = core_label if core_label in sugar_dict else 'Unknown'
+    modification_text = get_modification(raw_label).replace('O', '').replace('-ol', '')
+    if modification_text:
+      modification_text = modification_text.replace('Substituent', 'Subst')
+      match = SUBSTITUENT_PATTERN.search(modification_text) if 'Subst' in modification_text else None
+      modification_text = f"{match.group(1)}Subst" if match else (modification_text if ('Subst' in modification_text or normalized_label != 'Unknown') else '')
+    parsed_sugars[idx] = (normalized_label, modification_text)
+
   root = max(graph.nodes())
   leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
   main_chain = nx.shortest_path(graph.reverse(), leaves[0], root) if leaves else []
   main_label_sugar = [node for node in main_chain if node % 2 == 0]
-  main_sugar = [node_values[node] for node in main_chain if node % 2 == 0]  # Even indices are sugars
-  main_sugar = [get_core(node) if node not in domon_costello else node for node in main_sugar][::-1]
-  main_sugar_modification = [get_modification(node_values[node]).replace('O', '').replace('-ol', '') for node in main_chain if node % 2 == 0][::-1]
+  main_entries = [parsed_sugars[node] for node in main_chain if node % 2 == 0]
+  main_sugar, main_sugar_modification = map(list, zip(*reversed(main_entries)))
   main_bond = [node_values[node] for node in main_chain if node % 2 == 1][::-1]  # Odd indices are bonds
   main_sugar_highlight = [highlight_values[node] for node in main_chain if node % 2 == 0][::-1]
   main_bond_highlight = [highlight_values[node] for node in main_chain if node % 2 == 1][::-1]
@@ -612,8 +629,9 @@ def get_coordinates_and_labels(
       # Extract sugar and bond labels
       sugar_nodes = branch['sugar_nodes']
       bond_nodes = [m for m in branch['nodes'] if m % 2 == 1]
-      sugar.append([get_core(node_values[n]) if node_values[n] not in domon_costello else node_values[n] for n in sugar_nodes])
-      sugar_mod.append([get_modification(node_values[n]).replace('O', '') for n in sugar_nodes])
+      sugar_entries = [parsed_sugars[n] for n in sugar_nodes]
+      sugar.append([label for label, _ in sugar_entries])
+      sugar_mod.append([mod for _, mod in sugar_entries])
       bond.append([node_values[n] for n in bond_nodes])
       connection.append(branch['connection'])
       sugar_label.append([highlight_values[n] for n in sugar_nodes])
@@ -848,6 +866,7 @@ def display_svg_with_matplotlib(
     chem: bool = False # Whether svg_data comes from RDKit chemical
     ) -> None:
   "Renders SVG using matplotlib for non-Jupyter environments"
+  _, convert_svg_to_png = _get_glycorender()
   from PIL import Image
   svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
   # Get original SVG dimensions and scale them up
@@ -1046,6 +1065,7 @@ def draw_chem2d(
         with open(filepath, 'w') as f:
           f.write(svg_data)
     elif filepath.suffix.lower() == '.pdf':
+      convert_svg_to_pdf, _ = _get_glycorender()
       convert_svg_to_pdf(svg_data, str(filepath), chem = True)
   return SVG(svg_data) if is_jupyter() else display_svg_with_matplotlib(svg_data, chem = True)
 
@@ -1119,6 +1139,7 @@ class GlycanDrawing:
   def save_svg(self, filepath):
     return self.drawing_obj.save_svg(filepath)
   def _repr_png_(self):
+    _, convert_svg_to_png = _get_glycorender()
     return convert_svg_to_png(self.as_svg(), None, return_bytes = True)
 
 
@@ -1186,7 +1207,10 @@ def GlycoDraw(
   draw_this = draw_this.replace('*', '')
 
   if restrict_vocab and not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
-    raise Exception('Did you enter a real glycan or motif?')
+    if "!" in draw_this:
+      draw_this = re.sub(r'\[?!.*?\)', '', draw_this)
+    else:
+      raise Exception('Did you enter a real glycan or motif?')
 
   data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
 
@@ -1280,7 +1304,7 @@ def GlycoDraw(
     add_bond(bond_start_x, main_sugar_x_pos[0], label_y, main_sugar_y_pos[0], d, '-', dim = dim, compact = compact, highlight = main_sugar_label[0])
     col_dict = col_dict_transparent if main_sugar_label[0] == 'hide' else col_dict_base
     x_base = -label_x * dim * (1.2 if compact else 2)
-    y_base = label_y * dim * (0.6 if compact else 1)
+    y_base = label_y * dim * (0.6 if compact else 1) + 5
     d.append(draw.Text(reducing_end_label, dim*0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
   # Bond main chain
   [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = main_per_linkage[k] if highlight_linkages else False) for k in range(len(main_sugar)-1)]
@@ -1383,8 +1407,10 @@ def GlycoDraw(
       with open(filepath, 'w', encoding = "utf-8") as f:
         f.write(data)
     elif filepath.suffix.lower() == '.pdf':
+      convert_svg_to_pdf, _ = _get_glycorender()
       convert_svg_to_pdf(data, str(filepath))
     elif filepath.suffix.lower() == '.png':
+      _, convert_svg_to_png = _get_glycorender()
       convert_svg_to_png(data, str(filepath))
   return GlycanDrawing(d2) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
 
@@ -1413,6 +1439,10 @@ def annotate_figure(
     x_metric: str = 'Log2FC' # X axis metric ('Log2FC', 'Effect size')
     ) -> str | None: # Modified SVG code
   "Replaces text labels with glycan drawings in SVG figure"
+  convert_svg_to_pdf, _ = _get_glycorender()
+  import tempfile
+  import fitz
+  import os
   glycan_size_dict = {
       'small': 'scale(0.1 0.1)  translate(0, -74)',
       'medium': 'scale(0.2 0.2)  translate(0, -55)',
@@ -1427,7 +1457,7 @@ def annotate_figure(
     glycan_scale = [y, labels]
 
   # Get svg code
-  svg_tmp = open(svg_input, "r").read() if '?xml' not in svg_input else svg_input
+  svg_tmp = open(svg_input, "r", encoding = "utf-8").read() if '?xml' not in svg_input else svg_input
   # Get all text labels
   label_pattern = re.compile(r'<!--\s*(.*?)\s*-->')
   transform_pattern = re.compile(r'<g transform\s*(.*?)\s*">')
@@ -1450,7 +1480,8 @@ def annotate_figure(
     else:
       pass
     try:
-      if in_lib(motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0], lib):
+      glycan = motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0]
+      if in_lib(glycan, lib) or "!" in glycan:
         edit_svg = True
       else:
         pass
@@ -1465,9 +1496,17 @@ def annotate_figure(
         d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
       else:
         d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)], suppress = True, restrict_vocab = True)
-      data = d.as_svg().replace('<?xml version="1.0" encoding="UTF-8"?>\n', '')
+      glycan_svg = d.as_svg()
+      with tempfile.NamedTemporaryFile(suffix = '.pdf', delete = False) as tmp_pdf:
+        tmp_pdf_path = tmp_pdf.name
+      convert_svg_to_pdf(glycan_svg, tmp_pdf_path)
+      doc = fitz.open(tmp_pdf_path)
+      page = doc[0]
+      svg_from_pdf = page.get_svg_image()
+      doc.close()
+      os.unlink(tmp_pdf_path)
+      data = svg_from_pdf.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace('<?xml version="1.0"?>', '')
       id_matches = re.findall(r'd\d+', data)
-      # Reassign element ids to avoid duplicates
       for idx in id_matches:
         data = data.replace(idx, 'd' + str(element_id))
         element_id += 1
@@ -1477,12 +1516,14 @@ def annotate_figure(
 
   if filepath:
     if filepath.endswith('.pdf'):
-      convert_svg_to_pdf(svg_tmp, str(filepath))
+      from glycorender.render import simple_svg_to_pdf
+      simple_svg_to_pdf(svg_tmp, str(filepath))
     elif filepath.endswith('.svg'):
       with open(filepath, 'w', encoding = "utf-8") as f:
         f.write(svg_tmp)
     elif filepath.endswith('.png'):
-      convert_svg_to_png(svg_tmp, str(filepath))
+      from glycorender.render import simple_svg_to_png
+      simple_svg_to_png(svg_tmp, str(filepath))
   else:
     return svg_tmp
 
@@ -1495,6 +1536,7 @@ def plot_glycans_excel(
     compact: bool = False # Use compact style
     ) -> None:
   "Creates Excel file with SNFG glycan images in a new column"
+  _, convert_svg_to_png = _get_glycorender()
   from openpyxl.drawing.image import Image as OpenpyxlImage
   from openpyxl.utils import get_column_letter
   from PIL import Image

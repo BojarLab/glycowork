@@ -3,7 +3,7 @@ project:
 
 website:
   title: "glycowork"
-  site-url: "https://BojarLab.github.io/glycowork/"
+  site-url: "/"
   description: "Package for processing and analyzing glycans"
   repo-branch: master
-  repo-url: "https://github.com/BojarLab/glycowork/tree/master/"
+  repo-url: ""

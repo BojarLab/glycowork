@@ -4,6 +4,7 @@ import pickle
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import networkx as nx
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 plt.style.use('default')
@@ -34,10 +35,10 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          omega_squared, get_glycoform_diff, process_glm_results, partial_corr, estimate_technical_variance,
                                          perform_tests_monte_carlo)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
-from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network, get_k_saccharides,
+from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type, load_lectin_lib,
                                       create_lectin_and_motif_mappings, lectin_motif_scoring, deduplicate_motifs)
-from glycowork.motif.graph import subgraph_isomorphism
+from glycowork.motif.graph import subgraph_isomorphism, glycan_to_nxGraph
 
 
 def preprocess_data(
@@ -318,9 +319,16 @@ def characterize_monosaccharide(
     df = df_species
   if rank is not None and focus is not None:
     df = df[df[rank] == focus]
-  # Get all disaccharides for linkage analysis
-  pool_in = unwrap(get_k_saccharides(df[glycan_col_name].tolist(), just_motifs = True))
-  pool_in = [k.replace('(', '*').replace(')', '*') for k in pool_in]
+    # Get all disaccharides by extracting adjacent pairs from graph structure
+  pool_in = []
+  for glycan in df[glycan_col_name].tolist():
+    graph = glycan_to_nxGraph(glycan)
+    node_labels = nx.get_node_attributes(graph, 'string_labels')
+    for parent_mono in graph.nodes():
+      if parent_mono % 2 == 0:
+        for linkage in graph.successors(parent_mono):
+          for child_mono in graph.successors(linkage):
+            pool_in.append(f"{node_labels[child_mono]}*{node_labels[linkage]}*{node_labels[parent_mono]}")
   pool_in_split = [k.split('*') for k in pool_in]
   pool, sugars = [], []
   if mode == 'bond':
@@ -704,8 +712,11 @@ def get_volcano(
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
     if annotate_volcano:
       from glycowork.motif.draw import annotate_figure
-      annotate_figure(filepath, filepath = filepath.split('.')[0]+'.pdf', scale_by_DE_res = df_res,
-                          y_thresh = y_thresh, x_thresh = x_thresh, x_metric = x_metric)
+      svg_temp = filepath.rsplit('.', 1)[0] + '_temp.svg'
+      plt.savefig(svg_temp, format = 'svg', bbox_inches = 'tight')
+      annotate_figure(svg_temp, filepath = filepath, scale_by_DE_res = df_res, y_thresh = y_thresh, x_thresh = x_thresh, x_metric = x_metric)
+      import os
+      os.remove(svg_temp)
   plt.show()
 
 

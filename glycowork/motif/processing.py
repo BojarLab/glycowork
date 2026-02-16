@@ -8,7 +8,7 @@ from collections import defaultdict
 from pathlib import Path
 from itertools import combinations
 from typing import Callable, Generator
-from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan,
+from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan, df_species,
                                           find_nth, find_nth_reverse, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
@@ -62,7 +62,7 @@ def rescue_glycans(func: Callable # Function to wrap
 def min_process_glycans(glycan_list: list[str] # List of glycans in IUPAC-condensed format
                       ) -> list[list[str]]: # List of glycoletter lists
   "Convert list of glycans into a nested lists of glycoletters"
-  return [k.replace('[', '').replace(']', '').replace('{', '').replace('}', '').replace(')', '(').split('(') for k in glycan_list]
+  return [[x for x in k.replace('[', '').replace(']', '').replace('{', '(').replace('}', ')').replace(')', '(').split('(') if x] for k in glycan_list]
 
 
 def get_lib(glycan_list: list[str] # List of IUPAC-condensed glycan sequences
@@ -1232,6 +1232,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'\d{,2}%', '', glycan)  # [50%Ac(a1-2)] into [Ac(a1-2)]
   glycan = re.sub(r'(?<!\d),(?!\d)', '][', glycan)  # Replace only commas not flanked by digits
   glycan = re.sub(r'<<([A-Za-z0-9]+)\(([ab\?])(\d+)-\d+\)\|([A-Za-z0-9]+)\([ab\?]\d+-\d+\)>>', r'\1(\2\3-?)', glycan)  # <<Rha(a1-3)|Rha(a1-4)>> to Rha(a1-?)
+  glycan = re.sub(r'(\[|\)|\]|^)([1-9]?[SP])(?!en)([A-Z][A-Za-z]*)', r'\1\3\2', glycan)  # SGalNAc to GalNAcS
   old_glycan = ""
   while glycan != old_glycan:
     old_glycan = glycan
@@ -1248,7 +1249,6 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'\[([1-9]?[SP])\]([A-Z][^\(^\[]+)', r'\2\1', glycan)  # [S]Gal to GalS
   glycan = re.sub(r'(\)|\]|^)([1-9]?[SP])([A-Z][^\(^\[]+)', r'\1\3\2', glycan)  # )SGal to )GalS
   glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)  # Gal-olS to GalS-ol
-  glycan = re.sub(r'(\[|\)|\]|^)([1-9]?[SP])(?!en)([A-Z][A-Za-z]*)', r'\1\3\2', glycan)  # SGalNAc to GalNAcS
   glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)  # S-Gal to GalS
   # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
   glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
@@ -1367,3 +1367,20 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
 def is_composition(s: str # Either glycan or composition string
                   ) -> bool: # Whether the input is a composition
   return s and s.isalnum() and s[-1].isdigit()
+
+
+def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
+                       species: str = "Homo_sapiens" # Species for biosynthetic inferences
+                      ) -> str: # Maximally inferred glycan string
+  "Infers sequence ambiguities/uncertainties via biosynthetic invariances"
+  tax = df_species[df_species['Species'] == species].iloc[0, 2:9].to_dict()
+  if glycan.endswith("GlcNAc(b1-?)GlcNAc"):
+    glycan.replace("GlcNAc(b1-?)GlcNAc", "GlcNAc(b1-4)GlcNAc")
+  if tax['Kingdom'] == 'Animalia':
+    glycan = glycan.replace("dHex", "Fuc")
+    glycan = glycan.replace("Gal(b1-?)GlcNAc", "Gal(b1-3/4)GlcNAc")
+  if "GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc" in glycan:
+    glycan = glycan.replace("GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc", "GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" if tax['Class'] == 'Mammalia' else "GlcNAc(b1-4)[Fuc(a1-3/6)]GlcNAc")
+  for old, new in [("Neu5Ac(a2-?)Neu5Ac", "Neu5Ac(a2-8)Neu5Ac"), ("Neu5Ac(a2-?)", "Neu5Ac(a2-3/6)"), ("Neu5Gc(a2-?)Neu5Gc", "Neu5Gc(a2-8)Neu5Gc"), ("Neu5Gc(a2-?)", "Neu5Gc(a2-3/6)")]:
+    glycan = glycan.replace(old, new)
+  return glycan
