@@ -2509,6 +2509,15 @@ def test_get_k_saccharides():
         pass
     result = get_k_saccharides(["NeuGc1Hex4HexNAc3deHex1", "Fuc(a1-2)Gal(b1-3)Gal"], up_to=True)
     assert "NeuGc1Hex4HexNAc3deHex1" not in result.columns
+    glycans = [
+        "Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc",
+        "Neu5Gc(a2-8)Neu5Ac(a2-3)Gal(b1-3)GalNAc",
+        "Neu5Gc(a2-6)GalNAc",
+        "Neu5Ac(a2-6)GalNAc"
+    ]
+    res = unwrap(get_k_saccharides(glycans, size=2, up_to=True, just_motifs=True))
+    assert "Sia" in res
+    assert "Gal(b1-4)Gal" in get_k_saccharides(["{Gal(b1-4)Gal}{GlcNAc(b1-3)}Neu5Gc(a2-8)Neu5Ac(a2-3)Gal(b1-3)GalNAc"], just_motifs=True)[0]
 
 
 def test_get_terminal_structures():
