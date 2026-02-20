@@ -111,15 +111,20 @@ def get_molecular_properties(
   if verbose and len(failed_requests) >= 1:
     print('The following SMILES were not found on PubChem:\n')
     print(failed_requests)
-  df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight', 'xlogp',
+  try:
+    df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight', 'xlogp',
                                                             'charge', 'exact_mass', 'monoisotopic_mass', 'tpsa', 'complexity',
                                                             'h_bond_donor_count', 'h_bond_acceptor_count',
                                                             'rotatable_bond_count', 'heavy_atom_count', 'isotope_atom_count', 'atom_stereo_count',
                                                             'defined_atom_stereo_count', 'undefined_atom_stereo_count',
                                                             'bond_stereo_count', 'defined_bond_stereo_count',
                                                             'undefined_bond_stereo_count', 'covalent_unit_count'])
-  df = df.reset_index(drop = True)
-  df.index = succeeded_requests
+    df = df.reset_index(drop = True)
+    df.index = succeeded_requests
+  except (KeyError, ValueError) as e:
+    if verbose:
+      print(f'PubChem API returned incomplete data: {e}')
+    df = pd.DataFrame(index = succeeded_requests)
   return df
 
 
