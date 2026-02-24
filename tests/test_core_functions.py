@@ -98,7 +98,7 @@ from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighb
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
                          deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme, infer_network,
                          get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
-                         plot_network, add_high_man_removal, net_dic, find_shared_virtuals, create_adjacency_matrix, find_ptm
+                         plot_network, add_high_man_removal, net_dic, create_adjacency_matrix, find_ptm
 )
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
                       jaccard, distance_from_metric, check_conservation, get_communities, dendrogram_from_distance
@@ -4794,14 +4794,14 @@ def test_find_diff():
     graph_dic = {}
     glycan_a = "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
     glycan_b = "Gal(b1-4)Glc-ol"
-    diff = find_diff(glycan_a, glycan_b, graph_dic)
+    diff = find_diff(glycan_a, glycan_b)
     assert isinstance(diff, str)
     assert "GlcNAc" in diff
-    assert find_diff(glycan_a, glycan_a, graph_dic) == ""
-    assert find_diff(glycan_a, "Gal(b1-3)[GlcNAc(b1-6)]GalNAc", graph_dic) == "disregard"
+    assert find_diff(glycan_a, glycan_a) == ""
+    assert find_diff(glycan_a, "Gal(b1-3)[GlcNAc(b1-6)]GalNAc") == "disregard"
     a = "{Fuc(a1-2/3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-4)GlcNAc(b1-2/4/6)[Gal(b1-4)GlcNAc(b1-2/4/6)]Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     b = "{Fuc(a1-2/3/6)}{Neu5Ac(a2-3/6/8)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2/4/6)[GlcNAc(b1-2/4/6)]Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert find_diff(a, b, {}) == "disregard"
+    assert find_diff(a, b) == "disregard"
 
 
 def test_find_path():
@@ -5575,12 +5575,6 @@ def test_add_high_man_removal(evo_test_networks):
 
 def test_net_dic():
     assert len(net_dic) > 0
-
-
-def test_find_shared_virtuals():
-    glycan_a = "Glc-ol"
-    glycan_b = "GlcNAc(b1-3)Gal(b1-4)Gal-ol"
-    assert find_shared_virtuals(glycan_a, glycan_b, {}) == []
 
 
 def test_create_adjacency_matrix():
