@@ -26,20 +26,24 @@
 #### graph
 ##### Changed 🔄
 - Added `_prefilter_labels` for more cheap checks to avoid graph operations and thus make `compare_glycans` and `subgraph_isomorphism` considerably faster (b865229)
-- Made `glycan_to_graph` function much faster (up to 10x)
-- Made `graph_to_string_int` function ~40% faster
+- Made `glycan_to_graph` function much faster (up to 10x) (750cdb1)
+- Made `graph_to_string_int` function ~40% faster (750cdb1)
 
 ##### Deprecated ⚠️
-- Deprecated `evaluate_adjacency`; will be handled in-line in `glycan_to_graph`
-- Deprecated `canonicalize_glycan_graph`; will be handled in-line in `graph_to_string_int`
+- Deprecated `evaluate_adjacency`; will be handled in-line in `glycan_to_graph` (750cdb1)
+- Deprecated `canonicalize_glycan_graph`; will be handled in-line in `graph_to_string_int` (750cdb1)
 
 ### network
 #### biosynthesis
 ##### Added ✨
 - Added `build_network_from_glycans` handler to do a BFS-search to get the bulk biosynthetic network going (b865229)
+- Added `hierarchical` option (now the new default) to the keyword argument options in `plot_format` in `plot_network`, for a more organized network display
 
 ##### Changed 🔄
 - `construct_network` is now more than twice as fast (a1c810c, b865229)
+
+##### Fixed 🐛
+- Fixed reaction hover label in `plot_network`
 
 ##### Deprecated ⚠️
 - Deprecated `find_shared_virtuals`, `adjacencyMatrix_to_network`, `get_virtual_nodes`, `get_neighbors`, `create_adjacency_matrix`; now all handled in-line (a1c810c, b865229)

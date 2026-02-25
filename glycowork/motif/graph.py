@@ -2,7 +2,7 @@ import re
 from copy import deepcopy
 from typing import Callable
 from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
-from glycowork.motif.processing import min_process_glycans, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
+from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
 import numpy as np
 import pandas as pd
 import networkx as nx

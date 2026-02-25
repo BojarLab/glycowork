@@ -2,7 +2,6 @@ import pickle
 import re
 from pathlib import Path
 from copy import deepcopy
-from itertools import combinations
 from functools import lru_cache
 from importlib import resources
 from collections import defaultdict, Counter
@@ -244,8 +243,11 @@ def add_high_man_removal(network: nx.DiGraph # Biosynthetic network
 
 def _graph_fp(g: nx.DiGraph) -> tuple:
   "Wildcard-safe structural fingerprint for bucketing"
-  degrees = [d for _, d in g.out_degree()]
-  return (len(g), sum(1 for d in degrees if d == 0), sum(1 for d in degrees if d > 1))
+  leaves = branching = 0
+  for _, d in g.out_degree():
+    leaves += d == 0
+    branching += d > 1
+  return (len(g), leaves, branching)
 
 
 def build_network_from_glycans(glycans: list[str], # Observed glycans
@@ -335,7 +337,6 @@ def construct_network(glycans: list[str], # List of glycans
                      (network.degree[node] <= 1) and (network.nodes[node]['virtual'] == 1) and (
                                node not in permitted_roots)]
   network.remove_nodes_from(to_remove_nodes)
-  graph_dic.update({node: glycan_to_nxGraph(node) for node in network if node not in graph_dic})
   size_buckets = defaultdict(list)
   for n in network.nodes():
     size_buckets[len(safe_index(n, graph_dic))].append(n)
@@ -363,6 +364,10 @@ def construct_network(glycans: list[str], # List of glycans
     network.nodes[node].setdefault('virtual', 1)
   # Edge label specification
   if edge_type != 'monolink':
+    df_enzyme = None
+    if edge_type == 'enzyme':
+      with resources.files("glycowork.network").joinpath("monolink_to_enzyme.csv").open() as f:
+        df_enzyme = pd.read_csv(f, sep = '\t')
     for u, v in network.edges():
       elem = network[u][v]
       edge = elem['diffs']
@@ -371,8 +376,6 @@ def construct_network(glycans: list[str], # List of glycans
           if edge_type == 'monosaccharide':
             elem['diffs'] = edge.split('(')[0]
           elif edge_type == 'enzyme':
-            with resources.files("glycowork.network").joinpath("monolink_to_enzyme.csv").open() as f:
-              df_enzyme = pd.read_csv(f, sep = '\t')
             elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme)
   # Make network directed
   network = prune_directed_edges(network.to_directed())
@@ -390,7 +393,7 @@ def construct_network(glycans: list[str], # List of glycans
 
 
 def plot_network(network: nx.DiGraph, # Biosynthetic network
-                plot_format: str = 'spring', # Layout type: pydot2/kamada_kawai/spring
+                plot_format: str = 'hierarchical', # Layout type: hierarchical/pydot2/kamada_kawai/spring
                 edge_label_draw: bool = True, # Whether to draw edge labels
                 lfc_dict: dict[str, float] | None = None # Enzyme:log2FC mapping for edge width
                ) -> None: # Displays plot
@@ -402,9 +405,29 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
     output_notebook()
   except (ImportError, RuntimeError, Exception):
     pass
-  pos = {'pydot2': lambda: nx.nx_pydot.pydot_layout(network, prog = "dot"),
-         'kamada_kawai': lambda: nx.kamada_kawai_layout(network),
-         'spring': lambda: nx.spring_layout(network, k = 0.5, seed = 42)}.get(plot_format, lambda: nx.kamada_kawai_layout(network))()
+  if plot_format == 'hierarchical':
+    roots = [n for n in network.nodes() if network.in_degree(n) == 0]
+    levels = {}
+    queue = [(r, 0) for r in roots]
+    while queue:
+      node, level = queue.pop(0)
+      if node not in levels or levels[node] < level:
+        levels[node] = level
+        for s in network.successors(node):
+          queue.append((s, level + 1))
+    level_nodes = defaultdict(list)
+    for node, level in levels.items():
+      level_nodes[level].append(node)
+    max_level = max(levels.values()) if levels else 0
+    max_width = max(len(nodes) for nodes in level_nodes.values())
+    pos = {}
+    for level, nodes in level_nodes.items():
+      for i, node in enumerate(nodes):
+        pos[node] = ((i - (len(nodes)-1)/2) / max(max_width/2, 1), 1 - level/max(max_level, 1))
+  else:
+    pos = {'pydot2': lambda: nx.nx_pydot.pydot_layout(network, prog = "dot"),
+           'kamada_kawai': lambda: nx.kamada_kawai_layout(network),
+           'spring': lambda: nx.spring_layout(network, k = 0.5, seed = 42)}.get(plot_format, lambda: nx.kamada_kawai_layout(network))()
   node_attributes = nx.get_node_attributes(network, 'abundance')
   node_sizes = list(node_attributes.values()) if node_attributes else [50] * network.number_of_nodes()
   virtual_attrs = nx.get_node_attributes(network, 'virtual')
@@ -433,12 +456,11 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
   p = figure(width = 900, height = 900, x_range = (-1.2, 1.2), y_range = (-1.2, 1.2),
              tools = "pan,wheel_zoom,box_zoom,reset,save", toolbar_location = "above",
              x_axis_type = None, y_axis_type = None, background_fill_color = "white")
-  # Add hover tool for nodes
-  node_hover = HoverTool(tooltips = [("Node", "@name")])
-  p.add_tools(node_hover)
-  # Draw nodes
-  p.scatter('x', 'y', size = 'size', color = 'color', alpha = 'alpha', line_color = "#888", line_width = 1, source = node_source)
+  # Draw nodes with hover
+  node_renderer = p.scatter('x', 'y', size = 'size', color = 'color', alpha = 'alpha', line_color = "#888", line_width = 1, source = node_source)
+  p.add_tools(HoverTool(renderers = [node_renderer], tooltips = [("Node", "@name")]))
   # Draw edges and labels
+  edge_data = {'xs': [], 'ys': [], 'label': [], 'color': [], 'width': []}
   for edge in network.edges():
     x0, y0 = pos[edge[0]]
     x1, y1 = pos[edge[1]]
@@ -469,20 +491,30 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
     else:
       edge_color = 'cornflowerblue'
       width = 1
-    # Draw the edge
-    p.segment(x0, y0, x1, y1, color = edge_color, line_width = width)
+    edge_data['xs'].append([x0 + 0.15*(x1-x0), x1 - 0.15*(x1-x0)])
+    edge_data['ys'].append([y0 + 0.15*(y1-y0), y1 - 0.15*(y1-y0)])
+    edge_data['label'].append(attr)
+    edge_data['color'].append(edge_color)
+    edge_data['width'].append(width)
     # Add arrowhead
     arrow = Arrow(end = NormalHead(size = 8, fill_color = edge_color),
                  x_start = x0, y_start = y0, x_end = x1, y_end = y1, line_width = width, line_color = edge_color)
     p.add_layout(arrow)
-    # Add edge labels if enabled
-    if edge_label_draw and attr:
-      mid_x = (x0 + x1) / 2
-      mid_y = (y0 + y1) / 2
-      label_source = ColumnDataSource(data = dict(x = [mid_x], y = [mid_y], text = [attr]))
-      labels = LabelSet(x = 'x', y = 'y', text = 'text', source = label_source,
-                       text_color = 'black', text_font_size = '10pt', x_offset = 0, y_offset = 0, text_align = 'center')
-      p.add_layout(labels)
+  # Draw visible edges as segments; multi_line renderer (invisible) enables hover tooltips
+  edge_source = ColumnDataSource(data = edge_data)
+  edge_renderer = p.multi_line('xs', 'ys', color = 'color', line_width = 'width', source = edge_source, line_alpha = 0)
+  p.add_tools(HoverTool(renderers = [edge_renderer], tooltips = [("Reaction", "@label")]))
+  p.segment([x[0] for x in edge_data['xs']], [y[0] for y in edge_data['ys']],
+            [x[1] for x in edge_data['xs']], [y[1] for y in edge_data['ys']],
+            color = edge_data['color'], line_width = edge_data['width'])
+  # Add all edge labels in one LabelSet
+  if edge_label_draw:
+    p.add_layout(LabelSet(x = 'x', y = 'y', text = 'text', text_color = 'black', text_font_size = '10pt',
+                          x_offset = 0, y_offset = 0, text_align = 'center',
+                          source = ColumnDataSource(data = dict(
+                            x = [(pos[e[0]][0] + pos[e[1]][0]) / 2 for e in network.edges()],
+                            y = [(pos[e[0]][1] + pos[e[1]][1]) / 2 for e in network.edges()],
+                            text = [edge_attributes.get(e, '') for e in network.edges()]))))
   show(p)
   return p
 
@@ -940,8 +972,8 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
   if analysis == "reaction":
     res2 = {col: get_reaction_flow(nets[col], res[col], aggregate = "sum") for col in nets}
     regex = re.compile(r"\(([ab])(\d)-(\d)\)")
-    shadow_reactions = [regex.sub(r"(\1\2-?)", g) for g in res2[list(res2.keys())[0]]]
-    shadow_reactions = {r for r in shadow_reactions if shadow_reactions.count(r) > 1}
+    shadow_counts = Counter(regex.sub(r"(\1\2-?)", g) for g in res2[next(iter(res2))])
+    shadow_reactions = {r for r, c in shadow_counts.items() if c > 1}
     res2 = {k: {**v, **{r: np.mean([v2 for k2, v2 in v.items() if compare_glycans(k2, r)]) for r in shadow_reactions}} for k, v in res2.items()}
   elif analysis == "flow":
     res2 = {col: [res[col][sink]['flow_value'] for sink in res[col].keys()] for col in nets}
