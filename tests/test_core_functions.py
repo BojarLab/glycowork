@@ -61,7 +61,7 @@ from glycowork.glycan_data.stats import (
     replace_outliers_winsorization, perform_tests_monte_carlo
 )
 from glycowork.motif.graph import (
-    glycan_to_graph, glycan_to_nxGraph, evaluate_adjacency,
+    glycan_to_graph, glycan_to_nxGraph,
     compare_glycans, subgraph_isomorphism, generate_graph_features,
     graph_to_string, largest_subgraph, get_possible_topologies,
     deduplicate_glycans, neighbor_is_branchpoint, try_string_conversion,
@@ -2223,13 +2223,6 @@ def test_perform_tests_monte_carlo():
     assert len(raw_p) == len(adj_p) == len(effect) == 5
     assert all(0 <= p <= 1 for p in raw_p)
     assert all(0 <= p <= 1 for p in adj_p)
-
-
-def test_evaluate_adjacency():
-    assert evaluate_adjacency("(", 0)
-    assert evaluate_adjacency(")", 0)
-    assert not evaluate_adjacency("(1)[", 0)
-    assert not evaluate_adjacency(")[", 0)
 
 
 def test_glycan_to_graph():
