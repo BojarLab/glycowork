@@ -23,10 +23,18 @@
 ##### Fixed 🐛
 - Made sure curly bracket sequence content ("floaty bits") are correctly counted in `count_unique_subgraphs_of_size_k` (522b7cf)
 
+#### graph
+##### Changed 🔄
+- Added `_prefilter_labels` for more cheap checks to avoid graph operations and thus make `compare_glycans` and `subgraph_isomorphism` considerably faster
+
 ### network
 #### biosynthesis
+##### Added ✨
+- Added `build_network_from_glycans` handler to do a BFS-search to get the bulk biosynthetic network going
+
 ##### Changed 🔄
-- `construct_network` is now more than twice as fast
+- `construct_network` is now more than twice as fast (a1c810c)
 
 ##### Deprecated ⚠️
-- Deprecated `find_shared_virtuals` and `adjacencyMatrix_to_network`; now handled in-line in `create_adjacency_matrix`
+- Deprecated `find_shared_virtuals`, `adjacencyMatrix_to_network`, `get_virtual_nodes`, `get_neighbors`, `create_adjacency_matrix`; now all handled in-line (a1c810c)
+- Deprecated `find_path`, `find_shortest_path`, `deorphanize_nodes`, `shells_to_edges`, which is all now handled by the new `build_network_from_glycans`

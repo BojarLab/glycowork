@@ -6,6 +6,7 @@ from glycowork.motif.processing import min_process_glycans, bracket_removal, get
 import numpy as np
 import pandas as pd
 import networkx as nx
+from collections import Counter
 from scipy.sparse.linalg import eigsh
 from functools import lru_cache, wraps
 
@@ -192,6 +193,30 @@ def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph
   return graph
 
 
+def _prefilter_labels(g1_labels: list, # G1 node labels
+                     g2_labels: list, # G2 node labels
+                     narrow_wildcard_list: dict # Wildcard expansion dict
+                    ) -> bool: # True if label multisets are compatible
+  "Conservative multiset pre-filter: each g2 label needs enough compatible g1 labels to cover its count"
+  g1_counter = Counter(g1_labels)
+  for l2, need in Counter(g2_labels).items():
+    have = 0
+    for l1, cnt in g1_counter.items():
+      if (l1 == l2
+          or ('Monosaccharide' in (l1, l2) and '-' not in l1 and '-' not in l2)
+          or ((l1 == '?1-?' or l2 == '?1-?') and '-' in l1 and '-' in l2)
+          or (l2.startswith('!') and l1 != l2[1:] and '-' not in l1)
+          or (l1.startswith('!') and l2 != l1[1:] and '-' not in l2)
+          or l2 in narrow_wildcard_list.get(l1, frozenset())
+          or l1 in narrow_wildcard_list.get(l2, frozenset())):
+        have += cnt
+        if have >= need:
+          break
+    if have < need:
+      return False
+  return True
+
+
 def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
                    glycan_b: str | nx.DiGraph, # Second glycan to compare
                    return_matches: bool = False # Whether to return node mapping between glycans
@@ -215,13 +240,23 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
     return (False, None) if return_matches else False
   narrow_wildcard_list = build_wildcard_cache(proc)
   if narrow_wildcard_list:
+    g1_labels = list(nx.get_node_attributes(g1, 'string_labels').values())
+    g2_labels = list(nx.get_node_attributes(g2, 'string_labels').values())
+    if not _prefilter_labels(g1_labels, g2_labels, narrow_wildcard_list) or \
+            not _prefilter_labels(g2_labels, g1_labels, narrow_wildcard_list):
+      return (False, None) if return_matches else False
     matcher = nx.isomorphism.DiGraphMatcher(g1, g2, categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
   else:
     # First check whether components of both glycan graphs are identical, then check graph isomorphism (costly)
-    if sorted(nx.get_node_attributes(g1, "string_labels").values()) == sorted(nx.get_node_attributes(g2, "string_labels").values()):
-      matcher = nx.isomorphism.DiGraphMatcher(g1, g2, nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-    else:
+    if sorted(nx.get_node_attributes(g1, "string_labels").values()) != sorted(
+            nx.get_node_attributes(g2, "string_labels").values()):
       return (False, None) if return_matches else False
+    if graph_to_string(g1) != graph_to_string(g2):
+      return (False, None) if return_matches else False
+    if not return_matches:
+      return True
+    matcher = nx.isomorphism.DiGraphMatcher(g1, g2, nx.algorithms.isomorphism.categorical_node_match('string_labels',
+                                                                                                     'unknown'))
   for mapping in matcher.isomorphisms_iter():
     return (True, mapping) if return_matches else True
   return (False, None) if return_matches else False
@@ -284,6 +319,11 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
       g1, g2 = glycan, motif
   narrow_wildcard_list = build_wildcard_cache(set(unwrap(motif_comp)))
   if termini_list or narrow_wildcard_list:
+    if narrow_wildcard_list and not _prefilter_labels(
+            list(nx.get_node_attributes(g1, 'string_labels').values()),
+            list(nx.get_node_attributes(g2, 'string_labels').values()),
+            narrow_wildcard_list):
+      return (0, []) if return_matches else 0 if count else False
     graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
                                                                                                              'termini', 'flexible'))
   else:

@@ -92,13 +92,13 @@ from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_
                      get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings, get_pval_distribution,
                      characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site
 )
-from glycowork.network.biosynthesis import (safe_compare, safe_index, get_neighbors, create_neighbors,
-                         find_diff, find_path, construct_network, prune_network, estimate_weights, network_alignment, export_network,
-                         extend_glycans, highlight_network, infer_roots, deorphanize_nodes, get_edge_weight_by_abundance,
+from glycowork.network.biosynthesis import (safe_compare, safe_index, create_neighbors,
+                         find_diff, construct_network, prune_network, estimate_weights, network_alignment, export_network,
+                         extend_glycans, highlight_network, infer_roots, get_edge_weight_by_abundance,
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
                          deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme, infer_network,
                          get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
-                         plot_network, add_high_man_removal, net_dic, create_adjacency_matrix, find_ptm
+                         plot_network, add_high_man_removal, net_dic, find_ptm
 )
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
                       jaccard, distance_from_metric, check_conservation, get_communities, dendrogram_from_distance
@@ -4768,17 +4768,6 @@ def test_safe_index():
     assert graph_dic[glycan] == result
 
 
-def test_get_neighbors(simple_glycans):
-    ggraph = glycan_to_nxGraph("GlcNAc(b1-3)Gal(b1-4)Glc-ol")
-    graphs = [glycan_to_nxGraph(g) for g in simple_glycans]
-    neighbors, indices = get_neighbors(ggraph, simple_glycans, graphs)
-    assert len(neighbors) > 0
-    assert all(isinstance(n, str) for n in neighbors)
-    assert all(isinstance(idx, list) for idx in indices)
-    neighbors, indices = get_neighbors(glycan_to_nxGraph("Glc-ol"), simple_glycans, graphs)
-    assert neighbors == []
-
-
 def test_create_neighbors():
     glycan = "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
     ggraph = glycan_to_nxGraph(glycan)
@@ -4802,20 +4791,6 @@ def test_find_diff():
     a = "{Fuc(a1-2/3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-4)GlcNAc(b1-2/4/6)[Gal(b1-4)GlcNAc(b1-2/4/6)]Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     b = "{Fuc(a1-2/3/6)}{Neu5Ac(a2-3/6/8)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2/4/6)[GlcNAc(b1-2/4/6)]Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert find_diff(a, b) == "disregard"
-
-
-def test_find_path():
-    graph_dic = {}
-    glycan_a = "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
-    glycan_b = "Gal(b1-4)Glc-ol"
-    edges, labels = find_path(glycan_a, glycan_b, graph_dic)
-    assert isinstance(edges, list)
-    assert isinstance(labels, dict)
-    assert len(edges) > 0
-    assert all(isinstance(e, tuple) for e in edges)
-    glycan_a = "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"
-    edges, labels = find_path(glycan_a, glycan_b, graph_dic)
-    assert edges == []
 
 
 def test_construct_network(simple_glycans):
@@ -4963,17 +4938,6 @@ def test_infer_roots():
     unknown_glycans = {"XyzUnknownStructure", "SomeOtherUnknownFormat"}
     roots = infer_roots(frozenset(unknown_glycans))
     assert len(roots) == 0  # Returns empty frozenset
-
-
-def test_deorphanize_nodes(sample_network):
-    # Add an orphaned node
-    sample_network.add_node("GlcNAc(b1-3)Gal(b1-4)Glc-ol", virtual=0)
-    deorphanized = deorphanize_nodes(sample_network, {})
-    assert isinstance(deorphanized, nx.DiGraph)
-    assert len(deorphanized.edges()) > len(sample_network.edges())
-    # Check if orphaned node is now connected
-    assert deorphanized.degree("GlcNAc(b1-3)Gal(b1-4)Glc-ol") > 0
-    deorphanized = deorphanize_nodes(sample_network, {}, permitted_roots = frozenset("GalNAc"))
 
 
 def test_get_edge_weight_by_abundance(sample_network):
@@ -5575,13 +5539,6 @@ def test_add_high_man_removal(evo_test_networks):
 
 def test_net_dic():
     assert len(net_dic) > 0
-
-
-def test_create_adjacency_matrix():
-    glycans = ["Glc-ol", "Gal-ol"]
-    assert create_adjacency_matrix(glycans, {})[1] == []
-    glycans = ["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"]
-    assert create_adjacency_matrix(glycans, {})[1] == ['GlcNAc(b1-3)Gal(b1-4)Glc-ol']
 
 
 def test_find_ptm():
