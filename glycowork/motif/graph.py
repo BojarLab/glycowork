@@ -14,6 +14,7 @@ from functools import lru_cache, wraps
 PTM_REGEX = re.compile(r"(?<!Neu)(?<=\D)(\d+/\d+|\d+)(?=\D)")
 NEGATION_REGEX = re.compile(r'(!\w+\([^)]+\))')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
+LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
 
 
 def memoize_node_match(func):
@@ -144,7 +145,7 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
   "Match nodes while handling wildcards and flexible positions"
   def match(data1, data2):
     data1_labels2, data2_labels2 = data1.get(attr2, default2), data2.get(attr2, default2)
-    if data1_labels2 != data2_labels2 and 'flexible' not in {data1_labels2, data2_labels2}:
+    if data1_labels2 != data2_labels2 and data1_labels2 != 'flexible' and data2_labels2 != 'flexible':
       return False
     data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
     if data1_labels == data2_labels:
@@ -153,17 +154,15 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
       if '-' not in data1_labels and '-' not in data2_labels:
         return True
     if data1_labels == "?1-?" or data2_labels == "?1-?":
-      if data1_labels.count('-') + data2_labels.count('-') == 2:
+      if data1_labels.count('-') == 1 and data2_labels.count('-') == 1:
         return True
     if data2_labels.startswith('!'):
       if data1_labels != data2_labels[1:] and '-' not in data1_labels:
         return True
-    if data1_labels in narrow_wildcard_list:
-      if data2_labels in narrow_wildcard_list[data1_labels]:
-        return True
-    if data2_labels in narrow_wildcard_list:
-      if data1_labels in narrow_wildcard_list[data2_labels]:
-        return True
+    if data1_labels in narrow_wildcard_list and data2_labels in narrow_wildcard_list[data1_labels]:
+      return True
+    if data2_labels in narrow_wildcard_list and data1_labels in narrow_wildcard_list[data2_labels]:
+      return True
     return False
   return match
 
@@ -425,19 +424,9 @@ def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or netwo
     return pd.DataFrame(features, index = [glycan])
 
 
-def neighbor_is_branchpoint(graph: nx.DiGraph, # Glycan graph
-                          node: int # Node index to check
-                         ) -> bool: # True if connected to downstream multi-branch node
-  "Check if node is connected to downstream node with >2 branches"
-  edges = graph.edges(node)
-  edges = unwrap([e for e in edges if sum(e) > 2*node])
-  edges = [graph.degree[e] for e in set(edges) if e != node]
-  return max(edges, default = 0) > 3
-
-
 def get_linkage_number(node, graph):
   link_label = graph.nodes[node].get("string_labels", "")
-  match = re.search(r'[ab\?][12]-(\d+|\?)', link_label)
+  match = LINKAGE_PATTERN.search(link_label)
   if match:  # Extract the second number in the linkage (e.g., from "a1-3" get "3")
     linkage_num = match.group(1)
     if linkage_num == "?":

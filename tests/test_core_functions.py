@@ -64,7 +64,7 @@ from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph,
     compare_glycans, subgraph_isomorphism, generate_graph_features,
     graph_to_string, largest_subgraph, get_possible_topologies,
-    deduplicate_glycans, neighbor_is_branchpoint, try_string_conversion,
+    deduplicate_glycans, try_string_conversion,
     subgraph_isomorphism_with_negation, categorical_node_match_wildcard,
     expand_termini_list, ensure_graph, possible_topology_check
 )
@@ -2310,15 +2310,6 @@ def test_deduplicate_glycans():
     result = deduplicate_glycans(glycans)
     assert len(result) == 2
     assert deduplicate_glycans(["Man(a1-3)GlcNAc"]) == ["Man(a1-3)GlcNAc"]
-
-
-def test_neighbor_is_branchpoint():
-    # Create test graph
-    G = nx.Graph()
-    G.add_nodes_from(range(6))
-    G.add_edges_from([(0,1), (1,2), (2,3), (2,4), (2,5)])
-    assert neighbor_is_branchpoint(G, 1)  # Node 1 connected to branch point 2
-    assert not neighbor_is_branchpoint(G, 3)  # Node 3 is leaf
 
 
 def test_try_string_conversion():

@@ -32,18 +32,19 @@
 ##### Deprecated ⚠️
 - Deprecated `evaluate_adjacency`; will be handled in-line in `glycan_to_graph` (750cdb1)
 - Deprecated `canonicalize_glycan_graph`; will be handled in-line in `graph_to_string_int` (750cdb1)
+- Deprecated `neighbor_is_branchpoint`; no longer in use
 
 ### network
 #### biosynthesis
 ##### Added ✨
 - Added `build_network_from_glycans` handler to do a BFS-search to get the bulk biosynthetic network going (b865229)
-- Added `hierarchical` option (now the new default) to the keyword argument options in `plot_format` in `plot_network`, for a more organized network display
+- Added `hierarchical` option (now the new default) to the keyword argument options in `plot_format` in `plot_network`, for a more organized network display (8d03348)
 
 ##### Changed 🔄
 - `construct_network` is now more than twice as fast (a1c810c, b865229)
 
 ##### Fixed 🐛
-- Fixed reaction hover label in `plot_network`
+- Fixed reaction hover label in `plot_network` (8d03348)
 
 ##### Deprecated ⚠️
 - Deprecated `find_shared_virtuals`, `adjacencyMatrix_to_network`, `get_virtual_nodes`, `get_neighbors`, `create_adjacency_matrix`; now all handled in-line (a1c810c, b865229)
