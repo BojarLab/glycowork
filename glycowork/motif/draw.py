@@ -110,6 +110,11 @@ sugar_dict = {
 
 domon_costello = {'B', 'C', 'Z', 'Y', '04X', '15A', '02A', '13X', '24X', '35X', '04A', '15X', '02X', '13A', '24A', '35A', '25A', '03A', '14X', '25X', '03X', '14A'}
 SUBSTITUENT_PATTERN = re.compile(r'(?:^|[^1-9])([0-9]+)(?:Substituent|Subst)')
+_BOND_ALPHA = re.compile(r"^a\d")
+_BOND_BETA = re.compile(r"^b\d")
+_BOND_DIGIT = re.compile(r"^\d-\d")
+_CONF_DISPLAY = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
+_SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
 
 
 def _get_glycorender():
@@ -169,8 +174,7 @@ def add_customization(
   if furanose or conf:
     conf_text = ""
     if conf:
-      conf_dict = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
-      conf_text = conf_dict[conf] if isinstance(conf, str) and conf in conf_dict else conf
+      conf_text = _CONF_DISPLAY.get(conf, conf) if isinstance(conf, str) else conf
     if furanose:
       conf_text += "f"
     p = draw.Path(stroke_width = 0)
@@ -229,12 +233,7 @@ def draw_shape(
                         x_base-half_dim, y_base-half_dim,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
-    p.M(x_base-half_dim, y_base-half_dim)
-    p.L(x_base+half_dim, y_base-half_dim)
-    p.M(x_base+half_dim, y_base-half_dim)
-    p.L(x_base+half_dim, y_base+half_dim)
-    p.M(x_base+half_dim, y_base+half_dim)
-    p.L(x_base-half_dim, y_base-half_dim)
+    p.M(x_base-half_dim, y_base-half_dim).L(x_base+half_dim, y_base-half_dim).M(x_base+half_dim, y_base-half_dim).L(x_base+half_dim, y_base+half_dim).M(x_base+half_dim, y_base+half_dim).L(x_base-half_dim, y_base-half_dim)
     drawing.append(p)
   elif shape in ['HexA_2', 'HexA']:
     # Hexuronate - divided diamond;  AltA / IdoA for HexA_2 and flipped colors for HexA
@@ -250,13 +249,7 @@ def draw_shape(
                         x_base-half_dim, y_base,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
-    p.M(x_base-half_dim, y_base)
-    p.L(x_base, y_base+y_direction)
-    p.L(x_base+half_dim, y_base)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
-    p.M(x_base-half_dim, y_base)
-    p.L(x_base+half_dim, y_base)
+    p.M(x_base-half_dim, y_base).L(x_base, y_base+y_direction).L(x_base+half_dim, y_base).M(x_base-half_dim, y_base).L(x_base+half_dim, y_base)
     drawing.append(p)
   elif shape == 'dHex':
     # Deoxyhexose - triangle
@@ -275,16 +268,7 @@ def draw_shape(
                         x_base+half_dim, y_base+inside_hex_dim,
                         close = True, fill = col_dict[color], stroke = col_dict['black'], stroke_width = 0))
     p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
-    p.M(x_base, y_base+inside_hex_dim)
-    p.L(x_base, y_base-inside_hex_dim)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
-    p.M(x_base, y_base+inside_hex_dim)
-    p.L(x_base+half_dim, y_base+inside_hex_dim)
-    drawing.append(p)
-    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'], fill = 'none')
-    p.M(x_base, y_base-inside_hex_dim)
-    p.L(x_base+half_dim, y_base+inside_hex_dim)
+    p.M(x_base, y_base+inside_hex_dim).L(x_base, y_base-inside_hex_dim).M(x_base, y_base+inside_hex_dim).L(x_base+half_dim, y_base+inside_hex_dim).M(x_base, y_base-inside_hex_dim).L(x_base+half_dim, y_base+inside_hex_dim)
     drawing.append(p)
   elif shape == 'ddHex':
     # Dideoxyhexose - flat rectangle
@@ -358,7 +342,7 @@ def draw_shape(
     if shape == 'red_end':
       drawing.append(draw.Circle(x_base, y_base, 0.15 * dim, fill = 'white', stroke_width = stroke_w, stroke = col_dict['black']))
   # Handle segmented Hex shapes (04X, 15A, etc.)
-  elif any(x in shape for x in {'04', '15', '02', '13', '24', '35', '25', '03', '14'}):
+  elif shape[:2] in _SEGMENT_PREFIXES:
     use_grey_base = shape in {'04A', '15X', '02X', '13A', '24A', '35A', '14A'}
     segment_fill = 'white' if use_grey_base else col_dict['grey']
     # Define angle pairs for each shape type
@@ -413,7 +397,7 @@ def draw_shape(
     drawing.append(p)
     if shape == 'C':
       drawing.append(draw.Circle(x_base - 0.4 * dim, y_base, 0.15 * dim, fill = 'none', stroke_width = stroke_w, stroke = col_dict['black']))
-  if shape not in {'empty', 'text', 'red_end', 'free', 'Z', 'Y', 'B', 'C'} and not any(x in shape for x in {'04', '15', '02', '13', '24', '35', '25', '03', '14'}):
+  if shape not in {'empty', 'text', 'red_end', 'free', 'Z', 'Y', 'B', 'C'} and shape[:2] not in _SEGMENT_PREFIXES:
     add_customization(drawing, x_base, y_base, dim, modification, col_dict, conf, furanose, text_anchor)
 
 
@@ -481,9 +465,6 @@ def process_bonds(
     linkage_list: list[str] | list[list[str]] # Glycosidic linkages
     ) -> list[str] | list[list[str]]: # Formatted linkage text
   "Formats glycosidic linkage text for visualization"
-  ALPHA_PATTERN = re.compile(r"^a\d")
-  BETA_PATTERN = re.compile(r"^b\d")
-  DIGIT_PATTERN = re.compile(r"^\d-\d")
   def process_single_linkage(linkage: str) -> str:
     if '-' in linkage:
       first, last = linkage[0], re.search(r"-(.*)", linkage).group(1)
@@ -492,14 +473,14 @@ def process_bonds(
     if '?' in first and '?' in last: return '?'
     if '?' in first: return f' {last}'
     if '?' in last:
-      if ALPHA_PATTERN.match(linkage): return '\u03B1'
-      if BETA_PATTERN.match(linkage): return '\u03B2'
+      if _BOND_ALPHA.match(linkage): return '\u03B1'
+      if _BOND_BETA.match(linkage): return '\u03B2'
       return '-'
-    if ALPHA_PATTERN.match(linkage): return f'\u03B1 {last}'
-    if BETA_PATTERN.match(linkage): return f'\u03B2 {last}'
-    if DIGIT_PATTERN.match(linkage): return f'{first} - {last}'
+    if _BOND_ALPHA.match(linkage): return f'\u03B1 {last}'
+    if _BOND_BETA.match(linkage): return f'\u03B2 {last}'
+    if _BOND_DIGIT.match(linkage): return f'{first} - {last}'
     return '-'
-  if any(isinstance(el, list) for el in linkage_list):
+  if linkage_list and isinstance(linkage_list[0], list):
     return [[process_single_linkage(linkage) for linkage in sub_list] for sub_list in linkage_list]
   return [process_single_linkage(linkage) for linkage in linkage_list]
 
@@ -563,7 +544,7 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
     })
     all_nodes.update(path)
 
-  def process_level(parent_level, parent_idx: int, connect_idx_getter):
+  def process_level(parent_level):
     level = []
     for i, branch in enumerate(parent_level):
       for j, node in enumerate(branch['sugar_nodes']):
@@ -579,8 +560,8 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
       for succ in sorted(graph.successors(node)):
         if succ not in all_nodes:
           add_branch(first_level, succ, (0, main_chain_sugars.index(node)))
-  second_level = process_level(first_level, 0, lambda i: i)
-  third_level = process_level(second_level, 1, lambda i: i)
+  second_level = process_level(first_level)
+  third_level = process_level(second_level)
   return first_level, second_level, third_level
 
 
@@ -833,22 +814,17 @@ def draw_bracket(
     ) -> None:
   "Draws bracket shape at specified position and dimensions"
   col_dict = col_dict_transparent if highlight == 'hide' else col_dict_base
-  stroke_opts = {'stroke_width': 0.04 * dim, 'stroke': col_dict['black']}
   x_common = -x * dim
   y_min = y_min_max[0] * dim - 0.75 * dim
   y_max = y_min_max[1] * dim + 0.75 * dim
   # Vertical
-  g = draw.Group(transform = f'rotate({deg} {x_common} {np.mean(y_min_max)})')
-  p = draw.Path(**stroke_opts)
-  p.M(x_common, y_max)
-  p.L(x_common, y_min)
-  g.append(p)
   offset = 0.25 * dim * (1 if direction == 'right' else -1)
-  for y in [y_min, y_max]:
-    p = draw.Path(**stroke_opts)
-    p.M(x_common - offset/12.5, y)
-    p.L(x_common + offset, y)
-    g.append(p)
+  g = draw.Group(transform = f'rotate({deg} {x_common} {np.mean(y_min_max)})')
+  p = draw.Path(stroke_width = 0.04 * dim, stroke = col_dict['black'])
+  p.M(x_common, y_max).L(x_common, y_min)
+  p.M(x_common - offset / 12.5, y_min).L(x_common + offset, y_min)
+  p.M(x_common - offset / 12.5, y_max).L(x_common + offset, y_max)
+  g.append(p)
   drawing.append(g)
 
 
@@ -1457,7 +1433,7 @@ def annotate_figure(
     glycan_scale = [y, labels]
 
   # Get svg code
-  svg_tmp = open(svg_input, "r", encoding = "utf-8").read() if '?xml' not in svg_input else svg_input
+  svg_tmp = Path(svg_input).read_text(encoding = "utf-8") if '?xml' not in svg_input else svg_input
   # Get all text labels
   label_pattern = re.compile(r'<!--\s*(.*?)\s*-->')
   transform_pattern = re.compile(r'<g transform\s*(.*?)\s*">')

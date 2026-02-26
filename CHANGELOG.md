@@ -32,7 +32,11 @@
 ##### Deprecated ⚠️
 - Deprecated `evaluate_adjacency`; will be handled in-line in `glycan_to_graph` (750cdb1)
 - Deprecated `canonicalize_glycan_graph`; will be handled in-line in `graph_to_string_int` (750cdb1)
-- Deprecated `neighbor_is_branchpoint`; no longer in use
+- Deprecated `neighbor_is_branchpoint`; no longer in use (e020ffb)
+
+#### draw
+##### Changed 🔄
+- `HexN`, `dHexNAc`, and `HexA` shapes now get drawn in fewer objects/more efficiently
 
 ### network
 #### biosynthesis
