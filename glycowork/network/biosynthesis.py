@@ -252,8 +252,9 @@ def _graph_fp(g: nx.DiGraph) -> tuple:
 
 def build_network_from_glycans(glycans: list[str], # Observed glycans
                                graph_dic: dict[str, nx.DiGraph], # Dictionary of glycan:graph mappings
-                               min_size: int = 1 # Minimum root size; default:1
-                              ) -> tuple[nx.Graph, list[str]]: # (Network, Virtual nodes)
+                               min_size: int = 1, # Minimum root size; default:1
+                               allowed_ptms: frozenset[str] = allowed_ptms # Set of allowed PTMs
+                              ) -> tuple[nx.Graph, list[str], dict]: # (Network, Virtual nodes, Edge diffs)
   "Build biosynthetic network by BFS precursor expansion"
   network = nx.Graph()
   network.add_nodes_from(glycans)
@@ -262,11 +263,15 @@ def build_network_from_glycans(glycans: list[str], # Observed glycans
   queue = list(glycans)
   seen = set(glycans)
   observed_by_fp = defaultdict(list)
+  edge_diffs = {}
   for g in glycans:
     observed_by_fp[_graph_fp(safe_index(g, graph_dic))].append(g)
   while queue:
     glycan = queue.pop()
-    for prec_graph in create_neighbors(safe_index(glycan, graph_dic), min_size = min_size):
+    ggraph = safe_index(glycan, graph_dic)
+    terminal_pairs = [(k, next(ggraph.predecessors(k))) for k in ggraph.nodes()
+                      if ggraph.out_degree(k) == 0 and ggraph.in_degree(k) > 0]
+    for prec_graph, (term_node, link_node) in zip(create_neighbors(ggraph, min_size = min_size), terminal_pairs):
       prec_str = graph_to_string(prec_graph)
       if prec_str.startswith('('):
         continue
@@ -279,12 +284,14 @@ def build_network_from_glycans(glycans: list[str], # Observed glycans
         match = next((g for g in observed_by_fp.get(fp, []) if safe_compare(safe_index(g, graph_dic), prec_graph)),
                      prec_str)
       network.add_edge(glycan, match)
+      diff = graph_to_string_int(ggraph.subgraph({term_node, link_node}))
+      edge_diffs[(glycan, match)] = 'disregard' if any(ptm in diff for ptm in allowed_ptms) else diff
       if match not in seen:
         seen.add(match)
         virtual_nodes.add(match)
         observed_by_fp[fp].append(match)
         queue.append(match)
-  return network, list(virtual_nodes)
+  return network, list(virtual_nodes), edge_diffs
 
 
 @rescue_glycans
@@ -307,10 +314,9 @@ def construct_network(glycans: list[str], # List of glycans
   glycans.extend(add_to_virtuals)
   glycans.sort(key = len, reverse = True)
   graph_dic = {k: glycan_to_nxGraph(k) for k in glycans}
-  network, virtual_nodes = build_network_from_glycans(glycans, graph_dic, min_size = min_size)
+  network, virtual_nodes, edge_diffs = build_network_from_glycans(glycans, graph_dic, min_size = min_size, allowed_ptms = allowed_ptms)
   # Create edge and node labels
-  nx.set_edge_attributes(network, {el: find_diff(el[0], el[1], allowed_ptms = allowed_ptms) for el in network.edges()},
-                         'diffs')
+  nx.set_edge_attributes(network, edge_diffs, 'diffs')
   nx.set_node_attributes(network, {k: 1 if k in virtual_nodes else 0 for k in network}, 'virtual')
   # Connect post-translational modifications
   suffix = '-ol' if '-ol' in ''.join(glycans) else '1Cer' if '1Cer' in ''.join(glycans) else ''

@@ -213,25 +213,31 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
     if 'O' in glycan_a or 'O' in glycan_b:
       glycan_a, glycan_b = PTM_REGEX.sub('O', glycan_a), PTM_REGEX.sub('O', glycan_b)
     g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
+    g1_sl, g2_sl = nx.get_node_attributes(g1, "string_labels"), nx.get_node_attributes(g2, "string_labels")
   else:
     if len(glycan_a.nodes) != len(glycan_b.nodes):
       return (False, None) if return_matches else False
-    proc = frozenset(nx.get_node_attributes(glycan_a, "string_labels").values()) | frozenset(nx.get_node_attributes(glycan_b, "string_labels").values())
-    g1, g2 = (ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))) if any('O' in s for s in proc) else (glycan_a, glycan_b)
+    g1_sl, g2_sl = nx.get_node_attributes(glycan_a, "string_labels"), nx.get_node_attributes(glycan_b, "string_labels")
+    proc = frozenset(g1_sl.values()) | frozenset(g2_sl.values())
+    if any('O' in s for s in proc):
+      g1, g2 = ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))
+      g1_sl = nx.get_node_attributes(g1, "string_labels")
+      g2_sl = nx.get_node_attributes(g2, "string_labels")
+    else:
+      g1, g2 = glycan_a, glycan_b
   if sorted(d for _, d in g1.out_degree()) != sorted(d for _, d in g2.out_degree()):
     return (False, None) if return_matches else False
   narrow_wildcard_list = build_wildcard_cache(proc)
   if narrow_wildcard_list:
-    g1_labels = list(nx.get_node_attributes(g1, 'string_labels').values())
-    g2_labels = list(nx.get_node_attributes(g2, 'string_labels').values())
+    g1_labels = list(g1_sl.values())
+    g2_labels = list(g2_sl.values())
     if not _prefilter_labels(g1_labels, g2_labels, narrow_wildcard_list) or \
             not _prefilter_labels(g2_labels, g1_labels, narrow_wildcard_list):
       return (False, None) if return_matches else False
     matcher = nx.isomorphism.DiGraphMatcher(g1, g2, categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
   else:
     # First check whether components of both glycan graphs are identical, then check graph isomorphism (costly)
-    if sorted(nx.get_node_attributes(g1, "string_labels").values()) != sorted(
-            nx.get_node_attributes(g2, "string_labels").values()):
+    if sorted(g1_sl.values()) != sorted(g2_sl.values()):
       return (False, None) if return_matches else False
     if graph_to_string(g1) != graph_to_string(g2):
       return (False, None) if return_matches else False

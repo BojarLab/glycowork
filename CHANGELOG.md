@@ -36,7 +36,7 @@
 
 #### draw
 ##### Changed 🔄
-- `HexN`, `dHexNAc`, and `HexA` shapes now get drawn in fewer objects/more efficiently
+- `HexN`, `dHexNAc`, and `HexA` shapes now get drawn in fewer objects/more efficiently (10da7c5)
 
 ### network
 #### biosynthesis
