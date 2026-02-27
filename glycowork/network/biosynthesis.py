@@ -977,10 +977,24 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
   # Perform reaction or flow analysis
   if analysis == "reaction":
     res2 = {col: get_reaction_flow(nets[col], res[col], aggregate = "sum") for col in nets}
-    regex = re.compile(r"\(([ab])(\d)-(\d)\)")
-    shadow_counts = Counter(regex.sub(r"(\1\2-?)", g) for g in res2[next(iter(res2))])
-    shadow_reactions = {r for r, c in shadow_counts.items() if c > 1}
-    res2 = {k: {**v, **{r: np.mean([v2 for k2, v2 in v.items() if compare_glycans(k2, r)]) for r in shadow_reactions}} for k, v in res2.items()}
+    linkage_pat = re.compile(r'\(([ab?])([0-9?/]+)-([0-9?/]+)\)')
+    backbone_groups = defaultdict(list)
+    for g in res2[next(iter(res2))]:
+      backbone_groups[linkage_pat.sub('(LINK)', g)].append(g)
+    shadow_reactions = {}
+    for backbone, variants in backbone_groups.items():
+      if len(variants) < 2:
+        continue
+      anomer_set = {linkage_pat.search(v).group(1) for v in variants}
+      starts = sorted({s for v in variants for s in linkage_pat.search(v).group(2).split('/') if s != '?'},
+                      key = int) or ['?']
+      ends = sorted({e for v in variants for e in linkage_pat.search(v).group(3).split('/') if e != '?'},
+                    key = int) or ['?']
+      anomer = next(iter(anomer_set)) if len(anomer_set) == 1 else '?'
+      canonical = backbone.replace('(LINK)', f'({anomer}{"/".join(starts)}-{"/".join(ends)})')
+      shadow_reactions[canonical] = variants
+    res2 = {k: {**v, **{r: np.mean([v[k2] for k2 in shadow_reactions[r]]) for r in shadow_reactions}} for k, v in
+            res2.items()}
   elif analysis == "flow":
     res2 = {col: [res[col][sink]['flow_value'] for sink in res[col].keys()] for col in nets}
     features = res[col].keys()
@@ -1011,7 +1025,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
       f_value = anova_table.loc['C(time_point)', 'F']
       p_value = anova_table.loc['C(time_point)', 'PR(>F)']
       results.append({
-          'Feature': reaction,
+          'Glycan': reaction,
           'F-statistic': f_value,
           'p-val': p_value,
           'Direction': direction,
@@ -1030,9 +1044,9 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     alpha = get_alphaN(len(all_groups))
     significance = [p < alpha for p in corrpvals] if pvals else []
     effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
-    out = pd.DataFrame({'Feature': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
+    out = pd.DataFrame({'Glycan': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
                         'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
-  out = out.set_index('Feature')
+  out = out.set_index('Glycan')
   return out.dropna().sort_values(by = 'p-val')
 
 

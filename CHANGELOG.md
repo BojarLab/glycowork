@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.7.2]
+## [1.8.0]
 - fixed `Quarto` accessing of `pyproject.toml` attributes for doc building (cd9b62f)
 
 ### glycan_data
@@ -9,6 +9,7 @@
 - Added new N- and O-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/41460292/ to `glycomics_data_loader` (`mouse_taysachs_N_PMID41460292` and `mouse_taysachs_O_PMID41460292`) (52c6cf9)
 
 ##### Changed 🔄
+- Specified wildcards in `glycomics_human_colorectal_O_PMC9254241`
 
 ##### Fixed 🐛
 - Made sure that incomplete API access in `get_molecular_properties` does not lead to outright failure (52c6cf9)
@@ -38,6 +39,13 @@
 ##### Changed 🔄
 - `HexN`, `dHexNAc`, and `HexA` shapes now get drawn in fewer objects/more efficiently (10da7c5)
 
+##### Fixed 🐛
+- Fixed displaying beta-linkages instead of alpha-linkages in `annotate_figure`
+
+#### analysis
+##### Changed 🔄
+- `get_volcano` can now also deal with input dataframes that have the `Glycan` column be the index instead
+
 ### network
 #### biosynthesis
 ##### Added ✨
@@ -46,6 +54,8 @@
 
 ##### Changed 🔄
 - `construct_network` is now more than twice as fast (a1c810c, b865229)
+- Dynamic wildcard construction in `get_differential_biosynthesis` now also creates the most parsimonious narrow wildcards, similar to `annotate`
+- Renamed the `Feature` column in `get_differential_biosynthesis` to `Glycan`
 
 ##### Fixed 🐛
 - Fixed reaction hover label in `plot_network` (8d03348)

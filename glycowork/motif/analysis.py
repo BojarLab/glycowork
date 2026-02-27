@@ -689,6 +689,7 @@ def get_volcano(
   df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
   x = df_res[x_metric].values
   y = df_res['log_p'].values
+  if df_res.index.name == "Glycan": df_res.reset_index(inplace = True)
   labels = df_res['Glycan'].values if 'Glycan' in df_res.columns else df_res['Glycosite'].values
   # set y_thresh based on sample size via Bayesian-Adaptive Alpha Adjustment
   if n:

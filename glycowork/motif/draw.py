@@ -1482,7 +1482,7 @@ def annotate_figure(
       doc.close()
       os.unlink(tmp_pdf_path)
       data = svg_from_pdf.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace('<?xml version="1.0"?>', '')
-      id_matches = re.findall(r'd\d+', data)
+      id_matches = re.findall(r'(?:font_\d+_\d+|d\d+)', data)
       for idx in id_matches:
         data = data.replace(idx, 'd' + str(element_id))
         element_id += 1
