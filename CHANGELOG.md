@@ -9,7 +9,7 @@
 - Added new N- and O-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/41460292/ to `glycomics_data_loader` (`mouse_taysachs_N_PMID41460292` and `mouse_taysachs_O_PMID41460292`) (52c6cf9)
 
 ##### Changed 🔄
-- Specified wildcards in `glycomics_human_colorectal_O_PMC9254241`
+- Specified wildcards in `glycomics_human_colorectal_O_PMC9254241` (e71550d)
 
 ##### Fixed 🐛
 - Made sure that incomplete API access in `get_molecular_properties` does not lead to outright failure (52c6cf9)
@@ -40,11 +40,16 @@
 - `HexN`, `dHexNAc`, and `HexA` shapes now get drawn in fewer objects/more efficiently (10da7c5)
 
 ##### Fixed 🐛
-- Fixed displaying beta-linkages instead of alpha-linkages in `annotate_figure`
+- Fixed displaying beta-linkages instead of alpha-linkages in `annotate_figure` (e71550d)
 
 #### analysis
 ##### Changed 🔄
-- `get_volcano` can now also deal with input dataframes that have the `Glycan` column be the index instead
+- `get_volcano` can now also deal with input dataframes that have the `Glycan` column be the index instead (e71550d)
+- Equivalence p-values in `get_differential_expression` now also use the same sample-size adjusted alpha as regular p-values
+
+##### Fixed 🐛
+- CLR-transformation for paired data in `preprocess_data` now correctly uses the shared geometric mean as reference, to preserve within-pair differences
+- Fixed equivalence p-values in `get_differential_expression` if `sets=True`
 
 ### network
 #### biosynthesis
@@ -54,8 +59,8 @@
 
 ##### Changed 🔄
 - `construct_network` is now more than twice as fast (a1c810c, b865229)
-- Dynamic wildcard construction in `get_differential_biosynthesis` now also creates the most parsimonious narrow wildcards, similar to `annotate`
-- Renamed the `Feature` column in `get_differential_biosynthesis` to `Glycan`
+- Dynamic wildcard construction in `get_differential_biosynthesis` now also creates the most parsimonious narrow wildcards, similar to `annotate` (e71550d)
+- Renamed the `Feature` column in `get_differential_biosynthesis` to `Glycan` (e71550d)
 
 ##### Fixed 🐛
 - Fixed reaction hover label in `plot_network` (8d03348)

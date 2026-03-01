@@ -86,7 +86,7 @@ def preprocess_data(
                                                                  gamma = gamma, custom_scale = custom_scale)], axis = 1)
     else:
       df.iloc[:, 1:] = df.iloc[:, 1:] + 0.0000001
-      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:], group2, gamma = gamma, custom_scale = custom_scale, random_state = random_state)
+      df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:], [] if paired else group2, gamma = gamma, custom_scale = 0 if paired else custom_scale, random_state = random_state)
   elif transform == "Nothing":
     pass
   else:
@@ -570,6 +570,7 @@ def get_differential_expression(
         levene_pvals.append(np.mean([levene(gp1.loc[variable, :], gp2.loc[variable, :])[1] for variable in cluster]))
         # Calculate Mahalanobis distance as measure of effect size for multivariate comparisons
         effect_sizes.append(mahalanobis_distance(gp1, gp2, paired = paired))
+        equivalence_pvals.append(np.nan)
         if effect_size_variance:
           variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
     mean_abundance = mean_abundance_c
@@ -584,7 +585,7 @@ def get_differential_expression(
       levene_pvals = [1.0]*len(pvals)
     else:
       pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-      equivalence_pvals = np.array([get_equivalence_test(row_a, row_b, paired = paired) if pvals[i] > 0.05 else np.nan for i, (row_a, row_b) in enumerate(zip(df_a.values, df_b.values))])
+      equivalence_pvals = np.array([get_equivalence_test(row_a, row_b, paired = paired) if pvals[i] > alpha else np.nan for i, (row_a, row_b) in enumerate(zip(df_a.values, df_b.values))])
       valid_equivalence_pvals = equivalence_pvals[~np.isnan(equivalence_pvals)]
       corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_tsbh')[1] if len(valid_equivalence_pvals) else []
       equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
@@ -757,8 +758,8 @@ def get_glycanova(
       p_value = anova_table["PR(>F)"]["C(Group)"]
       results.append((glycan, f_value, p_value))
       if p_value < alpha and posthoc:
-        posthoc = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = alpha)
-        posthoc_results[glycan] = pd.DataFrame(data = posthoc._results_table.data[1:], columns = posthoc._results_table.data[0])
+        posthoc_res = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = alpha)
+        posthoc_results[glycan] = pd.DataFrame(data = posthoc_res._results_table.data[1:], columns = posthoc_res._results_table.data[0])
     df_out = pd.DataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
     corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
     df_out['corr p-val'] = corrpvals
