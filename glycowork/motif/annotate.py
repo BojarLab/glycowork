@@ -12,6 +12,9 @@ from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans,
 from glycowork.motif.regex import get_match
 
 
+LINKAGE_NODE_PATTERN = re.compile(r'^[ab?][0-9?/]+-[0-9?/]+$')
+
+
 def annotate_glycan(
     glycan: str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
     motifs: pd.DataFrame | None = None, # Motif dataframe (name + sequence); defaults to motif_list
@@ -309,7 +312,7 @@ def count_unique_subgraphs_of_size_k(
   "Identifies and counts unique connected subgraphs of specified size from glycan structure"
   target_size = size * 2 - 1
   successor_dict = {v: list(graph.successors(v)) for v in graph.nodes}
-  is_mono = {n: graph.nodes[n].get('string_labels', '') not in linkages for n in graph.nodes()}
+  is_mono = {n: not LINKAGE_NODE_PATTERN.match(graph.nodes[n].get('string_labels', '')) for n in graph.nodes()}
   k_subgraphs, processed = [], set()
   terminal_lookup = {n: graph.out_degree(n) == 0 for n in graph.nodes()} if terminal else {}
   for node in sorted(graph.nodes(), reverse = True):

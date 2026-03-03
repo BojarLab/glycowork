@@ -23,6 +23,7 @@
 
 ##### Fixed 🐛
 - Made sure curly bracket sequence content ("floaty bits") are correctly counted in `count_unique_subgraphs_of_size_k` (522b7cf)
+- Make sure all narrow linkage wildcards, even if not present in `linkages`, are being correctly parsed in `count_unique_subgraphs_of_size_k`
 
 #### graph
 ##### Changed 🔄
@@ -45,11 +46,11 @@
 #### analysis
 ##### Changed 🔄
 - `get_volcano` can now also deal with input dataframes that have the `Glycan` column be the index instead (e71550d)
-- Equivalence p-values in `get_differential_expression` now also use the same sample-size adjusted alpha as regular p-values
+- Equivalence p-values in `get_differential_expression` now also use the same sample-size adjusted alpha as regular p-values (3884125)
 
 ##### Fixed 🐛
-- CLR-transformation for paired data in `preprocess_data` now correctly uses the shared geometric mean as reference, to preserve within-pair differences
-- Fixed equivalence p-values in `get_differential_expression` if `sets=True`
+- CLR-transformation for paired data in `preprocess_data` now correctly uses the shared geometric mean as reference, to preserve within-pair differences (3884125)
+- Fixed equivalence p-values in `get_differential_expression` if `sets=True` (3884125)
 
 ### network
 #### biosynthesis
