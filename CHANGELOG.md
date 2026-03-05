@@ -13,6 +13,7 @@
 
 ##### Fixed 🐛
 - Made sure that incomplete API access in `get_molecular_properties` does not lead to outright failure (52c6cf9)
+- `glycomics_data_loader` and other `LazyLoader` instances are now robust against duplicate column names with the `.1`, `.2` suffix (they will be stripped now)
 
 ##### Deprecated ⚠️
 
@@ -23,7 +24,7 @@
 
 ##### Fixed 🐛
 - Made sure curly bracket sequence content ("floaty bits") are correctly counted in `count_unique_subgraphs_of_size_k` (522b7cf)
-- Make sure all narrow linkage wildcards, even if not present in `linkages`, are being correctly parsed in `count_unique_subgraphs_of_size_k`
+- Make sure all narrow linkage wildcards, even if not present in `linkages`, are being correctly parsed in `count_unique_subgraphs_of_size_k` (5220912)
 
 #### graph
 ##### Changed 🔄

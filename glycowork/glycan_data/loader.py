@@ -78,7 +78,9 @@ class LazyLoader:
       filename = f"{self.prefix}{name}.csv"
       try:
         with resources.files(f"{self.package}.{self.directory}").joinpath(filename).open(encoding = 'utf-8-sig') as f:
-          self._datasets[name] = pd.read_csv(f)
+          _df = pd.read_csv(f)
+          _df.columns = [re.sub(r'\.\d+$', '', c) for c in _df.columns]
+          self._datasets[name] = _df
       except FileNotFoundError:
         raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
     return self._datasets[name]
