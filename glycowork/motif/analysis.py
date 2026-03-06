@@ -93,10 +93,19 @@ def preprocess_data(
     raise ValueError("Only ALR and CLR are valid transforms for now.")
   if motifs:
     # Motif extraction and quantification
-    df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
-    df_org = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+    df_org = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set,
+                             custom_motifs = custom_motifs)
+    df = df_org + 0.0000001
     # Re-normalization
     df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
+    if transform == "CLR":
+        df = clr_transformation(df, group1 if experiment == "diff" else df.columns.tolist(), [] if paired else group2,
+                                gamma = gamma, custom_scale = 0 if paired else custom_scale,
+                                random_state = random_state)
+    elif transform == "ALR":
+        df = get_additive_logratio_transformation(df.reset_index(), group1, group2, paired = paired, gamma = gamma,
+                                                  custom_scale = custom_scale, random_state = random_state)
+        df = df.set_index(df.columns[0])
   else:
     df = df.set_index(df.columns.tolist()[0])
     df = df.groupby(df.index).mean()
@@ -444,16 +453,26 @@ def get_pca(
   "Performs PCA on glycan/motif abundance data with group-based visualization"
   if isinstance(df, (str, Path)):
     df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
-  if transform == "ALR":
-    df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
-    df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
-  elif transform == "CLR":
-    df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(1e-6)
-    df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], [], gamma = 0)
-  # get pca
+  if transform and not motifs:
+      df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(
+          1e-6)
+      if transform == "ALR":
+          df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
+      elif transform == "CLR":
+          df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], [], gamma = 0)
   if motifs:
-    # Motif extraction and quantification
-    df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs, remove_redundant = False).T.reset_index()
+      # Motif extraction and quantification
+      df_motif = (
+          df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(
+              1e-6) if transform else df)
+      raw = quantify_motifs(df_motif.iloc[:, 1:], df_motif.iloc[:, 0].values.tolist(), feature_set,
+                            custom_motifs = custom_motifs, remove_redundant = False)
+      if transform == "CLR":
+          raw = clr_transformation(raw + 1e-7, raw.columns.tolist(), [], gamma = 0)
+      elif transform == "ALR":
+          raw = get_additive_logratio_transformation(raw.reset_index(), raw.columns.tolist(), [], paired = False,
+                                                     gamma = 0).set_index(raw.index)
+      df = raw.T.reset_index()
   X = np.array(df.iloc[:, 1:len(groups)+1].T) if isinstance(groups, list) and groups else np.array(df.iloc[:, 1:].T)
   scaler = StandardScaler()
   X_std = scaler.fit_transform(X)

@@ -13,7 +13,7 @@
 
 ##### Fixed 🐛
 - Made sure that incomplete API access in `get_molecular_properties` does not lead to outright failure (52c6cf9)
-- `glycomics_data_loader` and other `LazyLoader` instances are now robust against duplicate column names with the `.1`, `.2` suffix (they will be stripped now)
+- `glycomics_data_loader` and other `LazyLoader` instances are now robust against duplicate column names with the `.1`, `.2` suffix (they will be stripped now) (44e8473)
 
 ##### Deprecated ⚠️
 
@@ -52,6 +52,7 @@
 ##### Fixed 🐛
 - CLR-transformation for paired data in `preprocess_data` now correctly uses the shared geometric mean as reference, to preserve within-pair differences (3884125)
 - Fixed equivalence p-values in `get_differential_expression` if `sets=True` (3884125)
+- CLR-transformed motif-level quantification in `preprocess_data` and `get_pca` used the glycan-level geometric mean as a reference, rather than the motif-level geometric mean, which is now fixed
 
 ### network
 #### biosynthesis
