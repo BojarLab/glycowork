@@ -63,13 +63,14 @@
 ##### Added ✨
 - Added `build_network_from_glycans` handler to do a BFS-search to get the bulk biosynthetic network going (b865229)
 - Added `hierarchical` option (now the new default) to the keyword argument options in `plot_format` in `plot_network`, for a more organized network display (8d03348)
+- `extend_network` now has the new `auto_steps` keyword argument, which (if `to_extend` is a target composition), will calculate the minimum number of steps, cross-check it against the provided maximum as `steps`, and then iteratively extend the most favorable leaf nodes toward the target composition
 
 ##### Changed 🔄
 - `construct_network` is now more than twice as fast (a1c810c, b865229)
 - Dynamic wildcard construction in `get_differential_biosynthesis` now also creates the most parsimonious narrow wildcards, similar to `annotate` (e71550d)
 - Renamed the `Feature` column in `get_differential_biosynthesis` to `Glycan` (e71550d)
-- `extend_network` now accepts compositions in any format in the `to_extend` keyword argument, using Universal Input
-- `extend_network` now early-exits if the composition provided in `to_extend` already exists within the network, outputting the existing matching structures in the network
+- `extend_network` now accepts compositions in any format in the `to_extend` keyword argument, using Universal Input (18f7ba5)
+- `extend_network` now early-exits if the composition provided in `to_extend` already exists within the network, outputting the existing matching structures in the network (18f7ba5)
 
 ##### Fixed 🐛
 - Fixed reaction hover label in `plot_network` (8d03348)

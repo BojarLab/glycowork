@@ -5438,6 +5438,13 @@ def test_extend_network_specific_target(extension_test_network):
         steps = 1,
         to_extend = target_composition
     )
+    extended_net, new_glycans, _ = extend_network(
+        extension_test_network,
+        steps = 2,
+        to_extend = "H2N2",
+        auto_steps = True,
+        strict_context = True
+    )
 
 
 def test_extend_network_specific_leaf(extension_test_network):

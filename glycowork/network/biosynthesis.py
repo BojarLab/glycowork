@@ -1100,10 +1100,11 @@ def choose_leaves_to_extend(leaf_glycans: set[str], # Terminal glycans in a netw
 
 
 def extend_network(network: nx.DiGraph, # Biosynthetic network
-                  steps: int = 1, # Number of extension steps; default:1
+                  steps: int = 1, # Number of extension steps; default:1 (becomes max_steps when auto_steps is True)
                   to_extend: str | dict[str, int] | list[str] = "all", # Nodes to extend (all, specific leaf node, target composition)
-                  strict_context: bool = False # Whether to use network only to derive allowed reaction products; default:False
-                 ) -> tuple[nx.DiGraph, set[str]]: # (Extended network, New glycans)
+                  strict_context: bool = False, # Whether to use network only to derive allowed reaction products; default:False
+                  auto_steps: bool = False # Infer minimum steps to reach target composition; converts steps into max_steps when to_extend is a composition
+                 ) -> tuple[nx.DiGraph, set[str]]: # (Extended network, New glycans), optionally minimum number of steps from auto_steps
   "Extend biosynthetic network physiologically"
   graphs = {}
   new_glycans = set()
@@ -1127,14 +1128,22 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
       return network, existing
     leaf_glycans = choose_leaves_to_extend(leaf_glycans, to_extend)
     reactions = {r for r in reactions if map_to_basic(r.split('(')[0]) in to_extend.keys()}
+    if auto_steps:
+      target_comp = Counter(to_extend)
+      min_score = min(sum((target_comp - Counter(glycan_to_composition(g))).values()) for g in leaf_glycans)
+      if min_score > steps:
+        print(f"auto_steps: {min_score} step(s) needed but max steps is {steps}; aborting.")
+        return network, set(), -1
+      print(f"auto_steps: {min_score} step(s) needed to reach target composition.")
+      steps = min_score
   if (isinstance(to_extend, str) and to_extend != "all") or isinstance(to_extend, list):
     leaf_glycans = {to_extend} if isinstance(to_extend, str) else set(to_extend)
   for _ in range(steps):
     new_leaf_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
+    if isinstance(to_extend, dict):
+      leaf_glycans = choose_leaves_to_extend(leaf_glycans, to_extend)
     new_edges, new_edge_labels = edges_for_extension(leaf_glycans, new_leaf_glycans, graphs)
     network = update_network(network, new_edges, edge_labels = new_edge_labels, node_labels = {k: 1 for k in new_leaf_glycans})
     leaf_glycans = new_leaf_glycans
     new_glycans.update(leaf_glycans)
-    if isinstance(to_extend, dict):
-      leaf_glycans = choose_leaves_to_extend(leaf_glycans, to_extend)
-  return network, new_glycans
+  return (network, new_glycans) if not auto_steps else (network, new_glycans, steps)
