@@ -171,7 +171,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
                      glycan_class: str = 'all', # Glycan class: N/O/lipid/free/all
                      df_use: pd.DataFrame | None = None, # Custom glycan database
                      filter_out: set[str] | None = None, # Monosaccharides to ignore during composition finding
-                     deprioritized: set[str] | None = {"Me", "HexA"}, # Monosaccharides to use only as fallback if no other composition matches
+                     deprioritized: set[str] | None = {"Me", "HexA", "PCho"}, # Monosaccharides to use only as fallback if no other composition matches
                      extras: list[str] = ["doubly_charged"], # Additional operations: adduct/doubly_charged
                      adduct: str | None = None # Chemical formula of adduct that contributes to m/z, e.g., "C2H4O2"
                     ) -> list[dict[str, int]]: # List of matching compositions
@@ -315,7 +315,7 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
                     reduced: bool = False, # Whether glycans are reduced
                     df_use: pd.DataFrame | None = None, # Custom glycan database
                     filter_out: set[str] | None = None, # Monosaccharides to ignore
-                    deprioritized: set[str] | None = {"Me", "HexA"}, # Monosaccharides to use only as fallback if no other composition matches
+                    deprioritized: set[str] | None = {"Me", "HexA", "PCho"}, # Monosaccharides to use only as fallback if no other composition matches
                     verbose: bool = False # Whether to print non-matching compositions
                    ) -> pd.DataFrame | list: # DataFrame of structures x intensities or empty list
   "Map precursor masses to structures, supporting accompanying relative intensities"

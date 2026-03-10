@@ -992,6 +992,16 @@ def test_mz_to_composition():
         extras = ["doubly_charged", "adduct"],
         deprioritized = None
     )
+    result = mz_to_composition(
+        675,
+        mode = 'negative',
+        mass_value = 'monoisotopic',
+        glycan_class = 'O',
+        mass_tolerance = 0.5,
+        reduced = True,
+        filter_out = {'Kdn'},
+        deprioritized = {"Hex", "HexNAc", "Neu5Ac"}
+    )
 
 
 def test_compositions_to_structures():
@@ -5421,6 +5431,12 @@ def test_extend_network_specific_target(extension_test_network):
         sum((Counter(target_composition) - Counter(glycan_to_composition(g))).values()) <
         sum((Counter(target_composition) - Counter(glycan_to_composition('Gal(b1-4)Glc-ol'))).values())
         for g in new_glycans
+    )
+    target_composition = "H2N1"
+    extended_net, new_glycans = extend_network(
+        extension_test_network,
+        steps = 1,
+        to_extend = target_composition
     )
 
 

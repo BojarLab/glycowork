@@ -15,7 +15,7 @@ import pandas as pd
 from glycowork.glycan_data.loader import unwrap, linkages, lib
 from glycowork.glycan_data.stats import cohen_d, get_alphaN
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, graph_to_string_int, subgraph_isomorphism, get_possible_topologies
-from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class, canonicalize_iupac
+from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class, canonicalize_iupac, canonicalize_composition, is_composition
 from glycowork.motif.tokenization import get_stem_lib, glycan_to_composition, map_to_basic
 from glycowork.motif.regex import get_match
 from glycowork.motif.annotate import get_k_saccharides
@@ -1115,9 +1115,16 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
     glycs = df_species[df_species.Class == "Mammalia"].glycan.drop_duplicates()
     glycs = glycs[glycs.apply(get_class) == classy].tolist()
   mammal_disac = set(unwrap(get_k_saccharides(glycs, just_motifs = True)))
-  reactions = {r for r in nx.get_edge_attributes(network, "diffs").values() if all(x not in r for x in ('?', 'Hex', 'O'))}
+  reactions = {r for r in nx.get_edge_attributes(network, "diffs").values() if all(x not in r for x in ('?', 'Hex', 'O', '/'))}
   leaf_glycans = {x for x in network.nodes() if network.out_degree(x) == 0 and network.in_degree(x) > 0}
+  if isinstance(to_extend, str) and is_composition(to_extend):
+    to_extend = canonicalize_composition(to_extend)
   if isinstance(to_extend, dict):
+    existing = {g for g in network.nodes() if glycan_to_composition(g) == to_extend}
+    if existing:
+      print(
+        "Target composition already present in network; skipping extension and instead returning matching structures from network.")
+      return network, existing
     leaf_glycans = choose_leaves_to_extend(leaf_glycans, to_extend)
     reactions = {r for r in reactions if map_to_basic(r.split('(')[0]) in to_extend.keys()}
   if (isinstance(to_extend, str) and to_extend != "all") or isinstance(to_extend, list):

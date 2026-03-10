@@ -56,7 +56,7 @@
 
 #### tokenization
 ##### Added ✨
-- `mz_to_composition` now has a new keyword argument `deprioritized`, which is a set of disfavored monosaccharides/modifications that will only be used if no composition can be found otherwise (i.e., less harsh than full exclusion via `filter_out`). This keyword argument is now also exposed in `mz_to_structures`
+- `mz_to_composition` now has a new keyword argument `deprioritized`, which is a set of disfavored monosaccharides/modifications that will only be used if no composition can be found otherwise (i.e., less harsh than full exclusion via `filter_out`). This keyword argument is now also exposed in `mz_to_structures` (316f962)
 
 ### network
 #### biosynthesis
@@ -68,6 +68,8 @@
 - `construct_network` is now more than twice as fast (a1c810c, b865229)
 - Dynamic wildcard construction in `get_differential_biosynthesis` now also creates the most parsimonious narrow wildcards, similar to `annotate` (e71550d)
 - Renamed the `Feature` column in `get_differential_biosynthesis` to `Glycan` (e71550d)
+- `extend_network` now accepts compositions in any format in the `to_extend` keyword argument, using Universal Input
+- `extend_network` now early-exits if the composition provided in `to_extend` already exists within the network, outputting the existing matching structures in the network
 
 ##### Fixed 🐛
 - Fixed reaction hover label in `plot_network` (8d03348)
