@@ -171,6 +171,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
                      glycan_class: str = 'all', # Glycan class: N/O/lipid/free/all
                      df_use: pd.DataFrame | None = None, # Custom glycan database
                      filter_out: set[str] | None = None, # Monosaccharides to ignore during composition finding
+                     deprioritized: set[str] | None = {"Me", "HexA"}, # Monosaccharides to use only as fallback if no other composition matches
                      extras: list[str] = ["doubly_charged"], # Additional operations: adduct/doubly_charged
                      adduct: str | None = None # Chemical formula of adduct that contributes to m/z, e.g., "C2H4O2"
                     ) -> list[dict[str, int]]: # List of matching compositions
@@ -182,6 +183,8 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
       df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
   if filter_out is None:
     filter_out = set()
+  if deprioritized is None:
+    deprioritized = set()
   if adduct:
     mz_value -= calculate_adduct_mass(adduct, mass_value)
   adduct_mass = mass_dict['Acetate'] if mode == 'negative' else mass_dict['Na+']
@@ -189,7 +192,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     mz_value -= 1.0078
   multiplier = 1 if mode == 'negative' else -1
   comp_pool = [dict(t) for t in {tuple(d.items()) for d in df_use.Composition}]
-  out = []
+  fallback = []
   cache = {}
   # Iterate over the composition pool
   for comp in comp_pool:
@@ -197,21 +200,27 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     cache[mass] = comp
     if abs(mass - mz_value) < mass_tolerance:
       if not filter_out.intersection(comp.keys()):
-        return [comp]
+        if not deprioritized.intersection(comp.keys()):
+          return [comp]
+        fallback.append(comp)
   if "adduct" in extras:
     # Check for matches including the adduct mass
     for mass, comp in cache.items():
       if abs(mass + adduct_mass - mz_value) < mass_tolerance:
         if not filter_out.intersection(comp.keys()):
-          return [comp]
+          if not deprioritized.intersection(comp.keys()):
+            return [comp]
+          fallback.append(comp)
   if "doubly_charged" in extras:
     # If no matches are found, consider a double charge scenario
     mz_value = (mz_value + 0.5*multiplier)*2 + (1.0078 if reduced else 0)
     for mass, comp in cache.items():
       if abs(mass - mz_value) < mass_tolerance:
         if not filter_out.intersection(comp.keys()):
-          return [comp]
-  return out
+          if not deprioritized.intersection(comp.keys()):
+            return [comp]
+          fallback.append(comp)
+  return fallback[:1]
 
 
 @rescue_compositions
@@ -306,6 +315,7 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
                     reduced: bool = False, # Whether glycans are reduced
                     df_use: pd.DataFrame | None = None, # Custom glycan database
                     filter_out: set[str] | None = None, # Monosaccharides to ignore
+                    deprioritized: set[str] | None = {"Me", "HexA"}, # Monosaccharides to use only as fallback if no other composition matches
                     verbose: bool = False # Whether to print non-matching compositions
                    ) -> pd.DataFrame | list: # DataFrame of structures x intensities or empty list
   "Map precursor masses to structures, supporting accompanying relative intensities"
@@ -320,7 +330,8 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
     print("Not a valid class for mz_to_composition; currently N/O/free/lipid matching is supported. For everything else run compositions_to_structures separately.")
   # Map each m/z value to potential compositions
   compositions = [mz_to_composition(mz, mode = mode, mass_value = mass_value, reduced = reduced, sample_prep = sample_prep,
-                                    mass_tolerance = mass_tolerance, kingdom = kingdom, glycan_class = glycan_class, df_use = df_use, filter_out = filter_out) for mz in mz_list]
+                                    mass_tolerance = mass_tolerance, kingdom = kingdom, glycan_class = glycan_class,
+                                    df_use = df_use, filter_out = filter_out, deprioritized = deprioritized) for mz in mz_list]
   # Map each of these potential compositions to potential structures
   out_structures = []
   for m, comp in enumerate(compositions):

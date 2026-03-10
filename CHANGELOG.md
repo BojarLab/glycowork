@@ -52,7 +52,11 @@
 ##### Fixed 🐛
 - CLR-transformation for paired data in `preprocess_data` now correctly uses the shared geometric mean as reference, to preserve within-pair differences (3884125)
 - Fixed equivalence p-values in `get_differential_expression` if `sets=True` (3884125)
-- CLR-transformed motif-level quantification in `preprocess_data` and `get_pca` used the glycan-level geometric mean as a reference, rather than the motif-level geometric mean, which is now fixed
+- CLR-transformed motif-level quantification in `preprocess_data` and `get_pca` used the glycan-level geometric mean as a reference, rather than the motif-level geometric mean, which is now fixed (c71c385)
+
+#### tokenization
+##### Added ✨
+- `mz_to_composition` now has a new keyword argument `deprioritized`, which is a set of disfavored monosaccharides/modifications that will only be used if no composition can be found otherwise (i.e., less harsh than full exclusion via `filter_out`). This keyword argument is now also exposed in `mz_to_structures`
 
 ### network
 #### biosynthesis

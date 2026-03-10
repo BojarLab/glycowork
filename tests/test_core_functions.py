@@ -980,6 +980,17 @@ def test_mz_to_composition():
         reduced=True,
         filter_out = {'Kdn'},
         extras=["doubly_charged", "adduct"]
+    ),
+    mz_to_composition(
+        675,
+        mode = 'negative',
+        mass_value = 'monoisotopic',
+        glycan_class = 'all',
+        mass_tolerance = 0.5,
+        reduced = True,
+        adduct = "H2O",
+        extras = ["doubly_charged", "adduct"],
+        deprioritized = None
     )
 
 
