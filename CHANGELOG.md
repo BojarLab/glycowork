@@ -58,12 +58,16 @@
 ##### Added ✨
 - `mz_to_composition` now has a new keyword argument `deprioritized`, which is a set of disfavored monosaccharides/modifications that will only be used if no composition can be found otherwise (i.e., less harsh than full exclusion via `filter_out`). This keyword argument is now also exposed in `mz_to_structures` (316f962)
 
+#### tokenization
+##### Changed 🔄
+- `canonicalize_iupac` now is even more robust regarding typo correction
+
 ### network
 #### biosynthesis
 ##### Added ✨
 - Added `build_network_from_glycans` handler to do a BFS-search to get the bulk biosynthetic network going (b865229)
 - Added `hierarchical` option (now the new default) to the keyword argument options in `plot_format` in `plot_network`, for a more organized network display (8d03348)
-- `extend_network` now has the new `auto_steps` keyword argument, which (if `to_extend` is a target composition), will calculate the minimum number of steps, cross-check it against the provided maximum as `steps`, and then iteratively extend the most favorable leaf nodes toward the target composition
+- `extend_network` now has the new `auto_steps` keyword argument, which (if `to_extend` is a target composition), will calculate the minimum number of steps, cross-check it against the provided maximum as `steps`, and then iteratively extend the most favorable leaf nodes toward the target composition (f8f2fa9)
 
 ##### Changed 🔄
 - `construct_network` is now more than twice as fast (a1c810c, b865229)

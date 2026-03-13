@@ -27,7 +27,7 @@ replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc
                  'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', '4,5Ac': '4Ac5Ac', 'Talp': 'Tal', 'manp': 'man',
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara',
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui',
-                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn',
+                 'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn', 'GlN': 'GlcN',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
 CSDB_COMMENT = re.compile(r'\s*//.*$')
@@ -1264,7 +1264,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
       glycan = glycan.replace('+', '(?1-?)+')
     glycan = '{'+glycan.replace('+', '}')
   post_process = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'u5Ac(b1': 'u5Ac(b2', 'u5Gc(b1': 'u5Gc(b2', 'Fuc(?': 'Fuc(a',
-                  'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a',
+                  'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a', '5Ac(a2-?': '5Ac(a2-3/6',
                   'Kdn(a1': 'Kdn(a2', 'Kdn(b1': 'Kdn(b2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?', 'manHep': 'ManHep', 'amino': 'N'}
   glycan = multireplace(glycan, post_process)
   glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
