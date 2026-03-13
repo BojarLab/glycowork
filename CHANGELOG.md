@@ -60,7 +60,7 @@
 
 #### tokenization
 ##### Changed 🔄
-- `canonicalize_iupac` now is even more robust regarding typo correction
+- `canonicalize_iupac` now is even more robust regarding typo correction (acf05e1)
 
 ### network
 #### biosynthesis
