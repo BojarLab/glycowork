@@ -48,6 +48,7 @@
 ##### Changed 🔄
 - `get_volcano` can now also deal with input dataframes that have the `Glycan` column be the index instead (e71550d)
 - Equivalence p-values in `get_differential_expression` now also use the same sample-size adjusted alpha as regular p-values (3884125)
+- Specifying `return_plot=True` in `get_heatmap` will now also return the column names and the transformed dataframe, next to the plot object
 
 ##### Fixed 🐛
 - CLR-transformation for paired data in `preprocess_data` now correctly uses the shared geometric mean as reference, to preserve within-pair differences (3884125)

@@ -212,7 +212,7 @@ def get_heatmap(
     return_plot: bool = False, # Return plot object
     show_all: bool = False, # Show all tick labels
     **kwargs: Any # Keyword args passed to seaborn clustermap
-    ) -> Any | None: # None or plot object if return_plot=True
+    ) -> tuple[Any, list[str], pd.DataFrame] | None: # None or (plot object, column names, transformed dataframe) if return_plot=True
   "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
   if isinstance(df, (str, Path)):
     df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
@@ -262,7 +262,7 @@ def get_heatmap(
     plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
     plt.close(g.fig)
   elif return_plot:
-    return g
+    return g, df.columns.tolist(), df
   else:
     plt.show()
 
