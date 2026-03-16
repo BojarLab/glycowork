@@ -7,7 +7,8 @@
 #### loader
 ##### Added ✨
 - Added new N- and O-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/41460292/ to `glycomics_data_loader` (`mouse_taysachs_N_PMID41460292` and `mouse_taysachs_O_PMID41460292`) (52c6cf9)
-- Added new N-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/39877544/ to `glycomics_data_loader` (`human_serum_N_PMID39877544`)
+- Added new N-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/39877544/ to `glycomics_data_loader` (`human_serum_N_PMID39877544`) (57f6260)
+- Added new N-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/37639587/ to `glycomics_data_loader` (`human_neutrophils_N_PMID37639587`)
 
 ##### Changed 🔄
 - Specified wildcards in `glycomics_human_colorectal_O_PMC9254241` (e71550d)
