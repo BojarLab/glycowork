@@ -7,6 +7,7 @@
 #### loader
 ##### Added ✨
 - Added new N- and O-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/41460292/ to `glycomics_data_loader` (`mouse_taysachs_N_PMID41460292` and `mouse_taysachs_O_PMID41460292`) (52c6cf9)
+- Added new N-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/39877544/ to `glycomics_data_loader` (`human_serum_N_PMID39877544`)
 
 ##### Changed 🔄
 - Specified wildcards in `glycomics_human_colorectal_O_PMC9254241` (e71550d)
@@ -48,7 +49,7 @@
 ##### Changed 🔄
 - `get_volcano` can now also deal with input dataframes that have the `Glycan` column be the index instead (e71550d)
 - Equivalence p-values in `get_differential_expression` now also use the same sample-size adjusted alpha as regular p-values (3884125)
-- Specifying `return_plot=True` in `get_heatmap` will now also return the column names and the transformed dataframe, next to the plot object
+- Specifying `return_plot=True` in `get_heatmap` will now also return the column names and the transformed dataframe, next to the plot object (3b72129)
 
 ##### Fixed 🐛
 - CLR-transformation for paired data in `preprocess_data` now correctly uses the shared geometric mean as reference, to preserve within-pair differences (3884125)
