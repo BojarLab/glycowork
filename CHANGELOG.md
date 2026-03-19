@@ -80,7 +80,7 @@
 - Renamed the `Feature` column in `get_differential_biosynthesis` to `Glycan` (e71550d)
 - `extend_network` now accepts compositions in any format in the `to_extend` keyword argument, using Universal Input (18f7ba5)
 - `extend_network` now early-exits if the composition provided in `to_extend` already exists within the network, outputting the existing matching structures in the network (18f7ba5)
-- `monolink_to_enzyme` is now comma-separated instead of tab-separated and is more complete
+- `monolink_to_enzyme` is now comma-separated instead of tab-separated and is more complete (10dc46e)
 
 ##### Fixed 🐛
 - Fixed reaction hover label in `plot_network` (8d03348)
