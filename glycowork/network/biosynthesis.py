@@ -373,7 +373,7 @@ def construct_network(glycans: list[str], # List of glycans
     df_enzyme = None
     if edge_type == 'enzyme':
       with resources.files("glycowork.network").joinpath("monolink_to_enzyme.csv").open() as f:
-        df_enzyme = pd.read_csv(f, sep = '\t')
+        df_enzyme = pd.read_csv(f, sep = ',')
     for u, v in network.edges():
       elem = network[u][v]
       edge = elem['diffs']
