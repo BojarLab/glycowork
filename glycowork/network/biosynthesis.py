@@ -237,7 +237,7 @@ def add_high_man_removal(network: nx.DiGraph # Biosynthetic network
                        ) -> nx.DiGraph: # Network with high-mannose removal
   "Add 'reverse' edges for high-mannose N-glycan maturation (i.e., cutting down)"
   edges_to_add = [(target, source, network[source][target]) for source, target in network.edges() if target.count('Man') >= 5]
-  network.add_edges_from(edges_to_add, diffs = lambda x: x[2])
+  network.add_edges_from(edges_to_add)
   return network
 
 

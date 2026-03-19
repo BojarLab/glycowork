@@ -10,7 +10,7 @@
 - Added new N-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/39877544/ to `glycomics_data_loader` (`human_serum_N_PMID39877544`) (57f6260)
 - Added new N-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/37639587/ to `glycomics_data_loader` (`human_neutrophils_N_PMID37639587`) (5d81cc3)
 - Added new N- and O-glycomics dataset from https://www.biorxiv.org/content/10.1101/2024.11.28.625934v1 to `glycomics_data_loader` (`human_macrophages_N_2024-11-28-625934` and `human_macrophages_O_2024-11-28-625934`) (4813910, 1688897)
-- Added new N-, O-, and GSL-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/36788594/ to `glycomics_data_loader` (`human_leukemia_N_PMID36788594`, `human_leukemia_O_PMID36788594`, and `human_leukemia_GSL_PMID36788594`)
+- Added new N-, O-, and GSL-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/36788594/ to `glycomics_data_loader` (`human_leukemia_N_PMID36788594`, `human_leukemia_O_PMID36788594`, and `human_leukemia_GSL_PMID36788594`) (5510e55)
 
 ##### Changed 🔄
 - Specified wildcards in `glycomics_human_colorectal_O_PMC9254241` (e71550d)
@@ -83,6 +83,7 @@
 
 ##### Fixed 🐛
 - Fixed reaction hover label in `plot_network` (8d03348)
+- Fixed a bug in `add_high_man_removal` which set the edge labels with a `lambda` function instead of a string
 
 ##### Deprecated ⚠️
 - Deprecated `find_shared_virtuals`, `adjacencyMatrix_to_network`, `get_virtual_nodes`, `get_neighbors`, `create_adjacency_matrix`; now all handled in-line (a1c810c, b865229)
