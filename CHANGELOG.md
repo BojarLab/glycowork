@@ -11,13 +11,14 @@
 - Added new N-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/37639587/ to `glycomics_data_loader` (`human_neutrophils_N_PMID37639587`) (5d81cc3)
 - Added new N- and O-glycomics dataset from https://www.biorxiv.org/content/10.1101/2024.11.28.625934v1 to `glycomics_data_loader` (`human_macrophages_N_2024-11-28-625934` and `human_macrophages_O_2024-11-28-625934`) (4813910, 1688897)
 - Added new N-, O-, and GSL-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/36788594/ to `glycomics_data_loader` (`human_leukemia_N_PMID36788594`, `human_leukemia_O_PMID36788594`, and `human_leukemia_GSL_PMID36788594`) (5510e55)
+- Added new N-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/39947398/ to `glycomics_data_loader` (`human_colorectal_N_PMID39947398`)
 
 ##### Changed 🔄
 - Specified wildcards in `glycomics_human_colorectal_O_PMC9254241` (e71550d)
 
 ##### Fixed 🐛
 - Made sure that incomplete API access in `get_molecular_properties` does not lead to outright failure (52c6cf9)
-- `glycomics_data_loader` and other `LazyLoader` instances are now robust against duplicate column names with the `.1`, `.2` suffix (they will be stripped now) (44e8473)
+- `glycomics_data_loader` and other `LazyLoader` instances are now robust against duplicate column names with the `.1`, `.2` suffix (they will be stripped now) (44e8473, 1cdb270)
 
 ##### Deprecated ⚠️
 
