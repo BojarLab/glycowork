@@ -2,10 +2,11 @@ import re
 from copy import deepcopy
 from typing import Callable
 from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
-from glycowork.motif.processing import min_process_glycans, bracket_removal, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
+from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
 import numpy as np
 import pandas as pd
 import networkx as nx
+from collections import Counter
 from scipy.sparse.linalg import eigsh
 from functools import lru_cache, wraps
 
@@ -13,6 +14,7 @@ from functools import lru_cache, wraps
 PTM_REGEX = re.compile(r"(?<!Neu)(?<=\D)(\d+/\d+|\d+)(?=\D)")
 NEGATION_REGEX = re.compile(r'(!\w+\([^)]+\))')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
+LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
 
 
 def memoize_node_match(func):
@@ -34,18 +36,6 @@ def build_wildcard_cache(proc: set) -> dict:
            {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!')}
 
 
-@lru_cache(maxsize = 1024)
-def evaluate_adjacency(glycan_part: str, # Residual part of a glycan from within glycan_to_graph
-                      adjustment: int    # Number of characters to allow for extra length (consequence of tokenizing glycoletters)
-                     ) -> bool: # True if adjacent, False if not
-  "Checks whether two glycoletters are adjacent in the graph-to-be-constructed"
-  last_char = glycan_part[-1]
-  len_glycan_part = len(glycan_part)
-  # Check whether (i) glycoletters are adjacent in the main chain or (ii) whether glycoletters are connected but separated by a branch delimiter
-  return ((last_char in {'(', ')'} and len_glycan_part < 2+adjustment) or
-          (last_char == ']' and glycan_part[-2] in {'(', ')'} and len_glycan_part-1 < 2+adjustment))
-
-
 def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence
                    ) -> tuple[dict[int, str], np.ndarray]: # (Dictionary of node:monosaccharide/linkage, Adjacency matrix)
   "Convert glycans into graphs"
@@ -54,29 +44,24 @@ def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence
   n = len(glycan_proc)
   # Map glycoletters to integers
   mask_dic = dict(enumerate(glycan_proc))
+  temp_glycan = glycan
   for i, gl in mask_dic.items():
-    glycan = glycan.replace(gl, str(i), 1)
+    temp_glycan = temp_glycan.replace(gl, str(i), 1)
   # Initialize adjacency matrix
   adj_matrix = np.zeros((n, n), dtype = np.uint8)
-  # Caching index positions
-  glycan_indices = {str(i): glycan.index(str(i)) for i in range(n)}
-  # Loop through each pair of glycoletters
-  for k in range(n):
-    # Integers that are in place of glycoletters go up from 1 character (0-9) to 3 characters (>99)
-    adjustment = 2 if k >= 100 else 1 if k >= 10 else 0
-    adjustment2 = 2 + adjustment
-    cache_first_part = glycan_indices[str(k)]+1
-    for j in range(k+1, n):
-      # Subset the part of the glycan that is bookended by k and j
-      glycan_part = glycan[cache_first_part:glycan_indices[str(j)]]
-      # Immediately adjacent residues
-      if evaluate_adjacency(glycan_part, adjustment):
-        adj_matrix[k, j] = 1
-        continue
-      # Adjacent residues separated by branches in the string
-      res = bracket_removal(glycan_part)
-      if len(res) <= adjustment2 and evaluate_adjacency(res, adjustment):
-        adj_matrix[k, j] = 1
+  tokens = re.findall(r'\d+|\[|\]', temp_glycan)
+  current_node = None
+  stack = []
+  for token in reversed(tokens):
+    if token == ']':
+      stack.append(current_node)
+    elif token == '[':
+      current_node = stack.pop()
+    else:
+      node_idx = int(token)
+      if current_node is not None:
+        adj_matrix[node_idx, current_node] = 1
+      current_node = node_idx
   return mask_dic, adj_matrix
 
 
@@ -160,7 +145,7 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
   "Match nodes while handling wildcards and flexible positions"
   def match(data1, data2):
     data1_labels2, data2_labels2 = data1.get(attr2, default2), data2.get(attr2, default2)
-    if data1_labels2 != data2_labels2 and 'flexible' not in {data1_labels2, data2_labels2}:
+    if data1_labels2 != data2_labels2 and data1_labels2 != 'flexible' and data2_labels2 != 'flexible':
       return False
     data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
     if data1_labels == data2_labels:
@@ -169,17 +154,15 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
       if '-' not in data1_labels and '-' not in data2_labels:
         return True
     if data1_labels == "?1-?" or data2_labels == "?1-?":
-      if data1_labels.count('-') + data2_labels.count('-') == 2:
+      if data1_labels.count('-') == 1 and data2_labels.count('-') == 1:
         return True
     if data2_labels.startswith('!'):
       if data1_labels != data2_labels[1:] and '-' not in data1_labels:
         return True
-    if data1_labels in narrow_wildcard_list:
-      if data2_labels in narrow_wildcard_list[data1_labels]:
-        return True
-    if data2_labels in narrow_wildcard_list:
-      if data1_labels in narrow_wildcard_list[data2_labels]:
-        return True
+    if data1_labels in narrow_wildcard_list and data2_labels in narrow_wildcard_list[data1_labels]:
+      return True
+    if data2_labels in narrow_wildcard_list and data1_labels in narrow_wildcard_list[data2_labels]:
+      return True
     return False
   return match
 
@@ -190,6 +173,30 @@ def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph
   for node in graph.nodes:
     graph.nodes[node]['string_labels'] = PTM_REGEX.sub('O', graph.nodes[node]['string_labels'])
   return graph
+
+
+def _prefilter_labels(g1_labels: list, # G1 node labels
+                     g2_labels: list, # G2 node labels
+                     narrow_wildcard_list: dict # Wildcard expansion dict
+                    ) -> bool: # True if label multisets are compatible
+  "Conservative multiset pre-filter: each g2 label needs enough compatible g1 labels to cover its count"
+  g1_counter = Counter(g1_labels)
+  for l2, need in Counter(g2_labels).items():
+    have = 0
+    for l1, cnt in g1_counter.items():
+      if (l1 == l2
+          or ('Monosaccharide' in (l1, l2) and '-' not in l1 and '-' not in l2)
+          or ((l1 == '?1-?' or l2 == '?1-?') and '-' in l1 and '-' in l2)
+          or (l2.startswith('!') and l1 != l2[1:] and '-' not in l1)
+          or (l1.startswith('!') and l2 != l1[1:] and '-' not in l2)
+          or l2 in narrow_wildcard_list.get(l1, frozenset())
+          or l1 in narrow_wildcard_list.get(l2, frozenset())):
+        have += cnt
+        if have >= need:
+          break
+    if have < need:
+      return False
+  return True
 
 
 def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
@@ -206,22 +213,38 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
     if 'O' in glycan_a or 'O' in glycan_b:
       glycan_a, glycan_b = PTM_REGEX.sub('O', glycan_a), PTM_REGEX.sub('O', glycan_b)
     g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
+    g1_sl, g2_sl = nx.get_node_attributes(g1, "string_labels"), nx.get_node_attributes(g2, "string_labels")
   else:
     if len(glycan_a.nodes) != len(glycan_b.nodes):
       return (False, None) if return_matches else False
-    proc = frozenset(nx.get_node_attributes(glycan_a, "string_labels").values()) | frozenset(nx.get_node_attributes(glycan_b, "string_labels").values())
-    g1, g2 = (ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))) if any('O' in s for s in proc) else (glycan_a, glycan_b)
+    g1_sl, g2_sl = nx.get_node_attributes(glycan_a, "string_labels"), nx.get_node_attributes(glycan_b, "string_labels")
+    proc = frozenset(g1_sl.values()) | frozenset(g2_sl.values())
+    if any('O' in s for s in proc):
+      g1, g2 = ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))
+      g1_sl = nx.get_node_attributes(g1, "string_labels")
+      g2_sl = nx.get_node_attributes(g2, "string_labels")
+    else:
+      g1, g2 = glycan_a, glycan_b
   if sorted(d for _, d in g1.out_degree()) != sorted(d for _, d in g2.out_degree()):
     return (False, None) if return_matches else False
   narrow_wildcard_list = build_wildcard_cache(proc)
   if narrow_wildcard_list:
+    g1_labels = list(g1_sl.values())
+    g2_labels = list(g2_sl.values())
+    if not _prefilter_labels(g1_labels, g2_labels, narrow_wildcard_list) or \
+            not _prefilter_labels(g2_labels, g1_labels, narrow_wildcard_list):
+      return (False, None) if return_matches else False
     matcher = nx.isomorphism.DiGraphMatcher(g1, g2, categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list, 'termini', 'flexible'))
   else:
     # First check whether components of both glycan graphs are identical, then check graph isomorphism (costly)
-    if sorted(nx.get_node_attributes(g1, "string_labels").values()) == sorted(nx.get_node_attributes(g2, "string_labels").values()):
-      matcher = nx.isomorphism.DiGraphMatcher(g1, g2, nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
-    else:
+    if sorted(g1_sl.values()) != sorted(g2_sl.values()):
       return (False, None) if return_matches else False
+    if graph_to_string(g1) != graph_to_string(g2):
+      return (False, None) if return_matches else False
+    if not return_matches:
+      return True
+    matcher = nx.isomorphism.DiGraphMatcher(g1, g2, nx.algorithms.isomorphism.categorical_node_match('string_labels',
+                                                                                                     'unknown'))
   for mapping in matcher.isomorphisms_iter():
     return (True, mapping) if return_matches else True
   return (False, None) if return_matches else False
@@ -284,6 +307,11 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
       g1, g2 = glycan, motif
   narrow_wildcard_list = build_wildcard_cache(set(unwrap(motif_comp)))
   if termini_list or narrow_wildcard_list:
+    if narrow_wildcard_list and not _prefilter_labels(
+            list(nx.get_node_attributes(g1, 'string_labels').values()),
+            list(nx.get_node_attributes(g2, 'string_labels').values()),
+            narrow_wildcard_list):
+      return (0, []) if return_matches else 0 if count else False
     graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
                                                                                                              'termini', 'flexible'))
   else:
@@ -402,89 +430,15 @@ def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or netwo
     return pd.DataFrame(features, index = [glycan])
 
 
-def neighbor_is_branchpoint(graph: nx.DiGraph, # Glycan graph
-                          node: int # Node index to check
-                         ) -> bool: # True if connected to downstream multi-branch node
-  "Check if node is connected to downstream node with >2 branches"
-  edges = graph.edges(node)
-  edges = unwrap([e for e in edges if sum(e) > 2*node])
-  edges = [graph.degree[e] for e in set(edges) if e != node]
-  return max(edges, default = 0) > 3
-
-
 def get_linkage_number(node, graph):
   link_label = graph.nodes[node].get("string_labels", "")
-  match = re.search(r'[ab\?][12]-(\d+|\?)', link_label)
+  match = LINKAGE_PATTERN.search(link_label)
   if match:  # Extract the second number in the linkage (e.g., from "a1-3" get "3")
     linkage_num = match.group(1)
     if linkage_num == "?":
       return float('inf')  # Wildcard comes last
     return int(linkage_num)
   return float('inf')
-
-
-def canonicalize_glycan_graph(graph: nx.DiGraph,
-                             order_by: str = "length"  # canonicalize by 'length' or 'linkage'
-                             ) -> nx.DiGraph:
-  """Canonicalize a glycan graph according to the following rules:
-  1. Longest chain is the main chain
-  2. Tie breakers:
-     a. Lowest incoming linkage number
-     b. Integer linkages preferred over wildcards
-     c. Alphabetical ordering of leaf nodes
-  Returns a new graph with reordered branches for canonical representation
-  """
-  # Get the root node (highest index)
-  root_idx = max(graph.nodes())
-  # Create a new graph for the canonicalized result
-  canonical_graph = nx.DiGraph()
-  # Copy all node attributes to the new graph
-  for node, attrs in graph.nodes(data = True):
-    canonical_graph.add_node(node, **attrs)
-  # Pre-calculate path lengths and leaf labels
-  path_lengths, leaf_labels = {}, {}
-
-  # Calculate values with post-order traversal (children before parents)
-  def calculate_values(node):
-    if node in path_lengths:
-      return path_lengths[node], leaf_labels[node]
-    successors = list(graph.successors(node))
-    if not successors:
-      path_lengths[node] = 0
-      leaf_labels[node] = graph.nodes[node].get("string_labels", "")
-    else:
-      # Process all children first
-      for child in successors:
-        calculate_values(child)
-      # Then calculate for this node
-      path_lengths[node] = 1 + max(path_lengths[child] for child in successors)
-      leaf_labels[node] = min(leaf_labels[child] for child in successors)
-    return path_lengths[node], leaf_labels[node]
-
-  # Calculate values for all nodes starting from root
-  calculate_values(root_idx)
-
-  # Sort branches using pre-calculated values
-  def sort_branches(node):
-    children = list(graph.successors(node))
-    if len(children) < 2:
-      return children
-    if order_by == "length":
-      children.sort(key = lambda x: (-path_lengths[x], get_linkage_number(x, graph), leaf_labels[x]), reverse = True)
-    else:  # order_by == "linkage"
-      children.sort(key = lambda x: (-get_linkage_number(x, graph), path_lengths[x], leaf_labels[x]), reverse = True)
-    return children
-
-  # Build canonical graph
-  def canonicalize_branch(node):
-    children = sort_branches(node)
-    for child in children:
-      canonical_graph.add_edge(node, child)
-      canonicalize_branch(child)
-
-  # Start canonicalization from root
-  canonicalize_branch(root_idx)
-  return canonical_graph
 
 
 def glycan_graph_memoize(maxsize: int = 128):
@@ -521,30 +475,40 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
                         canonicalize: bool = True,  # Whether to output canonicalized IUPAC-condensed
                         order_by: str = "length"  # canonicalize by 'length' or 'linkage'
                       ) -> str: # IUPAC-condensed glycan string
-  "Convert glycan graph back to IUPAC-condensed format"
+  """Convert glycan graph back to IUPAC-condensed format
+  Can canonicalize a glycan graph according to the following rules:
+  1. Longest chain is the main chain
+  2. Tie breakers:
+     a. Lowest incoming linkage number
+     b. Integer linkages preferred over wildcards
+     c. Alphabetical ordering of leaf nodes"""
   if len(graph) == 3:
     nodes = sorted(list(graph.nodes()))
     node_labels = nx.get_node_attributes(graph, "string_labels")
     return f"{node_labels[nodes[0]]}({node_labels[nodes[1]]}){node_labels[nodes[2]]}"
-  if canonicalize and any(d > 1 for _, d in graph.out_degree()):
-    graph = canonicalize_glycan_graph(graph, order_by = order_by)
   # Get the root node (highest index)
   root_idx = max(graph.nodes())
   # Build depths with a single traversal
   depths = {}
+  leaf_labels = {}
 
-  def compute_depths(node):
-    children = list(graph.successors(node))
-    if not children:
+  def compute_metrics(node):
+    if node in depths:
+      return depths[node], leaf_labels[node]
+    successors = list(graph.successors(node))
+    if not successors:
       depths[node] = 0
-      return 0
-    max_child_depth = max(compute_depths(child) for child in children) + 1
-    depths[node] = max_child_depth
-    return max_child_depth
+      leaf_labels[node] = graph.nodes[node].get("string_labels", "")
+    else:
+      for child in successors:
+        compute_metrics(child)
+      depths[node] = 1 + max(depths[child] for child in successors)
+      leaf_labels[node] = min(leaf_labels[child] for child in successors)
+    return depths[node], leaf_labels[node]
 
-  compute_depths(root_idx)
+  compute_metrics(root_idx)
 
-  def is_special_branch(graph, node):
+  def is_special_branch(node):
     """Check if a 1-mono branch starting at node contains Gal/Man."""
     descendants = list(nx.descendants(graph, node))
     if len(descendants) != 1:
@@ -557,7 +521,7 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
 
   # Convert to string with a single traversal
   def node_to_string(node):
-    output = graph.nodes[node]["string_labels"]
+    output = graph.nodes[node].get("string_labels", "")
     # Handle formatting for linkage descriptions
     if (output[0] in "?ab" or output[0].isdigit()) and (output[-1] == "?" or output[-1].isdigit()):
       output = f"({output})"
@@ -565,17 +529,25 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
     children = list(graph.successors(node))
     if not children:
       return output
-    # Sort children based on ordering mode
-    if order_by == "length":
-      # Sort by depth (shallow to deep)
-      children = sorted(children, key = lambda x: depths[x])
-    else:  # order_by == "linkage"
-      if any(is_special_branch(graph, child) for child in children):
-        # Use length-based sorting if special single mono branches exist
-        children = sorted(children, key = lambda x: (depths[x], -get_linkage_number(x, graph)))
+    if canonicalize:
+      # Combining the stable sorts: length-based and special branches use the same canonical tie-breakers
+      if order_by == "length" or any(is_special_branch(child) for child in children):
+        children.sort(key = lambda x: (-depths[x], get_linkage_number(x, graph), leaf_labels[x]), reverse = True)
       else:
-        # Use linkage-based sorting in all other cases
-        children = sorted(children, key = lambda x: -get_linkage_number(x, graph))
+        # Standard linkage canonicalization relies on positive depth rather than negative
+        children.sort(key = lambda x: (get_linkage_number(x, graph), depths[x], leaf_labels[x]), reverse = True)
+    else:
+      # Sort children based on ordering mode
+      if order_by == "length":
+        # Sort by depth (shallow to deep)
+        children.sort(key = lambda x: depths[x])
+      else:  # order_by == "linkage"
+        if any(is_special_branch(child) for child in children):
+          # Use length-based sorting if special single mono branches exist
+          children.sort(key = lambda x: (depths[x], -get_linkage_number(x, graph)))
+        else:
+          # Use linkage-based sorting in all other cases
+          children.sort(key = lambda x: -get_linkage_number(x, graph))
     # Process all but the deepest child
     for child in children[:-1]:
       output = f"[{node_to_string(child)}]{output}"

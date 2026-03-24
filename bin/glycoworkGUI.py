@@ -11,6 +11,21 @@ from glycowork.motif.draw import GlycoDraw, plot_glycans_excel
 from glycowork.motif.analysis import get_differential_expression, get_heatmap, get_lectin_array
 from glycowork.motif.processing import canonicalize_iupac
 
+def create_tooltip(widget, text):
+  tl = widget.winfo_toplevel()
+  tip = ttk.Label(tl, text=text, background="#FFFBE6", relief='solid', borderwidth=1, wraplength=220,
+                  font=('Helvetica', 9), padding=(4, 2))
+  def show(e):
+    tip.lift()
+    tip.place(x=widget.winfo_rootx()-tl.winfo_rootx()+widget.winfo_width()+6,
+              y=widget.winfo_rooty()-tl.winfo_rooty())
+  def hide(e):
+    tip.place_forget()
+  widget.bind('<Enter>', show, add='+')
+  widget.bind('<Leave>', hide, add='+')
+  tip.bind('<Enter>', hide, add='+')
+
+
 class BaseDialog(simpledialog.Dialog):
     def __init__(self, parent, title=None):
         self.style = ttk.Style()
@@ -18,24 +33,6 @@ class BaseDialog(simpledialog.Dialog):
         self.style.configure('Modern.TEntry', padding=3)
         self.style.configure('Modern.TCheckbutton', padding=3)
         super().__init__(parent, title)
-
-    def create_tooltip(self, widget, text):
-        tooltip = ttk.Label(widget.winfo_toplevel(), text=text, background="#FFFFEA", relief='solid', borderwidth=1, wraplength=200)
-
-        def show_tooltip(event):
-            tooltip.lift()
-            x = widget.winfo_x() + widget.winfo_width() + 5
-            y = widget.winfo_y()
-            tooltip.place(x=x, y=y)
-
-        def hide_tooltip(event):
-            tooltip.place_forget()
-
-        if not hasattr(widget, '_tooltip'):
-            widget._tooltip = tooltip
-        widget.bind('<Enter>', show_tooltip, add='+')
-        widget.bind('<Leave>', hide_tooltip, add='+')
-        tooltip.bind('<Enter>', hide_tooltip, add='+')
 
     def add_file_input(self, master, row, label_text, help_text=None, filetypes=None):
         if filetypes is None:
@@ -54,7 +51,7 @@ class BaseDialog(simpledialog.Dialog):
         if help_text:
             help_btn = ttk.Label(frame, text="?", cursor="question_arrow")
             help_btn.grid(row=0, column=3, padx=(5,0))
-            self.create_tooltip(help_btn, help_text)
+            create_tooltip(help_btn, help_text)
         return entry_var
 
     def add_folder_input(self, master, row, label_text):
@@ -107,7 +104,7 @@ class BaseDialog(simpledialog.Dialog):
         if help_text:  # Add help button if help text provided
             help_btn = ttk.Label(frame, text="?", cursor="question_arrow")
             help_btn.grid(row=0, column=2, padx=(5,0))
-            self.create_tooltip(help_btn, help_text)
+            create_tooltip(help_btn, help_text)
         return entry
 
     def validate_indices(self, value):
@@ -470,8 +467,8 @@ class CanonicalizeIUPACDialog(BaseDialog):
   def copy_to_clipboard(self):
     output_text = self.output_text.get(1.0, tk.END).strip()
     if output_text:
-      self.app.clipboard_clear()
-      self.app.clipboard_append(output_text)
+      self.clipboard_clear()
+      self.clipboard_append(output_text)
       messagebox.showinfo("Success", "Results copied to clipboard")
 
   def clear_all(self):
@@ -504,14 +501,36 @@ class GlycoworkGUI:
 
     def setup_styles(self):
         style = ttk.Style()
-        style.configure('Header.TLabel', font=('Helvetica', 16, 'bold'))
-        style.configure('Tool.TButton', padding=10)
-        style.configure('Sidebar.TFrame', background='#f0f0f0')
+        style.theme_use('clam')
+        BG, SURFACE, ACCENT, ACCENT_DARK = '#EEF2F7', '#FFFFFF', '#2B5EA7', '#1A3F7A'
+        TEXT, MUTED, BORDER = '#1A202C', '#5A6882', '#C5CDD8'
+        style.configure('.', background = BG, foreground = TEXT, font = ('Helvetica', 10))
+        style.configure('TFrame', background = BG)
+        style.configure('TLabel', background = BG, foreground = TEXT)
+        style.configure('TCheckbutton', background = BG)
+        style.configure('TLabelframe', background = BG, bordercolor = BORDER, relief = 'groove')
+        style.configure('TLabelframe.Label', background = BG, foreground = ACCENT, font = ('Helvetica', 10, 'bold'))
+        style.configure('TEntry', fieldbackground = SURFACE, bordercolor = BORDER, padding = 4)
+        style.configure('TCombobox', fieldbackground = SURFACE, bordercolor = BORDER)
+        style.configure('TButton', background = ACCENT, foreground = SURFACE, padding = (10, 5),
+                        relief = 'flat', borderwidth = 0, font = ('Helvetica', 10))
+        style.map('TButton', background = [('active', ACCENT_DARK), ('pressed', '#0F2A5A')],
+                  foreground = [('active', SURFACE)])
+        style.configure('Tool.TButton', padding = (10, 9), font = ('Helvetica', 10, 'bold'))
+        style.configure('Modern.TButton', padding = (8, 4))
+        style.configure('Header.TLabel', font = ('Helvetica', 17, 'bold'), foreground = ACCENT, background = BG)
+        style.configure('Sub.TLabel', font = ('Helvetica', 10), foreground = MUTED, background = BG)
+        style.configure('Sidebar.TFrame', background = '#DDE4EE')
+        style.configure('Modern.Horizontal.TProgressbar', thickness = 18, troughcolor = '#D0D8E4',
+                        background = '#38A169')
+        style.configure('TPanedwindow', background = BORDER)
+        self.app.configure(bg = BG)
 
     def setup_ui(self):
         # Header
-        header = ttk.Label(self.main_container, text="glycowork Analysis Suite", style='Header.TLabel')
-        header.pack(pady=(0, 20))
+        ttk.Label(self.main_container, text = "glycowork Analysis Suite", style = 'Header.TLabel').pack(pady = (0, 2))
+        ttk.Label(self.main_container, text = "Glycoinformatics Toolkit", style = 'Sub.TLabel').pack(pady = (0, 14))
+        self.app.minsize(720, 500)
         # Create main content area with sidebar and work area
         self.content = ttk.PanedWindow(self.main_container, orient=tk.HORIZONTAL)
         self.content.pack(fill=tk.BOTH, expand=True)
@@ -530,33 +549,18 @@ class GlycoworkGUI:
         for text, tooltip, command in tools:
             btn = ttk.Button(sidebar, text=text, command=command, style='Tool.TButton', width=20)
             btn.pack(pady=5, padx=10)
-            self.create_tooltip(btn, tooltip)
+            create_tooltip(btn, tooltip)
         # Work area with log
         self.work_area = ttk.Frame(self.content)
         self.content.add(self.work_area, weight=3)
-
-    def create_tooltip(self, widget, text):
-        tooltip = ttk.Label(self.app, text=text, background="#FFFFEA", relief='solid',borderwidth=1, wraplength=200)
-
-        def enter(event):
-            x = widget.winfo_rootx() + widget.winfo_width() + 5
-            y = widget.winfo_rooty()
-            tooltip.place(x=x, y=y)
-            tooltip.lift()
-
-        def leave(event):
-            tooltip.place_forget()
-
-        widget.bind('<Enter>', enter)
-        widget.bind('<Leave>', leave)
-        tooltip.bind('<Enter>', leave)
 
     def setup_logging(self):
         # Log view frame
         log_frame = ttk.LabelFrame(self.work_area, text="Operation Log", padding=10)
         log_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         # Add log view
-        self.log_view = ScrolledText(log_frame, height=10, width=50, font=('Courier', 10))
+        self.log_view = ScrolledText(log_frame, height = 10, width = 50, font = ('Courier', 10),
+                                     bg = '#FFFFFF', fg = '#1A202C', relief = 'flat', borderwidth = 1)
         self.log_view.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         # Configure tags for different message types
         self.log_view.tag_configure('INFO', foreground='black')
@@ -600,7 +604,7 @@ class GlycoworkGUI:
         self.app.mainloop()
 
     def show_about_info(self):
-        about_message = """glycowork v1.7
+        about_message = """glycowork v1.8
 
 For more information and citation, please refer to:
 Thomès, L., et al. (2021). Glycowork: A Python package for glycan data science

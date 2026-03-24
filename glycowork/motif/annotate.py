@@ -12,6 +12,9 @@ from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans,
 from glycowork.motif.regex import get_match
 
 
+LINKAGE_NODE_PATTERN = re.compile(r'^[ab?][0-9?/]+-[0-9?/]+$')
+
+
 def annotate_glycan(
     glycan: str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
     motifs: pd.DataFrame | None = None, # Motif dataframe (name + sequence); defaults to motif_list
@@ -111,15 +114,20 @@ def get_molecular_properties(
   if verbose and len(failed_requests) >= 1:
     print('The following SMILES were not found on PubChem:\n')
     print(failed_requests)
-  df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight', 'xlogp',
+  try:
+    df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight', 'xlogp',
                                                             'charge', 'exact_mass', 'monoisotopic_mass', 'tpsa', 'complexity',
                                                             'h_bond_donor_count', 'h_bond_acceptor_count',
                                                             'rotatable_bond_count', 'heavy_atom_count', 'isotope_atom_count', 'atom_stereo_count',
                                                             'defined_atom_stereo_count', 'undefined_atom_stereo_count',
                                                             'bond_stereo_count', 'defined_bond_stereo_count',
                                                             'undefined_bond_stereo_count', 'covalent_unit_count'])
-  df = df.reset_index(drop = True)
-  df.index = succeeded_requests
+    df = df.reset_index(drop = True)
+    df.index = succeeded_requests
+  except (KeyError, ValueError) as e:
+    if verbose:
+      print(f'PubChem API returned incomplete data: {e}')
+    df = pd.DataFrame(index = succeeded_requests)
   return df
 
 
@@ -227,6 +235,9 @@ def annotate_dataset(
     gmotifs_terminal = [glycan_to_nxGraph(m) for m in new_additions]
     ggraphs = [glycan_to_nxGraph(g) for g in glycans]
     counts_dict = {motif: [subgraph_isomorphism(g, m, count = True) for g in ggraphs] for motif, m in zip(new_additions, gmotifs_terminal)}
+    sia_motifs = {k for k in counts_dict if 'Sia' in k and 'Neu5Ac' not in k and 'Neu5Gc' not in k}
+    specific_vals = [v for k, v in counts_dict.items() if k not in sia_motifs]
+    counts_dict = {k: v for k, v in counts_dict.items() if k not in sia_motifs or v not in specific_vals}
     bag_out = pd.DataFrame(counts_dict).fillna(0).astype(int)
     bag_out.index = glycans
     bag_out.columns = ['Terminal_' + c for c in bag_out.columns]
@@ -301,10 +312,11 @@ def count_unique_subgraphs_of_size_k(
   "Identifies and counts unique connected subgraphs of specified size from glycan structure"
   target_size = size * 2 - 1
   successor_dict = {v: list(graph.successors(v)) for v in graph.nodes}
+  is_mono = {n: not LINKAGE_NODE_PATTERN.match(graph.nodes[n].get('string_labels', '')) for n in graph.nodes()}
   k_subgraphs, processed = [], set()
   terminal_lookup = {n: graph.out_degree(n) == 0 for n in graph.nodes()} if terminal else {}
   for node in sorted(graph.nodes(), reverse = True):
-    queue = deque([(tuple([node]), 1 if node % 2 == 0 else 0, 1)])
+    queue = deque([(tuple([node]), 1 if is_mono[node] else 0, 1)])
     while queue:
       current_sg, mono_cnt, curr_size = queue.popleft()
       if current_sg in processed: continue
@@ -316,7 +328,7 @@ def count_unique_subgraphs_of_size_k(
       current_sg_set = set(current_sg)
       candidates = [s for n in current_sg_set for s in successor_dict[n] if s not in current_sg_set]
       for candidate in candidates:
-        new_mono = mono_cnt + (1 if candidate % 2 == 0 else 0)
+        new_mono = mono_cnt + (1 if is_mono[candidate] else 0)
         if new_mono > size: continue
         queue.append((tuple(sorted(current_sg_set | {candidate})), new_mono, curr_size + 1))
   return dict(Counter(k_subgraphs))
@@ -365,6 +377,13 @@ def get_minimal_ksaccharide_ambiguity(
       end = '/'.join(ends_sorted) if len(ends_sorted) > 1 else ends_sorted[0]
       reconstructed = reconstructed.replace('(LINK)', f'({anomer}{start}-{end})', 1)
     result[ksac] = reconstructed
+  for sia_type, other_sia in [('Neu5Ac', 'Neu5Gc'), ('Neu5Gc', 'Neu5Ac')]:
+    for ksac in list(ksaccharides.keys()):
+      if sia_type not in ksac or ksac.replace(sia_type, other_sia) not in ksaccharides:
+        continue
+      sia_key = ksac.replace(sia_type, 'Sia')
+      if sia_key not in result:
+        result[sia_key] = result.get(ksac, ksac).replace(sia_type, 'Sia')
   return result
 
 
@@ -386,13 +405,17 @@ def get_k_saccharides(
   if up_to:
     wga_letter_data = []
     actual_glycans = [g for g in glycans if not is_composition(g)]
+    lib = get_lib(actual_glycans)
+    add_sia = {'Neu5Ac', 'Neu5Gc'}.issubset(lib)
     for g in glycans:
       if is_composition(g):
         comp_dict = canonicalize_composition(g)
         wga_letter_data.append(comp_dict)
       else:
-        wga_letter_data.append(
-          {i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in get_lib(actual_glycans) if i not in linkages})
+        d = {i: len(re.findall(rf'{re.escape(i)}(?=\(|$)', g)) for i in lib if i not in linkages}
+        if add_sia:
+          d['Sia'] = d.get('Neu5Ac', 0) + d.get('Neu5Gc', 0)
+        wga_letter_data.append(d)
     wga_letter = pd.DataFrame(wga_letter_data)
   counts_dict = {}
   ggraphs = [glycan_to_nxGraph(g) for g in glycans]

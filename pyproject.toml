@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # Project metadata
 [project]
 name = "glycowork"
-version = "1.7.1"
+version = "1.8.0"
 description = "Package for processing and analyzing glycans"
 readme = "README.md"
 authors = [
@@ -72,8 +72,6 @@ chem = [
 
 [tool.setuptools]
 include-package-data = true
-# This is a workaround for https://github.com/astral-sh/uv/issues/9513
-license-files = []
 
 [tool.setuptools.packages.find]
 include = ["glycowork*"]
@@ -96,3 +94,4 @@ custom_sidebar = false
 doc_host = "https://BojarLab.github.io"
 doc_baseurl = "/glycowork/"
 title = "glycowork"
+description = "Package for processing and analyzing glycans"
