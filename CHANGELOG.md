@@ -11,7 +11,7 @@
 - Added new N-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/37639587/ to `glycomics_data_loader` (`human_neutrophils_N_PMID37639587`) (5d81cc3)
 - Added new N- and O-glycomics dataset from https://www.biorxiv.org/content/10.1101/2024.11.28.625934v1 to `glycomics_data_loader` (`human_macrophages_N_2024-11-28-625934` and `human_macrophages_O_2024-11-28-625934`) (4813910, 1688897)
 - Added new N-, O-, and GSL-glycomics dataset from https://pubmed.ncbi.nlm.nih.gov/36788594/ to `glycomics_data_loader` (`human_leukemia_N_PMID36788594`, `human_leukemia_O_PMID36788594`, and `human_leukemia_GSL_PMID36788594`) (5510e55)
-- Added new N-glycomics datasets from https://pubmed.ncbi.nlm.nih.gov/39947398/ to `glycomics_data_loader` (`human_colorectal_N_PMID39947398` and `human_pbmc_cancer_N_PMID39947398`) (fdd2340)
+- Added new N-glycomics datasets from https://pubmed.ncbi.nlm.nih.gov/39947398/ to `glycomics_data_loader` (`human_colorectal_N_PMID39947398` and `human_pbmc_cancer_N_PMID39947398`) (fdd2340, 144051a)
 
 ##### Changed 🔄
 - Specified wildcards in `glycomics_human_colorectal_O_PMC9254241` (e71550d)
@@ -49,16 +49,23 @@
 ##### Fixed 🐛
 - Fixed displaying beta-linkages instead of alpha-linkages in `annotate_figure` (e71550d)
 
+##### Deprecated ⚠️
+- Deprecated `scale_in_range`; has been in-lined instead
+- Deprecated `process_repeat`; has been in-lined instead
+
 #### analysis
 ##### Changed 🔄
 - `get_volcano` can now also deal with input dataframes that have the `Glycan` column be the index instead (e71550d)
 - Equivalence p-values in `get_differential_expression` now also use the same sample-size adjusted alpha as regular p-values (3884125)
 - Specifying `return_plot=True` in `get_heatmap` will now also return the column names and the transformed dataframe, next to the plot object (3b72129)
+- Improved default plot styling for outputs from functions
 
 ##### Fixed 🐛
 - CLR-transformation for paired data in `preprocess_data` now correctly uses the shared geometric mean as reference, to preserve within-pair differences (3884125)
 - Fixed equivalence p-values in `get_differential_expression` if `sets=True` (3884125)
 - CLR-transformed motif-level quantification in `preprocess_data` and `get_pca` used the glycan-level geometric mean as a reference, rather than the motif-level geometric mean, which is now fixed (c71c385)
+- `get_roc` now saves the figures for all classes, not just the last, in a set-up of `filepath` + multi-group comparison
+- User-provided `random_state` values/generators are now correctly propagated through to `multi_feature_scoring`
 
 #### tokenization
 ##### Added ✨

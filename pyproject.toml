@@ -72,8 +72,6 @@ chem = [
 
 [tool.setuptools]
 include-package-data = true
-# This is a workaround for https://github.com/astral-sh/uv/issues/9513
-license-files = []
 
 [tool.setuptools.packages.find]
 include = ["glycowork*"]

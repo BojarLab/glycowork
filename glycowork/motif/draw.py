@@ -28,6 +28,11 @@ col_dict_transparent = {
     'snfg_orange': '#FDE7E0', 'snfg_red': '#F7E0E0', 'black': '#D9D9D9', 'grey': '#ECECEC'
 }
 
+_SCALAR_COLS = {
+    'snfg_white': '#FFFFFF', 'snfg_alt_blue': 'darkblue', 'snfg_green': 'green', 'snfg_yellow': 'darkgoldenrod',
+    'snfg_light_blue': 'skyblue', 'snfg_pink': 'orchid', 'snfg_purple': 'purple', 'snfg_brown': 'saddlebrown',
+    'snfg_orange': 'orangered', 'snfg_red': 'firebrick', 'black': '#000000', 'grey': '#7F7F7F'}
+
 # Shape-color mapping
 sugar_dict = {
   "Hex": ['Hex', 'snfg_white', False], "Glc": ['Hex', 'snfg_alt_blue', False],
@@ -113,6 +118,9 @@ SUBSTITUENT_PATTERN = re.compile(r'(?:^|[^1-9])([0-9]+)(?:Substituent|Subst)')
 _BOND_ALPHA = re.compile(r"^a\d")
 _BOND_BETA = re.compile(r"^b\d")
 _BOND_DIGIT = re.compile(r"^\d-\d")
+_CONF_PATTERN = re.compile(r'^L-|^D-|(\d,\d+lactone)')
+_LABEL_PATTERN = re.compile(r'<!--\s*(.*?)\s*-->')
+_TRANSFORM_PATTERN = re.compile(r'<g transform\s*(.*?)\s*">')
 _CONF_DISPLAY = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
 _SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
 
@@ -136,10 +144,7 @@ def draw_hex(
   y_base = y_pos * dim
   half_dim = 0.5 * dim
   stroke_width = 0.04 * dim
-  points = []
-  for angle in (0, 60, 120, 180, 240, 300):
-    rad = radians(angle)
-    points.extend([x_base + half_dim * cos(rad), y_base + half_dim * sin(rad)])
+  points = [v for a in (0,60,120,180,240,300) for v in (x_base+half_dim*cos(radians(a)), y_base+half_dim*sin(radians(a)))]
   if outline_only:
     p = draw.Path(stroke_width = stroke_width, stroke = col_dict['black'], fill = 'none')
     p.M(points[0], points[1])  # Move to first point
@@ -174,7 +179,7 @@ def add_customization(
   if furanose or conf:
     conf_text = ""
     if conf:
-      conf_text = _CONF_DISPLAY.get(conf, conf) if isinstance(conf, str) else conf
+      conf_text = _CONF_DISPLAY.get(conf, conf)
     if furanose:
       conf_text += "f"
     p = draw.Path(stroke_width = 0)
@@ -206,16 +211,12 @@ def draw_shape(
   half_dim = dim / 2
   inside_hex_dim = ((sqrt(3))/2) * half_dim
   if scalar:
-    col_dict_scalar = {
-    'snfg_white': '#FFFFFF', 'snfg_alt_blue': 'darkblue', 'snfg_green': 'green', 'snfg_yellow': 'darkgoldenrod',
-    'snfg_light_blue': 'skyblue', 'snfg_pink': 'orchid', 'snfg_purple': 'purple', 'snfg_brown': 'saddlebrown',
-    'snfg_orange': 'orangered', 'snfg_red': 'firebrick', 'black': '#000000', 'grey': '#7F7F7F'}
     radius = 2.35 if shape == "HexNAc" else 2.2
     gradient = draw.RadialGradient(x_base, y_base, half_dim * radius)
     opacity = max(0, min(1, scalar))*0.8  # Normalize opacity to [0, 1]
     opacity = opacity * 1.3 if color in ['snfg_yellow', 'snfg_light_blue', 'snfg_white'] else opacity
-    gradient.add_stop(0, col_dict_scalar[color], opacity = opacity)
-    gradient.add_stop(0.6, col_dict_scalar[color], opacity = opacity * 0.4)
+    gradient.add_stop(0, _SCALAR_COLS[color], opacity = opacity)
+    gradient.add_stop(0.6, _SCALAR_COLS[color], opacity = opacity * 0.4)
     gradient.add_stop(1, 'white', opacity = 0)
     drawing.append(draw.Circle(x_base, y_base, half_dim * radius, fill = gradient))
   if shape == 'Hex':
@@ -495,23 +496,13 @@ def get_highlight_attribute(
   if motif_string:
     motif = glycan_to_nxGraph(motif_string, termini = 'provided' if termini_list else None, termini_list = termini_list)
     _, mappings = subgraph_isomorphism(glycan_graph, motif, termini_list = termini_list, return_matches = True)
-    if reverse_highlight:
-      mapping_show = {node: 'hide' if node in set(unwrap(mappings)) else 'show' for node in glycan_graph.nodes()}
-    else:
-      mapping_show = {node: 'show' if node in set(unwrap(mappings)) else 'hide' for node in glycan_graph.nodes()}
+    matched = set(unwrap(mappings))
+    in_label, out_label = ('hide', 'show') if reverse_highlight else ('show', 'hide')
+    mapping_show = {node: in_label if node in matched else out_label for node in glycan_graph.nodes()}
   else:
     mapping_show = {node: 'show' for node in glycan_graph.nodes()}
   nx.set_node_attributes(glycan_graph, dict(sorted(mapping_show.items())), 'highlight_labels')
   return glycan_graph
-
-
-def process_repeat(
-    repeat: str # Repeating unit specification, terminating either in linkage connecting units or first monosaccharide of the unit
-    ) -> str: # Processed repeat unit
-  "Formats repeating unit glycan sequence for drawing"
-  backbone = re.findall(r'.*\((?!.*\()', repeat)[0]
-  repeat_connection = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', repeat))
-  return f'blank(?1-{repeat_connection[-1]}){backbone}{repeat_connection[:2]}-?)'
 
 
 def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_sugars: list):
@@ -781,13 +772,12 @@ def get_coordinates_and_labels(
     prev_y = branch_y
 
   def extract_conformation(sugar_modifications: list):
-    conf_pattern = r'^L-|^D-|(\d,\d+lactone)'
     if sugar_modifications and isinstance(sugar_modifications[0], list):
-      return [[k.group() if k is not None else '' for k in j] for j in [[re.search(conf_pattern, k) for k in j] for j in sugar_modifications]], \
-             [[re.sub(conf_pattern, '', k) for k in j] for j in sugar_modifications]
+      return [[k.group() if k is not None else '' for k in j] for j in [[re.search(_CONF_PATTERN, k) for k in j] for j in sugar_modifications]], \
+             [[re.sub(_CONF_PATTERN, '', k) for k in j] for j in sugar_modifications]
     else:
-      return [k.group() if k is not None else '' for k in [re.search(conf_pattern, k) for k in sugar_modifications]], \
-             [re.sub(conf_pattern, '', k) for k in sugar_modifications]
+      return [k.group() if k is not None else '' for k in [re.search(_CONF_PATTERN, k) for k in sugar_modifications]], \
+             [re.sub(_CONF_PATTERN, '', k) for k in sugar_modifications]
 
   main_conf, main_sugar_modification = extract_conformation(main_sugar_modification)
   l1_conf, l1_sugar_modification = extract_conformation(l1_sugar_modification)
@@ -819,7 +809,7 @@ def draw_bracket(
   y_max = y_min_max[1] * dim + 0.75 * dim
   # Vertical
   offset = 0.25 * dim * (1 if direction == 'right' else -1)
-  g = draw.Group(transform = f'rotate({deg} {x_common} {np.mean(y_min_max)})')
+  g = draw.Group(transform = f'rotate({deg} {x_common} {(y_min_max[0]+y_min_max[1])/2})')
   p = draw.Path(stroke_width = 0.04 * dim, stroke = col_dict['black'])
   p.M(x_common, y_max).L(x_common, y_min)
   p.M(x_common - offset / 12.5, y_min).L(x_common + offset, y_min)
@@ -1143,7 +1133,7 @@ def GlycoDraw(
     restrict_vocab: bool = False, # Whether only tokens present in libr can be drawn
     ) -> Any: # Drawing object
   "Renders glycan structure using SNFG symbols or chemical structure representation"
-  if any(k in glycan for k in [';', 'β', 'α', 'RES', '=']):
+  if any(k in glycan for k in (';', 'β', 'α', 'RES', '=')):
     raise Exception
   if libr is None:
     libr = lib
@@ -1152,7 +1142,9 @@ def GlycoDraw(
   if glycan in motif_list.motif_name.values.tolist():
     glycan = motif_list.loc[motif_list.motif_name == glycan].motif.values[0]
   if repeat and not repeat_range:
-    glycan = process_repeat(glycan)
+    _backbone = re.findall(r'.*\((?!.*\()', glycan)[0]
+    _conn = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', glycan))
+    glycan = f'blank(?1-{_conn[-1]}){_backbone}{_conn[:2]}-?)'
   if glycan.endswith(')'):
     glycan += 'blank'
   draw_this = graph_to_string(glycan_to_nxGraph(glycan), order_by = "linkage") if not glycan.startswith('[') else glycan
@@ -1203,8 +1195,7 @@ def GlycoDraw(
 
   # Calculate angles for main chain Y, Z fragments
   def calculate_degree(y1, y2, x1, x2):
-    slope = -1 * (y2 - y1) / ((x2 * 2) - (x1 * 2))
-    return degrees(atan(slope))
+    return degrees(atan((y1-y2) / (2*(x2-x1))))
 
   main_deg = [calculate_degree(main_sugar_y_pos[k], main_sugar_y_pos[k-1], main_sugar_x_pos[k], main_sugar_x_pos[k-1])
               if sugar in {'Z', 'Y'} else 0 for k, sugar in enumerate(main_sugar)]
@@ -1230,10 +1221,10 @@ def GlycoDraw(
       ])
 
   # Adjust drawing dimensions
-  max_y = max(unwrap(l3_y_pos)+unwrap(l2_y_pos)+unwrap(l1_y_pos)+main_sugar_y_pos)
-  min_y = min(unwrap(l3_y_pos)+unwrap(l2_y_pos)+unwrap(l1_y_pos)+main_sugar_y_pos)
-  max_x = max(unwrap(l3_x_pos)+unwrap(l2_x_pos)+unwrap(l1_x_pos)+main_sugar_x_pos)
-  min_x = min(unwrap(l3_x_pos)+unwrap(l2_x_pos)+unwrap(l1_x_pos)+main_sugar_x_pos)
+  all_y = unwrap(l3_y_pos) + unwrap(l2_y_pos) + unwrap(l1_y_pos) + main_sugar_y_pos
+  all_x = unwrap(l3_x_pos) + unwrap(l2_x_pos) + unwrap(l1_x_pos) + main_sugar_x_pos
+  max_y, min_y = max(all_y), min(all_y)
+  max_x, min_x = max(all_x), min(all_x)
   if reducing_end_label:
     min_x = min(min_x, main_sugar_x_pos[0] - 1)
   x_span = max_x - min_x
@@ -1327,7 +1318,7 @@ def GlycoDraw(
       floaty_sugar_y_pos = [current_y for _ in range(len(floaty_sugar_y_pos))]
       if floaty_sugar != ['blank', 'blank']:
         [add_bond(floaty_sugar_x_pos[k+1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k+1], floaty_sugar_y_pos[k], d, floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar)-1)]
-        [add_sugar(floaty_sugar[k], d, floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf, compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
+        [add_sugar(floaty_sugar[k], d, floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf[k], compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
       else:
         add_sugar('text', d, min(floaty_sugar_x_pos)-0.3, floaty_sugar_y_pos[-1], modification = floaty_bits[j].translate(str.maketrans("123456789", "\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089")).replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
 
@@ -1391,18 +1382,6 @@ def GlycoDraw(
   return GlycanDrawing(d2) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
 
 
-def scale_in_range(
-    listy: list[float], # Numbers to normalize
-    a: float, # Target minimum
-    b: float # Target maximum
-    ) -> list[float]: # Normalized numbers
-  "Normalizes list of numbers to specified range"
-  min_val = min(listy)
-  max_val = max(listy)
-  range_val = max(max_val - min_val, 1e-6)
-  return [(b - a) * ((x - min_val) / range_val) + a for x in listy]
-
-
 def annotate_figure(
     svg_input: str, # Input SVG file path
     scale_range: tuple[int, int] = (25, 80), # Min/max glycan dimensions
@@ -1431,12 +1410,13 @@ def annotate_figure(
     y = -np.log10(res_df['corr p-val'].values.tolist())
     labels = res_df['Glycan'].values.tolist()
     glycan_scale = [y, labels]
+    if glycan_scale != '':
+      _y_min, _y_max = min(glycan_scale[0]), max(glycan_scale[0])
+      _y_range = max(_y_max - _y_min, 1e-6)
 
   # Get svg code
   svg_tmp = Path(svg_input).read_text(encoding = "utf-8") if '?xml' not in svg_input else svg_input
   # Get all text labels
-  label_pattern = re.compile(r'<!--\s*(.*?)\s*-->')
-  transform_pattern = re.compile(r'<g transform\s*(.*?)\s*">')
   matches = re.findall(r"<!--.*-->[\s\S]*?<\/g>", svg_tmp)
   # Prepare for appending
   svg_tmp = svg_tmp.replace('</svg>', '')
@@ -1446,7 +1426,7 @@ def annotate_figure(
 
   for match in matches:
     # Keep track of current label and position in figure
-    current_label = label_pattern.findall(match)[0]
+    current_label = _LABEL_PATTERN.findall(match)[0]
     if current_label.startswith('Terminal') and current_label not in motifs:
       if in_lib(current_label.split('_')[-1], lib):
         edit_svg = True
@@ -1465,13 +1445,15 @@ def annotate_figure(
       pass
     # Delete text label, append glycan figure
     if edit_svg:
-      current_pos = '<g transform' + transform_pattern.findall(match)[0] + '">'
+      current_pos = '<g transform' + _TRANSFORM_PATTERN.findall(match)[0] + '">'
       current_pos = current_pos.replace('scale(0.1 -0.1)', glycan_size_dict[glycan_size])
       svg_tmp = svg_tmp.replace(match, '')
       if glycan_scale == '':
         d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
       else:
-        d = GlycoDraw(current_label, compact = compact, dim = scale_in_range(glycan_scale[0], scale_range[0], scale_range[1])[glycan_scale[1].index(current_label)], suppress = True, restrict_vocab = True)
+        _dim = (scale_range[1] - scale_range[0]) * (
+                  (glycan_scale[0][glycan_scale[1].index(current_label)] - _y_min) / _y_range) + scale_range[0]
+        d = GlycoDraw(current_label, compact = compact, dim = _dim, suppress = True, restrict_vocab = True)
       glycan_svg = d.as_svg()
       with tempfile.NamedTemporaryFile(suffix = '.pdf', delete = False) as tmp_pdf:
         tmp_pdf_path = tmp_pdf.name

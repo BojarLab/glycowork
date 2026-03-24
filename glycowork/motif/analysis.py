@@ -7,7 +7,14 @@ import seaborn as sns
 import networkx as nx
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
-plt.style.use('default')
+plt.rcParams.update({
+    'font.size': 11, 'axes.labelsize': 12, 'axes.titlesize': 13,
+    'xtick.labelsize': 10, 'ytick.labelsize': 10, 'axes.linewidth': 0.8,
+    'xtick.major.size': 4, 'ytick.major.size': 4, 'xtick.major.width': 0.8,
+    'ytick.major.width': 0.8, 'figure.facecolor': 'white', 'axes.facecolor': 'white',
+    'figure.dpi': 120, 'savefig.dpi': 300, 'savefig.bbox': 'tight',
+    'axes.prop_cycle': plt.cycler('color', ['#2D6A9F', '#C84B55', '#3A9268', '#E8863A', '#7B5EA7', '#C4843A', '#4AADA8'])
+})
 from collections import Counter
 from typing import Any
 from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway, spearmanr
@@ -382,14 +389,14 @@ def characterize_monosaccharide(
       if len(cou_k2) > 1:
         cou_for_df.append(pd.DataFrame({'monosaccharides': cou_k, 'counts': cou_v_t, 'colors': [key] * len(cou_k)}))
       else:
-        sns.barplot(x = cou_k, y = cou_v_t, ax = a1, color = "cornflowerblue")
+        sns.barplot(x = cou_k, y = cou_v_t, ax = a1, color = "#2D6A9F")
     if len(cou_k2) > 1:
       cou_df = pd.concat(cou_for_df).reset_index(drop = True)
       sns.histplot(data = cou_df, x = 'monosaccharides', hue = 'colors', weights = 'counts',
                        multiple = 'stack', palette = palette, ax = a1, legend = False, shrink = 0.8)
     a1.set_ylabel('Absolute Occurrence')
   else:
-    sns.barplot(x = cou_k, y = cou_v, ax = a1, color = "cornflowerblue")
+    sns.barplot(x = cou_k, y = cou_v, ax = a1, color = "#2D6A9F")
     a1.set_ylabel('Relative Proportion')
   sns.despine(left = True, bottom = True)
   a1.set_xlabel('')
@@ -402,7 +409,7 @@ def characterize_monosaccharide(
       sns.histplot(data = cou_df2, x = 'monosaccharides', weights = 'counts',
                      hue = 'monosaccharides', shrink = 0.8, legend = False, ax = a0, palette = palette, alpha = 0.75)
     else:
-      sns.barplot(x = cou_k2, y = cou_v2, ax = a0, color = "cornflowerblue")
+      sns.barplot(x = cou_k2, y = cou_v2, ax = a0, color = "#2D6A9F")
     sns.despine(left = True, bottom = True)
     a0.set_ylabel('Relative Proportion')
     a0.set_xlabel('')
@@ -426,8 +433,9 @@ def get_coverage(
   # arrange by mean intensity across all samples
   order = d.mean(axis = 1).sort_values().index
   # plot figure
-  ax = sns.heatmap(d.loc[order], cmap = sns.cubehelix_palette(as_cmap=True, start = 3, dark = 0.50, light = 0.90),
-                   cbar_kws = {'label': 'Relative Intensity'}, cbar = True, mask = d.loc[order] == 0)
+  ax = sns.heatmap(d.loc[order], cmap = sns.color_palette("mako", as_cmap = True),
+                   cbar_kws = {'label': 'Relative Intensity', 'shrink': 0.5},
+                   cbar = True, mask = d.loc[order] == 0, linewidths = 0, rasterized = True)
   ax.set(xlabel = 'Samples', ylabel =  'Glycan ID', title = '')
   # save figure
   if filepath:
@@ -492,6 +500,7 @@ def get_pca(
   if color or shape or size:
     plt.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
   ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance', ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
+  sns.despine()
   # save to file
   if filepath:
     plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
@@ -662,6 +671,7 @@ def get_pval_distribution(
   # make plot
   ax = sns.histplot(x = 'p-val', data = df_res, stat = 'frequency')
   ax.set(xlabel = 'p-values', ylabel =  'Frequency', title = '')
+  sns.despine(left = True, bottom = True)
   # save to file
   if filepath:
     plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
@@ -679,13 +689,15 @@ def get_ma(
     df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep = "\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
   # Create masks for significant and non-significant points
   sig_mask = (abs(df_res['Log2FC']) > log2fc_thresh) & (df_res['corr p-val'] < sig_thresh)
-  # Plot non-significant points first
-  ax = sns.scatterplot(x = 'Mean abundance', y = 'Log2FC',
-                       data = df_res[~sig_mask], color = 'grey', alpha = 0.5)
-  # Overlay significant points
-  sns.scatterplot(x = 'Mean abundance', y = 'Log2FC',
-                    data = df_res[sig_mask], color = '#CC4446', alpha = 0.95, ax = ax)
+  ax = sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res[~sig_mask],
+                       color = '#CCCCCC', alpha = 0.5, s = 20, linewidth = 0)
+  sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res[sig_mask & (df_res['Log2FC'] > 0)],
+                  color = '#C84B55', alpha = 0.9, s = 30, linewidth = 0, ax = ax)
+  sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res[sig_mask & (df_res['Log2FC'] <= 0)],
+                  color = '#2D6A9F', alpha = 0.9, s = 30, linewidth = 0, ax = ax)
+  ax.axhline(0, color = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
   ax.set(xlabel = 'Mean Abundance', ylabel = 'Log2FC', title = '')
+  sns.despine(left = True, bottom = True)
   # save to file
   if filepath:
     plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
@@ -706,6 +718,7 @@ def get_volcano(
   "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
   if isinstance(df_res, (str, Path)):
     df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res, sep = "\t") if Path(df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
+  df_res = df_res.copy()
   df_res['log_p'] = -np.log10(df_res['corr p-val'].values)
   x = df_res[x_metric].values
   y = df_res['log_p'].values
@@ -717,17 +730,24 @@ def get_volcano(
   else:
     print("You're working with a default alpha of 0.05. Set sample size (n = ...) for Bayesian-Adaptive Alpha Adjustment")
   # Make plot
-  color = kwargs.pop('color', '#3E3E3E')
-  ax = sns.scatterplot(x = x_metric, y = 'log_p', data = df_res, color = color, alpha = 0.8, **kwargs)
+  kwargs.pop('color', None)
+  kwargs.pop('hue', None)
+  sig = df_res['log_p'] > -np.log10(y_thresh)
+  df_res['_cat'] = np.where(sig & (df_res[x_metric] > 0), 'up', np.where(sig & (df_res[x_metric] <= 0), 'down', 'ns'))
+  ax = sns.scatterplot(x = x_metric, y = 'log_p', data = df_res, hue = '_cat',
+                       palette = {'up': '#C84B55', 'down': '#2D6A9F', 'ns': '#BBBBBB'},
+                       alpha = 0.85, s = 25, linewidth = 0, legend = False, **kwargs)
+  df_res.drop('_cat', axis = 1, inplace = True)
   ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)', title = '')
-  plt.axhline(y = -np.log10(y_thresh), c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
-  plt.axvline(x = x_thresh, c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
-  plt.axvline(x = -x_thresh, c = 'k', ls = ':', lw = 0.5, alpha = 0.3)
+  plt.axhline(y = -np.log10(y_thresh), c = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
+  plt.axvline(x = x_thresh, c = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
+  plt.axvline(x = -x_thresh, c = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
   sns.despine(bottom = True, left = True)
   # Text labels
   if label_changed:
-    for i in np.where((y > -np.log10(y_thresh)) & (np.abs(x) > x_thresh))[0]:
-      plt.text(x[i], y[i], labels[i])
+      for i in np.where((y > -np.log10(y_thresh)) & (np.abs(x) > x_thresh))[0]:
+          plt.text(x[i], y[i], labels[i], fontsize = 8, alpha = 0.85,
+                   bbox = dict(boxstyle = 'round,pad=0.15', facecolor = 'white', alpha = 0.5, linewidth = 0))
   # Save to file
   if filepath:
     plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
@@ -838,20 +858,18 @@ def get_meta_analysis(
       df_temp['lower'] = df_temp['EffectSize'] - 1.96 * standard_error
       df_temp['upper'] = df_temp['EffectSize'] + 1.96 * standard_error
       # Create a new figure and a axes to plot on
-      _, ax = plt.subplots(figsize = (8, len(df_temp)*0.6))  # adjust the size as needed
+      _, ax = plt.subplots(figsize = (7, max(len(df_temp) * 0.55, 3)))
       y_pos = np.arange(len(df_temp))
-      # Draw a horizontal line for each study, with x-values between the lower and upper confidence bounds
-      ax.hlines(y_pos, df_temp['lower'], df_temp['upper'], color = 'skyblue')
-      # Draw a marker at the effect size
-      ax.plot(df_temp['EffectSize'], y_pos, 'o', color = 'skyblue')
-      # Draw a vertical line at x=0 (or change to the desired reference line)
-      ax.vlines(0, -1, len(df_temp), colors = 'gray', linestyles = 'dashed')
+      ax.hlines(y_pos, df_temp['lower'], df_temp['upper'], color = '#2D6A9F', lw = 2.5, alpha = 0.6)
+      ax.scatter(df_temp['EffectSize'], y_pos, color = '#2D6A9F', s = 55, zorder = 3)
+      ax.axvline(0, color = '#888888', ls = '--', lw = 0.9, alpha = 0.7)
       ax.set_yticks(y_pos)
       ax.set_yticklabels(df_temp['Study'])
       ax.invert_yaxis()
       ax.set_xlabel('Effect size')
-      ax.spines['right'].set_visible(False)
-      ax.spines['top'].set_visible(False)
+      for spine in ['right', 'top', 'left']:
+          ax.spines[spine].set_visible(False)
+      ax.tick_params(left = False)
       plt.tight_layout()
       plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
     return combined_effect_size, p_value
@@ -915,7 +933,7 @@ def get_time_series(
       raise ValueError("Only ALR and CLR are valid transforms for now.")
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df.shape[1] - 1)
-    glycans = [k.split('.')[0] for k in df.iloc[:, 0]]
+    glycans = strip_suffixes(df.iloc[:, 0])
     if motifs:
       df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set, custom_motifs = custom_motifs)
     else:
@@ -1147,7 +1165,8 @@ def multi_feature_scoring(
     df: pd.DataFrame, # Transformed dataframe with glycans in rows, abundances in columns
     group1: list[str | int], # First group indices/names
     group2: list[str | int], # Second group indices/names
-    filepath: str = '' # Path to save ROC plot
+    filepath: str = '', # Path to save ROC plot
+    random_state: int | np.random.Generator | None = None # optional random state for reproducibility
     ) -> tuple[LogisticRegression, float]: # (L1-regularized logistic regression model, ROC AUC score)
   "Identifies minimal glycan feature set for group classification using L1-regularized logistic regression"
   if group2:
@@ -1155,13 +1174,13 @@ def multi_feature_scoring(
   else:
     y = group1
   X = df.T
-  model = LogisticRegression(penalty = 'l1', solver = 'liblinear', random_state = 42)
+  model = LogisticRegression(penalty = 'l1', solver = 'liblinear', random_state = random_state)
   model.fit(X.values, y)
   model = SelectFromModel(model, prefit = True)
   X_selected = model.transform(X.values)
   selected_features = X.columns[model.get_support()]
   print("Optimal features:", selected_features)
-  model = LogisticRegression(penalty = 'l2', solver = 'liblinear', random_state = 42)
+  model = LogisticRegression(penalty = 'l2', solver = 'liblinear', random_state = random_state)
   model.fit(X_selected, y)
   # Evaluate ROC AUC on the selected features
   y_scores = model.predict_proba(X_selected)[:, 1]
@@ -1203,7 +1222,7 @@ def get_roc(
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
                                                custom_scale = custom_scale, custom_motifs = custom_motifs, random_state = random_state)
   if multi_score:
-    return multi_feature_scoring(df, group1, group2, filepath = filepath)
+    return multi_feature_scoring(df, group1, group2, filepath = filepath, random_state = random_state)
   auc_scores = {}
   if group2: # binary comparison
     for feature, values in df.iterrows():
@@ -1264,9 +1283,10 @@ def get_roc(
       plt.ylabel('True Positive Rate')
       plt.title(f'Best Feature ROC for {classy}: {best_feature}')
       plt.legend(loc = "lower right")
-    if filepath:
-      filepath = Path(filepath)
-      plt.savefig(f"{filepath.stem}_{classy}{filepath.suffix}", format = filepath.suffix[1:], dpi = 300, bbox_inches = 'tight')
+      if filepath:
+        filepath = Path(filepath)
+        plt.savefig(f"{filepath.stem}_{classy}{filepath.suffix}", format = filepath.suffix[1:], dpi = 300, bbox_inches = 'tight')
+  plt.show()
   return sorted_auc_scores
 
 

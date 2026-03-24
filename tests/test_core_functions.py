@@ -82,8 +82,8 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process
                   process_main_branch, check_negative_look, get_match_batch,
                   filter_matches_by_location, parse_pattern, compile_pattern
 )
-from glycowork.motif.draw import (process_bonds, draw_hex, scale_in_range, process_per_residue, col_dict_base,
-                 get_hit_atoms_and_bonds, add_colours_to_map, is_jupyter, process_repeat, draw_bracket,
+from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, col_dict_base,
+                 get_hit_atoms_and_bonds, add_colours_to_map, is_jupyter, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
                  draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure
 )
@@ -3210,22 +3210,6 @@ def test_annotate_figure(mock_svg_file):
     assert Path("test.png").exists()
 
 
-def test_scale_in_range():
-    # Test basic scaling
-    result = scale_in_range([1, 2, 3], 0, 1)
-    assert result[0] == 0  # Min value
-    assert result[-1] == 1  # Max value
-    assert 0 < result[1] < 1  # Middle value
-    # Test with negative numbers
-    result = scale_in_range([-2, 0, 2], 0, 10)
-    assert result[0] == 0
-    assert result[1] == 5
-    assert result[2] == 10
-    # Test single value
-    result = scale_in_range([5, 5, 5], 0, 1)
-    assert all(x == 0 for x in result)  # All values map to min when input range is 0
-
-
 def test_process_per_residue():
     # Test linear glycan
     values = [1, 2, 3]
@@ -3290,17 +3274,6 @@ def test_is_jupyter():
   # Test basic functionality
   result = is_jupyter()
   assert isinstance(result, bool)
-
-
-def test_process_repeat():
-    # Test basic repeat unit processing
-    input_str = "GlcNAc(b1-4)GlcA(b1-3)"
-    expected = "blank(?1-3)GlcNAc(b1-4)GlcA(b1-?)"
-    assert process_repeat(input_str) == expected
-    # Test with different linkage
-    input_str = "GlcNAc(b1-4)Glc(a1-6)"
-    expected = "blank(?1-6)GlcNAc(b1-4)Glc(a1-?)"
-    assert process_repeat(input_str) == expected
 
 
 def test_draw_bracket():
