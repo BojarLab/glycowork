@@ -50,22 +50,22 @@
 - Fixed displaying beta-linkages instead of alpha-linkages in `annotate_figure` (e71550d)
 
 ##### Deprecated ⚠️
-- Deprecated `scale_in_range`; has been in-lined instead
-- Deprecated `process_repeat`; has been in-lined instead
+- Deprecated `scale_in_range`; has been in-lined instead (855a9f8)
+- Deprecated `process_repeat`; has been in-lined instead (855a9f8)
 
 #### analysis
 ##### Changed 🔄
 - `get_volcano` can now also deal with input dataframes that have the `Glycan` column be the index instead (e71550d)
 - Equivalence p-values in `get_differential_expression` now also use the same sample-size adjusted alpha as regular p-values (3884125)
 - Specifying `return_plot=True` in `get_heatmap` will now also return the column names and the transformed dataframe, next to the plot object (3b72129)
-- Improved default plot styling for outputs from functions
+- Improved default plot styling for outputs from functions (855a9f8)
 
 ##### Fixed 🐛
 - CLR-transformation for paired data in `preprocess_data` now correctly uses the shared geometric mean as reference, to preserve within-pair differences (3884125)
 - Fixed equivalence p-values in `get_differential_expression` if `sets=True` (3884125)
 - CLR-transformed motif-level quantification in `preprocess_data` and `get_pca` used the glycan-level geometric mean as a reference, rather than the motif-level geometric mean, which is now fixed (c71c385)
-- `get_roc` now saves the figures for all classes, not just the last, in a set-up of `filepath` + multi-group comparison
-- User-provided `random_state` values/generators are now correctly propagated through to `multi_feature_scoring`
+- `get_roc` now saves the figures for all classes, not just the last, in a set-up of `filepath` + multi-group comparison (855a9f8)
+- User-provided `random_state` values/generators are now correctly propagated through to `multi_feature_scoring` (855a9f8)
 
 #### tokenization
 ##### Added ✨
