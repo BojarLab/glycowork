@@ -1147,3 +1147,66 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
     leaf_glycans = new_leaf_glycans
     new_glycans.update(leaf_glycans)
   return (network, new_glycans) if not auto_steps else (network, new_glycans, steps)
+
+
+def get_biosynthetic_coherence(
+    df: pd.DataFrame, # Glycan abundances (glycans as index or first column, samples as columns)
+    group1: list[str], # First group column names
+    group2: list[str], # Second group column names
+    network: nx.DiGraph | None = None, # Pre-built network; built from df if not provided
+    paired: bool = False # Whether samples are paired
+  ) -> pd.DataFrame: # Test results with group means, difference, t-statistic, p-value, and Cohen's d
+  "Test whether biosynthetic coherence differs between two conditions using per-sample variance-weighted R²"
+  if not isinstance(df.index[0], str):
+    df = df.set_index(df.columns[0])
+  if network is None:
+    network = construct_network(df.index.tolist())
+  glycans_in_net = {n for n in network.nodes() if network.nodes[n].get('virtual', 1) == 0}
+  glycans = [g for g in df.index if g in glycans_in_net]
+  gidx = {g: i for i, g in enumerate(glycans)}
+  col_sums = df.loc[glycans].sum(axis = 0)
+  X = ((df.loc[glycans] / col_sums.where(col_sums > 0, 1)) * 100).values.astype(float)
+  preds_map = {}
+  for g in glycans:
+    queue = list(network.predecessors(g))
+    visited, preds = set(), []
+    while queue:
+      node = queue.pop()
+      if node in visited:
+        continue
+      visited.add(node)
+      if node in gidx:
+        preds.append(node)
+      else:
+        queue.extend(network.predecessors(node))
+    preds_map[g] = preds
+  col_idx = {c: i for i, c in enumerate(df.columns.tolist())}
+  def _sample_r2(col, group):
+    "Variance-weighted R² using leave-one-out regression of each glycan on its observed precursors"
+    train_idx = [col_idx[c] for c in group if c != col]
+    scores, weights = [], []
+    for g in glycans:
+      preds = preds_map[g]
+      y_train = X[gidx[g], train_idx]
+      var_y = float(np.var(y_train))
+      if not preds or len(train_idx) <= len(preds) + 1 or var_y < 1e-3:
+        continue
+      Xp_train = np.column_stack([X[gidx[p], train_idx] for p in preds] + [np.ones(len(train_idx))])
+      coef, _, _, _ = np.linalg.lstsq(Xp_train, y_train, rcond = None)
+      ss_tot = np.sum((y_train - y_train.mean()) ** 2)
+      r2 = max(0.0, 1.0 - np.sum((y_train - Xp_train @ coef) ** 2) / ss_tot) if ss_tot > 0 else 0.0
+      k, n = len(preds), len(train_idx)
+      r2_adj = max(0.0, 1.0 - (1.0 - r2) * (n - 1) / (n - k - 1))
+      scores.append(r2_adj)
+      weights.append(var_y)
+    total_w = sum(weights)
+    return float(sum(s * w for s, w in zip(scores, weights)) / total_w) if total_w > 0 else 0.0
+  scores1 = np.array([_sample_r2(c, group1) for c in group1])
+  scores2 = np.array([_sample_r2(c, group2) for c in group2])
+  stat, pval = ttest_rel(scores2, scores1) if paired else ttest_ind(scores2, scores1, equal_var = False)
+  effect, _ = cohen_d(scores2, scores1, paired = paired)
+  return pd.DataFrame([{
+    'group1_mean': float(scores1.mean()), 'group2_mean': float(scores2.mean()),
+    'difference': float(scores2.mean() - scores1.mean()),
+    't_statistic': float(stat), 'p_val': float(pval), 'cohens_d': float(effect)
+  }], index = ['global_r2_weighted']).assign(group1_scores = [scores1.tolist()], group2_scores = [scores2.tolist()])

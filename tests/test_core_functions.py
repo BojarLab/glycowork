@@ -98,7 +98,7 @@ from glycowork.network.biosynthesis import (safe_compare, safe_index, create_nei
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
                          deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme, infer_network,
                          get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
-                         plot_network, add_high_man_removal, net_dic, find_ptm
+                         plot_network, add_high_man_removal, net_dic, find_ptm, get_biosynthetic_coherence
 )
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
                       jaccard, distance_from_metric, check_conservation, get_communities, dendrogram_from_distance
@@ -5535,6 +5535,54 @@ def test_find_ptm():
     from glycowork.motif.tokenization import stem_lib
     assert find_ptm("Sug(b1-4)Gal6S(b1-4)Glc-ol", ["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"], {}, stem_lib) == 0
     assert find_ptm("Gal(b1-4)Gal6S(b1-4)Glc-ol", ["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"], {}, stem_lib)[1] == "6S"
+
+
+_GLYCANS = [
+  "Gal(b1-4)Glc-ol",
+  "Gal(b1-3)Gal(b1-4)Glc-ol",
+  "Fuc(a1-2)Gal(b1-4)Glc-ol",
+  "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol",
+]
+_RNG = np.random.default_rng(42)
+_EXPECTED_COLS = {"group1_mean", "group2_mean", "difference", "t_statistic", "p_val", "cohens_d", "group1_scores", "group2_scores"}
+
+
+def _make_df(n=5):
+  cols = [f"g1_{i}" for i in range(n)] + [f"g2_{i}" for i in range(n)]
+  data = _RNG.dirichlet(np.ones(len(_GLYCANS)), size=len(cols)).T * 100
+  return pd.DataFrame(data, index=_GLYCANS, columns=cols)
+
+
+def test_get_biosynthetic_coherence_unpaired():
+  df = _make_df()
+  g1 = [c for c in df.columns if c.startswith("g1_")]
+  g2 = [c for c in df.columns if c.startswith("g2_")]
+  result = get_biosynthetic_coherence(df, g1, g2)
+  assert list(result.index) == ["global_r2_weighted"]
+  assert set(result.columns) == _EXPECTED_COLS
+  assert 0.0 <= result.at["global_r2_weighted", "group1_mean"] <= 1.0
+  assert 0.0 <= result.at["global_r2_weighted", "group2_mean"] <= 1.0
+  assert len(result.at["global_r2_weighted", "group1_scores"]) == len(g1)
+  assert len(result.at["global_r2_weighted", "group2_scores"]) == len(g2)
+
+
+def test_get_biosynthetic_coherence_paired():
+  df = _make_df()
+  g1 = [c for c in df.columns if c.startswith("g1_")]
+  g2 = [c for c in df.columns if c.startswith("g2_")]
+  result = get_biosynthetic_coherence(df, g1, g2, paired=True)
+  assert list(result.index) == ["global_r2_weighted"]
+  assert set(result.columns) == _EXPECTED_COLS
+
+
+def test_get_biosynthetic_coherence_prebuilt_network_and_column_index():
+  df = _make_df().reset_index()  # moves glycan strings into first column, index becomes integers
+  g1 = [c for c in df.columns if c.startswith("g1_")]
+  g2 = [c for c in df.columns if c.startswith("g2_")]
+  net = construct_network(_GLYCANS)
+  result = get_biosynthetic_coherence(df, g1, g2, network=net)
+  assert list(result.index) == ["global_r2_weighted"]
+  assert set(result.columns) == _EXPECTED_COLS
 
 
 @patch('bokeh.io.output_notebook')
