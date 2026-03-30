@@ -479,7 +479,7 @@ def get_pca(
           raw = clr_transformation(raw + 1e-7, raw.columns.tolist(), [], gamma = 0)
       elif transform == "ALR":
           raw = get_additive_logratio_transformation(raw.reset_index(), raw.columns.tolist(), [], paired = False,
-                                                     gamma = 0).set_index(raw.index)
+                                                     gamma = 0).select_dtypes(include = 'number').set_axis(raw.index)
       df = raw.T.reset_index()
   X = np.array(df.iloc[:, 1:len(groups)+1].T) if isinstance(groups, list) and groups else np.array(df.iloc[:, 1:].T)
   scaler = StandardScaler()

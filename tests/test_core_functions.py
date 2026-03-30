@@ -3575,6 +3575,46 @@ def test_preprocess_data():
         return False
     except ValueError:
         pass
+    df_big = sample_comp_glycomics_data()
+    g1_big = [k for k in df_big.columns if 'control' in k]
+    g2_big = [k for k in df_big.columns if 'tumor' in k]
+    df_trans, df_org, _, _ = preprocess_data(df_big, g1_big, g2_big, motifs = True, transform = "ALR", impute = False)
+    assert isinstance(df_trans, pd.DataFrame)
+
+
+def test_file_loading_branches(tmp_path):
+    df = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man'],
+        'sample1': [10, 20], 'sample2': [15, 25],
+        'sample3': [12, 22], 'sample4': [18, 28]
+    })
+    group1, group2 = ['sample1', 'sample2'], ['sample3', 'sample4']
+    df.to_csv(tmp_path / "test.csv", index=False)
+    df.to_csv(tmp_path / "test.tsv", index=False, sep="\t")
+    df.to_excel(tmp_path / "test.xlsx", index=False)
+    for ext in ["csv", "tsv", "xlsx"]:
+        df_t, _, _, _ = preprocess_data(str(tmp_path / f"test.{ext}"), group1, group2, impute=False)
+        assert isinstance(df_t, pd.DataFrame)
+    pvals_df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc']*8, 'target': [2.5]*4 + [-2.5]*4})
+    pvals_df.to_csv(tmp_path / "pvals.csv", index=False)
+    pvals_df.to_csv(tmp_path / "pvals.tsv", index=False, sep="\t")
+    pvals_df.to_excel(tmp_path / "pvals.xlsx", index=False)
+    for ext in ["csv", "tsv", "xlsx"]:
+        result = get_pvals_motifs(str(tmp_path / f"pvals.{ext}"))
+        assert isinstance(result, pd.DataFrame)
+    res_df = pd.DataFrame({'p-val': [0.01, 0.05], 'Glycan': ['A', 'B'],
+                           'Log2FC': [1.0, -0.5], 'corr p-val': [0.03, 0.06],
+                           'Mean abundance': [0.3, 0.4], 'Effect size': [0.5, -0.2]})
+    res_df.to_csv(tmp_path / "res.csv", index=False)
+    get_pval_distribution(str(tmp_path / "res.csv"))
+    get_ma(str(tmp_path / "res.csv"))
+    get_volcano(str(tmp_path / "res.csv"))
+    cov_df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc'], 's1': [10.0], 's2': [0.0]})
+    cov_df.to_csv(tmp_path / "cov.csv", index=False)
+    cov_df.to_csv(tmp_path / "cov.tsv", index=False, sep="\t")
+    cov_df.to_excel(tmp_path / "cov.xlsx", index=False)
+    for ext in ["csv", "tsv", "xlsx"]:
+        get_coverage(str(tmp_path / f"cov.{ext}"))
 
 
 def test_get_pvals_motifs():
@@ -3804,8 +3844,16 @@ def test_get_differential_expression():
     assert len(results_motifs) > 0
     results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
                                                  monte_carlo=True)
-    results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
-                                                 sets=True)
+    # use correlated data so create_correlation_network yields clusters with len > 1
+    df_corr = sample_comp_glycomics_data_corr()
+    g1_corr = [k for k in df_corr.columns if 'control' in k]
+    g2_corr = [k for k in df_corr.columns if 'tumor' in k]
+    results = get_differential_expression(df_corr, g1_corr, g2_corr, motifs = False, impute = False,
+                                          sets = True)
+    assert isinstance(results, pd.DataFrame)
+    results = get_differential_expression(df_corr, g1_corr, g2_corr, motifs = False, impute = False,
+                                          sets = True, effect_size_variance = True)
+    assert isinstance(results, pd.DataFrame)
     results = get_differential_expression(df_grouped, [k for k in df_grouped.columns if 'control' in k],
                                           [k for k in df_grouped.columns if 'tumor' in k], motifs=False, impute=False,
                                                  grouped_BH=True)
@@ -4177,6 +4225,7 @@ def simple_glycans():
 def mock_show():
     with patch('matplotlib.pyplot.show'):
         yield
+    plt.close('all')
 
 
 # Sample data fixtures
@@ -4428,6 +4477,8 @@ def test_characterize_monosaccharide_with_modifications():
     """Test characterize_monosaccharide with modifications enabled"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
         characterize_monosaccharide('Man', modifications=True, rank="Class", focus="Actinopterygii")
+        characterize_monosaccharide('a1-3', mode = 'bond', rank = "Class", focus = "Actinopterygii")
+        characterize_monosaccharide('Gal', modifications = True, rank = "Kingdom", focus = "Animalia", thresh = 5)
         mock_savefig.assert_not_called()
 
 
@@ -4458,6 +4509,10 @@ def test_get_heatmap_basic(sample_df):
         return False
     except ValueError:
         pass
+    df_renamed = sample_df.rename(columns = {'glycan': 'glycan_id'})
+    get_heatmap(df_renamed)
+    df_transposed = sample_df.set_index('glycan').T
+    get_heatmap(df_transposed)
     plt.close('all')
 
 
@@ -4503,6 +4558,14 @@ def test_get_pca_with_motifs(sample_df):
     groups = [1, 1, 1]
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
         get_pca(sample_df, groups, motifs=True)
+        get_pca(sample_df, groups, motifs = True, transform = "CLR")
+        mock_savefig.assert_not_called()
+
+def test_get_pca_motifs_transform():
+    df = sample_comp_glycomics_data()
+    groups = [1]*6 + [2]*6
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_pca(df, groups, motifs=True, transform="ALR")
         mock_savefig.assert_not_called()
 
 
@@ -5446,7 +5509,7 @@ def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
     # Test without edge labels
     plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=False)
     assert plot is not None
-    plt.close()
+    plt.close('all')
 
 
 @patch('bokeh.io.output_notebook')
@@ -5461,7 +5524,7 @@ def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
     # Test without edge labels
     plot = plot_network(n_glycan_network, plot_format='spring', edge_label_draw=False)
     assert plot is not None
-    plt.close()
+    plt.close('all')
 
 
 @patch('bokeh.io.output_notebook')
@@ -5472,7 +5535,7 @@ def test_plot_network_with_edge_labels(mock_show, mock_enable, evo_test_networks
     plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True)
     # Check for edge labels
     assert plot is not None
-    plt.close()
+    plt.close('all')
 
 
 @patch('bokeh.io.output_notebook')
@@ -5486,7 +5549,7 @@ def test_plot_network_with_lfc(mock_show, mock_enable, evo_test_networks):
     assert plot is not None
     # Check for renderers
     assert len(plot.renderers) > 0
-    plt.close()
+    plt.close('all')
 
 
 @patch('bokeh.io.output_notebook')
@@ -5499,7 +5562,7 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
     for layout in safe_layouts:
         plot = plot_network(main_net, plot_format=layout)
         assert plot is not None
-        plt.close()
+        plt.close('all')
     # Test pydot2 layout with proper error handling
     try:
         with suppress_pydot_warnings():
@@ -5507,7 +5570,7 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
             assert plot is not None
     except (ImportError, FileNotFoundError):
         print("Graphviz not installed, skipping pydot2 layout test")
-    plt.close()
+    plt.close('all')
 
 
 def test_plot_network_no_notebook(evo_test_networks):
@@ -5518,6 +5581,7 @@ def test_plot_network_no_notebook(evo_test_networks):
             plot = plot_network(main_net, plot_format='kamada_kawai')
             # Even with notebook initialization failing, should still return a plot
             assert plot is not None
+    plt.close('all')
 
 
 def test_add_high_man_removal(evo_test_networks):
@@ -5593,6 +5657,7 @@ def test_infer_network(mock_show, mock_enable):
     net2 = infer_network(net, "org", ["test", "org"], spec_dic)
     assert nx.get_node_attributes(net2, "virtual")["GlcNAc(b1-3)Gal(b1-4)Glc-ol"] == 2
     plot = plot_network(net2)
+    plt.close('all')
 
 
 def test_export_network(tmp_path):
@@ -6632,6 +6697,7 @@ def test_analyze_ml_model(mock_show, mock_xgb_data):
     model = train_ml_model(X_train, X_test, y_train, y_test, mode='classification')
     analyze_ml_model(model)
     mock_show.assert_called_once()
+    plt.close('all')
 
 
 def test_get_mismatch(mock_xgb_data):

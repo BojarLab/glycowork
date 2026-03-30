@@ -13,7 +13,12 @@
 
 ##### Deprecated ⚠️
 
+### motif
+#### analysis
+##### Fixed 🐛
+- Fixed column names slipping into column values when `motifs = True` combined with `transform = ALR` in `get_pca`
+
 ### network
 #### biosynthesis
 ##### Added ✨
-- Added `get_biosynthetic_coherence` function to estimate how well glycan abundances can be predicted from biosynthetic networks, to disentangle biosynthetic vs carrier variance
+- Added `get_biosynthetic_coherence` function to estimate how well glycan abundances can be predicted from biosynthetic networks, to disentangle biosynthetic vs carrier variance (b7020fd)
