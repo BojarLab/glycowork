@@ -874,13 +874,15 @@ def test_glycan_to_composition():
 
 
 def test_glycan_to_mass():
-    assert abs(glycan_to_mass("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc") - 674.2149056) < 0.1
+    assert abs(glycan_to_mass("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc") - 657.2115545999999) < 0.1
     assert abs(glycan_to_mass("Neu5Az(a2-3)Gal(b1-4)Glc") - 658.2181545999999) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc") - 633.2115546) < 0.1
-    assert abs(glycan_to_mass("Neu5Az9Ac(a2-3)Gal(b1-4)Glc") - 717.2320056) < 0.1
+    assert abs(glycan_to_mass("Neu5Az9Ac(a2-3)Gal(b1-4)Glc") - 700.2286545999999) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "C2H4O2") - 693.2325546) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "-C2H4O2") - 573.1905546) < 0.1
     assert abs(glycan_to_mass("GalOS(b1-3)GalNAc4/6S") - 543.0563546) < 0.1
+    assert abs(glycan_to_mass("Neu5Ac9Ac(a2-3)Gal(b1-4)Glc") - 675.2220546) < 0.1
+    assert abs(glycan_to_mass("Neu4Ac5Ac9Ac(a2-3)Gal(b1-4)Glc") - 717.2325546) < 0.1
 
 
 def test_calculate_adduct_mass():
@@ -1002,6 +1004,18 @@ def test_mz_to_composition():
         filter_out = {'Kdn'},
         deprioritized = {"Hex", "HexNAc", "Neu5Ac"}
     )
+    # Test mass_tag: same composition shifted by reducing-end label mass (e.g., 2AA = 137.14 Da)
+    result = mz_to_composition(
+        675 + 137.14,
+        mode = 'negative',
+        mass_value = 'monoisotopic',
+        glycan_class = 'O',
+        mass_tolerance = 0.5,
+        reduced = True,
+        filter_out = {'Kdn'},
+        mass_tag = 137.14
+    )
+    assert result == [{'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}]
 
 
 def test_compositions_to_structures():

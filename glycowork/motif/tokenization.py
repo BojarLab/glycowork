@@ -173,7 +173,8 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
                      filter_out: set[str] | None = None, # Monosaccharides to ignore during composition finding
                      deprioritized: set[str] | None = {"Me", "HexA", "PCho"}, # Monosaccharides to use only as fallback if no other composition matches
                      extras: list[str] = ["doubly_charged"], # Additional operations: adduct/doubly_charged
-                     adduct: str | None = None # Chemical formula of adduct that contributes to m/z, e.g., "C2H4O2"
+                     adduct: str | None = None, # Chemical formula of adduct that contributes to m/z, e.g., "C2H4O2"
+                     mass_tag: float | None = None # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA, 219.21 for 2AB+procA), subtracted from mz_value
                     ) -> list[dict[str, int]]: # List of matching compositions
   "Map m/z value to matching monosaccharide composition"
   if df_use is None:
@@ -187,6 +188,8 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     deprioritized = set()
   if adduct:
     mz_value -= calculate_adduct_mass(adduct, mass_value)
+  if mass_tag:
+    mz_value -= mass_tag
   adduct_mass = mass_dict['Acetate'] if mode == 'negative' else mass_dict['Na+']
   if reduced:
     mz_value -= 1.0078
@@ -316,7 +319,8 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
                     df_use: pd.DataFrame | None = None, # Custom glycan database
                     filter_out: set[str] | None = None, # Monosaccharides to ignore
                     deprioritized: set[str] | None = {"Me", "HexA", "PCho"}, # Monosaccharides to use only as fallback if no other composition matches
-                    verbose: bool = False # Whether to print non-matching compositions
+                    verbose: bool = False, # Whether to print non-matching compositions
+                    mass_tag: float | None = None # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA), subtracted from each m/z before matching
                    ) -> pd.DataFrame | list: # DataFrame of structures x intensities or empty list
   "Map precursor masses to structures, supporting accompanying relative intensities"
   if df_use is None:
@@ -331,7 +335,7 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
   # Map each m/z value to potential compositions
   compositions = [mz_to_composition(mz, mode = mode, mass_value = mass_value, reduced = reduced, sample_prep = sample_prep,
                                     mass_tolerance = mass_tolerance, kingdom = kingdom, glycan_class = glycan_class,
-                                    df_use = df_use, filter_out = filter_out, deprioritized = deprioritized) for mz in mz_list]
+                                    df_use = df_use, filter_out = filter_out, deprioritized = deprioritized, mass_tag = mass_tag) for mz in mz_list]
   # Map each of these potential compositions to potential structures
   out_structures = []
   for m, comp in enumerate(compositions):
@@ -500,11 +504,14 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
   dict_comp = dict_comp_in.copy()
   mass_key = f"{sample_prep}_{mass_value}"
   mass_dict_in = mass_dict if mass_key == "underivatized_monoisotopic" else dict(zip(mapping_file.composition, mapping_file[mass_key]))
-  for old_key, new_key in {'S': 'Sulphate', 'P': 'Phosphate', 'Me': 'Methyl', 'Ac': 'Acetate'}.items():
+  for old_key, new_key in {'S': 'Sulphate', 'P': 'Phosphate', 'Me': 'Methyl'}.items():
     if old_key in dict_comp:
       dict_comp[new_key] = dict_comp.pop(old_key)
+  # O-acetylation adds acetyl minus H (net +C2H2O = 42.0106 monoisotopic), not full acetate (59 Da)
+  ac_count = dict_comp.pop('Ac', 0)
   total_mass = sum(v * (mass_dict_in.get(k) or calculate_adduct_mass(k, mass_value, enforce_sign = True))
-                   for k, v in dict_comp.items()) + mass_dict_in['red_end']
+                   for k, v in dict_comp.items()) + mass_dict_in['red_end'] + ac_count * calculate_adduct_mass(
+      'C2H2O', mass_value)
   if adduct:
     total_mass += calculate_adduct_mass(adduct, mass_value) if isinstance(adduct, str) else adduct
   return total_mass
