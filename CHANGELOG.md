@@ -30,10 +30,17 @@
 
 #### tokenization
 ##### Added ✨
-- Added a `mass_tag` keyword argument to `mz_to_composition` and `mz_to_structures` for glycans tagged at the reducing end
+- Added a `mass_tag` keyword argument to `mz_to_composition` and `mz_to_structures` for glycans tagged at the reducing end (7adaf75)
 
 ##### Fixed 🐛
-- Fixed mass calculation of additionally acetylated glycans in `glycan_to_mass`
+- Fixed mass calculation of additionally acetylated glycans in `glycan_to_mass` (7adaf75)
+
+#### processing
+##### Changed 🔄
+- Universal Input via `canonicalize_iupac` can now deal with more pyranose indicators (e.g., `Altp` or `Lyxp`)
+
+##### Fixed 🐛
+- Fixed overeager modification of already correctly formatted `6PCho` modifications in `canonicalize_iupac`
 
 ### network
 #### biosynthesis
