@@ -58,7 +58,7 @@ from glycowork.glycan_data.stats import (
     pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
     correct_multiple_testing, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results, replace_outliers_with_IQR_bounds,
-    replace_outliers_winsorization, perform_tests_monte_carlo
+    replace_outliers_winsorization, perform_tests_monte_carlo, hsic
 )
 from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph,
@@ -2283,6 +2283,13 @@ def test_perform_tests_monte_carlo():
     assert len(raw_p) == len(adj_p) == len(effect) == 5
     assert all(0 <= p <= 1 for p in raw_p)
     assert all(0 <= p <= 1 for p in adj_p)
+
+
+def test_hsic():
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=200)
+    assert hsic(x, rng.normal(size=200))[1] > 0.05  # independent: non-significant
+    assert hsic(x, x**2 + rng.normal(size=200, scale=0.1))[1] < 0.05  # nonlinear dependence: significant
 
 
 def test_glycan_to_graph():

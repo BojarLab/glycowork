@@ -15,6 +15,10 @@
 
 ##### Deprecated ⚠️
 
+#### stats
+##### Added ✨
+- Added `hsic` to calculate Hilbert-Schmidt Independence Criterion between variables, to measure dependency
+
 ### motif
 #### analysis
 ##### Changed 🔄
@@ -37,10 +41,10 @@
 
 #### processing
 ##### Changed 🔄
-- Universal Input via `canonicalize_iupac` can now deal with more pyranose indicators (e.g., `Altp` or `Lyxp`)
+- Universal Input via `canonicalize_iupac` can now deal with more pyranose indicators (e.g., `Altp` or `Lyxp`) (467673b)
 
 ##### Fixed 🐛
-- Fixed overeager modification of already correctly formatted `6PCho` modifications in `canonicalize_iupac`
+- Fixed overeager modification of already correctly formatted `6PCho` modifications in `canonicalize_iupac` (467673b)
 
 ### network
 #### biosynthesis
