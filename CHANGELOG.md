@@ -8,8 +8,8 @@
 ##### Added ✨
 
 ##### Changed 🔄
-- Changed `human_macrophages_N_2024-11-28-625934` and `human_macrophages_O_2024-11-28-625934` glycomics datasets to `human_macrophages_N_2024_11_28_625934` and `human_macrophages_O_2024_11_28_625934`
-- Recurated `human_brain_GSL_PMID40207879` glycomics dataset with improved nomenclature conversion
+- Changed `human_macrophages_N_2024-11-28-625934` and `human_macrophages_O_2024-11-28-625934` glycomics datasets to `human_macrophages_N_2024_11_28_625934` and `human_macrophages_O_2024_11_28_625934` (6a673d0)
+- Recurated `human_brain_GSL_PMID40207879` glycomics dataset with improved nomenclature conversion (cf8706a)
 
 ##### Fixed 🐛
 - Fixed one faulty sequence in `df_glycan` that caused graph generation to fail (b2f6ab9)
@@ -47,7 +47,7 @@
 
 #### processing
 ##### Added ✨
-- Added some more lipid shorthands (e.g., `Fuc-GD1a` or `Fuc-GA1`) to Universal Input/`canonicalize_iupac`
+- Added some more lipid shorthands (e.g., `Fuc-GD1a` or `Fuc-GA1`) to Universal Input/`canonicalize_iupac` (cf8706a)
 
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` can now deal with more pyranose indicators (e.g., `Altp` or `Lyxp`) (467673b)
