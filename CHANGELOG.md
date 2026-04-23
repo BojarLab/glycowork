@@ -42,7 +42,7 @@
 #### processing
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` can now deal with more pyranose indicators (e.g., `Altp` or `Lyxp`) (467673b)
-- Universal Input via `canonicalize_iupac` can now deal with more sulfate variants (`6-O-sulfo`)
+- Universal Input via `canonicalize_iupac` can now deal with more sulfate variants (e.g., `6-O-sulfo`, `[S-6]`) (0e102a6)
 
 ##### Fixed 🐛
 - Fixed overeager modification of already correctly formatted `6PCho` modifications in `canonicalize_iupac` (467673b)

@@ -1242,6 +1242,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'\[([A-Za-z0-9]+)\(\?(\d+)-(\d+)\)([DL]-)?([A-Za-z0-9]+)',
               lambda m: f"[{m.group(4) or ''}{m.group(5)}{m.group(3)}{m.group(1)}" if m.group(1) not in lib else f"[{m.group(1)}(?{m.group(2)}-{m.group(3)}){m.group(4) or ''}{m.group(5)}",
               glycan)  # [Ac(?1-2)D-Rha to [D-Rha2Ac
+  glycan = re.sub(r'\[([SP])-(\d)\]', r'[\2\1]', glycan)  # [S-6] to [6S]
   glycan = re.sub(r'\[([1-9][SP])\]\[([1-9][SP])\]([A-Z][^\(^\[]+)',
                 lambda m: f"{m.group(3)}{min(m.group(1), m.group(2))}{max(m.group(1), m.group(2))}",
                 glycan)  # [6S][4S]Gal to Gal4S6S

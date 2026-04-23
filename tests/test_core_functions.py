@@ -359,6 +359,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc") == "GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc"
     assert canonicalize_iupac("Gal4,6Pyr") == "Gal4Pyr6Pyr"
     assert canonicalize_iupac("Neu5Acα2-3(6-O-sulfo)Galβ1-4Glc") == "Neu5Ac(a2-3)Gal6S(b1-4)Glc"
+    assert canonicalize_iupac("D-Fuc(a1-2)[S-6]Glc(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc") == "D-Fuc(a1-2)Glc6S(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc"
     # Test sanitization
     assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
     assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-2)]Man") == "Gal(b1-4)GlcNAc(b1-?)[Gal(b1-4)GlcNAc(b1-?)]Man"
