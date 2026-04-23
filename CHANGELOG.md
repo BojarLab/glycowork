@@ -17,7 +17,7 @@
 
 #### stats
 ##### Added ✨
-- Added `hsic` to calculate Hilbert-Schmidt Independence Criterion between variables, to measure dependency
+- Added `hsic` to calculate Hilbert-Schmidt Independence Criterion between variables, to measure dependency (c560fbb)
 
 ### motif
 #### analysis
@@ -42,6 +42,7 @@
 #### processing
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` can now deal with more pyranose indicators (e.g., `Altp` or `Lyxp`) (467673b)
+- Universal Input via `canonicalize_iupac` can now deal with more sulfate variants (`6-O-sulfo`)
 
 ##### Fixed 🐛
 - Fixed overeager modification of already correctly formatted `6PCho` modifications in `canonicalize_iupac` (467673b)
