@@ -34,15 +34,20 @@
 
 #### tokenization
 ##### Added ✨
-- Added a `mass_tag` keyword argument to `mz_to_composition` and `mz_to_structures` for glycans tagged at the reducing end (7adaf75)
+- Added a `mass_tag` float keyword argument to `mz_to_composition` and `mz_to_structures` for glycans tagged at the reducing end (7adaf75)
+- Added a `modification` string keyword argument to `composition_to_mass` and `glycan_to_mass` for glycans tagged at the reducing end
+- `mz_to_composition` and `mz_to_structures` now also support the combination of multiply-charged ions with adducts
 
 ##### Fixed 🐛
 - Fixed mass calculation of additionally acetylated glycans in `glycan_to_mass` (7adaf75)
 
+##### Deprecated ⚠️
+- The `reduced` bool keyword argument in `mz_to_composition` and `mz_to_structures` has been replaced with the `modification` string keyword argument
+
 #### processing
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` can now deal with more pyranose indicators (e.g., `Altp` or `Lyxp`) (467673b)
-- Universal Input via `canonicalize_iupac` can now deal with more sulfate variants (e.g., `6-O-sulfo`, `[S-6]`) (0e102a6)
+- Universal Input via `canonicalize_iupac` can now deal with more sulfate variants (e.g., `6-O-sulfo`, `[S-6]`) (0e102a6, cbe20da)
 
 ##### Fixed 🐛
 - Fixed overeager modification of already correctly formatted `6PCho` modifications in `canonicalize_iupac` (467673b)

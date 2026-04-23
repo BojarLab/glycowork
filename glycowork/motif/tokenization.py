@@ -19,6 +19,8 @@ chars = {'A':1, 'B':2, 'C':3, 'D':4, 'E':5, 'F':6, 'G':7, 'H':8, 'I':9, 'J':10, 
 with resources.files("glycowork.motif").joinpath("mz_to_composition.csv").open(encoding = 'utf-8-sig') as f:
   mapping_file = pd.read_csv(f)
 mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
+HYDROGEN_MASS = 1.007825
+modification_mass_dict = {'reduced': 2 * HYDROGEN_MASS, '2AA': 121.0528, '2AB': 120.0688}
 
 
 def constrain_prot(proteins: list[str], # List of protein sequences
@@ -164,7 +166,7 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
 def mz_to_composition(mz_value: float, # m/z value from mass spec
                      mode: str = 'negative', # MS mode: positive/negative
                      mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
-                     reduced: bool = False, # Whether glycans are reduced
+                     modification: str | None = None, # Reducing end modification: reduced/2AA/2AB
                      sample_prep: str = 'underivatized', # Sample preparation method: underivatized/permethylated/peracetylated
                      mass_tolerance: float = 0.5, # Mass tolerance for matching
                      kingdom: str = 'Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
@@ -191,23 +193,21 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
   if mass_tag:
     mz_value -= mass_tag
   adduct_mass = mass_dict['Acetate'] if mode == 'negative' else mass_dict['Na+']
-  if reduced:
-    mz_value -= 1.0078
-  multiplier = 1 if mode == 'negative' else -1
+  # Theoretical m/z offset for proton ionization: [M-H]- or [M+H]+
+  ion_offset = -HYDROGEN_MASS if mode == 'negative' else HYDROGEN_MASS
   comp_pool = [dict(t) for t in {tuple(d.items()) for d in df_use.Composition}]
-  fallback = []
-  cache = {}
-  # Iterate over the composition pool
+  fallback, cache = [], {}
+  # Iterate over the composition pool; compare theoretical m/z against raw observed value for each ionization scenario
   for comp in comp_pool:
-    mass = composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep)
+    mass = composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, modification = modification)
     cache[mass] = comp
-    if abs(mass - mz_value) < mass_tolerance:
+    if abs(mass + ion_offset - mz_value) < mass_tolerance:
       if not filter_out.intersection(comp.keys()):
         if not deprioritized.intersection(comp.keys()):
           return [comp]
         fallback.append(comp)
   if "adduct" in extras:
-    # Check for matches including the adduct mass
+    # Adduct ions: [M+Acetate]- or [M+Na]+; no proton involved
     for mass, comp in cache.items():
       if abs(mass + adduct_mass - mz_value) < mass_tolerance:
         if not filter_out.intersection(comp.keys()):
@@ -215,14 +215,21 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
             return [comp]
           fallback.append(comp)
   if "doubly_charged" in extras:
-    # If no matches are found, consider a double charge scenario
-    mz_value = (mz_value + 0.5*multiplier)*2 + (1.0078 if reduced else 0)
+    # Doubly-charged proton ions: [M-2H]2- or [M+2H]2+
     for mass, comp in cache.items():
-      if abs(mass - mz_value) < mass_tolerance:
+      if abs((mass + 2 * ion_offset) / 2 - mz_value) < mass_tolerance:
         if not filter_out.intersection(comp.keys()):
           if not deprioritized.intersection(comp.keys()):
             return [comp]
           fallback.append(comp)
+    if "adduct" in extras:
+      # Doubly-charged mixed ions: [M+H+adduct]2+ or [M-H+adduct]2-
+      for mass, comp in cache.items():
+        if abs((mass + ion_offset + adduct_mass) / 2 - mz_value) < mass_tolerance:
+          if not filter_out.intersection(comp.keys()):
+            if not deprioritized.intersection(comp.keys()):
+              return [comp]
+            fallback.append(comp)
   return fallback[:1]
 
 
@@ -315,7 +322,7 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
                     mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                     sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                     mass_tolerance: float = 0.5, # Mass tolerance for matching
-                    reduced: bool = False, # Whether glycans are reduced
+                    modification: str | None = None, # Reducing end modification: reduced/2AA/2AB
                     df_use: pd.DataFrame | None = None, # Custom glycan database
                     filter_out: set[str] | None = None, # Monosaccharides to ignore
                     deprioritized: set[str] | None = {"Me", "HexA", "PCho"}, # Monosaccharides to use only as fallback if no other composition matches
@@ -333,7 +340,7 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
   if glycan_class not in {'N', 'O', 'free', 'lipid'}:
     print("Not a valid class for mz_to_composition; currently N/O/free/lipid matching is supported. For everything else run compositions_to_structures separately.")
   # Map each m/z value to potential compositions
-  compositions = [mz_to_composition(mz, mode = mode, mass_value = mass_value, reduced = reduced, sample_prep = sample_prep,
+  compositions = [mz_to_composition(mz, mode = mode, mass_value = mass_value, modification = modification, sample_prep = sample_prep,
                                     mass_tolerance = mass_tolerance, kingdom = kingdom, glycan_class = glycan_class,
                                     df_use = df_use, filter_out = filter_out, deprioritized = deprioritized, mass_tag = mass_tag) for mz in mz_list]
   # Map each of these potential compositions to potential structures
@@ -498,7 +505,8 @@ def calculate_adduct_mass(formula: str, # Chemical formula of adduct (e.g., "C2H
 def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary of monosaccharide:count
                        mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                        sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
-                       adduct: str | float | None = None # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
+                       adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
+                       modification: str | None = None # Reducing end modification: reduced/2AA/2AB
                       ) -> float: # Theoretical mass
   "Calculate theoretical mass from composition"
   dict_comp = dict_comp_in.copy()
@@ -514,6 +522,8 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
       'C2H2O', mass_value)
   if adduct:
     total_mass += calculate_adduct_mass(adduct, mass_value) if isinstance(adduct, str) else adduct
+  if modification:
+    total_mass += modification_mass_dict.get(modification, 0)
   return total_mass
 
 
@@ -521,13 +531,14 @@ def glycan_to_mass(glycan: str, # Glycan in IUPAC-condensed format
                    mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                    sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                    stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
-                   adduct: str | float | None = None # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
+                   adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
+                   modification: str | None = None # Reducing end modification: reduced/2AA/2AB
                   ) -> float: # Theoretical mass
   "Calculate theoretical mass from glycan"
   if stem_libr is None:
     stem_libr = stem_lib
   comp = glycan_to_composition(glycan, stem_libr = stem_libr)
-  return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct)
+  return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct, modification = modification)
 
 
 @rescue_compositions

@@ -33,7 +33,7 @@ from glycowork.motif.tokenization import (
     glycan_to_composition, calculate_adduct_mass, structure_to_basic, map_to_basic,
     compositions_to_structures, match_composition_relaxed, stemify_dataset, composition_to_mass,
     condense_composition_matching, get_unique_topologies, mz_to_structures, glycan_to_mass,
-    get_random_glycan
+    get_random_glycan, HYDROGEN_MASS, mass_dict
 )
 from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages,
@@ -960,7 +960,7 @@ def test_mz_to_composition():
         mass_value='monoisotopic',
         glycan_class='O',
         mass_tolerance=0.5,
-        reduced=True,
+        modification="reduced",
         filter_out = {'Kdn'}
     )
     expected = [{'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}]
@@ -971,7 +971,7 @@ def test_mz_to_composition():
         mass_value='monoisotopic',
         glycan_class='all',
         mass_tolerance=0.5,
-        reduced=True,
+        modification="reduced",
         adduct="H2O",
         extras=["doubly_charged", "adduct"]
     )
@@ -981,7 +981,7 @@ def test_mz_to_composition():
         mass_value='monoisotopic',
         glycan_class='all',
         mass_tolerance=0.5,
-        reduced=True,
+        modification="reduced",
         filter_out = {'Kdn'},
         extras=["doubly_charged", "adduct"]
     ),
@@ -991,7 +991,7 @@ def test_mz_to_composition():
         mass_value = 'monoisotopic',
         glycan_class = 'all',
         mass_tolerance = 0.5,
-        reduced = True,
+        modification="reduced",
         adduct = "H2O",
         extras = ["doubly_charged", "adduct"],
         deprioritized = None
@@ -1002,7 +1002,7 @@ def test_mz_to_composition():
         mass_value = 'monoisotopic',
         glycan_class = 'O',
         mass_tolerance = 0.5,
-        reduced = True,
+        modification="reduced",
         filter_out = {'Kdn'},
         deprioritized = {"Hex", "HexNAc", "Neu5Ac"}
     )
@@ -1013,11 +1013,26 @@ def test_mz_to_composition():
         mass_value = 'monoisotopic',
         glycan_class = 'O',
         mass_tolerance = 0.5,
-        reduced = True,
+        modification="reduced",
         filter_out = {'Kdn'},
         mass_tag = 137.14
     )
     assert result == [{'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}]
+    # Test doubly-charged mixed ion: [M-H+Acetate]2- in negative mode
+    comp = {'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}
+    neutral = composition_to_mass(comp, modification = 'reduced')
+    mixed_mz = (neutral - HYDROGEN_MASS + mass_dict['Acetate']) / 2
+    result = mz_to_composition(
+        mixed_mz,
+        mode = 'negative',
+        mass_value = 'monoisotopic',
+        glycan_class = 'O',
+        mass_tolerance = 0.5,
+        modification = 'reduced',
+        filter_out = {'Kdn'},
+        extras = ["doubly_charged", "adduct"]
+    )
+    assert result == [comp]
 
 
 def test_compositions_to_structures():
@@ -1089,6 +1104,16 @@ def test_composition_to_mass():
     comp = {'Hex': 1, 'HexNAc': 1, 'S': 1}
     mass = composition_to_mass(comp)
     assert mass > composition_to_mass({'Hex': 1, 'HexNAc': 1})
+    # Test reducing end modification
+    comp = {'Hex': 1, 'HexNAc': 1}
+    base_mass = composition_to_mass(comp)
+    reduced_mass = composition_to_mass(comp, modification = 'reduced')
+    assert abs(reduced_mass - base_mass - 2 * 1.007825) < 0.01
+    aa_mass = composition_to_mass(comp, modification = '2AA')
+    assert aa_mass > base_mass
+    assert abs(aa_mass - base_mass - 121.0528) < 0.01
+    # Unknown modification should add nothing
+    assert composition_to_mass(comp, modification = 'nonexistent') == base_mass
 
 
 def test_condense_composition_matching():
@@ -1144,7 +1169,7 @@ def test_mz_to_structures():
         mode='negative',
         mass_value='monoisotopic',
         mass_tolerance=0.5,
-        reduced=True
+        modification="reduced"
     )
     assert isinstance(result, pd.DataFrame)
     # Verify returned structures match the mass
@@ -1161,7 +1186,7 @@ def test_mz_to_structures():
         mz_values,
         glycan_class='O',
         mode='negative',
-        reduced=True,
+        modification="reduced",
         filter_out={'Kdn'},
         abundances=abundances
     )
@@ -1171,7 +1196,7 @@ def test_mz_to_structures():
     result = mz_to_structures(
         mz_values,
         glycan_class='O',
-        reduced=True,
+        modification="reduced",
         filter_out={'Kdn', 'Neu5Ac'}
     )
     # Verify no structures contain Neu5Ac
