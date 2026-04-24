@@ -16,8 +16,6 @@ from statsmodels.stats.anova import anova_lm
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-import copy
-import inspect
 rng = np.random.default_rng(42)
 np.random.seed(0)
 
@@ -29,11 +27,10 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
   "calculates effect size between two groups"
   if paired:
     assert len(x) == len(y), "For paired samples, the size of x and y should be the same"
-    diff = np.array(x) - np.array(y)
+    diff = np.asarray(x) - np.asarray(y)
     diff_std = np.std(diff, ddof = 1)
     if diff_std == 0:
-      d = np.inf if np.mean(diff) > 0 else -np.inf
-      return d, 0
+      return (np.inf if np.mean(diff) > 0 else -np.inf), 0
     n = len(diff)
     d = np.mean(diff) / diff_std
     var_d = 1 / n + d**2 / (2 * n)
@@ -57,10 +54,7 @@ def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group contai
     assert x.shape == y.shape, "For paired samples, the size of x and y should be the same"
     x = np.array(x) - np.array(y)
     y = np.zeros_like(x)
-  if isinstance(x, pd.DataFrame):
-    x = x.values
-  if isinstance(y, pd.DataFrame):
-    y = y.values
+  x, y = np.asarray(x), np.asarray(y)
   pooled_cov_inv = np.linalg.pinv((np.cov(x) + np.cov(y)) / 2)
   diff_means = (np.mean(y, axis = 1) - np.mean(x, axis = 1)).reshape(-1, 1)
   mahalanobis_d = np.sqrt(np.clip(diff_means.T @ pooled_cov_inv @ diff_means, 0, None))
@@ -76,17 +70,11 @@ def mahalanobis_variance(x: np.ndarray | pd.DataFrame, # comparison group contai
   data = np.concatenate((x.T, y.T), axis = 0)
   # Perform bootstrap resampling
   n_iterations = 1000
-  # Initialize an empty array to store the bootstrap samples
-  bootstrap_samples = np.empty(n_iterations)
   size_x = x.shape[1]
-  for i in range(n_iterations):
-    # Generate a random bootstrap sample
-    sample = data[rng.choice(range(data.shape[0]), size = data.shape[0], replace = True)]
-    # Split the bootstrap sample into two groups
-    x_sample = sample[:size_x]
-    y_sample = sample[size_x:]
-    # Calculate the Mahalanobis distance for the bootstrap sample
-    bootstrap_samples[i] = mahalanobis_distance(x_sample.T, y_sample.T, paired = paired)
+  # Generate all bootstrap indices at once
+  boot_indices = rng.choice(data.shape[0], size = (n_iterations, data.shape[0]), replace = True)
+  bootstrap_samples = np.array([mahalanobis_distance(data[idx[:size_x]].T, data[idx[size_x:]].T, paired = paired)
+                                for idx in boot_indices])
   # Estimate the variance of the Mahalanobis distance
   return np.var(bootstrap_samples)
 
@@ -99,11 +87,11 @@ def variance_stabilization(data: pd.DataFrame, # dataframe with glycans/motifs a
   data = np.log1p(data)
   # Scale data to have zero mean and unit variance
   if groups is None:
-    data = (data - data.mean(axis = 0)) / data.std(axis = 0, ddof = 1)
+    data = (data - data.mean(axis = 0)) / data.std(axis = 0, ddof = 1).replace(0, 1)
   else:
     for group in groups:
       group_data = data[group]
-      data[group] = (group_data - group_data.mean(axis = 0)) / group_data.std(axis = 0, ddof = 1)
+      data[group] = (group_data - group_data.mean(axis = 0)) / group_data.std(axis = 0, ddof = 1).replace(0, 1)
   return data
 
 
@@ -171,9 +159,8 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
       group_data = df[group]
       all_zero_mask = (group_data == 0).all(axis = 1)
       df.loc[all_zero_mask, group] = 1e-5
-    old_cols = []
-    if isinstance(colname, int):
-      old_cols = df.columns
+    old_cols = df.columns if isinstance(colname, int) else []
+    if len(old_cols):
       df.columns = df.columns.astype(str)
     if impute:
       mf = MissForest()
@@ -220,10 +207,10 @@ class JTKTest:
       cf[1:Q+1] += cf[:Q]
     if self.max_stat % 2:
       double_MM = 2 * cf[MM]
-      jtkcf = np.concatenate((cf, double_MM - cf[:MM][::-1], [double_MM]))[::-1]
+      jtkcf = np.concatenate((cf, double_MM - cf[MM-1::-1], [double_MM]))[::-1]
     else:
       sum_MM = cf[MM-1] + cf[MM]
-      jtkcf = np.concatenate((cf, sum_MM - cf[:MM-1][::-1], [sum_MM]))[::-1]
+      jtkcf = np.concatenate((cf, sum_MM - cf[MM-2::-1], [sum_MM]))[::-1]
     ajtkcf = [(jtkcf[i - 1] + jtkcf[i]) / 2 for i in range(1, len(jtkcf))]
     cf = [ajtkcf[(j - 1) // 2] if j % 2 == 0 else jtkcf[j // 2] for j in range(1, 2 * int(self.max_stat) + 2)]
     return np.array(cf) / (jtkcf[0] or 1)
@@ -512,7 +499,8 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
                         paired: bool = False # whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient)
                        ) -> float: # p-value for equivalence test
   "performs equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent"
-  pooled_std = np.sqrt(((len(row_a) - 1) * np.var(row_a, ddof = 1) + (len(row_b) - 1) * np.var(row_b, ddof = 1)) / (len(row_a) + len(row_b) - 2))
+  na, nb = len(row_a), len(row_b)
+  pooled_std = np.sqrt(((na - 1) * np.var(row_a, ddof = 1) + (nb - 1) * np.var(row_b, ddof = 1)) / (na + nb - 2))
   delta = 0.2 * pooled_std
   low, up = -delta, delta
   return ttost_paired(row_a, row_b, low, up)[0] if paired else ttost_ind(row_a, row_b, low, up)[0]
@@ -555,7 +543,7 @@ def anosim(df: pd.DataFrame, # square distance matrix
           permutations: int = 999 # number of permutations to perform in ANOSIM test
          ) -> tuple[float, float]: # (ANOSIM R statistic [-1 to 1], p-value)
   "Performs analysis of similarity (ANOSIM) statistical test"
-  group_labels = copy.deepcopy(group_labels_in)
+  group_labels = list(group_labels_in)
   n = df.shape[0]
   condensed_dist = df.values[np.tril_indices(n, k = -1)]
   ranks = rankdata(condensed_dist, method = 'average')
@@ -590,8 +578,7 @@ def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
   if all(count > 1 for count in group_counts.values()):
     stat_outputs = pd.DataFrame({'group': group_labels, 'diversity': df.squeeze()})
     grouped_diversity = stat_outputs.groupby('group')['diversity'].apply(list).tolist()
-    stats = f_oneway(*grouped_diversity, **({'equal_var': False} if 'equal_var' in inspect.signature(f_oneway).parameters else {}))
-    return stats
+    return f_oneway(*grouped_diversity, equal_var = False)
 
 
 def calculate_permanova_stat(df: pd.DataFrame, # square distance matrix
@@ -605,8 +592,7 @@ def calculate_permanova_stat(df: pd.DataFrame, # square distance matrix
   ss_within = 0
   for group in unique_groups:
     group_mask = np.array(group_labels) == group
-    group_indices = np.arange(len(group_labels))[group_mask]
-    group_matrix = df.values[np.ix_(group_indices, group_indices)]
+    group_matrix = df.values[np.ix_(group_mask, group_mask)]
     ss_within += np.sum(squareform(group_matrix)) / 2
   ss_between = ss_total - ss_within
   # Calculate the PERMANOVA test statistic: pseudo-F
@@ -724,8 +710,7 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
                            correction_method: str = "two-stage" # "two-stage" or "one-stage" Benjamini-Hochberg
                           ) -> tuple[list[float], list[bool]]: # (corrected p-values, significance True/False)
   "Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure"
-  if not isinstance(pvals, list):
-    pvals = pvals.tolist()
+  pvals = list(pvals)
   if not pvals:
     return [], []
   corrpvals = multipletests(pvals, method = 'fdr_tsbh' if correction_method == "two-stage" else 'fdr_bh')[1]
@@ -762,7 +747,7 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
     df_res[label_col] = [k.split('_')[0] for k in df_res[label_col]]
   else:
     df_res[label_col] = ['_'.join(k.split('_')[:-1]) for k in df_res[label_col]]
-  grouped = df_res.groupby(label_col)['corr p-val'].apply(lambda p: combine_pvalues(p)[1]) # Fisher’s Combined Probability Test
+  grouped = df_res.groupby(label_col)['corr p-val'].agg(lambda p: combine_pvalues(p)[1]) # Fisher’s Combined Probability Test
   mean_effect_size = df_res.groupby(label_col)['Effect size'].mean()
   pvals, sig = correct_multiple_testing(grouped, alpha)
   df_out = pd.DataFrame({'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})
@@ -829,8 +814,8 @@ def partial_corr(x: np.ndarray, # typically values from a column or row
   beta_x = Ridge(alpha = alpha).fit(controls, x).coef_
   beta_y = Ridge(alpha = alpha).fit(controls, y).coef_
   # Compute residuals
-  res_x = x - controls.dot(beta_x)
-  res_y = y - controls.dot(beta_y)
+  res_x = x - controls @ beta_x
+  res_y = y - controls @ beta_y
   # Compute correlation of residuals
   return spearmanr(res_x, res_y)
 
@@ -894,8 +879,9 @@ def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
          sigma: float | None = None # RBF bandwidth; per-variable median heuristic if None
         ) -> tuple[float, float]: # (HSIC statistic, analytical p-value via gamma approximation)
   "Hilbert-Schmidt Independence Criterion with analytical p-value (Gretton et al. 2005) to measure dependency between variables"
-  x = np.atleast_2d(np.asarray(x, float)).T if np.asarray(x).ndim == 1 else np.asarray(x, float)
-  y = np.atleast_2d(np.asarray(y, float)).T if np.asarray(y).ndim == 1 else np.asarray(y, float)
+  x, y = np.asarray(x, float), np.asarray(y, float)
+  if x.ndim == 1: x = x[:, None]
+  if y.ndim == 1: y = y[:, None]
   n = x.shape[0]
   sq_x = np.sum((x[:, None] - x[None, :]) ** 2, axis = -1)
   sq_y = np.sum((y[:, None] - y[None, :]) ** 2, axis = -1)

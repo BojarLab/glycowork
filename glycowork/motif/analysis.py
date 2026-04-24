@@ -18,6 +18,7 @@ plt.rcParams.update({
 from collections import Counter
 from typing import Any
 from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway, spearmanr
+from scipy.spatial.distance import squareform, pdist
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
@@ -750,7 +751,7 @@ def get_volcano(
                    bbox = dict(boxstyle = 'round,pad=0.15', facecolor = 'white', alpha = 0.5, linewidth = 0))
   # Save to file
   if filepath:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
     if annotate_volcano:
       from glycowork.motif.draw import annotate_figure
       svg_temp = filepath.rsplit('.', 1)[0] + '_temp.svg'
@@ -871,7 +872,7 @@ def get_meta_analysis(
           ax.spines[spine].set_visible(False)
       ax.tick_params(left = False)
       plt.tight_layout()
-      plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+      plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
     return combined_effect_size, p_value
 
 
@@ -1060,15 +1061,8 @@ def get_biodiversity(
   if 'beta' in metrics:
     if not isinstance(df.index[0], str):
       df = df.set_index(df.columns[0])
-    bc_diversity = {}  # Calculating pair-wise indices
-    for index_1 in range(0, len(df.columns)):
-      for index_2 in range(0, len(df.columns)):
-        bc_pair = np.sqrt(np.sum((df.iloc[:, index_1] - df.iloc[:, index_2]) ** 2))
-        bc_diversity[index_1, index_2] = bc_pair
-    b_df_out = pd.DataFrame.from_dict(bc_diversity, orient = 'index')
-    out_len = int(np.sqrt(len(b_df_out)))
-    distance_matrix = b_df_out.values.reshape(out_len, out_len)
-    beta_df_out = pd.DataFrame(data = distance_matrix, index = range(out_len), columns = range(out_len))
+    distance_matrix = squareform(pdist(df.values.T, metric = 'euclidean'))
+    beta_df_out = pd.DataFrame(distance_matrix, index = range(len(df.columns)), columns = range(len(df.columns)))
     if all(count > 1 for count in group_counts.values()):
       r, p = anosim(beta_df_out, group_sizes, permutations)
       b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (ANOSIM)', 'p-val': p, 'Effect size': r}, index = [0])
@@ -1196,7 +1190,7 @@ def multi_feature_scoring(
   plt.title('ROC Curve with Optimal Features')
   plt.legend(loc = "lower right")
   if filepath:
-    plt.savefig(filepath, format = filepath.split('.')[-1], dpi = 300, bbox_inches = 'tight')
+    plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
   return model, roc_auc
 
 

@@ -34,7 +34,7 @@ def annotate_glycan(
   # Count the number of times each motif occurs in a glycan
   ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
   res = [subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
-                                count = True) for i, g in enumerate(gmotifs)]*1
+                                count = True) for i, g in enumerate(gmotifs)]
   out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
@@ -71,7 +71,7 @@ def annotate_glycan_topology_uncertainty(
     temp_res = subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
                                 count = True)
     if temp_res:
-      res.append(temp_res*1)
+      res.append(temp_res)
       continue
     temp_res = [subgraph_isomorphism(p, g, termini_list = termini_list[i] if termini_list else termini_list,
                                 count = True) for p in possibles]
@@ -99,7 +99,7 @@ def get_molecular_properties(
   if placeholder:
     dummy = IUPAC_to_SMILES(['Glc'])[0]
   compounds_list, succeeded_requests, failed_requests = [], [], []
-  for s, g in zip(*[IUPAC_to_SMILES(glycan_list), glycan_list]):
+  for s, g in zip(IUPAC_to_SMILES(glycan_list), glycan_list):
     try:
       c = pcp.get_compounds(s, 'smiles')[0]
       if c.cid is None:
@@ -137,18 +137,20 @@ def get_size_branching_features(
     ) -> pd.DataFrame:
   "Generate binned features for glycan size (parentheses count) and branching (bracket count)"
   # Calculate size and branching for each glycan
-  sizes = [glycan.count('(')+1 for glycan in glycans]
+  sizes = [glycan.count('(') + 1 for glycan in glycans]
   branchings = [glycan.count('[') for glycan in glycans]
   if n_bins == 0:
     return pd.DataFrame({'Size': sizes, 'Branching': branchings}, index = glycans)
+
   # Helper function to create bin edges and labels
   def create_bins(values: list[int], n_bins: int) -> tuple[list[int], list[str]]:
     min_val, max_val = min(values), max(values)
     if min_val == max_val:
       return [min_val - 0.5, max_val + 0.5], [f"{min_val}"]
     edges = list(np.linspace(min_val - 0.5, max_val + 0.5, n_bins + 1))  # Create bin edges
-    labels = [f"{int(edges[i]+0.5)}-{int(edges[i+1]-0.5)}" for i in range(len(edges)-1)]  # Create bin labels
+    labels = [f"{int(edges[i] + 0.5)} - {int(edges[i + 1] - 0.5)}" for i in range(len(edges) - 1)]  # Create bin labels
     return edges, labels
+
   # Create bins for size and branching
   size_edges, size_labels = create_bins(sizes, n_bins)
   branch_edges, branch_labels = create_bins(branchings, n_bins)
@@ -156,13 +158,13 @@ def get_size_branching_features(
   size_dist = pd.DataFrame(0, index = glycans, columns = [f"Size_{label}" for label in size_labels])
   branch_dist = pd.DataFrame(0, index = glycans, columns = [f"Branch_{label}" for label in branch_labels])
   # Assign values to bins
-  for i, glycan in enumerate(glycans):
-    size_bin = np.digitize([sizes[i]], size_edges)[0] - 1
-    branch_bin = np.digitize([branchings[i]], branch_edges)[0] - 1
-    if size_bin < len(size_labels):
-      size_dist.iloc[i, size_bin] = 1
-    if branch_bin < len(branch_labels):
-      branch_dist.iloc[i, branch_bin] = 1
+  size_bins = np.digitize(sizes, size_edges) - 1
+  branch_bins = np.digitize(branchings, branch_edges) - 1
+  for i in range(len(glycans)):
+    if size_bins[i] < len(size_labels):
+      size_dist.iloc[i, size_bins[i]] = 1
+    if branch_bins[i] < len(branch_labels):
+      branch_dist.iloc[i, branch_bins[i]] = 1
   # Combine size and branching features
   return pd.concat([size_dist, branch_dist], axis = 1)
 
@@ -177,7 +179,7 @@ def annotate_dataset(
     custom_motifs: list = [] # Custom motifs when using 'custom' feature set
     ) -> pd.DataFrame: # DataFrame mapping glycans to presence/absence of motifs
   "Comprehensive glycan annotation combining multiple feature types: structural motifs, graph properties, terminal sequences"
-  if any([k in ''.join(glycans) for k in [';', 'β', 'α', 'RES', '=']]):
+  if any(k in ''.join(glycans) for k in (';', 'β', 'α', 'RES', '=')):
     raise Exception
   invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive', 'size_branch'}
   if invalid_features:
@@ -220,7 +222,7 @@ def annotate_dataset(
     shopping_cart.append(temp)
   if 'chemical' in feature_set:
     shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
-  if 'terminal' in feature_set or 'terminal1' in feature_set or 'terminal2' in feature_set or 'terminal3' in feature_set:
+  if any(t in feature_set for t in ('terminal', 'terminal1', 'terminal2', 'terminal3')):
     bag1, bag2, bag3 = [], [], []
     if 'terminal' in feature_set or 'terminal1' in feature_set:
       bag1 = list(map(get_terminal_structures, glycans))
@@ -290,16 +292,16 @@ def quantify_motifs(
   df = df.T
   log2 = (df.values < 0).any()
   # Motif quantification
-  for c, col in enumerate(df_motif.columns):
+  for col in df_motif.columns:
     indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
     temp = df.iloc[:, indices]
     temp.columns = range(temp.columns.size)
+    weights = df_motif[col].iloc[indices].reset_index(drop = True)
     if log2:
       linear_values = np.power(2, temp)
-      weighted_values = (linear_values * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
-      collect_dic[col] = np.log2(weighted_values)
+      collect_dic[col] = np.log2((linear_values * weights).sum(axis = 1))
     else:
-      collect_dic[col] = (temp * df_motif.iloc[indices, c].reset_index(drop = True)).sum(axis = 1)
+      collect_dic[col] = (temp * weights).sum(axis = 1)
   df = pd.DataFrame(collect_dic)
   return df if not remove_redundant else deduplicate_motifs(df.T)
 
@@ -398,7 +400,7 @@ def get_k_saccharides(
   "Extracts k-saccharide fragments from glycan sequences with options for different fragment sizes and positions"
   if not isinstance(glycans, (list, set)):
     raise TypeError("The input has to be a list or set of glycans")
-  if any(k in ''.join(glycans) for k in [';', 'β', 'α', 'RES', '=']):
+  if any(k in ''.join(glycans) for k in (';', 'β', 'α', 'RES', '=')):
     raise Exception
   if not up_to and max(g.count('(') + 1 for g in glycans) < size:
     return [] if just_motifs else pd.DataFrame()
@@ -437,20 +439,20 @@ def get_terminal_structures(
    ) -> list[str]: # List of terminal structures with linkages
   "Identifies terminal monosaccharide sequences from non-reducing ends of glycan structure"
   ggraph = ensure_graph(glycan)
-  nodeDict = dict(ggraph.nodes(data = True))
+  node_dict = dict(ggraph.nodes(data = True))
   result = []
   for k in list(ggraph.nodes())[:-1]:
-    if ggraph.out_degree[k] == 0 and k+1 in nodeDict.keys() and nodeDict[k]['string_labels'] not in linkages:
-      structure = nodeDict[k]['string_labels'] + '(' + nodeDict[k+1]['string_labels'] + ')'
+    if ggraph.out_degree[k] == 0 and k + 1 in node_dict and node_dict[k]['string_labels'] not in linkages:
+      structure = node_dict[k]['string_labels'] + '(' + node_dict[k + 1]['string_labels'] + ')'
       current_linkage = k + 1
       for _ in range(size - 1):
         preds = list(ggraph.predecessors(current_linkage))
         if not preds:
           break
         next_mono = preds[0]
-        structure += nodeDict[next_mono]['string_labels']
-        if next_mono + 1 in nodeDict:
-          structure += '(' + nodeDict[next_mono + 1]['string_labels'] + ')'
+        structure += node_dict[next_mono]['string_labels']
+        if next_mono + 1 in node_dict:
+          structure += '(' + node_dict[next_mono + 1]['string_labels'] + ')'
           current_linkage = next_mono + 1
         else:
           break
@@ -467,14 +469,13 @@ def create_correlation_network(
   # Calculate the correlation matrix
   correlation_matrix = df.corr()
   # Create an adjacency matrix based on the correlation threshold
-  adjacency_matrix = (correlation_matrix > correlation_threshold).astype(int)
+  adjacency_matrix = correlation_matrix > correlation_threshold
   # Create a graph from the adjacency matrix
   graph = nx.from_numpy_array(adjacency_matrix.values)
   # Use the graph to find connected components (clusters of highly correlated glycans)
   clusters = list(nx.connected_components(graph))
   # Convert indices back to original labels
-  clusters = [set(df.columns[list(cluster)]) for cluster in clusters]
-  return clusters
+  return [set(df.columns[list(cluster)]) for cluster in clusters]
 
 
 def group_glycans_core(
@@ -640,7 +641,7 @@ def create_lectin_and_motif_mappings(
         if binder:
           motif_mapping[motif][lectin] = 2 if binder == 1 else 3
     # sort lectins by weight class
-    motif_mapping[motif] = dict(sorted(mapping.items(), key=lambda x:x[1]))
+    motif_mapping[motif] = dict(sorted(mapping.items(), key = lambda x:x[1]))
   return useable_lectin_mapping, motif_mapping
 
 
@@ -657,7 +658,6 @@ def lectin_motif_scoring(
   "Calculates weighted motif scores from lectin binding data incorporating specificity and redundancy factors"
   output = []
   useable_lectin_count = {k: list(useable_lectin_mapping.values()).count(v) for k, v in useable_lectin_mapping.items()}
-  #max_motifs = max([lectin_lib[k].get_all_binding_motifs_count() for k in useable_lectin_mapping.values()]) + 1
   for motif, lectins in motif_mapping.items():
     score = 0
     for lectin, weight_class in lectins.items():

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # Project metadata
 [project]
 name = "glycowork"
-version = "1.8.1"
+version = "1.8.2"
 description = "Package for processing and analyzing glycans"
 readme = "README.md"
 authors = [
@@ -22,7 +22,7 @@ dependencies = [
     "scikit-learn",
     "networkx>=3.0",
     "statsmodels",
-    "scipy",
+    "scipy>=1.16",
     "seaborn",
     "bokeh",
     "IPython",

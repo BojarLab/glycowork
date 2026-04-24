@@ -6,7 +6,7 @@ from glycowork.motif.processing import min_process_glycans, get_possible_linkage
 import numpy as np
 import pandas as pd
 import networkx as nx
-from collections import Counter
+from collections import Counter, OrderedDict
 from scipy.sparse.linalg import eigsh
 from functools import lru_cache, wraps
 
@@ -75,8 +75,8 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
   if isinstance(libr, dict):
     libr = HashableDict(libr)  # Convert to HashableDict for consistency and user friendliness
   # This allows to make glycan graphs of motifs ending in a linkage
-  cache = glycan.endswith(')')
-  if cache:
+  appended_hex = glycan.endswith(')')
+  if appended_hex:
     glycan += 'Hex'
   # Map glycan string to node labels and adjacency matrix
   node_dict, adj_matrix = glycan_to_graph(glycan)
@@ -86,7 +86,7 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
   g1.add_nodes_from(node_dict.keys())
   g1.add_edges_from(zip(edges[0], edges[1]))
   # Remove the helper monosaccharide if used
-  if cache and glycan.endswith('x'):
+  if appended_hex and glycan.endswith('x'):
     last_node = len(node_dict) - 1
     node_dict.pop(last_node, None)
     g1.remove_node(last_node)
@@ -150,9 +150,8 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
     data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
     if data1_labels == data2_labels:
       return True
-    if "Monosaccharide" in data1_labels or "Monosaccharide" in data2_labels:
-      if '-' not in data1_labels and '-' not in data2_labels:
-        return True
+    if (data1_labels == "Monosaccharide" or data2_labels == "Monosaccharide") and '-' not in data1_labels and '-' not in data2_labels:
+      return True
     if data1_labels == "?1-?" or data2_labels == "?1-?":
       if data1_labels.count('-') == 1 and data2_labels.count('-') == 1:
         return True
@@ -185,7 +184,7 @@ def _prefilter_labels(g1_labels: list, # G1 node labels
     have = 0
     for l1, cnt in g1_counter.items():
       if (l1 == l2
-          or ('Monosaccharide' in (l1, l2) and '-' not in l1 and '-' not in l2)
+          or ((l1 == 'Monosaccharide' or l2 == 'Monosaccharide') and '-' not in l1 and '-' not in l2)
           or ((l1 == '?1-?' or l2 == '?1-?') and '-' in l1 and '-' in l2)
           or (l2.startswith('!') and l1 != l2[1:] and '-' not in l1)
           or (l1.startswith('!') and l2 != l1[1:] and '-' not in l2)
@@ -218,7 +217,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
     if len(glycan_a.nodes) != len(glycan_b.nodes):
       return (False, None) if return_matches else False
     g1_sl, g2_sl = nx.get_node_attributes(glycan_a, "string_labels"), nx.get_node_attributes(glycan_b, "string_labels")
-    proc = frozenset(g1_sl.values()) | frozenset(g2_sl.values())
+    proc = set(g1_sl.values()) | set(g2_sl.values())
     if any('O' in s for s in proc):
       g1, g2 = ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))
       g1_sl = nx.get_node_attributes(g1, "string_labels")
@@ -399,7 +398,7 @@ def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or netwo
                       'harm': [0.0], 'flow': [], 'flow_edge': [], 'secorder': []}
     else:
       deg = np.sum(A, axis = 1) + np.sum(A, axis = 0)
-      deg_to_leaves = np.array([np.sum(A[:, deg == 1]) for i in range(N)])
+      deg_to_leaves = np.full(N, np.sum(A[:, deg == 1]))
       centralities = {'betweeness': list(nx.betweenness_centrality(g).values()), 'eigen': list(nx.katz_centrality_numpy(g).values()),
                       'close': list(nx.closeness_centrality(g).values()), 'load': list(nx.load_centrality(g_undir).values()),
                       'harm': list(nx.harmonic_centrality(g).values()), 'flow': list(nx.current_flow_betweenness_centrality(g_undir).values()) if connected else [],
@@ -442,30 +441,23 @@ def get_linkage_number(node, graph):
 
 
 def glycan_graph_memoize(maxsize: int = 128):
-  cache, access_order = {}, []
+  cache = OrderedDict()
   def decorator(func):
     @wraps(func)
     def wrapper(graph, *args, **kwargs):
       if len(graph) < 4:
         return func(graph, *args, **kwargs)
       node_ids = sorted(graph.nodes())
-      labels_vals = tuple(graph.nodes[n]["string_labels"] for n in node_ids)
-      degrees = tuple(graph.out_degree(n) for n in node_ids)
-      edges = tuple(sorted(graph.edges()))
-      kwargs_items = tuple(sorted(kwargs.items()))
-      key = (labels_vals, degrees, edges, args, kwargs_items)
+      key = (tuple(graph.nodes[n]["string_labels"] for n in node_ids),
+             tuple(graph.out_degree(n) for n in node_ids),
+             tuple(sorted(graph.edges())), args, tuple(sorted(kwargs.items())))
       if key in cache:
-        if key in access_order:
-          access_order.remove(key)
-        access_order.append(key)
+        cache.move_to_end(key)
         return cache[key]
-      result = func(graph, *args, **kwargs)
       if len(cache) >= maxsize:
-        oldest = access_order.pop(0)
-        del cache[oldest]
-      cache[key] = result
-      access_order.append(key)
-      return result
+        cache.popitem(last = False)
+      cache[key] = func(graph, *args, **kwargs)
+      return cache[key]
     return wrapper
   return decorator
 
@@ -514,10 +506,11 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
     if len(descendants) != 1:
       return False
     tip_string = graph.nodes[descendants[0]].get("string_labels", "")
-    special = tip_string not in {"Gal", "Man"}
-    if special and "GlcNAc" in tip_string:
-      special = special if graph.nodes[node].get("string_labels", "") not in {'b1-3'} else False
-    return special
+    if tip_string in {"Gal", "Man"}:
+      return False
+    if "GlcNAc" in tip_string and graph.nodes[node].get("string_labels", "") == 'b1-3':
+      return False
+    return True
 
   # Convert to string with a single traversal
   def node_to_string(node):
@@ -569,13 +562,10 @@ def graph_to_string(graph: nx.DiGraph, # Glycan graph (assumes root node is the 
     parts = [graph.subgraph(sorted(c)) for c in nx.weakly_connected_components(graph)]
     len_org = len(parts[-1])
     for p in range(len(parts) - 1):
-      H = nx.DiGraph()
-      H.add_nodes_from(sorted(parts[p].nodes(data = True)))
-      H.add_edges_from(parts[p].edges(data = True))
-      parts[p] = nx.relabel_nodes(H, {pn: pn - len_org for pn in H.nodes()})
-      len_org += len(H)
-    parts = '}'.join(['{'+graph_to_string_int(p, canonicalize = canonicalize, order_by = order_by) for p in parts])
-    return parts[:parts.rfind('{')] + parts[parts.rfind('{')+1:]
+      parts[p] = nx.relabel_nodes(parts[p].copy(), {pn: pn - len_org for pn in parts[p].nodes()})
+      len_org += len(parts[p])
+    parts = '}'.join(['{' + graph_to_string_int(p, canonicalize = canonicalize, order_by = order_by) for p in parts])
+    return parts[:parts.rfind('{')] + parts[parts.rfind('{') + 1:]
   else:
     return graph_to_string_int(graph, canonicalize = canonicalize, order_by = order_by)
 
@@ -625,7 +615,7 @@ def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating sub
     dangling_carbon = ggraph.nodes[dangling_linkage]['string_labels'][-1]
     floating_monosaccharide = dangling_linkage - 1
   topologies = []
-  candidate_nodes = [k for k in list(main_part.nodes())[::2] if exhaustive or is_modification or (main_part.out_degree[k] == 0)]
+  candidate_nodes = [k for i, k in enumerate(main_part.nodes()) if i % 2 == 0 and (exhaustive or is_modification or main_part.out_degree[k] == 0)]
   for k in candidate_nodes:
     neighbor_carbons = [ggraph.nodes[n]['string_labels'][-1] for n in ggraph.neighbors(k) if n < k]
     if dangling_carbon in neighbor_carbons:
