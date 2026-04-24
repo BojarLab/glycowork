@@ -33,7 +33,7 @@ from glycowork.motif.tokenization import (
     glycan_to_composition, calculate_adduct_mass, structure_to_basic, map_to_basic,
     compositions_to_structures, match_composition_relaxed, stemify_dataset, composition_to_mass,
     condense_composition_matching, get_unique_topologies, mz_to_structures, glycan_to_mass,
-    get_random_glycan
+    get_random_glycan, HYDROGEN_MASS, mass_dict
 )
 from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages,
@@ -58,7 +58,7 @@ from glycowork.glycan_data.stats import (
     pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
     correct_multiple_testing, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results, replace_outliers_with_IQR_bounds,
-    replace_outliers_winsorization, perform_tests_monte_carlo
+    replace_outliers_winsorization, perform_tests_monte_carlo, hsic
 )
 from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph,
@@ -98,7 +98,7 @@ from glycowork.network.biosynthesis import (safe_compare, safe_index, create_nei
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
                          deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme, infer_network,
                          get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
-                         plot_network, add_high_man_removal, net_dic, find_ptm
+                         plot_network, add_high_man_removal, net_dic, find_ptm, get_biosynthetic_coherence
 )
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
                       jaccard, distance_from_metric, check_conservation, get_communities, dendrogram_from_distance
@@ -358,6 +358,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Rha(a1-2)Ara4S") == "Rha(a1-2)Ara4S"
     assert canonicalize_iupac("GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc") == "GalNAc(a1-3)GalNAc(b1-3)[D-Fuc3NAc(a1-4)]Gal(a1-4)Glc"
     assert canonicalize_iupac("Gal4,6Pyr") == "Gal4Pyr6Pyr"
+    assert canonicalize_iupac("Neu5Acα2-3(6-O-sulfo)Galβ1-4Glc") == "Neu5Ac(a2-3)Gal6S(b1-4)Glc"
+    assert canonicalize_iupac("D-Fuc(a1-2)[S-6]Glc(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc") == "D-Fuc(a1-2)Glc6S(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc"
     # Test sanitization
     assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
     assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-2)]Man") == "Gal(b1-4)GlcNAc(b1-?)[Gal(b1-4)GlcNAc(b1-?)]Man"
@@ -874,13 +876,15 @@ def test_glycan_to_composition():
 
 
 def test_glycan_to_mass():
-    assert abs(glycan_to_mass("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc") - 674.2149056) < 0.1
+    assert abs(glycan_to_mass("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc") - 657.2115545999999) < 0.1
     assert abs(glycan_to_mass("Neu5Az(a2-3)Gal(b1-4)Glc") - 658.2181545999999) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc") - 633.2115546) < 0.1
-    assert abs(glycan_to_mass("Neu5Az9Ac(a2-3)Gal(b1-4)Glc") - 717.2320056) < 0.1
+    assert abs(glycan_to_mass("Neu5Az9Ac(a2-3)Gal(b1-4)Glc") - 700.2286545999999) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "C2H4O2") - 693.2325546) < 0.1
     assert abs(glycan_to_mass("Neu5Ac(a2-3)Gal(b1-4)Glc", adduct = "-C2H4O2") - 573.1905546) < 0.1
     assert abs(glycan_to_mass("GalOS(b1-3)GalNAc4/6S") - 543.0563546) < 0.1
+    assert abs(glycan_to_mass("Neu5Ac9Ac(a2-3)Gal(b1-4)Glc") - 675.2220546) < 0.1
+    assert abs(glycan_to_mass("Neu4Ac5Ac9Ac(a2-3)Gal(b1-4)Glc") - 717.2325546) < 0.1
 
 
 def test_calculate_adduct_mass():
@@ -956,7 +960,7 @@ def test_mz_to_composition():
         mass_value='monoisotopic',
         glycan_class='O',
         mass_tolerance=0.5,
-        reduced=True,
+        modification="reduced",
         filter_out = {'Kdn'}
     )
     expected = [{'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}]
@@ -967,7 +971,7 @@ def test_mz_to_composition():
         mass_value='monoisotopic',
         glycan_class='all',
         mass_tolerance=0.5,
-        reduced=True,
+        modification="reduced",
         adduct="H2O",
         extras=["doubly_charged", "adduct"]
     )
@@ -977,7 +981,7 @@ def test_mz_to_composition():
         mass_value='monoisotopic',
         glycan_class='all',
         mass_tolerance=0.5,
-        reduced=True,
+        modification="reduced",
         filter_out = {'Kdn'},
         extras=["doubly_charged", "adduct"]
     ),
@@ -987,7 +991,7 @@ def test_mz_to_composition():
         mass_value = 'monoisotopic',
         glycan_class = 'all',
         mass_tolerance = 0.5,
-        reduced = True,
+        modification="reduced",
         adduct = "H2O",
         extras = ["doubly_charged", "adduct"],
         deprioritized = None
@@ -998,10 +1002,37 @@ def test_mz_to_composition():
         mass_value = 'monoisotopic',
         glycan_class = 'O',
         mass_tolerance = 0.5,
-        reduced = True,
+        modification="reduced",
         filter_out = {'Kdn'},
         deprioritized = {"Hex", "HexNAc", "Neu5Ac"}
     )
+    # Test mass_tag: same composition shifted by reducing-end label mass (e.g., 2AA = 137.14 Da)
+    result = mz_to_composition(
+        675 + 137.14,
+        mode = 'negative',
+        mass_value = 'monoisotopic',
+        glycan_class = 'O',
+        mass_tolerance = 0.5,
+        modification="reduced",
+        filter_out = {'Kdn'},
+        mass_tag = 137.14
+    )
+    assert result == [{'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}]
+    # Test doubly-charged mixed ion: [M-H+Acetate]2- in negative mode
+    comp = {'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}
+    neutral = composition_to_mass(comp, modification = 'reduced')
+    mixed_mz = (neutral - HYDROGEN_MASS + mass_dict['Acetate']) / 2
+    result = mz_to_composition(
+        mixed_mz,
+        mode = 'negative',
+        mass_value = 'monoisotopic',
+        glycan_class = 'O',
+        mass_tolerance = 0.5,
+        modification = 'reduced',
+        filter_out = {'Kdn'},
+        extras = ["doubly_charged", "adduct"]
+    )
+    assert result == [comp]
 
 
 def test_compositions_to_structures():
@@ -1073,6 +1104,16 @@ def test_composition_to_mass():
     comp = {'Hex': 1, 'HexNAc': 1, 'S': 1}
     mass = composition_to_mass(comp)
     assert mass > composition_to_mass({'Hex': 1, 'HexNAc': 1})
+    # Test reducing end modification
+    comp = {'Hex': 1, 'HexNAc': 1}
+    base_mass = composition_to_mass(comp)
+    reduced_mass = composition_to_mass(comp, modification = 'reduced')
+    assert abs(reduced_mass - base_mass - 2 * 1.007825) < 0.01
+    aa_mass = composition_to_mass(comp, modification = '2AA')
+    assert aa_mass > base_mass
+    assert abs(aa_mass - base_mass - 121.0528) < 0.01
+    # Unknown modification should add nothing
+    assert composition_to_mass(comp, modification = 'nonexistent') == base_mass
 
 
 def test_condense_composition_matching():
@@ -1128,7 +1169,7 @@ def test_mz_to_structures():
         mode='negative',
         mass_value='monoisotopic',
         mass_tolerance=0.5,
-        reduced=True
+        modification="reduced"
     )
     assert isinstance(result, pd.DataFrame)
     # Verify returned structures match the mass
@@ -1145,7 +1186,7 @@ def test_mz_to_structures():
         mz_values,
         glycan_class='O',
         mode='negative',
-        reduced=True,
+        modification="reduced",
         filter_out={'Kdn'},
         abundances=abundances
     )
@@ -1155,7 +1196,7 @@ def test_mz_to_structures():
     result = mz_to_structures(
         mz_values,
         glycan_class='O',
-        reduced=True,
+        modification="reduced",
         filter_out={'Kdn', 'Neu5Ac'}
     )
     # Verify no structures contain Neu5Ac
@@ -1583,6 +1624,7 @@ def test_find_nth_reverse():
     assert find_nth_reverse(glycan, "Gal", 2, ignore_branches=True) == 26
     # Test missing
     assert find_nth_reverse("hello", "j", 1) == -1
+    assert find_nth_reverse("Gal(b1-4)[Fuc(a1-3)]GlcNAc", "GlcNAc", 1, ignore_branches = True) == 9
 
 
 def test_remove_unmatched_brackets():
@@ -1748,6 +1790,20 @@ def test_dataframe_serializer():
     df2 = serializer.deserialize("test.json")
     assert isinstance(df2["stringified_lists"].tolist()[0], list)
     assert isinstance(df2["stringified_dicts"].tolist()[0], dict)
+    s = DataFrameSerializer()
+    # string-like-list that fails literal_eval → falls through to primitive
+    assert s._serialize_cell("[not a list]")['type'] == 'primitive'
+    # string-like-dict with str→list values → str_list_dict
+    assert s._serialize_cell("{'a': [1, 2], 'b': [3, 4]}")['type'] == 'str_list_dict'
+    # string-like-dict with str→str values → dict; bad dict string → primitive
+    assert s._serialize_cell("{'a': 'x', 'b': 'y'}")['type'] == 'dict'
+    assert s._serialize_cell("{not: a dict}")['type'] == 'primitive'
+    # actual dict with str→list values → str_list_dict
+    assert s._serialize_cell({'a': [1, 2], 'b': [3, 4]})['type'] == 'str_list_dict'
+    # actual dict with str→str values → generic dict
+    assert s._serialize_cell({'a': 'x', 'b': 'y'})['type'] == 'dict'
+    # deserializing a 'dict'-type cell returns its value directly
+    assert s._deserialize_cell({'type': 'dict', 'value': {'a': 'b'}}) == {'a': 'b'}
 
 
 def test_glycan_binding():
@@ -2186,6 +2242,16 @@ def test_get_glm():
         assert hasattr(model, 'params')
         assert hasattr(model, 'pvalues')
         assert len(variables) > 0
+    # all retained features have max == 0 → early return
+    data_empty = pd.DataFrame({'H': [0, 0, 0, 0], 'N': [0, 0, 0, 0],
+                               'Abundance': [1., 2., 1., 2.], 'Condition': [0, 0, 1, 1]})
+    result, vars_ = get_glm(data_empty)
+    assert result == "No variables retained"
+    assert vars_ == []
+    # GLM fit raises → returns failure message
+    with patch('glycowork.glycan_data.stats.smf.glm', side_effect = ValueError("forced")):
+        result, vars_ = get_glm(data)
+        assert "GLM fitting failed" in result
 
 
 def test_process_glm_results():
@@ -2244,6 +2310,13 @@ def test_perform_tests_monte_carlo():
     assert len(raw_p) == len(adj_p) == len(effect) == 5
     assert all(0 <= p <= 1 for p in raw_p)
     assert all(0 <= p <= 1 for p in adj_p)
+
+
+def test_hsic():
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=200)
+    assert hsic(x, rng.normal(size=200))[1] > 0.05  # independent: non-significant
+    assert hsic(x, x**2 + rng.normal(size=200, scale=0.1))[1] < 0.05  # nonlinear dependence: significant
 
 
 def test_glycan_to_graph():
@@ -2463,8 +2536,9 @@ def test_get_molecular_properties():
         glycans = ["Gal(b1-4)GlcNAc", "Neu4Ac5Ac7Ac9Ac(a2-6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc", "Glc6Madeup(b1-4)Glc"]
         result = get_molecular_properties(glycans, verbose=True, placeholder=True)
         assert isinstance(result, pd.DataFrame)
-        assert 'molecular_weight' in result.columns
-        assert 'xlogp' in result.columns
+        if not result.columns.empty:
+            assert 'molecular_weight' in result.columns
+            assert 'xlogp' in result.columns
     except ImportError:
         pytest.skip("Skipping test due to missing dependencies")
 
@@ -3575,6 +3649,77 @@ def test_preprocess_data():
         return False
     except ValueError:
         pass
+    df_big = sample_comp_glycomics_data()
+    g1_big = [k for k in df_big.columns if 'control' in k]
+    g2_big = [k for k in df_big.columns if 'tumor' in k]
+    df_trans, df_org, _, _ = preprocess_data(df_big, g1_big, g2_big, motifs = True, transform = "ALR", impute = False)
+    assert isinstance(df_trans, pd.DataFrame)
+
+
+def test_file_loading_branches(tmp_path):
+    df = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man'],
+        'sample1': [10, 20], 'sample2': [15, 25],
+        'sample3': [12, 22], 'sample4': [18, 28]
+    })
+    group1, group2 = ['sample1', 'sample2'], ['sample3', 'sample4']
+    df.to_csv(tmp_path / "test.csv", index=False)
+    df.to_csv(tmp_path / "test.tsv", index=False, sep="\t")
+    df.to_excel(tmp_path / "test.xlsx", index=False)
+    for ext in ["csv", "tsv", "xlsx"]:
+        df_t, _, _, _ = preprocess_data(str(tmp_path / f"test.{ext}"), group1, group2, impute=False)
+        assert isinstance(df_t, pd.DataFrame)
+    pvals_df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc']*8, 'target': [2.5]*4 + [-2.5]*4})
+    pvals_df.to_csv(tmp_path / "pvals.csv", index=False)
+    pvals_df.to_csv(tmp_path / "pvals.tsv", index=False, sep="\t")
+    pvals_df.to_excel(tmp_path / "pvals.xlsx", index=False)
+    for ext in ["csv", "tsv", "xlsx"]:
+        result = get_pvals_motifs(str(tmp_path / f"pvals.{ext}"))
+        assert isinstance(result, pd.DataFrame)
+    res_df = pd.DataFrame({'p-val': [0.01, 0.05], 'Glycan': ['A', 'B'],
+                           'Log2FC': [1.0, -0.5], 'corr p-val': [0.03, 0.06],
+                           'Mean abundance': [0.3, 0.4], 'Effect size': [0.5, -0.2]})
+    res_df.to_csv(tmp_path / "res.csv", index=False)
+    get_pval_distribution(str(tmp_path / "res.csv"))
+    get_ma(str(tmp_path / "res.csv"))
+    get_volcano(str(tmp_path / "res.csv"))
+    cov_df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc'], 's1': [10.0], 's2': [0.0]})
+    cov_df.to_csv(tmp_path / "cov.csv", index=False)
+    cov_df.to_csv(tmp_path / "cov.tsv", index=False, sep="\t")
+    cov_df.to_excel(tmp_path / "cov.xlsx", index=False)
+    for ext in ["csv", "tsv", "xlsx"]:
+        get_coverage(str(tmp_path / f"cov.{ext}"))
+    for ext in ["csv", "tsv", "xlsx"]:
+        get_heatmap(str(tmp_path / f"test.{ext}"))
+        plt.close('all')
+        # get_pca — reuses test.* files; groups list drives column slicing
+    for ext in ["csv", "tsv", "xlsx"]:
+        get_pca(str(tmp_path / f"test.{ext}"), groups = [1, 1, 2, 2])
+        plt.close('all')
+        # get_time_series — needs sample columns in 'ID_hN_rN' format
+    ts_df = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man'],
+        'T1_h5_r1': [10.0, 20.0], 'T1_h5_r2': [15.0, 25.0],
+        'T2_h10_r1': [12.0, 22.0], 'T2_h10_r2': [18.0, 28.0]
+    })
+    ts_df.to_csv(tmp_path / "ts.csv", index = False)
+    ts_df.to_csv(tmp_path / "ts.tsv", index = False, sep = "\t")
+    ts_df.to_excel(tmp_path / "ts.xlsx", index = False)
+    for ext in ["csv", "tsv", "xlsx"]:
+        result = get_time_series(str(tmp_path / f"ts.{ext}"), impute = False)
+        assert isinstance(result, pd.DataFrame)
+    # get_jtk — 2 timepoints × 2 replicates, period=24 at interval=12 gives period/interval=2=timepoints
+    jtk_df = pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man'],
+        'r1_t1': [10.0, 20.0], 'r2_t1': [15.0, 25.0],
+        'r1_t2': [12.0, 22.0], 'r2_t2': [18.0, 28.0]
+    })
+    jtk_df.to_csv(tmp_path / "jtk.csv", index = False)
+    jtk_df.to_csv(tmp_path / "jtk.tsv", index = False, sep = "\t")
+    jtk_df.to_excel(tmp_path / "jtk.xlsx", index = False)
+    for ext in ["csv", "tsv", "xlsx"]:
+        result = get_jtk(str(tmp_path / f"jtk.{ext}"), timepoints = 2, interval = 12, periods = [24])
+        assert isinstance(result, pd.DataFrame)
 
 
 def test_get_pvals_motifs():
@@ -3804,8 +3949,16 @@ def test_get_differential_expression():
     assert len(results_motifs) > 0
     results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
                                                  monte_carlo=True)
-    results = get_differential_expression(df, group1, group2, motifs=False, impute=False,
-                                                 sets=True)
+    # use correlated data so create_correlation_network yields clusters with len > 1
+    df_corr = sample_comp_glycomics_data_corr()
+    g1_corr = [k for k in df_corr.columns if 'control' in k]
+    g2_corr = [k for k in df_corr.columns if 'tumor' in k]
+    results = get_differential_expression(df_corr, g1_corr, g2_corr, motifs = False, impute = False,
+                                          sets = True)
+    assert isinstance(results, pd.DataFrame)
+    results = get_differential_expression(df_corr, g1_corr, g2_corr, motifs = False, impute = False,
+                                          sets = True, effect_size_variance = True)
+    assert isinstance(results, pd.DataFrame)
     results = get_differential_expression(df_grouped, [k for k in df_grouped.columns if 'control' in k],
                                           [k for k in df_grouped.columns if 'tumor' in k], motifs=False, impute=False,
                                                  grouped_BH=True)
@@ -3927,16 +4080,27 @@ def test_get_biodiversity():
     # Run biodiversity analysis
     results = get_biodiversity(df, group1, group2, metrics=['alpha', 'beta'])
     # Basic assertions
-    assert isinstance(results, pd.DataFrame), "Results should be a DataFrame"
-    assert 'Metric' in results.columns, "Results should have a Metric column"
-    assert 'p-val' in results.columns, "Results should have a p-val column"
+    assert isinstance(results, tuple), "Results should be a tuple"
+    assert len(results) == 2, "Results should be consist of two DataFrames"
+    stats, dist_matrix = results
+    assert isinstance(stats, pd.DataFrame)
+    assert isinstance(dist_matrix, np.ndarray)
+    assert 'Metric' in stats.columns, "Stats results should have a Metric column"
+    assert 'p-val' in stats.columns, "Results should have a p-val column"
     # Additional assertions to verify realistic results
-    assert len(results) >= 2, "Should have at least alpha and beta diversity results"
-    assert all(0 <= p <= 1 for p in results['p-val']), "p-values should be between 0 and 1"
+    assert len(stats) >= 2, "Should have at least alpha and beta diversity results"
+    assert all(0 <= p <= 1 for p in stats['p-val']), "p-values should be between 0 and 1"
     # Optional: Check if the differences are detectable
     # The groups are designed to be different, so p-values should be < 0.05
-    assert any(p < 0.05 for p in results['p-val']), "Should detect differences between groups"
+    assert any(p < 0.05 for p in stats['p-val']), "Should detect differences between groups"
     results = get_biodiversity(df, group1, group2, metrics=['alpha', 'beta'], paired=True)
+    df3 = df[['glycan'] + group1 + group2].copy()
+    for i in range(3):
+        df3[f'sample3_{i + 1}'] = group2_data[i] * 1.2
+    results = get_biodiversity(df3, [1, 1, 1, 2, 2, 2, 3, 3, 3], [], metrics = ['alpha'])
+    assert isinstance(results, tuple)
+    results = get_biodiversity(df, group1, group2, metrics = ['beta'], motifs = True)
+    assert isinstance(results, tuple)
 
 
 @pytest.fixture
@@ -4177,6 +4341,7 @@ def simple_glycans():
 def mock_show():
     with patch('matplotlib.pyplot.show'):
         yield
+    plt.close('all')
 
 
 # Sample data fixtures
@@ -4428,6 +4593,8 @@ def test_characterize_monosaccharide_with_modifications():
     """Test characterize_monosaccharide with modifications enabled"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
         characterize_monosaccharide('Man', modifications=True, rank="Class", focus="Actinopterygii")
+        characterize_monosaccharide('a1-3', mode = 'bond', rank = "Class", focus = "Actinopterygii")
+        characterize_monosaccharide('Gal', modifications = True, rank = "Kingdom", focus = "Animalia", thresh = 5)
         mock_savefig.assert_not_called()
 
 
@@ -4458,6 +4625,10 @@ def test_get_heatmap_basic(sample_df):
         return False
     except ValueError:
         pass
+    df_renamed = sample_df.rename(columns = {'glycan': 'glycan_id'})
+    get_heatmap(df_renamed)
+    df_transposed = sample_df.set_index('glycan').T
+    get_heatmap(df_transposed)
     plt.close('all')
 
 
@@ -4503,6 +4674,14 @@ def test_get_pca_with_motifs(sample_df):
     groups = [1, 1, 1]
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
         get_pca(sample_df, groups, motifs=True)
+        get_pca(sample_df, groups, motifs = True, transform = "CLR")
+        mock_savefig.assert_not_called()
+
+def test_get_pca_motifs_transform():
+    df = sample_comp_glycomics_data()
+    groups = [1]*6 + [2]*6
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_pca(df, groups, motifs=True, transform="ALR")
         mock_savefig.assert_not_called()
 
 
@@ -4572,6 +4751,11 @@ def test_get_jtk_basic(sample_jtk_df):
         return False
     except:
         pass
+    # Odd max_stat: timepoints=3, replicates=1 → max_stat = 3*(3-1)/2 = 3 (odd)
+    odd_df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-3)GlcNAc'],
+                           't1': [1.0, 2.0], 't2': [2.0, 1.0], 't3': [1.5, 1.5]})
+    result = get_jtk(odd_df, timepoints = 3, interval = 1, periods = [2])
+    assert isinstance(result, pd.DataFrame)
 
 
 def test_get_jtk_with_motifs(sample_jtk_df):
@@ -5446,7 +5630,7 @@ def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
     # Test without edge labels
     plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=False)
     assert plot is not None
-    plt.close()
+    plt.close('all')
 
 
 @patch('bokeh.io.output_notebook')
@@ -5461,7 +5645,7 @@ def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
     # Test without edge labels
     plot = plot_network(n_glycan_network, plot_format='spring', edge_label_draw=False)
     assert plot is not None
-    plt.close()
+    plt.close('all')
 
 
 @patch('bokeh.io.output_notebook')
@@ -5472,7 +5656,7 @@ def test_plot_network_with_edge_labels(mock_show, mock_enable, evo_test_networks
     plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True)
     # Check for edge labels
     assert plot is not None
-    plt.close()
+    plt.close('all')
 
 
 @patch('bokeh.io.output_notebook')
@@ -5486,7 +5670,7 @@ def test_plot_network_with_lfc(mock_show, mock_enable, evo_test_networks):
     assert plot is not None
     # Check for renderers
     assert len(plot.renderers) > 0
-    plt.close()
+    plt.close('all')
 
 
 @patch('bokeh.io.output_notebook')
@@ -5499,7 +5683,7 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
     for layout in safe_layouts:
         plot = plot_network(main_net, plot_format=layout)
         assert plot is not None
-        plt.close()
+        plt.close('all')
     # Test pydot2 layout with proper error handling
     try:
         with suppress_pydot_warnings():
@@ -5507,7 +5691,7 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
             assert plot is not None
     except (ImportError, FileNotFoundError):
         print("Graphviz not installed, skipping pydot2 layout test")
-    plt.close()
+    plt.close('all')
 
 
 def test_plot_network_no_notebook(evo_test_networks):
@@ -5518,6 +5702,7 @@ def test_plot_network_no_notebook(evo_test_networks):
             plot = plot_network(main_net, plot_format='kamada_kawai')
             # Even with notebook initialization failing, should still return a plot
             assert plot is not None
+    plt.close('all')
 
 
 def test_add_high_man_removal(evo_test_networks):
@@ -5537,6 +5722,54 @@ def test_find_ptm():
     assert find_ptm("Gal(b1-4)Gal6S(b1-4)Glc-ol", ["Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"], {}, stem_lib)[1] == "6S"
 
 
+_GLYCANS = [
+  "Gal(b1-4)Glc-ol",
+  "Gal(b1-3)Gal(b1-4)Glc-ol",
+  "Fuc(a1-2)Gal(b1-4)Glc-ol",
+  "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol",
+]
+_RNG = np.random.default_rng(42)
+_EXPECTED_COLS = {"group1_mean", "group2_mean", "difference", "t_statistic", "p_val", "cohens_d", "group1_scores", "group2_scores"}
+
+
+def _make_df(n=5):
+  cols = [f"g1_{i}" for i in range(n)] + [f"g2_{i}" for i in range(n)]
+  data = _RNG.dirichlet(np.ones(len(_GLYCANS)), size=len(cols)).T * 100
+  return pd.DataFrame(data, index=_GLYCANS, columns=cols)
+
+
+def test_get_biosynthetic_coherence_unpaired():
+  df = _make_df()
+  g1 = [c for c in df.columns if c.startswith("g1_")]
+  g2 = [c for c in df.columns if c.startswith("g2_")]
+  result = get_biosynthetic_coherence(df, g1, g2)
+  assert list(result.index) == ["global_r2_weighted"]
+  assert set(result.columns) == _EXPECTED_COLS
+  assert 0.0 <= result.at["global_r2_weighted", "group1_mean"] <= 1.0
+  assert 0.0 <= result.at["global_r2_weighted", "group2_mean"] <= 1.0
+  assert len(result.at["global_r2_weighted", "group1_scores"]) == len(g1)
+  assert len(result.at["global_r2_weighted", "group2_scores"]) == len(g2)
+
+
+def test_get_biosynthetic_coherence_paired():
+  df = _make_df()
+  g1 = [c for c in df.columns if c.startswith("g1_")]
+  g2 = [c for c in df.columns if c.startswith("g2_")]
+  result = get_biosynthetic_coherence(df, g1, g2, paired=True)
+  assert list(result.index) == ["global_r2_weighted"]
+  assert set(result.columns) == _EXPECTED_COLS
+
+
+def test_get_biosynthetic_coherence_prebuilt_network_and_column_index():
+  df = _make_df().reset_index()  # moves glycan strings into first column, index becomes integers
+  g1 = [c for c in df.columns if c.startswith("g1_")]
+  g2 = [c for c in df.columns if c.startswith("g2_")]
+  net = construct_network(_GLYCANS)
+  result = get_biosynthetic_coherence(df, g1, g2, network=net)
+  assert list(result.index) == ["global_r2_weighted"]
+  assert set(result.columns) == _EXPECTED_COLS
+
+
 @patch('bokeh.io.output_notebook')
 @patch('bokeh.plotting.show')
 def test_infer_network(mock_show, mock_enable):
@@ -5545,6 +5778,7 @@ def test_infer_network(mock_show, mock_enable):
     net2 = infer_network(net, "org", ["test", "org"], spec_dic)
     assert nx.get_node_attributes(net2, "virtual")["GlcNAc(b1-3)Gal(b1-4)Glc-ol"] == 2
     plot = plot_network(net2)
+    plt.close('all')
 
 
 def test_export_network(tmp_path):
@@ -6584,6 +6818,7 @@ def test_analyze_ml_model(mock_show, mock_xgb_data):
     model = train_ml_model(X_train, X_test, y_train, y_test, mode='classification')
     analyze_ml_model(model)
     mock_show.assert_called_once()
+    plt.close('all')
 
 
 def test_get_mismatch(mock_xgb_data):

@@ -663,18 +663,31 @@ def get_coordinates_and_labels(
     is_fuc_partner = main_sugar[parent_idx + 1] == 'Fuc'
     if not is_core_fuc and not is_fuc_partner:
       branch_sugar = max(core_branches, key = len)
-      l2_connected_branches = [l2_sugar[k] for k, conn in enumerate(l2_connection) if conn[0] in branch_indices]
-      l1_main_chain_branches = [l1_sugar[k] for k, conn in enumerate(l1_connection) if conn[1] > parent_idx and l1_sugar[k] not in [['Fuc'], ['Gal']]]
-      has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(l2_connected_branches))
-      has_own_fuc = 'Fuc' in unwrap(l1_main_chain_branches)
-      has_bisecting = any('GlcNAc' in b[0] for b in core_branches) and main_sugar[parent_idx] == 'Man' and main_bond[parent_idx-1] == 'β 4'
+      l2_connected_indices = [k for k, conn in enumerate(l2_connection) if conn[0] in branch_indices]
+      l2_connected_branches = [l2_sugar[k] for k in l2_connected_indices]
+      l3_connected_branches = [l3_sugar[k] for k, conn in enumerate(l3_connection) if conn[0] in l2_connected_indices]
+      l1_main_chain_indices = [k for k, conn in enumerate(l1_connection) if
+                               conn[1] > parent_idx and l1_sugar[k] not in [['Fuc'], ['Gal']]]
+      l1_main_chain_branches = [l1_sugar[k] for k in l1_main_chain_indices]
+      l2_main_chain_indices = [k for k, conn in enumerate(l2_connection) if conn[0] in l1_main_chain_indices]
+      l2_main_chain_branches = [l2_sugar[k] for k in l2_main_chain_indices]
+      l3_main_chain_branches = [l3_sugar[k] for k, conn in enumerate(l3_connection) if
+                                conn[0] in l2_main_chain_indices]
+      has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(l2_connected_branches)) or (
+                  'Fuc' in unwrap(l3_connected_branches))
+      has_own_fuc = 'Fuc' in unwrap(l1_main_chain_branches) or 'Fuc' in unwrap(
+          l2_main_chain_branches) or 'Fuc' in unwrap(l3_main_chain_branches)
+      has_bisecting = any('GlcNAc' in b[0] for b in core_branches) and main_sugar[parent_idx] == 'Man' and main_bond[
+          parent_idx - 1] == 'β 4'
       has_triple_branch = len(branch_indices) == 2 and not 'Xyl' in unwrap(core_branches)
+      is_highly_branched = len(l2_connected_branches) > 1
       l2_connected_branches = [k for k in l2_connected_branches if k not in [['Fuc'], ['Gal']]]
       max_l2_len = max((len(b) for b in l2_connected_branches), default = 0)
       max_l1_len = max((len(b) for b in l1_main_chain_branches if b not in [['Fuc'], ['Gal']]), default = 0)
-      spacing_spec = SPACING + has_fuc*SPACING + has_own_fuc*SPACING + (max_l1_len > 0)*0.25*SPACING
+      spacing_spec = SPACING + has_fuc * SPACING + has_own_fuc * SPACING + (
+                  max_l1_len > 0) * 0.25 * SPACING + is_highly_branched * 0.5 * SPACING
       if (max_l2_len > 0) and (spacing_spec < 2.5 or (has_fuc and has_own_fuc)):
-        spacing_spec += 0.5*SPACING
+        spacing_spec += 0.5 * SPACING
       if (has_bisecting or has_triple_branch) and spacing_spec < 1.1:
         spacing_spec += SPACING
       # Push main chain down after branch point

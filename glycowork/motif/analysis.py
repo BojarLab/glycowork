@@ -84,7 +84,7 @@ def preprocess_data(
                               min_samples = min_samples)
   df_org = df.copy(deep = True)
   if transform is None:
-    transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
+    transform = "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"
   if transform == "ALR":
     df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale, random_state = random_state)
   elif transform == "CLR":
@@ -102,9 +102,9 @@ def preprocess_data(
     # Motif extraction and quantification
     df_org = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set,
                              custom_motifs = custom_motifs)
-    df = df_org + 0.0000001
     # Re-normalization
     df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
+    df = df_org + 0.0000001
     if transform == "CLR":
         df = clr_transformation(df, group1 if experiment == "diff" else df.columns.tolist(), [] if paired else group2,
                                 gamma = gamma, custom_scale = 0 if paired else custom_scale,
@@ -479,7 +479,7 @@ def get_pca(
           raw = clr_transformation(raw + 1e-7, raw.columns.tolist(), [], gamma = 0)
       elif transform == "ALR":
           raw = get_additive_logratio_transformation(raw.reset_index(), raw.columns.tolist(), [], paired = False,
-                                                     gamma = 0).set_index(raw.index)
+                                                     gamma = 0).select_dtypes(include = 'number').set_axis(raw.index)
       df = raw.T.reset_index()
   X = np.array(df.iloc[:, 1:len(groups)+1].T) if isinstance(groups, list) and groups else np.array(df.iloc[:, 1:].T)
   scaler = StandardScaler()
@@ -1015,13 +1015,14 @@ def get_biodiversity(
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
     custom_scale: float | dict = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     random_state: int | np.random.Generator | None = None # optional random state for reproducibility
-    ) -> pd.DataFrame: # DataFrame with diversity indices and test statistics
+    ) -> tuple: # First DataFrame with diversity indices and test statistics, second with beta-diversity distance matrix
   "Calculates alpha (Shannon/Simpson) and beta (ANOSIM/PERMANOVA) diversity measures from glycomics data"
   experiment = "diff" if group2 else "anova"
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs, impute = False,
                                                transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
                                                custom_scale = custom_scale, custom_motifs = custom_motifs, random_state = random_state)
   shopping_cart = []
+  distance_matrix = pd.DataFrame()
   group_sizes = group1 if not group2 else len(group1)*[1]+len(group2)*[2]
   group_counts = Counter(group_sizes)
   # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
@@ -1066,8 +1067,8 @@ def get_biodiversity(
         bc_diversity[index_1, index_2] = bc_pair
     b_df_out = pd.DataFrame.from_dict(bc_diversity, orient = 'index')
     out_len = int(np.sqrt(len(b_df_out)))
-    b_df_out_values = b_df_out.values.reshape(out_len, out_len)
-    beta_df_out = pd.DataFrame(data = b_df_out_values, index = range(out_len), columns = range(out_len))
+    distance_matrix = b_df_out.values.reshape(out_len, out_len)
+    beta_df_out = pd.DataFrame(data = distance_matrix, index = range(out_len), columns = range(out_len))
     if all(count > 1 for count in group_counts.values()):
       r, p = anosim(beta_df_out, group_sizes, permutations)
       b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (ANOSIM)', 'p-val': p, 'Effect size': r}, index = [0])
@@ -1079,7 +1080,7 @@ def get_biodiversity(
   corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
   df_out["corr p-val"] = corrpvals
   df_out["significant"] = significance
-  return df_out.sort_values(by = 'p-val').sort_values(by = 'corr p-val').reset_index(drop = True)
+  return df_out.sort_values(by = 'p-val').sort_values(by = 'corr p-val').reset_index(drop = True), distance_matrix
 
 
 def get_SparCC(

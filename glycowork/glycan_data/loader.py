@@ -383,11 +383,9 @@ class DataFrameSerializer:
       'index': list(df.index),
       'data': []
     }
-
     for _, row in df.iterrows():
       serialized_row = [cls._serialize_cell(val) for val in row]
       data['data'].append(serialized_row)
-
     with open(path, 'w') as f:
       json.dump(data, f)
 
@@ -397,12 +395,10 @@ class DataFrameSerializer:
     "Deserialize a DataFrame from JSON"
     with open(path, 'r') as f:
       data = json.load(f)
-
     deserialized_data = []
     for row in data['data']:
       deserialized_row = [cls._deserialize_cell(cell) for cell in row]
       deserialized_data.append(deserialized_row)
-
     return pd.DataFrame(
       data = deserialized_data,
       columns = data['columns'],

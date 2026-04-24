@@ -887,3 +887,27 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
   avg_corrected_p_values = [p if p >= avg_uncorrected_p_values[i] else avg_uncorrected_p_values[i] for i, p in enumerate(avg_corrected_p_values)]
   avg_effect_sizes /= num_instances
   return avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes
+
+
+def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
+         y: np.ndarray, # second variable; same n_samples as x
+         sigma: float | None = None # RBF bandwidth; per-variable median heuristic if None
+        ) -> tuple[float, float]: # (HSIC statistic, analytical p-value via gamma approximation)
+  "Hilbert-Schmidt Independence Criterion with analytical p-value (Gretton et al. 2005) to measure dependency between variables"
+  x = np.atleast_2d(np.asarray(x, float)).T if np.asarray(x).ndim == 1 else np.asarray(x, float)
+  y = np.atleast_2d(np.asarray(y, float)).T if np.asarray(y).ndim == 1 else np.asarray(y, float)
+  n = x.shape[0]
+  sq_x = np.sum((x[:, None] - x[None, :]) ** 2, axis = -1)
+  sq_y = np.sum((y[:, None] - y[None, :]) ** 2, axis = -1)
+  sx = np.sqrt(np.median(sq_x[sq_x > 0]) + 1e-10) if sigma is None else sigma
+  sy = np.sqrt(np.median(sq_y[sq_y > 0]) + 1e-10) if sigma is None else sigma
+  H = np.eye(n) - 1.0 / n
+  Kc = H @ np.exp(-sq_x / (2 * sx ** 2)) @ H
+  Lc = H @ np.exp(-sq_y / (2 * sy ** 2)) @ H
+  stat = np.trace(Kc @ Lc) / (n - 1) ** 2
+  ev_K = np.linalg.eigvalsh(Kc)
+  ev_L = np.linalg.eigvalsh(Lc)
+  ev_K, ev_L = ev_K[ev_K > 1e-12], ev_L[ev_L > 1e-12]
+  theta = np.mean(ev_K) * np.mean(ev_L)
+  df = 4 * np.mean(ev_K) ** 2 / np.var(ev_K) if np.var(ev_K) > 0 else 1.0
+  return stat, 1 - chi2.cdf(stat * (n - 1) ** 2 / theta, df)
