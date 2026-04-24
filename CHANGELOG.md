@@ -44,10 +44,10 @@
 
 ##### Deprecated ⚠️
 - The `reduced` bool keyword argument in `mz_to_composition` and `mz_to_structures` has been replaced with the `modification` string keyword argument (8160490)
-- Deprecated the `reducing_end` keyword argument in `match_composition_relaxed`, as it was no longer being used
+- Deprecated the `reducing_end` keyword argument in `match_composition_relaxed`, as it was no longer being used (3f459b2)
 
 ##### Fixed 🐛
-- Fixed a bug in `mask_rare_glycoletters` in which rare linkages occasionally were not masked
+- Fixed a bug in `mask_rare_glycoletters` in which rare linkages occasionally were not masked (3f459b2)
 
 #### processing
 ##### Added ✨
@@ -59,7 +59,7 @@
 
 ##### Fixed 🐛
 - Fixed overeager modification of already correctly formatted `6PCho` modifications in `canonicalize_iupac` (467673b)
-- Fixed `max_specify_glycan` not specifying the chitobiose core in N-glycans
+- Fixed `max_specify_glycan` not specifying the chitobiose core in N-glycans (3f459b2)
 
 ### network
 #### biosynthesis
