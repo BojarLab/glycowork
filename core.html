@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.8.26">
+<meta name="generator" content="quarto-1.9.37">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -10,6 +10,9 @@
 
 <title>Overview – glycowork</title>
 <style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -68,15 +71,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="quarto:offset" content="./">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-000f0825b9c55ed21d14970d810c14a9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-de52dc3353fe04aa4d07820b7139bd46.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -112,15 +114,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="styles.css">
 <meta property="og:title" content="Overview – glycowork">
 <meta property="og:description" content="Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.">
-<meta property="og:image" content="https://BojarLab.github.io/glycowork/00_core_files/figure-html/cell-5-output-2.png">
+<meta property="og:image" content="/00_core_files/figure-html/cell-5-output-2.png">
 <meta property="og:site_name" content="glycowork">
-<meta property="og:image:height" content="470">
-<meta property="og:image:width" content="624">
+<meta property="og:image:height" content="560">
+<meta property="og:image:width" content="744">
 <meta name="twitter:title" content="Overview – glycowork">
 <meta name="twitter:description" content="Glycans are a fundamental biological sequence, similar to DNA, RNA, or proteins. Glycans are complex carbohydrates that can form branched structures comprising monosaccharides and linkages as constituents. Despite being conspicuously absent from most research, glycans are ubiquitous in biology. They decorate most proteins and lipids and direct the stability and functions of biomolecules, cells, and organisms. This also makes glycans relevant to every human disease.">
-<meta name="twitter:image" content="https://BojarLab.github.io/glycowork/00_core_files/figure-html/cell-5-output-2.png">
-<meta name="twitter:image-height" content="470">
-<meta name="twitter:image-width" content="624">
+<meta name="twitter:image" content="/00_core_files/figure-html/cell-5-output-2.png">
+<meta name="twitter:image-height" content="560">
+<meta name="twitter:image-width" content="744">
 <meta name="twitter:card" content="summary_large_image">
 </head>
 
@@ -243,13 +245,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>If you want to run <code>glycowork.ml</code> in a Jupyter Notebook (in the cloud or wherever you have a GPU), just install glycowork with its optional dependencies for machine learning:</p>
 <pre><code>!pip install "glycowork[ml]"</code></pre>
 <p>Okay, how about an example! (For more example workflows, head over to the <code>examples</code> section) <br> Let’s say you’re interested in glycans of the plant order Fabales that includes the legumes. Luckily, we’ve got you covered and <code>df_species</code> has &gt;700 glycan sequences that stem from Fabales. So the first step is easy: import <code>df_species</code> from <code>glycowork.glycan_data.loader</code> and filter for Fabales glycans.</p>
-<div id="cell-6" class="cell">
+<div id="a2632755" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>df_fabales <span class="op">=</span> df_species[df_species.Order <span class="op">==</span> <span class="st">'Fabales'</span>].reset_index(drop <span class="op">=</span> <span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div id="cell-7" class="cell">
+<div id="788e4706" class="cell">
 <div class="cell-output cell-output-display">
 <style type="text/css">
-#T_c89e5_row0_col0, #T_c89e5_row0_col1, #T_c89e5_row0_col2, #T_c89e5_row0_col3, #T_c89e5_row0_col4, #T_c89e5_row0_col5, #T_c89e5_row0_col6, #T_c89e5_row0_col7, #T_c89e5_row0_col8, #T_c89e5_row1_col0, #T_c89e5_row1_col1, #T_c89e5_row1_col2, #T_c89e5_row1_col3, #T_c89e5_row1_col4, #T_c89e5_row1_col5, #T_c89e5_row1_col6, #T_c89e5_row1_col7, #T_c89e5_row1_col8, #T_c89e5_row2_col0, #T_c89e5_row2_col1, #T_c89e5_row2_col2, #T_c89e5_row2_col3, #T_c89e5_row2_col4, #T_c89e5_row2_col5, #T_c89e5_row2_col6, #T_c89e5_row2_col7, #T_c89e5_row2_col8, #T_c89e5_row3_col0, #T_c89e5_row3_col1, #T_c89e5_row3_col2, #T_c89e5_row3_col3, #T_c89e5_row3_col4, #T_c89e5_row3_col5, #T_c89e5_row3_col6, #T_c89e5_row3_col7, #T_c89e5_row3_col8, #T_c89e5_row4_col0, #T_c89e5_row4_col1, #T_c89e5_row4_col2, #T_c89e5_row4_col3, #T_c89e5_row4_col4, #T_c89e5_row4_col5, #T_c89e5_row4_col6, #T_c89e5_row4_col7, #T_c89e5_row4_col8 {
+#T_6a10f_row0_col0, #T_6a10f_row0_col1, #T_6a10f_row0_col2, #T_6a10f_row0_col3, #T_6a10f_row0_col4, #T_6a10f_row0_col5, #T_6a10f_row0_col6, #T_6a10f_row0_col7, #T_6a10f_row0_col8, #T_6a10f_row1_col0, #T_6a10f_row1_col1, #T_6a10f_row1_col2, #T_6a10f_row1_col3, #T_6a10f_row1_col4, #T_6a10f_row1_col5, #T_6a10f_row1_col6, #T_6a10f_row1_col7, #T_6a10f_row1_col8, #T_6a10f_row2_col0, #T_6a10f_row2_col1, #T_6a10f_row2_col2, #T_6a10f_row2_col3, #T_6a10f_row2_col4, #T_6a10f_row2_col5, #T_6a10f_row2_col6, #T_6a10f_row2_col7, #T_6a10f_row2_col8, #T_6a10f_row3_col0, #T_6a10f_row3_col1, #T_6a10f_row3_col2, #T_6a10f_row3_col3, #T_6a10f_row3_col4, #T_6a10f_row3_col5, #T_6a10f_row3_col6, #T_6a10f_row3_col7, #T_6a10f_row3_col8, #T_6a10f_row4_col0, #T_6a10f_row4_col1, #T_6a10f_row4_col2, #T_6a10f_row4_col3, #T_6a10f_row4_col4, #T_6a10f_row4_col5, #T_6a10f_row4_col6, #T_6a10f_row4_col7, #T_6a10f_row4_col8 {
   font-size: 11pt;
   font-family: Helvetica;
   border-collapse: collapse;
@@ -257,19 +259,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 }
 </style>
 
-<table id="T_c89e5" class="caption-top table table-sm table-striped small">
+<table id="T_6a10f" class="caption-top table table-sm table-striped small">
 <thead>
 <tr class="header">
 <th class="blank level0" data-quarto-table-cell-role="th">&nbsp;</th>
-<th id="T_c89e5_level0_col0" class="col_heading level0 col0" data-quarto-table-cell-role="th">Species</th>
-<th id="T_c89e5_level0_col1" class="col_heading level0 col1" data-quarto-table-cell-role="th">Genus</th>
-<th id="T_c89e5_level0_col2" class="col_heading level0 col2" data-quarto-table-cell-role="th">Family</th>
-<th id="T_c89e5_level0_col3" class="col_heading level0 col3" data-quarto-table-cell-role="th">Order</th>
-<th id="T_c89e5_level0_col4" class="col_heading level0 col4" data-quarto-table-cell-role="th">Class</th>
-<th id="T_c89e5_level0_col5" class="col_heading level0 col5" data-quarto-table-cell-role="th">Phylum</th>
-<th id="T_c89e5_level0_col6" class="col_heading level0 col6" data-quarto-table-cell-role="th">Kingdom</th>
-<th id="T_c89e5_level0_col7" class="col_heading level0 col7" data-quarto-table-cell-role="th">Domain</th>
-<th id="T_c89e5_level0_col8" class="col_heading level0 col8" data-quarto-table-cell-role="th">ref</th>
+<th id="T_6a10f_level0_col0" class="col_heading level0 col0" data-quarto-table-cell-role="th">Species</th>
+<th id="T_6a10f_level0_col1" class="col_heading level0 col1" data-quarto-table-cell-role="th">Genus</th>
+<th id="T_6a10f_level0_col2" class="col_heading level0 col2" data-quarto-table-cell-role="th">Family</th>
+<th id="T_6a10f_level0_col3" class="col_heading level0 col3" data-quarto-table-cell-role="th">Order</th>
+<th id="T_6a10f_level0_col4" class="col_heading level0 col4" data-quarto-table-cell-role="th">Class</th>
+<th id="T_6a10f_level0_col5" class="col_heading level0 col5" data-quarto-table-cell-role="th">Phylum</th>
+<th id="T_6a10f_level0_col6" class="col_heading level0 col6" data-quarto-table-cell-role="th">Kingdom</th>
+<th id="T_6a10f_level0_col7" class="col_heading level0 col7" data-quarto-table-cell-role="th">Domain</th>
+<th id="T_6a10f_level0_col8" class="col_heading level0 col8" data-quarto-table-cell-role="th">ref</th>
 </tr>
 <tr class="even">
 <th class="index_name level0" data-quarto-table-cell-role="th">glycan</th>
@@ -286,64 +288,64 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </thead>
 <tbody>
 <tr class="odd">
-<th id="T_c89e5_level0_row0" class="row_heading level0 row0" data-quarto-table-cell-role="th">Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
-<td id="T_c89e5_row0_col0" class="data row0 col0">Abrus_precatorius</td>
-<td id="T_c89e5_row0_col1" class="data row0 col1">Abrus</td>
-<td id="T_c89e5_row0_col2" class="data row0 col2">Fabaceae</td>
-<td id="T_c89e5_row0_col3" class="data row0 col3">Fabales</td>
-<td id="T_c89e5_row0_col4" class="data row0 col4">Dicotyledons</td>
-<td id="T_c89e5_row0_col5" class="data row0 col5">Angiosperms</td>
-<td id="T_c89e5_row0_col6" class="data row0 col6">Plantae</td>
-<td id="T_c89e5_row0_col7" class="data row0 col7">Eukarya</td>
-<td id="T_c89e5_row0_col8" class="data row0 col8">gwb</td>
+<th id="T_6a10f_level0_row0" class="row_heading level0 row0" data-quarto-table-cell-role="th">Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_6a10f_row0_col0" class="data row0 col0">Abrus_precatorius</td>
+<td id="T_6a10f_row0_col1" class="data row0 col1">Abrus</td>
+<td id="T_6a10f_row0_col2" class="data row0 col2">Fabaceae</td>
+<td id="T_6a10f_row0_col3" class="data row0 col3">Fabales</td>
+<td id="T_6a10f_row0_col4" class="data row0 col4">Dicotyledons</td>
+<td id="T_6a10f_row0_col5" class="data row0 col5">Angiosperms</td>
+<td id="T_6a10f_row0_col6" class="data row0 col6">Plantae</td>
+<td id="T_6a10f_row0_col7" class="data row0 col7">Eukarya</td>
+<td id="T_6a10f_row0_col8" class="data row0 col8">gwb</td>
 </tr>
 <tr class="even">
-<th id="T_c89e5_level0_row1" class="row_heading level0 row1" data-quarto-table-cell-role="th">Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
-<td id="T_c89e5_row1_col0" class="data row1 col0">Abrus_precatorius</td>
-<td id="T_c89e5_row1_col1" class="data row1 col1">Abrus</td>
-<td id="T_c89e5_row1_col2" class="data row1 col2">Fabaceae</td>
-<td id="T_c89e5_row1_col3" class="data row1 col3">Fabales</td>
-<td id="T_c89e5_row1_col4" class="data row1 col4">Dicotyledons</td>
-<td id="T_c89e5_row1_col5" class="data row1 col5">Angiosperms</td>
-<td id="T_c89e5_row1_col6" class="data row1 col6">Plantae</td>
-<td id="T_c89e5_row1_col7" class="data row1 col7">Eukarya</td>
-<td id="T_c89e5_row1_col8" class="data row1 col8">gwb</td>
+<th id="T_6a10f_level0_row1" class="row_heading level0 row1" data-quarto-table-cell-role="th">Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_6a10f_row1_col0" class="data row1 col0">Abrus_precatorius</td>
+<td id="T_6a10f_row1_col1" class="data row1 col1">Abrus</td>
+<td id="T_6a10f_row1_col2" class="data row1 col2">Fabaceae</td>
+<td id="T_6a10f_row1_col3" class="data row1 col3">Fabales</td>
+<td id="T_6a10f_row1_col4" class="data row1 col4">Dicotyledons</td>
+<td id="T_6a10f_row1_col5" class="data row1 col5">Angiosperms</td>
+<td id="T_6a10f_row1_col6" class="data row1 col6">Plantae</td>
+<td id="T_6a10f_row1_col7" class="data row1 col7">Eukarya</td>
+<td id="T_6a10f_row1_col8" class="data row1 col8">gwb</td>
 </tr>
 <tr class="odd">
-<th id="T_c89e5_level0_row2" class="row_heading level0 row2" data-quarto-table-cell-role="th">Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)[Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
-<td id="T_c89e5_row2_col0" class="data row2 col0">Abrus_precatorius</td>
-<td id="T_c89e5_row2_col1" class="data row2 col1">Abrus</td>
-<td id="T_c89e5_row2_col2" class="data row2 col2">Fabaceae</td>
-<td id="T_c89e5_row2_col3" class="data row2 col3">Fabales</td>
-<td id="T_c89e5_row2_col4" class="data row2 col4">Dicotyledons</td>
-<td id="T_c89e5_row2_col5" class="data row2 col5">Angiosperms</td>
-<td id="T_c89e5_row2_col6" class="data row2 col6">Plantae</td>
-<td id="T_c89e5_row2_col7" class="data row2 col7">Eukarya</td>
-<td id="T_c89e5_row2_col8" class="data row2 col8">gwb</td>
+<th id="T_6a10f_level0_row2" class="row_heading level0 row2" data-quarto-table-cell-role="th">Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)[Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_6a10f_row2_col0" class="data row2 col0">Abrus_precatorius</td>
+<td id="T_6a10f_row2_col1" class="data row2 col1">Abrus</td>
+<td id="T_6a10f_row2_col2" class="data row2 col2">Fabaceae</td>
+<td id="T_6a10f_row2_col3" class="data row2 col3">Fabales</td>
+<td id="T_6a10f_row2_col4" class="data row2 col4">Dicotyledons</td>
+<td id="T_6a10f_row2_col5" class="data row2 col5">Angiosperms</td>
+<td id="T_6a10f_row2_col6" class="data row2 col6">Plantae</td>
+<td id="T_6a10f_row2_col7" class="data row2 col7">Eukarya</td>
+<td id="T_6a10f_row2_col8" class="data row2 col8">gwb</td>
 </tr>
 <tr class="even">
-<th id="T_c89e5_level0_row3" class="row_heading level0 row3" data-quarto-table-cell-role="th">Man(a1-3)Man(a1-6)[Xyl(b1-2)][Man(a1-3)]Man(a1-6)Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
-<td id="T_c89e5_row3_col0" class="data row3 col0">Abrus_precatorius</td>
-<td id="T_c89e5_row3_col1" class="data row3 col1">Abrus</td>
-<td id="T_c89e5_row3_col2" class="data row3 col2">Fabaceae</td>
-<td id="T_c89e5_row3_col3" class="data row3 col3">Fabales</td>
-<td id="T_c89e5_row3_col4" class="data row3 col4">Dicotyledons</td>
-<td id="T_c89e5_row3_col5" class="data row3 col5">Angiosperms</td>
-<td id="T_c89e5_row3_col6" class="data row3 col6">Plantae</td>
-<td id="T_c89e5_row3_col7" class="data row3 col7">Eukarya</td>
-<td id="T_c89e5_row3_col8" class="data row3 col8">nan</td>
+<th id="T_6a10f_level0_row3" class="row_heading level0 row3" data-quarto-table-cell-role="th">Man(a1-3)Man(a1-6)[Xyl(b1-2)][Man(a1-3)]Man(a1-6)Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_6a10f_row3_col0" class="data row3 col0">Abrus_precatorius</td>
+<td id="T_6a10f_row3_col1" class="data row3 col1">Abrus</td>
+<td id="T_6a10f_row3_col2" class="data row3 col2">Fabaceae</td>
+<td id="T_6a10f_row3_col3" class="data row3 col3">Fabales</td>
+<td id="T_6a10f_row3_col4" class="data row3 col4">Dicotyledons</td>
+<td id="T_6a10f_row3_col5" class="data row3 col5">Angiosperms</td>
+<td id="T_6a10f_row3_col6" class="data row3 col6">Plantae</td>
+<td id="T_6a10f_row3_col7" class="data row3 col7">Eukarya</td>
+<td id="T_6a10f_row3_col8" class="data row3 col8">nan</td>
 </tr>
 <tr class="odd">
-<th id="T_c89e5_level0_row4" class="row_heading level0 row4" data-quarto-table-cell-role="th">Man(a1-3)Man(a1-6)[Xyl(b1-2)][Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
-<td id="T_c89e5_row4_col0" class="data row4 col0">Abrus_precatorius</td>
-<td id="T_c89e5_row4_col1" class="data row4 col1">Abrus</td>
-<td id="T_c89e5_row4_col2" class="data row4 col2">Fabaceae</td>
-<td id="T_c89e5_row4_col3" class="data row4 col3">Fabales</td>
-<td id="T_c89e5_row4_col4" class="data row4 col4">Dicotyledons</td>
-<td id="T_c89e5_row4_col5" class="data row4 col5">Angiosperms</td>
-<td id="T_c89e5_row4_col6" class="data row4 col6">Plantae</td>
-<td id="T_c89e5_row4_col7" class="data row4 col7">Eukarya</td>
-<td id="T_c89e5_row4_col8" class="data row4 col8">nan</td>
+<th id="T_6a10f_level0_row4" class="row_heading level0 row4" data-quarto-table-cell-role="th">Man(a1-3)Man(a1-6)[Xyl(b1-2)][Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
+<td id="T_6a10f_row4_col0" class="data row4 col0">Abrus_precatorius</td>
+<td id="T_6a10f_row4_col1" class="data row4 col1">Abrus</td>
+<td id="T_6a10f_row4_col2" class="data row4 col2">Fabaceae</td>
+<td id="T_6a10f_row4_col3" class="data row4 col3">Fabales</td>
+<td id="T_6a10f_row4_col4" class="data row4 col4">Dicotyledons</td>
+<td id="T_6a10f_row4_col5" class="data row4 col5">Angiosperms</td>
+<td id="T_6a10f_row4_col6" class="data row4 col6">Plantae</td>
+<td id="T_6a10f_row4_col7" class="data row4 col7">Eukarya</td>
+<td id="T_6a10f_row4_col8" class="data row4 col8">nan</td>
 </tr>
 </tbody>
 </table>
@@ -353,7 +355,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Representations or embeddings are really just a bunch of numbers learned by a machine learning model that express similarity. Meaning that if two glycans are similar (in sequence/properties/etc.), the difference between their representations should be small. Or, in other words, they should cluster in a plot. <br></p>
 <p>Now, you might not be in possession of a GPU and/or the wherewithal to train a glycan-focused deep learning model. That’s why <code>glycowork</code> has both trained models and <strong>already calculated</strong> glycan representations waiting for you! And the best thing: you don’t even need to worry about them. You just pass glycan sequences to our functions and <code>glycowork</code> will handle glycan representations behind the scenes. <br></p>
 <p>So, for our Fabales example, we pass our glycan sequences to <code>glycowork.motif.analysis.plot_embeddings</code>, which will retrieve their learned representations, transform them into two dimensions via t-distributed stochastic neighbor embedding (t-SNE), and plot them! If you want, it can even color the resulting scatterplots by a label, for instance the taxonomic family within Fabales.</p>
-<div id="cell-9" class="cell">
+<div id="8676d844" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>plot_embeddings(df_fabales.glycan.values.tolist(), label_list <span class="op">=</span> df_fabales.Family.values.tolist())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Download completed.</code></pre>
@@ -368,13 +370,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <p>Hmm, interesting. We definitely see clear glycan clusters (remember, every point is one glycan sequence). What’s even cooler is that the families Polygalaceae and Quillajaceae cluster in narrow regions of the whole plot. I wonder what differentiates their glycans from Fabaceae? <br></p>
 <p>If you’re also curious, proceed to the next function. First, we need to convert our data into a count table, with counts of every glycan in every family of Fabales. For this, you can use <code>glycowork.motif.processing.presence_to_matrix</code>, which was designed to work with tables such as <code>df_species</code>. Changing <code>label_col_name</code> to ‘Family’ will for instance generate a count table for all families in Fabales.</p>
-<div id="cell-11" class="cell">
+<div id="af7066cb" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>df_map <span class="op">=</span> presence_to_matrix(df_fabales, label_col_name <span class="op">=</span> <span class="st">'Family'</span>).T</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div id="cell-12" class="cell">
+<div id="ce8c8aa1" class="cell">
 <div class="cell-output cell-output-display">
 <style type="text/css">
-#T_c0841_row0_col0, #T_c0841_row0_col1, #T_c0841_row0_col2, #T_c0841_row0_col3, #T_c0841_row1_col0, #T_c0841_row1_col1, #T_c0841_row1_col2, #T_c0841_row1_col3, #T_c0841_row2_col0, #T_c0841_row2_col1, #T_c0841_row2_col2, #T_c0841_row2_col3, #T_c0841_row3_col0, #T_c0841_row3_col1, #T_c0841_row3_col2, #T_c0841_row3_col3, #T_c0841_row4_col0, #T_c0841_row4_col1, #T_c0841_row4_col2, #T_c0841_row4_col3 {
+#T_49327_row0_col0, #T_49327_row0_col1, #T_49327_row0_col2, #T_49327_row0_col3, #T_49327_row1_col0, #T_49327_row1_col1, #T_49327_row1_col2, #T_49327_row1_col3, #T_49327_row2_col0, #T_49327_row2_col1, #T_49327_row2_col2, #T_49327_row2_col3, #T_49327_row3_col0, #T_49327_row3_col1, #T_49327_row3_col2, #T_49327_row3_col3, #T_49327_row4_col0, #T_49327_row4_col1, #T_49327_row4_col2, #T_49327_row4_col3 {
   font-size: 11pt;
   font-family: Helvetica;
   border-collapse: collapse;
@@ -382,14 +384,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 }
 </style>
 
-<table id="T_c0841" class="caption-top table table-sm table-striped small">
+<table id="T_49327" class="caption-top table table-sm table-striped small">
 <thead>
 <tr class="header">
 <th class="index_name level0" data-quarto-table-cell-role="th">Family</th>
-<th id="T_c0841_level0_col0" class="col_heading level0 col0" data-quarto-table-cell-role="th">Fabaceae</th>
-<th id="T_c0841_level0_col1" class="col_heading level0 col1" data-quarto-table-cell-role="th">Fagaceae</th>
-<th id="T_c0841_level0_col2" class="col_heading level0 col2" data-quarto-table-cell-role="th">Polygalaceae</th>
-<th id="T_c0841_level0_col3" class="col_heading level0 col3" data-quarto-table-cell-role="th">Quillajaceae</th>
+<th id="T_49327_level0_col0" class="col_heading level0 col0" data-quarto-table-cell-role="th">Fabaceae</th>
+<th id="T_49327_level0_col1" class="col_heading level0 col1" data-quarto-table-cell-role="th">Fagaceae</th>
+<th id="T_49327_level0_col2" class="col_heading level0 col2" data-quarto-table-cell-role="th">Polygalaceae</th>
+<th id="T_49327_level0_col3" class="col_heading level0 col3" data-quarto-table-cell-role="th">Quillajaceae</th>
 </tr>
 <tr class="even">
 <th class="index_name level0" data-quarto-table-cell-role="th">glycan</th>
@@ -401,39 +403,39 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </thead>
 <tbody>
 <tr class="odd">
-<th id="T_c0841_level0_row0" class="row_heading level0 row0" data-quarto-table-cell-role="th">Apif(a1-2)Xyl(b1-2)[Glc6Ac(b1-4)]Glc</th>
-<td id="T_c0841_row0_col0" class="data row0 col0">1</td>
-<td id="T_c0841_row0_col1" class="data row0 col1">0</td>
-<td id="T_c0841_row0_col2" class="data row0 col2">0</td>
-<td id="T_c0841_row0_col3" class="data row0 col3">0</td>
+<th id="T_49327_level0_row0" class="row_heading level0 row0" data-quarto-table-cell-role="th">Apif(a1-2)Xyl(b1-2)[Glc6Ac(b1-4)]Glc</th>
+<td id="T_49327_row0_col0" class="data row0 col0">1</td>
+<td id="T_49327_row0_col1" class="data row0 col1">0</td>
+<td id="T_49327_row0_col2" class="data row0 col2">0</td>
+<td id="T_49327_row0_col3" class="data row0 col3">0</td>
 </tr>
 <tr class="even">
-<th id="T_c0841_level0_row1" class="row_heading level0 row1" data-quarto-table-cell-role="th">Ara(a1-2)Ara(a1-6)GlcNAc</th>
-<td id="T_c0841_row1_col0" class="data row1 col0">4</td>
-<td id="T_c0841_row1_col1" class="data row1 col1">0</td>
-<td id="T_c0841_row1_col2" class="data row1 col2">0</td>
-<td id="T_c0841_row1_col3" class="data row1 col3">0</td>
+<th id="T_49327_level0_row1" class="row_heading level0 row1" data-quarto-table-cell-role="th">Ara(a1-2)Ara(a1-6)GlcNAc</th>
+<td id="T_49327_row1_col0" class="data row1 col0">4</td>
+<td id="T_49327_row1_col1" class="data row1 col1">0</td>
+<td id="T_49327_row1_col2" class="data row1 col2">0</td>
+<td id="T_49327_row1_col3" class="data row1 col3">0</td>
 </tr>
 <tr class="odd">
-<th id="T_c0841_level0_row2" class="row_heading level0 row2" data-quarto-table-cell-role="th">Ara(a1-2)Glc(b1-2)Ara</th>
-<td id="T_c0841_row2_col0" class="data row2 col0">1</td>
-<td id="T_c0841_row2_col1" class="data row2 col1">0</td>
-<td id="T_c0841_row2_col2" class="data row2 col2">0</td>
-<td id="T_c0841_row2_col3" class="data row2 col3">0</td>
+<th id="T_49327_level0_row2" class="row_heading level0 row2" data-quarto-table-cell-role="th">Ara(a1-2)Glc(b1-2)Ara</th>
+<td id="T_49327_row2_col0" class="data row2 col0">1</td>
+<td id="T_49327_row2_col1" class="data row2 col1">0</td>
+<td id="T_49327_row2_col2" class="data row2 col2">0</td>
+<td id="T_49327_row2_col3" class="data row2 col3">0</td>
 </tr>
 <tr class="even">
-<th id="T_c0841_level0_row3" class="row_heading level0 row3" data-quarto-table-cell-role="th">Ara(a1-2)GlcA</th>
-<td id="T_c0841_row3_col0" class="data row3 col0">3</td>
-<td id="T_c0841_row3_col1" class="data row3 col1">0</td>
-<td id="T_c0841_row3_col2" class="data row3 col2">0</td>
-<td id="T_c0841_row3_col3" class="data row3 col3">0</td>
+<th id="T_49327_level0_row3" class="row_heading level0 row3" data-quarto-table-cell-role="th">Ara(a1-2)GlcA</th>
+<td id="T_49327_row3_col0" class="data row3 col0">3</td>
+<td id="T_49327_row3_col1" class="data row3 col1">0</td>
+<td id="T_49327_row3_col2" class="data row3 col2">0</td>
+<td id="T_49327_row3_col3" class="data row3 col3">0</td>
 </tr>
 <tr class="odd">
-<th id="T_c0841_level0_row4" class="row_heading level0 row4" data-quarto-table-cell-role="th">Ara(a1-2)[Glc(b1-6)]Glc</th>
-<td id="T_c0841_row4_col0" class="data row4 col0">1</td>
-<td id="T_c0841_row4_col1" class="data row4 col1">0</td>
-<td id="T_c0841_row4_col2" class="data row4 col2">0</td>
-<td id="T_c0841_row4_col3" class="data row4 col3">0</td>
+<th id="T_49327_level0_row4" class="row_heading level0 row4" data-quarto-table-cell-role="th">Ara(a1-2)[Glc(b1-6)]Glc</th>
+<td id="T_49327_row4_col0" class="data row4 col0">1</td>
+<td id="T_49327_row4_col1" class="data row4 col1">0</td>
+<td id="T_49327_row4_col2" class="data row4 col2">0</td>
+<td id="T_49327_row4_col3" class="data row4 col3">0</td>
 </tr>
 </tbody>
 </table>
@@ -442,7 +444,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Okay, we’re ready for some heatmaps! In <code>glycowork.motif.analysis.get_heatmap</code>, we have a function which…makes heatmaps.<br></p>
 <p>Specifically, it will generate clustermaps, that are aiming to cluster samples based on their glycan profile. Calling <code>get_heatmap</code> with <code>df_map</code> without any other arguments will try to cluster the samples based on their full glycan sequences. But we also have the <code>motif</code> mode, which extracts motifs from these glycans and clusters samples based on those. For instance, you can use the <code>known</code> (curated glycan motifs) and the <code>exhaustive</code> (all observed monosaccharides and disaccharides) options. Check out the documentation for more options! <br></p>
 <p>We can immediately see that we have a lot more <em>N</em>-linked glycans in Fabaceae, for instance based on the prominence of Trimannosylcore and Fuc(a1-3)GlcNAc. Glycans from Polygalaceae and Quillajaceae in <code>df_species</code> seem to mainly contain small molecule- and lipid-linked glycans, which of course are quite different from <em>N</em>-linked glycans and are more similar to each other than to glycans from Fabaceae in <code>df_species</code>.</p>
-<div id="cell-14" class="cell">
+<div id="e64ea37a" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>get_heatmap(df_map, motifs <span class="op">=</span> <span class="va">True</span>, feature_set <span class="op">=</span> [<span class="st">'exhaustive'</span>], datatype <span class="op">=</span> <span class="st">'presence'</span>,</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>            show_all <span class="op">=</span> <span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
@@ -455,7 +457,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <p>Let’s say you’re interested in a specific glycan from Fabales, <code>GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc</code>. Finding out more about it could be annoying (try to Google anything more complex than a short motif and you run into problems). That’s why we have <code>glycowork.motif.query.get_insight</code>, a function that returns some metadata about that glycan. The nice thing is that you don’t need to bother with database IDs or notational ambiguity, as <code>glycowork</code> will convert that glycan into a graph behind the scenes and search our databases.</p>
 <p>Let’s say you develop an acute interest in the distribution of xylose in plant glycans. In such a situation, one option for further inquiry would be <code>glycowork.motif.analysis.characterize_monosaccharide</code>. This neat little function allows you to get a sense of what a particular monosaccharide is typically directly connected to and which modifications it can acquire. Further, you can filter the results to any taxonomic level you’re interested in! (as long as it’s in <code>df_species</code> or your dataset of interest of course.) <br> So, for xylose in plants, we immediately see Man (in M3X/M3FX structures) and Glc/Xyl (Xyloglucans) as prominent neighbors. Additionally, we note that xylose in plant glycans can be methylated, which is a rather typical modification in plant glycans in general. <br> There is quite a bit more that you can do with <code>characterize_monosaccharide</code>, so have a look at its documentation for all the options!</p>
-<div id="cell-17" class="cell">
+<div id="6399b3d0" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>characterize_monosaccharide(<span class="st">'Xyl'</span>, rank <span class="op">=</span> <span class="st">'Kingdom'</span>, focus <span class="op">=</span> <span class="st">'Plantae'</span>, modifications <span class="op">=</span> <span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
 <div>
@@ -466,7 +468,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <p>Or how about we switch gears to fish and have a look at how they handle their galactose connections. This is a bit more diverse than with xylose! Note that you can set <code>thresh</code> to 50 (from its default value of 10), to make the plot more legible, if you have many rare modifications and pairings.</p>
-<div id="cell-19" class="cell">
+<div id="19293dd0" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>characterize_monosaccharide(<span class="st">'Gal'</span>, rank <span class="op">=</span> <span class="st">'Class'</span>, mode <span class="op">=</span> <span class="st">'sugarbond'</span>,</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>                            focus <span class="op">=</span> <span class="st">'Actinopterygii'</span>, modifications <span class="op">=</span> <span class="va">True</span>, thresh <span class="op">=</span> <span class="dv">50</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
@@ -555,7 +557,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     }
       var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
       var mailtoRegex = new RegExp(/^mailto:/);
-        var filterRegex = new RegExp("https:\/\/BojarLab\.github\.io\/glycowork\/");
+        var filterRegex = new RegExp("\/");
       var isInternal = (href) => {
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }
@@ -887,4 +889,4 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions"><ul><li><a href="https://github.com/BojarLab/glycowork/tree/master/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
+</body></html>

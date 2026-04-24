@@ -2,13 +2,16 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.8.26">
+<meta name="generator" content="quarto-1.9.37">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
 <title>glycowork</title>
 <style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
 div.columns{display: flex; gap: min(4vw, 1.5em);}
@@ -67,15 +70,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <meta name="quarto:offset" content="./">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="site_libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-000f0825b9c55ed21d14970d810c14a9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-de52dc3353fe04aa4d07820b7139bd46.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -111,12 +113,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="styles.css">
 <meta property="og:title" content="glycowork">
 <meta property="og:description" content="Package for processing and analyzing glycans">
-<meta property="og:image" content="https://BojarLab.github.io/glycowork/glycowork_badge_wo_bg.jpg">
+<meta property="og:image" content="/glycowork_badge_wo_bg.jpg">
 <meta property="og:site_name" content="glycowork">
 <meta property="og:image:alt" content="glycowork logo">
 <meta name="twitter:title" content="glycowork">
 <meta name="twitter:description" content="Package for processing and analyzing glycans">
-<meta name="twitter:image" content="https://BojarLab.github.io/glycowork/glycowork_badge_wo_bg.jpg">
+<meta name="twitter:image" content="/glycowork_badge_wo_bg.jpg">
 <meta name="twitter:image:alt" content="glycowork logo">
 <meta name="twitter:card" content="summary_large_image">
 </head>
@@ -212,7 +214,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#data-models" id="toc-data-models" class="nav-link" data-scroll-target="#data-models">Data &amp; Models</a></li>
   <li><a href="#how-to-use" id="toc-how-to-use" class="nav-link" data-scroll-target="#how-to-use">How to use</a></li>
   </ul>
-<div class="toc-actions"><ul><li><a href="https://github.com/BojarLab/glycowork/tree/master/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></nav>
+</nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
@@ -337,12 +339,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>visualizing motif distribution / glycan similarities / sequence properties <a href="./motif.html#analysis">–&gt; Learn more</a></li>
 <li>constructing and analyzing biosynthetic networks <a href="./network.html#biosynthesis">–&gt; Learn more</a></li>
 </ul>
-<div id="cell-12" class="cell">
+<div id="0d3be287" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#drawing publication-quality glycan figures</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> glycowork <span class="im">import</span> GlycoDraw</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>drawing <span class="op">=</span> GlycoDraw(<span class="st">"Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"</span>, highlight_motif <span class="op">=</span> <span class="st">"Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"</span>, suppress<span class="op">=</span><span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div id="cell-13" class="cell">
+<div id="02ac2ee1" class="cell">
 <div class="cell-output cell-output-display">
 <div>
 <figure class="figure">
@@ -351,7 +353,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </div>
-<div id="cell-14" class="cell">
+<div id="78ee0cc8" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">#get motifs, graph features, and sequence features of a set of glycan sequences to train models or analyze glycan properties</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>glycans <span class="op">=</span> [<span class="st">"Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"</span>,</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>           <span class="st">"Ma3(Ma6)Mb4GNb4GN;N"</span>,</span>
@@ -394,7 +396,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> glycowork.motif.annotate <span class="im">import</span> annotate_dataset</span>
 <span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a>out <span class="op">=</span> annotate_dataset(glycans, feature_set <span class="op">=</span> [<span class="st">'known'</span>, <span class="st">'terminal'</span>, <span class="st">'exhaustive'</span>], condense<span class="op">=</span><span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<div id="cell-15" class="cell">
+<div id="f1bab021" class="cell">
 <div class="cell-output cell-output-display">
 <table class="dataframe caption-top table table-sm table-striped small" data-border="1">
 <thead>
@@ -419,40 +421,36 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <th data-quarto-table-cell-role="th">Man</th>
 <th data-quarto-table-cell-role="th">Neu5Ac</th>
 <th data-quarto-table-cell-role="th">Xyl</th>
-<th data-quarto-table-cell-role="th">Fuc(a1-2)Gal</th>
-<th data-quarto-table-cell-role="th">Fuc(a1-3)GlcNAc</th>
-<th data-quarto-table-cell-role="th">Fuc(a1-4)GlcNAc</th>
-<th data-quarto-table-cell-role="th">Fuc(a1-6)GlcNAc</th>
-<th data-quarto-table-cell-role="th">Fuc(a1-?)GlcNAc</th>
-<th data-quarto-table-cell-role="th">Gal(b1-3)GlcNAc</th>
-<th data-quarto-table-cell-role="th">Gal(b1-4)GlcNAc</th>
-<th data-quarto-table-cell-role="th">Gal(b1-?)GlcNAc</th>
-<th data-quarto-table-cell-role="th">GalNAc(b1-4)GlcNAc</th>
-<th data-quarto-table-cell-role="th">GalNAcOS(b1-4)GlcNAc</th>
-<th data-quarto-table-cell-role="th">GlcNAc(b1-2)Man</th>
-<th data-quarto-table-cell-role="th">GlcNAc(b1-4)GlcNAc</th>
-<th data-quarto-table-cell-role="th">Man(a1-3)Man</th>
-<th data-quarto-table-cell-role="th">Man(a1-6)Man</th>
-<th data-quarto-table-cell-role="th">Man(a1-?)Man</th>
 <th data-quarto-table-cell-role="th">Man(b1-4)GlcNAc</th>
+<th data-quarto-table-cell-role="th">GlcNAc(b1-2)Man</th>
+<th data-quarto-table-cell-role="th">Fuc(a1-6)GlcNAc</th>
+<th data-quarto-table-cell-role="th">Fuc(a1-4)GlcNAc</th>
+<th data-quarto-table-cell-role="th">Man(a1-6)Man</th>
+<th data-quarto-table-cell-role="th">Fuc(a1-3)GlcNAc</th>
 <th data-quarto-table-cell-role="th">Neu5Ac(a2-3)Gal</th>
+<th data-quarto-table-cell-role="th">Gal(b1-3)GlcNAc</th>
 <th data-quarto-table-cell-role="th">Xyl(b1-2)Man</th>
-<th data-quarto-table-cell-role="th">Terminal_GlcNAc(b1-2)</th>
-<th data-quarto-table-cell-role="th">Terminal_Xyl(b1-2)</th>
-<th data-quarto-table-cell-role="th">Terminal_GalNAc(b1-4)</th>
+<th data-quarto-table-cell-role="th">GlcNAc(b1-4)GlcNAc</th>
+<th data-quarto-table-cell-role="th">Gal(b1-4)GlcNAc</th>
+<th data-quarto-table-cell-role="th">Fuc(a1-2)Gal</th>
+<th data-quarto-table-cell-role="th">Man(a1-3/6)Man</th>
+<th data-quarto-table-cell-role="th">Man(a1-3)Man</th>
+<th data-quarto-table-cell-role="th">Fuc(a1-3/4/6)GlcNAc</th>
+<th data-quarto-table-cell-role="th">Gal(b1-3/4)GlcNAc</th>
+<th data-quarto-table-cell-role="th">Terminal_Neu5Ac(a2-3)</th>
 <th data-quarto-table-cell-role="th">Terminal_Gal(b1-3)</th>
-<th data-quarto-table-cell-role="th">Terminal_Gal(b1-4)</th>
-<th data-quarto-table-cell-role="th">Terminal_Fuc(a1-4)</th>
-<th data-quarto-table-cell-role="th">Terminal_Fuc(a1-6)</th>
+<th data-quarto-table-cell-role="th">Terminal_GlcNAc(b1-2)</th>
 <th data-quarto-table-cell-role="th">Terminal_Fuc(a1-3)</th>
-<th data-quarto-table-cell-role="th">Terminal_Man(a1-3)</th>
 <th data-quarto-table-cell-role="th">Terminal_Fuc(a1-2)</th>
 <th data-quarto-table-cell-role="th">Terminal_Man(a1-6)</th>
-<th data-quarto-table-cell-role="th">Terminal_Neu5Ac(a2-3)</th>
-<th data-quarto-table-cell-role="th">Terminal_GalNAcOS(b1-4)</th>
-<th data-quarto-table-cell-role="th">Terminal_Gal(b1-?)</th>
-<th data-quarto-table-cell-role="th">Terminal_Man(a1-?)</th>
-<th data-quarto-table-cell-role="th">Terminal_Fuc(a1-?)</th>
+<th data-quarto-table-cell-role="th">Terminal_Man(a1-3)</th>
+<th data-quarto-table-cell-role="th">Terminal_Man(a1-3/6)</th>
+<th data-quarto-table-cell-role="th">Terminal_Fuc(a1-2/3/4/6)</th>
+<th data-quarto-table-cell-role="th">Terminal_Gal(b1-4)</th>
+<th data-quarto-table-cell-role="th">Terminal_Fuc(a1-4)</th>
+<th data-quarto-table-cell-role="th">Terminal_Xyl(b1-2)</th>
+<th data-quarto-table-cell-role="th">Terminal_Gal(b1-3/4)</th>
+<th data-quarto-table-cell-role="th">Terminal_Fuc(a1-6)</th>
 </tr>
 </thead>
 <tbody>
@@ -477,40 +475,36 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>3</td>
 <td>1</td>
 <td>0</td>
+<td>1</td>
+<td>2</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
 <td>0</td>
 <td>1</td>
 <td>1</td>
+<td>0</td>
+<td>2</td>
 <td>1</td>
+<td>3</td>
+<td>2</td>
+<td>1</td>
+<td>1</td>
+<td>2</td>
+<td>1</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>2</td>
 <td>3</td>
 <td>1</td>
 <td>1</td>
-<td>2</td>
-<td>0</td>
 <td>0</td>
 <td>2</td>
 <td>1</td>
-<td>1</td>
-<td>1</td>
-<td>2</td>
-<td>1</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>0</td>
-<td>1</td>
-<td>0</td>
-<td>3</td>
 </tr>
 <tr class="even">
 <th data-quarto-table-cell-role="th">Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
@@ -533,20 +527,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>3</td>
 <td>0</td>
 <td>0</td>
+<td>1</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
 <td>1</td>
-<td>1</td>
-<td>1</td>
+<td>0</td>
+<td>0</td>
 <td>2</td>
 <td>1</td>
 <td>0</td>
@@ -556,16 +548,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>0</td>
 <td>0</td>
 <td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
 <td>1</td>
-<td>0</td>
 <td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
 <td>2</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
 <td>0</td>
 </tr>
 <tr class="odd">
@@ -589,20 +579,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>3</td>
 <td>0</td>
 <td>0</td>
+<td>1</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
 <td>1</td>
-<td>1</td>
-<td>1</td>
+<td>0</td>
+<td>0</td>
 <td>2</td>
 <td>1</td>
 <td>0</td>
@@ -612,16 +600,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>0</td>
 <td>0</td>
 <td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
 <td>1</td>
-<td>0</td>
 <td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
 <td>2</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
 <td>0</td>
 </tr>
 <tr class="even">
@@ -645,40 +631,36 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>3</td>
 <td>0</td>
 <td>1</td>
+<td>1</td>
+<td>2</td>
 <td>0</td>
+<td>0</td>
+<td>1</td>
 <td>1</td>
 <td>0</td>
 <td>0</td>
 <td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
+<td>1</td>
 <td>0</td>
 <td>0</td>
 <td>2</td>
 <td>1</td>
 <td>1</td>
-<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
 <td>2</td>
 <td>1</td>
 <td>0</td>
 <td>1</td>
+<td>1</td>
 <td>2</td>
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
 <td>1</td>
 <td>0</td>
 <td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
 </tr>
 <tr class="odd">
 <th data-quarto-table-cell-role="th">Fuc(a1-2)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[Gal(b1-4)GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc</th>
@@ -702,39 +684,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>0</td>
 <td>0</td>
 <td>1</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
-<td>1</td>
-<td>0</td>
-<td>2</td>
-<td>2</td>
-<td>0</td>
-<td>0</td>
-<td>2</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
 <td>2</td>
 <td>1</td>
 <td>0</td>
-<td>0</td>
+<td>1</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
 <td>1</td>
-<td>0</td>
+<td>2</td>
 <td>1</td>
-<td>0</td>
-<td>0</td>
+<td>2</td>
 <td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
 <td>1</td>
+<td>2</td>
+<td>0</td>
 <td>0</td>
 <td>2</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>2</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+<td>0</td>
+<td>2</td>
+<td>1</td>
 </tr>
 <tr class="even">
 <th data-quarto-table-cell-role="th">GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc</th>
@@ -765,19 +743,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>0</td>
 <td>0</td>
 <td>0</td>
-<td>1</td>
-<td>1</td>
-<td>2</td>
-<td>1</td>
-<td>1</td>
-<td>1</td>
-<td>2</td>
-<td>1</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>0</td>
-<td>1</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
@@ -787,7 +752,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>0</td>
 <td>0</td>
 <td>0</td>
-<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
 <td>0</td>
 <td>0</td>
 <td>0</td>
@@ -796,7 +770,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </table>
 </div>
 </div>
-<div id="cell-16" class="cell">
+<div id="08bdf27f" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">#using graphs, you can easily check whether a glycan contains a specific motif; how about internal Lewis A/X motifs?</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> glycowork.motif.graph <span class="im">import</span> subgraph_isomorphism</span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(subgraph_isomorphism(<span class="st">'Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Gal(b1-3)]GalNAc'</span>,</span>
@@ -819,7 +793,7 @@ Terminal structures:
 ['Man(a1-3)', 'Man(a1-6)', 'Fuc(a1-6)']</code></pre>
 </div>
 </div>
-<div id="cell-17" class="cell">
+<div id="3eb1e74a" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">#given a composition, find matching glycan structures in SugarBase; specific for glycan classes and taxonomy</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> glycowork.motif.tokenization <span class="im">import</span> compositions_to_structures</span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(compositions_to_structures([{<span class="st">'Hex'</span>:<span class="dv">3</span>, <span class="st">'HexNAc'</span>:<span class="dv">4</span>}], glycan_class <span class="op">=</span> <span class="st">'N'</span>))</span>
@@ -933,7 +907,7 @@ Mass of the composition Hex3HexNAc4
     }
       var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
       var mailtoRegex = new RegExp(/^mailto:/);
-        var filterRegex = new RegExp("https:\/\/BojarLab\.github\.io\/glycowork\/");
+        var filterRegex = new RegExp("\/");
       var isInternal = (href) => {
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }
@@ -1265,4 +1239,4 @@ Mass of the composition Hex3HexNAc4
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/BojarLab/glycowork/tree/master/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
+</body></html>
