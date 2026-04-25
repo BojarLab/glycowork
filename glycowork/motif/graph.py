@@ -298,6 +298,7 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
     if len(glycan.nodes) < len(motif.nodes):
       return (0, []) if return_matches else 0 if count else False
     if termini_list:
+      motif = motif.copy()
       nx.set_node_attributes(motif, dict(zip(motif.nodes(), termini_list)), 'termini')
     motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
     if any('O' in s for s in unwrap(motif_comp)):

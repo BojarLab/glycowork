@@ -1,6 +1,8 @@
 # Changelog
 
 ## [1.8.2]
+- Bumped Python version to `3.11` (`3.10` reaches end of life in October 2026; https://devguide.python.org/versions/) (6a94ea9)
+- Bumped minimum `pandas` version to `2.1`
 - Fixed `scipy` version as `>=1.16` to guarantee Games-Howell test in the ANOVA for biodiversity tests (cf5e7bd)
 
 ### motif
