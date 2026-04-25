@@ -591,8 +591,9 @@ def largest_subgraph(glycan_a: str | nx.DiGraph, # First glycan
   ismags = nx.isomorphism.ISMAGS(graph_a, graph_b,
                                  node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
   largest_common_subgraph = list(ismags.largest_common_subgraph(symmetry = False))
-  largest_common_subgraph = [list(sub.keys()) for sub in largest_common_subgraph if list(sub.keys())[0] < list(sub.keys())[1]]
-  return graph_to_string_int(graph_a.subgraph(largest_common_subgraph[0]))
+  if not largest_common_subgraph:
+      return ''
+  return graph_to_string_int(graph_a.subgraph(largest_common_subgraph[0].keys()))
 
 
 def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating substituent
