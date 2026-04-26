@@ -23,12 +23,12 @@ with open(_parent / "glyconnect_to_glytoucan.json") as f:
   GLYCONNECT_TO_GLYTOUCAN = json.load(f)
 
 # for canonicalize_iupac
-replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')',
-                 'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', '4,5Ac': '4Ac5Ac', 'Talp': 'Tal', 'manp': 'man',
-                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', '-O-sulfo': 'S', 'H2PO3': 'P', '(P)': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara', 'Lyxp': 'Lyx',
+replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')', '-man': '-Man',
+                 'α': 'a', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', '4,5Ac': '4Ac5Ac', 'Talp': 'Tal', 'manp': 'man', 'Ribp': 'Rib',
+                 'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'SO3': 'S', 'So3': 'S', '-O-sulfo': 'S', 'H2PO3': 'P', '(P)': 'P', 'PO4': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara', 'Lyxp': 'Lyx',
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'PCho': 'PCho', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui', 'Sorp': 'Sor', 'Tagp': 'Tag',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn', 'GlN': 'GlcN', 'Altp': 'Alt', 'Allp': 'All',
-                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)'}
+                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)', '-glcp': '-Glc'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
 _POST_PROCESS = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'u5Ac(b1': 'u5Ac(b2', 'u5Gc(b1': 'u5Gc(b2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a', '5Ac(a2-?)Neu': '5Ac(a2-8)Neu', '5Ac(a2-?': '5Ac(a2-3/6',
@@ -319,15 +319,17 @@ def iupac_extended_to_condensed(iupac_extended: str # Glycan in IUPAC-extended f
   iupac_extended = re.sub(r'p-\(', '(', iupac_extended)  # Remove 'p-(' -> '('
   iupac_extended = re.sub(r'\)-', ')', iupac_extended)   # Remove ')-' -> ')'
   # Find all occurrences of the pattern and apply the changes
+
   def replace_pattern(match):
     # Move the α or β after the next opening parenthesis, KEEP D-/L-
     return f"{match.group('dl')}-{match.group('after')}{match.group('alpha_beta')}"
+
   # Modified pattern to capture D-/L- separately
   pattern = re.compile(r"(?P<alpha_beta>[αβßab\?])-(?P<dl>[DL])-(?P<after>[^\)]*\()")
   # Substitute the pattern in the string with our replace_pattern function
   adjusted_string = pattern.sub(replace_pattern, iupac_extended)
   # Handle reducing end sugar (no parentheses after)
-  adjusted_string = re.sub(r'([ab\?αβ])-([DL])-([A-Za-z]+)p?$', r'\2-\3', adjusted_string)
+  adjusted_string = re.sub(r'([ab\?αβ])-([DL])-([A-Za-z]+)p?(.*)$', r'\2-\3\4', adjusted_string)
   adjusted_string = re.sub(r"-\(", "(", adjusted_string)
   adjusted_string = re.sub(r"\)-", ")", adjusted_string)
   adjusted_string = re.sub(r"\]-", "]", adjusted_string)
@@ -1162,8 +1164,10 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Trim linkers
   if '-' in glycan:
     last_dash = glycan.rindex('-')
-    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash-1:])) and 'ol' not in glycan and glycan[last_dash+1:] not in lib:
-      glycan = glycan[:last_dash]
+    if bool(re.search(r'[a-z]\-[a-zA-Z]', glycan[last_dash - 1:])) and 'ol' not in glycan and glycan[
+      last_dash + 1:] not in lib:
+      tail_mono = re.match(r'[A-Z][A-Za-z]*', glycan[last_dash + 1:])
+      glycan = glycan[:last_dash - 1] + glycan[last_dash + 1:] if glycan[last_dash - 1] in 'ab' and tail_mono and tail_mono.group() in lib else glycan[:last_dash]
   # Anomeric and steric indicators placed before monosaccharide (e.g., "bDGal(1-4)bDGlcNAc")
   glycan = re.sub(r'([abx\?])([DLX\?])([A-Z1-9][A-Za-z2-9\-]*)\((\d)-(\d*\))',
                 lambda m: f"{m.group(2)}-{m.group(3)}({m.group(1)}{m.group(4)}-{m.group(5)}" if m.group(2) in 'DL' else f"{m.group(3)}({m.group(1)}{m.group(4)}-{m.group(5)}", glycan)
@@ -1221,6 +1225,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Remove anomeric and steric indicators at reducing end
   if '(' in glycan and bool(re.search(r'\)([ab][DLX\?][A-Z][A-Za-z5]*)', glycan)):
     glycan = re.sub(r'\)([ab][DLX\?])([A-Z][A-Za-z5]*)', r')\2', glycan)
+  glycan = re.sub(r'\)[ab]-([DL]-[A-Z])', r')\1', glycan)
   # Handle modifications
   glycan = re.sub(r'\d{,2}%', '', glycan)  # [50%Ac(a1-2)] into [Ac(a1-2)]
   glycan = re.sub(r'(?<!\d),(?!\d)', '][', glycan)  # Replace only commas not flanked by digits
@@ -1249,6 +1254,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'(~\([c-z])([1-2])-', r'\1(?\2-', glycan)
   glycan = re.sub(r'-([\?2-9])([A-Z])', r'-\1)\2', glycan)
   glycan = re.sub(r'([\?2-9])([\[\]])', r'\1)\2', glycan)
+  glycan = re.sub(r'(\d)OMe', r'\1Me', glycan)  # Glc1OMe to Glc1Me
   # Floating bits
   if '+' in glycan:
     prefix = glycan[:glycan.index('+')]

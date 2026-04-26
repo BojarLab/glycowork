@@ -16,3 +16,10 @@
 - Fixed some degree calculations in `generate_graph_features` (cf5e7bd)
 
 ##### Deprecated ⚠️
+
+#### processing
+##### Added ✨
+- Universal Input via `canonicalize_iupac` can now deal with more cases, such as `Ribp` or `Glc1OMe`
+
+##### Changed 🔄
+- Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans
