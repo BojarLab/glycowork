@@ -19,7 +19,8 @@
 
 #### processing
 ##### Added ✨
-- Universal Input via `canonicalize_iupac` can now deal with more cases, such as `Ribp` or `Glc1OMe`
+- Universal Input via `canonicalize_iupac` can now deal with more cases, such as `Ribp` or `Glc1OMe` (6754bbf)
+- Universal Input via `canonicalize_iupac` can now more robustly handle modifications in CSDB-linear, such as in `Ac(1-5)aXNeup(2-6)[Ac(1-2)]bDGalpN(1-4)bDGalp(1-4)bDGlcp` or `S-3)bDGlcpA(1-3)bDGalp(1-4)[Ac(1-2)]bDGlcpN(1-3)bDGalp(1-4)bDGlcp`, as well as more robustly strip reducing end anomeric indicator
 
 ##### Changed 🔄
-- Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans
+- Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans (6754bbf)

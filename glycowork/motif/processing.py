@@ -1223,11 +1223,12 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if glycan[-1] in 'ab' and glycan[-3:] not in ['Rha', 'Ara']:
     glycan = glycan[:-1]
   # Remove anomeric and steric indicators at reducing end
-  if '(' in glycan and bool(re.search(r'\)([ab][DLX\?][A-Z][A-Za-z5]*)', glycan)):
-    glycan = re.sub(r'\)([ab][DLX\?])([A-Z][A-Za-z5]*)', r')\2', glycan)
+  if '(' in glycan and bool(re.search(r'[\)\]]([ab][DLX\?][A-Z][A-Za-z5]*)', glycan)):
+    glycan = re.sub(r'([\)\]])([ab][DLX\?])([A-Z][A-Za-z5]*)', r'\1\3', glycan)
   glycan = re.sub(r'\)[ab]-([DL]-[A-Z])', r')\1', glycan)
   # Handle modifications
   glycan = re.sub(r'\d{,2}%', '', glycan)  # [50%Ac(a1-2)] into [Ac(a1-2)]
+  glycan = re.sub(r'\[([SP]-\d)\)\]', r'[\1]', glycan)  # [S-3)] to [S-3]
   glycan = re.sub(r'(?<!\d),(?!\d)', '][', glycan)  # Replace only commas not flanked by digits
   glycan = re.sub(r'<<([A-Za-z0-9]+)\(([ab\?])(\d+)-\d+\)\|([A-Za-z0-9]+)\([ab\?]\d+-\d+\)>>', r'\1(\2\3-?)', glycan)  # <<Rha(a1-3)|Rha(a1-4)>> to Rha(a1-?)
   glycan = re.sub(r'(\[|\)|\]|^)([1-9]?[SP])(?!en)([A-Z][A-Za-z]*)', r'\1\3\2', glycan)  # SGalNAc to GalNAcS
@@ -1237,6 +1238,10 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = re.sub(r'\[([^]^-]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
                  lambda m: f"{m.group(3)}{m.group(2)}{m.group(1).split('(')[0]}" if (m.group(1).split('(')[0] not in lib and m.group(1).count('(') == 1) else f"[{m.group(1)}]{m.group(3)}",
                  glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
+    glycan = re.sub(r'(?:(?<=[\)\]\}])|^)([A-Z][a-z]{0,3})(?:\([?ab]?\d+-([\d\?]+)\)|-(\d)\))([A-Z][A-Za-z1-9]*)',
+                    lambda m: f"{m.group(4)}{m.group(2) or m.group(3)}{m.group(1)}" if m.group(
+                      1) not in lib else m.group(0),
+                    glycan)  # Ac(?1-5)Neu to Neu5Ac; S-3)GlcA to GlcA3S
   glycan = re.sub(r'\[([A-Za-z0-9]+)\(\?(\d+)-(\d+)\)([DL]-)?([A-Za-z0-9]+)',
               lambda m: f"[{m.group(4) or ''}{m.group(5)}{m.group(3)}{m.group(1)}" if m.group(1) not in lib else f"[{m.group(1)}(?{m.group(2)}-{m.group(3)}){m.group(4) or ''}{m.group(5)}",
               glycan)  # [Ac(?1-2)D-Rha to [D-Rha2Ac
