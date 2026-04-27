@@ -32,7 +32,7 @@ replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
 _POST_PROCESS = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'u5Ac(b1': 'u5Ac(b2', 'u5Gc(b1': 'u5Gc(b2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a', '5Ac(a2-?)Neu': '5Ac(a2-8)Neu', '5Ac(a2-?': '5Ac(a2-3/6',
-                  'Kdn(a1': 'Kdn(a2', 'Kdn(b1': 'Kdn(b2', 'N2Ac(': 'NAc(', 'N2Ac3': 'NAc3', '(x': '(?', 'manHep': 'ManHep', 'amino': 'N'}
+                  'Kdn(a1': 'Kdn(a2', 'Kdn(b1': 'Kdn(b2', '(x': '(?', 'manHep': 'ManHep', 'amino': 'N'}
 CSDB_COMMENT = re.compile(r'\s*//.*$')
 CSDB_SUBSTITUENT = re.compile(r'\bSubst\b', flags = re.IGNORECASE)
 COMMON_ENANTIOMER = {"L-Fuc": "Fuc", "D-Gal": "Gal", "D-Man": "Man", "D-Glc": "Glc", "L-Alt": "Alt", "L-All": "All", "L-Ara": "Ara", "D-Gul": "Gul", "D-Lyx": "Lyx",
@@ -1269,6 +1269,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
       glycan = glycan.replace('+', '(?1-?)+')
     glycan = '{'+glycan.replace('+', '}')
   glycan = multireplace(glycan, _POST_PROCESS)
+  glycan = re.sub(r'N2Ac(?=[^a-z]|$)', 'NAc', glycan)
   glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
   glycan = sanitize_iupac(glycan)
   # Assume every non-lib "monosaccharide" at the reducing end is a modification and glue it to the preceding monosaccharide
