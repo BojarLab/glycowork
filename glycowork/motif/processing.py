@@ -57,7 +57,7 @@ OXFORD_FORBIDDEN_IUPAC = re.compile(r"\([a-z]?\d-\d\)")
 OXFORD_FORBIDDEN_LINKAGE = re.compile(r"[ab]\d")
 OXFORD_REQ_TOKEN = re.compile(r"(?:A\d+|G\d+|Sg?\d+|F(?:\(\d\))?|F\d+|Bi?|M\d+|H\d+|N\d+|E\d+|L\d+|Lac(?:DiNAc)?\d+|GalNAc\d+|GlcNAc\d+|GlcN\d+|Gluc\d+|Sulf)")
 OXFORD_BODY = re.compile(r"\A(?:[A-Za-z0-9-]+|\((?:3|4|6|2,3|2,6|Ac|Ac1|s)\)|\[(?:[368](?:,[368]){0,3}|SO4-2)\]|,)+\Z", re.VERBOSE)
-_OXFORD_HARDCODED = hardcoded = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+_OXFORD_HARDCODED = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M4": "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M9": "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M9Gluc1": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
@@ -1149,8 +1149,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = re.sub(r'([βα])(\()', r'\2\1', glycan)
   ac_multi = r'\d+(?:,\d+)+Ac\d*|\d+Ac\d*(?:,\d+Ac\d*)+'  # Neu9,5Ac to Neu5Ac9Ac
   glycan = re.sub(ac_multi, lambda m: ''.join(n+'Ac' for n in sorted(re.findall(r'\d+(?=,|Ac)', m.group()), key=int)), glycan)
-  ac_to_nac = r'Ac\((?:\?1|1)-2\)(?P<prefix>[abx\?]?(?:[DL]-?)?)(?P<base>[A-Z][a-z]{2,})(?P<pflag>p)?N\b'  # Ac(1-2)bDGlcpN to bDGlcNAc
-  glycan = re.sub(ac_to_nac, lambda m: f"{m.group('prefix') or ''}{m.group('base')}{m.group('pflag') or ''}NAc", glycan)
+  ac_to_nac = r'Ac\((?:\?1|1)-2\)(?P<branch>\[[^\]]*\])?(?P<prefix>[abx\?]?(?:[DL]-?)?)(?P<base>[A-Z][a-z]{2,})(?P<pflag>p)?N\b'  # Ac(1-2)bDGlcpN to bDGlcNAc
+  glycan = re.sub(ac_to_nac, lambda m: f"{m.group('branch') or ''}{m.group('prefix') or ''}{m.group('base')}{m.group('pflag') or ''}NAc", glycan)
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
   glycan = multireplace(glycan, COMMON_ENANTIOMER)
   glycan = re.sub(r'(\d)A($|a)', r'\1Ac\2', glycan)  # 9Aa into 9Aca
@@ -1223,13 +1223,13 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if glycan[-1] in 'ab' and glycan[-3:] not in ['Rha', 'Ara']:
     glycan = glycan[:-1]
   # Remove anomeric and steric indicators at reducing end
-  if '(' in glycan and bool(re.search(r'[\)\]]([ab][DLX\?][A-Z][A-Za-z5]*)', glycan)):
-    glycan = re.sub(r'([\)\]])([ab][DLX\?])([A-Z][A-Za-z5]*)', r'\1\3', glycan)
+  if '(' in glycan and bool(re.search(r'[\)\]]([abx\?][DLX\?][A-Z][A-Za-z5]*)', glycan)):
+    glycan = re.sub(r'([\)\]])([abx\?][DLX\?])([A-Z][A-Za-z5]*)', r'\1\3', glycan)
   glycan = re.sub(r'\)[ab]-([DL]-[A-Z])', r')\1', glycan)
   # Handle modifications
   glycan = re.sub(r'\d{,2}%', '', glycan)  # [50%Ac(a1-2)] into [Ac(a1-2)]
-  glycan = re.sub(r'\[([SP]-\d)\)\]', r'[\1]', glycan)  # [S-3)] to [S-3]
   glycan = re.sub(r'(?<!\d),(?!\d)', '][', glycan)  # Replace only commas not flanked by digits
+  glycan = re.sub(r'\[([SP]-\d)\)\]', r'[\1]', glycan)  # [S-3)] to [S-3]
   glycan = re.sub(r'<<([A-Za-z0-9]+)\(([ab\?])(\d+)-\d+\)\|([A-Za-z0-9]+)\([ab\?]\d+-\d+\)>>', r'\1(\2\3-?)', glycan)  # <<Rha(a1-3)|Rha(a1-4)>> to Rha(a1-?)
   glycan = re.sub(r'(\[|\)|\]|^)([1-9]?[SP])(?!en)([A-Z][A-Za-z]*)', r'\1\3\2', glycan)  # SGalNAc to GalNAcS
   old_glycan = ""
@@ -1249,6 +1249,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'\[([1-9][SP])\]\[([1-9][SP])\]([A-Z][^\(^\[]+)',
                 lambda m: f"{m.group(3)}{min(m.group(1), m.group(2))}{max(m.group(1), m.group(2))}",
                 glycan)  # [6S][4S]Gal to Gal4S6S
+  glycan = re.sub(r'\[(?:[abxX\?DL]{0,3})-?([A-Z][a-z]+)\??([A-Z])?\(\??\d+-([PS])-(\d+)\)\]([A-Z][A-Za-z1-9]*)',
+                  r'\5\4\3\1\2', glycan)  # [xXEtN(1-P-6)]GlcNAc to GlcNAc6PEtN
   glycan = re.sub(r'\?([A-Z])', r'O\1', glycan)  # Kdo?Ac to KdoOAc
   glycan = re.sub(r'\[([1-9]?[SP])\]([A-Z][^\(^\[]+)', r'\2\1', glycan)  # [S]Gal to GalS
   glycan = re.sub(r'(\)|\]|^)([1-9]?[SP])([A-Z][^\(^\[]+)', r'\1\3\2', glycan)  # )SGal to )GalS
