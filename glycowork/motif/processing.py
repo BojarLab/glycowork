@@ -28,7 +28,8 @@ replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc
                  'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'SO3': 'S', 'So3': 'S', '-O-sulfo': 'S', 'H2PO3': 'P', '(P)': 'P', 'PO4': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara', 'Lyxp': 'Lyx',
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'PCho': 'PCho', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui', 'Sorp': 'Sor', 'Tagp': 'Tag',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn', 'GlN': 'GlcN', 'Altp': 'Alt', 'Allp': 'All',
-                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)', '-glcp': '-Glc'}
+                 '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)', '-glcp': '-Glc',
+                 'lXGc?': 'Gc', 'lXGc': 'Gc', 'lXAc?': 'Ac', 'lXAc': 'Ac',}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
 _POST_PROCESS = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'u5Ac(b1': 'u5Ac(b2', 'u5Gc(b1': 'u5Gc(b2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a', '5Ac(a2-?)Neu': '5Ac(a2-8)Neu', '5Ac(a2-?': '5Ac(a2-3/6',
@@ -1227,6 +1228,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = re.sub(r'([\)\]])([abx\?][DLX\?])([A-Z][A-Za-z5]*)', r'\1\3', glycan)
   glycan = re.sub(r'\)[ab]-([DL]-[A-Z])', r')\1', glycan)
   # Handle modifications
+  glycan = re.sub(r'(-%P)+', lambda m: '-' + 'P' * m.group().count('P'), glycan)  # -%P-%P- to -PP- (pyrophosphate)
   glycan = re.sub(r'\d{,2}%', '', glycan)  # [50%Ac(a1-2)] into [Ac(a1-2)]
   glycan = re.sub(r'(?<!\d),(?!\d)', '][', glycan)  # Replace only commas not flanked by digits
   glycan = re.sub(r'\[([SP]-\d)\)\]', r'[\1]', glycan)  # [S-3)] to [S-3]
@@ -1235,6 +1237,10 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   old_glycan = ""
   while glycan != old_glycan:
     old_glycan = glycan
+    glycan = re.sub(r'(Ac|Gc)\(\??\d+-5\)(?:\[([^\]]*)\])?(Neu)',
+                    lambda m: f"{m.group(2) or ''}{m.group(3)}5{m.group(1)}" if m.group(
+                      2) else f"{m.group(3)}5{m.group(1)}",
+                    glycan)  # Gc(?1-5)Neu to Neu5Gc
     glycan = re.sub(r'\[([^]^-]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
                  lambda m: f"{m.group(3)}{m.group(2)}{m.group(1).split('(')[0]}" if (m.group(1).split('(')[0] not in lib and m.group(1).count('(') == 1) else f"[{m.group(1)}]{m.group(3)}",
                  glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
@@ -1249,7 +1255,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'\[([1-9][SP])\]\[([1-9][SP])\]([A-Z][^\(^\[]+)',
                 lambda m: f"{m.group(3)}{min(m.group(1), m.group(2))}{max(m.group(1), m.group(2))}",
                 glycan)  # [6S][4S]Gal to Gal4S6S
-  glycan = re.sub(r'\[(?:[abxX\?DL]{0,3})-?([A-Z][a-z]+)\??([A-Z])?\(\??\d+-([PS])-(\d+)\)\]([A-Z][A-Za-z1-9]*)',
+  glycan = re.sub(r'\[(?:[abxX\?DL]{0,3})-?([A-Z][a-z]+)\??([A-Z])?\([abx\?]?\d+-(P{1,2}|S)-(\d+)\)\]([A-Z][A-Za-z1-9]*)',
                   r'\5\4\3\1\2', glycan)  # [xXEtN(1-P-6)]GlcNAc to GlcNAc6PEtN
   glycan = re.sub(r'\?([A-Z])', r'O\1', glycan)  # Kdo?Ac to KdoOAc
   glycan = re.sub(r'\[([1-9]?[SP])\]([A-Z][^\(^\[]+)', r'\2\1', glycan)  # [S]Gal to GalS
