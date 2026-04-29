@@ -286,7 +286,7 @@ def quantify_motifs(
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
   if glycans is None:
-    if df.iloc[:, 0].dtype == object:
+    if pd.api.types.is_string_dtype(df.iloc[:, 0]):
       glycans = df.iloc[:, 0].tolist()
       df = df.iloc[:, 1:]
     else:
