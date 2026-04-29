@@ -1069,21 +1069,58 @@ def draw_chem3d(
       from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
   except ImportError:
     raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
-  mol = MolFromSmiles(IUPAC_to_SMILES([draw_this])[0])
-  atom_colors, bond_colors = {}, {}
-  for i, smarts in enumerate(IUPAC_to_SMILES(mono_list)):
-    atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
-    add_colours_to_map(atoms, atom_colors, i, alpha = False)
-    add_colours_to_map(bonds, bond_colors, i, alpha = False)
-  atom_colors = {k: ['#ECECEC'] if len(v) > 1 else v for k, v in atom_colors.items()}
+  smiles_mol = MolFromSmiles(IUPAC_to_SMILES([draw_this])[0])
+  mono_smarts = IUPAC_to_SMILES(mono_list)
+  from_pdb = False
   if pdb_file:
     mol = MolFromPDBFile(str(pdb_file))
+    from_pdb = True
   else:
-    mol = AddHs(mol)
-    EmbedMolecule(mol)
-    MMFFOptimizeMolecule(mol)
-    mol = RemoveHs(mol)
-    print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
+    # Try glycontact for a realistic GlycoShape conformer; fall back to RDKit
+    glycoshape_mol = None
+    try:
+      from glycontact.process import fetch_pdbs
+      pdb_paths = fetch_pdbs(draw_this)
+      if pdb_paths and isinstance(pdb_paths[0], Path):
+        glycoshape_mol = MolFromPDBFile(str(pdb_paths[0]))
+    except Exception:
+      pass
+    if glycoshape_mol is not None:
+      mol = glycoshape_mol
+      from_pdb = True
+    else:
+      mol = AddHs(smiles_mol)
+      EmbedMolecule(mol)
+      MMFFOptimizeMolecule(mol)
+      mol = RemoveHs(mol)
+      print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
+    # Color atoms by monosaccharide after mol is finalized
+    atom_colors, bond_colors = {}, {}
+    if from_pdb:
+      try:
+        from glycontact.process import get_pdb_atom_monosaccharides
+        atom_monos = get_pdb_atom_monosaccharides(mol)
+        for atom_idx, mono_name in atom_monos.items():
+          for i, mono in enumerate(mono_list):
+            if mono_name == mono:
+              add_colours_to_map([atom_idx], atom_colors, i, alpha = False)
+              break
+      except Exception:
+        pass
+      # ROH reducing end oxygen belongs to adjacent monosaccharide
+      for atom in mol.GetAtoms():
+        info = atom.GetPDBResidueInfo()
+        if info and info.GetResidueName().strip() == 'ROH' and atom.GetIdx() not in atom_colors:
+          for neighbor in atom.GetNeighbors():
+            if neighbor.GetIdx() in atom_colors:
+              atom_colors[atom.GetIdx()] = atom_colors[neighbor.GetIdx()]
+              break
+    else:
+      for i, smarts in enumerate(mono_smarts):
+        atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
+        add_colours_to_map(atoms, atom_colors, i, alpha = False)
+        add_colours_to_map(bonds, bond_colors, i, alpha = False)
+    atom_colors = {k: ['#ECECEC'] if len(v) > 1 else v for k, v in atom_colors.items()}
   if filepath:
     filepath = Path(filepath)
     if filepath.suffix.lower() == '.pdb':

@@ -4,6 +4,7 @@
 - Bumped Python version to `3.11` (`3.10` reaches end of life in October 2026; https://devguide.python.org/versions/) (6a94ea9)
 - Bumped minimum `pandas` version to `2.1` (faf68f0)
 - Fixed `scipy` version as `>=1.16` to guarantee Games-Howell test in the ANOVA for biodiversity tests (cf5e7bd)
+- The `dev` optional install set (only used for testing) now also includes `glycontact>=0.3.3`
 
 ### motif
 #### graph
@@ -35,3 +36,7 @@
 
 ##### Fixed 🐛
 - `quantify_motifs` can now also be used with full datasets that still have the first column be a glycan string column (fa98caa)
+
+#### draw
+##### Changed 🔄
+- If `draw_method = chem3d`, `GlycoDraw` will now preferentially fetch a realistic conformer from GlycoShape/PDB via `glycontact`, if the user has `glycontact` installed (lazily imported), and only fall back to RDKit if none can be found

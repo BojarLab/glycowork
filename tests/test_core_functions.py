@@ -3122,7 +3122,10 @@ def test_draw_chem3d():
     draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath="test.pdb")
     # Test with non-PDB filepath
     with patch('builtins.print') as mock_print:
-        draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath="test.svg")
+        draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], filepath = "test.svg")
+    # Test RDKit fallback with glycan not on GlycoShape
+    draw_chem3d("Fuc(a1-2)Gal6S(b1-3)[Fuc(a1-4)]GlcNAc6S", ["Fuc"])
+    plt.close('all')
 
 
 def test_glycodraw():

@@ -56,7 +56,8 @@ dev = [
     "pubchempy",
     "requests",
     "py3Dmol",
-    "pytest"
+    "pytest",
+    "glycontact>=0.3.3"
 ]
 ml = [
     "torch_geometric",
