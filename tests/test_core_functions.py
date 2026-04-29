@@ -1042,6 +1042,19 @@ def test_mz_to_composition():
         extras = ["doubly_charged", "adduct"]
     )
     assert result == [comp]
+    # Test custom df_use
+    result = mz_to_composition(
+        675,
+        mode = 'negative',
+        mass_value = 'monoisotopic',
+        glycan_class = 'O',
+        mass_tolerance = 0.5,
+        modification = "reduced",
+        filter_out = {'Kdn'},
+        df_use = df_glycan
+    )
+    expected = [{'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}]
+    assert result == expected
 
 
 def test_compositions_to_structures():

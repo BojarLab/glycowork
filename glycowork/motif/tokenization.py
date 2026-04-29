@@ -189,6 +189,8 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
       df_use = df_glycan[df_glycan.Kingdom.apply(lambda x: kingdom in x)]
     else:
       df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
+  elif glycan_class != "all":
+    df_use = df_use[df_use.glycan_type == glycan_class] if 'glycan_type' in df_use.columns else df_use
   if filter_out is None:
     filter_out = set()
   if deprioritized is None:
