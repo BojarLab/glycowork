@@ -1136,6 +1136,16 @@ def test_composition_to_mass():
     assert abs(aa_mass - base_mass - 121.0528) < 0.01
     # Unknown modification should add nothing
     assert composition_to_mass(comp, modification = 'nonexistent') == base_mass
+    # Permethylated reduced should add extra methyl (ring-opening creates methylatable OH at C5)
+    comp = {'Hex': 5, 'HexNAc': 2}
+    base_perm = composition_to_mass(comp, sample_prep = 'permethylated')
+    reduced_perm = composition_to_mass(comp, modification = 'reduced', sample_prep = 'permethylated')
+    reduced_underiv = composition_to_mass(comp, modification = 'reduced')
+    base_underiv = composition_to_mass(comp)
+    assert abs(reduced_perm - base_perm - 2 * 1.007825 - 14.01565) < 0.01
+    assert abs(reduced_underiv - base_underiv - 2 * 1.007825) < 0.01
+    # Man5GlcNAc2 permethylated reduced [M+Na]+ should match literature m/z 1595
+    assert abs(reduced_perm + 22.989218 - 1595.81) < 0.5
 
 
 def test_condense_composition_matching():

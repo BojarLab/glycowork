@@ -38,6 +38,7 @@ with resources.files("glycowork.motif").joinpath("mz_to_composition.csv").open(e
   mapping_file = pd.read_csv(f)
 mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
 HYDROGEN_MASS = 1.007825
+METHYL_MASS = 14.01565
 modification_mass_dict = {'reduced': 2 * HYDROGEN_MASS, '2AA': 121.0528, '2AB': 120.0688}
 
 
@@ -507,7 +508,10 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
   if adduct:
     total_mass += calculate_adduct_mass(adduct, mass_value) if isinstance(adduct, str) else adduct
   if modification:
-    total_mass += modification_mass_dict.get(modification, 0)
+    mod_mass = modification_mass_dict.get(modification, 0)
+    if modification == 'reduced' and sample_prep == 'permethylated':
+      mod_mass += METHYL_MASS # ring-opening creates one additional free OH (at C5, previously the ring oxygen) that gets methylated
+    total_mass += mod_mass
   return total_mass
 
 

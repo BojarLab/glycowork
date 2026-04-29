@@ -30,6 +30,9 @@
 ##### Changed 🔄
 - `mz_to_composition` now also filters by provided `glycan_class` if a user provides a custom `df_use` (ab57479)
 
+##### Fixed 🐛
+- `composition_to_mass` now correctly factors in the extra methylation (former ring oxygen) that happens in the combination of `modification == 'reduced'` and `sample_prep == 'permethylated'`
+
 #### annotate
 ##### Changed 🔄
 - Arguments `glycans` and `feature_set` in `quantify_motifs` have been changed to keyword arguments with defaults `glycans = None` (will be inferred from first column if it contains glycans, otherwise needs to be supplied) and `feature_set = ['known', 'exhaustive']` (c5db6a8)
