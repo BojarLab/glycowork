@@ -28,3 +28,7 @@
 #### tokenization
 ##### Changed 🔄
 - `mz_to_composition` now also filters by provided `glycan_class` if a user provides a custom `df_use`
+
+#### processing
+#### Fixed
+- Quantify_motifs was trying to log transform strings (first column with glycan-labels). 

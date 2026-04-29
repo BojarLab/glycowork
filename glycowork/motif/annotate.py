@@ -290,7 +290,7 @@ def quantify_motifs(
                               condense = True, custom_motifs = custom_motifs)
   collect_dic = {}
   df = df.T
-  log2 = (df.values < 0).any()
+  log2 = (df.select_dtypes(include='number') < 0).any().any()
   # Motif quantification
   for col in df_motif.columns:
     indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
