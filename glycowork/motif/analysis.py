@@ -101,8 +101,7 @@ def preprocess_data(
     raise ValueError("Only ALR and CLR are valid transforms for now.")
   if motifs:
     # Motif extraction and quantification
-    df_org = quantify_motifs(df_org.iloc[:, 1:], df_org.iloc[:, 0].values.tolist(), feature_set,
-                             custom_motifs = custom_motifs)
+    df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs)
     # Re-normalization
     df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
     df = df_org + 0.0000001
@@ -242,7 +241,7 @@ def get_heatmap(
     if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
       raise ValueError("A heatmap needs to have at least two motifs.")
     if datatype == 'response':
-      df = quantify_motifs(df, df.index.tolist(), feature_set, custom_motifs = custom_motifs)
+      df = quantify_motifs(df, glycans = df.index.tolist(), feature_set = feature_set, custom_motifs = custom_motifs)
     elif datatype == 'presence':
       # Count glycan motifs and remove rare motifs from the result
       df_motif = annotate_dataset(df.index.tolist(), feature_set = feature_set, condense = True, custom_motifs = custom_motifs)
@@ -474,7 +473,7 @@ def get_pca(
       df_motif = (
           df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(
               1e-6) if transform else df)
-      raw = quantify_motifs(df_motif.iloc[:, 1:], df_motif.iloc[:, 0].values.tolist(), feature_set,
+      raw = quantify_motifs(df_motif, feature_set = feature_set,
                             custom_motifs = custom_motifs, remove_redundant = False)
       if transform == "CLR":
           raw = clr_transformation(raw + 1e-7, raw.columns.tolist(), [], gamma = 0)
@@ -936,7 +935,7 @@ def get_time_series(
     alpha = get_alphaN(df.shape[1] - 1)
     glycans = strip_suffixes(df.iloc[:, 0])
     if motifs:
-      df = quantify_motifs(df.iloc[:, 1:], glycans, feature_set, custom_motifs = custom_motifs)
+      df = quantify_motifs(df.iloc[:, 1:], glycans = glycans, feature_set = feature_set, custom_motifs = custom_motifs)
     else:
       df.index = glycans
       df = df.drop([df.columns[0]], axis = 1)
@@ -990,7 +989,7 @@ def get_jtk(
     else:
       raise ValueError("Only ALR and CLR are valid transforms for now.")
     if motifs:
-      df = quantify_motifs(df.iloc[:, 1:], df.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs).reset_index()
+      df = quantify_motifs(df, feature_set = feature_set, custom_motifs = custom_motifs).reset_index()
     results = []
     for _, row in df.iterrows():
       p_val, period, phase, tau = jtk.test(row.iloc[1:].values.astype(float))
@@ -1120,9 +1119,9 @@ def get_SparCC(
   else:
     raise ValueError("Only ALR and CLR are valid transforms for now.")
   if motifs:
-    df1 = quantify_motifs(df1.iloc[:, 1:], df1.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+    df1 = quantify_motifs(df1, feature_set = feature_set, custom_motifs = custom_motifs)
     if '(' in df2.iloc[:, 0].values.tolist()[0]:
-      df2 = quantify_motifs(df2.iloc[:, 1:], df2.iloc[:, 0].values.tolist(), feature_set, custom_motifs = custom_motifs)
+      df2 = quantify_motifs(df2, feature_set = feature_set, custom_motifs = custom_motifs)
     else:
       df2 = df2.set_index(df2.columns.tolist()[0])
   else:

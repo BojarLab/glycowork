@@ -29,6 +29,9 @@
 ##### Changed 🔄
 - `mz_to_composition` now also filters by provided `glycan_class` if a user provides a custom `df_use`
 
-#### processing
-#### Fixed
-- Quantify_motifs was trying to log transform strings (first column with glycan-labels). 
+#### annotate
+##### Changed 🔄
+- Arguments `glycans` and `feature_set` in `quantify_motifs` have been changed to keyword arguments with defaults `glycans = None` (will be inferred from first column if it contains glycans, otherwise needs to be supplied) and `feature_set = ['known', 'exhaustive']`
+
+##### Fixed 🐛
+- `quantify_motifs` can now also be used with full datasets that still have the first column be a glycan string column (fa98caa)

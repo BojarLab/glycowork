@@ -2760,6 +2760,26 @@ def test_quantify_motifs():
     assert len(result.columns) > 0
 
 
+def test_quantify_motifs_auto_glycans():
+    df = pd.DataFrame({
+        'glycan': ["Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc"],
+        'sample1': [1, 2],
+        'sample2': [2, 3]
+    })
+    result = quantify_motifs(df, feature_set=['exhaustive'])
+    assert isinstance(result, pd.DataFrame)
+    assert len(result.columns) > 0
+
+
+def test_quantify_motifs_no_glycans_numeric():
+    df = pd.DataFrame({
+        'sample1': [1, 2],
+        'sample2': [2, 3]
+    })
+    with pytest.raises(ValueError, match="glycans must be provided"):
+        quantify_motifs(df, feature_set=['exhaustive'])
+
+
 def test_count_unique_subgraphs_of_size_k():
     glycan = "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     graph = glycan_to_nxGraph(glycan)

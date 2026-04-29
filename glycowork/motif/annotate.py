@@ -277,20 +277,26 @@ def deduplicate_motifs(
 
 def quantify_motifs(
    df: str | pd.DataFrame, # DataFrame or filepath with samples as columns, abundances as values
-   glycans: list[str], # List of IUPAC-condensed glycan sequences
-   feature_set: list[str], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
+   glycans: list[str] | None = None, # List of IUPAC-condensed glycan sequences; auto-detected from first column if None
+   feature_set: list[str] = ['known', 'exhaustive'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
    custom_motifs: list = [], # Custom motifs when using 'custom' feature set
    remove_redundant: bool = True # Remove redundant motifs via deduplicate_motifs
    ) -> pd.DataFrame: # DataFrame with motif abundances (motifs as columns, samples as rows)
   "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences"
   if isinstance(df, str):
     df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+  if glycans is None:
+    if df.iloc[:, 0].dtype == object:
+      glycans = df.iloc[:, 0].tolist()
+      df = df.iloc[:, 1:]
+    else:
+      raise ValueError("glycans must be provided if the first column is not glycan strings")
   # Motif extraction
   df_motif = annotate_dataset(glycans, feature_set = feature_set,
                               condense = True, custom_motifs = custom_motifs)
   collect_dic = {}
   df = df.T
-  log2 = (df.select_dtypes(include='number') < 0).any().any()
+  log2 = (df.select_dtypes(include = 'number') < 0).any().any()
   # Motif quantification
   for col in df_motif.columns:
     indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
