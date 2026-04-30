@@ -5,6 +5,7 @@
 - Bumped minimum `pandas` version to `2.1` (faf68f0)
 - Fixed `scipy` version as `>=1.16` to guarantee Games-Howell test in the ANOVA for biodiversity tests (cf5e7bd)
 - The `dev` optional install set (only used for testing) now also includes `glycontact>=0.3.3`
+- Automate versioning in __init__.py
 
 ### glycan_data
 - Added new curated glycomics dataset: `human_interstitialfluid_N_GPST000651` (ce499ae, 7ddd6c2)
