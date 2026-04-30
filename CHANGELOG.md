@@ -6,6 +6,9 @@
 - Fixed `scipy` version as `>=1.16` to guarantee Games-Howell test in the ANOVA for biodiversity tests (cf5e7bd)
 - The `dev` optional install set (only used for testing) now also includes `glycontact>=0.3.3`
 
+### glycan_data
+- Added new curated glycomics dataset: `human_interstitialfluid_N_GPST000651` (ce499ae)
+
 ### motif
 #### graph
 ##### Added ✨
@@ -31,7 +34,7 @@
 - `mz_to_composition` now also filters by provided `glycan_class` if a user provides a custom `df_use` (ab57479)
 
 ##### Fixed 🐛
-- `composition_to_mass` now correctly factors in the extra methylation (former ring oxygen) that happens in the combination of `modification == 'reduced'` and `sample_prep == 'permethylated'`
+- `composition_to_mass` now correctly factors in the extra methylation (former ring oxygen) that happens in the combination of `modification == 'reduced'` and `sample_prep == 'permethylated'` (30e1a46)
 
 #### annotate
 ##### Changed 🔄
