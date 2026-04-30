@@ -56,11 +56,12 @@ OXFORD_MANN_ONLY = re.compile(r"\A(?:M|Man)-?\d+\Z", re.IGNORECASE)
 OXFORD_HAS_NONZERO_DIGIT = re.compile(r"[1-9]")
 OXFORD_FORBIDDEN_IUPAC = re.compile(r"\([a-z]?\d-\d\)")
 OXFORD_FORBIDDEN_LINKAGE = re.compile(r"[ab]\d")
-OXFORD_REQ_TOKEN = re.compile(r"(?:A\d+|G\d+|Sg?\d+|F(?:\(\d\))?|F\d+|Bi?|M\d+|H\d+|N\d+|E\d+|L\d+|Lac(?:DiNAc)?\d+|GalNAc\d+|GlcNAc\d+|GlcN\d+|Gluc\d+|Sulf)")
-OXFORD_BODY = re.compile(r"\A(?:[A-Za-z0-9-]+|\((?:3|4|6|2,3|2,6|Ac|Ac1|s)\)|\[(?:[368](?:,[368]){0,3}|SO4-2)\]|,)+\Z", re.VERBOSE)
+OXFORD_REQ_TOKEN = re.compile(r"(?:A\d+|G(?:\(\d\))?\d+|Sg?(?:\([368](?:,[368])*\))?\d+|F(?:\(\d\))?|F\d+|Bi?|M\d+|H\d+|N\d+|E\d+|L\d+|Lac(?:DiNAc)?\d+|GalNAc\d+|GlcNAc\d+|GlcN\d+|Gluc\d+|Sulf)")
+OXFORD_BODY = re.compile(r"\A(?:[A-Za-z0-9-]+|\((?:[3468](?:,[3468]){0,5}|2,[36]|Ac1?|s)\)|\[(?:[368](?:,[368]){0,3}|SO4-2)\]|,)+\Z", re.VERBOSE)
 _OXFORD_HARDCODED = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M4": "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M9": "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "M9Glc": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M9Gluc1": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M10": "Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                "M11": "Glc(a1-3)Glc(a1-3)Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
@@ -703,7 +704,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
           count = int(match.group(2)) if match.group(2) else 1
           if bond_str:
               bonds = [f'Gal(b1-{x.strip()})' for x in bond_str.split(',')]
-              return bonds + ['Gal(b1-3/4)'] * (count - len(bonds))
+              return bonds + [bonds[-1]] * (count - len(bonds))
           else:
               return ['Gal(b1-3/4)' for x in range(count)]
       else:
@@ -766,7 +767,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
   if 'M' in oxford:
     M_count = int(oxford[oxford.index("M") + 1]) - 3
     for m in range(M_count):
-      floaty += "{Man(a1-?)}"
+      floaty += "{Man(a1-2/3/6)}"
   oxford_wo_branches = bracket_removal(oxford)
   branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A") + 1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A") + 1] != "c" else 0}
   extras = {"Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga") + 2]) if "Ga" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Ga") + 2].isdigit() else 0,

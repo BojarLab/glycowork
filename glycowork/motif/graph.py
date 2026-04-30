@@ -482,21 +482,23 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
   # Get the root node (highest index)
   root_idx = max(graph.nodes())
   # Build depths with a single traversal
-  depths = {}
-  leaf_labels = {}
+  depths, leaf_labels, subtree_keys = {}, {}, {}
 
   def compute_metrics(node):
     if node in depths:
       return depths[node], leaf_labels[node]
     successors = list(graph.successors(node))
+    label = graph.nodes[node].get("string_labels", "")
     if not successors:
       depths[node] = 0
-      leaf_labels[node] = graph.nodes[node].get("string_labels", "")
+      leaf_labels[node] = label
+      subtree_keys[node] = label
     else:
       for child in successors:
         compute_metrics(child)
       depths[node] = 1 + max(depths[child] for child in successors)
       leaf_labels[node] = min(leaf_labels[child] for child in successors)
+      subtree_keys[node] = label + ''.join(sorted(subtree_keys[child] for child in successors))
     return depths[node], leaf_labels[node]
 
   compute_metrics(root_idx)
@@ -526,10 +528,10 @@ def graph_to_string_int(graph: nx.DiGraph, # Glycan graph
     if canonicalize:
       # Combining the stable sorts: length-based and special branches use the same canonical tie-breakers
       if order_by == "length" or any(is_special_branch(child) for child in children):
-        children.sort(key = lambda x: (-depths[x], get_linkage_number(x, graph), leaf_labels[x]), reverse = True)
+        children.sort(key = lambda x: (-depths[x], get_linkage_number(x, graph), leaf_labels[x], subtree_keys[x]), reverse = True)
       else:
         # Standard linkage canonicalization relies on positive depth rather than negative
-        children.sort(key = lambda x: (get_linkage_number(x, graph), depths[x], leaf_labels[x]), reverse = True)
+        children.sort(key = lambda x: (get_linkage_number(x, graph), depths[x], leaf_labels[x], subtree_keys[x]), reverse = True)
     else:
       # Sort children based on ordering mode
       if order_by == "length":

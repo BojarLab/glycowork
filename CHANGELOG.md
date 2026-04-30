@@ -5,7 +5,7 @@
 - Bumped minimum `pandas` version to `2.1` (faf68f0)
 - Fixed `scipy` version as `>=1.16` to guarantee Games-Howell test in the ANOVA for biodiversity tests (cf5e7bd)
 - The `dev` optional install set (only used for testing) now also includes `glycontact>=0.3.3`
-- Automate versioning in __init__.py
+- Automated versioning in `__init__.py` (b72d113)
 
 ### glycan_data
 - Added new curated glycomics dataset: `human_interstitialfluid_N_GPST000651` (ce499ae, 7ddd6c2)
@@ -19,6 +19,7 @@
 
 ##### Fixed 🐛
 - Fixed some degree calculations in `generate_graph_features` (cf5e7bd)
+- Fixed `graph_to_string` very rarely not ordering branches in a deterministic/idempotent manner
 
 ##### Deprecated ⚠️
 
@@ -26,13 +27,17 @@
 ##### Added ✨
 - Universal Input via `canonicalize_iupac` can now deal with more cases, such as `Ribp` or `Glc1OMe` (6754bbf)
 - Universal Input via `canonicalize_iupac` can now more robustly handle modifications in CSDB-linear, such as in `Ac(1-5)aXNeup(2-6)[Ac(1-2)]bDGalpN(1-4)bDGalp(1-4)bDGlcp`, `S-3)bDGlcpA(1-3)bDGalp(1-4)[Ac(1-2)]bDGlcpN(1-3)bDGalp(1-4)bDGlcp`, or `Ac(1-2)[xXEt?N(1-P-6)]bDGlcpN(1-3)bDManp(1-4)bDGlcp`, as well as more robustly strip reducing end anomeric indicator (99942e8, a152c47, d6c3d56)
+- Universal Input via `canonicalize_iupac` can now parse more complex Oxford sequences, such as `F(6)A2G(4)2S(3,3)2`
 
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans (6754bbf)
 
+##### Fixed 🐛
+- Fixed some Oxford sequences (e.g., `A1`, `A2`) being misidentified as blood group glycolipids by `canonicalize_iupac`
+
 #### tokenization
 ##### Added ✨
-- The `modification` keyword argument in `mz_to_composition` etc now also accepts `procainamide` as an argument
+- The `modification` keyword argument in `mz_to_composition` etc now also accepts `procainamide` as an argument (e4a2a40)
 
 ##### Changed 🔄
 - `mz_to_composition` now also filters by provided `glycan_class` if a user provides a custom `df_use` (ab57479)
