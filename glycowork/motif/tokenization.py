@@ -39,7 +39,7 @@ with resources.files("glycowork.motif").joinpath("mz_to_composition.csv").open(e
 mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
 HYDROGEN_MASS = 1.007825
 METHYL_MASS = 14.01565
-modification_mass_dict = {'reduced': 2 * HYDROGEN_MASS, '2AA': 121.0528, '2AB': 120.0688}
+modification_mass_dict = {'reduced': 2 * HYDROGEN_MASS, '2AA': 121.0528, '2AB': 120.0688, 'procainamide': 219.1736}
 
 
 def constrain_prot(proteins: list[str], # List of protein sequences
@@ -172,7 +172,7 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
 def mz_to_composition(mz_value: float, # m/z value from mass spec
                      mode: str = 'negative', # MS mode: positive/negative
                      mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
-                     modification: str | None = None, # Reducing end modification: reduced/2AA/2AB
+                     modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide
                      sample_prep: str = 'underivatized', # Sample preparation method: underivatized/permethylated/peracetylated
                      mass_tolerance: float = 0.5, # Mass tolerance for matching
                      kingdom: str = 'Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
@@ -329,7 +329,7 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
                     mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                     sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                     mass_tolerance: float = 0.5, # Mass tolerance for matching
-                    modification: str | None = None, # Reducing end modification: reduced/2AA/2AB
+                    modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide
                     df_use: pd.DataFrame | None = None, # Custom glycan database
                     filter_out: set[str] | None = None, # Monosaccharides to ignore
                     deprioritized: set[str] | None = {"Me", "HexA", "PCho"}, # Monosaccharides to use only as fallback if no other composition matches
@@ -491,7 +491,7 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
                        mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                        sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                        adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-                       modification: str | None = None # Reducing end modification: reduced/2AA/2AB
+                       modification: str | None = None # Reducing end modification: reduced/2AA/2AB/procainamide
                       ) -> float: # Theoretical mass
   """Calculate theoretical mass from composition"""
   dict_comp = dict_comp_in.copy()
@@ -520,7 +520,7 @@ def glycan_to_mass(glycan: str, # Glycan in IUPAC-condensed format
                    sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                    stem_libr: dict[str, str] | None = None, # Modified to core monosaccharide mapping
                    adduct: str | float | None = None, # Chemical formula of adduct (e.g., "C2H4O2") OR its exact mass in Da
-                   modification: str | None = None # Reducing end modification: reduced/2AA/2AB
+                   modification: str | None = None # Reducing end modification: reduced/2AA/2AB/procainamide
                   ) -> float: # Theoretical mass
   """Calculate theoretical mass from glycan"""
   if stem_libr is None:

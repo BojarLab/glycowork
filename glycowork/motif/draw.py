@@ -1093,7 +1093,7 @@ def draw_chem3d(
       EmbedMolecule(mol)
       MMFFOptimizeMolecule(mol)
       mol = RemoveHs(mol)
-      print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool.")
+      print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool. Install glycontact and run this again for improved conformers.")
     # Color atoms by monosaccharide after mol is finalized
     atom_colors, bond_colors = {}, {}
     if from_pdb:

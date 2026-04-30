@@ -7,7 +7,7 @@
 - The `dev` optional install set (only used for testing) now also includes `glycontact>=0.3.3`
 
 ### glycan_data
-- Added new curated glycomics dataset: `human_interstitialfluid_N_GPST000651` (ce499ae)
+- Added new curated glycomics dataset: `human_interstitialfluid_N_GPST000651` (ce499ae, 7ddd6c2)
 
 ### motif
 #### graph
@@ -30,6 +30,9 @@
 - Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans (6754bbf)
 
 #### tokenization
+##### Added ✨
+- The `modification` keyword argument in `mz_to_composition` etc now also accepts `procainamide` as an argument
+
 ##### Changed 🔄
 - `mz_to_composition` now also filters by provided `glycan_class` if a user provides a custom `df_use` (ab57479)
 
