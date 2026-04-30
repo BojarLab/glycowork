@@ -1,4 +1,5 @@
-__version__ = "1.8.2"
+from importlib.metadata import version
+__version__ = version("glycowork")
 from .motif.draw import GlycoDraw
 
 __all__ = ['GlycoDraw']
