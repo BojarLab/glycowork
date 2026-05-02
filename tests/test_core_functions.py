@@ -407,6 +407,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("bDGlcp(1-3)/bDGlcpA(1-4)bDGlcp(1-3)/n=1-2/bDGlcpA(1-4)bDGlcp") == "Glc(b1-3)GlcA(b1-4)Glc(b1-3)GlcA(b1-4)Glc"
     assert canonicalize_iupac("Ac(1-5)aXNeup(2-6)[Ac(1-2)]bDGalpN(1-4)bDGalp(1-4)bDGlcp") == "Neu5Ac(a2-6)GalNAc(b1-4)Gal(b1-4)Glc"
     assert canonicalize_iupac("Ac(1-2)[xXEt?N(1-P-6)]bDGlcpN(1-3)bDManp(1-4)bDGlcp") == "GlcNAc6PEtN(b1-3)Man(b1-4)Glc"
+    assert canonicalize_iupac("-4)[S-2)]aD3,6anhGalp(1-3)[S-2)]bDGalp(1-") == "3,6-Anhydro-Gal2S(a1-3)Gal2S(b1-4)3,6-Anhydro-Gal2S"
     assert canonicalize_iupac("lXGc?(1-5)[Ac(1-5)aXNeup(2-8)]aXNeup(2-3)bDGalp(1-3)[Ac(1-2)]bDGalpN(1-4)bDGalp(1-4)bDGlcp") == "Neu5Ac(a2-8)Neu5Gc(a2-3)Gal(b1-3)GalNAc(b1-4)Gal(b1-4)Glc"
     assert canonicalize_iupac("aLFucp(1-3)[bLFucp(1-3)[S-6),Ac(1-2)]aDGlcpN(1-2)[S-3)]aDGalp(1-4)[Ac(1-5)]bXNeup(2-3)[S-6)]bDGlcp(1-4)[S-3)]bDGalp(1-4)]aLFucp(1-1)Me") == "Fuc(b1-3)GlcNAc6S(a1-2)Gal3S(a1-4)Neu5Ac(b2-3)Glc6S(b1-4)Gal3S(b1-4)[Fuc(a1-3)]Fuc1Me"
     assert canonicalize_iupac("S-3)bDGlcpA(1-3)bDGalp(1-4)[Ac(1-2)]bDGlcpN(1-3)bDGalp(1-4)bDGlcp") == "GlcA3S(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc"

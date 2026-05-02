@@ -29,7 +29,7 @@ replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'PCho': 'PCho', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui', 'Sorp': 'Sor', 'Tagp': 'Tag',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn', 'GlN': 'GlcN', 'Altp': 'Alt', 'Allp': 'All',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)', '-glcp': '-Glc',
-                 'lXGc?': 'Gc', 'lXGc': 'Gc', 'lXAc?': 'Ac', 'lXAc': 'Ac', 'CER': 'Cer'}
+                 'lXGc?': 'Gc', 'lXGc': 'Gc', 'lXAc?': 'Ac', 'lXAc': 'Ac', 'CER': 'Cer', 'anh': '-Anhydro-'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
 _POST_PROCESS = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'u5Ac(b1': 'u5Ac(b2', 'u5Gc(b1': 'u5Gc(b2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a', '5Ac(a2-?)Neu': '5Ac(a2-8)Neu', '5Ac(a2-?': '5Ac(a2-3/6',
@@ -1042,14 +1042,14 @@ def transform_repeat_glycan(glycan: str # Glycan string to check
                             ) -> tuple[str, bool]: # Glycan string with converted repeat structure, if necessary, and whether glycan is repeat
   """Transform -1)Fruf(b2-3)Fruf(b2- repeat structure into Fruf(b2-3)Fruf(b2-1)Fruf"""
   if glycan.startswith("-"):
-    match = re.match(r"(-P)?(-\d+\))(\[[^\]]*\])?([A-Za-z0-9-]+)(.*)", glycan)
+    match = re.match(r"(-P)?(-\d+\))(\[[^\]]*\])?([A-Za-z0-9,.-]+)(.*)", glycan)
     if match:
       phospho, linkage, brackets, first_mono, remainder = match.groups()
       brackets = brackets or ""
       phospho = phospho or ""
-      glycan = brackets + first_mono + remainder + phospho + linkage + first_mono
+      glycan = brackets + first_mono + remainder + phospho + linkage + (brackets if '(' not in brackets else '') + first_mono
       glycan = re.sub(r'(\w+)\(([\w\?])(\d+)-P-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}P({m.group(2)}{m.group(3)}-{m.group(4)})", glycan)
-      return re.sub(r"-ol(\d+)P", r"\1P-ol", glycan), True
+      return re.sub(r"-ol(\d+)P", r"\1P-ol", glycan).replace('--', '-'), True
   return glycan, False
 
 
@@ -1169,6 +1169,10 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(ac_to_nac, lambda m: f"{m.group('branch') or ''}{m.group('prefix') or ''}{m.group('base')}{m.group('pflag') or ''}NAc", glycan)
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
   glycan = multireplace(glycan, COMMON_ENANTIOMER)
+  glycan = re.sub(r'([ab\?]?)([DL]?)(\d+,\d+-Anhydro-)([A-Z][a-z]+)(\()?',  # aD3,6-Anhydro-Gal( to 3,6-Anhydro-Gal(a
+                  lambda m: m.group() if not m.group(1) and not m.group(2) else
+                  f"{m.group(3)}{COMMON_ENANTIOMER.get(f'{m.group(2)}-{m.group(4)}', (f'{m.group(2)}-' if m.group(2) else '') + m.group(4))}"
+                  + (f"({m.group(1) or '?'}" if m.group(5) else ""), glycan)
   glycan = re.sub(r'(\d)A($|a)', r'\1Ac\2', glycan)  # 9Aa into 9Aca
   glycan = re.sub(r'-([ab])-(\d+),(\d+\)?)-', r'\1\2-\3', glycan)  # Inconsistent usage of dashes and commas, like in Neu5Ac-a-2,6-Gal-b-1,3-GlcNAc
   glycan = re.sub(r'([A-Za-z]+\d+),(\d+)Pyr', r'\1Pyr\2Pyr', glycan)  # Gal4,6Pyr into Gal4Pyr6Pyr
@@ -1280,7 +1284,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'\[(?:[abxX\?DL]{0,3})-?([A-Z][a-z]+)\??([A-Z])?\([abx\?]?\d+-(P{1,2}|S)-(\d+)\)\]([A-Z][A-Za-z1-9]*)',
                   r'\5\4\3\1\2', glycan)  # [xXEtN(1-P-6)]GlcNAc to GlcNAc6PEtN
   glycan = re.sub(r'\?([A-Z])', r'O\1', glycan)  # Kdo?Ac to KdoOAc
-  glycan = re.sub(r'\[([1-9]?[SP])\]([A-Z][^\(^\[]+)', r'\2\1', glycan)  # [S]Gal to GalS
+  glycan = re.sub(r'\[([1-9][SP])\]([A-Z0-9][^\(\[]+)', r'\2\1', glycan)  # [S]Gal to GalS
   glycan = re.sub(r'(\)|\]|^)([1-9]?[SP])([A-Z][^\(^\[]+)', r'\1\3\2', glycan)  # )SGal to )GalS
   glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)  # Gal-olS to GalS-ol
   glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)  # S-Gal to GalS
