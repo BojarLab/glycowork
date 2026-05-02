@@ -394,9 +394,13 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("-3)[65%Ac(1-2)]bDRibf(1-2)bDRibf(1-6)bXKdof(2-") == "Ribf2Ac(b1-2)Ribf(b1-6)Kdof(b2-3)Ribf2Ac"
     assert canonicalize_iupac("-2)aLRhap(1-P-4)[Ac(1-2)]bDManpN(1-4)aDGlcp(1-") == "Rha1P(a1-4)ManNAc(b1-4)Glc(a1-2)Rha1P"
     assert canonicalize_iupac("-2)bDGlcpA(1-3)[%Ac(1-2)aL6dTalpN(1-4)bDGlcp(1-4),%Ac(1-2)]aLFucpN(1-") == "GlcA(b1-3)[L-6dTalNAc(a1-4)Glc(b1-4)]FucNAc(a1-2)GlcA"
-    assert canonicalize_iupac("-3)aLRhap(1-2)aLRhap(1-5)[<<Ac(1-8)|Ac(1-7)>>]bXKdo(2-") == "Rha(a1-2)Rha(a1-5)KdoOAc(b2-3)Rha"
+    assert canonicalize_iupac("-3)aLRhap(1-2)aLRhap(1-5)[<<Ac(1-8)|Ac(1-7)>>]bXKdo(2-") == "Rha(a1-2)Rha(a1-5)Kdo7/8Ac(b2-3)Rha"
     assert canonicalize_iupac("-P-2)bDRibf(1-2)xDRib-ol(5-") == "Ribf(b1-2)Rib5P-ol(?5-2)Ribf"
     assert canonicalize_iupac("-8)[%Ac(1-7),Ac(1-5)]aXNeup(2-") == "Neu5Ac7Ac(a2-8)Neu5Ac7Ac"
+    assert canonicalize_iupac("bDGalp(1-4)bDGlcp(1-1)CER") == "Gal(b1-4)Glc1Cer"
+    assert canonicalize_iupac("aDGlcpA") == "GlcA"
+    assert canonicalize_iupac("aDGlcp(1-4)[Ac(1-3)]bDManpNA(1-1)Ac") == "Glc(a1-4)ManAN1Ac3Ac"
+    assert canonicalize_iupac("Ac(1-5)aXNeup(2-3)bDGalp(1-3)[Ac(1-5)aXNeup(2-6),Ac(1-2)]aDGalpN(1-3)xDSer?") == "Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc1Ser"
     assert canonicalize_iupac("-6)[x?Rib-ol(1-P-4),80%Ac(1-3),Ac(1-2)]aDGlcpN(1-4)[40%Ac(1-2)]aDGalp(1-3)bDGalp(1-4)bDGlcp(1-") == "[Rib1P-ol(?1-4)]GlcNAc3Ac(a1-4)Gal2Ac(a1-3)Gal(b1-4)Glc(b1-6)GlcNAc3Ac"
     assert canonicalize_iupac("-6)bDGalf(1-1)xDMan-ol(6-P-3)[aDGlcp(1-2)]bDGalp(1-3)bDGalf(1-3)bDGlcp(1-") == "Galf(b1-1)Man6P-ol(?6-3)[Glc(a1-2)]Gal(b1-3)Galf(b1-3)Glc(b1-6)Galf"
     assert canonicalize_iupac("-6)aDGlcp(1-6)aDGlcp(1-6)[aDGlcp(1-6)/aDGlcp(1-4)/n=?/aDGlcp(1-4)]aDGlcp(1-6)aDGlcp(1-") == "Glc(a1-6)Glc(a1-6)[Glc(a1-6)Glc(a1-4)Glc(a1-4)]Glc(a1-6)Glc(a1-6)Glc"
@@ -419,6 +423,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("DManpa1-2DGlcpA[4Me]b1-4DGalpAa1-4DGlcpAb1-4DGlcp") == "Man(a1-2)GlcA4Me(b1-4)GalA(a1-4)GlcA(b1-4)Glc"
     assert canonicalize_iupac("DNeup5Ac[9A]a2-3DGalpb1-4[LFucpa1-3]DGlcpNAc") == "Neu5Ac9Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc"
     assert canonicalize_iupac("DGlcpNAcb1-2[DGlcpa1-3]LRhapa1-2LRhapa1-3LRhap[2A]a1-OH") == "GlcNAc(b1-2)[Glc(a1-3)]Rha(a1-2)Rha(a1-3)Rha2Ac"
+    assert canonicalize_iupac("S-2)[S-4)]aLFucp(1-4)[S-2)]aLFucp") == "Fuc2S4S(a1-4)Fuc2S"
     assert canonicalize_iupac("LDmanpHepa1-OME") == "LDManHep1Me"
     assert canonicalize_iupac("NNb3Ab;") == "Neu5Ac(b2-3)Gal"
     assert canonicalize_iupac("Ma3(M[6P]a6)Ma6(Ma3)Mb4GNb4GN") == "Man(a1-3)[Man6P(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -699,7 +704,7 @@ NODE        3
 EDGE        2
             1     2:a1    1
             2     3:b1    2:3
-///""") == "Gal(b1-3)GalNAc(a1-?)Ser"
+///""") == "Gal(b1-3)GalNAc1Ser"
     assert canonicalize_iupac("""ENTRY       G00012        Glycan
 NODE        8
             1   Asn        20    -2
@@ -718,7 +723,7 @@ EDGE        7
             5     6:a1    4:3
             6     7:a1    5:6
             7     8:a1    5:3
-///""") == "Man(a1-3)[Man(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc(b1-?)Asn"
+///""") == "Man(a1-3)[Man(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc1Asn"
     assert canonicalize_iupac("""<?xml version="1.0" encoding="UTF-8"?>
 <sugar version="1.0">
   <residues>

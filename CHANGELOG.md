@@ -19,21 +19,21 @@
 
 ##### Fixed 🐛
 - Fixed some degree calculations in `generate_graph_features` (cf5e7bd)
-- Fixed `graph_to_string` very rarely not ordering branches in a deterministic/idempotent manner
+- Fixed `graph_to_string` very rarely not ordering branches in a deterministic/idempotent manner (9f42561)
 
 ##### Deprecated ⚠️
 
 #### processing
 ##### Added ✨
-- Universal Input via `canonicalize_iupac` can now deal with more cases, such as `Ribp` or `Glc1OMe` (6754bbf)
+- Universal Input via `canonicalize_iupac` can now deal with more monosaccharide cases, such as `Ribp`, `Glc1OMe`, or single-monosaccharide glycans such as `aDGlcpA` (6754bbf)
 - Universal Input via `canonicalize_iupac` can now more robustly handle modifications in CSDB-linear, such as in `Ac(1-5)aXNeup(2-6)[Ac(1-2)]bDGalpN(1-4)bDGalp(1-4)bDGlcp`, `S-3)bDGlcpA(1-3)bDGalp(1-4)[Ac(1-2)]bDGlcpN(1-3)bDGalp(1-4)bDGlcp`, or `Ac(1-2)[xXEt?N(1-P-6)]bDGlcpN(1-3)bDManp(1-4)bDGlcp`, as well as more robustly strip reducing end anomeric indicator (99942e8, a152c47, d6c3d56)
-- Universal Input via `canonicalize_iupac` can now parse more complex Oxford sequences, such as `F(6)A2G(4)2S(3,3)2`
+- Universal Input via `canonicalize_iupac` can now parse more complex Oxford sequences, such as `F(6)A2G(4)2S(3,3)2` (9f42561)
 
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans (6754bbf)
 
 ##### Fixed 🐛
-- Fixed some Oxford sequences (e.g., `A1`, `A2`) being misidentified as blood group glycolipids by `canonicalize_iupac`
+- Fixed some Oxford sequences (e.g., `A1`, `A2`) being misidentified as blood group glycolipids by `canonicalize_iupac` (9f42561)
 
 #### tokenization
 ##### Added ✨

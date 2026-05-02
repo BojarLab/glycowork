@@ -29,11 +29,12 @@ replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc
                  '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'PCho': 'PCho', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui', 'Sorp': 'Sor', 'Tagp': 'Tag',
                  'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn', 'GlN': 'GlcN', 'Altp': 'Alt', 'Allp': 'All',
                  '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)', '-glcp': '-Glc',
-                 'lXGc?': 'Gc', 'lXGc': 'Gc', 'lXAc?': 'Ac', 'lXAc': 'Ac',}
+                 'lXGc?': 'Gc', 'lXGc': 'Gc', 'lXAc?': 'Ac', 'lXAc': 'Ac', 'CER': 'Cer'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
 _POST_PROCESS = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'u5Ac(b1': 'u5Ac(b2', 'u5Gc(b1': 'u5Gc(b2', 'Fuc(?': 'Fuc(a',
                   'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a', '5Ac(a2-?)Neu': '5Ac(a2-8)Neu', '5Ac(a2-?': '5Ac(a2-3/6',
                   'Kdn(a1': 'Kdn(a2', 'Kdn(b1': 'Kdn(b2', '(x': '(?', 'manHep': 'ManHep', 'amino': 'N'}
+_MOD_UNIT = re.compile(r'\d+(?:PEtN|PCho|NAc|NGc|OAc|OMe|OS|OP|Ac|Gc|Me|Et|Pyr|[A-Z][a-z]*)|PEtN|PCho|NAc|NGc|OAc|OMe|OS|OP|Ac|Gc|Me|Et|Pyr|[A-Z]')
 CSDB_COMMENT = re.compile(r'\s*//.*$')
 CSDB_SUBSTITUENT = re.compile(r'\bSubst\b', flags = re.IGNORECASE)
 COMMON_ENANTIOMER = {"L-Fuc": "Fuc", "D-Gal": "Gal", "D-Man": "Man", "D-Glc": "Glc", "L-Alt": "Alt", "L-All": "All", "L-Ara": "Ara", "D-Gul": "Gul", "D-Lyx": "Lyx",
@@ -1093,6 +1094,19 @@ def looks_like_oxford(glycan: str) -> bool:
   return bool(OXFORD_BODY.fullmatch(glycan))
 
 
+def _sort_mono_mods(m):
+  match = re.match(r'([A-Z][a-z]{2,})(.*)', m.group())
+  if not match or not match.group(2):
+    return m.group()
+  base, mod_str = match.group(1), match.group(2)
+  mods = _MOD_UNIT.findall(mod_str)
+  if ''.join(mods) != mod_str or len(mods) < 2:
+    return m.group()
+  non_numeric = sorted(x for x in mods if not x[0].isdigit())
+  numeric = sorted((x for x in mods if x[0].isdigit()), key=lambda x: int(re.match(r'\d+', x).group()))
+  return base + ''.join(non_numeric) + ''.join(numeric)
+
+
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                      ) -> str: # Standardized IUPAC-condensed format
   "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, KCF, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
@@ -1228,12 +1242,19 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   if '(' in glycan and bool(re.search(r'[\)\]]([abx\?][DLX\?][A-Z][A-Za-z5]*)', glycan)):
     glycan = re.sub(r'([\)\]])([abx\?][DLX\?])([A-Z][A-Za-z5]*)', r'\1\3', glycan)
   glycan = re.sub(r'\)[ab]-([DL]-[A-Z])', r')\1', glycan)
+  glycan = re.sub(r'^[abx\?][DLX\?]-?(?=[A-Z])', '', glycan)  # Bare monosaccharide reducing-end prefix
+  glycan = re.sub(r'([A-Z][a-z]+)\?$', r'\1', glycan)  # Strip bare anomeric ? at reducing end
   # Handle modifications
   glycan = re.sub(r'(-%P)+', lambda m: '-' + 'P' * m.group().count('P'), glycan)  # -%P-%P- to -PP- (pyrophosphate)
   glycan = re.sub(r'\d{,2}%', '', glycan)  # [50%Ac(a1-2)] into [Ac(a1-2)]
   glycan = re.sub(r'(?<!\d),(?!\d)', '][', glycan)  # Replace only commas not flanked by digits
-  glycan = re.sub(r'\[([SP]-\d)\)\]', r'[\1]', glycan)  # [S-3)] to [S-3]
-  glycan = re.sub(r'<<([A-Za-z0-9]+)\(([ab\?])(\d+)-\d+\)\|([A-Za-z0-9]+)\([ab\?]\d+-\d+\)>>', r'\1(\2\3-?)', glycan)  # <<Rha(a1-3)|Rha(a1-4)>> to Rha(a1-?)
+  glycan = re.sub(r'(?<![A-Za-z0-9\-%])\[?([SP]-\d)\)\]?', r'[\1]', glycan)  # [S-3)] or S-2) to [S-3]
+  glycan = re.sub(r'(\[?)<<([A-Za-z0-9]+)\(([ab\?]?)(\d+)-([\d\?]+)\)\|\2\([ab\?]?\d+-([\d\?]+)\)>>(\]?)([A-Z][a-z]*)?',
+                  lambda m: (
+                    f"{m.group(8)}{'/'.join(sorted([m.group(5), m.group(6)], key = lambda x: int(x) if x.isdigit() else 0))}{m.group(2)}"
+                    if m.group(1) else
+                    f"{m.group(2)}({m.group(3)}{m.group(4)}-{'/'.join(sorted([m.group(5), m.group(6)], key = int))})"),
+                  glycan)  # <<Rha(a1-3)|Rha(a1-4)>> to Rha(a1-3/4); [<<Ac(1-8)|Ac(1-7)>>]Kdo to Kdo7/8Ac
   glycan = re.sub(r'(\[|\)|\]|^)([1-9]?[SP])(?!en)([A-Z][A-Za-z]*)', r'\1\3\2', glycan)  # SGalNAc to GalNAcS
   old_glycan = ""
   while glycan != old_glycan:
@@ -1282,8 +1303,13 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'(?:[ab])?-+$', '', glycan)  # Remove endings like Glcb-
   glycan = sanitize_iupac(glycan)
   # Assume every non-lib "monosaccharide" at the reducing end is a modification and glue it to the preceding monosaccharide
-  glycan = re.sub(r'\(([ab\?][1-2])-([1])\)([A-Z][A-Za-z\-]*$)', lambda m: f'{m.group(2)}{m.group(3)}' if m.group(3) not in lib else f'({m.group(1)}-{m.group(2)}){m.group(3)}', glycan)
-  glycan = re.sub(r'([\w-]+)(?:-ol)?\(([\w\?])(\d+)-([PS])-(\d+)\)', lambda m: f"{m.group(1)}{m.group(3)}{m.group(4)}({m.group(2)}{m.group(3)}-{m.group(5)})", glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
+  glycan = re.sub(r'\(([ab\?])([1-2])-([\d\?]+)\)([A-Z][A-Za-z]*)$',
+                  lambda m: f'{m.group(2)}{m.group(4)}' if m.group(
+                    4) not in lib else f'({m.group(1)}{m.group(2)}-{m.group(3)}){m.group(4)}', glycan)
+  glycan = re.sub(r'([\w-]+)(?:-ol)?\(([\w\?])(\d+)-([PS])-(\d+)\)',
+                  lambda m: f"{m.group(1)}{m.group(3)}{m.group(4)}({m.group(2)}{m.group(3)}-{m.group(5)})",
+                  glycan)  # Rha(a1-P-4) into Rha1P(a1-4)
+  glycan = re.sub(r'[A-Z][A-Za-z0-9]+', _sort_mono_mods, glycan)  # Sort modifications: ManNA3Ac1Ac to ManAN1Ac3Ac
   glycan, repeat = transform_repeat_glycan(glycan)
   glycan = re.sub(r"n\=[\d\?\-]+\/", "", glycan)  # Strip out internal repeats such as n=?/
   glycan = re.sub(r"\/([A-Z])", r"\1", glycan)  # Strip out any remaining / from internal repeats
