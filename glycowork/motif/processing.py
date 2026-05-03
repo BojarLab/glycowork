@@ -82,6 +82,8 @@ _LINEARCODE_MAPPING = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Ne
                  'GalN': 'GalNAc', 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
                  'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac'}
 _GLYSEEKER_MAPPING = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a', 'X': 'Xyl(b', 'F': 'Fuc(a', 'L': 'GlcA(b'}
+_CSDB_AC_12 = re.compile(r'^Ac\(\??1-2\)')
+_CSDB_N_TO_NAC = re.compile(r'N(?=[^A-Za-z]|$)')
 
 
 def rescue_glycans(func: Callable # Function to wrap
@@ -1259,8 +1261,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                   lambda m: m.group(0) if not re.search(r'(?:^|,)(?:[SP]-\d|(?:Ac|Gc|Me)\(|[abx?][DLX?]\w+\?\()',
                                                         m.group(1)) else
                   (lambda ps, mo: ''.join(
-                      f'[{re.sub(r"N(?=[^A-Za-z]|$)", "NAc", re.sub(r"^Ac\(\??1-2\)", "", p), count = 1)}]' if re.match(
-                          r"Ac\(\??1-2\)", p) else f'[{p}]'
+                      f'[{_CSDB_N_TO_NAC.sub("NAc", _CSDB_AC_12.sub("", p), count = 1)}]' if _CSDB_AC_12.match(p) else f'[{p}]'
                       for p in ps if not re.fullmatch(
                           r'[SP]-\d\)?|(?:Ac|Gc|Me)\(\??1?-?\d\)|[abx?][DLX?][A-Z][A-Za-z]*\??\(\??1?-?\d\)', p))
                                   + (re.sub(r'N$', 'NAc', mo) if any(
