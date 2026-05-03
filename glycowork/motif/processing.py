@@ -1169,6 +1169,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(ac_to_nac, lambda m: f"{m.group('branch') or ''}{m.group('prefix') or ''}{m.group('base')}{m.group('pflag') or ''}NAc", glycan)
   glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
   glycan = multireplace(glycan, COMMON_ENANTIOMER)
+  glycan = re.sub(r'(?:[abx?][DLRSX?]-?)?Pyr\??\((\d+)-(\d+):\1-(\d+)\)((?:[abx?][DLX?]-?)?)([A-Z][A-Za-z]*)',
+                  lambda m: f"{m.group(4)}{m.group(5)}{min(int(m.group(2)), int(m.group(3)))}Pyr{max(int(m.group(2)), int(m.group(3)))}Pyr",
+                  glycan)  # xRPyr?(2-4:2-6)bDMan to bDMan4Pyr6Pyr
   glycan = re.sub(r'([ab\?]?)([DL]?)(\d+,\d+-Anhydro-)([A-Z][a-z]+)(\()?',  # aD3,6-Anhydro-Gal( to 3,6-Anhydro-Gal(a
                   lambda m: m.group() if not m.group(1) and not m.group(2) else
                   f"{m.group(3)}{COMMON_ENANTIOMER.get(f'{m.group(2)}-{m.group(4)}', (f'{m.group(2)}-' if m.group(2) else '') + m.group(4))}"
@@ -1251,6 +1254,24 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   # Handle modifications
   glycan = re.sub(r'(-%P)+', lambda m: '-' + 'P' * m.group().count('P'), glycan)  # -%P-%P- to -PP- (pyrophosphate)
   glycan = re.sub(r'\d{,2}%', '', glycan)  # [50%Ac(a1-2)] into [Ac(a1-2)]
+  glycan = re.sub(r'\[((?:[^,\[\]]+,)+[^,\[\]]+)\]([abx\?]?[DLX\?]?-?[A-Z][A-Za-z]*)',
+                  # Expand CSDB multi-mod brackets before comma-splitting
+                  lambda m: m.group(0) if not re.search(r'(?:^|,)(?:[SP]-\d|(?:Ac|Gc|Me)\(|[abx?][DLX?]\w+\?\()',
+                                                        m.group(1)) else
+                  (lambda ps, mo: ''.join(
+                      f'[{re.sub(r"N(?=[^A-Za-z]|$)", "NAc", re.sub(r"^Ac\(\??1-2\)", "", p), count = 1)}]' if re.match(
+                          r"Ac\(\??1-2\)", p) else f'[{p}]'
+                      for p in ps if not re.fullmatch(
+                          r'[SP]-\d\)?|(?:Ac|Gc|Me)\(\??1?-?\d\)|[abx?][DLX?][A-Z][A-Za-z]*\??\(\??1?-?\d\)', p))
+                                  + (re.sub(r'N$', 'NAc', mo) if any(
+                      re.fullmatch(r'Ac\(\??1-2\)', p) for p in ps) else mo)
+                                  + ''.join(f'{p}{t}' for p, t in sorted(
+                      [(int(s.group(2)), s.group(1)) for p in ps for s in [re.fullmatch(r'([SP])-(\d)\)?', p)] if s]
+                      + [(int(s.group(2)), s.group(1)) for p in ps for s in
+                         [re.fullmatch(r'(Ac|Gc|Me)\(\??1?-?(\d)\)', p)] if s and not re.fullmatch(r'Ac\(\??1-2\)', p)]
+                      + [(int(s.group(2)), s.group(1)) for p in ps for s in
+                         [re.fullmatch(r'[abx?][DLX?]([A-Z][A-Za-z]*)\??\(\??1?-?(\d)\)', p)] if s]
+                  )))(m.group(1).split(','), m.group(2)), glycan)
   glycan = re.sub(r'(?<!\d),(?!\d)', '][', glycan)  # Replace only commas not flanked by digits
   glycan = re.sub(r'(?<![A-Za-z0-9\-%])\[?([SP]-\d)\)\]?', r'[\1]', glycan)  # [S-3)] or S-2) to [S-3]
   glycan = re.sub(r'(\[?)<<([A-Za-z0-9]+)\(([ab\?]?)(\d+)-([\d\?]+)\)\|\2\([ab\?]?\d+-([\d\?]+)\)>>(\]?)([A-Z][a-z]*)?',
@@ -1268,12 +1289,15 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                       2) else f"{m.group(3)}5{m.group(1)}",
                     glycan)  # Gc(?1-5)Neu to Neu5Gc
     glycan = re.sub(r'\[([^]^-]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
-                 lambda m: f"{m.group(3)}{m.group(2)}{m.group(1).split('(')[0]}" if (m.group(1).split('(')[0] not in lib and m.group(1).count('(') == 1) else f"[{m.group(1)}]{m.group(3)}",
-                 glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
-    glycan = re.sub(r'(?:(?<=[\)\]\}])|^)([A-Z][a-z]{0,3})(?:\([?ab]?\d+-([\d\?]+)\)|-(\d)\))([A-Z][A-Za-z1-9]*)',
-                    lambda m: f"{m.group(4)}{m.group(2) or m.group(3)}{m.group(1)}" if m.group(
-                      1) not in lib else m.group(0),
-                    glycan)  # Ac(?1-5)Neu to Neu5Ac; S-3)GlcA to GlcA3S
+                    lambda m: (lambda mod: f"{m.group(3)}{m.group(2)}{mod}" if (
+                                mod not in lib and m.group(1).count('(') == 1) else f"[{m.group(1)}]{m.group(3)}")(
+                        re.sub(r'^[abx?][DLX?]', '', m.group(1).split('(')[0]).rstrip('?')),
+                    glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
+    glycan = re.sub(
+      r'(?:(?<=[\)\]\}])|^)([A-Z][a-z]{0,3})(?:\([?ab]?\d+-([\d\?]+)\)|-(\d)\))((?:[DL]-)?[A-Z][A-Za-z1-9]*)',
+      lambda m: f"{m.group(4)}{m.group(2) or m.group(3)}{m.group(1)}" if m.group(
+        1) not in lib else m.group(0),
+      glycan)  # Ac(?1-5)Neu to Neu5Ac; S-3)GlcA to GlcA3S
   glycan = re.sub(r'\[([A-Za-z0-9]+)\(\?(\d+)-(\d+)\)([DL]-)?([A-Za-z0-9]+)',
               lambda m: f"[{m.group(4) or ''}{m.group(5)}{m.group(3)}{m.group(1)}" if m.group(1) not in lib else f"[{m.group(1)}(?{m.group(2)}-{m.group(3)}){m.group(4) or ''}{m.group(5)}",
               glycan)  # [Ac(?1-2)D-Rha to [D-Rha2Ac
