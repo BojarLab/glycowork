@@ -55,3 +55,6 @@
 #### draw
 ##### Changed 🔄
 - If `draw_method = chem3d`, `GlycoDraw` will now preferentially fetch a realistic conformer from GlycoShape/PDB via `glycontact`, if the user has `glycontact` installed (lazily imported), and only fall back to RDKit if none can be found (7a59d08)
+
+##### Fixed 🐛
+- Made SVG parsing in `annotate_figure` more robust

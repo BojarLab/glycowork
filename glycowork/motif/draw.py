@@ -120,7 +120,7 @@ _BOND_BETA = re.compile(r"^b\d")
 _BOND_DIGIT = re.compile(r"^\d-\d")
 _CONF_PATTERN = re.compile(r'^L-|^D-|(\d,\d+lactone)')
 _LABEL_PATTERN = re.compile(r'<!--\s*(.*?)\s*-->')
-_TRANSFORM_PATTERN = re.compile(r'<g transform\s*(.*?)\s*">')
+_TRANSFORM_PATTERN = re.compile(r'transform\s*=\s*"([^"]*)"')
 _CONF_DISPLAY = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
 _SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
 
@@ -1454,7 +1454,6 @@ def annotate_figure(
       'large': 'scale(0.3 0.3)  translate(0, -49)'
       }
   glycan_scale = ''
-
   if scale_by_DE_res is not None:
     res_df = scale_by_DE_res.loc[(abs(scale_by_DE_res[x_metric]) > x_thresh) & (scale_by_DE_res['corr p-val'] < y_thresh)]
     y = -np.log10(res_df['corr p-val'].values.tolist())
@@ -1463,7 +1462,6 @@ def annotate_figure(
     if glycan_scale != '':
       _y_min, _y_max = min(glycan_scale[0]), max(glycan_scale[0])
       _y_range = max(_y_max - _y_min, 1e-6)
-
   # Get svg code
   svg_tmp = Path(svg_input).read_text(encoding = "utf-8") if '?xml' not in svg_input else svg_input
   # Get all text labels
@@ -1473,7 +1471,6 @@ def annotate_figure(
   element_id = 0
   edit_svg = False
   motifs = motif_list.motif_name.values.tolist()
-
   for match in matches:
     # Keep track of current label and position in figure
     current_label = _LABEL_PATTERN.findall(match)[0]
@@ -1495,8 +1492,12 @@ def annotate_figure(
       pass
     # Delete text label, append glycan figure
     if edit_svg:
-      current_pos = '<g transform' + _TRANSFORM_PATTERN.findall(match)[0] + '">'
-      current_pos = current_pos.replace('scale(0.1 -0.1)', glycan_size_dict[glycan_size])
+      transform_val = _TRANSFORM_PATTERN.findall(match)
+      if not transform_val:
+        edit_svg = False
+        continue
+      translate_part = re.search(r'translate\([^)]+\)', transform_val[0])
+      current_pos = f'<g transform="{translate_part.group() if translate_part else ""} {glycan_size_dict[glycan_size]}">'
       svg_tmp = svg_tmp.replace(match, '')
       if glycan_scale == '':
         d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
@@ -1521,7 +1522,6 @@ def annotate_figure(
       svg_tmp += '\n' + current_pos + '\n' + data + '\n</g>'
       edit_svg = False
   svg_tmp += '</svg>'
-
   if filepath:
     if filepath.endswith('.pdf'):
       from glycorender.render import simple_svg_to_pdf
