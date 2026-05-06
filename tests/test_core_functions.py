@@ -47,7 +47,8 @@ from glycowork.motif.processing import (
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
-    strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan
+    strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan,
+    GlycoList
 )
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
@@ -1888,6 +1889,21 @@ def test_real_glycan_structures():
     s2 = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     # These should have different nested bracket counts
     assert count_nested_brackets(s1) != count_nested_brackets(s2)
+
+
+def test_GlycoList():
+    glycan_list = GlycoList(["Fuc(a1-2)Gal(b1-3/4)GlcNAc", "Neu5Ac(a2-3)Gal(b1-3)[Hex(b1-4)GlcNAc(b1-6)]GalNAc",
+                             "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc", "Gal(b1-?)GlcNAc(b1-?)Gal(b1-?)GlcNAc"])
+    assert glycan_list.index("Fuc(a1-2)Gal(b1-3)GlcNAc") == 0
+    assert "Sia(a2-?)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc" in glycan_list
+    assert glycan_list.count("Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc") == 2
+    glycan_list.remove("Fuc(a1-2)Gal(b1-3)GlcNAc")
+    assert len(glycan_list) == 3
+    assert "Man(a1-2)Man" not in glycan_list
+    with pytest.raises(ValueError):
+        glycan_list.index("Man(a1-2)Man")
+    with pytest.raises(ValueError):
+        glycan_list.remove("Man(a1-2)Man")
 
 
 def test_cohen_d():

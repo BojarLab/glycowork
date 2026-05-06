@@ -10,6 +10,10 @@
 ### glycan_data
 - Added new curated glycomics dataset: `human_interstitialfluid_N_GPST000651` (ce499ae, 7ddd6c2)
 
+#### loader
+##### Added ✨
+- Added the `GlycoList` class that equips `List` with graph-based matching capabilities (overriding `index`, `remove`, `count`, and `in` with `compare_glycans` isomorphisms)
+
 ### motif
 #### graph
 ##### Added ✨
@@ -57,4 +61,4 @@
 - If `draw_method = chem3d`, `GlycoDraw` will now preferentially fetch a realistic conformer from GlycoShape/PDB via `glycontact`, if the user has `glycontact` installed (lazily imported), and only fall back to RDKit if none can be found (7a59d08)
 
 ##### Fixed 🐛
-- Made SVG parsing in `annotate_figure` more robust
+- Made SVG parsing in `annotate_figure` more robust (e3dce0e)

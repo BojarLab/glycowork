@@ -42,6 +42,34 @@ class GlycoDataFrame(pd.DataFrame):
     return self.iloc[indices, :].reset_index(drop = True)
 
 
+class GlycoList(list):
+
+  def _compare(self, a, b):
+    from glycowork.motif.graph import compare_glycans
+    return compare_glycans(a, b)
+
+  def index(self, value, start = 0, stop = None):
+    if stop is None:
+      stop = len(self)
+    for i in range(start, stop):
+      if self._compare(self[i], value):
+        return i
+    raise ValueError(f"{value} is not in list")
+
+  def __contains__(self, value):
+    return any(self._compare(item, value) for item in self)
+
+  def count(self, value):
+    return sum(1 for item in self if self._compare(item, value))
+
+  def remove(self, value):
+    for i, item in enumerate(self):
+      if self._compare(item, value):
+        del self[i]
+        return
+    raise ValueError("list.remove(x): x not in list")
+
+
 def __getattr__(name):
   if name == "glycan_binding":
     with resources.files("glycowork.glycan_data").joinpath("v12_glycan_binding.csv").open(encoding = 'utf-8-sig') as f:
