@@ -59,7 +59,7 @@ class GlycoDataFrame(pd.DataFrame):
     col = self._glycan_col
     if col:
       return GlycoList(list(self[col]))
-    if self.index.dtype == object and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
+    if self.index.dtype != float and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
       return GlycoList(list(self.index))
     return GlycoList(list(self.iloc[:, 0]))
 
@@ -68,7 +68,7 @@ class GlycoDataFrame(pd.DataFrame):
     col = self._glycan_col
     if col:
       return self.drop(columns = col)
-    if self.index.dtype == object and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
+    if self.index.dtype != float and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
       return self
     return self.iloc[:, 1:]
 

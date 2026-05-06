@@ -9,12 +9,12 @@
 
 ### glycan_data
 - Added new curated glycomics dataset: `human_interstitialfluid_N_GPST000651` (ce499ae, 7ddd6c2)
-- Added new `contrasts` file to catalog which sample belongs to which comparison group for the curated glycomics datasets
+- Added new `contrasts` file to catalog which sample belongs to which comparison group for the curated glycomics datasets (aad159e)
 
 #### loader
 ##### Added ✨
 - Added the `GlycoList` class that equips `List` with graph-based matching capabilities (overriding `index`, `remove`, `count`, and `in` with `compare_glycans` isomorphisms) (49c9aeb)
-- Added the `glycans`, `abundance`, `group1`, `group2`, and `groups` properties to `GlycoDataFrame` to benefit from `GlycoList` capabilities in `glycans`, get the abundance values via `abundance` and provide functions in `glycowork.motif.analysis` with group labels
+- Added the `glycans`, `abundance`, `group1`, `group2`, and `groups` properties to `GlycoDataFrame` to benefit from `GlycoList` capabilities in `glycans`, get the abundance values via `abundance` and provide functions in `glycowork.motif.analysis` with group labels (aad159e)
 
 ### motif
 #### graph
@@ -67,10 +67,10 @@
 
 #### analysis
 ##### Changed 🔄
-- Several functions are now more robust toward the specific glycan column naming for processing
+- Several functions are now more robust toward the specific glycan column naming for processing (aad159e)
 
 ##### Fixed 🐛
-- Fixed column access in ALR-treatment of `get_glycanova`
+- Fixed column access in ALR-treatment of `get_glycanova` (aad159e)
 
 ##### Deprecated ⚠️
-- Deprecated `glycan_col_name` keyword argument in `get_pvals_motif` and `characterize_monosaccharide`; will be auto-detected
+- Deprecated `glycan_col_name` keyword argument in `get_pvals_motif` and `characterize_monosaccharide`; will be auto-detected (aad159e)
