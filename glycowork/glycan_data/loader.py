@@ -45,6 +45,8 @@ class GlycoDataFrame(pd.DataFrame):
 class GlycoList(list):
 
   def _compare(self, a, b):
+    if a is None or b is None or (isinstance(a, float) and a != a) or (isinstance(b, float) and b != b):
+      return False
     from glycowork.motif.graph import compare_glycans
     return compare_glycans(a, b)
 

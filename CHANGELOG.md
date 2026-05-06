@@ -12,7 +12,7 @@
 
 #### loader
 ##### Added ✨
-- Added the `GlycoList` class that equips `List` with graph-based matching capabilities (overriding `index`, `remove`, `count`, and `in` with `compare_glycans` isomorphisms)
+- Added the `GlycoList` class that equips `List` with graph-based matching capabilities (overriding `index`, `remove`, `count`, and `in` with `compare_glycans` isomorphisms) (49c9aeb)
 
 ### motif
 #### graph

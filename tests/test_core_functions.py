@@ -1892,13 +1892,14 @@ def test_real_glycan_structures():
 
 
 def test_GlycoList():
-    glycan_list = GlycoList(["Fuc(a1-2)Gal(b1-3/4)GlcNAc", "Neu5Ac(a2-3)Gal(b1-3)[Hex(b1-4)GlcNAc(b1-6)]GalNAc",
+    glycan_list = GlycoList(["Fuc(a1-2)Gal(b1-3/4)GlcNAc", None, "Neu5Ac(a2-3)Gal(b1-3)[Hex(b1-4)GlcNAc(b1-6)]GalNAc",
                              "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc", "Gal(b1-?)GlcNAc(b1-?)Gal(b1-?)GlcNAc"])
     assert glycan_list.index("Fuc(a1-2)Gal(b1-3)GlcNAc") == 0
+    assert None not in glycan_list
     assert "Sia(a2-?)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc" in glycan_list
     assert glycan_list.count("Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc") == 2
     glycan_list.remove("Fuc(a1-2)Gal(b1-3)GlcNAc")
-    assert len(glycan_list) == 3
+    assert len(glycan_list) == 4
     assert "Man(a1-2)Man" not in glycan_list
     with pytest.raises(ValueError):
         glycan_list.index("Man(a1-2)Man")
