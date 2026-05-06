@@ -48,7 +48,7 @@ from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan,
-    GlycoList
+    GlycoList, GlycoDataFrame, NamedGroup, NamedGroups
 )
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
@@ -1905,6 +1905,39 @@ def test_GlycoList():
         glycan_list.index("Man(a1-2)Man")
     with pytest.raises(ValueError):
         glycan_list.remove("Man(a1-2)Man")
+
+
+def test_GlycoDataFrame():
+    df = GlycoDataFrame(
+      pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal'], 's1': [1.0, 2.0], 's2': [3.0, 4.0]}),
+      contrasts={'s1': 'control', 's2': 'disease'}
+    )
+    assert df._glycan_col == 'glycan'
+    assert isinstance(df.glycans, GlycoList)
+    assert list(df.glycans) == ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal']
+    assert list(df.abundance.columns) == ['s1', 's2']
+    g = df.groups
+    assert 'control' in g.mapping and 'disease' in g.mapping
+    assert 'control' in repr(g) and 'disease' in repr(g)
+    assert df.group1.name == 'control' and list(df.group1) == ['s1']
+    assert df.group2.name == 'disease' and list(df.group2) == ['s2']
+    # No contrasts
+    df2 = GlycoDataFrame(pd.DataFrame({'glycan': ['Gal'], 's1': [1.0]}))
+    assert df2.groups.mapping == {}
+    assert df2.group1.name == '' and df2.group2.name == ''
+    # Index-based glycan detection
+    df3 = GlycoDataFrame(pd.DataFrame({'a': [1.0]}, index=['Gal(b1-4)GlcNAc']))
+    assert list(df3.glycans) == ['Gal(b1-4)GlcNAc']
+    assert list(df3.abundance.columns) == ['a']
+    # Fallback to first column
+    df4 = GlycoDataFrame(pd.DataFrame({'col1': ['x'], 'col2': [1.0]}))
+    assert list(df4.glycans) == ['x']
+    assert list(df4.abundance.columns) == ['col2']
+    # Constructor preserves metadata
+    assert isinstance(df.iloc[:1], GlycoDataFrame)
+    # NamedGroup repr
+    ng = NamedGroup('ctrl', ['s1', 's2'])
+    assert 'ctrl' in repr(ng)
 
 
 def test_cohen_d():

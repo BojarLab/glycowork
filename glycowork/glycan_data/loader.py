@@ -24,21 +24,96 @@ with open(data_path, 'rb') as f:
   lib = pickle.load(f)
 
 
+class NamedGroup(list):
+  def __init__(self, name, items):
+    super().__init__(items)
+    self.name = name
+  def __repr__(self):
+    return f"{self.name}: {list.__repr__(self)}"
+
+
+class NamedGroups(list):
+  def __init__(self, labels, mapping):
+    super().__init__(labels)
+    self.mapping = mapping
+  def __repr__(self):
+    return ' | '.join(f"{name} (n={len(s)})" for name, s in self.mapping.items())
+
+
 class GlycoDataFrame(pd.DataFrame):
+  _metadata = ['_contrasts']
 
   @property
   def _constructor(self):
     return GlycoDataFrame
 
+  @property
+  def _glycan_col(self):
+    for name in ('glycan', 'Glycan', 'glycans', 'Glycans'):
+      if name in self.columns:
+        return name
+    return None
+
+  @property
+  def glycans(self):
+    col = self._glycan_col
+    if col:
+      return GlycoList(list(self[col]))
+    if self.index.dtype == object and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
+      return GlycoList(list(self.index))
+    return GlycoList(list(self.iloc[:, 0]))
+
+  @property
+  def abundance(self):
+    col = self._glycan_col
+    if col:
+      return self.drop(columns = col)
+    if self.index.dtype == object and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
+      return self
+    return self.iloc[:, 1:]
+
+  @property
+  def groups(self):
+    """Flat group labels per sample; .mapping gives {group_name: [samples]}"""
+    if not self._contrasts:
+      return NamedGroups([], {})
+    mapping = {}
+    for col in self.columns:
+      if col in self._contrasts:
+        mapping.setdefault(self._contrasts[col], []).append(col)
+    labels = [self._contrasts[col] for col in self.columns if col in self._contrasts]
+    return NamedGroups(labels, mapping)
+
+  @property
+  def group1(self):
+    """Sample columns for the first group, with .name for group label"""
+    if not self._contrasts:
+      return NamedGroup('', [])
+    name = next(iter(dict.fromkeys(self._contrasts.values())))
+    return NamedGroup(name, [col for col in self.columns if self._contrasts.get(col) == name])
+
+  @property
+  def group2(self):
+    """Sample columns for the second group, with .name for group label"""
+    if not self._contrasts:
+      return NamedGroup('', [])
+    name = list(dict.fromkeys(self._contrasts.values()))[1]
+    return NamedGroup(name, [col for col in self.columns if self._contrasts.get(col) == name])
+
   def __init__(self, *args, **kwargs):
+    contrasts = kwargs.pop('contrasts', None)
     super().__init__(*args, **kwargs)
+    if contrasts is not None:
+      self._contrasts = contrasts
+    elif not hasattr(self, '_contrasts'):
+      self._contrasts = {}
 
   def glyco_filter(self, motif: str | nx.DiGraph, # Glycan motif sequence or graph
                   termini_list: list = [], # List of monosaccharide positions from terminal/internal/flexible
                   min_count: int | None = 1 # Minimum number of times motif needs to be present to pass
                   ) -> 'GlycoDataFrame':
     from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
-    indices = [i for i, g in enumerate(self['glycan']) if subgraph_isomorphism(g, motif, termini_list, count = True) >= min_count]
+    indices = [i for i, g in enumerate(self.glycans) if isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list, count = True) >= min_count]
     return self.iloc[indices, :].reset_index(drop = True)
 
 
@@ -102,6 +177,22 @@ class LazyLoader:
     self.directory = directory
     self.prefix = prefix
     self._datasets = {}
+    self._contrasts_map = None
+
+  def _load_contrasts(self):
+    if self._contrasts_map is None:
+      try:
+        with resources.files(f"{self.package}.{self.directory}").joinpath("contrasts.csv").open(
+                encoding = 'utf-8-sig') as f:
+          ct = pd.read_csv(f)
+          self._contrasts_map = {}
+          for _, row in ct.iterrows():
+            sample_map = self._contrasts_map.setdefault(row['dataset'], {})
+            for sample in row['samples'].split(','):
+              sample_map[sample] = row['group']
+      except FileNotFoundError:
+        self._contrasts_map = {}
+    return self._contrasts_map
 
   def __getattr__(self, name):
     if name not in self._datasets:
@@ -112,7 +203,8 @@ class LazyLoader:
           cols = list(_df.columns)
           cleaned = [re.sub(r'\.\d+$', '', c) for c in cols]
           _df.columns = [cleaned[i] if cleaned[i] in cleaned[:i] + cleaned[i + 1:] else cols[i] for i in range(len(cols))]
-          self._datasets[name] = _df
+          contrasts = self._load_contrasts().get(f"{self.prefix}{name}", {})
+          self._datasets[name] = GlycoDataFrame(_df, contrasts = contrasts)
       except FileNotFoundError:
         raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
     return self._datasets[name]

@@ -9,10 +9,12 @@
 
 ### glycan_data
 - Added new curated glycomics dataset: `human_interstitialfluid_N_GPST000651` (ce499ae, 7ddd6c2)
+- Added new `contrasts` file to catalog which sample belongs to which comparison group for the curated glycomics datasets
 
 #### loader
 ##### Added ✨
 - Added the `GlycoList` class that equips `List` with graph-based matching capabilities (overriding `index`, `remove`, `count`, and `in` with `compare_glycans` isomorphisms) (49c9aeb)
+- Added the `glycans`, `abundance`, `group1`, `group2`, and `groups` properties to `GlycoDataFrame` to benefit from `GlycoList` capabilities in `glycans`, get the abundance values via `abundance` and provide functions in `glycowork.motif.analysis` with group labels
 
 ### motif
 #### graph
@@ -62,3 +64,13 @@
 
 ##### Fixed 🐛
 - Made SVG parsing in `annotate_figure` more robust (e3dce0e)
+
+#### analysis
+##### Changed 🔄
+- Several functions are now more robust toward the specific glycan column naming for processing
+
+##### Fixed 🐛
+- Fixed column access in ALR-treatment of `get_glycanova`
+
+##### Deprecated ⚠️
+- Deprecated `glycan_col_name` keyword argument in `get_pvals_motif` and `characterize_monosaccharide`; will be auto-detected

@@ -32,7 +32,7 @@ from sklearn.feature_selection import SelectFromModel
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-from glycowork.glycan_data.loader import df_species, strip_suffixes, download_model
+from glycowork.glycan_data.loader import df_species, strip_suffixes, download_model, GlycoDataFrame
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, variance_based_filtering, JTKTest,
                                          MissForest, get_alphaN, TST_grouped_benjamini_hochberg,
@@ -87,7 +87,9 @@ def preprocess_data(
   if transform is None:
     transform = "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"
   if transform == "ALR":
-    df = get_additive_logratio_transformation(df, group1, group2, paired = paired, gamma = gamma, custom_scale = custom_scale, random_state = random_state)
+    df = get_additive_logratio_transformation(df, df.columns[1:].tolist() if experiment == "anova" else group1,
+                                                group2, paired = paired, gamma = gamma, custom_scale = custom_scale,
+                                                random_state = random_state)
   elif transform == "CLR":
     if monte_carlo and not motifs:
       df = pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
@@ -114,16 +116,15 @@ def preprocess_data(
                                                   custom_scale = custom_scale, random_state = random_state)
         df = df.set_index(df.columns[0])
   else:
-    df = df.set_index(df.columns.tolist()[0])
+    df = df.set_index(df.columns[0])
     df = df.groupby(df.index).mean()
-    df_org = df_org.set_index(df_org.columns.tolist()[0])
+    df_org = df_org.set_index(df_org.columns[0])
     df_org = df_org.groupby(df_org.index).mean()
   return df, df_org, group1, group2
 
 
 def get_pvals_motifs(
     df: pd.DataFrame | str, # Input dataframe or filepath (.csv/.xlsx)
-    glycan_col_name: str = 'glycan', # Column name for glycan sequences
     label_col_name: str = 'target', # Column name for labels
     zscores: bool = True, # Whether data are z-scores
     thresh: float = 1.645, # Threshold to separate positive/negative
@@ -136,6 +137,7 @@ def get_pvals_motifs(
     "Identifies significantly enriched glycan motifs using Welch's t-test with FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
     if isinstance(df, (str, Path)):
       df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    glycan_col_name = GlycoDataFrame(df)._glycan_col or df.columns[0]
     # Reformat to allow for proper annotation in all samples
     if multiple_samples:
       df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
@@ -223,10 +225,11 @@ def get_heatmap(
   "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
   if isinstance(df, (str, Path)):
     df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
-  if index_col in df.columns:
-    df = df.set_index(index_col)
-  elif isinstance(df.iloc[0,0], str):
-    df = df.set_index(df.columns.tolist()[0])
+  gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
+  if gcol:
+    df = df.set_index(gcol)
+  elif isinstance(df.iloc[0, 0], str):
+    df = df.set_index(df.columns[0])
   if not isinstance(df.index[0], str) or (isinstance(df.index[0], str) and ('(' not in df.index[0] or '-' not in df.index[0])):
     df = df.T
   df = df.fillna(0)
@@ -323,7 +326,6 @@ def characterize_monosaccharide(
     sugar: str, # Monosaccharide or linkage to analyze
     df: pd.DataFrame | None  = None, # DataFrame with glycan column 'glycan'; defaults to df_species
     mode: str = 'sugar', # Analysis mode: 'sugar', 'bond', 'sugarbond'
-    glycan_col_name: str = 'glycan', # Column name for glycan sequences
     rank: str | None = None, # Column name for group filtering
     focus: str | None = None, # Row value for group filtering
     modifications: bool = False, # Consider modified monosaccharides
@@ -333,9 +335,10 @@ def characterize_monosaccharide(
   "Analyzes connectivity and modification patterns of specified monosaccharides/linkages in glycan sequences"
   if df is None:
     df = df_species
+  glycan_col_name = GlycoDataFrame(df)._glycan_col
   if rank is not None and focus is not None:
     df = df[df[rank] == focus]
-    # Get all disaccharides by extracting adjacent pairs from graph structure
+  # Get all disaccharides by extracting adjacent pairs from graph structure
   pool_in = []
   for glycan in df[glycan_col_name].tolist():
     graph = glycan_to_nxGraph(glycan)
@@ -636,8 +639,8 @@ def get_differential_expression(
     pass
   else:
     corrpvals, significance = [1]*len(glycans), [False]*len(glycans)
-  df_out = pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes, equivalence_pvals)),
-                     columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size', 'Equivalence p-val'])
+  df_out = GlycoDataFrame(pd.DataFrame(list(zip(glycans, mean_abundance, log2fc, pvals, corrpvals, significance, levene_pvals, effect_sizes, equivalence_pvals)),
+                     columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'significant', 'corr Levene p-val', 'Effect size', 'Equivalence p-val']))
   if not monte_carlo:
     prison_rows = pd.DataFrame({
         'Glycan': df_prison.index,
@@ -799,7 +802,7 @@ def get_glycanova(
       if p_value < alpha and posthoc:
         posthoc_res = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = alpha)
         posthoc_results[glycan] = pd.DataFrame(data = posthoc_res._results_table.data[1:], columns = posthoc_res._results_table.data[0])
-    df_out = pd.DataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
+    df_out = GlycoDataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
     corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
     df_out['corr p-val'] = corrpvals
     df_out['significant'] = significance
@@ -945,7 +948,7 @@ def get_time_series(
     df = df.sort_values(by = df.columns[0])
     time = df.iloc[:, 0].to_numpy()  # Time points
     df_out = [(c, *get_glycan_change_over_time(np.column_stack((time, df[c].to_numpy())), degree = degree)) for c in df.columns[1:]]
-    df_out = pd.DataFrame(df_out, columns = ['Glycan', 'Change', 'p-val'])
+    df_out = GlycoDataFrame(df_out, columns = ['Glycan', 'Change', 'p-val'])
     corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
     df_out['corr p-val'] = corrpvals
     df_out['significant'] = significance
@@ -975,7 +978,7 @@ def get_jtk(
     df = df.apply(replace_outliers_winsorization, axis = 1)
     mf = MissForest()
     df = df.replace(0, np.nan)
-    annot = df.pop(df.columns.tolist()[0])
+    annot = df.pop(df.columns[0])
     df = mf.fit_transform(df)
     df.insert(0, 'Molecule_Name', annot)
     if transform is None:
@@ -994,7 +997,7 @@ def get_jtk(
     for _, row in df.iterrows():
       p_val, period, phase, tau = jtk.test(row.iloc[1:].values.astype(float))
       results.append([row.iloc[0], p_val, period, phase, abs(tau)])
-    df_out = pd.DataFrame(results, columns = ['Molecule_Name', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude'])
+    df_out = GlycoDataFrame(results, columns = ['Molecule_Name', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude'])
     corrpvals, significance = correct_multiple_testing(df_out.iloc[:, 1].tolist(), alpha, correction_method = correction_method)
     df_out['Adjusted_P_value'] = corrpvals
     df_out['significant'] = significance
