@@ -8,13 +8,15 @@
 - Automated versioning in `__init__.py` (b72d113)
 
 ### glycan_data
-- Added new curated glycomics dataset: `human_interstitialfluid_N_GPST000651` (ce499ae, 7ddd6c2)
+- Curated datasets are now stored in a dedicated folder `.glycan_data.datasets`, for tidiness
+- Added new curated glycomics datasets: `human_interstitialfluid_N_GPST000651`, `celllines_colorectal_O_PMID32236654` (ce499ae, 7ddd6c2)
+- Renamed and re-curated `glycomics_mouse_gastric_O_GPST000464` to `glycomics_mouse_gastric_O_PMID40667878`
 - Added new `contrasts` file to catalog which sample belongs to which comparison group for the curated glycomics datasets (aad159e)
 
 #### loader
 ##### Added ✨
 - Added the `GlycoList` class that equips `List` with graph-based matching capabilities (overriding `index`, `remove`, `count`, and `in` with `compare_glycans` isomorphisms) (49c9aeb)
-- Added the `glycans`, `abundance`, `group1`, `group2`, and `groups` properties to `GlycoDataFrame` to benefit from `GlycoList` capabilities in `glycans`, get the abundance values via `abundance` and provide functions in `glycowork.motif.analysis` with group labels (aad159e)
+- Added the `glycans`, `abundance`, `group1`, `group2`, `groups`, and paired properties to `GlycoDataFrame` to benefit from `GlycoList` capabilities in `glycans`, get the abundance values via `abundance` and provide functions in `glycowork.motif.analysis` with group labels and information whether data are paired or not (aad159e)
 
 ### motif
 #### graph

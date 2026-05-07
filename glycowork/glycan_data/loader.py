@@ -41,7 +41,7 @@ class NamedGroups(list):
 
 
 class GlycoDataFrame(pd.DataFrame):
-  _metadata = ['_contrasts']
+  _metadata = ['_contrasts', '_paired']
 
   @property
   def _constructor(self):
@@ -100,13 +100,22 @@ class GlycoDataFrame(pd.DataFrame):
     name = list(dict.fromkeys(self._contrasts.values()))[1]
     return NamedGroup(name, [col for col in self.columns if self._contrasts.get(col) == name])
 
+  @property
+  def paired(self):
+    return self._paired
+
   def __init__(self, *args, **kwargs):
     contrasts = kwargs.pop('contrasts', None)
+    paired = kwargs.pop('paired', None)
     super().__init__(*args, **kwargs)
     if contrasts is not None:
       self._contrasts = contrasts
     elif not hasattr(self, '_contrasts'):
       self._contrasts = {}
+    if paired is not None:
+      self._paired = paired
+    elif not hasattr(self, '_paired'):
+      self._paired = False
 
   def glyco_filter(self, motif: str | nx.DiGraph, # Glycan motif sequence or graph
                   termini_list: list = [], # List of monosaccharide positions from terminal/internal/flexible
@@ -186,13 +195,16 @@ class LazyLoader:
                 encoding = 'utf-8-sig') as f:
           ct = pd.read_csv(f)
           self._contrasts_map = {}
+          self._paired_map = {}
           for _, row in ct.iterrows():
             sample_map = self._contrasts_map.setdefault(row['dataset'], {})
             for sample in row['samples'].split(','):
               sample_map[sample] = row['group']
+            self._paired_map[row['dataset']] = str(row['paired']).strip().lower() == 'true'
       except FileNotFoundError:
         self._contrasts_map = {}
-    return self._contrasts_map
+        self._paired_map = {}
+    return
 
   def __getattr__(self, name):
     if name not in self._datasets:
@@ -203,8 +215,11 @@ class LazyLoader:
           cols = list(_df.columns)
           cleaned = [re.sub(r'\.\d+$', '', c) for c in cols]
           _df.columns = [cleaned[i] if cleaned[i] in cleaned[:i] + cleaned[i + 1:] else cols[i] for i in range(len(cols))]
-          contrasts = self._load_contrasts().get(f"{self.prefix}{name}", {})
-          self._datasets[name] = GlycoDataFrame(_df, contrasts = contrasts)
+          self._load_contrasts()
+          dataset_key = f"{self.prefix}{name}"
+          contrasts = self._contrasts_map.get(dataset_key, {})
+          paired = self._paired_map.get(dataset_key, False)
+          self._datasets[name] = GlycoDataFrame(_df, contrasts = contrasts, paired = paired)
       except FileNotFoundError:
         raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
     return self._datasets[name]
@@ -215,9 +230,9 @@ class LazyLoader:
     return dataset_names
 
 
-glycomics_data_loader = LazyLoader("glycowork", "glycan_data")
-lectin_array_data_loader = LazyLoader("glycowork", "glycan_data", prefix = 'lectin_array_')
-glycoproteomics_data_loader = LazyLoader("glycowork", "glycan_data", prefix = 'glycoproteomics_')
+glycomics_data_loader = LazyLoader("glycowork", "glycan_data.datasets")
+lectin_array_data_loader = LazyLoader("glycowork", "glycan_data.datasets", prefix = 'lectin_array_')
+glycoproteomics_data_loader = LazyLoader("glycowork", "glycan_data.datasets", prefix = 'glycoproteomics_')
 
 
 linkages = {
