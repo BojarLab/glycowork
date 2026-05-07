@@ -567,7 +567,7 @@ def get_differential_expression(
     level: str = 'peptide', # Analysis level for glycoproteomics
     monte_carlo: bool = False, # Use Monte Carlo for technical variation
     random_state: int | np.random.Generator | None = None # optional random state for reproducibility
-    ) -> pd.DataFrame: # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
+    ) -> GlycoDataFrame: # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
   "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
   df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs, impute = impute,
                                                min_samples = min_samples, transform = transform, feature_set = feature_set,
@@ -777,7 +777,7 @@ def get_glycanova(
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
     custom_scale: float = 0, # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
     random_state: int | np.random.Generator | None = None # optional random state for reproducibility
-    ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]: # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
+    ) -> tuple[GlycoDataFrame, dict[str, pd.DataFrame]]: # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     if len(set(groups)) < 3:
       raise ValueError("You have fewer than three groups. We suggest get_differential_expression for those cases. ANOVA is for >= three groups.")
@@ -913,7 +913,7 @@ def get_time_series(
     transform: str | None = None, # Transformation type: "CLR" or "ALR"
     gamma: float = 0.1, # Uncertainty parameter for CLR transform
     custom_scale: float | dict = 0 # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-    ) -> pd.DataFrame: # DataFrame with regression coefficients and FDR-corrected p-values
+    ) -> GlycoDataFrame: # DataFrame with regression coefficients and FDR-corrected p-values
     "Analyzes time series glycomics data using polynomial regression"
     if isinstance(df, (str, Path)):
       df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
@@ -966,7 +966,7 @@ def get_jtk(
    transform: str | None = None, # Transformation type: "CLR" or "ALR"
    gamma: float = 0.1, # Uncertainty parameter for CLR transform
    correction_method: str = "two-stage" # Multiple testing correction method
-   ) -> pd.DataFrame: # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
+   ) -> GlycoDataFrame: # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
     if isinstance(df_in, (str, Path)):
       df = pd.read_csv(df_in) if Path(df_in).suffix.lower() == ".csv" else pd.read_csv(df_in, sep = "\t") if Path(df_in).suffix.lower() == ".tsv" else pd.read_excel(df_in)
