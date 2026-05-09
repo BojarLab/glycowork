@@ -77,10 +77,10 @@ from glycowork.motif.annotate import (
     lectin_motif_scoring, deduplicate_motifs, quantify_motifs, get_size_branching_features,
     count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty
 )
-from glycowork.motif.regex import (preprocess_pattern, specify_linkages, process_occurrence,
+from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
                   convert_pattern_component, reformat_glycan_string,
-                  motif_to_regex, get_match, process_question_mark, calculate_len_matches_comb,
-                  process_main_branch, check_negative_look, get_match_batch,
+                  motif_to_regex, get_match, calculate_len_matches_comb,
+                  check_negative_look, get_match_batch,
                   filter_matches_by_location, parse_pattern, compile_pattern
 )
 from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, col_dict_base,
@@ -2907,16 +2907,6 @@ def test_specify_linkages():
     assert specify_linkages("Man(a1-6)Man") == "Man(a1-6)Man"
 
 
-def test_process_occurrence():
-    # Test single number
-    assert process_occurrence("2") == [2, 2]
-    # Test range
-    assert process_occurrence("1,3") == [1, 3]
-    # Test open-ended range
-    assert process_occurrence(",3") == [0, 3]
-    assert process_occurrence("2,") == [2, 5]
-
-
 def test_convert_pattern_component():
     # Test simple component
     result = convert_pattern_component("Hex")
@@ -3004,6 +2994,38 @@ def test_get_match():
     assert get_match("Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc(?!-HexNAc)", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc") == ['Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc']
     assert get_match("(?<=Xyl-)Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc") == ['Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc']
     assert get_match("(?<!Xyl-)Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc") == ['Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc']
+    # Internal anchor %
+    assert get_match("Hex%", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc") == ['Man', 'Gal', 'Man', 'Man']
+    # Exact occurrence {N}
+    assert get_match("[HexNAc]{2}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['GlcNAc(b1-4)GlcNAc']
+    assert get_match("[HexNAc]{3}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == []
+    # Open-ended quantifiers
+    assert get_match("[HexNAc]{2,}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc") == ['GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc', 'GlcNAc(b1-4)GlcNAc']
+    assert get_match("[Hex]{,2}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal']
+    # Lazy quantifiers
+    assert get_match("Hex-[HexNAc]{1,2}?", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal(b1-4)GlcNAc']
+    assert get_match("Hex-[HexNAc]*?", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal(b1-4)GlcNAc']
+    assert get_match("Hex-[HexNAc]+?", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal(b1-4)GlcNAc']
+    # Linkage shorthand
+    assert get_match("Mana6-Man", "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc") == ['Man(a1-6)Man']
+    assert get_match("Mana3-Man", "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc") == ['Man(a1-3)Man']
+    assert get_match("Galb4-GlcNAc", "Gal(b1-4)GlcNAc(b1-2)Man") == ['Gal(b1-4)GlcNAc']
+    # Sialic acid linkage correction
+    assert get_match("Neu5Aca3-Gal", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc") == ['Neu5Ac(a2-3)Gal']
+    assert get_match("Neu5Aca6-Gal", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc") == []
+    # Three-way alternatives
+    assert get_match("[Gal|Man|Fuc]-HexNAc", "Gal(b1-4)GlcNAc") == ['Gal(b1-4)GlcNAc']
+    assert get_match("[Gal|Man|Fuc]-HexNAc", "Fuc(a1-3)GlcNAc") == ['Fuc(a1-3)GlcNAc']
+    # Dot wildcard as primary feature
+    assert get_match(".-.", "Gal(b1-4)GlcNAc") == ['Gal(b1-4)GlcNAc']
+    assert get_match(".-.-.", "Gal(b1-4)GlcNAc") == []
+    # Full match with ^ and $
+    assert get_match("^Hex-HexNAc$", "Gal(b1-4)GlcNAc", return_matches = False) is True
+    assert get_match("^Hex-HexNAc$", "Gal(b1-4)GlcNAc(b1-4)GlcNAc", return_matches = False) is False
+    # Multiple independent matches
+    result = get_match("Hex-HexNAc",
+                       "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert result == ['Gal(b1-4)GlcNAc', 'Man(b1-4)GlcNAc', 'Gal(b1-4)GlcNAc']
     # Cases where no match is present
     assert get_match("Fuc-([^Gal])+-GlcNAc", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Fuc(a1-2)Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == []
     assert get_match("Man-HexNAc", "Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc") == []
@@ -3036,21 +3058,6 @@ def test_get_match_batch():
     assert len(get_match_batch(pattern, glycan_list)) == 2
 
 
-def test_process_question_mark():
-    # Test basic lookahead
-    result, pattern = process_question_mark("(?=Hex)", "Hex")
-    assert result == [1]
-    assert pattern == ["Hex"]
-    # Test lookbehind
-    result, pattern = process_question_mark("(?<=Hex)", "Hex")
-    assert result == [1]
-    assert pattern == ["Hex"]
-    # Test simple question mark
-    result, pattern = process_question_mark("Hex?", "Hex")
-    assert result == [0, 1]
-    assert pattern == ["Hex"]
-
-
 def test_calculate_len_matches_comb():
     # Test single list of matches
     len_matches = [[2, 3]]
@@ -3064,14 +3071,6 @@ def test_calculate_len_matches_comb():
     assert 2 in result
     assert 3 in result
     assert 5 in result  # Combined length
-
-
-def test_process_main_branch():
-    glycan = "Gal(b1-4)GlcNAc(b1-2)[GlcNAc(b1-4)]Man"
-    glycan_parts = min_process_glycans(["Gal(b1-4)GlcNAc(b1-2)Man"])[0]
-    result = process_main_branch(glycan, glycan_parts)
-    assert len(result) == len(glycan_parts)
-    assert all(isinstance(x, str) for x in result)
 
 
 def test_check_negative_look():
