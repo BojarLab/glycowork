@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.8.2]
+## [1.9.0]
 - Bumped Python version to `3.11` (`3.10` reaches end of life in October 2026; https://devguide.python.org/versions/) (6a94ea9)
 - Bumped minimum `pandas` version to `2.1` (faf68f0)
 - Fixed `scipy` version as `>=1.16` to guarantee Games-Howell test in the ANOVA for biodiversity tests (cf5e7bd)
@@ -54,6 +54,9 @@
 - `composition_to_mass` now correctly factors in the extra methylation (former ring oxygen) that happens in the combination of `modification == 'reduced'` and `sample_prep == 'permethylated'` (30e1a46)
 
 #### annotate
+##### Added ✨
+- `annotate_glycan` now also exposes the keyword argument `condense=False`, analogous to `annotate_dataset`, to get only non-zero motifs
+
 ##### Changed 🔄
 - Arguments `glycans` and `feature_set` in `quantify_motifs` have been changed to keyword arguments with defaults `glycans = None` (will be inferred from first column if it contains glycans, otherwise needs to be supplied) and `feature_set = ['known', 'exhaustive']` (c5db6a8)
 
@@ -79,7 +82,7 @@
 
 #### regex
 ##### Fixed 🐛
-- Specifying exact occurrences in `get_match`, as in `get_match("[HexNAc]{2}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc")`, is now more robust/accurate
+- Specifying exact occurrences in `get_match`, as in `get_match("[HexNAc]{2}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc")`, is now more robust/accurate (28894d8)
 
 ##### Deprecated ⚠️
-- Deprecated `process_occurrence`, `process_main_branch`, and `process_question_mark` as they are handled in-line now
+- Deprecated `process_occurrence`, `process_main_branch`, and `process_question_mark` as they are handled in-line now (28894d8)

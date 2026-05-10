@@ -19,7 +19,8 @@ def annotate_glycan(
     glycan: str | nx.DiGraph, # IUPAC-condensed glycan sequence or NetworkX graph
     motifs: pd.DataFrame | None = None, # Motif dataframe (name + sequence); defaults to motif_list
     termini_list: list = [], # Monosaccharide positions: 'terminal', 'internal', or 'flexible'
-    gmotifs: list[nx.DiGraph] | None = None # Precalculated motif graphs for speed
+    gmotifs: list[nx.DiGraph] | None = None, # Precalculated motif graphs for speed
+    condense: bool = False # Remove columns with only zeros
     ) -> pd.DataFrame: # DataFrame with motif counts for the glycan
   "Counts occurrences of known motifs in a glycan structure using subgraph isomorphism"
   if motifs is None:
@@ -39,7 +40,7 @@ def annotate_glycan(
   out.loc[0] = res
   out.loc[0] = out.loc[0].astype('int')
   out.index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)]
-  return out
+  return out if not condense else out.loc[:, (out != 0).any(axis = 0)]
 
 
 def annotate_glycan_topology_uncertainty(
