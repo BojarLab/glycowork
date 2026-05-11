@@ -1448,6 +1448,7 @@ def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
     glycan = glycan.replace("Gal(b1-?)GlcNAc", "Gal(b1-3/4)GlcNAc")
   if "GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc" in glycan:
     glycan = glycan.replace("GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc", "GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" if tax['Class'] == 'Mammalia' else "GlcNAc(b1-4)[Fuc(a1-3/6)]GlcNAc")
-  for old, new in [("Neu5Ac(a2-?)Neu5Ac", "Neu5Ac(a2-8)Neu5Ac"), ("Neu5Ac(a2-?)", "Neu5Ac(a2-3/6)"), ("Neu5Gc(a2-?)Neu5Gc", "Neu5Gc(a2-8)Neu5Gc"), ("Neu5Gc(a2-?)", "Neu5Gc(a2-3/6)")]:
+  for old, new in [("Neu5Ac(a2-?)Neu5Ac", "Neu5Ac(a2-8)Neu5Ac"), ("Neu5Ac(a2-?)", "Neu5Ac(a2-3/6)"), ("Neu5Gc(a2-?)Neu5Gc", "Neu5Gc(a2-8)Neu5Gc"), ("Neu5Gc(a2-?)", "Neu5Gc(a2-3/6)"),
+                   ("Fuc(a1-?)GlcNAc", "Fuc(a1-3/4)GlcNAc"), ("Fuc(a1-?)]GlcNAc", "Fuc(a1-3/4)]GlcNAc"), ("Fuc(a1-?)Gal(", "Fuc(a1-2)Gal("), ("GalOS", "Gal3/6S"), ("GlcNAcOS", "GlcNAc6S")]:
     glycan = glycan.replace(old, new)
   return glycan
