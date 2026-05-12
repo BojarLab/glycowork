@@ -767,10 +767,22 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     nth = oxford.count('F')
     antennae["F"] = int(oxford[find_nth(oxford, "F", nth)+1])
   floaty = ''
+  is_hybrid = False
   if 'M' in oxford:
     M_count = int(oxford[oxford.index("M") + 1]) - 3
-    for m in range(M_count):
-      floaty += "{Man(a1-2/3/6)}"
+    if M_count > 0 and re.search(r'Sg?(?:\([^)]*\))?\d', oxford):
+      is_hybrid = True
+      if M_count == 1:
+        iupac = iupac.replace("Man(a1-6)]", "Man(a1-3/6)Man(a1-6)]")
+      elif M_count == 2:
+        iupac = iupac.replace("Man(a1-6)]", "Man(a1-3)[Man(a1-6)]Man(a1-6)]")
+      else:
+        iupac = iupac.replace("Man(a1-6)]", "Man(a1-3)[Man(a1-6)]Man(a1-6)]")
+        for m in range(M_count - 2):
+          floaty += "{Man(a1-2/3/6)}"
+    else:
+      for m in range(M_count):
+        floaty += "{Man(a1-2/3/6)}"
   oxford_wo_branches = bracket_removal(oxford)
   branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A") + 1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A") + 1] != "c" else 0}
   extras = {"Ga": int(oxford_wo_branches[oxford_wo_branches.index("Ga") + 2]) if "Ga" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("Ga") + 2].isdigit() else 0,
@@ -836,7 +848,8 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     sulf -= 1
   iupac = iupac.replace("GlcNAc(b1-?)Man", "GlcNAc(b1-2)Man")
   antenna_number = match.group(2) if (match := re.search(r'A\d+(B)?\[([36])\]', oxford)) else None
-  iupac = balance_mannose_branch_linkages(iupac,antenna_number)
+  if not is_hybrid:
+    iupac = balance_mannose_branch_linkages(iupac, antenna_number)
   return floaty + iupac.strip('[]')
 
 
