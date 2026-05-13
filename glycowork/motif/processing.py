@@ -1450,17 +1450,22 @@ def is_composition(s: str # Either glycan or composition string
 
 
 def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
-                       species: str = "Homo_sapiens" # Species for biosynthetic inferences
+                       glycan_class: str, # "O", "N", "lipid", "free"
+                       taxonomy_level: str = "Kingdom", # Which taxonomy level to filter by
+                       taxonomy_filter: str = "Animalia", # Which taxonomy to pull glycans for
+                       df_use: pd.DataFrame = None # Which sugarbase-like database of glycans with species associations etc.
                       ) -> str: # Maximally inferred glycan string
   "Infers sequence ambiguities/uncertainties via biosynthetic invariances"
-  tax = df_species[df_species['Species'] == species].iloc[0, 2:9].to_dict()
+  if df_use is None:
+    df_use = copy.deepcopy(df_glycan[df_glycan.glycan_type == glycan_class])
+  tax = df_use[df_use[taxonomy_level].apply(lambda x: taxonomy_filter in str(x))].iloc[0].to_dict()
   if glycan.endswith("GlcNAc(b1-?)GlcNAc"):
     glycan = glycan.replace("GlcNAc(b1-?)GlcNAc", "GlcNAc(b1-4)GlcNAc")
-  if tax['Kingdom'] == 'Animalia':
+  if tax.get('Kingdom') == 'Animalia':
     glycan = glycan.replace("dHex", "Fuc")
     glycan = glycan.replace("Gal(b1-?)GlcNAc", "Gal(b1-3/4)GlcNAc")
   if "GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc" in glycan:
-    glycan = glycan.replace("GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc", "GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" if tax['Class'] == 'Mammalia' else "GlcNAc(b1-4)[Fuc(a1-3/6)]GlcNAc")
+    glycan = glycan.replace("GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc", "GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" if tax.get('Class') == 'Mammalia' else "GlcNAc(b1-4)[Fuc(a1-3/6)]GlcNAc")
   for old, new in [("Neu5Ac(a2-?)Neu5Ac", "Neu5Ac(a2-8)Neu5Ac"), ("Neu5Ac(a2-?)", "Neu5Ac(a2-3/6)"), ("Neu5Gc(a2-?)Neu5Gc", "Neu5Gc(a2-8)Neu5Gc"), ("Neu5Gc(a2-?)", "Neu5Gc(a2-3/6)"),
                    ("Fuc(a1-?)GlcNAc", "Fuc(a1-3/4)GlcNAc"), ("Fuc(a1-?)]GlcNAc", "Fuc(a1-3/4)]GlcNAc"), ("Fuc(a1-?)Gal(", "Fuc(a1-2)Gal("), ("GalOS", "Gal3/6S"), ("GlcNAcOS", "GlcNAc6S")]:
     glycan = glycan.replace(old, new)
