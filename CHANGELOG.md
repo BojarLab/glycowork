@@ -38,9 +38,11 @@
 - Universal Input via `canonicalize_iupac` can now parse more complex Oxford sequences, such as `F(6)A2G(4)2S(3,3)2` (9f42561)
 - `max_specify_glycan` will now also specify these cases: `("Fuc(a1-?)GlcNAc", "Fuc(a1-3/4)GlcNAc")`, `("Fuc(a1-?)]GlcNAc", "Fuc(a1-3/4)]GlcNAc")`, `("Fuc(a1-?)Gal(", "Fuc(a1-2)Gal(")`, `("GalOS", "Gal3/6S"), ("GlcNAcOS", "GlcNAc6S")` (f3b4389)
 - Oxford parsing in `canonicalize_iupac` will now detect hybrid glycans and will add extra mannoses to the `a1-6` branch
-
+- `max_specify_glycan` accepts `glycan_class`, `taxonomy_level`, `taxonomy_filter`, and `df_use` (a sugarbase-like database of glycans) to improve the annotation of the sequences (2ddbcf3)
+  
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans (6754bbf)
+- Make `glycan_class` optional in `max_specify_glycan` and infer it automatically using `get_class` (585b94a)
 
 ##### Fixed 🐛
 - Fixed some Oxford sequences (e.g., `A1`, `A2`) being misidentified as blood group glycolipids by `canonicalize_iupac` (9f42561)
