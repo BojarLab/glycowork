@@ -1450,12 +1450,15 @@ def is_composition(s: str # Either glycan or composition string
 
 
 def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
-                       glycan_class: str, # "O", "N", "lipid", "free"
+                       glycan_class: str = None, # "O", "N", "lipid", "free"
                        taxonomy_level: str = "Kingdom", # Which taxonomy level to filter by
                        taxonomy_filter: str = "Animalia", # Which taxonomy to pull glycans for
                        df_use: pd.DataFrame = None # Which sugarbase-like database of glycans with species associations etc.
                       ) -> str: # Maximally inferred glycan string
   "Infers sequence ambiguities/uncertainties via biosynthetic invariances"
+  if glycan_class is None:
+    from glycowork.motif.processing import get_class 
+    glycan_class = get_class(glycan)
   if df_use is None:
     df_use = copy.deepcopy(df_glycan[df_glycan.glycan_type == glycan_class])
   tax = df_use[df_use[taxonomy_level].apply(lambda x: taxonomy_filter in str(x))].iloc[0].to_dict()
