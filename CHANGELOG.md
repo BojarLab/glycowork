@@ -21,6 +21,7 @@
 ### motif
 #### graph
 ##### Added ✨
+- All graph functions (e.g., `compare_glycans`, `subgraph_isomorphism`) now support narrow monosaccharide wildcards (e.g., `Gal/Man` instead of `Hex`)
 
 ##### Changed 🔄
 - Made glycan graph caching in `glycan_graph_memoize` somewhat faster (cf5e7bd)
@@ -37,7 +38,7 @@
 - Universal Input via `canonicalize_iupac` can now more robustly handle modifications in CSDB-linear, such as in `Ac(1-5)aXNeup(2-6)[Ac(1-2)]bDGalpN(1-4)bDGalp(1-4)bDGlcp`, `S-3)bDGlcpA(1-3)bDGalp(1-4)[Ac(1-2)]bDGlcpN(1-3)bDGalp(1-4)bDGlcp`, `-4)[S-2)]aD3,6anhGalp(1-3)[S-2)]bDGalp(1-`, or `Ac(1-2)[xXEt?N(1-P-6)]bDGlcpN(1-3)bDManp(1-4)bDGlcp`, as well as more robustly strip reducing end anomeric indicator (99942e8, a152c47, d6c3d56, ced60fc, a6882db)
 - Universal Input via `canonicalize_iupac` can now parse more complex Oxford sequences, such as `F(6)A2G(4)2S(3,3)2` (9f42561)
 - `max_specify_glycan` will now also specify these cases: `("Fuc(a1-?)GlcNAc", "Fuc(a1-3/4)GlcNAc")`, `("Fuc(a1-?)]GlcNAc", "Fuc(a1-3/4)]GlcNAc")`, `("Fuc(a1-?)Gal(", "Fuc(a1-2)Gal(")`, `("GalOS", "Gal3/6S"), ("GlcNAcOS", "GlcNAc6S")` (f3b4389)
-- Oxford parsing in `canonicalize_iupac` will now detect hybrid glycans and will add extra mannoses to the `a1-6` branch
+- Oxford parsing in `canonicalize_iupac` will now detect hybrid glycans and will add extra mannoses to the `a1-6` branch (c4ba7f9)
 
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans (6754bbf)
@@ -66,6 +67,9 @@
 - `quantify_motifs` can now also be used with full datasets that still have the first column be a glycan string column (fa98caa)
 
 #### draw
+##### Added ✨
+- When supplied with narrow monosaccharide wildcards, `GlycoDraw` will now draw bisected monosaccharides (e.g., a blue-yellow split rectangle for `GlcNAc/GalNAc`)
+
 ##### Changed 🔄
 - If `draw_method = chem3d`, `GlycoDraw` will now preferentially fetch a realistic conformer from GlycoShape/PDB via `glycontact`, if the user has `glycontact` installed (lazily imported), and only fall back to RDKit if none can be found (7a59d08)
 

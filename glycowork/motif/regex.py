@@ -54,6 +54,8 @@ def convert_pattern_component(pattern_component: str # Chunk of glyco-regular ex
         after_bracket = pattern_component.split(']', 1)[1] if ']' in pattern_component else ''
         if not any(q in after_bracket for q in ('{', '*', '+', '?', ')')) and (prefix or after_bracket.lstrip('-')):
             suffix = after_bracket.lstrip('-')
+            if all('-' not in a and '(' not in a for a in alternatives):
+                return specify_linkages(replace_patterns('-'.join(filter(None, [prefix, '/'.join(alternatives), suffix]))))
             pattern = ['-'.join(filter(None, [prefix, alt, suffix])) for alt in alternatives]
         else:
             pattern = alternatives
