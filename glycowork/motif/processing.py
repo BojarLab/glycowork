@@ -1461,14 +1461,18 @@ def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
   if glycan_class is None:
     glycan_class = get_class(glycan)
   if df_use is None:
-    df_use = copy.deepcopy(df_glycan[df_glycan.glycan_type == glycan_class])
+    if glycan_class == "lipid/free":
+      df_use = df_glycan[df_glycan.glycan_type.isin(["lipid", "free"])]
+    else:
+      df_use = df_glycan[df_glycan.glycan_type == glycan_class]
+  tax = df_use[df_use[taxonomy_level].apply(lambda x: isinstance(x, list) and taxonomy_filter in x)]
   if glycan.endswith("GlcNAc(b1-?)GlcNAc"):
     glycan = glycan.replace("GlcNAc(b1-?)GlcNAc", "GlcNAc(b1-4)GlcNAc")
-  if taxonomy_level == "Kingdom" and taxonomy_filter == 'Animalia':
+  if (tax['Kingdom'].apply(lambda x: isinstance(x, list) and 'Animalia' in x)).any():
     glycan = glycan.replace("dHex", "Fuc")
     glycan = glycan.replace("Gal(b1-?)GlcNAc", "Gal(b1-3/4)GlcNAc")
   if "GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc" in glycan:
-    glycan = glycan.replace("GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc", "GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" if taxonomy_level == "Class" and taxonomy_filter == 'Mammalia' else "GlcNAc(b1-4)[Fuc(a1-3/6)]GlcNAc")
+    glycan = glycan.replace("GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc", "GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" if (tax['Class'].apply(lambda x: isinstance(x, list) and 'Mammalia' in x)).any() else "GlcNAc(b1-4)[Fuc(a1-3/6)]GlcNAc")
   for old, new in [("Neu5Ac(a2-?)Neu5Ac", "Neu5Ac(a2-8)Neu5Ac"), ("Neu5Ac(a2-?)", "Neu5Ac(a2-3/6)"), ("Neu5Gc(a2-?)Neu5Gc", "Neu5Gc(a2-8)Neu5Gc"), ("Neu5Gc(a2-?)", "Neu5Gc(a2-3/6)"),
                    ("Fuc(a1-?)GlcNAc", "Fuc(a1-3/4)GlcNAc"), ("Fuc(a1-?)]GlcNAc", "Fuc(a1-3/4)]GlcNAc"), ("Fuc(a1-?)Gal(", "Fuc(a1-2)Gal("), ("GalOS", "Gal3/6S"), ("GlcNAcOS", "GlcNAc6S")]:
     glycan = glycan.replace(old, new)
