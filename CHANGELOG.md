@@ -42,7 +42,8 @@
   
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans (6754bbf)
-- Make `glycan_class` optional in `max_specify_glycan` and infer it automatically using `get_class` (585b94a)
+- The `glycan_class` parameter is optional in `max_specify_glycan` and inferred using `get_class` (585b94a)
+- Added user-defined parameters (0486986)
 
 ##### Fixed 🐛
 - Fixed some Oxford sequences (e.g., `A1`, `A2`) being misidentified as blood group glycolipids by `canonicalize_iupac` (9f42561)
