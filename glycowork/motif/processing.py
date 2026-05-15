@@ -1462,7 +1462,6 @@ def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
     glycan_class = get_class(glycan)
   if df_use is None:
     df_use = copy.deepcopy(df_glycan[df_glycan.glycan_type == glycan_class])
-  tax = df_use[df_use[taxonomy_level].apply(lambda x: isinstance(x, list) and taxonomy_filter in x)]
   if glycan.endswith("GlcNAc(b1-?)GlcNAc"):
     glycan = glycan.replace("GlcNAc(b1-?)GlcNAc", "GlcNAc(b1-4)GlcNAc")
   if taxonomy_level == "Kingdom" and taxonomy_filter == 'Animalia':
