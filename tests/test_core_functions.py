@@ -339,6 +339,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Glc(a1-4)2,3-Anhydro-Man(a1-4)Glc(a1-4)Glc") == "Glc(a1-4)2,3-Anhydro-Man(a1-4)Glc(a1-4)Glc"
     assert canonicalize_iupac("NeuAcalpha2-3Galbeta1-3GalNAcbeta1-4(NeuAcalpha2-8NeuGcalpha2-3)Galbeta1-4Glcbeta-Cer") == "Neu5Ac(a2-3)Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-8)Neu5Gc(a2-3)]Gal(b1-4)Glc1Cer"
     assert canonicalize_iupac("Galβ1-3(6SGlcNAcβ1-6)GalNAcol") == "Gal(b1-3)[GlcNAc6S(b1-6)]GalNAc"
+    assert canonicalize_iupac("GlcNAc/GalNAc(?1-3/4)Gal(b1-3)GalNAc") == "GlcNAc/GalNAc(?1-3/4)Gal(b1-3)GalNAc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -2458,6 +2459,8 @@ def test_compare_glycans():
     assert compare_glycans("Gal6S(b1-4)GlcNAc", "GalOS(b1-4)GlcNAc")
     assert compare_glycans("Gal6S(b1-3)GalNAc4S", "GalOS(b1-3)GalNAc4/6S")
     res, mappy = compare_glycans('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc', graph_to_string(glycan_to_nxGraph('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc'), order_by='linkage'), return_matches=True)
+    # Test narrow monosaccharide wildcards
+    assert compare_glycans("GlcNAc/GalNAc(?1-3/4)Gal(b1-3)GalNAc", "GlcNAc(a1-4)Gal(b1-3)GalNAc")
 
 
 def test_subgraph_isomorphism():
@@ -2474,6 +2477,9 @@ def test_subgraph_isomorphism():
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-3/4)GlcNAc") == True
     assert subgraph_isomorphism("Gal(a1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-3/4)GlcNAc") == False
     assert subgraph_isomorphism("Gal(b1-?)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-3/4)GlcNAc") == True
+    # Test with narrow monosaccharide ambiguity
+    assert subgraph_isomorphism("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Gal/Man(b1-3)GalNAc")
+    assert not subgraph_isomorphism("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Glc/Man(b1-3)GalNAc")
 
 
 def test_generate_graph_features():
@@ -3270,6 +3276,13 @@ def test_glycodraw():
     result = GlycoDraw("DManpa1-3[DManpa1-6][DXylpb1-2]DManpb1-4DGlcpNAcb1-4[LFucpa1-3]DGlcpNAca1-OH", suppress=True)
     assert result is not None
     result = GlycoDraw("Internal_LewisA", restrict_vocab=True, suppress=True)
+    assert result is not None
+    # Test narrow monosaccharide wildcards
+    result = GlycoDraw("GlcNAc/GalNAc(?1-3/4)Gal/Glc(b1-3)GalNAc", suppress = True)
+    assert result is not None
+    result = GlycoDraw("Fuc/Rha(a1-2)Gal(b1-3)GalNAc", suppress = True)
+    assert result is not None
+    result = GlycoDraw("Neu5Ac/Neu5Gc(a2-3)Gal(b1-3)GalNAc", suppress = True)
     assert result is not None
     # Test file saving
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.svg")

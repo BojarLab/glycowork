@@ -33,7 +33,7 @@ def memoize_node_match(func):
 def build_wildcard_cache(proc: set) -> dict:
     """Precompute all possible wildcard expansions"""
     return {k: get_possible_linkages(k) for k in proc if '?' in k or ('/' in k and '-' in k)} | \
-           {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!')}
+           {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!') or ('/' in k and '-' not in k)}
 
 
 def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence

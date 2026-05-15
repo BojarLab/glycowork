@@ -156,6 +156,8 @@ def get_possible_linkages(wildcard: str, # Pattern to match, ? can be wildcard
 def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: Hex, HexNAc, dHex, Sia, HexA, Pen, HexOS, HexNAcOS
                                ) -> set[str]: # Matching monosaccharides
   "Retrieves all matching common monosaccharides of a type"
+  if '/' in wildcard:
+    return set(wildcard.split('/'))
   return _WILDCARD_MONO.get(wildcard, set())
 
 
@@ -1354,7 +1356,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
   glycan = re.sub(r'[A-Z][A-Za-z0-9]+', _sort_mono_mods, glycan)  # Sort modifications: ManNA3Ac1Ac to ManAN1Ac3Ac
   glycan, repeat = transform_repeat_glycan(glycan)
   glycan = re.sub(r"n\=[\d\?\-]+\/", "", glycan)  # Strip out internal repeats such as n=?/
-  glycan = re.sub(r"\/([A-Z])", r"\1", glycan)  # Strip out any remaining / from internal repeats
+  glycan = re.sub(r"(?<=[\)\]\d])\/([A-Z])", r"\1", glycan)  # Strip out any remaining / from internal repeats
   # Canonicalize branch ordering
   if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
     from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string

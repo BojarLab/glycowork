@@ -450,15 +450,78 @@ def add_sugar(
     shape, color, furanose = sugar_dict[monosaccharide]
     draw_shape(shape = shape, color = color, x_pos = x_pos, y_pos = y_pos, drawing = drawing, modification = modification,
                conf = conf, furanose = furanose, dim = dim, deg = deg, text_anchor = text_anchor, col_dict = col_dict, scalar = scalar)
+  elif '/' in monosaccharide:
+    parts = monosaccharide.split('/')
+    entries = [sugar_dict[p] for p in parts if p in sugar_dict]
+    if len(entries) < 2:
+      return
+    shape, furanose = entries[0][0], any(e[2] for e in entries)
+    colors = [col_dict[e[1]] for e in entries[:2]]
+    x_base, y_base = -x_pos * dim, y_pos * dim
+    stroke_w, half_dim = 0.04 * dim, dim / 2
+    if shape == 'Hex':
+      for sign, col in [(1, colors[0]), (-1, colors[1])]:
+        pts = []
+        for i in range(33):
+          a = radians(135 + sign * i * 180 / 32)
+          pts.extend([x_base + half_dim * cos(a), y_base - half_dim * sin(a)])
+        drawing.append(draw.Lines(*pts, close = True, fill = col, stroke = 'none', stroke_width = 0))
+      drawing.append(
+        draw.Circle(x_base, y_base, half_dim, fill = 'none', stroke_width = stroke_w, stroke = col_dict['black']))
+    elif shape == 'HexNAc':
+      tl, tr = (x_base - half_dim, y_base - half_dim), (x_base + half_dim, y_base - half_dim)
+      bl, br = (x_base - half_dim, y_base + half_dim), (x_base + half_dim, y_base + half_dim)
+      drawing.append(draw.Lines(*tl, *bl, *br, close = True, fill = colors[0], stroke = 'none', stroke_width = 0))
+      drawing.append(draw.Lines(*tl, *tr, *br, close = True, fill = colors[1], stroke = 'none', stroke_width = 0))
+      drawing.append(
+        draw.Rectangle(x_base - half_dim, y_base - half_dim, dim, dim, fill = 'none', stroke_width = stroke_w,
+                       stroke = col_dict['black']))
+    elif shape == 'dNon':
+      drawing.append(
+        draw.Lines(x_base, y_base + half_dim, x_base - half_dim, y_base, x_base, y_base - half_dim, close = True,
+                   fill = colors[0], stroke = 'none', stroke_width = 0))
+      drawing.append(
+        draw.Lines(x_base, y_base + half_dim, x_base + half_dim, y_base, x_base, y_base - half_dim, close = True,
+                   fill = colors[1], stroke = 'none', stroke_width = 0))
+      drawing.append(
+        draw.Lines(x_base, y_base + half_dim, x_base + half_dim, y_base, x_base, y_base - half_dim, x_base - half_dim,
+                   y_base, close = True, fill = 'none', stroke = col_dict['black'], stroke_width = stroke_w))
+    elif shape == 'dHex':
+      ihd = ((sqrt(3)) / 2) * half_dim
+      drawing.append(
+        draw.Lines(x_base - half_dim, y_base + ihd, x_base, y_base - ihd, x_base, y_base + ihd, close = True,
+                   fill = colors[0], stroke = 'none', stroke_width = 0))
+      drawing.append(
+        draw.Lines(x_base, y_base + ihd, x_base, y_base - ihd, x_base + half_dim, y_base + ihd, close = True,
+                   fill = colors[1], stroke = 'none', stroke_width = 0))
+      drawing.append(
+        draw.Lines(x_base - half_dim, y_base + ihd, x_base, y_base - ihd, x_base + half_dim, y_base + ihd, close = True,
+                   fill = 'none', stroke = col_dict['black'], stroke_width = stroke_w))
+    else:
+      draw_shape(shape = shape, color = entries[0][1], x_pos = x_pos, y_pos = y_pos, drawing = drawing,
+                 modification = modification,
+                 conf = conf, furanose = entries[0][2], dim = dim, deg = deg, text_anchor = text_anchor,
+                 col_dict = col_dict, scalar = scalar)
+      return
+    # Dividing line
+    p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
+    if shape in ('HexNAc', 'Hex'):
+      d = half_dim if shape == 'HexNAc' else half_dim * sqrt(2) / 2
+      p.M(x_base - d, y_base - d).L(x_base + d, y_base + d)
+    else:
+      div_y = ((sqrt(3)) / 2) * half_dim if shape == 'dHex' else half_dim
+      p.M(x_base, y_base - div_y).L(x_base, y_base + div_y)
+    drawing.append(p)
+    add_customization(drawing, x_base, y_base, dim, modification, col_dict, conf, furanose, text_anchor)
   else:
     x_base = -x_pos * dim
     y_base = y_pos * dim
     half_dim = dim / 2
     p = draw.Path(stroke_width = 0.04 * dim, stroke = 'black')
-    p.M(x_base-half_dim, y_base+half_dim)
-    p.L(x_base+half_dim, y_base-half_dim)
-    p.M(x_base+half_dim, y_base+half_dim)
-    p.L(x_base-half_dim, y_base-half_dim)
+    p.M(x_base - half_dim, y_base + half_dim)
+    p.L(x_base + half_dim, y_base - half_dim)
+    p.M(x_base + half_dim, y_base + half_dim)
+    p.L(x_base - half_dim, y_base - half_dim)
     drawing.append(p)
 
 
@@ -573,6 +636,11 @@ def get_coordinates_and_labels(
   for idx, raw_label in enumerate(node_values):
     if idx % 2:
       continue
+    if '/' in raw_label and raw_label not in domon_costello:
+      cores = [get_core(p) for p in raw_label.split('/')]
+      if all(c in sugar_dict for c in cores):
+        parsed_sugars[idx] = ('/'.join(cores), '')
+        continue
     core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
     normalized_label = core_label if core_label in sugar_dict else 'Unknown'
     modification_text = get_modification(raw_label).replace('O', '').replace('-ol', '')
@@ -1284,7 +1352,7 @@ def GlycoDraw(
   width = ((((x_span+1)*2)-1)*dim)+dim
   if floaty_bits:
     len_one_gw = ((max([len(j) for k in min_process_glycans(floaty_bits) for j in k]) / 6) + 1) * dim
-    len_multiple_gw = (max([len(k) for k in min_process_glycans(floaty_bits)], default = 0)+1) * dim
+    len_multiple_gw = (max([len(k) for k in min_process_glycans(floaty_bits)], default = 0) + 1) * dim
     width += max(len_one_gw, len_multiple_gw)
   if len(floaty_bits) > len(set(floaty_bits)):
     width += dim
@@ -1292,11 +1360,11 @@ def GlycoDraw(
     y_span += 1.0
     max_y += 0.5
     min_y -= 0.5
-  height = ((((max(abs(min_y), max_y)+1)*2)-1)*dim)+60
+  height = ((((max(abs(min_y), max_y) + 1) * 2) - 1) * dim) + 60
   height = max(height, width) if vertical else height
   x_offset = abs(min_x) * dim * (1.2 if compact else 2) if reducing_end_label else 0
-  x_ori = -width+(dim/2)+0.5*dim+x_offset
-  y_ori = (-height/2)+(((max_y-abs(min_y))/2)*dim)
+  x_ori = -width + (dim / 2) + 0.5 * dim + x_offset
+  y_ori = (-height / 2) + (((max_y - abs(min_y)) / 2) * dim)
 
   # Generate default ALT text if not provided
   if alt_text is None:
@@ -1312,7 +1380,7 @@ def GlycoDraw(
   # Draw
   d2 = draw.Drawing(width, height, origin = (x_ori, y_ori))
   deg = 90 if vertical else 0
-  d = draw.Group(transform = f'rotate({deg} {x_ori+0.5*width} {y_ori+0.5*height})')
+  d = draw.Group(transform = f'rotate({deg} {x_ori + 0.5 * width} {y_ori + 0.5 * height})')
 
   if reducing_end_label:
     bond_start_x = main_sugar_x_pos[0] - 0.5
@@ -1322,7 +1390,7 @@ def GlycoDraw(
     col_dict = col_dict_transparent if main_sugar_label[0] == 'hide' else col_dict_base
     x_base = -label_x * dim * (1.2 if compact else 2)
     y_base = label_y * dim * (0.6 if compact else 1) + 5
-    d.append(draw.Text(reducing_end_label, dim*0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
+    d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
   # Bond main chain
   [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = main_per_linkage[k] if highlight_linkages else False) for k in range(len(main_sugar)-1)]
   # Bond branch
@@ -1367,14 +1435,14 @@ def GlycoDraw(
       current_y = (min_y + (j * y_spacing)) if n_floats > 1 else ((min_y + max_y) / 2)
       floaty_sugar_y_pos = [current_y for _ in range(len(floaty_sugar_y_pos))]
       if floaty_sugar != ['blank', 'blank']:
-        [add_bond(floaty_sugar_x_pos[k+1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k+1], floaty_sugar_y_pos[k], d, floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar)-1)]
+        [add_bond(floaty_sugar_x_pos[k + 1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k + 1], floaty_sugar_y_pos[k], d, floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar) - 1)]
         [add_sugar(floaty_sugar[k], d, floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf[k], compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
       else:
-        add_sugar('text', d, min(floaty_sugar_x_pos)-0.3, floaty_sugar_y_pos[-1], modification = floaty_bits[j].translate(str.maketrans("123456789", "\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089")).replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
+        add_sugar('text', d, min(floaty_sugar_x_pos) - 0.3, floaty_sugar_y_pos[-1], modification = floaty_bits[j].translate(str.maketrans("123456789", "\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089")).replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
 
       if fb_count[floaty_bits[j]] > 1:
         x_offset = 0.5 if not compact else 0.75
-        add_sugar('text', d, max(floaty_sugar_x_pos)+x_offset, floaty_sugar_y_pos[-1], modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)
+        add_sugar('text', d, max(floaty_sugar_x_pos) + x_offset, floaty_sugar_y_pos[-1], modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)
 
     bracket_x = max_x * (2 if not compact else 1.2) + 1
     bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
@@ -1386,12 +1454,12 @@ def GlycoDraw(
     repeat_annot = 'n' + (' = ' + str(repeat) if isinstance(repeat, (str, int)) and repeat != True else '')
     # repeat range code block
     if repeat_range:
-      bracket_open = (main_sugar_x_pos[repeat_range[1]]*2)+1 if not compact else (main_sugar_x_pos[repeat_range[1]]*1.2)+0.6
-      bracket_close = (main_sugar_x_pos[repeat_range[0]]*2)-1 if not compact else (main_sugar_x_pos[repeat_range[0]]*1.2)-0.6
-      bracket_y_open =  (main_sugar_y_pos[repeat_range[1]], main_sugar_y_pos[repeat_range[1]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2)-0.0)
-      bracket_y_close = (main_sugar_y_pos[repeat_range[0]], main_sugar_y_pos[repeat_range[0]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2)-0.0)
-      text_x = main_sugar_x_pos[repeat_range[0]]-0.5
-      text_y = main_sugar_y_pos[0]+1.05 if not compact else (main_sugar_y_pos[0]+1.03)/0.6
+      bracket_open = (main_sugar_x_pos[repeat_range[1]] * 2) + 1 if not compact else (main_sugar_x_pos[repeat_range[1]] * 1.2) + 0.6
+      bracket_close = (main_sugar_x_pos[repeat_range[0]] * 2) - 1 if not compact else (main_sugar_x_pos[repeat_range[0]] * 1.2) - 0.6
+      bracket_y_open =  (main_sugar_y_pos[repeat_range[1]], main_sugar_y_pos[repeat_range[1]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2), ((np.mean(main_sugar_y_pos[repeat_range[1]]) * 0.5) * 1.2))
+      bracket_y_close = (main_sugar_y_pos[repeat_range[0]], main_sugar_y_pos[repeat_range[0]]) if not compact else (((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2), ((np.mean(main_sugar_y_pos[repeat_range[0]]) * 0.5) * 1.2))
+      text_x = main_sugar_x_pos[repeat_range[0]] - 0.5
+      text_y = main_sugar_y_pos[0] + 1.05 if not compact else (main_sugar_y_pos[0] + 1.03) / 0.6
       draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
       draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = 0)
       add_sugar('text', d, text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
@@ -1399,16 +1467,16 @@ def GlycoDraw(
     else:
       open_deg = calculate_degree(main_sugar_y_pos[-1], main_sugar_y_pos[-2], main_sugar_x_pos[-1], main_sugar_x_pos[-2])
       if open_deg == 0:
-        bracket_open = np.mean([k*2 for k in main_sugar_x_pos][-2:])+0.2 if not compact else np.mean([k*1.2 for k in main_sugar_x_pos][-2:])+0.15
-        bracket_y_open = (np.mean(main_sugar_y_pos[-2:]), np.mean(main_sugar_y_pos[-2:])) if not compact else (((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)-0.0)
-        bracket_y_close = (main_sugar_y_pos[0], main_sugar_y_pos[0]) if not compact else (((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)+0.0, ((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)-0.0)
+        bracket_open = np.mean([k * 2 for k in main_sugar_x_pos][-2:]) + 0.2 if not compact else np.mean([k * 1.2 for k in main_sugar_x_pos][-2:]) + 0.15
+        bracket_y_open = (np.mean(main_sugar_y_pos[-2:]), np.mean(main_sugar_y_pos[-2:])) if not compact else (((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2), ((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2))
+        bracket_y_close = (main_sugar_y_pos[0], main_sugar_y_pos[0]) if not compact else (((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2), ((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2))
       else:
-        bracket_open = np.mean([k*2 for k in main_sugar_x_pos][-2:])+0.0 if not compact else np.mean([k*1.2 for k in main_sugar_x_pos][-2:])+0
-        bracket_y_open = (np.mean(main_sugar_y_pos[-2:]), np.mean(main_sugar_y_pos[-2:])) if not compact else (((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)+0.3, ((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2)-0.3)
-        bracket_y_close = (main_sugar_y_pos[0], main_sugar_y_pos[0]) if not compact else (((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)+0.3, ((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2)-0.3)
-      bracket_close = np.mean([k*2 for k in main_sugar_x_pos][:2])-0.2 if not compact else np.mean([k*1.2 for k in main_sugar_x_pos][:2])-0.15
-      text_x = bracket_close - (0.42) if not compact else bracket_close - (0.13)
-      text_y = main_sugar_y_pos[0] + 1.05 if not compact else (main_sugar_y_pos[0] + 1.03)/0.6
+        bracket_open = np.mean([k * 2 for k in main_sugar_x_pos][-2:]) if not compact else np.mean([k * 1.2 for k in main_sugar_x_pos][-2:])
+        bracket_y_open = (np.mean(main_sugar_y_pos[-2:]), np.mean(main_sugar_y_pos[-2:])) if not compact else (((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2) + 0.3, ((np.mean(main_sugar_y_pos[-2:]) * 0.5) * 1.2) - 0.3)
+        bracket_y_close = (main_sugar_y_pos[0], main_sugar_y_pos[0]) if not compact else (((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2) + 0.3, ((np.mean(main_sugar_y_pos[0]) * 0.5) * 1.2) - 0.3)
+      bracket_close = np.mean([k * 2 for k in main_sugar_x_pos][:2]) - 0.2 if not compact else np.mean([k * 1.2 for k in main_sugar_x_pos][:2]) - 0.15
+      text_x = bracket_close - 0.42 if not compact else bracket_close - 0.13
+      text_y = main_sugar_y_pos[0] + 1.05 if not compact else (main_sugar_y_pos[0] + 1.03) / 0.6
       draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = open_deg)
       draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
       add_sugar('text', d, text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
