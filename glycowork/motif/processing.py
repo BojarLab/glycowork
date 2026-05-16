@@ -1364,7 +1364,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if '{' in glycan:
         floating_bits = re.findall(r'\{.*?\}', glycan)
         sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))
-        glycan = sorted_floating_bits + glycan[glycan.rfind('}')+1:]
+        glycan = sorted_floating_bits + glycan[glycan.rfind('}') +1:]
+    glycan = re.sub(r'[A-Z][A-Za-z0-9]*(?:/[A-Z][A-Za-z0-9]*)+', lambda m: '/'.join(sorted(m.group().split('/'))),
+                    glycan)
     if glycan.count('[') != glycan.count(']'):
         raise ValueError(f"Mismatching brackets in formatted glycan string: {glycan}")
     return glycan
