@@ -5,29 +5,32 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+
 try:
-  import xgboost as xgb
-  import torch
-  import torch.nn.functional as F
-  # Choose the correct computing architecture
-  device = "cpu"
-  if torch.cuda.is_available():
-    device = "cuda:0"
+    import xgboost as xgb
+    import torch
+    import torch.nn.functional as F
+
+    # Choose the correct computing architecture
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda:0"
 except ImportError:
-  raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
+    raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
 try:
-  from glycowork.ml.processing import HeteroDataBatch
+    from glycowork.ml.processing import HeteroDataBatch
 except ImportError:
-  raise ImportError("<torch or torch_geometric or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
+    raise ImportError(
+        "<torch or torch_geometric or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
 from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error, \
     label_ranking_average_precision_score, ndcg_score, roc_auc_score, mean_absolute_error, r2_score
 from glycowork.motif.annotate import annotate_dataset
 
 
 class EarlyStopping:
-    def __init__(self, patience: int = 7, # epochs to wait after last improvement
-                 verbose: bool = False # whether to print messages
-                ) -> None:
+    def __init__(self, patience: int = 7,  # epochs to wait after last improvement
+                 verbose: bool = False  # whether to print messages
+                 ) -> None:
         "Early stops the training if validation loss doesn't improve after a given patience"
         self.patience = patience
         self.verbose = verbose
@@ -58,14 +61,14 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 
-def sigmoid(x: float # input value
-          ) -> float: # sigmoid transformed value
+def sigmoid(x: float  # input value
+            ) -> float:  # sigmoid transformed value
     "Apply sigmoid transformation to input"
     return 1 / (1 + np.exp(-x))
 
 
-def disable_running_stats(model: torch.nn.Module # model to disable batch norm
-                       ) -> None:
+def disable_running_stats(model: torch.nn.Module  # model to disable batch norm
+                          ) -> None:
     "Disable batch normalization running statistics"
 
     def _disable(module):
@@ -76,8 +79,8 @@ def disable_running_stats(model: torch.nn.Module # model to disable batch norm
     model.apply(_disable)
 
 
-def enable_running_stats(model: torch.nn.Module # model to enable batch norm
-                      ) -> None:
+def enable_running_stats(model: torch.nn.Module  # model to enable batch norm
+                         ) -> None:
     "Enable batch normalization running statistics"
 
     def _enable(module):
@@ -87,17 +90,18 @@ def enable_running_stats(model: torch.nn.Module # model to enable batch norm
     model.apply(_enable)
 
 
-def train_model(model: torch.nn.Module, # graph neural network for analyzing glycans
-               dataloaders: dict[str, torch.utils.data.DataLoader], # dict with 'train' and 'val' loaders
-               criterion: torch.nn.Module, # PyTorch loss function
-               optimizer: torch.optim.Optimizer, # PyTorch optimizer, has to be SAM if mode != "regression"
-               scheduler: torch.optim.lr_scheduler.LRScheduler, # PyTorch learning rate decay
-               num_epochs: int = 25, # number of epochs for training
-               patience: int = 50, # epochs without improvement until early stop
-               mode: str = 'classification', # 'classification', 'multilabel', or 'regression'
-               mode2: str = 'multi', # 'multi' or 'binary' classification
-               return_metrics: bool = False, # whether to return metrics
-              ) -> torch.nn.Module | tuple[torch.nn.Module, dict[str, dict[str, list[float]]]]: # best model from training and the training and validation metrics
+def train_model(model: torch.nn.Module,  # graph neural network for analyzing glycans
+                dataloaders: dict[str, torch.utils.data.DataLoader],  # dict with 'train' and 'val' loaders
+                criterion: torch.nn.Module,  # PyTorch loss function
+                optimizer: torch.optim.Optimizer,  # PyTorch optimizer, has to be SAM if mode != "regression"
+                scheduler: torch.optim.lr_scheduler.LRScheduler,  # PyTorch learning rate decay
+                num_epochs: int = 25,  # number of epochs for training
+                patience: int = 50,  # epochs without improvement until early stop
+                mode: str = 'classification',  # 'classification', 'multilabel', or 'regression'
+                mode2: str = 'multi',  # 'multi' or 'binary' classification
+                return_metrics: bool = False,  # whether to return metrics
+                ) -> torch.nn.Module | tuple[torch.nn.Module, dict[
+    str, dict[str, list[float]]]]:  # best model from training and the training and validation metrics
     "trains a deep learning model on predicting glycan properties"
     since = time.time()
     early_stopping = EarlyStopping(patience = patience, verbose = True)
@@ -160,7 +164,9 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                             optimizer.first_step(zero_grad = True)
                             # Second forward pass
                             disable_running_stats(model)
-                            second_pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
+                            second_pred = model(prot, x, edge_index, batch) if prot is not None else model(x,
+                                                                                                           edge_index,
+                                                                                                           batch)
                             criterion(second_pred, y).backward()
                             optimizer.second_step(zero_grad = True)
                         else:
@@ -172,14 +178,16 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                 pred_det = pred.cpu().detach().numpy()
                 if mode == 'classification':
                     if mode2 == 'multi':
-                        pred_proba = np.exp(pred_det) / np.sum(np.exp(pred_det), axis = 1, keepdims = True)  # numpy softmax
+                        pred_proba = np.exp(pred_det) / np.sum(np.exp(pred_det), axis = 1,
+                                                               keepdims = True)  # numpy softmax
                         pred2 = np.argmax(pred_det, axis = 1)
                     else:
                         pred_proba = sigmoid(pred_det)
                         pred2 = (pred_proba >= 0.5).astype(int)
                     running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
                     running_metrics["mcc"].append(matthews_corrcoef(y_det, pred2))
-                    running_metrics["auroc"].append(roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' else np.nan)
+                    running_metrics["auroc"].append(
+                        roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' else np.nan)
                 elif mode == 'multilabel':
                     pred_proba = sigmoid(pred_det)
                     pred2 = (pred_proba >= 0.5).astype(int)
@@ -197,11 +205,17 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                     continue
                 metrics[phase][key].append(np.average(running_metrics[key], weights = running_metrics["weights"]))
             if mode == 'classification':
-                print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["acc"][-1], metrics[phase]["mcc"][-1]))
+                print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1],
+                                                                            metrics[phase]["acc"][-1],
+                                                                            metrics[phase]["mcc"][-1]))
             elif mode == 'multilabel':
-                print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["acc"][-1], metrics[phase]["mcc"][-1]))
+                print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1],
+                                                                            metrics[phase]["acc"][-1],
+                                                                            metrics[phase]["mcc"][-1]))
             else:
-                print('{} Loss: {:.4f} MSE: {:.4f} MAE: {:.4f}'.format(phase, metrics[phase]["loss"][-1], metrics[phase]["mse"][-1], metrics[phase]["mae"][-1]))
+                print('{} Loss: {:.4f} MSE: {:.4f} MAE: {:.4f}'.format(phase, metrics[phase]["loss"][-1],
+                                                                       metrics[phase]["mse"][-1],
+                                                                       metrics[phase]["mae"][-1]))
             # Keep best model state_dict
             if phase == "val":
                 if metrics[phase]["loss"][-1] <= best_loss:
@@ -216,7 +230,8 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
                         best_lead_metric = metrics[phase]["mse"][-1]
                 # Check Early Stopping & adjust learning rate if needed
                 early_stopping(metrics[phase]["loss"][-1], model)
-                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau) or isinstance(scheduler, WarmupScheduler):
+                if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau) or isinstance(scheduler,
+                                                                                                   WarmupScheduler):
                     scheduler.step(metrics[phase]["loss"][-1])
                 else:
                     scheduler.step()
@@ -237,7 +252,7 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
     if return_metrics:
         return model, metrics
     # Plot loss & score over the course of training
-    _, _ = plt.subplots(nrows=2, ncols=1)
+    _, _ = plt.subplots(nrows = 2, ncols = 1)
     plt.subplot(2, 1, 1)
     plt.plot(range(epoch + 1), metrics["val"]["loss"])
     plt.title('Model Training')
@@ -261,13 +276,13 @@ def train_model(model: torch.nn.Module, # graph neural network for analyzing gly
 
 
 class SAM(torch.optim.Optimizer):
-    def __init__(self, params: list[torch.nn.Parameter], # model parameters
-                 base_optimizer: type[torch.optim.Optimizer], # base PyTorch optimizer type
-                 rho: float = 0.5, # size of neighborhood to explore
-                 alpha: float = 0.0, # surrogate gap minimization coefficient
-                 adaptive: bool = False, # whether to use adaptive SAM
-                 **kwargs # additional optimizer arguments
-                ) -> None:
+    def __init__(self, params: list[torch.nn.Parameter],  # model parameters
+                 base_optimizer: type[torch.optim.Optimizer],  # base PyTorch optimizer type
+                 rho: float = 0.5,  # size of neighborhood to explore
+                 alpha: float = 0.0,  # surrogate gap minimization coefficient
+                 adaptive: bool = False,  # whether to use adaptive SAM
+                 **kwargs  # additional optimizer arguments
+                 ) -> None:
         "Sharpness-Aware Minimization (SAM) optimizer adapted from https://github.com/davda54/sam"
         assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
         assert alpha >= 0.0, f"Invalid alpha, should be non-negative: {alpha}"
@@ -279,8 +294,8 @@ class SAM(torch.optim.Optimizer):
         self.minimize_surrogate_gap = any(group["alpha"] > 0.0 for group in self.param_groups)
 
     @torch.no_grad()
-    def first_step(self, zero_grad: bool = False # whether to zero gradients after step
-                 ) -> None:
+    def first_step(self, zero_grad: bool = False  # whether to zero gradients after step
+                   ) -> None:
         "Performs first optimization step to find adversarial weights"
         grad_norm = self._grad_norm()
         for group in self.param_groups:
@@ -297,8 +312,8 @@ class SAM(torch.optim.Optimizer):
             self.zero_grad()
 
     @torch.no_grad()
-    def second_step(self, zero_grad: bool = False # whether to zero gradients after step
-                  ) -> None:
+    def second_step(self, zero_grad: bool = False  # whether to zero gradients after step
+                    ) -> None:
         "Performs second optimization step with regular weights"
         for group in self.param_groups:
             for p in group["params"]:
@@ -325,16 +340,17 @@ class SAM(torch.optim.Optimizer):
                 if p.grad is None:
                     continue
                 rejection = self.state[p]['old_g'] - coeff * p.grad
-                p.grad.data.add_(rejection, alpha=-group["alpha"])
+                p.grad.data.add_(rejection, alpha = -group["alpha"])
 
     def _grad_norm(self) -> torch.Tensor:
-        shared_device = self.param_groups[0]["params"][0].device  # Put everything on the same device, in case of model parallelism
+        shared_device = self.param_groups[0]["params"][
+            0].device  # Put everything on the same device, in case of model parallelism
         norm = torch.norm(
-                    torch.stack([
-                        ((torch.abs(p) if group["adaptive"] else 1.0) * p.grad).norm(p=2).to(shared_device)
-                        for group in self.param_groups for p in group["params"] if p.grad is not None
-                    ]), p = 2
-               )
+            torch.stack([
+                ((torch.abs(p) if group["adaptive"] else 1.0) * p.grad).norm(p = 2).to(shared_device)
+                for group in self.param_groups for p in group["params"] if p.grad is not None
+            ]), p = 2
+        )
         return norm
 
     def load_state_dict(self, state_dict: dict) -> None:
@@ -343,11 +359,11 @@ class SAM(torch.optim.Optimizer):
 
 
 class Poly1CrossEntropyLoss(torch.nn.Module):
-    def __init__(self, num_classes: int, # number of classes
-                 epsilon: float = 1.0, # weight of poly1 term
-                 reduction: str = "mean", # reduction method for loss
-                 weight: torch.Tensor | None = None # manual class weights
-                ) -> None:
+    def __init__(self, num_classes: int,  # number of classes
+                 epsilon: float = 1.0,  # weight of poly1 term
+                 reduction: str = "mean",  # reduction method for loss
+                 weight: torch.Tensor | None = None  # manual class weights
+                 ) -> None:
         "Polynomial cross entropy loss for improved training stability"
         super(Poly1CrossEntropyLoss, self).__init__()
         self.num_classes = num_classes
@@ -356,16 +372,16 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
         self.weight = weight
         return
 
-    def forward(self, logits: torch.Tensor, # predicted class probabilities [N, num_classes]
-               labels: torch.Tensor # ground truth labels [N]
-              ) -> torch.Tensor: # computed loss value
+    def forward(self, logits: torch.Tensor,  # predicted class probabilities [N, num_classes]
+                labels: torch.Tensor  # ground truth labels [N]
+                ) -> torch.Tensor:  # computed loss value
         "Compute poly cross-entropy loss"
         if len(labels.shape) == 2 and labels.shape[1] == self.num_classes:
             labels_onehot = labels.to(device = logits.device, dtype = logits.dtype)
             labels = torch.argmax(labels, dim = 1)
         else:
             labels_onehot = F.one_hot(labels, num_classes = self.num_classes).to(device = logits.device,
-                                                                           dtype = logits.dtype)
+                                                                                 dtype = logits.dtype)
         pt = torch.sum(labels_onehot * F.softmax(logits, dim = -1), dim = -1)
         CE = F.cross_entropy(input = logits,
                              target = labels,
@@ -381,106 +397,110 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
 
 
 class WarmupScheduler:
-  def __init__(self, optimizer, base_scheduler, warmup_epochs, is_sam = False):
-    self.optimizer = optimizer.base_optimizer if is_sam else optimizer
-    self.base_scheduler = base_scheduler
-    self.warmup_epochs = warmup_epochs
-    self.current_epoch = 0
-    self.base_lr = self.optimizer.param_groups[0]['lr']
-  def step(self, metrics = None):
-    self.current_epoch += 1
-    if self.current_epoch <= self.warmup_epochs:
-      warmup_factor = self.current_epoch / self.warmup_epochs
-      for param_group in self.optimizer.param_groups:
-        param_group['lr'] = self.base_lr * warmup_factor
-    else:
-      if metrics is not None:
-        self.base_scheduler.step(metrics)
-      else:
-        self.base_scheduler.step()
+    def __init__(self, optimizer, base_scheduler, warmup_epochs, is_sam = False):
+        self.optimizer = optimizer.base_optimizer if is_sam else optimizer
+        self.base_scheduler = base_scheduler
+        self.warmup_epochs = warmup_epochs
+        self.current_epoch = 0
+        self.base_lr = self.optimizer.param_groups[0]['lr']
+
+    def step(self, metrics = None):
+        self.current_epoch += 1
+        if self.current_epoch <= self.warmup_epochs:
+            warmup_factor = self.current_epoch / self.warmup_epochs
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = self.base_lr * warmup_factor
+        else:
+            if metrics is not None:
+                self.base_scheduler.step(metrics)
+            else:
+                self.base_scheduler.step()
 
 
-def training_setup(model: torch.nn.Module, # graph neural network for analyzing glycans
-                  lr: float, # learning rate
-                  lr_patience: int = 4, # epochs before reducing learning rate
-                  factor: float = 0.2, # factor to multiply lr on reduction
-                  weight_decay: float = 0.0001, # regularization parameter
-                  mode: str = 'multiclass', # type of prediction task
-                  num_classes: int = 2, # number of classes for classification
-                  gsam_alpha: float = 0., # if >0, uses GSAM instead of SAM optimizer
-                  warmup_epochs: int = 5  # if >0, uses a learning rate warm-up schedule for training stability
-                 ) -> tuple[torch.optim.Optimizer, torch.optim.lr_scheduler._LRScheduler, torch.nn.Module]: # optimizer, scheduler, criterion
+def training_setup(model: torch.nn.Module,  # graph neural network for analyzing glycans
+                   lr: float,  # learning rate
+                   lr_patience: int = 4,  # epochs before reducing learning rate
+                   factor: float = 0.2,  # factor to multiply lr on reduction
+                   weight_decay: float = 0.0001,  # regularization parameter
+                   mode: str = 'multiclass',  # type of prediction task
+                   num_classes: int = 2,  # number of classes for classification
+                   gsam_alpha: float = 0.,  # if >0, uses GSAM instead of SAM optimizer
+                   warmup_epochs: int = 5  # if >0, uses a learning rate warm-up schedule for training stability
+                   ) -> tuple[
+    torch.optim.Optimizer, torch.optim.lr_scheduler._LRScheduler, torch.nn.Module]:  # optimizer, scheduler, criterion
     "prepares optimizer, learning rate scheduler, and loss criterion for model training"
     # Choose optimizer & learning rate scheduler
     if mode in {'multiclass', 'multilabel'}:
-      optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, alpha = gsam_alpha, lr = lr,
+        optimizer_ft = SAM(model.parameters(), torch.optim.AdamW, alpha = gsam_alpha, lr = lr,
                            weight_decay = weight_decay)
-      base_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
-                                                               factor = factor)
+        base_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft.base_optimizer, patience = lr_patience,
+                                                                    factor = factor)
     else:
-      optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr, weight_decay = weight_decay)
-      base_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
-                                                               factor = factor)
+        optimizer_ft = torch.optim.AdamW(model.parameters(), lr = lr, weight_decay = weight_decay)
+        base_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_ft, patience = lr_patience,
+                                                                    factor = factor)
     if warmup_epochs > 0:
-      scheduler = WarmupScheduler(optimizer_ft, base_scheduler, warmup_epochs, mode in {'multiclass', 'multilabel'})
+        scheduler = WarmupScheduler(optimizer_ft, base_scheduler, warmup_epochs, mode in {'multiclass', 'multilabel'})
     else:
-      scheduler = base_scheduler
+        scheduler = base_scheduler
     # Choose loss function
     if mode == 'multiclass':
-      if num_classes == 2:
-        raise ValueError("You have to set the number of classes via num_classes")
-      criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
+        if num_classes == 2:
+            raise ValueError("You have to set the number of classes via num_classes")
+        criterion = Poly1CrossEntropyLoss(num_classes = num_classes).to(device)
     elif mode == 'multilabel':
-      criterion = torch.nn.BCEWithLogitsLoss().to(device)
+        criterion = torch.nn.BCEWithLogitsLoss().to(device)
     elif mode == 'binary':
-      criterion = Poly1CrossEntropyLoss(num_classes = 2).to(device)
+        criterion = Poly1CrossEntropyLoss(num_classes = 2).to(device)
     elif mode == 'regression':
-      criterion = torch.nn.MSELoss().to(device)
+        criterion = torch.nn.MSELoss().to(device)
     else:
-      raise ValueError("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
+        raise ValueError("Invalid option. Please pass 'multiclass', 'multilabel', 'binary', or 'regression'.")
     return optimizer_ft, scheduler, criterion
 
 
-def train_ml_model(X_train: pd.DataFrame | list, # training data/glycans
-                  X_test: pd.DataFrame | list, # test data/glycans
-                  y_train: list, # training labels
-                  y_test: list, # test labels
-                  mode: str = 'classification', # 'classification' or 'regression'
-                  feature_calc: bool = False, # calculate motifs from glycans
-                  return_features: bool = False, # return calculated features
-                  feature_set: list[str] = ['known', 'exhaustive'], # feature set for annotations
-                  additional_features_train: pd.DataFrame | None = None, # additional training features
-                  additional_features_test: pd.DataFrame | None = None # additional test features
-                 ) -> xgb.XGBModel | tuple[xgb.XGBModel, pd.DataFrame, pd.DataFrame]: # trained model and optionally features
+def train_ml_model(X_train: pd.DataFrame | list,  # training data/glycans
+                   X_test: pd.DataFrame | list,  # test data/glycans
+                   y_train: list,  # training labels
+                   y_test: list,  # test labels
+                   mode: str = 'classification',  # 'classification' or 'regression'
+                   feature_calc: bool = False,  # calculate motifs from glycans
+                   return_features: bool = False,  # return calculated features
+                   feature_set: list[str] = ['known', 'exhaustive'],  # feature set for annotations
+                   additional_features_train: pd.DataFrame | None = None,  # additional training features
+                   additional_features_test: pd.DataFrame | None = None  # additional test features
+                   ) -> xgb.XGBModel | tuple[
+    xgb.XGBModel, pd.DataFrame, pd.DataFrame]:  # trained model and optionally features
     "wrapper function to train standard machine learning models on glycans"
     # Choose model type
     if mode == 'classification':
-      model = xgb.XGBClassifier(random_state = 42, n_estimators = 100,  max_depth = 3)
+        model = xgb.XGBClassifier(random_state = 42, n_estimators = 100, max_depth = 3)
     elif mode == 'regression':
-      model = xgb.XGBRegressor(random_state = 42, n_estimators = 100, objective = 'reg:squarederror')
+        model = xgb.XGBRegressor(random_state = 42, n_estimators = 100, objective = 'reg:squarederror')
     # Get features
     if isinstance(X_train, list) and isinstance(X_train[0], str) and not feature_calc:
-      feature_calc = True
-      print("\nYou provided glycans without features but did not specify feature_calc; we'll step in and calculate features with the current feature_set but feel free to re-run and change.")
+        feature_calc = True
+        print(
+            "\nYou provided glycans without features but did not specify feature_calc; we'll step in and calculate features with the current feature_set but feel free to re-run and change.")
     if feature_calc:
-      print("\nCalculating Glycan Features...")
-      X_train = annotate_dataset(X_train, feature_set = feature_set, condense = True)
-      X_test = annotate_dataset(X_test, feature_set = feature_set, condense = True)
-      # Get the difference between the columns
-      missing_in_X_train = set(X_test.columns) - set(X_train.columns)
-      missing_in_X_test = set(X_train.columns) - set(X_test.columns)
-      # Fill in the missing columns
-      for k in missing_in_X_train:
-        X_train[k] = 0
-      for k in missing_in_X_test:
-        X_test[k] = 0
-      X_train = X_train.apply(pd.to_numeric)
-      X_test = X_test.apply(pd.to_numeric)
+        print("\nCalculating Glycan Features...")
+        X_train = annotate_dataset(X_train, feature_set = feature_set, condense = True)
+        X_test = annotate_dataset(X_test, feature_set = feature_set, condense = True)
+        # Get the difference between the columns
+        missing_in_X_train = set(X_test.columns) - set(X_train.columns)
+        missing_in_X_test = set(X_train.columns) - set(X_test.columns)
+        # Fill in the missing columns
+        for k in missing_in_X_train:
+            X_train[k] = 0
+        for k in missing_in_X_test:
+            X_test[k] = 0
+        X_train = X_train.apply(pd.to_numeric)
+        X_test = X_test.apply(pd.to_numeric)
     if additional_features_train is not None:
-      additional_features_train.index = X_train.index
-      additional_features_test.index = X_test.index
-      X_train = pd.concat([X_train, additional_features_train], axis = 1)
-      X_test = pd.concat([X_test, additional_features_test], axis = 1)
+        additional_features_train.index = X_train.index
+        additional_features_test.index = X_test.index
+        X_train = pd.concat([X_train, additional_features_train], axis = 1)
+        X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")
     model.fit(X_train, y_train)
     # Keep track of column order & re-order test set accordingly
@@ -490,16 +510,16 @@ def train_ml_model(X_train: pd.DataFrame | list, # training data/glycans
     preds = model.predict(X_test)
     # Get metrics of trained model
     if mode == 'classification':
-      out = accuracy_score(y_test, preds)
-      print("Accuracy of trained model on separate validation set: " + str(out))
+        out = accuracy_score(y_test, preds)
+        print("Accuracy of trained model on separate validation set: " + str(out))
     elif mode == 'regression':
-      out = mean_squared_error(y_test, preds)
-      print("Mean squared error of trained model on separate validation set: " + str(out))
+        out = mean_squared_error(y_test, preds)
+        print("Mean squared error of trained model on separate validation set: " + str(out))
     return (model, X_train, X_test) if return_features else model
 
 
-def analyze_ml_model(model: xgb.XGBModel # trained ML model from train_ml_model
-                   ) -> None:
+def analyze_ml_model(model: xgb.XGBModel  # trained ML model from train_ml_model
+                     ) -> None:
     "plots relevant features for model prediction"
     # Get important features
     feat_imp = model.get_booster().get_score(importance_type = 'gain')
@@ -518,11 +538,11 @@ def analyze_ml_model(model: xgb.XGBModel # trained ML model from train_ml_model
     plt.show()
 
 
-def get_mismatch(model: xgb.XGBModel, # trained ML model from train_ml_model
-                X_test: pd.DataFrame, # motif dataframe for validation
-                y_test: list, # test labels
-                n: int = 10 # number of returned misclassifications
-               ) -> list[tuple[Any, float]]: # misclassifications and predicted probabilities
+def get_mismatch(model: xgb.XGBModel,  # trained ML model from train_ml_model
+                 X_test: pd.DataFrame,  # motif dataframe for validation
+                 y_test: list,  # test labels
+                 n: int = 10  # number of returned misclassifications
+                 ) -> list[tuple[Any, float]]:  # misclassifications and predicted probabilities
     "analyzes misclassifications of trained machine learning model"
     # Get predictions
     preds = model.predict(X_test)

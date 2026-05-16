@@ -21,7 +21,7 @@
 ### motif
 #### graph
 ##### Added ✨
-- All graph functions (e.g., `compare_glycans`, `subgraph_isomorphism`) now support narrow monosaccharide wildcards (e.g., `Gal/Man` instead of `Hex`)
+- All graph functions (e.g., `compare_glycans`, `subgraph_isomorphism`) now support narrow monosaccharide wildcards (e.g., `Gal/Man` instead of `Hex`) (f85ab80)
 
 ##### Changed 🔄
 - Made glycan graph caching in `glycan_graph_memoize` somewhat faster (cf5e7bd)
@@ -68,7 +68,7 @@
 
 #### draw
 ##### Added ✨
-- When supplied with narrow monosaccharide wildcards, `GlycoDraw` will now draw bisected monosaccharides (e.g., a blue-yellow split rectangle for `GlcNAc/GalNAc`)
+- When supplied with narrow monosaccharide wildcards, `GlycoDraw` will now draw bisected monosaccharides (e.g., a blue-yellow split rectangle for `GlcNAc/GalNAc`) (f85ab80)
 
 ##### Changed 🔄
 - If `draw_method = chem3d`, `GlycoDraw` will now preferentially fetch a realistic conformer from GlycoShape/PDB via `glycontact`, if the user has `glycontact` installed (lazily imported), and only fall back to RDKit if none can be found (7a59d08)
