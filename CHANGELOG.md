@@ -45,6 +45,7 @@
 
 ##### Fixed 🐛
 - Fixed some Oxford sequences (e.g., `A1`, `A2`) being misidentified as blood group glycolipids by `canonicalize_iupac` (9f42561)
+- Fixed `canonicalize_composition` mistaking sialic acid composition blocks as sulfate in compositions such as `H2N2S1Sulf1`
 
 #### tokenization
 ##### Added ✨

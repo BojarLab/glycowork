@@ -1454,6 +1454,12 @@ def test_canonicalize_composition():
     assert result["Hex"] == 9
     assert result["HexNAc"] == 2
     assert result["Neu5Gc"] == 1
+    result = canonicalize_composition("H2N2S1Sulf1")
+    assert result["S"] == 1
+    assert result["Neu5Ac"] == 1
+    result = canonicalize_composition("H2N2S1Sul1")
+    assert result["S"] == 1
+    assert result["Neu5Ac"] == 1
 
 
 def test_parse_glycoform():

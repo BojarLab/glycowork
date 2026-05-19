@@ -44,6 +44,7 @@ _CODE_TO_NAME = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Ne
                  'Hex': 'Hex', 'HexNAc': 'HexNAc', 'HexAc': 'HexNAc', 'Fuc': 'dHex', 'dHex': 'dHex', 'deHex': 'dHex', 'HexA': 'HexA',
                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc', 'HexNc': 'HexNAc', 'hex': 'Hex',
                  'Su': 'S', 's': 'S', 'Sul': 'S', 'p': 'P', 'Pent': 'Pen', 'Xyl': 'Pen', 'Man': 'Hex', 'GlcNAc': 'HexNAc', 'Deoxyhexose': 'dHex'}
+_SULFATE_CODES = frozenset({'Su', 's', 'Sul'})
 _CLASS_POOLS = {
     'O': 'GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S',
     'N': 'GlcNAc',
@@ -268,6 +269,7 @@ def canonicalize_composition(comp: str # Composition in Hex5HexNAc4Fuc1Neu5Ac2 o
     i = 0
     comp = multireplace(comp, {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", '(': '', ')': '', ' ': '', '+': ''})
     n = len(comp)
+    explicit_sulfate = 0
     while i < n:
         # Code initialization
         code = ''
@@ -287,6 +289,15 @@ def canonicalize_composition(comp: str # Composition in Hex5HexNAc4Fuc1Neu5Ac2 o
             comp_dict[name] += num
         else:
             comp_dict[name] = num
+        if code in _SULFATE_CODES:
+            explicit_sulfate += num
+    sulfate_from_sulf = comp_dict.pop('Sulf', 0)
+    total_sulfate = explicit_sulfate + sulfate_from_sulf
+    if total_sulfate:
+        sialic = comp_dict.get('S', 0) - explicit_sulfate
+        if sialic > 0:
+            comp_dict['Neu5Ac'] = sialic + comp_dict.get('Neu5Ac', 0)
+        comp_dict['S'] = total_sulfate
     return comp_dict
 
 
