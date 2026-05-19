@@ -6,7 +6,7 @@ from collections import Counter, deque, defaultdict
 from functools import partial
 from scipy.spatial.distance import cosine
 
-from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species
+from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species, Hex, dHex, HexNAc, HexA, Pen, Sia
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition
 from glycowork.motif.regex import get_match
@@ -426,6 +426,16 @@ def get_k_saccharides(
                     d['Sia'] = d.get('Neu5Ac', 0) + d.get('Neu5Gc', 0)
                 wga_letter_data.append(d)
         wga_letter = pd.DataFrame(wga_letter_data)
+        _class_map = {'Hex': Hex - {'Hex'}, 'dHex': dHex - {'dHex'}, 'HexNAc': HexNAc - {'HexNAc'},
+                      'HexA': HexA - {'HexA'}, 'Pen': Pen - {'Pen'}}
+        if not add_sia:
+            _class_map['Sia'] = Sia - {'Sia'}
+        for cls, members in _class_map.items():
+            if cls not in wga_letter.columns:
+                continue
+            member_cols = [m for m in members if m in wga_letter.columns]
+            if member_cols:
+                wga_letter[cls] = wga_letter[member_cols].fillna(0).sum(axis = 1) + wga_letter[cls].fillna(0)
     counts_dict = {}
     ggraphs = [glycan_to_nxGraph(g) for g in glycans]
     for s in range(2, size + 1):

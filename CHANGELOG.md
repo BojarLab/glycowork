@@ -63,10 +63,11 @@
 
 ##### Changed 🔄
 - Arguments `glycans` and `feature_set` in `quantify_motifs` have been changed to keyword arguments with defaults `glycans = None` (will be inferred from first column if it contains glycans, otherwise needs to be supplied) and `feature_set = ['known', 'exhaustive']` (c5db6a8)
+- Wildcard monosaccharide-only columns (e.g., `dHex`) in `get_k_saccharide` will now also aggregate signal from their specific instances (e.g., `Fuc`) across the dataset (was already working like that for `Sia` and for k>1)
 
 ##### Fixed 🐛
 - `quantify_motifs` can now also be used with full datasets that still have the first column be a glycan string column (fa98caa)
-- `get_k_saccharides` will no longer mistakenly capture narrow linkage wildcards like `b1-3/4` in its feature columns for k=1 (where there should only be monosaccharides)
+- `get_k_saccharides` will no longer mistakenly capture narrow linkage wildcards like `b1-3/4` in its feature columns for k=1 (where there should only be monosaccharides) (c209f85)
 
 #### draw
 ##### Added ✨

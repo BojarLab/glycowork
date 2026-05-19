@@ -2723,6 +2723,8 @@ def test_get_k_saccharides():
     assert 'b1-3/4' not in \
            get_k_saccharides(["{3/6S}Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-3/4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc"], up_to = True,
                              just_motifs = True)[0]
+    assert get_k_saccharides(["Fuc(a1-2)Gal(b1-3)GalNAc", "dHex(a1-3)GlcNAc(b1-4)GlcNAc"], up_to = True)[
+               "dHex"].sum() == 2
 
 
 def test_get_terminal_structures():
