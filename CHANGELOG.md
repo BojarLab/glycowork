@@ -45,7 +45,7 @@
 
 ##### Fixed 🐛
 - Fixed some Oxford sequences (e.g., `A1`, `A2`) being misidentified as blood group glycolipids by `canonicalize_iupac` (9f42561)
-- Fixed `canonicalize_composition` mistaking sialic acid composition blocks as sulfate in compositions such as `H2N2S1Sulf1`
+- Fixed `canonicalize_composition` mistaking sialic acid composition blocks as sulfate in compositions such as `H2N2S1Sulf1` (bb822c8)
 
 #### tokenization
 ##### Added ✨
@@ -66,6 +66,7 @@
 
 ##### Fixed 🐛
 - `quantify_motifs` can now also be used with full datasets that still have the first column be a glycan string column (fa98caa)
+- `get_k_saccharides` will no longer mistakenly capture narrow linkage wildcards like `b1-3/4` in its feature columns for k=1 (where there should only be monosaccharides)
 
 #### draw
 ##### Added ✨
