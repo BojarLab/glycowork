@@ -1953,13 +1953,15 @@ def test_GlycoDataFrame():
     # Paired property
     df_paired = GlycoDataFrame(
         pd.DataFrame({'glycan': ['Gal'], 's1': [1.0], 's2': [2.0]}),
-        contrasts = {'s1': 'control', 's2': 'disease'}, paired = True
+        contrasts = {'s1': 'control', 's2': 'disease'}, paired = True, name = "test_df"
     )
     assert df_paired.paired is True
     assert df_paired.iloc[:1].paired is True  # preserved through slicing
     # Defaults to False
     assert df.paired is False
     assert df2.paired is False
+    assert df_paired.name == "test_df"
+    assert df_paired.iloc[:1].name == "test_df"  # preserved through slicing
 
 
 def test_cohen_d():

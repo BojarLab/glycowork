@@ -326,7 +326,7 @@ def clean_tree(tree: nx.Graph  # tree to clean
 def iupac2mol(iupac: str  # IUPAC-condensed string of the glycan to convert
               ) -> HeteroData | None:  # HeteroData object containing the IUPAC string, the SMILES representation, the RDKit molecule, and the monosaccharide tree
     """Convert a glycan stored given as IUPAC-condensed string into an RDKit molecule while keeping the information of which atom and which bond belongs to which monosaccharide"""
-    if "{" in iupac or "?" in iupac:
+    if "{" in iupac or "?" in iupac or "/" in iupac:
         return None
     # Convert the IUPAC string using GlyLES
     glycan = glyles.Glycan(iupac)

@@ -16,7 +16,7 @@
 #### loader
 ##### Added ✨
 - Added the `GlycoList` class that equips `List` with graph-based matching capabilities (overriding `index`, `remove`, `count`, and `in` with `compare_glycans` isomorphisms) (49c9aeb)
-- Added the `glycans`, `abundance`, `group1`, `group2`, `groups`, and `paired` properties to `GlycoDataFrame` to benefit from `GlycoList` capabilities in `glycans`, get the abundance values via `abundance` and provide functions in `glycowork.motif.analysis` with group labels and information whether data are paired or not (aad159e, c91ee8d)
+- Added the `glycans`, `abundance`, `group1`, `group2`, `groups`, `paired`, and `name` properties to `GlycoDataFrame` to benefit from `GlycoList` capabilities in `glycans`, get the abundance values via `abundance` and provide functions in `glycowork.motif.analysis` with group labels and information whether data are paired or not (aad159e, c91ee8d)
 
 ### motif
 #### graph
@@ -63,7 +63,7 @@
 
 ##### Changed 🔄
 - Arguments `glycans` and `feature_set` in `quantify_motifs` have been changed to keyword arguments with defaults `glycans = None` (will be inferred from first column if it contains glycans, otherwise needs to be supplied) and `feature_set = ['known', 'exhaustive']` (c5db6a8)
-- Wildcard monosaccharide-only columns (e.g., `dHex`) in `get_k_saccharide` will now also aggregate signal from their specific instances (e.g., `Fuc`) across the dataset (was already working like that for `Sia` and for k>1)
+- Wildcard monosaccharide-only columns (e.g., `dHex`) in `get_k_saccharide` will now also aggregate signal from their specific instances (e.g., `Fuc`) across the dataset (was already working like that for `Sia` and for k>1) (6de40f9)
 
 ##### Fixed 🐛
 - `quantify_motifs` can now also be used with full datasets that still have the first column be a glycan string column (fa98caa)
