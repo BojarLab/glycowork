@@ -72,7 +72,12 @@ def preprocess_data(
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         monte_carlo: bool = False,
         # Use Monte Carlo simulation to control for technical variation (will take longer to run)
-        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+        random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+        circadian: bool = False,  # inject sin/cos time features into MissForest
+        circadian_timepoints: int | list | np.ndarray | None = None,  # number of timepoints or explicit time values (only relevant if circadian)
+        circadian_periods: list[int] | None = None,  # cycle lengths to encode (only relevant if circadian)
+        circadian_interval: int = 1,  # time units between timepoints (only relevant if circadian)
+        circadian_replicates: int = 1  # replicates per timepoint (only relevant if circadian)
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str | int], list[
     str | int]]:  # (transformed df, untransformed df, group1 labels, group2 labels)
     "Preprocesses glycomics data by handling missing values with Random Forest imputation, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
@@ -89,12 +94,15 @@ def preprocess_data(
     df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
     df = df.apply(replace_outliers_winsorization, axis = 1)
     if experiment == "diff":
-        df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples)
+        df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples,
+                                  circadian = circadian, timepoints = circadian_timepoints, periods = circadian_periods,
+                                  interval = circadian_interval, replicates = circadian_replicates)
     elif experiment == "anova":
         groups_unq = sorted(set(group1))
         df = impute_and_normalize(df, [[df.columns[i + 1] for i, x in enumerate(group1) if x == g] for g in groups_unq],
-                                  impute = impute,
-                                  min_samples = min_samples)
+                                  impute = impute, min_samples = min_samples,
+                                  circadian = circadian, timepoints = circadian_timepoints, periods = circadian_periods,
+                                  interval = circadian_interval, replicates = circadian_replicates)
     df_org = df.copy(deep = True)
     if transform is None:
         transform = "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(df.iloc[0, 0], "N")) and len(
@@ -1063,7 +1071,7 @@ def get_jtk(
     alpha = get_alphaN(replicates)
     jtk = JTKTest(timepoints, periods, interval, replicates)
     df = df.apply(replace_outliers_winsorization, axis = 1)
-    mf = MissForest()
+    mf = MissForest(circadian = True, timepoints = timepoints, periods = periods, interval = interval, replicates = replicates)
     df = df.replace(0, np.nan)
     annot = df.pop(df.columns[0])
     df = mf.fit_transform(df)

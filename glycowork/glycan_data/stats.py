@@ -98,12 +98,22 @@ def variance_stabilization(data: pd.DataFrame, # dataframe with glycans/motifs a
 class MissForest:
     def __init__(self, regressor: RandomForestRegressor = RandomForestRegressor(n_jobs = -1), # estimator object for each imputation
                  max_iter: int = 5, # number of iterations for imputation process
-                 tol: float = 1e-5 # convergence tolerance
+                 tol: float = 1e-5, # convergence tolerance
+                 circadian: bool = False,  # inject sin/cos time features to exploit periodic structure
+                 timepoints: int | list | np.ndarray | None = None,  # number of timepoints, or explicit time values per column (only relevant if circadian)
+                 periods: list[int] | None = None,  # cycle lengths to encode (e.g., [12, 24]) (only relevant if circadian)
+                 interval: int = 1,  # time units between experimental timepoints (only relevant if circadian)
+                 replicates: int = 1  # replicates per timepoint (only relevant if circadian)
                  ) -> None:
         "A class to perform MissForest imputation adapted from https://github.com/yuenshingyan/MissForest"
         self.regressor = regressor
         self.max_iter = max_iter
         self.tol = tol
+        self.circadian = circadian
+        self.timepoints = timepoints
+        self.periods = periods if periods is not None else [24]
+        self.interval = interval
+        self.replicates = replicates
 
     def fit_transform(self, X: pd.DataFrame # input dataframe with missing values
                       ) -> pd.DataFrame: # imputed dataframe
@@ -111,8 +121,23 @@ class MissForest:
         # Step 1: Initialization
         # Keep track of where NaNs are in the original dataset
         X_nan = X.isnull()
-        # Replace NaNs with median of the column in a new dataset that will be transformed
-        X_transform = X.fillna(X.median())
+        # Replace NaNs with row medians (each glycan's median across its observed samples)
+        row_medians = X.median(axis = 1)
+        if self.circadian and self.timepoints is not None:
+            time_values = np.array(self.timepoints) if isinstance(self.timepoints, (list, np.ndarray)) \
+                else np.repeat(np.arange(self.timepoints) * self.interval, self.replicates)[:X.shape[1]]
+            phases = time_values % max(self.periods)
+            X_transform = X.copy()
+            # Phase-aware fill: use same glycan's median at same circadian phase
+            for phase in np.unique(phases):
+                phase_cols = X.columns[phases == phase]
+                phase_medians = X[phase_cols].median(axis = 1)
+                for col in phase_cols:
+                    X_transform[col] = X[col].fillna(phase_medians)
+            # Fall back to global row median if all same-phase values are also NaN
+            X_transform = X_transform.apply(lambda col: col.fillna(row_medians))
+        else:
+            X_transform = X.apply(lambda col: col.fillna(row_medians))
         # Sort columns by the number of NaNs (ascending)
         sorted_columns = X_nan.sum().sort_values().index
         for _ in range(self.max_iter):
@@ -143,7 +168,12 @@ class MissForest:
 def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences in first col and abundances in subsequent cols
                          groups: list[list[str]], # nested list of column name lists, one list per group
                          impute: bool = True, # replaces zeroes with predictions from MissForest
-                         min_samples: float = 0.1 # percent of samples that need non-zero values for glycan to be kept
+                         min_samples: float = 0.1, # percent of samples that need non-zero values for glycan to be kept
+                         circadian: bool = False, # inject sin/cos time features into MissForest
+                         timepoints: int | list | np.ndarray | None = None, # number of timepoints, or explicit time values per column (only relevant if circadian)
+                         periods: list[int] | None = None, # cycle lengths to encode (e.g., [12, 24]) (only relevant if circadian)
+                         interval: int = 1, # time units between experimental timepoints (only relevant if circadian)
+                         replicates: int = 1 # replicates per timepoint (only relevant if circadian)
                          ) -> pd.DataFrame: # normalized dataframe in same style as input
     "discards rows with too many missings, imputes the rest, and normalizes"
     df = df_in.copy()
@@ -163,7 +193,8 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     if len(old_cols):
         df.columns = df.columns.astype(str)
     if impute:
-        mf = MissForest()
+        mf = MissForest(circadian = circadian, timepoints = timepoints, periods = periods,
+                        interval = interval, replicates = replicates)
         df = df.replace(0, np.nan)
         df = mf.fit_transform(df)
     df = (df / df.sum(axis = 0)) * 100
