@@ -202,7 +202,7 @@ def process_complex_pattern(p: str, # Pattern component
                 p2_keys[0].endswith(')')
     len_motif = [v * len_motif for v in list(p2.values())[0]]
     if not any(le in len_motif for le in len_matches_comb) and '{' in p:
-        return False, False
+        return False
     matches = list(matches) if not isinstance(matches, list) else matches
     if '=' in p or '<!' in p or '?!' in p:
         matches = unwrap(matches)
@@ -218,12 +218,8 @@ def process_complex_pattern(p: str, # Pattern component
     elif '?=' in p:
         len_look = p.split('=')[1]
         len_look = len([l for l in len_look.split('-') if l]) + len_look.count('-')
-        if matches and not max(len(m) for m in matches) > len_look:
-            matches = [[m[1]] for m in matches if len(m) > 1]
-            return matches, True
-        else:
-            matches = [m[:-len_look] for m in matches]
-    return matches, False
+        matches = [m[:-len_look] for m in matches]
+    return matches
 
 
 def match_it_up(pattern_components: list[str], # Pattern chunks
@@ -232,21 +228,19 @@ def match_it_up(pattern_components: list[str], # Pattern chunks
                 ) -> list[tuple[str, list[list[int]]]]: # [(pattern, matches)]
     "Find pattern component matches in glycan"
     pattern_matches = []
-    lookahead = False
     for p in pattern_components:
         p2 = convert_pattern_component(p)
         if isinstance(p2, dict):
             first_key = list(p2.keys())[0]
             match_location = {k for s, k in [('^', 'start'), ('$', 'end'), ('%', 'internal')] if s in first_key} or None
-            res, la = process_complex_pattern(p, p2, ggraph, glycan, match_location)
-            lookahead = lookahead or la
+            res = process_complex_pattern(p, p2, ggraph, glycan, match_location)
         else:
             match_location = {k for s, k in [('^', 'start'), ('$', 'end'), ('%', 'internal')] if s in p2} or None
             p2 = glycan_to_nxGraph(p2.strip('^$%'))
             res = process_simple_pattern(p2, ggraph, match_location)
         res = sorted(res) if isinstance(res, list) and all(len(inner) == 1 for inner in res) else res
         pattern_matches.append((p, res) if res else (p, []))
-    return pattern_matches, lookahead
+    return pattern_matches
 
 
 def all_combinations(nested_list: list[list[int]], # List of match indices
@@ -348,10 +342,7 @@ def do_trace(start_pattern: tuple[str, list[list[int]]], # (Pattern, Match indic
             if to_extend:
                 extend = to_extend[-1] if not isinstance(to_extend, bool) else []
                 extend = list(extend) if isinstance(extend, tuple) else extend
-                if len(extend) == 1 and extend[0] < trace[-1]:
-                    trace = trace[:-1] + extend + [trace[-1]]
-                else:
-                    trace.extend(extend)
+                trace.extend(extend)
                 if extend:
                     used_patterns.append(component)
                 extended = True
@@ -398,11 +389,8 @@ def trace_path(pattern_matches: list[tuple[str, list[list[int]]]], # [(pattern, 
 
 
 def fill_missing_in_list(lists: list[list[int]], # Lists of indices
-                         lookahead: bool = False # Whether lookahead inserted extra nodes to trim
                          ) -> list[list[int]]: # Lists with gaps filled
     "Fill missing integers in lists to make full ranges"
-    if lookahead:
-        lists = [le[:-1] for le in lists]
     filled_lists = []
     for sublist in lists:
         if not sublist:
@@ -447,10 +435,10 @@ def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.
         ggraph = glycan
         glycan = graph_to_string(ggraph)
     pattern_components = preprocess_pattern(pattern) if isinstance(pattern, str) else pattern
-    pattern_matches, lookahead = match_it_up(pattern_components, glycan, ggraph)
+    pattern_matches = match_it_up(pattern_components, glycan, ggraph)
     if pattern_matches:
         traces, _ = trace_path(pattern_matches, ggraph)
-        traces = fill_missing_in_list(traces, lookahead)
+        traces = fill_missing_in_list(traces)
         if traces:
             return True if not return_matches else format_retrieved_matches(traces, ggraph)
         else:

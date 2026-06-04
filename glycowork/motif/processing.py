@@ -1472,8 +1472,7 @@ def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
     if glycan.endswith("GlcNAc(b1-?)GlcNAc"):
         glycan = glycan.replace("GlcNAc(b1-?)GlcNAc", "GlcNAc(b1-4)GlcNAc")
     if tax['Kingdom'] == 'Animalia':
-        glycan = glycan.replace("dHex", "Fuc")
-        glycan = glycan.replace("Gal(b1-?)GlcNAc", "Gal(b1-3/4)GlcNAc")
+        glycan = glycan.replace("dHex", "Fuc").replace("Gal(b1-?)GlcNAc", "Gal(b1-3/4)GlcNAc").replace("Fuc(a1-?)[Gal(b1-?)]", "Fuc(a1-3/4)[Gal(b1-3/4)]").replace("Man(a1-?)Man", "Man(a1-2/3/6)Man")
     if "GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc" in glycan:
         glycan = glycan.replace("GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc", "GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" if tax['Class'] == 'Mammalia' else "GlcNAc(b1-4)[Fuc(a1-3/6)]GlcNAc")
     for old, new in [("Neu5Ac(a2-?)Neu5Ac", "Neu5Ac(a2-8)Neu5Ac"), ("Neu5Ac(a2-?)", "Neu5Ac(a2-3/6)"), ("Neu5Gc(a2-?)Neu5Gc", "Neu5Gc(a2-8)Neu5Gc"), ("Neu5Gc(a2-?)", "Neu5Gc(a2-3/6)"),

@@ -1644,6 +1644,7 @@ def test_max_specify_glycan():
     assert max_specify_glycan("Neu5Ac(a2-?)Gal(b1-?)GlcNAc(b1-2)Man(a1-3)[Gal(b1-?)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert max_specify_glycan("Fuc(a1-?)Gal(b1-4)Glc") == "Fuc(a1-2)Gal(b1-4)Glc"
     assert max_specify_glycan("GalOS(b1-4)Glc") == "Gal3/6S(b1-4)Glc"
+    assert max_specify_glycan("Fuc(a1-?)[Gal(b1-?)]GlcNAc(b1-2)Man(a1-3/6)[Man(a1-?)Man(a1-3/6)Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)Man(a1-3/6)[Man(a1-2/3/6)Man(a1-3/6)Man(b1-4)GlcNAc(b1-4)GlcNAc"
 
 
 def test_unwrap():
