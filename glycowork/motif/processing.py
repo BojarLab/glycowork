@@ -1085,8 +1085,6 @@ def looks_like_linearcode(glycan: str) -> bool:
     glycan = glycan.strip()
     if not glycan or '-' in glycan or any(sig in glycan for sig in ('RES', 'S=', '@')):
         return False
-    if ';' in glycan:
-        return True
     if re.search(r'[^A-Za-z0-9\[\]\(\),/;? =%]', glycan):
         return False
     base = r'(?:GN|AN|NN|NJ|G|A|M|N|K|W|L|I|H|F|X|B|R|U|O|P|E)'
@@ -1123,7 +1121,7 @@ def looks_like_oxford(glycan: str) -> bool:
 
 
 def _sort_mono_mods(m):
-    match = re.match(r'([A-Z][a-z]{2,})(.*)', m.group())
+    match = re.match(r'(Neu5Ac|Neu5Gc|[A-Z][a-z]{2,})(.*)', m.group())
     if not match or not match.group(2):
         return m.group()
     base, mod_str = match.group(1), match.group(2)

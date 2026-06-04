@@ -11,6 +11,11 @@ jobs:
             python-version: '3.11'
             cache: "pip"
             cache-dependency-path: pyproject.toml
+        - name: Cache HuggingFace models
+          uses: actions/cache@v4
+          with:
+            path: ~/.cache/huggingface/hub
+            key: hf-glycowork-models-v1
         - name: Test with nbdev
           shell: bash
           run: |

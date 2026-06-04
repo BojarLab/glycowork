@@ -51,6 +51,7 @@
 ##### Fixed 🐛
 - Fixed some Oxford sequences (e.g., `A1`, `A2`) being misidentified as blood group glycolipids by `canonicalize_iupac` (9f42561)
 - Fixed `canonicalize_composition` mistaking sialic acid composition blocks as sulfate in compositions such as `H2N2S1Sulf1` (bb822c8)
+- Fixed `oxford_to_iupac` wrongly ordering `NeuOAc5Ac` instead of `Neu5AcOAc`
 
 #### tokenization
 ##### Added ✨
@@ -61,7 +62,7 @@
 
 ##### Fixed 🐛
 - `composition_to_mass` now correctly factors in the extra methylation (former ring oxygen) that happens in the combination of `modification == 'reduced'` and `sample_prep == 'permethylated'` (30e1a46)
-- Fixed incompatibility of `condense_composition_matching` with `scikit-learn >= 1.9.0`
+- Fixed incompatibility of `condense_composition_matching` with `scikit-learn >= 1.9.0` (34d839f)
 
 #### annotate
 ##### Added ✨
@@ -92,7 +93,7 @@
 
 ##### Fixed 🐛
 - Fixed column access in ALR-treatment of `get_glycanova` (aad159e)
-- Fixed warnings when using `scikit-learn>=1.9.0` due to the deprecated `penalty` keyword arg in `sklearn.linear_model.LogisticRegression` used in `multi_feature_scoring`
+- Fixed warnings when using `scikit-learn>=1.9.0` due to the deprecated `penalty` keyword arg in `sklearn.linear_model.LogisticRegression` used in `multi_feature_scoring` (34d839f)
 
 ##### Deprecated ⚠️
 - Deprecated `glycan_col_name` keyword argument in `get_pvals_motif` and `characterize_monosaccharide`; will be auto-detected (aad159e)

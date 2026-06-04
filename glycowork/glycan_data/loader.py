@@ -420,7 +420,7 @@ def download_model(file_id: str # Filename in the HuggingFace repo
                    ) -> str:  # file path to cached model
     "Download the model weights file from HuggingFace Hub"
     from huggingface_hub import hf_hub_download
-    file_path = hf_hub_download(repo_id = "DBojar/glycowork_models", filename = file_id)
+    file_path = hf_hub_download(repo_id = "DBojar/glycowork_models", filename = file_id, etag_timeout = 30)
     print("Download completed.")
     return file_path
 
