@@ -263,11 +263,7 @@ def condense_composition_matching(matched_composition: list[str] # List of match
                                   ) -> list[str]: # Minimal list of representative glycans
     """Find minimum set of glycans characterizing matched composition"""
     # Establish glycan equality given the wildcards
-    match_matrix = pd.DataFrame(
-        [[compare_glycans(k, j)
-          for j in matched_composition] for k in matched_composition],
-        columns = matched_composition
-    )
+    match_matrix = [[compare_glycans(k, j) for j in matched_composition] for k in matched_composition]
     # Cluster glycans by pairwise equality (given the wildcards)
     clustering = DBSCAN(eps = 1, min_samples = 1).fit(match_matrix)
     num_clusters = len(set(clustering.labels_))

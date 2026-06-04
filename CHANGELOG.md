@@ -41,7 +41,7 @@
 - Universal Input via `canonicalize_iupac` can now deal with more monosaccharide cases, such as `Ribp`, `Glc1OMe`, or single-monosaccharide glycans such as `aDGlcpA` (6754bbf, 426ff9d)
 - Universal Input via `canonicalize_iupac` can now more robustly handle modifications in CSDB-linear, such as in `Ac(1-5)aXNeup(2-6)[Ac(1-2)]bDGalpN(1-4)bDGalp(1-4)bDGlcp`, `S-3)bDGlcpA(1-3)bDGalp(1-4)[Ac(1-2)]bDGlcpN(1-3)bDGalp(1-4)bDGlcp`, `-4)[S-2)]aD3,6anhGalp(1-3)[S-2)]bDGalp(1-`, or `Ac(1-2)[xXEt?N(1-P-6)]bDGlcpN(1-3)bDManp(1-4)bDGlcp`, as well as more robustly strip reducing end anomeric indicator (99942e8, a152c47, d6c3d56, ced60fc, a6882db)
 - Universal Input via `canonicalize_iupac` can now parse more complex Oxford sequences, such as `F(6)A2G(4)2S(3,3)2` (9f42561)
-- `max_specify_glycan` will now also specify these cases: `("Fuc(a1-?)GlcNAc", "Fuc(a1-3/4)GlcNAc")`, `("Fuc(a1-?)]GlcNAc", "Fuc(a1-3/4)]GlcNAc")`, `("Fuc(a1-?)Gal(", "Fuc(a1-2)Gal(")`, `("GalOS", "Gal3/6S")`, `("GlcNAcOS", "GlcNAc6S")`, `("Fuc(a1-?)[Gal(b1-?)]", "Fuc(a1-3/4)[Gal(b1-3/4)]")`, `("Man(a1-?)Man", "Man(a1-2/3/6)Man")` (f3b4389)
+- `max_specify_glycan` will now also specify these cases: `("Fuc(a1-?)GlcNAc", "Fuc(a1-3/4)GlcNAc")`, `("Fuc(a1-?)]GlcNAc", "Fuc(a1-3/4)]GlcNAc")`, `("Fuc(a1-?)Gal(", "Fuc(a1-2)Gal(")`, `("GalOS", "Gal3/6S")`, `("GlcNAcOS", "GlcNAc6S")`, `("Fuc(a1-?)[Gal(b1-?)]", "Fuc(a1-3/4)[Gal(b1-3/4)]")`, `("Man(a1-?)Man", "Man(a1-2/3/6)Man")` (f3b4389, 487dad4)
 - Oxford parsing in `canonicalize_iupac` will now detect hybrid glycans and will add extra mannoses to the `a1-6` branch (c4ba7f9)
 
 ##### Changed 🔄
@@ -61,6 +61,7 @@
 
 ##### Fixed 🐛
 - `composition_to_mass` now correctly factors in the extra methylation (former ring oxygen) that happens in the combination of `modification == 'reduced'` and `sample_prep == 'permethylated'` (30e1a46)
+- Fixed incompatibility of `condense_composition_matching` with `scikit-learn >= 1.9.0`
 
 #### annotate
 ##### Added ✨
@@ -91,6 +92,7 @@
 
 ##### Fixed 🐛
 - Fixed column access in ALR-treatment of `get_glycanova` (aad159e)
+- Fixed warnings when using `scikit-learn>=1.9.0` due to the deprecated `penalty` keyword arg in `sklearn.linear_model.LogisticRegression` used in `multi_feature_scoring`
 
 ##### Deprecated ⚠️
 - Deprecated `glycan_col_name` keyword argument in `get_pvals_motif` and `characterize_monosaccharide`; will be auto-detected (aad159e)
@@ -101,4 +103,4 @@
 
 ##### Deprecated ⚠️
 - Deprecated `process_occurrence`, `process_main_branch`, and `process_question_mark` as they are handled in-line now (28894d8)
-- Deprecated the `lookahead` keyword argument in `fill_missing_in_list` (handled automatically)
+- Deprecated the `lookahead` keyword argument in `fill_missing_in_list` (handled automatically) (487dad4)

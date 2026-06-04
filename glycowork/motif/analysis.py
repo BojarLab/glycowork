@@ -33,6 +33,10 @@ from sklearn.multiclass import OneVsRestClassifier
 from sklearn.feature_selection import SelectFromModel
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn import __version__ as _sklearn_version
+# sklearn 1.8 deprecated LogisticRegression's 'penalty' in favor of 'l1_ratio'; pick the right kwarg once
+_LR_L1 = {'l1_ratio': 1} if tuple(map(int, _sklearn_version.split('.')[:2])) >= (1, 8) else {'penalty': 'l1'}
+_LR_L2 = {'l1_ratio': 0} if 'l1_ratio' in _LR_L1 else {'penalty': 'l2'}
 
 from glycowork.glycan_data.loader import df_species, strip_suffixes, download_model, GlycoDataFrame
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
@@ -1285,13 +1289,13 @@ def multi_feature_scoring(
     else:
         y = group1
     X = df.T
-    model = LogisticRegression(penalty = 'l1', solver = 'liblinear', random_state = random_state)
+    model = LogisticRegression(**_LR_L1, solver = 'liblinear', random_state = random_state)
     model.fit(X.values, y)
     model = SelectFromModel(model, prefit = True)
     X_selected = model.transform(X.values)
     selected_features = X.columns[model.get_support()]
     print("Optimal features:", selected_features)
-    model = LogisticRegression(penalty = 'l2', solver = 'liblinear', random_state = random_state)
+    model = LogisticRegression(**_LR_L2, solver = 'liblinear', random_state = random_state)
     model.fit(X_selected, y)
     # Evaluate ROC AUC on the selected features
     y_scores = model.predict_proba(X_selected)[:, 1]
