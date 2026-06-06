@@ -9,7 +9,7 @@
 
 ### glycan_data
 - Curated datasets are now stored in a dedicated folder `.glycan_data.datasets`, for tidiness (c91ee8d)
-- Added new curated glycomics datasets: `human_interstitialfluid_N_GPST000651`, `celllines_colorectal_O_PMID32236654`, `celllines_colorectal_GSL_PMID35489554`, `human_serum_ovarian_N_PMID41366864`, `mouse_platelet_N_101161ATVBAHA126324757` (ce499ae, 7ddd6c2, c91ee8d, 086d589, c29ceeb)
+- Added new curated glycomics datasets: `human_interstitialfluid_N_GPST000651`, `celllines_colorectal_O_PMID32236654`, `celllines_colorectal_GSL_PMID35489554`, `human_serum_ovarian_N_PMID41366864`, `mouse_platelet_N_101161ATVBAHA126324757` (ce499ae, 7ddd6c2, c91ee8d, 086d589, c29ceeb, e6f59e6)
 - Renamed and re-curated `glycomics_mouse_gastric_O_GPST000464` to `glycomics_mouse_gastric_O_PMID40667878` (c91ee8d)
 - Added new `contrasts` file to catalog which sample belongs to which comparison group for the curated glycomics datasets (aad159e)
 
@@ -85,6 +85,7 @@
 
 ##### Fixed 🐛
 - Made SVG parsing in `annotate_figure` more robust (e3dce0e)
+- Glycans with `/` in their sequence can now be saved with the glycan name as the filename in `GlycoDraw` without error
 
 #### analysis
 ##### Changed 🔄

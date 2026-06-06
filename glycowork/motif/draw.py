@@ -1484,8 +1484,7 @@ def GlycoDraw(
     d2.append(d)
 
     if filepath:
-        filepath = Path(filepath)
-        filepath = filepath.with_name(filepath.name.replace('?', '_'))
+        filepath = Path(str(filepath).replace(glycan, re.sub(r'[<>:"/\\|?*]', '_', glycan)))
         data = d2.as_svg()
         data = data.replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
         if filepath.suffix.lower() == '.svg':
