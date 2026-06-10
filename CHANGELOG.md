@@ -85,7 +85,7 @@
 
 ##### Fixed 🐛
 - Made SVG parsing in `annotate_figure` more robust (e3dce0e)
-- Glycans with `/` in their sequence can now be saved with the glycan name as the filename in `GlycoDraw` without error
+- Glycans with `/` in their sequence can now be saved with the glycan name as the filename in `GlycoDraw` without error (edba778)
 
 #### analysis
 ##### Changed 🔄

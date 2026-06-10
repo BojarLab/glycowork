@@ -1242,7 +1242,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     # Open linkages in front of branches (e.g., "1-[")
     glycan = re.sub(r'([0-9])\-([\[\]])', r'\1-?\2', glycan)
     # Open linkages in front of branches (with missing information) (e.g., "c-[")
-    glycan = re.sub(r'([a-z])\-([\[\]])', r'\1?1-?\2', glycan)
+    glycan = re.sub(r'([a-zA-Z])\-([\[\]])', r'\1?1-?\2', glycan)
     # Branches without linkages (e.g., "[GalGlcNAc]")
     glycan = re.sub(r'(\[[a-zA-Z]+)(\])', r'\1?1-?\2', glycan)
     # Missing linkages in front of branches (e.g., "c[G")
@@ -1266,6 +1266,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                 glycan = f'{glycan[:idx-2]}({glycan[idx-2:idx+2]}){glycan[idx+2:]}'
             elif (glycan[idx-1].isnumeric()) and bool(re.search(r'[A-Z]', glycan[idx+1])):
                 glycan = f'{glycan[:idx-2]}({glycan[idx-2:idx+1]}?){glycan[idx+1:]}'
+    glycan = re.sub(r'([A-Za-z0-9])([ab])([12])-([\d?]+)', r'\1(\2\3-\4)', glycan)  # Wrap bare specified linkages (e.g. Neu5Aca2-6) left naked when other parens disabled the block above
     # Canonicalize reducing end
     if bool(re.search(r'[a-z]ol', glycan)):
         glycan = glycan[:-2] if 'Glcol' not in glycan else f'{glycan[:-2]}-ol'
@@ -1338,7 +1339,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     glycan = re.sub(r'(\-ol)([0-9]?[SP])', r'\2\1', glycan)  # Gal-olS to GalS-ol
     glycan = re.sub(r'([1-9]?[SP])-([A-Za-n]+)', r'\2\1', glycan)  # S-Gal to GalS
     # Handle malformed things like Gal-GlcNAc in an otherwise properly formatted string
-    glycan = re.sub(r'([a-z])\?', r'\1(?', glycan)
+    glycan = re.sub(r'([a-zA-Z])\?', r'\1(?', glycan)
     glycan = re.sub(r'(~\([c-z])([1-2])-', r'\1(?\2-', glycan)
     glycan = re.sub(r'-([\?2-9])([A-Z])', r'-\1)\2', glycan)
     glycan = re.sub(r'([\?2-9])([\[\]])', r'\1)\2', glycan)
