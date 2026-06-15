@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import drawsvg as draw
 import warnings
+from huggingface_hub.errors import LocalEntryNotFoundError, HfHubHTTPError
 import importlib
 import matplotlib
 matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
@@ -7143,12 +7144,15 @@ def test_prep_model(model_type: str, num_classes: int, expected_class: type):
 
 
 def test_prep_model_trained():
-    model = prep_model("LectinOracle", num_classes=1, trained=True)
-    assert isinstance(model, LectinOracle)
-    with warnings.catch_warnings():
-      warnings.simplefilter("ignore", UserWarning)
-      model = prep_model("SweetNet", num_classes=1, trained=True)
-      assert isinstance(model, SweetNet)
+    try:
+      model = prep_model("LectinOracle", num_classes=1, trained=True)
+      assert isinstance(model, LectinOracle)
+      with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        model = prep_model("SweetNet", num_classes=1, trained=True)
+        assert isinstance(model, SweetNet)
+    except (LocalEntryNotFoundError, HfHubHTTPError) as e:
+      pytest.skip(f"HuggingFace Hub unavailable: {e}")
     with pytest.warns(UserWarning, match="No pretrained GIFFLAR model is currently available"):
       model = prep_model("GIFFLAR", num_classes=1, trained=True)
 
