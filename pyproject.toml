@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # Project metadata
 [project]
 name = "glycowork"
-version = "1.8.1"
+version = "1.9.0"
 description = "Package for processing and analyzing glycans"
 readme = "README.md"
 authors = [
@@ -15,18 +15,18 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent"
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "numpy",
     "matplotlib",
     "scikit-learn",
     "networkx>=3.0",
     "statsmodels",
-    "scipy",
+    "scipy>=1.16",
     "seaborn",
     "bokeh",
     "IPython",
-    "pandas>=1.3",
+    "pandas>=2.1",
     "setuptools>=64.0",
     "huggingface_hub>=0.16.0",
     "drawSvg~=2.0",
@@ -56,7 +56,8 @@ dev = [
     "pubchempy",
     "requests",
     "py3Dmol",
-    "pytest"
+    "pytest",
+    "glycontact>=0.3.3"
 ]
 ml = [
     "torch_geometric",

@@ -332,8 +332,6 @@
   "btype4": "Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GalNAc",
   "hantigen": "Fuc(a1-2)Gal(b1-4)GlcNAc",
   "bloodgrouph": "Fuc(a1-2)Gal(b1-4)GlcNAc",
-  "a1": "Fuc(a1-2)[GalNAc(a1-3)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc",
-  "a2": "Fuc(a1-2)[GalNAc(a1-3)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc",
   "b1": "Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc",
   "b2": "Fuc(a1-2)[Gal(a1-3)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc",
   "lnfp1": "Fuc(a1-2)Gal(b1-3)GlcNAc(b1-3)Gal(b1-4)Glc-ol",
