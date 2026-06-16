@@ -24,8 +24,8 @@
 - `MissForest` now has a `circadian` API (also exposed in `impute_and_normalize`, to fine-tune data imputation of rhythmic data (starting from the same-phase median, instead of the overall median) (4305377)
 
 ##### Fixed 🐛
-- Fixed behavior of `hotellings_t2` when `paired=True`
-- Fixed `get_glycoform_diff` mutating its input
+- Fixed behavior of `hotellings_t2` when `paired=True` (e419fc4)
+- Fixed `get_glycoform_diff` mutating its input (e419fc4)
 
 ### motif
 #### graph
@@ -51,7 +51,7 @@
 
 ##### Changed 🔄
 - Universal Input via `canonicalize_iupac` now is more robust to modified reducing ends in IUPAC-extended glycans (6754bbf)
-- `canonicalize_iupac` has again been made more robust against typos and personal idiosyncrasies in nomenclature (39b1d25, 9f57fa5)
+- `canonicalize_iupac` has again been made more robust against typos and personal idiosyncrasies in nomenclature (39b1d25, 9f57fa5, e419fc4)
 
 ##### Fixed 🐛
 - Fixed some Oxford sequences (e.g., `A1`, `A2`) being misidentified as blood group glycolipids by `canonicalize_iupac` (9f42561)
@@ -106,7 +106,7 @@
 ##### Fixed 🐛
 - Fixed column access in ALR-treatment of `get_glycanova` (aad159e)
 - Fixed warnings when using `scikit-learn>=1.9.0` due to the deprecated `penalty` keyword arg in `sklearn.linear_model.LogisticRegression` used in `multi_feature_scoring` (34d839f)
-- Fixed edge case where `get_glycanova` could assign effect sizes to wrong glycans, if glycans had been dropped due to variance filtering
+- Fixed edge case where `get_glycanova` could assign effect sizes to wrong glycans, if glycans had been dropped due to variance filtering (e419fc4)
 
 ##### Deprecated ⚠️
 - Deprecated `glycan_col_name` keyword argument in `get_pvals_motif` and `characterize_monosaccharide`; will be auto-detected (aad159e)
