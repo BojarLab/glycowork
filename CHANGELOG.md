@@ -57,6 +57,8 @@
 #### tokenization
 ##### Added ✨
 - The `modification` keyword argument in `mz_to_composition` etc now also accepts `procainamide` as an argument (e4a2a40)
+- `mz_to_composition` and `mz_to_structures` now have a new `max_charge` keyword argument that sets the maximum applicable charge state as well as the ion mode
+- `mz_to_composition` and `mz_to_structures` now also support ppm-level mass tolerances via the new `tolerance_unit` keyword argument that allows users to switch between Da and ppm
 
 ##### Changed 🔄
 - `mz_to_composition` now also filters by provided `glycan_class` if a user provides a custom `df_use` (ab57479)
@@ -64,6 +66,10 @@
 ##### Fixed 🐛
 - `composition_to_mass` now correctly factors in the extra methylation (former ring oxygen) that happens in the combination of `modification == 'reduced'` and `sample_prep == 'permethylated'` (30e1a46)
 - Fixed incompatibility of `condense_composition_matching` with `scikit-learn >= 1.9.0` (34d839f)
+
+##### Deprecated ⚠️
+- Removed the keyword argument `mode` from `mz_to_composition` and `mz_to_structures`; will be handled by the new `max_charge` instead
+- Removed the `doubly_charged` option from the `extras` keyword argument in `mz_to_composition`; will be handled by the new `max_charge` instead
 
 #### annotate
 ##### Added ✨

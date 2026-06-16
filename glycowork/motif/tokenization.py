@@ -170,19 +170,20 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
 
 
 def mz_to_composition(mz_value: float, # m/z value from mass spec
-                      mode: str = 'negative', # MS mode: positive/negative
+                      max_charge: int = -2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
                       mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                       modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide
                       sample_prep: str = 'underivatized', # Sample preparation method: underivatized/permethylated/peracetylated
                       mass_tolerance: float = 0.5, # Mass tolerance for matching
+                      tolerance_unit: str = "Da",  # Unit of mass_tolerance: "Da" (absolute) or "ppm"
                       kingdom: str = 'Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
                       glycan_class: str = 'all', # Glycan class: N/O/lipid/free/all
                       df_use: pd.DataFrame | None = None, # Custom glycan database
                       filter_out: set[str] | None = None, # Monosaccharides to ignore during composition finding
                       deprioritized: set[str] | None = {"Me", "HexA", "PCho"}, # Monosaccharides to use only as fallback if no other composition matches
-                      extras: list[str] = ["doubly_charged"], # Additional operations: adduct/doubly_charged
+                      extras: list[str] = [], # Additional operations: adduct
                       adduct: str | None = None, # Chemical formula of adduct that contributes to m/z, e.g., "C2H4O2"
-                      mass_tag: float | None = None # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA, 219.21 for 2AB+procA), subtracted from mz_value
+                      mass_tag: float | None = None, # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA, 219.21 for 2AB+procA), subtracted from mz_value
                       ) -> list[dict[str, int]]: # List of matching compositions
     """Map m/z value to matching monosaccharide composition"""
     if df_use is None:
@@ -200,44 +201,29 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
         mz_value -= calculate_adduct_mass(adduct, mass_value)
     if mass_tag:
         mz_value -= mass_tag
-    adduct_mass = mass_dict['Acetate'] if mode == 'negative' else mass_dict['Na+']
+    adduct_mass = mass_dict['Acetate'] if max_charge < 0 else mass_dict['Na+']
     # Theoretical m/z offset for proton ionization: [M-H]- or [M+H]+
-    ion_offset = -HYDROGEN_MASS if mode == 'negative' else HYDROGEN_MASS
+    ion_offset = -HYDROGEN_MASS if max_charge < 0 else HYDROGEN_MASS
+    tol = mass_tolerance if tolerance_unit == "Da" else mz_value * mass_tolerance / 1e6
     comp_pool = [dict(t) for t in {tuple(d.items()) for d in df_use.Composition}]
-    fallback, cache = [], {}
-    # Iterate over the composition pool; compare theoretical m/z against raw observed value for each ionization scenario
-    for comp in comp_pool:
-        mass = composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, modification = modification)
-        cache[mass] = comp
-        if abs(mass + ion_offset - mz_value) < mass_tolerance:
-            if not filter_out.intersection(comp.keys()):
-                if not deprioritized.intersection(comp.keys()):
+    masses = [(comp, composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep,
+                                         modification = modification)) for comp in comp_pool if
+              not filter_out.intersection(comp.keys())]
+    # Ionization scenarios in Occam order (lower charge first, proton before adduct), each generalized to z protons or one adduct plus z-1 protons
+    scenarios = [('proton', z) for z in range(1, abs(max_charge) + 1)] + (
+        [('adduct', z) for z in range(1, abs(max_charge) + 1)] if "adduct" in extras else [])
+    scenarios.sort(key = lambda s: (s[1], s[0] == 'adduct'))
+    fallback = []
+    # Compare each composition's theoretical m/z against the observed value; return first non-deprioritized hit, else first deprioritized fallback
+    for kind, z in scenarios:
+        for comp, mass in masses:
+            observed = (mass + z * ion_offset) / z if kind == 'proton' else (mass + (
+                        z - 1) * ion_offset + adduct_mass) / z
+            if abs(observed - mz_value) < tol:
+                if deprioritized.intersection(comp.keys()):
+                    fallback.append(comp)
+                else:
                     return [comp]
-                fallback.append(comp)
-    if "adduct" in extras:
-        # Adduct ions: [M+Acetate]- or [M+Na]+; no proton involved
-        for mass, comp in cache.items():
-            if abs(mass + adduct_mass - mz_value) < mass_tolerance:
-                if not filter_out.intersection(comp.keys()):
-                    if not deprioritized.intersection(comp.keys()):
-                        return [comp]
-                    fallback.append(comp)
-    if "doubly_charged" in extras:
-        # Doubly-charged proton ions: [M-2H]2- or [M+2H]2+
-        for mass, comp in cache.items():
-            if abs((mass + 2 * ion_offset) / 2 - mz_value) < mass_tolerance:
-                if not filter_out.intersection(comp.keys()):
-                    if not deprioritized.intersection(comp.keys()):
-                        return [comp]
-                    fallback.append(comp)
-        if "adduct" in extras:
-            # Doubly-charged mixed ions: [M+H+adduct]2+ or [M-H+adduct]2-
-            for mass, comp in cache.items():
-                if abs((mass + ion_offset + adduct_mass) / 2 - mz_value) < mass_tolerance:
-                    if not filter_out.intersection(comp.keys()):
-                        if not deprioritized.intersection(comp.keys()):
-                            return [comp]
-                        fallback.append(comp)
     return fallback[:1]
 
 
@@ -252,7 +238,7 @@ def match_composition_relaxed(composition: dict[str, int], # Dictionary indicati
         df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
     # Subset for glycans with the right number of monosaccharides
     comp_count = sum(composition.values())
-    len_distr = [len(k) - (len(k)-1)/2 for k in min_process_glycans(df_use.glycan.values.tolist())]
+    len_distr = [(len(k)+1)//2 for k in min_process_glycans(df_use.glycan.values.tolist())]
     idx = [i for i, length in enumerate(len_distr) if length == comp_count]
     output_list = df_use.iloc[idx, :].glycan.values.tolist()
     output_compositions = [glycan_to_composition(k) for k in output_list]
@@ -321,10 +307,11 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
                      glycan_class: str, # Glycan class: N/O/lipid/free
                      kingdom: str = 'Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
                      abundances: pd.DataFrame | None = None, # Sample abundances matrix
-                     mode: str = 'negative', # MS mode: positive/negative
+                     max_charge: int = -2, # Signed charge ceiling: sign sets ion mode (negative/positive), magnitude the highest charge state z considered
                      mass_value: str = 'monoisotopic', # Mass type: monoisotopic/average
                      sample_prep: str = 'underivatized', # Sample prep: underivatized/permethylated/peracetylated
                      mass_tolerance: float = 0.5, # Mass tolerance for matching
+                     tolerance_unit: str = "Da",  # Unit of mass_tolerance: "Da" (absolute) or "ppm"
                      modification: str | None = None, # Reducing end modification: reduced/2AA/2AB/procainamide
                      df_use: pd.DataFrame | None = None, # Custom glycan database
                      filter_out: set[str] | None = None, # Monosaccharides to ignore
@@ -343,8 +330,8 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
     if glycan_class not in {'N', 'O', 'free', 'lipid'}:
         print("Not a valid class for mz_to_composition; currently N/O/free/lipid matching is supported. For everything else, run compositions_to_structures separately.")
     # Map each m/z value to potential compositions
-    compositions = [mz_to_composition(mz, mode = mode, mass_value = mass_value, modification = modification, sample_prep = sample_prep,
-                                      mass_tolerance = mass_tolerance, kingdom = kingdom, glycan_class = glycan_class,
+    compositions = [mz_to_composition(mz, max_charge = max_charge, mass_value = mass_value, modification = modification, sample_prep = sample_prep,
+                                      mass_tolerance = mass_tolerance, tolerance_unit = tolerance_unit, kingdom = kingdom, glycan_class = glycan_class,
                                       df_use = df_use, filter_out = filter_out, deprioritized = deprioritized, mass_tag = mass_tag) for mz in mz_list]
     # Map each of these potential compositions to potential structures
     out_structures = []

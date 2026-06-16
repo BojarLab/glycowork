@@ -993,7 +993,7 @@ def test_mz_to_composition():
     # Test O-glycan mass
     result = mz_to_composition(
         675,
-        mode='negative',
+        max_charge=-2,
         mass_value='monoisotopic',
         glycan_class='O',
         mass_tolerance=0.5,
@@ -1004,38 +1004,38 @@ def test_mz_to_composition():
     assert result == expected
     result = mz_to_composition(
         675,
-        mode='negative',
+        max_charge=-2,
         mass_value='monoisotopic',
         glycan_class='all',
         mass_tolerance=0.5,
         modification="reduced",
         adduct="H2O",
-        extras=["doubly_charged", "adduct"]
+        extras=["adduct"]
     )
     result = mz_to_composition(
         698,
-        mode='positive',
+        max_charge=+2,
         mass_value='monoisotopic',
         glycan_class='all',
         mass_tolerance=0.5,
         modification="reduced",
         filter_out = {'Kdn'},
-        extras=["doubly_charged", "adduct"]
+        extras=["adduct"]
     ),
     mz_to_composition(
         675,
-        mode = 'negative',
+        max_charge=-2,
         mass_value = 'monoisotopic',
         glycan_class = 'all',
         mass_tolerance = 0.5,
         modification="reduced",
         adduct = "H2O",
-        extras = ["doubly_charged", "adduct"],
+        extras = ["adduct"],
         deprioritized = None
     )
     result = mz_to_composition(
         675,
-        mode = 'negative',
+        max_charge=-2,
         mass_value = 'monoisotopic',
         glycan_class = 'O',
         mass_tolerance = 0.5,
@@ -1046,7 +1046,7 @@ def test_mz_to_composition():
     # Test mass_tag: same composition shifted by reducing-end label mass (e.g., 2AA = 137.14 Da)
     result = mz_to_composition(
         675 + 137.14,
-        mode = 'negative',
+        max_charge=-2,
         mass_value = 'monoisotopic',
         glycan_class = 'O',
         mass_tolerance = 0.5,
@@ -1061,19 +1061,19 @@ def test_mz_to_composition():
     mixed_mz = (neutral - HYDROGEN_MASS + mass_dict['Acetate']) / 2
     result = mz_to_composition(
         mixed_mz,
-        mode = 'negative',
+        max_charge=-2,
         mass_value = 'monoisotopic',
         glycan_class = 'O',
         mass_tolerance = 0.5,
         modification = 'reduced',
         filter_out = {'Kdn'},
-        extras = ["doubly_charged", "adduct"]
+        extras = ["adduct"]
     )
     assert result == [comp]
     # Test custom df_use
     result = mz_to_composition(
         675,
-        mode = 'negative',
+        max_charge=-2,
         mass_value = 'monoisotopic',
         glycan_class = 'O',
         mass_tolerance = 0.5,
@@ -1226,7 +1226,7 @@ def test_mz_to_structures():
     result = mz_to_structures(
         mz_values,
         glycan_class='O',
-        mode='negative',
+        max_charge=-2,
         mass_value='monoisotopic',
         mass_tolerance=0.5,
         modification="reduced"
@@ -1245,7 +1245,7 @@ def test_mz_to_structures():
     result = mz_to_structures(
         mz_values,
         glycan_class='O',
-        mode='negative',
+        max_charge=-2,
         modification="reduced",
         filter_out={'Kdn'},
         abundances=abundances

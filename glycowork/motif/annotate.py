@@ -674,7 +674,8 @@ def lectin_motif_scoring(
 ) -> pd.DataFrame: # DataFrame with scored motifs and supporting evidence
     "Calculates weighted motif scores from lectin binding data incorporating specificity and redundancy factors"
     output = []
-    useable_lectin_count = {k: list(useable_lectin_mapping.values()).count(v) for k, v in useable_lectin_mapping.items()}
+    _vc = Counter(useable_lectin_mapping.values())
+    useable_lectin_count = {k: _vc[v] for k, v in useable_lectin_mapping.items()}
     for motif, lectins in motif_mapping.items():
         score = 0
         for lectin, weight_class in lectins.items():
