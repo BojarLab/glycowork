@@ -1232,7 +1232,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = glycan.replace('(', '[').replace(')', ']')
     # Canonicalize linkage uncertainty
     # Open linkages with anomeric config specified (e.g., "Mana-")
-    glycan = re.sub(r'([A-Z][a-z]*)([a-b])\-([A-Z])', r'\1\g<2>1-?\3', glycan)
+    glycan = re.sub(r'([A-Z][a-z]*)([a-b])\-(?=[A-Z])', r'\1\g<2>1-?', glycan)
     # Open linkages (e.g., "c-")
     glycan = re.sub(r'([a-np-z])\-([A-Z][^\-])', r'\1?1-?\2', glycan)
     # Open linkages2 (e.g., "1-")

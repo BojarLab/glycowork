@@ -23,6 +23,10 @@
 ##### Added ✨
 - `MissForest` now has a `circadian` API (also exposed in `impute_and_normalize`, to fine-tune data imputation of rhythmic data (starting from the same-phase median, instead of the overall median) (4305377)
 
+##### Fixed 🐛
+- Fixed behavior of `hotellings_t2` when `paired=True`
+- Fixed `get_glycoform_diff` mutating its input
+
 ### motif
 #### graph
 ##### Added ✨
@@ -57,8 +61,8 @@
 #### tokenization
 ##### Added ✨
 - The `modification` keyword argument in `mz_to_composition` etc now also accepts `procainamide` as an argument (e4a2a40)
-- `mz_to_composition` and `mz_to_structures` now have a new `max_charge` keyword argument that sets the maximum applicable charge state as well as the ion mode
-- `mz_to_composition` and `mz_to_structures` now also support ppm-level mass tolerances via the new `tolerance_unit` keyword argument that allows users to switch between Da and ppm
+- `mz_to_composition` and `mz_to_structures` now have a new `max_charge` keyword argument that sets the maximum applicable charge state as well as the ion mode (e1475f9)
+- `mz_to_composition` and `mz_to_structures` now also support ppm-level mass tolerances via the new `tolerance_unit` keyword argument that allows users to switch between Da and ppm (e1475f9)
 
 ##### Changed 🔄
 - `mz_to_composition` now also filters by provided `glycan_class` if a user provides a custom `df_use` (ab57479)
@@ -68,8 +72,8 @@
 - Fixed incompatibility of `condense_composition_matching` with `scikit-learn >= 1.9.0` (34d839f)
 
 ##### Deprecated ⚠️
-- Removed the keyword argument `mode` from `mz_to_composition` and `mz_to_structures`; will be handled by the new `max_charge` instead
-- Removed the `doubly_charged` option from the `extras` keyword argument in `mz_to_composition`; will be handled by the new `max_charge` instead
+- Removed the keyword argument `mode` from `mz_to_composition` and `mz_to_structures`; will be handled by the new `max_charge` instead (e1475f9)
+- Removed the `doubly_charged` option from the `extras` keyword argument in `mz_to_composition`; will be handled by the new `max_charge` instead (e1475f9)
 
 #### annotate
 ##### Added ✨
@@ -102,6 +106,7 @@
 ##### Fixed 🐛
 - Fixed column access in ALR-treatment of `get_glycanova` (aad159e)
 - Fixed warnings when using `scikit-learn>=1.9.0` due to the deprecated `penalty` keyword arg in `sklearn.linear_model.LogisticRegression` used in `multi_feature_scoring` (34d839f)
+- Fixed edge case where `get_glycanova` could assign effect sizes to wrong glycans, if glycans had been dropped due to variance filtering
 
 ##### Deprecated ⚠️
 - Deprecated `glycan_col_name` keyword argument in `get_pvals_motif` and `characterize_monosaccharide`; will be auto-detected (aad159e)

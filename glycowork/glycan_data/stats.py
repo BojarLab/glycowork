@@ -415,7 +415,7 @@ def compare_inter_vs_intra_group(cohort_b: pd.DataFrame, # dataframe of glycans 
 def replace_outliers_with_IQR_bounds(full_row: pd.Series, # row from dataframe, with all but possibly first value numerical
                                      cap_side: str = 'both' # which side(s) to cap outliers on: 'both', 'lower', or 'upper'
                                      ) -> pd.Series: # row with replaced outliers
-    "replaces outlier values with row median"
+    "caps outlier values at the IQR fences"
     row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
     # Calculate Q1, Q3, and IQR for each row
     Q1 = row.quantile(0.25)
@@ -474,34 +474,30 @@ def hotellings_t2(group1: np.ndarray, # comparison group containing numerical da
     "Hotelling's T^2 test (the t-test for multivariate comparisons)"
     if paired:
         assert group1.shape == group2.shape, "For paired samples, the size of group1 and group2 should be the same"
-        group1 -= group2
+        group1 = group1 - group2  # one-sample test of mean difference vs zero
         group2 = None
-    # Calculate the means and covariances of each group
+        # Calculate the means and covariances of each group
     n1, p = group1.shape
     mean1 = np.mean(group1, axis = 0)
     cov1 = np.cov(group1, rowvar = False)
-    if group2 is not None:
+    if group2 is not None:  # two-sample case
         n2, _ = group2.shape
-        mean2 = np.mean(group2, axis = 0)
+        diff = mean1 - np.mean(group2, axis = 0)
         cov2 = np.cov(group2, rowvar = False)
-    else:
-        n2 = 0
-        mean2 = np.zeros_like(mean1)
-        cov2 = np.zeros_like(cov1)
-    # Calculate the difference between the means
-    diff = mean1 - mean2
-    # Calculate the pooled covariance matrix
-    denom = (n1 + n2 - 2)
-    pooled_cov = cov1 if denom < 1 else ((n1 - 1) * cov1 + (n2 - 1) * cov2) / denom
+        denom = n1 + n2 - 2
+        pooled_cov = cov1 if denom < 1 else ((n1 - 1) * cov1 + (n2 - 1) * cov2) / denom
+        scale, df2 = (n1 * n2) / (n1 + n2), n1 + n2 - p - 1
+    else:  # one-sample case (incl. paired)
+        diff = mean1
+        denom, pooled_cov = n1 - 1, cov1
+        scale, df2 = n1, n1 - p
     pooled_cov += np.eye(p) * 1e-6
-    # Calculate the Hotelling's T^2 statistic
-    T2 = (n1 * n2) / (n1 + n2) * diff @ np.linalg.pinv(pooled_cov) @ diff.T
-    # Convert the T^2 statistic to an F statistic
-    F = 0 if denom < 1 else T2 * (denom + 1 - p) / (denom * p)
+    # Calculate the Hotelling's T^2 statistic and convert to F
+    T2 = scale * diff @ np.linalg.pinv(pooled_cov) @ diff.T
+    F = 0 if denom < 1 or df2 < 1 else T2 * df2 / (denom * p)
     if F == 0:
         return F, 1.0
-    # Calculate the p-value of the F statistic
-    p_value = f.sf(F, p, n1 + n2 - p - 1)
+    p_value = f.sf(F, p, df2)
     return F, p_value
 
 
@@ -774,12 +770,10 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
                        ) -> pd.DataFrame: # df with differential expression results, p-vals (Fisher’s Combined Probability Test), significance, effect sizes (Cohen's d)
     "Calculates differential expression of glycoforms from either a peptide or a whole protein"
     label_col = 'Glycosite' if 'Glycosite' in df_res.columns else 'Glycan'
-    if level == 'protein':
-        df_res[label_col] = [k.split('_')[0] for k in df_res[label_col]]
-    else:
-        df_res[label_col] = ['_'.join(k.split('_')[:-1]) for k in df_res[label_col]]
-    grouped = df_res.groupby(label_col)['corr p-val'].agg(lambda p: combine_pvalues(p)[1]) # Fisher’s Combined Probability Test
-    mean_effect_size = df_res.groupby(label_col)['Effect size'].mean()
+    labels = [k.split('_')[0] for k in df_res[label_col]] if level == 'protein' else ['_'.join(k.split('_')[:-1]) for k
+                                                                                      in df_res[label_col]]
+    grouped = df_res['corr p-val'].groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
+    mean_effect_size = df_res['Effect size'].groupby(labels).mean()
     pvals, sig = correct_multiple_testing(grouped, alpha)
     df_out = pd.DataFrame({'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})
     return df_out.sort_values(by = 'corr p-val')

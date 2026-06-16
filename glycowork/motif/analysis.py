@@ -343,7 +343,7 @@ def plot_embeddings(
         model_path = download_model("glycan_representations.pkl")
         emb = pickle.load(open(model_path, 'rb'))
     # Get the subset of embeddings corresponding to 'glycans'
-    embs = emb.values if isinstance(emb, pd.DataFrame) else np.vstack([emb[g] for g in glycans])
+    embs = emb.iloc[idx].values if isinstance(emb, pd.DataFrame) else np.vstack([emb[g] for g in glycans])
     # Calculate t-SNE of embeddings
     n_samples = embs.shape[0]
     perplexity = min(30, n_samples - 1)
@@ -903,7 +903,7 @@ def get_glycanova(
     if len(prison_rows) > 0:
         df_out = pd.concat([df_out, prison_rows], ignore_index = True)
     df_out['significant'] = df_out['significant'].astype('bool')
-    df_out['Effect size'] = effect_sizes.values
+    df_out['Effect size'] = effect_sizes.reindex(df_out['Glycan']).values
     return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
 

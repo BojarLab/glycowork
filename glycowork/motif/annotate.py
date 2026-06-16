@@ -346,7 +346,6 @@ def count_unique_subgraphs_of_size_k(
 def get_minimal_ksaccharide_ambiguity(
         glycans: list, # list of glycans in IUPAC-condensed nomenclature
         size: int = 2, # Number of monosaccharides per fragment
-        terminal: bool = False, # Only count terminal fragments
         motifs: list = None # Pre-computed motifs (for terminal structures)
 ) -> dict: # Dictionary of precise-k-saccharide : ideal wildcarded k-saccharide
     if motifs is None:
@@ -380,8 +379,8 @@ def get_minimal_ksaccharide_ambiguity(
         for i in range(len(linkages)):
             anomers, starts, ends = backbone_linkages[backbone][i]
             anomer = list(anomers)[0] if len(anomers) == 1 else '?'
-            starts_sorted = sorted(starts, key=int) if starts else ['?']
-            ends_sorted = sorted(ends, key=int) if ends else ['?']
+            starts_sorted = sorted(starts, key = int) if starts else ['?']
+            ends_sorted = sorted(ends, key = int) if ends else ['?']
             start = '/'.join(starts_sorted) if len(starts_sorted) > 1 else starts_sorted[0]
             end = '/'.join(ends_sorted) if len(ends_sorted) > 1 else ends_sorted[0]
             reconstructed = reconstructed.replace('(LINK)', f'({anomer}{start}-{end})', 1)
@@ -439,7 +438,7 @@ def get_k_saccharides(
     counts_dict = {}
     ggraphs = [glycan_to_nxGraph(g) for g in glycans]
     for s in range(2, size + 1):
-        potentials = get_minimal_ksaccharide_ambiguity(glycans, size = s, terminal = terminal)
+        potentials = get_minimal_ksaccharide_ambiguity(glycans, size = s)
         new_additions = [(addy, glycan_to_nxGraph(addy)) for addy in set(list(potentials.keys()) + list(potentials.values()))]
         for n, m in new_additions:
             counts_dict[n] = [subgraph_isomorphism(g, m, count = True) for g in ggraphs]

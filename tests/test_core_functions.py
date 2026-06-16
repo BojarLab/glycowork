@@ -344,6 +344,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("GlcNAcβ1-3Galβ1-4GlcNAcββ1-6Galβ1-4Glcol") == "GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-6)Gal(b1-4)Glc-ol"
     assert canonicalize_iupac("Neuac + Gal(b1-3)[Gal-GlcNAc(b1-6)]GalNAc") == "{Neu5Ac(a2-3/6)}Gal(?1-?)GlcNAc(b1-6)[Gal(b1-3)]GalNAc"
     assert canonicalize_iupac("Gal3S-[NeuAca2-6]GlcNAc-Gal(b1-3)GalNAc") == "Neu5Ac(a2-6)[Gal3S(?1-?)]GlcNAc(?1-?)Gal(b1-3)GalNAc"
+    assert canonicalize_iupac("Manα-Manβ-Glc") == "Man(a1-?)Man(b1-?)Glc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -2069,9 +2070,13 @@ def test_hotellings_t2():
     assert F_stat >= 0
     assert 0 <= p_val <= 1
     # Test paired
-    F_stat_paired, p_val_paired = hotellings_t2(group1, group2, paired=True)
-    assert F_stat_paired >= 0
-    assert 0 <= p_val_paired <= 1
+    rng = np.random.default_rng(0)
+    a = rng.normal(0, 1, (20, 3))
+    b = a + np.array([2.0, 2.0, 2.0])
+    a_before = a.copy()
+    _, p = hotellings_t2(a, b, paired = True)
+    assert p < 0.05
+    assert np.array_equal(a, a_before)
 
 
 def test_calculate_permanova_stat():
