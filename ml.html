@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.9.37">
+<meta name="generator" content="quarto-1.9.38">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -74,10 +74,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-de52dc3353fe04aa4d07820b7139bd46.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-3d242d70d41cd9edc5ebe4da1d712dc5.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -309,7 +309,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'classification'</span>, <span class="co"># 'classification', 'multilabel', or 'regression'</span></span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    mode2:<span class="bu">str</span><span class="op">=</span><span class="st">'multi'</span>, <span class="co"># 'multi' or 'binary' classification</span></span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    return_metrics:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to return metrics</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>torch.nn.modules.module.Module <span class="op">|</span> <span class="bu">tuple</span>[torch.nn.modules.module.Module, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">float</span>]]]]: <span class="co"># best model from training and the training and validation metrics</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>torch.nn.modules.module.Module <span class="op">|</span> <span class="bu">tuple</span>[torch.nn.modules.module.Module, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">float</span>]]]]:</span>
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>trains a deep learning model on predicting glycan properties</em></p>
 <hr>
@@ -327,7 +327,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span><span class="op">=</span><span class="dv">2</span>, <span class="co"># number of classes for classification</span></span>
 <span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    gsam_alpha:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0</span>, <span class="co"># if &gt;0, uses GSAM instead of SAM optimizer</span></span>
 <span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    warmup_epochs:<span class="bu">int</span><span class="op">=</span><span class="dv">5</span>, <span class="co"># if &gt;0, uses a learning rate warm-up schedule for training stability</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>: <span class="co"># optimizer, scheduler, criterion</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>:</span>
 <span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>prepares optimizer, learning rate scheduler, and loss criterion for model training</em></p>
 <hr>
@@ -346,7 +346,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    feature_set:<span class="bu">list</span><span class="op">=</span>[<span class="st">'known'</span>, <span class="st">'exhaustive'</span>], <span class="co"># feature set for annotations</span></span>
 <span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    additional_features_train:pandas.DataFrame <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional training features</span></span>
 <span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    additional_features_test:pandas.DataFrame <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional test features</span></span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>xgboost.sklearn.XGBModel <span class="op">|</span> <span class="bu">tuple</span>[xgboost.sklearn.XGBModel, pandas.DataFrame, pandas.DataFrame]: <span class="co"># trained model and optionally features</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>xgboost.sklearn.XGBModel <span class="op">|</span> <span class="bu">tuple</span>[xgboost.sklearn.XGBModel, pandas.DataFrame, pandas.DataFrame]:</span>
 <span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>wrapper function to train standard machine learning models on glycans</em></p>
 <div id="separate-knock" class="cell">
@@ -361,7 +361,7 @@ Calculating Glycan Features...
 Training model...
 
 Evaluating model...
-Accuracy of trained model on separate validation set: 0.8639514731369151</code></pre>
+Accuracy of trained model on separate validation set: 0.8578856152512998</code></pre>
 </div>
 </div>
 <hr>
@@ -405,17 +405,17 @@ Accuracy of trained model on separate validation set: 0.8639514731369151</code><
   0.8374393582344055),
  ('Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.8031653165817261),
  ('Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-  0.9144783020019531),
+  0.9337360262870789),
  ('Gal(b1-3)[Neu5Ac(a2-6)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.7572895884513855),
  ('Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-  0.7963845133781433),
+  0.7792727947235107),
  ('Gal(b1-3/4)GlcNAc(b1-2/4)[GlcNAc(b1-2/4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-  0.8054612874984741),
+  0.8451094627380371),
+ ('{Gal(b1-3/4)GlcNAc(b1-3)}{Gal(b1-3/4)GlcNAc(b1-3)}{Gal(b1-3/4)GlcNAc(b1-3)}{Gal(b1-3/4)GlcNAc(b1-3)}{Fuc(a1-2/3/4)}Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+  0.3473208248615265),
  ('Gal(b1-4)Glc-ol', 0.6590997576713562),
  ('Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
-  0.7153773307800293),
- ('Neu5Gc(a2-3/6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Man(a1-2/3/6)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
-  0.6712727546691895)]</code></pre>
+  0.7680991291999817)]</code></pre>
 </div>
 </div>
 </section>
@@ -745,7 +745,7 @@ class Model(nn.Module):
 <span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>                                                                                       rank <span class="op">=</span> <span class="st">'Kingdom'</span>)</span>
 <span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(train_x[:<span class="dv">10</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>['Glc(a1-2)Fru(b1-2)Fru(b1-2)Fru', 'Neu5Ac8S(a2-3/6)Glc(?1-?)Neu5Gc(a2-3/6)Glc', 'Xyl(?1-?)Gal', 'Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc', 'Glc(a1-6)Glc(a1-6)Glc(a1-6)Glc(a1-6)Glc(a1-6)Glc(a1-6)Glc(a1-6)Glc1Cer', 'GlcOMe(a1-2)[Xyl(b1-4)]Xyl(b1-4)Xyl', 'Rha(a1-3)GlcNAc(b1-3)Rha', 'Glc(b1-3)Glc(b1-3)[Glc(b1-2)]Glc(a1-2)Fru', '[Glc(a1-6)]Gal(b1-3)GalNAc(b1-3)Gal', 'GlcNAc(a1-4)Gal(b1-4)GlcNAc(b1-3)GlcNAc(b1-6)[Kdn(a2-3)Gal(b1-3)]GalNAc']</code></pre>
+<pre><code>['D-Ara(b1-2)Gal(b1-3)GalOP(b1-4)Man', '{Fuc(a1-?)}{Hex(?1-?)}Man(a1-3)Man(a1-6)Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Fuc(a1-3)GalNAc(b1-3)Gal(b1-4)Gal(b1-3)[Neu5Gc(a2-6)]GalNAc', 'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-3/6)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', '{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'GalNAcA4Ac(a1-3)QuiNAc4NAc(b1-3)GalNAcA4Ac', 'Kdo(a2-4)Kdo(a2-6)GlcNAcOP(b1-6)GlcNAcOP', 'Hex(?1-?)[HexA(?1-?)]GalNAc', 'Fuc(a1-2)[Gal(a1-3)]Gal(b1-3)GalNAc', 'Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc']</code></pre>
 </div>
 </div>
 <hr>
@@ -785,7 +785,7 @@ class Model(nn.Module):
 <span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(glycans[<span class="dv">50</span>])</span>
 <span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(labels[<span class="dv">50</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc6S(b1-6)]Gal(b1-4)Glc-ol
+<pre><code>Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)]Gal(b1-4)Glc-ol
 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</code></pre>
 </div>
 </div>
