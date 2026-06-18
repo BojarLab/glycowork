@@ -911,6 +911,8 @@ def test_glycan_to_composition():
     # Test lactonization
     result = glycan_to_composition("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc")
     assert result == {'Neu5Ac': 1, 'Hex': 2, '-H2O': 1, 'Ac': 1}
+    result = glycan_to_composition("{Fuc(a1-2/3)}{HexNAc4/6S(b1-4/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")
+    assert result == {'Hex': 4, 'HexNAc': 5, 'dHex': 2, 'S': 1}
 
 
 def test_glycan_to_mass():
