@@ -4216,7 +4216,7 @@ def test_select_grouping():
     assert isinstance(pval_groups, dict)
 
 
-def test_get_biodiversity():
+def test_get_biodiversity(sample_jtk_df):
     # Create more realistic glycan compositions based on biological patterns
     np.random.seed(42)  # For reproducibility
     # Helper function to generate realistic glycan proportions
@@ -4279,6 +4279,19 @@ def test_get_biodiversity():
     assert isinstance(results, tuple)
     results = get_biodiversity(df, group1, group2, metrics = ['beta'], motifs = True)
     assert isinstance(results, tuple)
+    cgroups = [t for t in range(1, 9) for _ in range(3)]
+    cstats, cdist = get_biodiversity(sample_jtk_df, cgroups, [], metrics = ['alpha'], circadian = True, timepoints = 8,
+                                     interval = 3, periods = [12, 24])
+    assert any('JTK' in m for m in cstats['Metric']), "Circadian mode should produce JTK rows"
+    assert {'Period length', 'Lag phase', 'Amplitude'}.issubset(cstats.columns)
+    assert isinstance(cdist, pd.DataFrame) and cdist.empty, "Beta diversity must be skipped under circadian"
+    cstats_m, _ = get_biodiversity(sample_jtk_df, cgroups, [], metrics = ['alpha'], motifs = True, circadian = True,
+                                   timepoints = 8, interval = 3, periods = [12, 24])
+    assert any('JTK' in m for m in cstats_m['Metric'])
+    cstats_b, cdist_b = get_biodiversity(sample_jtk_df, cgroups, [], metrics = ['beta'], circadian = True,
+                                         timepoints = 8, interval = 3, periods = [12, 24])
+    assert any('db-RDA' in m for m in cstats_b['Metric'])
+    assert isinstance(cdist_b, pd.DataFrame) and not cdist_b.empty
 
 
 @pytest.fixture

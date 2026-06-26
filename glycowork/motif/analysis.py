@@ -1120,7 +1120,11 @@ def get_biodiversity(
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+        random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+        circadian: bool = False,  # test whether diversity changes rhythmically over time via JTK
+        timepoints: int | None = None,  # number of timepoints, columns ordered by ascending timepoint (required if circadian)
+        interval: int = 1,  # time units between timepoints (only relevant if circadian)
+        periods: list[int] = [12, 24],  # cycle lengths to test (only relevant if circadian)
 ) -> tuple:  # First DataFrame with diversity indices and test statistics, second with beta-diversity distance matrix
     "Calculates alpha (Shannon/Simpson) and beta (ANOSIM/PERMANOVA) diversity measures from glycomics data"
     experiment = "diff" if group2 else "anova"
@@ -1142,7 +1146,15 @@ def get_biodiversity(
         simp_div = df_org.apply(simpson_diversity_index)
         a_df = pd.DataFrame({'species_richness': unique_counts,
                              'shannon_diversity': shan_div, 'simpson_diversity': simp_div}).T
-        if len(group_counts) == 2:
+        if circadian:
+            jtk = JTKTest(timepoints, periods, interval, df_org.shape[1] // timepoints)
+            for metric_name, series in (('Species richness', unique_counts), ('Shannon diversity', shan_div),
+                                        ('Simpson diversity', simp_div)):
+                p_val, period, phase, tau = jtk.test(series.values.astype(float))
+                shopping_cart.append(pd.DataFrame(
+                    {'Metric': f'{metric_name} (JTK)', 'p-val': p_val, 'Period length': period, 'Lag phase': phase,
+                     'Amplitude': abs(tau)}, index = [0]))
+        elif len(group_counts) == 2:
             df_a, df_b = a_df[group1], a_df[group2]
             mean_a, mean_b = [np.mean(row_a) for row_a in df_a.values], [np.mean(row_b) for row_b in df_b.values]
             if paired:
@@ -1174,8 +1186,29 @@ def get_biodiversity(
         if not isinstance(df.index[0], str):
             df = df.set_index(df.columns[0])
         distance_matrix = squareform(pdist(df.values.T, metric = 'euclidean'))
-        beta_df_out = pd.DataFrame(distance_matrix, index = range(len(df.columns)), columns = range(len(df.columns)))
-        if all(count > 1 for count in group_counts.values()):
+        if circadian:
+            n = distance_matrix.shape[0]
+            tvec = np.repeat(np.arange(timepoints) * interval, n // timepoints)[:n].astype(float)
+            J = np.eye(n) - np.ones((n, n)) / n
+            G = -0.5 * J @ (distance_matrix ** 2) @ J  # Gower-centered distances for db-RDA
+            for period in periods:
+                w = 2 * np.pi / period
+                X = np.column_stack([np.ones(n), np.cos(w * tvec), np.sin(w * tvec)])
+                p = X.shape[1]
+                pseudo_f = lambda design: (lambda H: np.trace(H @ G @ H) / (p - 1) / (
+                            np.trace((np.eye(n) - H) @ G @ (np.eye(n) - H)) / (n - p)))(
+                    design @ np.linalg.pinv(design.T @ design) @ design.T)
+                f_obs = pseudo_f(X)
+                perm_f = np.array([pseudo_f(X[np.random.permutation(n)]) for _ in range(
+                    permutations)])  # free permutation of cosinor design against fixed turnover structure
+                p_val = (np.sum(perm_f >= f_obs) + 1) / (permutations + 1)
+                shopping_cart.append(pd.DataFrame(
+                    {'Metric': f'Beta diversity rhythm {period}h (db-RDA)', 'p-val': p_val, 'Period length': period,
+                     'Effect size': f_obs}, index = [0]))
+            distance_matrix = pd.DataFrame(distance_matrix, index = range(n), columns = range(n))
+        elif all(count > 1 for count in group_counts.values()):
+            beta_df_out = pd.DataFrame(distance_matrix, index = range(len(df.columns)),
+                                       columns = range(len(df.columns)))
             r, p = anosim(beta_df_out, group_sizes, permutations)
             b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (ANOSIM)', 'p-val': p, 'Effect size': r},
                                         index = [0])
