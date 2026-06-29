@@ -1316,7 +1316,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                         glycan)  # Gc(?1-5)Neu to Neu5Gc
         glycan = re.sub(r'\[([^]^-]+\([?ab]?\d+-([\d\?]+)\))\]([A-Z][A-Za-z1-9]*)',
                         lambda m: (lambda mod: f"{m.group(3)}{m.group(2)}{mod}" if (
-                                mod not in lib and m.group(1).count('(') == 1) else f"[{m.group(1)}]{m.group(3)}")(
+                                mod not in lib and '/' not in mod and m.group(1).count(
+                            '(') == 1) else f"[{m.group(1)}]{m.group(3)}")(
                             re.sub(r'^[abx?][DLX?]', '', m.group(1).split('(')[0]).rstrip('?')),
                         glycan)  # [Ac(?1-3)]Fruf to Fruf3Ac
         glycan = re.sub(
