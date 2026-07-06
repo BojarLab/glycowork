@@ -636,10 +636,15 @@ def get_coordinates_and_labels(
     for idx, raw_label in enumerate(node_values):
         if idx % 2:
             continue
+        negated = raw_label.startswith('!')
+        if negated:
+            highlight_values[idx] = 'hide'
+            if idx + 1 < len(highlight_values): highlight_values[idx + 1] = 'hide'
+            raw_label = raw_label[1:]
         if '/' in raw_label and raw_label not in domon_costello:
             cores = [get_core(p) for p in raw_label.split('/')]
             if all(c in sugar_dict for c in cores):
-                parsed_sugars[idx] = ('/'.join(cores), '')
+                parsed_sugars[idx] = ('/'.join(cores), '!' if negated else '')
                 continue
         core_label = get_core(raw_label) if raw_label not in domon_costello else raw_label
         normalized_label = core_label if core_label in sugar_dict else 'Unknown'
@@ -647,8 +652,9 @@ def get_coordinates_and_labels(
         if modification_text:
             modification_text = modification_text.replace('Substituent', 'Subst')
             match = SUBSTITUENT_PATTERN.search(modification_text) if 'Subst' in modification_text else None
-            modification_text = f"{match.group(1)}Subst" if match else (modification_text if ('Subst' in modification_text or normalized_label != 'Unknown') else '')
-        parsed_sugars[idx] = (normalized_label, modification_text)
+            modification_text = f"{match.group(1)}Subst" if match else (
+                modification_text if ('Subst' in modification_text or normalized_label != 'Unknown') else '')
+        parsed_sugars[idx] = (normalized_label, ('!' + modification_text) if negated else modification_text)
 
     root = max(graph.nodes())
     leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
