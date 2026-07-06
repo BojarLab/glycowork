@@ -320,12 +320,15 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
             return (0, []) if return_matches else 0 if count else False
         graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
     # Count motif occurrence
-    valid_mappings = []
+    valid_mappings, seen = [], set()
     if graph_pair.subgraph_is_isomorphic():
         for mapping in graph_pair.subgraph_isomorphisms_iter():
             if not return_matches and not count:
                 return True
-            valid_mappings.append(list(mapping.keys()))
+            key = frozenset(mapping.keys())
+            if key not in seen:
+                seen.add(key)
+                valid_mappings.append(list(mapping.keys()))
     if count:
         total = len(valid_mappings)
         return (total, valid_mappings) if return_matches else total

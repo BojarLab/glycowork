@@ -23,4 +23,8 @@
 
 #### draw
 ##### Changed 🔄
-- Drawing "forbidden" monosaccharides, such as in `GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")`, now automatically makes the forbidden monosaccharides and their linkages transparent
+- Drawing "forbidden" monosaccharides, such as in `GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")`, now automatically makes the forbidden monosaccharides and their linkages transparent (3621350)
+
+#### graph
+##### Fixed 🐛
+- Fixed `subgraph_isomorphism` counting too many isomorphic matches in certain scenarios of linkage ambiguity

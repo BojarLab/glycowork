@@ -2496,6 +2496,7 @@ def test_subgraph_isomorphism():
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "GlcNAc")
     # Test motif count
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc(b1-4)GlcNAc", "GlcNAc", count=True) == 2
+    assert subgraph_isomorphism("Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)GlcNAc", "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", count=True) == 1
     # Test with negation
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "!Man(a1-3)GlcNAc")
     # Test with termini constraints
