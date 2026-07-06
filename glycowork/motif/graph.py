@@ -440,7 +440,7 @@ def get_linkage_number(node, graph):
         linkage_num = match.group(1)
         if linkage_num == "?":
             return float('inf')  # Wildcard comes last
-        return int(linkage_num)
+        return int(linkage_num) + 100 if '/' in link_label else int(linkage_num)  # Slash-wildcards rank after specified but before ?
     return float('inf')
 
 

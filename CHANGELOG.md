@@ -20,7 +20,7 @@
 #### processing
 ##### Fixed 🐛
 - Fixed `canonicalize_iupac` messing up narrow modification wildcards (e.g., `Gal3/6S`) in side branches (3a02eff)
-- Fixed `canonicalize_iupac` sometimes ordering multiple floating bits wrongly
+- Fixed `canonicalize_iupac` sometimes ordering multiple floating bits wrongly (b6689a5)
 
 #### draw
 ##### Changed 🔄
@@ -29,3 +29,4 @@
 #### graph
 ##### Fixed 🐛
 - Fixed `subgraph_isomorphism` counting too many isomorphic matches in certain scenarios of linkage ambiguity (81244c9)
+- `get_linkage_number` now always handles narrow linkage wildcards correctly for branch sorting purposes
