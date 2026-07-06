@@ -1374,8 +1374,11 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = graph_to_string(glycan_to_nxGraph.__wrapped__(glycan))
     if '{' in glycan:
         floating_bits = re.findall(r'\{.*?\}', glycan)
-        sorted_floating_bits = ''.join(sorted(floating_bits, key = len, reverse = True))
-        glycan = sorted_floating_bits + glycan[glycan.rfind('}') +1:]
+        sorted_floating_bits = ''.join(sorted(floating_bits, key = lambda x: (-x.count('('), (
+            2 if not (e := (re.findall(r'-([\d?/]+)\)', x) or ['?'])[-1]) or '?' in e else 1 if '/' in e else 0),
+                                                                              int(re.match(r'\d+', e).group()) if e[
+                                                                                  0].isdigit() else 99, x)))
+        glycan = sorted_floating_bits + glycan[glycan.rfind('}') + 1:]
     glycan = re.sub(r'[A-Z][A-Za-z0-9]*(?:/[A-Z][A-Za-z0-9]*)+', lambda m: '/'.join(sorted(m.group().split('/'))),
                     glycan)
     if glycan.count('[') != glycan.count(']'):

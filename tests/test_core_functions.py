@@ -391,6 +391,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Glc(?1-?)[Gal(?1-?)]2,5-Anhydro-Tal") == "Gal(?1-?)[Glc(?1-?)]2,5-Anhydro-Tal"
     assert canonicalize_iupac("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("{Fuc(a1-2/3/4)}{Neu5Ac(a2-3/6/8)}Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)[GlcNAc(b1-6)]GalNAc") == "{Fuc(a1-2/3/4)}{Neu5Ac(a2-3/6/8)}Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
     # Test other nomenclatures
     assert canonicalize_iupac("Ac(1-2)aLFucpN(1-3)[Ac(1-2)]bDGlcpN(1-1)Subst // Subst = 2-(4-(hydroxymethyl)-1,3-dioxolan-2-yl)propane-1,3-diol = SMILES O{1}CC(C1OCC(CO)O1)CO") == "FucNAc(a1-3)GlcNAc1Substituent"
     assert canonicalize_iupac("aDMan(1-2)bDGlcp(1-1)Me") == "Man(a1-2)Glc1Me"
@@ -489,8 +490,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac('m7') == '{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('Man-7') == '{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('Man7') == '{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
-    assert canonicalize_iupac("(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2") == "{Neu5Ac(a2-3/6)}{HexNAc(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert canonicalize_iupac("(Hex)2 (HexNAc)3 (Deoxyhexose)1 (NeuAc)2 + (Man)3(GlcNAc)2") == "{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}{HexNAc(?1-?)}{HexNAc(?1-?)}{HexNAc(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Fuc(a1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2") == "{Neu5Ac(a2-3/6)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{HexNAc(?1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("(Hex)2 (HexNAc)3 (Deoxyhexose)1 (NeuAc)2 + (Man)3(GlcNAc)2") == "{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}{Fuc(a1-?)}{Hex(?1-?)}{Hex(?1-?)}{HexNAc(?1-?)}{HexNAc(?1-?)}{HexNAc(?1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G2S2") == "Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G1FN") == "Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("redEnd--??1D-GalNAc,p--??2D-KDN,p$MONO,Und,-H,0,redEnd") == "Kdn(a2-?)GalNAc"
