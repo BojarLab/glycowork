@@ -29,4 +29,9 @@
 #### graph
 ##### Fixed 🐛
 - Fixed `subgraph_isomorphism` counting too many isomorphic matches in certain scenarios of linkage ambiguity (81244c9)
-- `get_linkage_number` now always handles narrow linkage wildcards correctly for branch sorting purposes
+- `get_linkage_number` now always handles narrow linkage wildcards correctly for branch sorting purposes (d222f41)
+
+### network
+#### biosynthesis
+##### Changed 🔄
+- In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs)

@@ -370,10 +370,11 @@ def construct_network(glycans: list[str], # List of glycans
         network.nodes[node].setdefault('virtual', 1)
     # Edge label specification
     if edge_type != 'monolink':
-        df_enzyme = None
+        df_enzyme, net_class = None, None
         if edge_type == 'enzyme':
             with resources.files("glycowork.network").joinpath("monolink_to_enzyme.csv").open() as f:
                 df_enzyme = pd.read_csv(f, sep = ',')
+            net_class = get_class(glycans[0])  # glycans sorted desc by len, [0] is a real observed glycan
         for u, v in network.edges():
             elem = network[u][v]
             edge = elem['diffs']
@@ -382,7 +383,7 @@ def construct_network(glycans: list[str], # List of glycans
                     if edge_type == 'monosaccharide':
                         elem['diffs'] = edge.split('(')[0]
                     elif edge_type == 'enzyme':
-                        elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme)
+                        elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme, glycan_class = net_class)
     # Make network directed
     network = prune_directed_edges(network.to_directed())
     for node in sorted(network.nodes(), key = len):
@@ -622,12 +623,18 @@ def monolink_to_glycoenzyme(edge_label: str, # Monolink edge label
                             df: pd.DataFrame, # Glycoenzyme mapping data
                             enzyme_column: str = 'glycoenzyme', # Enzyme column name
                             monolink_column: str = 'monolink', # Monolink column name
-                            mode: str = 'condensed' # Output mode: condensed/full
+                            mode: str = 'condensed', # Output mode: condensed/full
+                            glycan_class: str | None = None # Network glycan class to filter enzymes by
                             ) -> str: # Enzyme label
     "Convert monosaccharide(linkage) edge label to enzyme name responsible for its synthesis"
     if mode == 'condensed':
         enzyme_column = 'glycoclass'
-    new_edge_label = df.loc[df[monolink_column] == edge_label, enzyme_column].unique()
+    hits = df[df[monolink_column] == edge_label]
+    if glycan_class is not None and not hits.empty:
+        net_cls = set(glycan_class.split('/'))
+        keep = hits['glycan_class'].apply(lambda c: not isinstance(c, str) or bool(net_cls & set(c.split('/'))))  # blank rows apply to all classes
+        hits = hits[keep] if keep.any() else hits  # fall back to class-agnostic if no class match
+    new_edge_label = hits[enzyme_column].unique()
     return '_'.join(new_edge_label) if new_edge_label.size else edge_label
 
 
