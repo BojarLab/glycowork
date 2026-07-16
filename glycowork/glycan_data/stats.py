@@ -345,12 +345,7 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped: dict[str, list], # dicti
         group_p_values = np.array(group_p_values)
         # Estimate π0 for the group within the Two-Stage method
         pi0_estimate = pi0_tst(group_p_values, alpha)
-        if pi0_estimate == 1:
-            group_adjusted_p_values = [1.0] * len(group_p_values)
-            for identifier, corrected_pval in zip(identifiers_grouped[group], group_adjusted_p_values):
-                adjusted_p_values[identifier] = corrected_pval
-                significance_dict[identifier] = False
-            continue
+        # π0 = 1 just means stage 1 found no signal in this family; standard TST then falls back to ordinary within-group BH (adjusted_alpha = alpha below), instead of discarding the whole family, which silently wipes out sparse-signal conditions
         n = len(group_p_values)
         sorted_indices = np.argsort(group_p_values)
         sorted_p_values = group_p_values[sorted_indices]
