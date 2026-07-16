@@ -479,11 +479,12 @@ def hotellings_t2(group1: np.ndarray, # comparison group containing numerical da
         # Calculate the means and covariances of each group
     n1, p = group1.shape
     mean1 = np.mean(group1, axis = 0)
-    cov1 = np.cov(group1, rowvar = False)
+    cov1 = np.atleast_2d(np.cov(group1,
+                                rowvar = False))  # np.cov returns a 0-d array for a single variable, which breaks the ridge below
     if group2 is not None:  # two-sample case
         n2, _ = group2.shape
         diff = mean1 - np.mean(group2, axis = 0)
-        cov2 = np.cov(group2, rowvar = False)
+        cov2 = np.atleast_2d(np.cov(group2, rowvar = False))
         denom = n1 + n2 - 2
         pooled_cov = cov1 if denom < 1 else ((n1 - 1) * cov1 + (n2 - 1) * cov2) / denom
         scale, df2 = (n1 * n2) / (n1 + n2), n1 + n2 - p - 1
@@ -538,11 +539,12 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
                        group2: list[str | int], # column indices/names for second group of samples
                        gamma: float = 0.1, # degree of uncertainty that CLR assumption holds
                        custom_scale: float | dict = 0, # ratio total signal group2/group1 for scale model (or group_idx:mean/min dict for multivariate)
-                       random_state: int | np.random.Generator | None = None # optional random state for reproducibility
+                       random_state: int | np.random.Generator | None = None, # optional random state for reproducibility
+                       reference: list | None = None # subset of feature rows defining the log-ratio reference; defaults to all rows
                        ) -> pd.DataFrame: # CLR-transformed dataframe
     "performs the Center Log-Ratio (CLR) Transformation with scale model adjustment"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
-    geometric_mean = gmean(df.replace(0, np.nan), axis = 0, nan_policy = 'omit')
+    geometric_mean = gmean((df if reference is None else df.loc[reference]).replace(0, np.nan), axis = 0, nan_policy = 'omit')
     clr_adjusted = np.zeros_like(df.values)
     if gamma and not isinstance(custom_scale, dict):
         group1i = [df.columns.get_loc(c) for c in group1]

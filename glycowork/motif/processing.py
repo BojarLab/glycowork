@@ -29,7 +29,7 @@ replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc
                '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'PCho': 'PCho', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui', 'Sorp': 'Sor', 'Tagp': 'Tag',
                'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn', 'GlN': 'GlcN', 'Altp': 'Alt', 'Allp': 'All',
                '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)', '-glcp': '-Glc',
-               'lXGc?': 'Gc', 'lXGc': 'Gc', 'lXAc?': 'Ac', 'lXAc': 'Ac', 'CER': 'Cer', 'anh': '-Anhydro-', 'euac': 'eu5Ac'}
+               'lXGc?': 'Gc', 'lXGc': 'Gc', 'lXAc?': 'Ac', 'lXAc': 'Ac', 'CER': 'Cer', 'anh': '-Anhydro-', 'euac': 'eu5Ac', '⍺': 'a'}
 CANONICALIZE = re.compile('|'.join(map(re.escape, sorted(replace_dic.keys(), key = len, reverse = True))))
 _POST_PROCESS = {'5Ac(?': '5Ac(a', '5Gc(?': '5Gc(a', '5Ac(a1': '5Ac(a2', '5Gc(a1': '5Gc(a2', 'u5Ac(b1': 'u5Ac(b2', 'u5Gc(b1': 'u5Gc(b2', 'Fuc(?': 'Fuc(a',
                  'GalS': 'GalOS', 'GlcS': 'GlcOS', 'GlcNAcS': 'GlcNAcOS', 'GalNAcS': 'GalNAcOS', 'SGal': 'GalOS', 'Kdn(?': 'Kdn(a', '5Ac(a2-?)Neu': '5Ac(a2-8)Neu', '5Ac(a2-?': '5Ac(a2-3/6',

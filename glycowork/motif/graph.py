@@ -256,7 +256,7 @@ def expand_termini_list(motif: str | nx.DiGraph, # Glycan motif sequence or grap
     if len(termini_list[0]) < 2:
         mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
         termini_list = [mapping[t] for t in termini_list]
-    num_linkages = motif.count('(') if isinstance(motif, str) else (len(motif) - 1) // 2
+    num_linkages = motif.count('(') if isinstance(motif, str) else len(motif) - len(termini_list)
     result = ['flexible'] * (len(termini_list) + num_linkages)
     result[::2] = termini_list
     return tuple(result)
@@ -299,7 +299,7 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
             return (0, []) if return_matches else 0 if count else False
         if termini_list:
             motif = motif.copy()
-            nx.set_node_attributes(motif, dict(zip(motif.nodes(), termini_list)), 'termini')
+            nx.set_node_attributes(motif, dict(zip(motif.nodes(), expand_termini_list(motif, termini_list) if len(termini_list) < len(motif) else termini_list)), 'termini')
         motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
         if any('O' in s for s in unwrap(motif_comp)):
             g1, g2 = ptm_wildcard_for_graph(deepcopy(glycan)), ptm_wildcard_for_graph(deepcopy(motif))
@@ -358,8 +358,14 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
         motif_stub.remove_nodes_from(negated_nodes)
         negated_part_clean = motif_copy.subgraph(negated_nodes).copy()
         for node in negated_part_clean.nodes():
-            negated_part_clean.nodes[node]['string_labels'] = negated_part_clean.nodes[node]['string_labels'].replace('!', '')
-    res = subgraph_isomorphism.__wrapped__(glycan, motif_stub, termini_list = termini_list, count = count, return_matches = True)
+            negated_part_clean.nodes[node]['string_labels'] = negated_part_clean.nodes[node]['string_labels'].replace(
+                '!', '')
+        if termini_list:
+            # The spec describes the full motif, so expand it there and keep only what the stub retained; the stub's node ids are non-contiguous, so a positional zip lands on the wrong nodes or fails to fit at all
+            expanded = expand_termini_list(motif, termini_list) if len(termini_list) < len(motif) else termini_list
+            termini_list = [expanded[n] for n in motif_stub.nodes()]
+    res = subgraph_isomorphism.__wrapped__(glycan, motif_stub, termini_list = termini_list, count = count,
+                                           return_matches = True)
     if not res[0]:
         return (0, []) if return_matches else 0 if count else False
     valid_matches = []

@@ -7,7 +7,7 @@ from functools import partial
 from scipy.spatial.distance import cosine
 
 from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species, Hex, dHex, HexNAc, HexA, Pen, Sia
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int, expand_termini_list
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition
 from glycowork.motif.regex import get_match
 
@@ -234,10 +234,13 @@ def annotate_dataset(
         bags = [b for b in [bag1, bag2, bag3] if b]
         bag = [sum(items, []) for items in zip(*bags)] if bags else []
         potentials = get_minimal_ksaccharide_ambiguity(glycans, motifs = list(set(unwrap(bag))))
-        new_additions = set(list(potentials.keys()) + list(potentials.values()))
-        gmotifs_terminal = [glycan_to_nxGraph(m) for m in new_additions]
-        ggraphs = [glycan_to_nxGraph(g) for g in glycans]
-        counts_dict = {motif: [subgraph_isomorphism(g, m, count = True) for g in ggraphs] for motif, m in zip(new_additions, gmotifs_terminal)}
+        new_additions = sorted(set(list(potentials.keys()) + list(potentials.values())))
+        # These were seeded from non-reducing ends, so demand that position when counting; without it Terminal_ columns silently count internal occurrences too
+        specs = {m: ['terminal'] + ['flexible'] * (m.count('(') - (1 if m.endswith(')') else 0)) for m in new_additions}
+        gmotifs_terminal = [glycan_to_nxGraph(m, termini = 'provided', termini_list = specs[m]) for m in new_additions]
+        ggraphs = [glycan_to_nxGraph(g, termini = 'calc') for g in glycans]
+        counts_dict = {motif: [subgraph_isomorphism(g, m, count = True, termini_list = specs[motif]) for g in ggraphs]
+                       for motif, m in zip(new_additions, gmotifs_terminal)}
         sia_motifs = {k for k in counts_dict if 'Sia' in k and 'Neu5Ac' not in k and 'Neu5Gc' not in k}
         specific_vals = [v for k, v in counts_dict.items() if k not in sia_motifs]
         counts_dict = {k: v for k, v in counts_dict.items() if k not in sia_motifs or v not in specific_vals}
@@ -253,6 +256,42 @@ def annotate_dataset(
         return temp.loc[:, (temp != 0).any(axis = 0)]
     else:
         return pd.concat(shopping_cart, axis = 1)
+
+def get_motif_dag(
+        motifs: list[str], # Motif labels as produced by annotate_dataset/quantify_motifs
+        abundances: pd.DataFrame | None = None # Motifs x samples abundances, used as an exact prefilter for containment
+) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is a substructure of child
+    "Builds the containment DAG of a motif set, in which a parent motif is a substructure of each of its children"
+    motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
+    spec_dic = dict(zip(motif_list.motif_name, motif_list.termini_spec))
+    pat, tgt, spec = {}, {}, {}
+    for m in motifs:
+        s = motif_dic.get(m, m[9:] if m.startswith('Terminal_') else m)
+        # Only 'known' motifs carry a termini spec; exhaustive and Terminal_ columns are counted position-agnostically and so demand nothing
+        sp = eval(spec_dic[m]) if m in spec_dic else ['flexible'] * (s.count('(') + (0 if s.endswith(')') else 1))
+        try:
+            pat[m] = glycan_to_nxGraph(s, termini = 'provided', termini_list = sp)
+        except Exception:
+            continue  # non-structural features (graph/chemical/size_branch) have no place in the DAG
+        sp = expand_termini_list(s, sp)
+        t = glycan_to_nxGraph(s).copy()
+        # A host may attach anything at c's open ends, so only what c itself pins down is provable: a node carrying something above it inside c is internal, an open end is what c declares or else genuinely unknown
+        nx.set_node_attributes(t, {n: 'internal' if (t.out_degree(n) and t.in_degree(n)) else (sp[n] if sp[n] != 'flexible' else 'unknown') for n in t.nodes()}, 'termini')
+        tgt[m], spec[m] = t, sp
+    cols = list(pat)
+    dag = nx.DiGraph()
+    dag.add_nodes_from(cols)
+    A = abundances.loc[cols].values if abundances is not None else None
+    for i, p in enumerate(cols):
+        # p contains c implies count(p) >= count(c) in every glycan, hence abundance dominance is a necessary condition and an exact prefilter
+        dom = (A <= A[i] + 1e-9).all(axis = 1) if A is not None else np.ones(len(cols), dtype = bool)
+        for j, c in enumerate(cols):
+            if i == j or not dom[j] or len(pat[p]) > len(tgt[c]) or not subgraph_isomorphism(tgt[c], pat[p], termini_list = spec[p]):
+                continue
+            if len(pat[p]) == len(tgt[c]) and i > j and subgraph_isomorphism(tgt[p], pat[c], termini_list = spec[c]):
+                continue  # mutually isomorphic labels: keep one direction only, so the DAG stays acyclic
+            dag.add_edge(p, c)
+    return nx.transitive_reduction(dag)
 
 
 def deduplicate_motifs(
@@ -439,7 +478,7 @@ def get_k_saccharides(
     ggraphs = [glycan_to_nxGraph(g) for g in glycans]
     for s in range(2, size + 1):
         potentials = get_minimal_ksaccharide_ambiguity(glycans, size = s)
-        new_additions = [(addy, glycan_to_nxGraph(addy)) for addy in set(list(potentials.keys()) + list(potentials.values()))]
+        new_additions = [(addy, glycan_to_nxGraph(addy)) for addy in sorted(set(list(potentials.keys()) + list(potentials.values())))]
         for n, m in new_additions:
             counts_dict[n] = [subgraph_isomorphism(g, m, count = True) for g in ggraphs]
     df_counts = pd.DataFrame(counts_dict)
