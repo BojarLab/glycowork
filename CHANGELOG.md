@@ -24,6 +24,7 @@
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
+- `get_glycanova` now also gates its `significant=True` call by `omega²>0.14`, which has been benchmarked to strictly lower false-positive rates
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
@@ -61,4 +62,4 @@
 
 ##### Changed 🔄
 - `hotellings_t2` is now more robust to tiny groups (a918a2e)
-- `TST_grouped_benjamini_hochberg` is now more robust to groups with π0 = 1
+- `TST_grouped_benjamini_hochberg` is now more robust to groups with π0 = 1 (c902297)

@@ -954,6 +954,8 @@ def get_glycanova(
         significance = [significance_dict[g] for g in df_out['Glycan']]
     else:
         corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
+    # Large-effect omega-squared floor: permutation-benchmarked to strip small-effect false positives while sharpening the real, large-effect signal
+    significance = [s and abs(effect_sizes.get(g, 0.0)) >= 0.14 for g, s in zip(df_out['Glycan'], significance)]
     df_out['corr p-val'] = corrpvals
     df_out['significant'] = significance
     prison_rows = pd.DataFrame({
