@@ -24,7 +24,7 @@
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
-- `get_glycanova` now also gates its `significant=True` call by `omega²>0.14`, which has been benchmarked to strictly lower false-positive rates
+- `get_differential_expression`, `get_glycanova`, `get_time_series`, and `get_jtk` now default to `grouped_BH=True` if they are run in motif-analysis mode (`motifs=True`)
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
@@ -59,6 +59,7 @@
 #### stats
 ##### Added ✨
 - `clr_transformation` now has a new `reference` keyword argument, to optionally specify from which variables the geometric mean should be constructed (a918a2e)
+- `MissForest` now runs left-censored draws where missingness is intensity-dependent (MNAR) and Random Forest for the rest (MAR), where intensity-dependence is estimated via logistic regression
 
 ##### Changed 🔄
 - `hotellings_t2` is now more robust to tiny groups (a918a2e)

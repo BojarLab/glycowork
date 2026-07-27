@@ -634,9 +634,9 @@ def get_differential_expression(
         set_thresh: float = 0.9,  # Correlation threshold for clusters
         effect_size_variance: bool = False,  # Calculate effect size variance
         min_samples: float = 0.1,  # Min percent of non-zero samples required
-        grouped_BH: bool = False,  # Use two-stage adaptive Benjamini-Hochberg
+        grouped_BH: bool | None = None,  # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
-        transform: str | None = None,  # Transformation type: "CLR" or "ALR"
+        transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
@@ -646,6 +646,7 @@ def get_differential_expression(
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
+    grouped_BH = (motifs and not sets) if grouped_BH is None else grouped_BH
     df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs,
                                                  impute = impute,
                                                  min_samples = min_samples, transform = transform,
@@ -907,9 +908,9 @@ def get_glycanova(
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         min_samples: float = 0.1,  # Min percent of non-zero samples required
         posthoc: bool = True,  # Perform Tukey's HSD test post-hoc
-        grouped_BH: bool = False,  # Use two-stage adaptive Benjamini-Hochberg
+        grouped_BH: bool | None = None,  # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
-        transform: str | None = None,  # Transformation type: "CLR" or "ALR"
+        transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
@@ -917,6 +918,7 @@ def get_glycanova(
 ) -> tuple[GlycoDataFrame, dict[
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
+    grouped_BH = motifs if grouped_BH is None else grouped_BH
     if len(set(groups)) < 3:
         raise ValueError(
             "You have fewer than three groups. We suggest get_differential_expression for those cases. ANOVA is for >= three groups.")
@@ -954,8 +956,6 @@ def get_glycanova(
         significance = [significance_dict[g] for g in df_out['Glycan']]
     else:
         corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
-    # Large-effect omega-squared floor: permutation-benchmarked to strip small-effect false positives while sharpening the real, large-effect signal
-    significance = [s and abs(effect_sizes.get(g, 0.0)) >= 0.14 for g, s in zip(df_out['Glycan'], significance)]
     df_out['corr p-val'] = corrpvals
     df_out['significant'] = significance
     prison_rows = pd.DataFrame({
@@ -1099,14 +1099,15 @@ def get_time_series(
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         degree: int = 1,  # Polynomial degree for regression
         min_samples: float = 0.1,  # Min percent of non-zero samples required
-        grouped_BH: bool = False,  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; only when motifs = True
+        grouped_BH: bool | None = None,  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
-        transform: str | None = None,  # Transformation type: "CLR" or "ALR"
+        transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
 ) -> GlycoDataFrame:  # DataFrame with regression coefficients and FDR-corrected p-values
     "Analyzes time series glycomics data using polynomial regression"
+    grouped_BH = motifs if grouped_BH is None else grouped_BH
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
@@ -1158,7 +1159,9 @@ def get_time_series(
               df.columns[1:]]
     df_out = GlycoDataFrame(df_out, columns = ['Glycan', 'Change', 'p-val'])
     if grouped_BH and dag is not None:
-        grouped_glycans, grouped_pvals = select_grouping(df, df, df_out['Glycan'].tolist(), df_out['p-val'].tolist(),
+        df_num = df.iloc[:, 1:].T.astype(float)
+        grouped_glycans, grouped_pvals = select_grouping(df_num, df_num, df_out['Glycan'].tolist(),
+                                                         df_out['p-val'].tolist(),
                                                          grouped_BH = grouped_BH, dag = dag)
         corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
         corrpvals = [corrpvals[g] for g in df_out['Glycan']]
@@ -1181,12 +1184,13 @@ def get_jtk(
         feature_set: list[str] = ['known', 'exhaustive', 'terminal'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
-        transform: str | None = None,  # Transformation type: "CLR" or "ALR"
+        transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         correction_method: str = "two-stage",  # Multiple testing correction method
-        grouped_BH: bool = False  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; only when motifs = True
+        grouped_BH: bool | None = None  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
 ) -> GlycoDataFrame:  # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
+    grouped_BH = motifs if grouped_BH is None else grouped_BH
     if isinstance(df_in, (str, Path)):
         df = pd.read_csv(df_in) if Path(df_in).suffix.lower() == ".csv" else pd.read_csv(df_in, sep = "\t") if Path(
             df_in).suffix.lower() == ".tsv" else pd.read_excel(df_in)
@@ -1231,7 +1235,8 @@ def get_jtk(
     df_out = GlycoDataFrame(results,
                             columns = ['Molecule_Name', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude'])
     if grouped_BH and dag is not None:
-        grouped_glycans, grouped_pvals = select_grouping(df, df, df_out['Molecule_Name'].tolist(),
+        df_num = df.iloc[:, 1:].astype(float)
+        grouped_glycans, grouped_pvals = select_grouping(df_num, df_num, df_out['Molecule_Name'].tolist(),
                                                          df_out['Adjusted_P_value'].tolist(), grouped_BH = grouped_BH,
                                                          dag = dag)
         corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)

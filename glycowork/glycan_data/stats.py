@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import warnings
 from collections import Counter
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import Ridge, LogisticRegression
 from sklearn.ensemble import RandomForestRegressor
 from scipy.stats import rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind
 from scipy.stats.mstats import winsorize
@@ -117,12 +117,39 @@ class MissForest:
 
     def fit_transform(self, X: pd.DataFrame # input dataframe with missing values
                       ) -> pd.DataFrame: # imputed dataframe
-        "Replace missing values using the MissForest algorithm"
+        "Replace missing values using the MissForest algorithm, blended with left-censored draws wherever missingness is intensity-dependent (MNAR)"
         # Step 1: Initialization
         # Keep track of where NaNs are in the original dataset
         X_nan = X.isnull()
         # Replace NaNs with row medians (each glycan's median across its observed samples)
         row_medians = X.median(axis = 1)
+        # Intensity-dependent missingness: features sitting near the detection limit are missing not at random, which random forest (an MAR method) systematically over-imputes towards the feature median
+        logX = np.log2(X.mask(X <= 0))
+        feat_mu = logX.median(axis = 1)
+        w, fit_idx = pd.Series(1.0, index = X.index), feat_mu.notna()
+        y = X_nan.loc[fit_idx].values.ravel().astype(int)
+        if fit_idx.sum() > 5 and len(y) and 0 < y.mean() < 1 and feat_mu[fit_idx].std() > 0:
+            z = ((feat_mu[fit_idx] - feat_mu[fit_idx].mean()) / feat_mu[fit_idx].std()).values.reshape(-1, 1)
+            lr = LogisticRegression().fit(np.repeat(z, X.shape[1], axis = 0), y)
+            p = lr.predict_proba(z)[:, 1]
+            # Missingness that persists at the high-intensity end is the intensity-independent (MAR) baseline; only the excess over it is attributed to censoring
+            p0 = lr.predict_proba(np.array([[np.quantile(z, 0.95)]]))[0, 1]
+            w[fit_idx] = np.clip((p - p0) / np.maximum(p, 1e-9), 0, 1)
+        else:
+            w[fit_idx] = 0.0
+        # Per-sample detection limit from robust column statistics, so a heavy left tail of sentinel values cannot drag it down
+        med_c = logX.median(axis = 0)
+        mad_c = ((logX - med_c).abs().median(axis = 0) * 1.4826).replace(0, np.nan).fillna(logX.std(axis = 0, ddof = 1)).fillna(1.0)
+        b = norm.cdf(-1.6)
+        mnar = pd.DataFrame(np.nan, index = X.index, columns = X.columns, dtype = float)
+        for col in X.columns:
+            idx = X_nan.index[X_nan[col].values]
+            if not len(idx):
+                continue
+            # Spread the censored draws across the truncated left tail by feature intensity, so they keep rank order and variance instead of collapsing onto a single constant
+            r = rankdata(feat_mu.reindex(idx).fillna(-np.inf).values, method = 'ordinal')
+            mnar.loc[idx, col] = norm.ppf((r - 0.5) / len(idx) * b) * mad_c[col] + med_c[col]
+        mnar, wv = np.exp2(mnar), w.values[:, None]
         if self.circadian and self.timepoints is not None:
             time_values = np.array(self.timepoints) if isinstance(self.timepoints, (list, np.ndarray)) \
                 else np.repeat(np.arange(self.timepoints) * self.interval, self.replicates)[:X.shape[1]]
@@ -138,6 +165,10 @@ class MissForest:
             X_transform = X_transform.apply(lambda col: col.fillna(row_medians))
         else:
             X_transform = X.apply(lambda col: col.fillna(row_medians))
+        # Start the iterations from the MNAR-aware prior, so the forest is not anchored at the far-too-high feature median for censored values
+        X_transform = X_transform.mask(X_nan, pd.DataFrame(
+            np.exp2(wv * np.log2(mnar.values) + (1 - wv) * np.log2(np.maximum(X_transform.values, 1e-9))),
+            index = X.index, columns = X.columns))
         # Sort columns by the number of NaNs (ascending)
         sorted_columns = X_nan.sum().sort_values().index
         for _ in range(self.max_iter):
@@ -154,6 +185,10 @@ class MissForest:
                         # Use other columns to predict the current column
                         self.regressor.fit(observed.drop(columns = column), observed[column])
                         y_missing_pred = self.regressor.predict(missing.drop(columns = column))
+                        # Pull the prediction back towards the left-censored draw in proportion to how much of this feature's missingness is intensity-driven
+                        wm, mn = w[missing_idx].values, mnar.loc[missing_idx, column].values
+                        y_missing_pred = np.exp2(
+                            wm * np.log2(mn) + (1 - wm) * np.log2(np.maximum(y_missing_pred, 1e-9)))
                         # Replace missing values in the current column with predictions
                         total_change += np.sum(np.abs(X_transform.loc[missing_idx, column] - y_missing_pred))
                         X_transform.loc[missing_idx, column] = y_missing_pred
@@ -185,10 +220,11 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     glycans = df[colname]
     df = df.iloc[:, 1:]
     df = df.astype(float)
+    floor = 1e-7 if len(groups) == 2 else 1e-5
     for group in groups:
         group_data = df[group]
         all_zero_mask = (group_data == 0).all(axis = 1)
-        df.loc[all_zero_mask, group] = 1e-5
+        df.loc[all_zero_mask, group] = floor
     old_cols = df.columns if isinstance(colname, int) else []
     if len(old_cols):
         df.columns = df.columns.astype(str)
