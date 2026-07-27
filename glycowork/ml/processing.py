@@ -24,7 +24,7 @@ try:
 except ImportError:
     raise ImportError("<rdkit missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
 
-atom_map = {6: 1, 7: 2, 8: 3, 15: 3, 16: 5}
+atom_map = {6: 1, 7: 2, 8: 3, 15: 4, 16: 5}
 bond_map = {Chem.BondDir.BEGINDASH: 1, Chem.BondDir.BEGINWEDGE: 2, Chem.BondDir.NONE: 3}
 
 

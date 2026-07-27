@@ -298,16 +298,16 @@ class GIFFLAR(torch.nn.Module):
                 *args, **kwargs
                 ) -> torch.Tensor | dict:  # node embeddings
         """Compute the node embeddings"""
-        batch.x_dict["atoms"] = self.atom_embedding.forward(batch.x_dict["atoms"])
-        batch.x_dict["bonds"] = self.bond_embedding.forward(batch.x_dict["bonds"])
-        batch.x_dict["monosacchs"] = self.mono_embedding.forward(batch.x_dict["monosacchs"])
+        x_dict = {"atoms": self.atom_embedding.forward(batch.x_dict["atoms"]),
+                  "bonds": self.bond_embedding.forward(batch.x_dict["bonds"]),
+                  "monosacchs": self.mono_embedding.forward(batch.x_dict["monosacchs"])}
         for conv in self.convs:
-            batch.x_dict = conv(batch.x_dict, batch.edge_index_dict)
-        graph_embed = self.pool(batch.x_dict, batch.batch_dict)
+            x_dict = conv(x_dict, batch.edge_index_dict)
+        graph_embed = self.pool(x_dict, batch.batch_dict)
         pred = self.head(graph_embed).squeeze()
         if embeddings:
             return {
-                "node_embed": batch.x_dict,
+                "node_embed": x_dict,
                 "graph_embed": graph_embed,
                 "pred": pred
             }
@@ -385,5 +385,5 @@ def prep_model(model_type: Literal["SweetNet", "GIFFLAR", "LectinOracle", "Lecti
             model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
         model = model.to(device)
     else:
-        print("Invalid Model Type")
+        raise ValueError(f"Invalid model type: {model_type}")
     return model

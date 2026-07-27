@@ -1,3 +1,4 @@
+from glycowork.motif.processing import canonicalize_iupac
 from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
 import copy
 import random
@@ -41,7 +42,7 @@ def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and ta
     # For each class in rank, get unique set of glycans
     for classy in class_list:
         t = df[df[rank] == classy]
-        t = t.drop_duplicates('glycan', keep = 'first')
+        t = t.drop_duplicates(col, keep = 'first')
         temp.append(t)
     df = pd.concat(temp).reset_index(drop = True)
     # Only keep classes in rank with minimum number of glycans
@@ -84,9 +85,11 @@ def prepare_multilabel(df: pd.DataFrame, # dataframe with one glycan-association
                        glycan_col: str = 'glycan' # column with glycan sequences
                        ) -> tuple[list[str], list[list[float]]]: # unique glycans and their label vectors
     "converts a one row per glycan-species/tissue/disease association file to a format of one glycan - all associations"
-    glycans = list(set(df[glycan_col].values.tolist()))
+    df = df.copy()
+    df[glycan_col] = [canonicalize_iupac(g) for g in df[glycan_col]]
+    glycans = list(dict.fromkeys(df[glycan_col].values.tolist()))
     class_list = sorted(list(set(df[rank].values.tolist())))
-    labels = [[0.]*len(class_list) for k in range(len(glycans))]
+    labels = [[0.] * len(class_list) for k in range(len(glycans))]
     # Get all class occurrences of glycan to construct multi-label
     for k, glyc in enumerate(glycans):
         sub_classes = df[df[glycan_col] == glyc][rank].values.tolist()

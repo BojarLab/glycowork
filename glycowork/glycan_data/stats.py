@@ -5,7 +5,6 @@ from collections import Counter
 from sklearn.linear_model import Ridge, LogisticRegression
 from sklearn.ensemble import RandomForestRegressor
 from scipy.stats import rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind
-from scipy.stats.mstats import winsorize
 from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
 import scipy.integrate as integrate
@@ -96,7 +95,7 @@ def variance_stabilization(data: pd.DataFrame, # dataframe with glycans/motifs a
 
 
 class MissForest:
-    def __init__(self, regressor: RandomForestRegressor = RandomForestRegressor(n_jobs = -1), # estimator object for each imputation
+    def __init__(self, regressor: RandomForestRegressor | None = None, # estimator object for each imputation
                  max_iter: int = 5, # number of iterations for imputation process
                  tol: float = 1e-5, # convergence tolerance
                  circadian: bool = False,  # inject sin/cos time features to exploit periodic structure
@@ -106,7 +105,7 @@ class MissForest:
                  replicates: int = 1  # replicates per timepoint (only relevant if circadian)
                  ) -> None:
         "A class to perform MissForest imputation adapted from https://github.com/yuenshingyan/MissForest"
-        self.regressor = regressor
+        self.regressor = regressor if regressor is not None else RandomForestRegressor(n_jobs = -1)
         self.max_iter = max_iter
         self.tol = tol
         self.circadian = circadian
@@ -288,7 +287,7 @@ class JTKTest:
         for period in self.periods:
             theta = 2 * np.pi * timerange / period
             waveforms[period] = [
-                self._generate_phase_waveform(theta + (j * theta / 2))
+                self._generate_phase_waveform(theta + 2 * np.pi * j * self.interval / period)
                 for j in range(timepoints)
             ]
         return waveforms
@@ -336,7 +335,8 @@ def get_BF(n: int, # sample size
 def get_alphaN(n: int, # sample size
                BF: float = 3, # Bayes factor you would like to match
                method: str = "robust", # method for choice of 'b': "JAB", "min", "robust", "balanced"
-               upper: float = 10 # upper limit for range of realistic effect sizes
+               upper: float = 10, # upper limit for range of realistic effect sizes
+               verbose: bool = False # whether to print the adjusted alpha
                ) -> float: # alpha level required to achieve desired evidence
     "Set the alpha level based on sample size via Bayesian-Adaptive Alpha Adjustment"
     method_dict = {"JAB": lambda n: 1/n, "min": lambda n: 2/n, "robust": lambda n: max(2/n, 1/np.sqrt(n))}
@@ -345,7 +345,8 @@ def get_alphaN(n: int, # sample size
         method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
     b = method_dict.get(method, lambda n: 1/n)(n)
     alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(b)), 1)
-    print(f"You're working with an alpha of {alpha} that has been adjusted for your sample size of {n}.")
+    if verbose:
+        print(f"You're working with an alpha of {alpha} that has been adjusted for your sample size of {n}.")
     return alpha
 
 
@@ -471,31 +472,28 @@ def replace_outliers_with_IQR_bounds(full_row: pd.Series, # row from dataframe, 
     return full_row
 
 
-def replace_outliers_winsorization(full_row: pd.Series, # row from dataframe, with all but possibly first value numerical
+def replace_outliers_winsorization(df: pd.DataFrame, # features as rows, all but possibly first column numerical
                                    cap_side: str = 'both' # which side(s) to cap outliers on: 'both', 'lower', or 'upper'
-                                   ) -> pd.Series: # row with outliers replaced by Winsorization
+                                   ) -> pd.DataFrame: # dataframe with outliers replaced by Winsorization
     "Replaces outlier values using Winsorization"
-    row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
-    # Apply Winsorization - limits set to match typical IQR outlier detection
-    nan_placeholder = row.min() - 1
-    row = row.astype(float).fillna(nan_placeholder)
-    limit_value = max(0.05, 1/len(row))
-    if cap_side == 'both':
-        limits = [limit_value, limit_value]
-    elif cap_side == 'lower':
-        limits = [limit_value, 0]
-    elif cap_side == 'upper':
-        limits = [0, limit_value]
-    else:
+    if cap_side not in ('both', 'lower', 'upper'):
         raise ValueError("cap_side must be 'both', 'lower', or 'upper'")
-    winsorized_values = winsorize(row, limits = limits)
-    winsorized_values = pd.Series(winsorized_values, index = row.index)
-    winsorized_values = winsorized_values.replace(nan_placeholder, np.nan)
-    if isinstance(full_row.iloc[0], str):
-        full_row.iloc[1:] = winsorized_values
-    else:
-        full_row = winsorized_values
-    return full_row
+    num = df.select_dtypes('number')
+    V = num.to_numpy(float)
+    n = V.shape[1]
+    # Park NaNs below the minimum so they never affect the order statistics, then restore them
+    placeholder = np.nanmin(V, axis = 1) - 1
+    V = np.where(np.isnan(V), placeholder[:, None], V)
+    # Limits set to match typical IQR outlier detection
+    k = int(np.floor(max(0.05, 1 / n) * n))
+    S = np.sort(V, axis = 1)
+    lower = S[:, k][:, None] if cap_side in ('both', 'lower') else -np.inf
+    upper = S[:, n - 1 - k][:, None] if cap_side in ('both', 'upper') else np.inf
+    out = np.clip(V, lower, upper)
+    out[out == placeholder[:, None]] = np.nan
+    res = df.copy()
+    res[num.columns] = out
+    return res
 
 
 def hotellings_t2(group1: np.ndarray, # comparison group containing numerical data
@@ -648,12 +646,12 @@ def calculate_permanova_stat(df: pd.DataFrame, # square distance matrix
     unique_groups = np.unique(group_labels)
     n = len(group_labels)
     # Between-group and within-group sums of squares
-    ss_total = np.sum(squareform(df)) / 2
+    ss_total = np.sum(squareform(df) ** 2) / n
     ss_within = 0
     for group in unique_groups:
         group_mask = np.array(group_labels) == group
         group_matrix = df.values[np.ix_(group_mask, group_mask)]
-        ss_within += np.sum(squareform(group_matrix)) / 2
+        ss_within += np.sum(squareform(group_matrix) ** 2) / group_mask.sum()
     ss_between = ss_total - ss_within
     # Calculate the PERMANOVA test statistic: pseudo-F
     ms_between = ss_between / max(len(unique_groups) - 1, 1e-10)
@@ -779,22 +777,26 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
     if sum(significance) > 0.9*len(significance):
         print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value.\
              Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
-        res = multipletests(pvals, method = 'bonferroni')
-        corrpvals, alpha = res[1], res[3]
+        corrpvals = multipletests(pvals, method = 'bonferroni')[1]
         significance = [bool(p < alpha) for p in corrpvals]
     return corrpvals, significance
 
 
-def omega_squared(row: pd.Series | np.ndarray, # values for one feature
+def omega_squared(row: pd.Series | np.ndarray | pd.DataFrame, # values for one feature, or a whole feature x sample frame
                   groups: list[str] # list indicating group membership with indices per column
-                  ) -> float: # effect size as omega squared
+                  ) -> float | pd.Series: # effect size as omega squared, per feature
     "Calculates Omega squared, as an effect size in an ANOVA setting"
-    long_df = pd.DataFrame({'value': row, 'group': groups})
-    model = ols('value ~ C(group)', data = long_df).fit()
-    anova_results = anova_lm(model, typ = 2)
-    ss_total = sum(model.resid ** 2) + anova_results['sum_sq'].sum()
-    omega_squared = (anova_results.at['C(group)', 'sum_sq'] - (anova_results.at['C(group)', 'df'] * model.mse_resid)) / (ss_total + model.mse_resid)
-    return omega_squared
+    X = np.atleast_2d(np.asarray(row, dtype = float))
+    g = np.asarray(groups)
+    ug = np.unique(g)
+    ns = np.array([(g == u).sum() for u in ug])
+    group_means = np.stack([X[:, g == u].mean(1) for u in ug], 1)
+    grand_mean = X.mean(1)
+    ss_between = (((group_means - grand_mean[:, None]) ** 2) * ns).sum(1)
+    ss_total = ((X - grand_mean[:, None]) ** 2).sum(1)
+    mse_resid = (ss_total - ss_between) / (X.shape[1] - len(ug))
+    out = (ss_between - (len(ug) - 1) * mse_resid) / (ss_total + mse_resid)
+    return pd.Series(out, index = row.index) if isinstance(row, pd.DataFrame) else out[0]
 
 
 def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_differential_expression
@@ -890,12 +892,18 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
     features, samples = df.shape
     transformed_data = np.zeros((features, samples, num_instances))
     for j in range(samples):
-        dirichlet_samples = dirichlet.rvs(alpha = df.iloc[:, j], random_state = rng, size = num_instances)
-        # CLR Transformation for each Monte Carlo instance
-        for n in range(num_instances):
-            sample_instance = pd.DataFrame(dirichlet_samples[n, :])
-            transformed_data[:, j, n] = clr_transformation(sample_instance, sample_instance.columns.tolist(), [],
-                                                           gamma = gamma, custom_scale = custom_scale).squeeze()
+        dirichlet_samples = dirichlet.rvs(alpha = df.iloc[:, j], random_state = rng, size = num_instances).T
+        if isinstance(custom_scale, dict) or custom_scale:
+            for n in range(num_instances):
+                sample_instance = pd.DataFrame(dirichlet_samples[:, n])
+                transformed_data[:, j, n] = clr_transformation(sample_instance, sample_instance.columns.tolist(), [],
+                                                               gamma = gamma, custom_scale = custom_scale).squeeze()
+        else:
+            # CLR on a single column is just log2(x) minus the log2 geometric mean, plus the gamma uncertainty term
+            log_samples = np.log2(np.where(dirichlet_samples > 0, dirichlet_samples, np.nan))
+            log_gmean = np.nanmean(log_samples, axis = 0)
+            transformed_data[:, j, :] = log_samples + norm.rvs(loc = -log_gmean, scale = gamma, random_state = rng,
+                                                               size = (features, num_instances))
     columns = [col for col in df.columns for _ in range(num_instances)]
     transformed_data_2d = transformed_data.reshape((features, samples* num_instances))
     transformed_df = pd.DataFrame(transformed_data_2d, columns = columns)
@@ -910,20 +918,21 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
     "Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, calculate effect sizes"
     num_features, _ = group_a.shape
     avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes = np.zeros(num_features), np.zeros(num_features), np.zeros(num_features)
+    n_samples = group_a.shape[1] // num_instances
+    arr_a = group_a.values.reshape(num_features, n_samples, num_instances)
+    arr_b = group_b.values.reshape(num_features, n_samples, num_instances)
     for instance in range(num_instances):
-        instance_p_values = []
-        instance_effect_sizes = []
-        for feature in range(num_features):
-            sample_a = group_a.iloc[feature, instance::num_instances].values
-            sample_b = group_b.iloc[feature, instance::num_instances].values
-            p_value = ttest_rel(sample_b, sample_a)[1] if paired else ttest_ind(sample_b, sample_a, equal_var = False)[1]
-            effect_size, _ = cohen_d(sample_b, sample_a, paired = paired)
-            instance_p_values.append(p_value)
-            instance_effect_sizes.append(effect_size)
+        sample_a, sample_b = arr_a[:, :, instance], arr_b[:, :, instance]
+        instance_p_values = (
+            ttest_rel(sample_b, sample_a, axis = 1) if paired else ttest_ind(sample_b, sample_a, equal_var = False,
+                                                                             axis = 1))[1]
+        var_a, var_b = sample_a.var(axis = 1, ddof = 1), sample_b.var(axis = 1, ddof = 1)
+        instance_effect_sizes = (sample_b.mean(1) - sample_a.mean(1)) / np.sqrt(
+            ((n_samples - 1) * np.maximum(var_b, 1e-12) + (n_samples - 1) * np.maximum(var_a, 1e-12)) / (
+                        2 * n_samples - 2))
         # Apply Benjamini-Hochberg correction for multiple testing within the instance
         avg_uncorrected_p_values += instance_p_values
-        corrected_p_values = multipletests(instance_p_values, method = 'fdr_tsbh')[1]
-        avg_corrected_p_values += corrected_p_values
+        avg_corrected_p_values += multipletests(instance_p_values, method = 'fdr_tsbh')[1]
         avg_effect_sizes += instance_effect_sizes
     avg_uncorrected_p_values /= num_instances
     avg_corrected_p_values /= num_instances

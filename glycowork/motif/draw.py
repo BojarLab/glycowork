@@ -1168,33 +1168,33 @@ def draw_chem3d(
             MMFFOptimizeMolecule(mol)
             mol = RemoveHs(mol)
             print("Disclaimer: The conformer generated using RDKit and MMFFOptimizeMolecule is not intended to be a replacement for a 'real' conformer analysis tool. Install glycontact and run this again for improved conformers.")
-        # Color atoms by monosaccharide after mol is finalized
-        atom_colors, bond_colors = {}, {}
-        if from_pdb:
-            try:
-                from glycontact.process import get_pdb_atom_monosaccharides
-                atom_monos = get_pdb_atom_monosaccharides(mol)
-                for atom_idx, mono_name in atom_monos.items():
-                    for i, mono in enumerate(mono_list):
-                        if mono_name == mono:
-                            add_colours_to_map([atom_idx], atom_colors, i, alpha = False)
-                            break
-            except Exception:
-                pass
-            # ROH reducing end oxygen belongs to adjacent monosaccharide
-            for atom in mol.GetAtoms():
-                info = atom.GetPDBResidueInfo()
-                if info and info.GetResidueName().strip() == 'ROH' and atom.GetIdx() not in atom_colors:
-                    for neighbor in atom.GetNeighbors():
-                        if neighbor.GetIdx() in atom_colors:
-                            atom_colors[atom.GetIdx()] = atom_colors[neighbor.GetIdx()]
-                            break
-        else:
-            for i, smarts in enumerate(mono_smarts):
-                atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
-                add_colours_to_map(atoms, atom_colors, i, alpha = False)
-                add_colours_to_map(bonds, bond_colors, i, alpha = False)
-        atom_colors = {k: ['#ECECEC'] if len(v) > 1 else v for k, v in atom_colors.items()}
+    # Color atoms by monosaccharide after mol is finalized
+    atom_colors, bond_colors = {}, {}
+    if from_pdb:
+        try:
+            from glycontact.process import get_pdb_atom_monosaccharides
+            atom_monos = get_pdb_atom_monosaccharides(mol)
+            for atom_idx, mono_name in atom_monos.items():
+                for i, mono in enumerate(mono_list):
+                    if mono_name == mono:
+                        add_colours_to_map([atom_idx], atom_colors, i, alpha = False)
+                        break
+        except Exception:
+            pass
+        # ROH reducing end oxygen belongs to adjacent monosaccharide
+        for atom in mol.GetAtoms():
+            info = atom.GetPDBResidueInfo()
+            if info and info.GetResidueName().strip() == 'ROH' and atom.GetIdx() not in atom_colors:
+                for neighbor in atom.GetNeighbors():
+                    if neighbor.GetIdx() in atom_colors:
+                        atom_colors[atom.GetIdx()] = atom_colors[neighbor.GetIdx()]
+                        break
+    else:
+        for i, smarts in enumerate(mono_smarts):
+            atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
+            add_colours_to_map(atoms, atom_colors, i, alpha = False)
+            add_colours_to_map(bonds, bond_colors, i, alpha = False)
+    atom_colors = {k: ['#ECECEC'] if len(v) > 1 else v for k, v in atom_colors.items()}
     if filepath:
         filepath = Path(filepath)
         if filepath.suffix.lower() == '.pdb':
@@ -1321,8 +1321,8 @@ def GlycoDraw(
     def calculate_degree(y1, y2, x1, x2):
         return degrees(atan((y1-y2) / (2*(x2-x1))))
 
-    main_deg = [calculate_degree(main_sugar_y_pos[k], main_sugar_y_pos[k-1], main_sugar_x_pos[k], main_sugar_x_pos[k-1])
-                if sugar in {'Z', 'Y'} else 0 for k, sugar in enumerate(main_sugar)]
+    main_deg = [calculate_degree(main_sugar_y_pos[k], main_sugar_y_pos[k - 1], main_sugar_x_pos[k], main_sugar_x_pos[k - 1])
+        if sugar in {'Z', 'Y'} and k > 0 else 0 for k, sugar in enumerate(main_sugar)]
 
     # Calculate angles for branch Y, Z fragments
     l1_deg = []
@@ -1437,7 +1437,7 @@ def GlycoDraw(
             floaty_sugar, floaty_sugar_x_pos, floaty_sugar_y_pos, floaty_sugar_modification, floaty_bond, floaty_conf, _, _ = j_val[0]
             floaty_sugar_label = ['show' if highlight_motif == None else 'hide' for k in floaty_sugar]
             floaty_bond_label = ['show' if highlight_motif == None else 'hide' for k in floaty_bond]
-            floaty_sugar_x_pos = [floaty_sugar_x_pos[k] + max_x + 1 for k in floaty_sugar_x_pos]
+            floaty_sugar_x_pos = [k + max_x + 1 for k in floaty_sugar_x_pos]
             current_y = (min_y + (j * y_spacing)) if n_floats > 1 else ((min_y + max_y) / 2)
             floaty_sugar_y_pos = [current_y for _ in range(len(floaty_sugar_y_pos))]
             if floaty_sugar != ['blank', 'blank']:

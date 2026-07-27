@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from typing import Callable
 from scipy.spatial.distance import cosine, squareform
 from scipy.cluster.hierarchy import dendrogram, linkage
+from glycowork.glycan_data.loader import GlycoList
 from glycowork.motif.graph import subgraph_isomorphism
 
 # Get the directory and filename of the current script
@@ -67,7 +68,7 @@ def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) a
         avg_embeddings = avg_embeddings.set_index(avg_embeddings.columns[0])
     avg_values = np.vstack(avg_embeddings.values)
     # Get the distance matrix
-    return calculate_distance_matrix(avg_values, cosine, label_list = valid_ranks)
+    return calculate_distance_matrix(avg_values, cosine, label_list = avg_embeddings.index.tolist())
 
 
 def jaccard(list1: list | nx.Graph, # First list/network to compare
@@ -149,7 +150,7 @@ def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
     for r in valid_ranks:
         rank_df = df_filtered[df_filtered[rank] == r]
         rank_species = rank_df['Species'].unique()
-        rank_networks = [filtered_network_dic[spec] for spec in rank_species]
+        rank_networks = [filtered_network_dic[spec] for spec in rank_species if spec in filtered_network_dic]
         rank_nodes = [list(net.nodes()) for net in rank_networks]
         if motif:
             if glycan[-1] == ')':
@@ -157,7 +158,7 @@ def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
             else:
                 conserved[r] =  sum(any(subgraph_isomorphism(node, glycan) for node in nodes) for nodes in rank_nodes) / len(rank_nodes)
         else:
-            conserved[r] = sum(glycan in nodes for nodes in rank_nodes) / len(rank_nodes)
+            conserved[r] = sum(glycan in GlycoList(nodes) for nodes in rank_nodes) / len(rank_nodes)
     return conserved
 
 

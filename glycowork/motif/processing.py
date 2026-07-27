@@ -124,10 +124,9 @@ def expand_lib(libr_in: dict[str, int], # Existing dictionary of glycoletter:ind
     "Updates libr with newly introduced glycoletters"
     libr = dict(libr_in)
     new_libr = get_lib(glycan_list)
-    offset = len(libr)
-    for k, v in new_libr.items():
+    for k in new_libr:
         if k not in libr:
-            libr[k] = v + offset
+            libr[k] = len(libr)
     return libr
 
 
@@ -165,7 +164,7 @@ def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: H
 def de_wildcard_glycoletter(glycoletter: str # Monosaccharide or linkage with wildcards
                             ) -> str: # Specific glycoletter instance
     "Retrieves a random specified instance of a general type (e.g., 'Gal' for 'Hex')"
-    if '?' in glycoletter or '/' in glycoletter:
+    if ('?' in glycoletter or '/' in glycoletter) and '-' in glycoletter:
         return choice(list(get_possible_linkages(glycoletter)))
     elif monos := get_possible_monosaccharides(glycoletter):
         return choice(list(monos))
@@ -726,7 +725,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
         else:
             return []
 
-    def balance_mannose_branch_linkages(iupac: str, antenna_number = int | None):
+    def balance_mannose_branch_linkages(iupac: str, antenna_number: int | None = None):
         """
         Checks whether a1-3 and a1-6 branches are identical, if not assigns a1-3/6.
         If antenna_number is provided, assigns that number to the longest branch.

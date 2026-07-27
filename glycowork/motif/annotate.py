@@ -298,6 +298,7 @@ def deduplicate_motifs(
         df: pd.DataFrame # DataFrame with glycan motifs as rows, samples as columns
 ) -> pd.DataFrame: # DataFrame with redundant motifs removed
     "Removes redundant motif entries from glycan abundance data while preserving the most informative labels"
+    df = df.copy()
     motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
     original_index = df.index.copy()
     df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' ' * 20 if x in motif_dic else x)

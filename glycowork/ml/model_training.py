@@ -154,8 +154,6 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                     if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
                         enable_running_stats(model)
                     pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
-                    if mode2 == "multi" and mode != "multilabel" and mode != "regression":
-                        pred = pred.softmax(dim = -1)
                     loss = criterion(pred, y)
                     if phase == 'train':
                         loss.backward()
@@ -182,7 +180,10 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                                                                keepdims = True)  # numpy softmax
                         pred2 = np.argmax(pred_det, axis = 1)
                     else:
-                        pred_proba = sigmoid(pred_det)
+                        if pred_det.ndim > 1 and pred_det.shape[1] == 2:
+                            pred_proba = (np.exp(pred_det) / np.sum(np.exp(pred_det), axis = 1, keepdims = True))[:, 1]
+                        else:
+                            pred_proba = sigmoid(pred_det)
                         pred2 = (pred_proba >= 0.5).astype(int)
                     running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
                     running_metrics["mcc"].append(matthews_corrcoef(y_det, pred2))

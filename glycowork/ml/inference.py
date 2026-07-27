@@ -12,7 +12,7 @@ try:
         device = "cuda:0"
 except ImportError:
     raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
-from glycowork.glycan_data.loader import lib, unwrap
+from glycowork.glycan_data.loader import lib, unwrap, GlycoList
 from glycowork.motif.tokenization import prot_to_coded
 from glycowork.ml.processing import dataset_to_dataloader
 
@@ -60,11 +60,12 @@ def glycans_to_emb(glycans: list[str],  # list of glycans in IUPAC-condensed
     model = model.eval()
     # Get predictions for each mini-batch
     for data in glycan_loader:
-        x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
-        x, y, edge_index, batch = x.to(device), y.to(device), edge_index.to(device), batch.to(device)
-        pred, out = model(x, edge_index, batch, inference = True)
-        # Unpacking and combining predictions
-        res.extend(out.detach().cpu().numpy()) if rep else res.extend(pred.detach().cpu().numpy())
+        with torch.no_grad():
+            x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
+            x, y, edge_index, batch = x.to(device), y.to(device), edge_index.to(device), batch.to(device)
+            pred, out = model(x, edge_index, batch, inference = True)
+            # Unpacking and combining predictions
+            res.extend(out.detach().cpu().numpy()) if rep else res.extend(pred.detach().cpu().numpy())
     return pd.DataFrame(res) if (rep or multilabel) else [class_list[k] for k in np.argmax(res, axis = 1)]
 
 
@@ -94,16 +95,19 @@ def get_multi_pred(prot: str,  # protein amino acid sequence
     res = []
     # Get predictions for each mini-batch
     for k in train_loader:
-        x, y, edge_index, prot, batch = k.labels, k.y, k.edge_index, k.train_idx, k.batch
-        x, y, edge_index, prot, batch = x.to(device), y.to(device), edge_index.to(device), prot.view(max(batch) + 1,
-                                                                                                     -1).float().to(
-            device), batch.to(device)
-        pred = model(prot, x, edge_index, batch)
-        res.extend(pred.detach().cpu().numpy())
+        with torch.no_grad():
+            x, y, edge_index, prot, batch = k.labels, k.y, k.edge_index, k.train_idx, k.batch
+            x, y, edge_index, prot, batch = x.to(device), y.to(device), edge_index.to(device), prot.view(max(batch) + 1,
+                                                                                                         -1).float().to(
+                device), batch.to(device)
+            pred = model(prot, x, edge_index, batch)
+            res.extend(pred.detach().cpu().numpy())
     # Applying background correction of predictions
     if background_correction:
         correction_df = pd.Series(correction_df.pred.values, index = correction_df.motif).to_dict()
-        bg_res = [correction_df.get(j, 0) for j in glycans]
+        correction_keys = GlycoList(list(correction_df))
+        bg_res = [correction_df[j] if j in correction_df else (
+            correction_df[correction_keys[correction_keys.index(j)]] if j in correction_keys else 0) for j in glycans]
         if 0 in bg_res:
             print(
                 "Warning: not all glycans are in the correction_df; consider adding their background to correction_df")

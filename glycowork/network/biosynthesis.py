@@ -12,7 +12,7 @@ import statsmodels.api as sm
 import networkx as nx
 import numpy as np
 import pandas as pd
-from glycowork.glycan_data.loader import unwrap, linkages, lib
+from glycowork.glycan_data.loader import unwrap, linkages, lib, GlycoList, GlycoDataFrame
 from glycowork.glycan_data.stats import cohen_d, get_alphaN
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, graph_to_string_int, subgraph_isomorphism, get_possible_topologies
 from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class, canonicalize_iupac, canonicalize_composition, is_composition
@@ -691,17 +691,23 @@ def find_diamonds(network: nx.DiGraph, # Biosynthetic network
     graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(network, g1)
     # Find diamonds within those networks
     matchings_list = list(graph_pair.subgraph_isomorphisms_iter())
-    unique_keys = {tuple(sorted(d.keys())) for d in matchings_list}
     # Map found diamonds to the same format
-    matchings_list = [{v: k for k, v in next(d for d in matchings_list if tuple(sorted(d.keys())) == key).items()} for key in unique_keys]
+    seen_keys = {}
+    for d in matchings_list:
+        seen_keys.setdefault(tuple(sorted(d.keys())), {v: k for k, v in d.items()})
+    matchings_list = list(seen_keys.values())
     final_matchings = []
     # For each diamond, only keep the diamond if at least one of the intermediate structures is virtual
     virtual_attr = nx.get_node_attributes(network, 'virtual')
+    desc_cache = {}
     for d in matchings_list:
         substrate_node, product_node = d[1], d[path_length]
-        middle_nodes = [d[k] for k in range(2, path_length) if k != path_length]
+        middle_nodes = [d[k] for k in list(range(2, path_length)) + list(range(path_length + 1, 2 * path_length - 1))]
         # For each middle node, test whether they are part of the same path as substrate node and product node (remove false positives)
-        if all(nx.has_path(network, substrate_node, mn) and nx.has_path(network, mn, product_node) for mn in middle_nodes):
+        for node in [substrate_node] + middle_nodes:
+            if node not in desc_cache:
+                desc_cache[node] = nx.descendants(network, node)
+        if all(mn in desc_cache[substrate_node] and product_node in desc_cache[mn] for mn in middle_nodes):
             virtual_states = (virtual_attr.get(mn, 0) for mn in middle_nodes)
             if any(vs == 1 for vs in virtual_states) or mode == 'abundance':
                 # Filter out non-diamond shapes with any cross-connections
@@ -816,7 +822,10 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
     # Add relative intensity values as 'abundance' node attribute used for node size scaling
     elif highlight == 'abundance':
         abundance_dict = dict(zip(abundance_df[glycan_col], abundance_df[intensity_col] * 100))
-        node_abundance = {node: abundance_dict.get(node, 50) for node in network_out.nodes()}
+        abundance_keys = GlycoList(list(abundance_dict))
+        node_abundance = {
+            node: abundance_dict[abundance_keys[abundance_keys.index(node)]] if node in abundance_keys else 50 for node
+            in network_out.nodes()}
         nx.set_node_attributes(network_out, node_abundance, name = 'abundance')
     # Add the degree of evolutionary conervation as 'abundance' node attribute used for node size scaling
     elif highlight == 'conservation':
@@ -869,13 +878,16 @@ def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
                      sinks: list[str] | None = None # Target nodes; default:all terminal nodes
                      ) -> dict[str, dict[str, float | dict[str, dict[str, float]]]]: # Flow results; sink: {maximum flow value, flow path dictionary}
     "Estimate maximum flow and flow paths between source and sinks"
+    path_lengths = nx.single_source_shortest_path_length(network, source)
     if sinks is None:
-        sinks = [node for node, out_degree in network.out_degree() if out_degree == 0 and nx.has_path(network, source, node)]
+        sinks = [node for node, out_degree in network.out_degree() if out_degree == 0 and node in path_lengths]
     # Dictionary to store flow values and paths for each sink
     flow_results = {}
     for sink in sinks:
         try:
-            path_length = nx.shortest_path_length(network, source = source, target = sink)
+            if sink not in path_lengths:
+                raise nx.NetworkXNoPath(f"No path between {source} and {sink}.")
+            path_length = path_lengths[sink]
             try:
                 flow_value, flow_dict = nx.maximum_flow(network, source, sink)
             except Exception:
@@ -927,14 +939,17 @@ def get_reaction_flow(network: nx.DiGraph, # Biosynthetic network
 
 
 def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance data (first column: glycan sequences)
-                                  group1: list[str | int], # First group column indices/names (or time points in longitudinal analysis)
+                                  group1: list[str | int] | None = None, # First group column indices/names (or time points in longitudinal analysis); default: from the frame's contrasts
                                   group2: list[str | int] | None = None, # Second group column indices/names (or time points in longitudinal analysis)
                                   analysis: str = "reaction", # Type: reaction/flow
-                                  paired: bool = False, # Whether samples are paired
+                                  paired: bool | None = None, # Whether samples are paired; default: from the frame
                                   longitudinal: bool = False, # Whether to do perform longitudinal analysis
                                   id_column: str = "ID" # Sample ID column for longitudinal analysis in the ID-style of participant_time_replicate
                                   ) -> pd.DataFrame: # Differential analysis results (differential flow features and statistics OR reaction changes over time
     "Compare biosynthetic patterns between conditions/timepoints"
+    if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
+        group1, group2 = list(df.group1), list(df.group2)
+    paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     if longitudinal:
         assert id_column is not None, "id_column must be specified for longitudinal analysis"
         assert group2 is None, "group2 should not be specified for longitudinal analysis"
@@ -964,7 +979,10 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         glycan_columns = all_groups
         df_analysis = df.set_index(df.columns.tolist()[0])
     df_analysis = df_analysis.loc[:, glycan_columns].fillna(0)
-    df_analysis = (df_analysis / df_analysis.sum(axis = 1).values[:, None]) * 100
+    if longitudinal:
+        df_analysis = (df_analysis / df_analysis.sum(axis = 1).values[:, None]) * 100
+    else:
+        df_analysis = (df_analysis / df_analysis.sum(axis = 0).values[None, :]) * 100
     if not longitudinal:
         df_analysis = df_analysis[df_analysis.any(axis = 1)]
     else:
@@ -1046,7 +1064,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         df_a, df_b = res2.loc[group1, :].T, res2.loc[group2, :].T
         log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
         pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-        pvals = [p if p > 0 else 1.0 for p in pvals]
+        pvals = [max(p, np.finfo(float).tiny) if p == p else 1.0 for p in pvals]
         corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1] if pvals else []
         alpha = get_alphaN(len(all_groups))
         significance = [p < alpha for p in corrpvals] if pvals else []
@@ -1158,17 +1176,20 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
 
 def get_biosynthetic_coherence(
         df: pd.DataFrame, # Glycan abundances (glycans as index or first column, samples as columns)
-        group1: list[str], # First group column names
-        group2: list[str], # Second group column names
-        network: nx.DiGraph | None = None, # Pre-built network; built from df if not provided
-        paired: bool = False # Whether samples are paired
+        group1: list[str] | None = None,  # First group column names; default: from the frame's contrasts
+        group2: list[str] | None = None,  # Second group column names; default: from the frame's contrasts
+        network: nx.DiGraph | None = None,  # Pre-built network; built from df if not provided
+        paired: bool | None = None  # Whether samples are paired; default: from the frame
 ) -> pd.DataFrame: # Test results with group means, difference, t-statistic, p-value, and Cohen's d
     "Test whether biosynthetic coherence differs between two conditions using per-sample variance-weighted R²"
+    if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
+        group1, group2 = list(df.group1), list(df.group2)
+    paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     if not isinstance(df.index[0], str):
         df = df.set_index(df.columns[0])
     if network is None:
         network = construct_network(df.index.tolist())
-    glycans_in_net = {n for n in network.nodes() if network.nodes[n].get('virtual', 1) == 0}
+    glycans_in_net = GlycoList([n for n in network.nodes() if network.nodes[n].get('virtual', 1) == 0])
     glycans = [g for g in df.index if g in glycans_in_net]
     gidx = {g: i for i, g in enumerate(glycans)}
     col_sums = df.loc[glycans].sum(axis = 0)

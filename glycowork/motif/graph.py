@@ -15,7 +15,9 @@ PTM_REGEX = re.compile(r"(?<!Neu)(?<=\D)(\d+/\d+|\d+)(?=\D)")
 NEGATION_REGEX = re.compile(r'(!\w+\([^)]+\))')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
 LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
-
+from weakref import WeakKeyDictionary
+_SL_CACHE = WeakKeyDictionary()
+_NEG_CACHE = WeakKeyDictionary()
 
 def memoize_node_match(func):
     """Memoization decorator for narrow wildcard lists"""
@@ -27,6 +29,13 @@ def memoize_node_match(func):
             cache[key] = func(proc)
         return cache[key]
     return wrapper
+
+
+def _sl(g):  # cached string_labels, keyed on graph identity (subgraph views share g.graph, so it cannot live there)
+    v = _SL_CACHE.get(g)
+    if v is None:
+        v = _SL_CACHE[g] = [d['string_labels'] for _, d in g.nodes(data = True)]
+    return v
 
 
 @memoize_node_match
@@ -169,6 +178,7 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
 def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph
                            ) -> nx.DiGraph: # Modified graph with PTM wildcards
     "Standardize PTM wildcards in graph"
+    _SL_CACHE.pop(graph, None)
     for node in graph.nodes:
         graph.nodes[node]['string_labels'] = PTM_REGEX.sub('O', graph.nodes[node]['string_labels'])
     return graph
@@ -219,7 +229,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
         g1_sl, g2_sl = nx.get_node_attributes(glycan_a, "string_labels"), nx.get_node_attributes(glycan_b, "string_labels")
         proc = set(g1_sl.values()) | set(g2_sl.values())
         if any('O' in s for s in proc):
-            g1, g2 = ptm_wildcard_for_graph(deepcopy(glycan_a)), ptm_wildcard_for_graph(deepcopy(glycan_b))
+            g1, g2 = ptm_wildcard_for_graph(glycan_a.copy()), ptm_wildcard_for_graph(glycan_b.copy())
             g1_sl = nx.get_node_attributes(g1, "string_labels")
             g2_sl = nx.get_node_attributes(g2, "string_labels")
         else:
@@ -269,7 +279,7 @@ def handle_negation(original_func: Callable # Function to wrap
     def wrapper(glycan, motif, *args, **kwargs):
         if isinstance(motif, str) and '!' in motif:
             return subgraph_isomorphism_with_negation(glycan, motif, *args, **kwargs)
-        elif hasattr(motif, 'nodes') and any('!' in data.get('string_labels', '') for _, data in motif.nodes(data = True)):
+        elif hasattr(motif, 'nodes') and _NEG_CACHE.setdefault(motif, any('!' in d.get('string_labels', '') for _, d in motif.nodes(data = True))):
             return subgraph_isomorphism_with_negation(glycan, motif, *args, **kwargs)
         else:
             return original_func(glycan, motif, *args, **kwargs)
@@ -287,7 +297,10 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
     if isinstance(glycan, str) and isinstance(motif, str):
         if motif.count('(') > glycan.count('('):
             return (0, []) if return_matches else 0 if count else False
-        if not count and not return_matches and motif in glycan:
+        if not count and not return_matches and not termini_list and any(
+                glycan[i:i + len(motif)] == motif and (i == 0 or glycan[i - 1] in '([)]') and (
+                        i + len(motif) == len(glycan) or glycan[i + len(motif)] in ')]') for i in
+                range(len(glycan) - len(motif) + 1)):
             return True
         motif_comp = min_process_glycans([motif, glycan])
         if 'O' in glycan or 'O' in motif:
@@ -297,38 +310,37 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
     else:
         if len(glycan.nodes) < len(motif.nodes):
             return (0, []) if return_matches else 0 if count else False
-        if termini_list:
+        if termini_list and not nx.get_node_attributes(motif, 'termini'):
             motif = motif.copy()
             nx.set_node_attributes(motif, dict(zip(motif.nodes(), expand_termini_list(motif, termini_list) if len(termini_list) < len(motif) else termini_list)), 'termini')
-        motif_comp = [nx.get_node_attributes(motif, "string_labels").values(), nx.get_node_attributes(glycan, "string_labels").values()]
+        motif_comp = [_sl(motif), _sl(glycan)]
         if any('O' in s for s in unwrap(motif_comp)):
-            g1, g2 = ptm_wildcard_for_graph(deepcopy(glycan)), ptm_wildcard_for_graph(deepcopy(motif))
+            g1, g2 = ptm_wildcard_for_graph(glycan.copy()), ptm_wildcard_for_graph(motif.copy())
         else:
             g1, g2 = glycan, motif
     narrow_wildcard_list = build_wildcard_cache(set(unwrap(motif_comp)))
     if termini_list or narrow_wildcard_list:
-        if narrow_wildcard_list and not _prefilter_labels(
-                list(nx.get_node_attributes(g1, 'string_labels').values()),
-                list(nx.get_node_attributes(g2, 'string_labels').values()),
-                narrow_wildcard_list):
+        # no wildcards anywhere => node_match is plain label equality, so a label-subset check is sound
+        if not narrow_wildcard_list and not set(_sl(g2)).issubset(set(_sl(g1))):
+            return (0, []) if return_matches else 0 if count else False
+        if narrow_wildcard_list and not _prefilter_labels(_sl(g1), _sl(g2), narrow_wildcard_list):
             return (0, []) if return_matches else 0 if count else False
         graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(g1, g2, node_match = categorical_node_match_wildcard('string_labels', 'unknown', narrow_wildcard_list,
                                                                                                                    'termini', 'flexible'))
     else:
-        g1_node_attr = set(nx.get_node_attributes(g1, "string_labels").values())
+        g1_node_attr = set(_sl(g1))
         if not set(motif_comp[0]).issubset(g1_node_attr):
             return (0, []) if return_matches else 0 if count else False
         graph_pair = nx.algorithms.isomorphism.DiGraphMatcher(g1, g2, node_match = nx.algorithms.isomorphism.categorical_node_match('string_labels', 'unknown'))
     # Count motif occurrence
     valid_mappings, seen = [], set()
-    if graph_pair.subgraph_is_isomorphic():
-        for mapping in graph_pair.subgraph_isomorphisms_iter():
-            if not return_matches and not count:
-                return True
-            key = frozenset(mapping.keys())
-            if key not in seen:
-                seen.add(key)
-                valid_mappings.append(list(mapping.keys()))
+    for mapping in graph_pair.subgraph_isomorphisms_iter():
+        if not return_matches and not count:
+            return True
+        key = frozenset(mapping.keys())
+        if key not in seen:
+            seen.add(key)
+            valid_mappings.append(list(mapping.keys()))
     if count:
         total = len(valid_mappings)
         return (total, valid_mappings) if return_matches else total

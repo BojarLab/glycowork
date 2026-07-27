@@ -5,7 +5,7 @@ import re
 import copy
 from random import sample
 from importlib import resources
-from collections import Counter
+from collections import Counter, defaultdict
 from sklearn.cluster import DBSCAN
 from functools import reduce
 
@@ -33,6 +33,7 @@ _SPECIAL_MODS = {
     # 'modification': {'replacement': 'what to replace with', 'diff_moiety': chemical formula, sign indicating loss/gain}
 }
 _VALID_COMPONENTS = {'Hex', 'dHex', 'HexNAc', 'HexN', 'HexA', 'Neu5Ac', 'Neu5Gc', 'Kdn', 'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac', '-H2O', '+N3', '-OH'}
+_COMPOSITION_INDEX = {}
 
 with resources.files("glycowork.motif").joinpath("mz_to_composition.csv").open(encoding = 'utf-8-sig') as f:
     mapping_file = pd.read_csv(f)
@@ -63,9 +64,10 @@ def prot_to_coded(proteins: list[str], # List of protein sequences
     # Cut off protein sequence above pad_len
     prots = [protein[:pad_len] for protein in proteins]
     # Replace forbidden characters with 'z'
-    prots = constrain_prot(prots, libr = libr)
+    prots = constrain_prot([protein.upper() for protein in prots], libr = libr)
     # Pad up to a length of pad_len
-    return [pad_sequence(string_to_labels(prot.upper(), libr = libr), max_length = pad_len, pad_label = pad_label) for prot in prots]
+    return [pad_sequence(string_to_labels(prot, libr = libr), max_length = pad_len, pad_label = pad_label) for prot in
+            prots]
 
 
 def string_to_labels(character_string: str, # String to tokenize
@@ -134,8 +136,7 @@ def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
     """Remove modifications from all monosaccharides in glycan"""
     if libr is None:
         libr = lib
-    if stem_lib is None:
-        stem_lib = get_stem_lib(libr)
+    stem_lib = get_stem_lib(libr) if stem_lib is None else dict(stem_lib)
     if '(' not in glycan:
         return get_core(glycan)
     sorted_keys = sorted(stem_lib.keys(), key = len, reverse = True)
@@ -235,21 +236,28 @@ def match_composition_relaxed(composition: dict[str, int], # Dictionary indicati
                               ) -> list[str]: # List of matching glycans
     """Map coarse-grained composition to matching glycans"""
     if df_use is None:
+        key = (glycan_class, kingdom)
         df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
-    # Subset for glycans with the right number of monosaccharides
-    comp_count = sum(composition.values())
-    len_distr = [(len(k)+1)//2 for k in min_process_glycans(df_use.glycan.values.tolist())]
-    idx = [i for i, length in enumerate(len_distr) if length == comp_count]
-    output_list = df_use.iloc[idx, :].glycan.values.tolist()
-    output_compositions = [glycan_to_composition(k) for k in output_list]
-    return [glycan for glycan, glycan_comp in zip(output_list, output_compositions) if glycan_comp == composition]
+    else:
+        key = id(df_use)
+        # Index the database by composition once; the reference to df_use keeps its id from being recycled
+    if key not in _COMPOSITION_INDEX:
+        index = defaultdict(list)
+        for glycan in df_use.glycan.values.tolist():
+            index[frozenset(glycan_to_composition(glycan).items())].append(glycan)
+        _COMPOSITION_INDEX[key] = (df_use, index)
+    return _COMPOSITION_INDEX[key][1].get(frozenset(composition.items()), [])
 
 
 def condense_composition_matching(matched_composition: list[str] # List of matching glycans
                                   ) -> list[str]: # Minimal list of representative glycans
     """Find minimum set of glycans characterizing matched composition"""
     # Establish glycan equality given the wildcards
-    match_matrix = [[compare_glycans(k, j) for j in matched_composition] for k in matched_composition]
+    n = len(matched_composition)
+    match_matrix = [[1] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            match_matrix[i][j] = match_matrix[j][i] = compare_glycans(matched_composition[i], matched_composition[j])
     # Cluster glycans by pairwise equality (given the wildcards)
     clustering = DBSCAN(eps = 1, min_samples = 1).fit(match_matrix)
     num_clusters = len(set(clustering.labels_))
@@ -436,11 +444,13 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
             glycan = glycan.replace(mod, info['replacement'])
     composition = Counter(sorted([map_to_basic(stem_libr.get(key := re.sub(r"/\d", "", k), get_core(key)) if '/' in k else stem_libr[k]) for k in min_process_glycans([glycan])[0]]))
     composition.update(diff_moieties)
-    for mod in ('Me', 'S', 'P', 'PCho', 'PEtN'):
+    for mod in ('Me', 'PCho', 'PEtN'):
         if mod in glycan:
             composition[mod] = glycan.count(mod)
-    if 'PCho' in glycan or 'PEtN' in glycan:
-        composition.pop('P', None)
+    if n_p := len(re.findall(r'P(?!en|yr|Cho|EtN)', glycan)):
+        composition['P'] = n_p
+    if n_s := len(re.findall(r'S(?!ia|or|ed)', glycan)):
+        composition['S'] = n_s
     ac_mods = ('OAc', '2Ac', '3Ac', '4Ac', '6Ac', '7Ac', '9Ac')
     if any(mod in glycan for mod in ac_mods):
         composition['Ac'] = sum(glycan.count(mod) for mod in ac_mods)

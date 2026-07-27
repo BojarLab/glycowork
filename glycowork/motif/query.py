@@ -14,7 +14,7 @@ def get_insight(glycan: str, # Glycan in IUPAC-condensed format
         motifs = motif_list
     print("Let's get rolling! Give us a few moments to crunch some numbers.")
     # Find glycan as string or as graph in df_glycan
-    if glycan in df_glycan.glycan:
+    if glycan in df_glycan.glycan.values:
         idx = df_glycan.glycan.values.tolist().index(glycan)
     else:
         idx = np.where([compare_glycans(glycan, k) for k in df_glycan.glycan.values.tolist()])[0][0]

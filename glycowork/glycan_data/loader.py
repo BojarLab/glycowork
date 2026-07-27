@@ -97,7 +97,10 @@ class GlycoDataFrame(pd.DataFrame):
         """Sample columns for the second group, with .name for group label"""
         if not self._contrasts:
             return NamedGroup('', [])
-        name = list(dict.fromkeys(self._contrasts.values()))[1]
+        names = list(dict.fromkeys(self._contrasts.values()))
+        if len(names) < 2:
+            return NamedGroup('', [])
+        name = names[1]
         return NamedGroup(name, [col for col in self.columns if self._contrasts.get(col) == name])
 
     @property
@@ -131,7 +134,7 @@ class GlycoDataFrame(pd.DataFrame):
                      min_count: int | None = 1 # Minimum number of times motif needs to be present to pass
                      ) -> 'GlycoDataFrame':
         from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
-        indices = [i for i, g in enumerate(self.glycans) if isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list, count = True) >= min_count]
+        indices = [i for i, g in enumerate(self.glycans) if isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list, count = True) >= (1 if min_count is None else min_count)]
         return self.iloc[indices, :].reset_index(drop = True)
 
 
@@ -152,6 +155,8 @@ class GlycoList(list):
         raise ValueError(f"{value} is not in list")
 
     def __contains__(self, value):
+        if isinstance(value, str) and list.__contains__(self, value):
+            return True
         return any(self._compare(item, value) for item in self)
 
     def count(self, value):
