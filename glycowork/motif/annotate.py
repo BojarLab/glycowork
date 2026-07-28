@@ -14,6 +14,7 @@ from glycowork.motif.regex import get_match
 
 LINKAGE_NODE_PATTERN = re.compile(r'^[ab?][0-9?/]+-[0-9?/]+$')
 _WILDCARD_RE = re.compile(r'(?<![A-Za-z0-9])(?:Monosaccharide|HexNAcOS|HexNAc|HexOS|HexA|dHex|Hex|Sia|Pen)(?![A-Za-z0-9])')
+_STRUCTURAL_ALDITOL = re.compile(r'(?:Thre|Ery|Rib|Gro|Ara)[A-Za-z0-9]*-ol$')
 
 
 def _motif_ambiguity(
@@ -190,6 +191,9 @@ def annotate_dataset(
     "Comprehensive glycan annotation combining multiple feature types: structural motifs, graph properties, terminal sequences"
     if any(k in ''.join(glycans) for k in (';', 'β', 'α', 'RES', '=')):
         raise Exception
+    # Reducing-end position is expressed through termini specs, not through the residue label
+    original_glycans = glycans
+    glycans = [g[:-3] if g.endswith('-ol') and not _STRUCTURAL_ALDITOL.search(g) else g for g in glycans]
     invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive', 'size_branch'}
     if invalid_features:
         print(f"Warning: {', '.join(invalid_features)} not recognized as features.")
@@ -258,12 +262,9 @@ def annotate_dataset(
         shopping_cart.append(bag_out)
     if 'size_branch' in feature_set:
         shopping_cart.append(get_size_branching_features(glycans))
-    if condense:
-        # Remove motifs that never occur
-        temp = pd.concat(shopping_cart, axis = 1)
-        return temp.loc[:, (temp != 0).any(axis = 0)]
-    else:
-        return pd.concat(shopping_cart, axis = 1)
+    temp = pd.concat(shopping_cart, axis = 1)
+    temp.index = original_glycans  # rows were built from the de-reduced sequences but must come back keyed on what the caller passed in, or downstream index alignment silently drops everything
+    return temp.loc[:, (temp != 0).any(axis = 0)] if condense else temp
 
 def get_motif_dag(
         motifs: list[str], # Motif labels as produced by annotate_dataset/quantify_motifs
