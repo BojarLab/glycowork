@@ -1,4 +1,5 @@
 *.bak
+CLAUDE.md
 .gitattributes
 .last_checked
 .gitconfig

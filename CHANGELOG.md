@@ -21,8 +21,8 @@
 - Added the new `grouped_BH` keyword argument to `get_glycanova`, `get_time_series`, and `get_jtk` (a918a2e)
 - `get_differential_expression` and `get_glycanova` now also announce which children motifs support the change in a parent motif (and whether a portion of the change cannot be explained by children motifs) (a918a2e)
 - `get_differential_expression` and `get_glycanova` now also report a "Redistribution p-val", which tests whether the motif is now found in *different* sequence contexts (e.g., `Internal_LacNAc_type2` might not change in abundance but might be redistributed from sialyl-LacNAc to H-type motifs) (a918a2e)
-- `get_roc` now also outputs the selected features if `multi_score=True`
-- functions in `.analysis` now can read the stored metadata automatically and act accordingly, supporting easy-calls like `get_differential_expression(glycomics_data_loader.human_brain_N_PMID38343116)`
+- `get_roc` now also outputs the selected features if `multi_score=True` (5483f3c)
+- functions in `.analysis` now can read the stored metadata automatically and act accordingly, supporting easy-calls like `get_differential_expression(glycomics_data_loader.human_brain_N_PMID38343116)` (5483f3c)
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
@@ -33,7 +33,7 @@
 
 #### processing
 ##### Changed 🔄
-- `de_wildcard_glycoletter` now also supports narrow monosaccharide wildcards like `Gal/Glc`
+- `de_wildcard_glycoletter` now also supports narrow monosaccharide wildcards like `Gal/Glc` (5483f3c)
 
 ##### Fixed 🐛
 - Fixed `canonicalize_iupac` messing up narrow modification wildcards (e.g., `Gal3/6S`) in side branches (3a02eff)
@@ -45,7 +45,7 @@
 
 #### graph
 ##### Changed 🔄
-- `subgraph_isomorphism` and `compare_glycans` have been made more performant
+- `subgraph_isomorphism` and `compare_glycans` have been made more performant (5483f3c)
 
 ##### Fixed 🐛
 - Fixed `subgraph_isomorphism` counting too many isomorphic matches in certain scenarios of linkage ambiguity (81244c9)
@@ -57,6 +57,7 @@
 
 ##### Changed 🔄
 - Refined counting of `Terminal_` motifs in `annotate_dataset` (a918a2e)
+- `deduplicate_motifs` will now (given the choice) always prefer the specified motif over the unspecified motif, all else being equal (e.g., `Fuc` > `dHex`)
 
 ### network
 #### biosynthesis
@@ -68,18 +69,18 @@
 ##### Added ✨
 - `clr_transformation` now has a new `reference` keyword argument, to optionally specify from which variables the geometric mean should be constructed (a918a2e)
 - `MissForest` now runs left-censored draws where missingness is intensity-dependent (MNAR) and Random Forest for the rest (MAR), where intensity-dependence is estimated via logistic regression (7849b15)
-- `get_alphaN` now has a new `verbose` keyword argument to suppress its print (which is now default `False`, since its output will now be stored as dataframe attributes)
+- `get_alphaN` now has a new `verbose` keyword argument to suppress its print (which is now default `False`, since its output will now be stored as dataframe attributes) (5483f3c)
 
 ##### Changed 🔄
 - `hotellings_t2` is now more robust to tiny groups (a918a2e)
 - `TST_grouped_benjamini_hochberg` is now more robust to groups with π0 = 1 (c902297)
-- `replace_outliers_winsorization` now takes in the entire `df` as input, instead of only one `row`
-- `replace_outliers_winsorization` and `omega_squared` are now much faster
+- `replace_outliers_winsorization` now takes in the entire `df` as input, instead of only one `row` (5483f3c)
+- `replace_outliers_winsorization` and `omega_squared` are now much faster (5483f3c)
 
 ##### Fixed 🐛
-- Fixed sum of squares calculation in `calculate_permanova_stat`
+- Fixed sum of squares calculation in `calculate_permanova_stat` (5483f3c)
 
 ### ml
 #### model_training
 ##### Fixed 🐛
-- Fixed double softmax in `train_model`
+- Fixed double softmax in `train_model` (5483f3c)

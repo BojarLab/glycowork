@@ -13,6 +13,14 @@ from glycowork.motif.regex import get_match
 
 
 LINKAGE_NODE_PATTERN = re.compile(r'^[ab?][0-9?/]+-[0-9?/]+$')
+_WILDCARD_RE = re.compile(r'(?<![A-Za-z0-9])(?:Monosaccharide|HexNAcOS|HexNAc|HexOS|HexA|dHex|Hex|Sia|Pen)(?![A-Za-z0-9])')
+
+
+def _motif_ambiguity(
+        s: str # Motif sequence in IUPAC-condensed
+) -> tuple[int, int]: # Sort key; lower is more specific
+    "Ranks a motif label by information content, since wildcards and ambiguous linkages convey less than the concrete forms they abstract and can be longer than them"
+    return (len(_WILDCARD_RE.findall(s)) + s.count('?') + s.count('/'), -len(s))
 
 
 def annotate_glycan(
@@ -264,7 +272,7 @@ def get_motif_dag(
     "Builds the containment DAG of a motif set, in which a parent motif is a substructure of each of its children"
     motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
     spec_dic = dict(zip(motif_list.motif_name, motif_list.termini_spec))
-    pat, tgt, spec = {}, {}, {}
+    pat, tgt, spec, amb = {}, {}, {}, {}
     for m in motifs:
         s = motif_dic.get(m, m[9:] if m.startswith('Terminal_') else m)
         # Only 'known' motifs carry a termini spec; exhaustive and Terminal_ columns are counted position-agnostically and so demand nothing
@@ -278,6 +286,7 @@ def get_motif_dag(
         # A host may attach anything at c's open ends, so only what c itself pins down is provable: a node carrying something above it inside c is internal, an open end is what c declares or else genuinely unknown
         nx.set_node_attributes(t, {n: 'internal' if (t.out_degree(n) and t.in_degree(n)) else (sp[n] if sp[n] != 'flexible' else 'unknown') for n in t.nodes()}, 'termini')
         tgt[m], spec[m] = t, sp
+        amb[m] = _motif_ambiguity(s)
     cols = list(pat)
     dag = nx.DiGraph()
     dag.add_nodes_from(cols)
@@ -288,8 +297,10 @@ def get_motif_dag(
         for j, c in enumerate(cols):
             if i == j or not dom[j] or len(pat[p]) > len(tgt[c]) or not subgraph_isomorphism(tgt[c], pat[p], termini_list = spec[p]):
                 continue
-            if len(pat[p]) == len(tgt[c]) and i > j and subgraph_isomorphism(tgt[p], pat[c], termini_list = spec[c]):
-                continue  # mutually isomorphic labels: keep one direction only, so the DAG stays acyclic
+            if len(pat[p]) == len(tgt[c]) and (amb[p], i) < (amb[c], j) and subgraph_isomorphism(tgt[p], pat[c],
+                                                                                                 termini_list = spec[
+                                                                                                     c]):
+                continue  # mutually isomorphic labels: the wildcard form matches strictly more structures and so is the ancestor, leaving the specific form as the descendant; the positional fallback makes the order total and the DAG acyclic
             dag.add_edge(p, c)
     return nx.transitive_reduction(dag)
 
@@ -305,13 +316,11 @@ def deduplicate_motifs(
     df['_original_position'] = range(len(df))
     # Group the DataFrame by identical rows
     grouped = df.groupby(list(df.columns[:-1]), sort = False)
-    # Find the integer indices of rows with the longest string index within each group
+    # Keep the least ambiguous label per group; length only breaks ties, since wildcards are longer than the specifics they abstract and would otherwise win on character count alone
     max_idx_positions = []
     for _, group in grouped:
-        # Find the row with the longest string index
-        longest_idx = group.index.to_series().str.len().idxmax()
-        # Retrieve the original integer position of this row
-        max_idx_positions.append(group.loc[longest_idx, '_original_position'])
+        pos = min(range(len(group)), key = lambda k: _motif_ambiguity(group.index[k]))
+        max_idx_positions.append(group['_original_position'].iloc[pos])
     df.index = original_index
     return df.iloc[max_idx_positions].drop_duplicates().drop(['_original_position'], axis = 1)
 
