@@ -130,7 +130,7 @@ def preprocess_data(
                                                                                       custom_scale = custom_scale)],
                                           axis = 1),
                                 contrasts = getattr(df, '_contrasts', {}), paired = paired,
-                                name = getattr(df, '_name', ''))
+                                name = getattr(df, '_glyco_name', ''))
         else:
             df.iloc[:, 1:] = df.iloc[:, 1:] + 0.0000001
             df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:],
@@ -660,7 +660,7 @@ def get_differential_expression(
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
     grouped_BH = (motifs and not sets) if grouped_BH is None else grouped_BH
-    in_contrasts, in_name = getattr(df, '_contrasts', {}), getattr(df, '_name', '')
+    in_contrasts, in_name = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', '')
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs,
                                                  impute = impute,
@@ -786,7 +786,7 @@ def get_differential_expression(
             bal = bal.iloc[1:] - bal.iloc[0] if len(bal) > 1 else bal.iloc[:0]
             bal = bal[bal.std(axis = 1) > 1e-9]
             bal_p = hotellings_t2(bal[group1].values.T, bal[group2].values.T, paired = paired)[1] if 0 < len(bal) < min(len(group1), len(group2)) else np.nan
-            explained = ', '.join(f'{c} ({fc[c] - fc[p]:+.2f})' for c in kids if c in fc)
+            explained = ', '.join((f'{c} ({fc[c] - fc[p]:+.2f})' if p in fc else c) for c in kids if c in fc)
             if (resid <= 1e-6).all():
                 rows[p] = (explained, 1.0, 0.0, bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
@@ -1007,7 +1007,7 @@ def get_glycanova(
             bal_p = \
             permanova_with_permutation(pd.DataFrame(squareform(pdist(bal.values.T, metric = 'euclidean'))), groups,
                                        999)[1] if len(bal) else np.nan
-            explained = ', '.join(f'{c} ({eff[c] - eff[p]:+.2f})' for c in kids if c in eff)
+            explained = ', '.join((f'{c} ({eff[c] - eff[p]:+.2f})' if p in eff else c) for c in kids if c in eff)
             if (resid <= 1e-6).all():
                 rows[p] = (explained, 1.0, 0.0,
                            bal_p)  # parent occurs only inside its children: no context of its own left to test

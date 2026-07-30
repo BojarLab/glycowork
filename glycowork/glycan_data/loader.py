@@ -41,7 +41,7 @@ class NamedGroups(list):
 
 
 class GlycoDataFrame(pd.DataFrame):
-    _metadata = ['_contrasts', '_paired', '_name']
+    _metadata = ['_contrasts', '_paired', '_glyco_name']
 
     @property
     def _constructor(self):
@@ -109,7 +109,7 @@ class GlycoDataFrame(pd.DataFrame):
 
     @property
     def name(self):
-        return self._name
+        return self._glyco_name
 
     def __init__(self, *args, **kwargs):
         contrasts = kwargs.pop('contrasts', None)
@@ -125,9 +125,9 @@ class GlycoDataFrame(pd.DataFrame):
         elif not hasattr(self, '_paired'):
             self._paired = False
         if name is not None:
-            self._name = name
-        elif not hasattr(self, '_name'):
-            self._name = ''
+            self._glyco_name = name
+        elif not hasattr(self, '_glyco_name'):
+            self._glyco_name = ''
 
     def glyco_filter(self, motif: str | nx.DiGraph, # Glycan motif sequence or graph
                      termini_list: list = [], # List of monosaccharide positions from terminal/internal/flexible

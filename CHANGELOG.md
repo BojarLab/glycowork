@@ -2,6 +2,11 @@
 
 ## [1.9.1]
 
+### glycan_data
+#### loader
+##### Changed 🔄
+- Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute
+
 ### motif
 #### tokenization
 ##### Added ✨
@@ -58,7 +63,7 @@
 ##### Changed 🔄
 - Refined counting of `Terminal_` motifs in `annotate_dataset` (a918a2e)
 - `deduplicate_motifs` will now (given the choice) always prefer the specified motif over the unspecified motif, all else being equal (e.g., `Fuc` > `dHex`) (81e769c)
-- `annotate_dataset` will no longer split signal between pairs such as `Gal(b1-4)GlcNAc` and `Gal(b1-4)GlcNAc-ol` in free oligosaccharides
+- `annotate_dataset` will no longer split signal between pairs such as `Gal(b1-4)GlcNAc` and `Gal(b1-4)GlcNAc-ol` in free oligosaccharides (3737633)
 
 ### network
 #### biosynthesis
