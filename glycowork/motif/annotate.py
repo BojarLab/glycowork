@@ -306,6 +306,36 @@ def get_motif_dag(
     return nx.transitive_reduction(dag)
 
 
+def get_composition_dag(
+        compositions: list[str], # Composition labels, optionally prefixed as protein_site_composition
+        abundances: pd.DataFrame | None = None # Compositions x samples abundances, used as an exact prefilter for containment
+) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is component-wise contained in child
+    "Builds the containment DAG of a composition set, in which a parent composition is component-wise dominated by each of its children"
+    comp = {}
+    for c in compositions:
+        try:
+            comp[c] = canonicalize_composition(c)
+        except Exception:
+            try:
+                comp[c] = canonicalize_composition(str(c).rsplit('_', 1)[-1])  # glycoproteomics indices carry a protein_site prefix
+            except Exception:
+                continue  # labels that do not parse as a composition have no place in the DAG
+    cols = list(comp)
+    residues = sorted({r for d in comp.values() for r in d})
+    V = np.array([[comp[c].get(r, 0) for r in residues] for c in cols])
+    dag = nx.DiGraph()
+    dag.add_nodes_from(cols)
+    A = abundances.loc[cols].values if abundances is not None else None
+    for i, p in enumerate(cols):
+        # p contained in c implies every glycoform counted toward c is counted toward p, hence abundance dominance is a necessary condition and an exact prefilter
+        dom = (A <= A[i] + 1e-9).all(axis = 1) if A is not None else np.ones(len(cols), dtype = bool)
+        for j, c in enumerate(cols):
+            # equal compositions are ordered by position, which makes the order total and the DAG acyclic
+            if i != j and dom[j] and (V[i] <= V[j]).all() and ((V[i] < V[j]).any() or i < j):
+                dag.add_edge(p, c)
+    return nx.transitive_reduction(dag)
+
+
 def deduplicate_motifs(
         df: pd.DataFrame # DataFrame with glycan motifs as rows, samples as columns
 ) -> pd.DataFrame: # DataFrame with redundant motifs removed

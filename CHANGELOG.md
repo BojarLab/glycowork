@@ -4,8 +4,11 @@
 
 ### glycan_data
 #### loader
+##### Added ✨
+- Added the `meta_filter` attribute to `GlycoDataFrame`, to filter datasets by metadata, such as `df_glycan.meta_filter(Order = 'Perissodactyla')`, which can be chained like any `pandas` attribute, such as `df_glycan.meta_filter(Order = 'Perissodactyla').glyco_filter('Sia(a2-3)Gal')`
+
 ##### Changed 🔄
-- Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute
+- Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute (9afa2b3)
 
 ### motif
 #### tokenization
@@ -28,6 +31,8 @@
 - `get_differential_expression` and `get_glycanova` now also report a "Redistribution p-val", which tests whether the motif is now found in *different* sequence contexts (e.g., `Internal_LacNAc_type2` might not change in abundance but might be redistributed from sialyl-LacNAc to H-type motifs) (a918a2e)
 - `get_roc` now also outputs the selected features if `multi_score=True` (5483f3c)
 - functions in `.analysis` now can read the stored metadata automatically and act accordingly, supporting easy-calls like `get_differential_expression(glycomics_data_loader.human_brain_N_PMID38343116)` (5483f3c)
+- `preprocess_data` now has the new optional keyword argument `glycoproteomics`, mainly for `get_differential_expression` to pass this info to be able to trigger `get_composition_dag`
+- `get_glycanova` now has the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type glycoform analysis of glycoproteomics data
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
@@ -58,7 +63,7 @@
 
 #### annotate
 ##### Added ✨
-- Added `get_motif_dag` to build a containment DAG of connected motifs, for comparative glycomics analyses in `analysis` (a918a2e)
+- Added `get_motif_dag` and `get_composition_dag` to build a containment DAG of connected motifs/compositions, for comparative glycomics/glycoproteomics analyses in `analysis` (a918a2e)
 
 ##### Changed 🔄
 - Refined counting of `Terminal_` motifs in `annotate_dataset` (a918a2e)

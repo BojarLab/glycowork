@@ -53,7 +53,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
-                                      load_lectin_lib, get_motif_dag,
+                                      load_lectin_lib, get_motif_dag, get_composition_dag,
                                       create_lectin_and_motif_mappings, lectin_motif_scoring, deduplicate_motifs)
 from glycowork.motif.graph import subgraph_isomorphism, glycan_to_nxGraph
 
@@ -66,6 +66,7 @@ def preprocess_data(
         # Column indices/names for second group; default: from the frame's contrasts
         experiment: str = "diff",  # Type of experiment: "diff" or "anova"
         motifs: bool = False,  # Analyze motifs instead of sequences
+        glycoproteomics: bool = False, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
@@ -162,6 +163,9 @@ def preprocess_data(
         df = df.groupby(df.index).mean()
         df_org = df_org.set_index(df_org.columns[0])
         df_org = df_org.groupby(df_org.index).mean()
+        if glycoproteomics:
+            # Component-wise composition containment forces the same abundance inequality as substructure containment, so glycoforms admit the same balances and residuals as motifs
+            df_org.attrs['motif_dag'] = get_composition_dag(df_org.index.tolist(), abundances = df_org)
     return df, df_org, group1, group2
 
 
@@ -659,11 +663,11 @@ def get_differential_expression(
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
-    grouped_BH = (motifs and not sets) if grouped_BH is None else grouped_BH
+    grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     in_contrasts, in_name = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', '')
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs,
-                                                 impute = impute,
+                                                 glycoproteomics = glycoproteomics, impute = impute,
                                                  min_samples = min_samples, transform = transform,
                                                  feature_set = feature_set,
                                                  paired = paired, gamma = gamma, custom_scale = custom_scale,
@@ -732,7 +736,7 @@ def get_differential_expression(
     if not monte_carlo and pvals:
         if grouped_BH:
             grouped_glycans, grouped_pvals = select_grouping(df_b, df_a, glycans, pvals, paired = paired,
-                                                             grouped_BH = grouped_BH, dag = df_org.attrs.get('motif_dag') if motifs else None)
+                                                             grouped_BH = grouped_BH, dag = df_org.attrs.get('motif_dag') if motifs or glycoproteomics else None)
             corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
             corrpvals = [corrpvals[g] for g in glycans]
             corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
@@ -770,7 +774,7 @@ def get_differential_expression(
     df_out['significant'] = df_out['significant'].astype('bool')
     if effect_size_variance:
         df_out['Effect size variance'] = list(variances) + [0] * len(df_prison)
-    if motifs and not sets and not monte_carlo and df_org.attrs.get('motif_dag') is not None:
+    if (motifs or glycoproteomics) and not sets and not monte_carlo and df_org.attrs.get('motif_dag') is not None:
         dag, full = df_org.attrs['motif_dag'], pd.concat([df_org, df_org_prison])
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
         ref = np.median(np.log2(df_org.values + 0.0000001) - df.values, axis = 0)
@@ -806,7 +810,10 @@ def get_differential_expression(
         {'alpha': alpha, 'n': len(group1) + len(group2), 'test': "Welch's t-test" if not paired else "paired t-test",
          'transform': transform, 'paired': paired})
     if glycoproteomics:
-        return get_glycoform_diff(df_out, alpha = alpha, level = level)
+        df_site = get_glycoform_diff(df_out, alpha = alpha, level = level)
+        df_site.attrs[
+            'glycoforms'] = df_out  # aggregating to glycosites drops the per-glycoform decomposition, so we keep it reachable
+        return df_site
     else:
         return df_out.dropna(subset = ['Log2FC', 'p-val']).sort_values(by = 'p-val').sort_values(by = 'corr p-val')
 
@@ -922,6 +929,7 @@ def get_glycanova(
         groups: list[Any],  # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3])
         impute: bool = True,  # Replace zeros with Random Forest model
         motifs: bool = False,  # Analyze motifs instead of sequences
+        glycoproteomics: bool = False, # Whether rows are glycoforms from glycoproteomics instead of glycans
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         min_samples: float = 0.1,  # Min percent of non-zero samples required
@@ -936,11 +944,12 @@ def get_glycanova(
 ) -> tuple[GlycoDataFrame, dict[
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
-    grouped_BH = motifs if grouped_BH is None else grouped_BH
+    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if len(set(groups)) < 3:
         raise ValueError(
             "You have fewer than three groups. We suggest get_differential_expression for those cases. ANOVA is for >= three groups.")
     df, df_org, groups, _ = preprocess_data(df, groups, [], experiment = "anova", motifs = motifs, impute = impute,
+                                       glycoproteomics = glycoproteomics,
                                        min_samples = min_samples, transform = transform, feature_set = feature_set,
                                        gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,
                                        random_state = random_state)
@@ -964,7 +973,7 @@ def get_glycanova(
             posthoc_results[glycan] = pd.DataFrame(data = posthoc_res._results_table.data[1:],
                                                    columns = posthoc_res._results_table.data[0])
     df_out = GlycoDataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
-    dag = df_org.attrs.get('motif_dag') if motifs else None
+    dag = df_org.attrs.get('motif_dag') if motifs or glycoproteomics else None
     if grouped_BH and dag is not None:
         grouped_glycans, grouped_pvals = select_grouping(df, df, df_out['Glycan'].tolist(), df_out['p-val'].tolist(),
                                                          grouped_BH = grouped_BH, dag = dag)
@@ -987,7 +996,7 @@ def get_glycanova(
         df_out = pd.concat([df_out, prison_rows], ignore_index = True)
     df_out['significant'] = df_out['significant'].astype('bool')
     df_out['Effect size'] = effect_sizes.reindex(df_out['Glycan']).values
-    if motifs and df_org.attrs.get('motif_dag') is not None:
+    if (motifs or glycoproteomics) and df_org.attrs.get('motif_dag') is not None:
         dag, full = df_org.attrs['motif_dag'], df_org
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
         ref = np.median(np.log2(full.loc[df.index].values + 0.0000001) - df.values, axis = 0)

@@ -42,6 +42,9 @@ class NamedGroups(list):
 
 class GlycoDataFrame(pd.DataFrame):
     _metadata = ['_contrasts', '_paired', '_glyco_name']
+    _meta_groups = [('Species', 'Genus', 'Family', 'Order', 'Class', 'Phylum', 'Kingdom', 'Domain', 'ref'),
+                    ('disease_association', 'disease_id', 'disease_sample', 'disease_direction', 'disease_ref', 'disease_species'),
+                    ('tissue_sample', 'tissue_id', 'tissue_ref', 'tissue_species')]
 
     @property
     def _constructor(self):
@@ -134,8 +137,69 @@ class GlycoDataFrame(pd.DataFrame):
                      min_count: int | None = 1 # Minimum number of times motif needs to be present to pass
                      ) -> 'GlycoDataFrame':
         from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
-        indices = [i for i, g in enumerate(self.glycans) if isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list, count = True) >= (1 if min_count is None else min_count)]
+        indices = [i for i, g in enumerate(self.glycans) if
+                   isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list, count = True) >= (
+                       1 if min_count is None else min_count)]
         return self.iloc[indices, :].reset_index(drop = True)
+
+    def meta_filter(self, narrow: bool = True,
+                    # Restrict positionally aligned metadata lists (e.g., Species/Family/ref) to the matching records
+                    match_all: bool = False,  # Require all values of a criterion to be present, instead of any of them
+                    **criteria
+                    # column = value, list of values (OR), or callable; multiple columns are combined with AND
+                    ) -> 'GlycoDataFrame':
+        norm = lambda v: v.strip().lower().replace(' ', '_') if isinstance(v, str) else v
+        specs = {}
+        for col, want in criteria.items():
+            if col not in self.columns:
+                raise KeyError(f"'{col}' is not a column of this DataFrame")
+            if callable(want):
+                specs[col] = (want, None)
+            else:
+                wanted = {norm(v) for v in (want if isinstance(want, (list, tuple, set)) else [want])}
+                specs[col] = (lambda v, wanted = wanted: norm(v) in wanted, wanted)
+        groups = [[c for c in g if c in self.columns] for g in self._meta_groups if
+                  any(c in specs for c in g)] if narrow else []
+        data = {c: self[c].tolist() for c in set(specs) | {c for g in groups for c in g}}
+        keep, narrowed = [], []
+        for i in range(len(self)):
+            masks, ok = {}, True
+            for col, (test, wanted) in specs.items():
+                val = data[col][i]
+                vals = val if isinstance(val, list) else ([] if val is None or val != val else [val])
+                mask = [bool(test(v)) for v in vals]
+                if not any(mask) or (
+                        match_all and wanted is not None and len({norm(v) for v, m in zip(vals, mask) if m}) < len(
+                        wanted)):
+                    ok = False
+                    break
+                masks[col] = mask
+            if not ok:
+                continue
+            keep.append(i)
+            sub = {}
+            for group in groups:
+                hits = [c for c in group if c in masks and isinstance(data[c][i], list)]
+                if not hits:
+                    continue
+                n = len(data[hits[0]][i])
+                idxs = [j for j in range(n) if all(masks[c][j] for c in hits)]
+                if len(idxs) < n:
+                    for c in group:
+                        if isinstance(data[c][i], list) and len(data[c][i]) == n:
+                            sub[c] = [data[c][i][j] for j in idxs]
+            narrowed.append(sub)
+        out = self.iloc[keep, :].reset_index(drop = True)
+        for col in {c for sub in narrowed for c in sub}:
+            out[col] = [sub.get(col, v) for sub, v in zip(narrowed, out[col])]
+        return out
+
+    def meta_values(self, column: str,  # Column whose (list or scalar) entries should be tallied
+                    top: int | None = None  # Only return the n most frequent values
+                    ) -> pd.Series:
+        vals = [v.strip() if isinstance(v, str) else v for val in self[column] for v in
+                (val if isinstance(val, list) else ([] if val is None or val != val else [val]))]
+        return pd.Series(vals, dtype = object).value_counts().head(top)
 
 
 class GlycoList(list):

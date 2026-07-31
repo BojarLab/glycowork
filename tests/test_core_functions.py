@@ -49,7 +49,7 @@ from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan,
-    GlycoList, GlycoDataFrame, NamedGroup, NamedGroups
+    GlycoList, GlycoDataFrame, NamedGroup, NamedGroups, glycoproteomics_data_loader
 )
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
@@ -71,7 +71,7 @@ from glycowork.motif.graph import (
     expand_termini_list, ensure_graph, possible_topology_check
 )
 from glycowork.motif.annotate import (
-    annotate_glycan, annotate_dataset, get_molecular_properties,
+    annotate_glycan, annotate_dataset, get_molecular_properties, get_motif_dag, get_composition_dag,
     get_k_saccharides, get_terminal_structures, create_correlation_network,
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
     Lectin, load_lectin_lib, create_lectin_and_motif_mappings, get_glycan_similarity,
@@ -1833,6 +1833,7 @@ def test_build_custom_df():
     assert 'glycan' in result.columns
     assert 'Species' in result.columns
     assert len(df_species[df_species.Genus=='Diceros'].glyco_filter("Neu5Ac(a2-3)[GalNAc(b1-4)]Gal", min_count=2)) > 0
+    assert len(GlycoDataFrame(df).meta_filter(Order = "Primates")) > 0
     try:
         result = build_custom_df(df, "wrong")
         return False
@@ -7569,3 +7570,161 @@ def test_gifflar(class_mode):
         return_metrics=False,
     )
     assert out is not None
+
+
+@pytest.fixture
+def motif_abundances():
+    motifs = ['GalNAc', 'Gal(b1-3)GalNAc', 'Oglycan_core1', 'Neu5Ac']
+    return pd.DataFrame(
+        [[40.0, 42.0, 38.0, 41.0], [20.0, 21.0, 19.0, 20.5], [12.0, 13.0, 11.0, 12.5], [8.0, 7.0, 9.0, 8.5]],
+        index = motifs, columns = ['s1', 's2', 's3', 's4'])
+
+
+def test_get_motif_dag_orientation_and_acyclicity(motif_abundances):
+    dag = get_motif_dag(motif_abundances.index.tolist(), abundances = motif_abundances)
+    assert nx.is_directed_acyclic_graph(dag)
+    assert dag.has_edge('GalNAc', 'Gal(b1-3)GalNAc')  # parent is the substructure
+    assert not dag.has_edge('Gal(b1-3)GalNAc', 'GalNAc')
+    assert nx.has_path(dag, 'GalNAc', 'Oglycan_core1')
+    assert not dag.has_edge('GalNAc', 'Oglycan_core1')  # transitively reduced
+
+
+def test_get_motif_dag_abundance_dominance_prefilter(motif_abundances):
+    violated = motif_abundances.copy()
+    violated.loc['GalNAc', 's1'] = 1.0  # parent can no longer dominate its child in every sample
+    dag = get_motif_dag(violated.index.tolist(), abundances = violated)
+    assert not dag.has_edge('GalNAc', 'Gal(b1-3)GalNAc')
+
+
+def test_get_motif_dag_wildcard_is_the_ancestor():
+    motifs = ['Neu5Ac(a2-3/6)Gal', 'Neu5Ac(a2-3)Gal']
+    dag = get_motif_dag(motifs)
+    assert dag.has_edge('Neu5Ac(a2-3/6)Gal', 'Neu5Ac(a2-3)Gal')  # ambiguous label matches strictly more structures
+    assert nx.is_directed_acyclic_graph(dag)
+
+
+def test_get_motif_dag_ignores_non_structural_features(motif_abundances):
+    labels = motif_abundances.index.tolist() + ['Nr_of_branches', 'Molecular_weight']
+    dag = get_motif_dag(labels)
+    assert dag.degree(
+        'Nr_of_branches') == 0 if 'Nr_of_branches' in dag else True  # non-structural features never gain containment edges
+    assert dag.degree('Molecular_weight') == 0 if 'Molecular_weight' in dag else True
+    assert dag.has_edge('GalNAc', 'Gal(b1-3)GalNAc')
+
+
+@pytest.fixture
+def composition_abundances():
+    idx = ['P1_100_H3N2', 'P1_100_H4N2', 'P1_100_H5N2', 'P1_100_H5N4F1']
+    # H5N4F1 contains H5N2 component-wise but is more abundant than it, so containment is impossible and the prefilter must reject it
+    return pd.DataFrame([[50.0, 52.0], [30.0, 31.0], [18.0, 19.0], [25.0, 26.0]], index = idx, columns = ['a', 'b'])
+
+
+def test_get_composition_dag_componentwise_containment(composition_abundances):
+    dag = get_composition_dag(composition_abundances.index.tolist(), abundances = composition_abundances)
+    assert nx.is_directed_acyclic_graph(dag)
+    assert dag.has_edge('P1_100_H3N2', 'P1_100_H4N2')
+    assert nx.has_path(dag, 'P1_100_H3N2', 'P1_100_H5N2')
+    assert not dag.has_edge('P1_100_H3N2', 'P1_100_H5N2')  # transitively reduced
+    assert not dag.has_edge('P1_100_H5N2',
+                            'P1_100_H5N4F1')  # abundance dominance is violated, so containment is impossible
+
+
+def test_get_composition_dag_equal_compositions_stay_acyclic():
+    idx = ['P1_1_H5N4', 'P2_9_H5N4', 'P3_3_H5N2']
+    dag = get_composition_dag(idx)
+    assert nx.is_directed_acyclic_graph(dag)
+    assert dag.number_of_nodes() == 3
+
+
+def test_get_composition_dag_skips_unparseable_labels():
+    dag = get_composition_dag(['Gal(b1-4)GlcNAc', 'Neu5Ac(a2-3)Gal'])
+    assert dag.number_of_edges() == 0
+
+
+def test_select_grouping_uses_the_dag(motif_abundances):
+    dag = get_motif_dag(motif_abundances.index.tolist(), abundances = motif_abundances)
+    glycans = motif_abundances.index.tolist()
+    pvals = [0.01, 0.02, 0.03, 0.04]
+    groups, pval_groups = select_grouping(motif_abundances, motif_abundances, glycans, pvals, grouped_BH = True,
+                                          dag = dag)
+    assert set(groups) == set(pval_groups)
+    assert sum(len(v) for v in groups.values()) == len(glycans)
+
+
+@pytest.fixture(scope = 'module')
+def bcc_result():
+    return get_differential_expression(glycomics_data_loader.human_skin_O_PMC5871710_BCC, motifs = True,
+                                       random_state = 42)
+
+
+def test_decomposition_columns_are_returned(bcc_result):
+    for col in ['Explained by', 'Redistribution p-val', 'Residual p-val', 'Residual effect size']:
+        assert col in bcc_result.columns
+    assert bcc_result['Redistribution p-val'].notna().any()
+
+
+def test_purely_inherited_parents_have_a_null_residual(bcc_result):
+    inherited = bcc_result[(bcc_result['Residual p-val'] >= 0.999) & (bcc_result['Residual effect size'].abs() < 1e-9)]
+    assert len(inherited) > 0
+    assert (inherited[
+                'Explained by'].str.len() > 0).all()  # a parent with no residual is fully explained by its children
+
+
+def test_leaf_motifs_get_no_decomposition(bcc_result):
+    leaves = bcc_result[bcc_result['Explained by'] == '']
+    assert leaves['Redistribution p-val'].isna().all()
+    assert leaves['Residual p-val'].isna().all()
+
+
+def test_balances_are_invariant_to_per_sample_scaling(motif_abundances):
+    # The reference-free claim is about the balance statistic given an abundance table, not about the upstream winsorization and imputation
+    parent, kids = 'GalNAc', ['Gal(b1-3)GalNAc']
+
+    def balances(frame):
+        resid = frame.loc[parent] - frame.loc[kids].sum(axis = 0)
+        parts = pd.DataFrame(np.vstack([frame.loc[kids].values, resid.clip(lower = 0).values]), columns = frame.columns)
+        bal = np.log2(parts + 0.0000001)
+        return (bal.iloc[1:] - bal.iloc[0]).values
+
+    rng = np.random.default_rng(0)
+    scaled = motif_abundances * rng.uniform(0.5, 2.0, motif_abundances.shape[1])
+    assert np.allclose(balances(motif_abundances), balances(scaled), atol = 1e-6)
+
+
+def test_redistribution_is_invariant_to_renormalization():
+    df = glycomics_data_loader.human_skin_O_PMC5871710_BCC
+    base = get_differential_expression(df, motifs = True, impute = False, random_state = 42)
+    scaled = df.copy()
+    scaled[scaled.columns[1:]] = scaled[scaled.columns[
+        1:]] * 7.0  # a single global constant survives winsorization and must cancel
+    out = get_differential_expression(scaled, motifs = True, impute = False, random_state = 42)
+    a = base.set_index('Glycan')['Redistribution p-val'].dropna()
+    b = out.set_index('Glycan')['Redistribution p-val'].dropna()
+    shared = a.index.intersection(b.index)
+    assert len(shared) > 0
+    assert np.allclose(a[shared].values, b[shared].values, atol = 1e-8)
+
+
+def test_glycoproteomics_decomposition_is_reachable():
+    df = glycoproteomics_data_loader.human_milk_N_PMID34087070
+    out = get_differential_expression(df, group1 = ['Colostrum1', 'Colostrum2', 'Colostrum3'],
+                                      group2 = ['Mature1', 'Mature2', 'Mature3'], glycoproteomics = True,
+                                      random_state = 42)
+    assert 'Glycosite' in out.columns
+    glycoforms = out.attrs['glycoforms']
+    assert 'Redistribution p-val' in glycoforms.columns
+    assert glycoforms['Redistribution p-val'].notna().any()
+
+
+def test_glycanova_glycoproteomics_decomposition():
+    df = glycoproteomics_data_loader.human_milk_N_PMID34087070
+    out, _ = get_glycanova(df, groups = ['A', 'A', 'B', 'B', 'C', 'C'], glycoproteomics = True, posthoc = False,
+                           random_state = 42)
+    assert 'Redistribution p-val' in out.columns
+    assert out['Redistribution p-val'].notna().any()
+
+
+def test_sequence_analysis_gets_no_decomposition_columns():
+    out = get_differential_expression(glycomics_data_loader.human_skin_O_PMC5871710_BCC, motifs = False,
+                                      random_state = 42)
+    assert 'Redistribution p-val' not in out.columns
