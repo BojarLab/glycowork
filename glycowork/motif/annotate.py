@@ -346,7 +346,7 @@ def deduplicate_motifs(
     df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' ' * 20 if x in motif_dic else x)
     df['_original_position'] = range(len(df))
     # Group the DataFrame by identical rows
-    grouped = df.groupby(list(df.columns[:-1]), sort = False)
+    grouped = df.groupby(list(df.columns[:-1]), sort = False, dropna = False)
     # Keep the least ambiguous label per group; length only breaks ties, since wildcards are longer than the specifics they abstract and would otherwise win on character count alone
     max_idx_positions = []
     for _, group in grouped:

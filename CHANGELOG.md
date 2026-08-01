@@ -1,11 +1,11 @@
 # Changelog
 
-## [1.9.1]
+## [1.10.0]
 
 ### glycan_data
 #### loader
 ##### Added ✨
-- Added the `meta_filter` attribute to `GlycoDataFrame`, to filter datasets by metadata, such as `df_glycan.meta_filter(Order = 'Perissodactyla')`, which can be chained like any `pandas` attribute, such as `df_glycan.meta_filter(Order = 'Perissodactyla').glyco_filter('Sia(a2-3)Gal')`
+- Added the `meta_filter` attribute to `GlycoDataFrame`, to filter datasets by metadata, such as `df_glycan.meta_filter(Order = 'Perissodactyla')`, which can be chained like any `pandas` attribute, such as `df_glycan.meta_filter(Order = 'Perissodactyla').glyco_filter('Sia(a2-3)Gal')` (c11b4d0)
 
 ##### Changed 🔄
 - Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute (9afa2b3)
@@ -13,11 +13,13 @@
 ### motif
 #### tokenization
 ##### Added ✨
+- Added more element masses to `calculate_adduct_mass` (S, P, Na, K, Cl)
 
 ##### Changed 🔄
 
 ##### Fixed 🐛
 - Fixed `glycan_to_composition` handling of narrow monosaccharide modification wildcards such as `HexNAc4/6S` (b3ad039)
+- `stemify_dataset` no longer mutates its `stem_lib` input
 
 ##### Deprecated ⚠️
 
@@ -31,8 +33,8 @@
 - `get_differential_expression` and `get_glycanova` now also report a "Redistribution p-val", which tests whether the motif is now found in *different* sequence contexts (e.g., `Internal_LacNAc_type2` might not change in abundance but might be redistributed from sialyl-LacNAc to H-type motifs) (a918a2e)
 - `get_roc` now also outputs the selected features if `multi_score=True` (5483f3c)
 - functions in `.analysis` now can read the stored metadata automatically and act accordingly, supporting easy-calls like `get_differential_expression(glycomics_data_loader.human_brain_N_PMID38343116)` (5483f3c)
-- `preprocess_data` now has the new optional keyword argument `glycoproteomics`, mainly for `get_differential_expression` to pass this info to be able to trigger `get_composition_dag`
-- `get_glycanova` now has the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type glycoform analysis of glycoproteomics data
+- `preprocess_data` now has the new optional keyword argument `glycoproteomics`, mainly for `get_differential_expression` to pass this info to be able to trigger `get_composition_dag` (c11b4d0)
+- `get_glycanova` now has the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type glycoform analysis of glycoproteomics data (c11b4d0)
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
@@ -40,14 +42,19 @@
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
+- `get_pvals_motifs` no longer mutates input dataframe
+- Fixed effect size handling in `get_meta_analysis` if `model="random"`
 
 #### processing
 ##### Changed 🔄
 - `de_wildcard_glycoletter` now also supports narrow monosaccharide wildcards like `Gal/Glc` (5483f3c)
+- `canonicalize_iupac` is again made more robust in terms of what inputs it can handle
 
 ##### Fixed 🐛
 - Fixed `canonicalize_iupac` messing up narrow modification wildcards (e.g., `Gal3/6S`) in side branches (3a02eff)
 - Fixed `canonicalize_iupac` sometimes ordering multiple floating bits wrongly (b6689a5)
+- Fixed `canonicalize_iupac` crashing on empty string inputs
+- `de_wildcard_glycoletter` now no longer can draw and return the wildcard itself
 
 #### draw
 ##### Changed 🔄
@@ -60,15 +67,23 @@
 ##### Fixed 🐛
 - Fixed `subgraph_isomorphism` counting too many isomorphic matches in certain scenarios of linkage ambiguity (81244c9)
 - `get_linkage_number` now always handles narrow linkage wildcards correctly for branch sorting purposes (d222f41)
+- Fixed edge case handling of sulfation wildcards in `subgraph_isomorphism`
 
 #### annotate
 ##### Added ✨
-- Added `get_motif_dag` and `get_composition_dag` to build a containment DAG of connected motifs/compositions, for comparative glycomics/glycoproteomics analyses in `analysis` (a918a2e)
+- Added `get_motif_dag` and `get_composition_dag` to build a containment DAG of connected motifs/compositions, for comparative glycomics/glycoproteomics analyses in `analysis` (a918a2e, c11b4d0)
 
 ##### Changed 🔄
 - Refined counting of `Terminal_` motifs in `annotate_dataset` (a918a2e)
 - `deduplicate_motifs` will now (given the choice) always prefer the specified motif over the unspecified motif, all else being equal (e.g., `Fuc` > `dHex`) (81e769c)
 - `annotate_dataset` will no longer split signal between pairs such as `Gal(b1-4)GlcNAc` and `Gal(b1-4)GlcNAc-ol` in free oligosaccharides (3737633)
+
+##### Fixed 🐛
+- Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data
+
+#### regex
+##### Fixed 🐛
+- Harden treatment of ?-wildcards in `parse_pattern`
 
 ### network
 #### biosynthesis

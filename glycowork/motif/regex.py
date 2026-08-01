@@ -310,7 +310,7 @@ def parse_pattern(pattern: str # Pattern component from glyco-regular motif
         min_occur, max_occur = 0, 8
     elif '+' in pattern:
         min_occur, max_occur = 1, 8
-    elif '?' in pattern and '=' not in pattern and '!' not in pattern:
+    elif '?' in re.sub(r'\([^)]*\)|[ab]?\?-', '', pattern) and '=' not in pattern and '!' not in pattern:
         min_occur, max_occur = 0, 1
     else:
         min_occur, max_occur = 1, 1
@@ -372,7 +372,7 @@ def trace_path(pattern_matches: list[tuple[str, list[list[int]]]], # [(pattern, 
     patterns = [p[0] for p in pattern_matches]
     edges = list(ggraph.edges())
     optional_components = {p: parse_pattern(p) for p in patterns if any(x in p for x in ('{', '*', '+', '?'))}
-    start_pattern = next(((p, m) for p, m in pattern_matches if (m and m[0] and not any(q in p for q in ('.?', '}?', '*?', '+?'))) or optional_components.get(p, (99,99))[0] > 0), patterns[0])
+    start_pattern = next(((p, m) for p, m in pattern_matches if (m and m[0] and not any(q in p for q in ('.?', '}?', '*?', '+?'))) or optional_components.get(p, (99,99))[0] > 0), pattern_matches[0])
     idx = patterns.index(start_pattern[0])
     all_traces, all_used_patterns = do_trace(start_pattern, idx, pattern_matches, optional_components, edges)
     if not all_traces and optional_components.get(start_pattern[0], (99,99))[0] == 0:

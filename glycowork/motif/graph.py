@@ -11,10 +11,11 @@ from scipy.sparse.linalg import eigsh
 from functools import lru_cache, wraps
 
 
-PTM_REGEX = re.compile(r"(?<!Neu)(?<=\D)(\d+/\d+|\d+)(?=\D)")
+PTM_REGEX = re.compile(r"(?<!Neu)(?<=\D)(\d+/\d+|\d+)(?=\D)(?![^()]*\))")
 NEGATION_REGEX = re.compile(r'(!\w+\([^)]+\))')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
 LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
+LINKAGE_LABEL = re.compile(r'^[ab?][12]-')
 from weakref import WeakKeyDictionary
 _SL_CACHE = WeakKeyDictionary()
 _NEG_CACHE = WeakKeyDictionary()
@@ -180,7 +181,8 @@ def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph
     "Standardize PTM wildcards in graph"
     _SL_CACHE.pop(graph, None)
     for node in graph.nodes:
-        graph.nodes[node]['string_labels'] = PTM_REGEX.sub('O', graph.nodes[node]['string_labels'])
+        if not LINKAGE_LABEL.match(label := graph.nodes[node]['string_labels']):
+            graph.nodes[node]['string_labels'] = PTM_REGEX.sub('O', label)
     return graph
 
 
@@ -302,9 +304,9 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
                         i + len(motif) == len(glycan) or glycan[i + len(motif)] in ')]') for i in
                 range(len(glycan) - len(motif) + 1)):
             return True
-        motif_comp = min_process_glycans([motif, glycan])
         if 'O' in glycan or 'O' in motif:
             glycan, motif = PTM_REGEX.sub('O', glycan), PTM_REGEX.sub('O', motif)
+        motif_comp = min_process_glycans([motif, glycan])
         g1 = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else None)
         g2 = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else None, termini_list = termini_list)
     else:
@@ -313,11 +315,11 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
         if termini_list and not nx.get_node_attributes(motif, 'termini'):
             motif = motif.copy()
             nx.set_node_attributes(motif, dict(zip(motif.nodes(), expand_termini_list(motif, termini_list) if len(termini_list) < len(motif) else termini_list)), 'termini')
-        motif_comp = [_sl(motif), _sl(glycan)]
-        if any('O' in s for s in unwrap(motif_comp)):
+        if any('O' in s for s in _sl(motif) + _sl(glycan)):
             g1, g2 = ptm_wildcard_for_graph(glycan.copy()), ptm_wildcard_for_graph(motif.copy())
         else:
             g1, g2 = glycan, motif
+        motif_comp = [_sl(g2), _sl(g1)]
     narrow_wildcard_list = build_wildcard_cache(set(unwrap(motif_comp)))
     if termini_list or narrow_wildcard_list:
         # no wildcards anywhere => node_match is plain label equality, so a label-subset check is sound
@@ -407,7 +409,7 @@ def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or netwo
     "Compute graph features of glycan or network"
     g = ensure_graph(glycan) if glycan_graph else glycan
     glycan = label if not glycan_graph else glycan
-    nbr_node_types = len(set(nx.get_node_attributes(g, "labels") if glycan_graph else g.nodes()))
+    nbr_node_types = len(set(nx.get_node_attributes(g, "string_labels").values()) if glycan_graph else set(g.nodes()))
     # Adjacency matrix:
     A = nx.to_numpy_array(g)
     N = A.shape[0]
@@ -420,7 +422,7 @@ def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or netwo
                         'harm': [0.0], 'flow': [], 'flow_edge': [], 'secorder': []}
     else:
         deg = np.sum(A, axis = 1) + np.sum(A, axis = 0)
-        deg_to_leaves = np.full(N, np.sum(A[:, deg == 1]))
+        deg_to_leaves = A[:, deg == 1].sum(axis = 1)
         centralities = {'betweeness': list(nx.betweenness_centrality(g).values()), 'eigen': list(nx.katz_centrality_numpy(g).values()),
                         'close': list(nx.closeness_centrality(g).values()), 'load': list(nx.load_centrality(g_undir).values()),
                         'harm': list(nx.harmonic_centrality(g).values()), 'flow': list(nx.current_flow_betweenness_centrality(g_undir).values()) if connected else [],

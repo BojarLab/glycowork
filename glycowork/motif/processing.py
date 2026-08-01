@@ -165,9 +165,10 @@ def de_wildcard_glycoletter(glycoletter: str # Monosaccharide or linkage with wi
                             ) -> str: # Specific glycoletter instance
     "Retrieves a random specified instance of a general type (e.g., 'Gal' for 'Hex')"
     if ('?' in glycoletter or '/' in glycoletter) and '-' in glycoletter:
-        return choice(list(get_possible_linkages(glycoletter)))
-    elif monos := get_possible_monosaccharides(glycoletter):
-        return choice(list(monos))
+        return choice(
+            sorted(k for k in get_possible_linkages(glycoletter) if '?' not in k and '/' not in k) or [glycoletter])
+    elif monos := get_possible_monosaccharides(glycoletter) - {glycoletter}:
+        return choice(sorted(monos))
     else:
         return glycoletter
 
@@ -1237,7 +1238,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     # Open linkages2 (e.g., "1-")
     glycan = re.sub(r'([1-2])\-(\))', r'\1-?\2', glycan)
     # Missing linkages (e.g., "c)")
-    glycan = re.sub(r'(?<![hr])([a-b])([\(\)])', r'\1?1-?\2', glycan)
+    glycan = re.sub(r'(?<![hirH])(?<!Al)(?<!hp)([a-b])([\(\)])', r'\1?1-?\2', glycan)
     # Open linkages in front of branches (e.g., "1-[")
     glycan = re.sub(r'([0-9])\-([\[\]])', r'\1-?\2', glycan)
     # Open linkages in front of branches (with missing information) (e.g., "c-[")
@@ -1269,7 +1270,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     # Canonicalize reducing end
     if bool(re.search(r'[a-z]ol', glycan)):
         glycan = glycan[:-2] if 'Glcol' not in glycan else f'{glycan[:-2]}-ol'
-    if glycan[-1] in 'ab' and glycan[-3:] not in ['Rha', 'Ara']:
+    if len(glycan) > 1 and glycan[-1] in 'ab' and not re.search(r'(?:[hirH]|Al|hp)[ab]$', glycan):
         glycan = glycan[:-1]
     # Remove anomeric and steric indicators at reducing end
     if '(' in glycan and bool(re.search(r'[\)\]]([abx\?][DLX\?][A-Z][A-Za-z5]*)', glycan)):

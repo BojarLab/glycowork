@@ -163,7 +163,7 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
     # Get pool of monosaccharides, decide which one to stemify based on rarity
     pool = unwrap(min_process_glycans(df[glycan_col_name].tolist()))
     pool_count = Counter(pool)
-    stem_lib.update({k: k for k, v in pool_count.items() if v > rarity_filter})
+    stem_lib = {**stem_lib, **{k: k for k, v in pool_count.items() if v > rarity_filter}}
     # Stemify all offending monosaccharides
     df_out = copy.deepcopy(df)
     df_out[glycan_col_name] = df_out[glycan_col_name].apply(lambda x: stemify_glycan(x, stem_lib = stem_lib, libr = libr))
@@ -471,11 +471,11 @@ def calculate_adduct_mass(formula: str, # Chemical formula of adduct (e.g., "C2H
     elif enforce_sign:
         return 0
     element_masses = {
-        'monoisotopic': {'C': 12.0000, 'H': 1.0078, 'O': 15.9949, 'N': 14.0031},
-        'average': {'C': 12.0107, 'H': 1.00794, 'O': 15.9994, 'N': 14.0067}
+        'monoisotopic': {'C': 12.0000, 'H': 1.0078, 'O': 15.9949, 'N': 14.0031, 'S': 31.9721, 'P': 30.9738, 'Na': 22.9898, 'K': 38.9637, 'Cl': 34.9689},
+        'average': {'C': 12.0107, 'H': 1.00794, 'O': 15.9994, 'N': 14.0067, 'S': 32.065, 'P': 30.9738, 'Na': 22.9898, 'K': 39.0983, 'Cl': 35.453}
     }
     mass = sum(element_masses[mass_value][el] * (int(n) if n else 1)
-               for el, n in re.findall(r'([A-Z])(\d*)', formula) if el)
+               for el, n in re.findall(r'([A-Z][a-z]?)(\d*)', formula) if el in element_masses[mass_value])
     return sign * mass
 
 

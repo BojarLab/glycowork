@@ -17,7 +17,12 @@ def get_insight(glycan: str, # Glycan in IUPAC-condensed format
     if glycan in df_glycan.glycan.values:
         idx = df_glycan.glycan.values.tolist().index(glycan)
     else:
-        idx = np.where([compare_glycans(glycan, k) for k in df_glycan.glycan.values.tolist()])[0][0]
+        hits = np.where([compare_glycans(glycan, k) for k in df_glycan.glycan.values.tolist()])[0]
+        if not len(hits):
+            print(
+                f"\nWe don't have {glycan} in our database yet. Please double-check the sequence or try a related structure.")
+            return
+        idx = hits[0]
     species = df_glycan.Species.values.tolist()[idx]
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(sorted(species)))

@@ -187,12 +187,13 @@ def get_pvals_motifs(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
     glycan_col_name = GlycoDataFrame(df)._glycan_col or df.columns[0]
     # Reformat to allow for proper annotation in all samples
-    if multiple_samples:
-        df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
+    df = df.copy()
     if not zscores:
         means = df.iloc[:, 1:].mean()
         std_devs = df.iloc[:, 1:].std()
         df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / (std_devs + 1e-6)
+    if multiple_samples:
+        df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
     # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 motifs = motifs, feature_set = feature_set, condense = True,
@@ -1045,7 +1046,7 @@ def get_meta_analysis(
     "Performs fixed/random effects meta-analysis using DerSimonian-Laird method for between-study variance estimation, with optional Forest plot visualization"
     if model not in ['fixed', 'random']:
         raise ValueError("Model must be 'fixed' or 'random'")
-    variances = np.array(variances)
+    effect_sizes, variances = np.array(effect_sizes), np.array(variances)
     weights = 1 / variances
     total_weight = np.sum(weights)
     combined_effect_size = np.dot(weights, effect_sizes) / total_weight
@@ -1651,7 +1652,7 @@ def get_lectin_array(
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
     df = df.set_index(df.columns[0])
-    alpha = get_alphaN(df.shape[1])
+    alpha = get_alphaN(df.shape[0])
     duplicated_cols = set(df.columns[df.columns.duplicated()])
     if duplicated_cols:
         raise ValueError(
