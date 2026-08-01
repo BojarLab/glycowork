@@ -16,7 +16,7 @@
 - Added more element masses to `calculate_adduct_mass` (S, P, Na, K, Cl) (8f799c3)
 
 ##### Changed 🔄
-- `mz_to_composition` now returns the closest prioritized match instead of the first prioritized match within tolerance
+- `mz_to_composition` now returns the closest prioritized match instead of the first prioritized match within tolerance (28769f5)
 
 ##### Fixed 🐛
 - Fixed `glycan_to_composition` handling of narrow monosaccharide modification wildcards such as `HexNAc4/6S` (b3ad039)
@@ -62,7 +62,7 @@
 - Drawing "forbidden" monosaccharides, such as in `GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")`, now automatically makes the forbidden monosaccharides and their linkages transparent (3621350)
 
 ##### Fixed 🐛
-- Fixed `GlycoDraw` being unusable if `Jupyter` was not installed
+- Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)
 
 #### graph
 ##### Changed 🔄
@@ -72,7 +72,8 @@
 - Fixed `subgraph_isomorphism` counting too many isomorphic matches in certain scenarios of linkage ambiguity (81244c9)
 - `get_linkage_number` now always handles narrow linkage wildcards correctly for branch sorting purposes (d222f41)
 - Fixed edge case handling of sulfation wildcards in `subgraph_isomorphism` (8f799c3)
-- Fixed returned node numbering if glycans returned from the fast `compare_glycans` branch
+- Fixed returned node numbering if glycans returned from the fast `compare_glycans` branch (28769f5)
+- Fixed `compare_glycans`/`subgraph_isomorphism` not treating `HexOP`/`HexN` as proper wildcards
 
 #### annotate
 ##### Added ✨
@@ -85,7 +86,7 @@
 
 ##### Fixed 🐛
 - Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data (8f799c3)
-- Hardened `annotate_dataset` against duplicate motifs if the `"custom"` motif set is used
+- Hardened `annotate_dataset` against duplicate motifs if the `"custom"` motif set is used (28769f5)
 
 #### regex
 ##### Fixed 🐛

@@ -13,15 +13,29 @@ from glycowork.motif.regex import get_match
 
 
 LINKAGE_NODE_PATTERN = re.compile(r'^[ab?][0-9?/]+-[0-9?/]+$')
-_WILDCARD_RE = re.compile(r'(?<![A-Za-z0-9])(?:Monosaccharide|HexNAcOS|HexNAc|HexOS|HexA|dHex|Hex|Sia|Pen)(?![A-Za-z0-9])')
+_WILDCARD_RE = re.compile(r'(?<![A-Za-z0-9])(?:Monosaccharide|HexNAcOS|HexNAcOP|HexNAc|HexAOS|HexOS|HexOP|HexNS|HexN|HexA|dHex|Hex|Sia|Pen)(?![A-Za-z0-9])')
 _STRUCTURAL_ALDITOL = re.compile(r'(?:Thre|Ery|Rib|Gro|Ara)[A-Za-z0-9]*-ol$')
+_MOTIF_SEQ = dict(zip(motif_list.motif_name, motif_list.motif))
+_MOTIF_SPEC = {n: eval(t) for n, t in zip(motif_list.motif_name, motif_list.termini_spec)}
+
+
+def _motif_sequence(
+        label: str # Motif label as produced by annotate_dataset/quantify_motifs
+) -> tuple[str, list[str]]: # (IUPAC-condensed sequence, monosaccharide termini spec)
+    "Resolves a motif label to the sequence and termini spec it was counted with"
+    if label in _MOTIF_SEQ:
+        return _MOTIF_SEQ[label], _MOTIF_SPEC[label]
+    s = label[9:] if label.startswith('Terminal_') else label
+    # Terminal_ columns were counted with a pinned non-reducing end, exhaustive ones position-agnostically
+    return s, (['terminal'] if label.startswith('Terminal_') else ['flexible']) + ['flexible'] * (s.count('(') - (1 if s.endswith(')') else 0))
 
 
 def _motif_ambiguity(
-        s: str # Motif sequence in IUPAC-condensed
-) -> tuple[int, int]: # Sort key; lower is more specific
-    "Ranks a motif label by information content, since wildcards and ambiguous linkages convey less than the concrete forms they abstract and can be longer than them"
-    return (len(_WILDCARD_RE.findall(s)) + s.count('?') + s.count('/'), -len(s))
+        label: str # Motif label as produced by annotate_dataset/quantify_motifs
+) -> tuple[int, bool, int, int]: # Sort key; lower is more specific
+    "Ranks a motif label by information content, since wildcards, ambiguous linkages and unpinned termini convey less than the concrete forms they abstract and can be longer than them"
+    s, sp = _motif_sequence(label)
+    return (len(_WILDCARD_RE.findall(s)) + s.count('?') + s.count('/'), label not in _MOTIF_SEQ, -sum(t != 'flexible' for t in sp), -len(s))
 
 
 def annotate_glycan(
@@ -272,13 +286,9 @@ def get_motif_dag(
         abundances: pd.DataFrame | None = None # Motifs x samples abundances, used as an exact prefilter for containment
 ) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is a substructure of child
     "Builds the containment DAG of a motif set, in which a parent motif is a substructure of each of its children"
-    motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
-    spec_dic = dict(zip(motif_list.motif_name, motif_list.termini_spec))
     pat, tgt, spec, amb = {}, {}, {}, {}
     for m in motifs:
-        s = motif_dic.get(m, m[9:] if m.startswith('Terminal_') else m)
-        # Only 'known' motifs carry a termini spec; exhaustive and Terminal_ columns are counted position-agnostically and so demand nothing
-        sp = eval(spec_dic[m]) if m in spec_dic else ['flexible'] * (s.count('(') + (0 if s.endswith(')') else 1))
+        s, sp = _motif_sequence(m)
         try:
             pat[m] = glycan_to_nxGraph(s, termini = 'provided', termini_list = sp)
         except Exception:
@@ -288,7 +298,7 @@ def get_motif_dag(
         # A host may attach anything at c's open ends, so only what c itself pins down is provable: a node carrying something above it inside c is internal, an open end is what c declares or else genuinely unknown
         nx.set_node_attributes(t, {n: 'internal' if (t.out_degree(n) and t.in_degree(n)) else (sp[n] if sp[n] != 'flexible' else 'unknown') for n in t.nodes()}, 'termini')
         tgt[m], spec[m] = t, sp
-        amb[m] = _motif_ambiguity(s)
+        amb[m] = _motif_ambiguity(m)
     cols = list(pat)
     dag = nx.DiGraph()
     dag.add_nodes_from(cols)
@@ -312,13 +322,14 @@ def get_composition_dag(
         abundances: pd.DataFrame | None = None # Compositions x samples abundances, used as an exact prefilter for containment
 ) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is component-wise contained in child
     "Builds the containment DAG of a composition set, in which a parent composition is component-wise dominated by each of its children"
-    comp = {}
+    comp, site = {}, {}
     for c in compositions:
         try:
-            comp[c] = canonicalize_composition(c)
+            comp[c], site[c] = canonicalize_composition(c), ''
         except Exception:
             try:
-                comp[c] = canonicalize_composition(str(c).rsplit('_', 1)[-1])  # glycoproteomics indices carry a protein_site prefix
+                comp[c], site[c] = canonicalize_composition(str(c).rsplit('_', 1)[-1]), str(c).rsplit('_', 1)[
+                    0]  # glycoproteomics indices carry a protein_site prefix
             except Exception:
                 continue  # labels that do not parse as a composition have no place in the DAG
     cols = list(comp)
@@ -331,8 +342,8 @@ def get_composition_dag(
         # p contained in c implies every glycoform counted toward c is counted toward p, hence abundance dominance is a necessary condition and an exact prefilter
         dom = (A <= A[i] + 1e-9).all(axis = 1) if A is not None else np.ones(len(cols), dtype = bool)
         for j, c in enumerate(cols):
-            # equal compositions are ordered by position, which makes the order total and the DAG acyclic
-            if i != j and dom[j] and (V[i] <= V[j]).all() and ((V[i] < V[j]).any() or i < j):
+            # equal compositions are ordered by position, which makes the order total and the DAG acyclic; glycoforms of different glycosites are separate compositional systems and never contain one another
+            if i != j and site[p] == site[c] and dom[j] and (V[i] <= V[j]).all() and ((V[i] < V[j]).any() or i < j):
                 dag.add_edge(p, c)
     return nx.transitive_reduction(dag)
 
@@ -342,19 +353,12 @@ def deduplicate_motifs(
 ) -> pd.DataFrame: # DataFrame with redundant motifs removed
     "Removes redundant motif entries from glycan abundance data while preserving the most informative labels"
     df = df.copy()
-    motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
-    original_index = df.index.copy()
-    df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' ' * 20 if x in motif_dic else x)
+    # Keep the least ambiguous label per group of identical rows; wildcards are longer than the specifics they abstract, so length only ever breaks ties between equally specific labels
+    ranks = [_motif_ambiguity(m) for m in df.index]
     df['_original_position'] = range(len(df))
-    # Group the DataFrame by identical rows
-    grouped = df.groupby(list(df.columns[:-1]), sort = False, dropna = False)
-    # Keep the least ambiguous label per group; length only breaks ties, since wildcards are longer than the specifics they abstract and would otherwise win on character count alone
-    max_idx_positions = []
-    for _, group in grouped:
-        pos = min(range(len(group)), key = lambda k: _motif_ambiguity(group.index[k]))
-        max_idx_positions.append(group['_original_position'].iloc[pos])
-    df.index = original_index
-    return df.iloc[max_idx_positions].drop_duplicates().drop(['_original_position'], axis = 1)
+    keep = [g['_original_position'].iloc[min(range(len(g)), key = lambda k: ranks[g['_original_position'].iloc[k]])]
+            for _, g in df.groupby(list(df.columns[:-1]), sort = False, dropna = False)]
+    return df.iloc[keep].drop(['_original_position'], axis = 1)
 
 
 def quantify_motifs(
@@ -362,8 +366,8 @@ def quantify_motifs(
         glycans: list[str] | None = None, # List of IUPAC-condensed glycan sequences; auto-detected from first column if None
         feature_set: list[str] = ['known', 'exhaustive'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
         custom_motifs: list = [], # Custom motifs when using 'custom' feature set
-        remove_redundant: bool = True # Remove redundant motifs via deduplicate_motifs
-) -> pd.DataFrame: # DataFrame with motif abundances (motifs as columns, samples as rows)
+        remove_redundant: bool = True  # Remove redundant motifs via deduplicate_motifs
+) -> pd.DataFrame:  # DataFrame with motif abundances (motifs as rows, samples as columns)
     "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences"
     if isinstance(df, str):
         df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
@@ -390,8 +394,8 @@ def quantify_motifs(
             collect_dic[col] = np.log2((linear_values * weights).sum(axis = 1))
         else:
             collect_dic[col] = (temp * weights).sum(axis = 1)
-    df = pd.DataFrame(collect_dic)
-    return df if not remove_redundant else deduplicate_motifs(df.T)
+    df = pd.DataFrame(collect_dic).T
+    return df if not remove_redundant else deduplicate_motifs(df)
 
 
 def count_unique_subgraphs_of_size_k(
