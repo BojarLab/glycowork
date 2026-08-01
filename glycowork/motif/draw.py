@@ -910,7 +910,7 @@ def is_jupyter() -> bool:
     try:
         from IPython import get_ipython
         return 'IPKernelApp' in get_ipython().config  # Check if in IPython kernel
-    except AttributeError:
+    except (AttributeError, ImportError):
         return False
 
 
@@ -921,11 +921,10 @@ def display_svg_with_matplotlib(
     "Renders SVG using matplotlib for non-Jupyter environments"
     _, convert_svg_to_png = _get_glycorender()
     from PIL import Image
-    svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
     # Get original SVG dimensions and scale them up
     size_multiplier = 4  # Make everything 4x bigger
-    width = svg_data.width if hasattr(svg_data, 'width') else 800
-    height = svg_data.height if hasattr(svg_data, 'height') else 800
+    width, height = getattr(svg_data, 'width', 800), getattr(svg_data, 'height', 800)
+    svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
     # Convert to PNG with larger dimensions
     png_output = convert_svg_to_png(svg_data, output_width = width * size_multiplier,
                                     output_height = height * size_multiplier, scale = 2.0, return_bytes = True, chem = chem)
@@ -1300,7 +1299,7 @@ def GlycoDraw(
 
     if restrict_vocab and not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
         if "!" in draw_this:
-            draw_this = re.sub(r'\[?!.*?\)', '', draw_this)
+            draw_this = re.sub(r'\[!.*?\)\]|!.*?\)', '', draw_this)
         else:
             raise Exception('Did you enter a real glycan or motif?')
 
@@ -1596,6 +1595,7 @@ def annotate_figure(
             edit_svg = False
     svg_tmp += '</svg>'
     if filepath:
+        filepath = str(filepath)
         if filepath.endswith('.pdf'):
             from glycorender.render import simple_svg_to_pdf
             simple_svg_to_pdf(svg_tmp, str(filepath))
@@ -1637,10 +1637,10 @@ def plot_glycans_excel(
             if not isinstance(glycan_structure[0], str):
                 glycan_structure = glycan_structure[0][0]
             # Generate glycan image using GlycoDraw
-            svg_data = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True).as_svg()
+            drawing = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True)
             # Get SVG dimensions and scale them
-            width = svg_data.width if hasattr(svg_data, 'width') else 800
-            height = svg_data.height if hasattr(svg_data, 'height') else 800
+            width, height = getattr(drawing, 'width', 800), getattr(drawing, 'height', 800)
+            svg_data = drawing.as_svg()
             # Convert SVG data to image
             temp_bytes = BytesIO(convert_svg_to_png(svg_data.encode('utf-8').decode('utf-8'), output_width = width,
                                                     output_height = height, scale = 2.0, return_bytes = True))

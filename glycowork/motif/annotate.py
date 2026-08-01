@@ -263,6 +263,7 @@ def annotate_dataset(
     if 'size_branch' in feature_set:
         shopping_cart.append(get_size_branching_features(glycans))
     temp = pd.concat(shopping_cart, axis = 1)
+    temp = temp.loc[:, ~temp.columns.duplicated()]
     temp.index = original_glycans  # rows were built from the de-reduced sequences but must come back keyed on what the caller passed in, or downstream index alignment silently drops everything
     return temp.loc[:, (temp != 0).any(axis = 0)] if condense else temp
 
@@ -664,7 +665,7 @@ class Lectin():
 
     def get_all_binding_motifs(self) -> list[str]: # List of all binding motifs
         "Returns combined list of primary and secondary binding motifs"
-        return list(self.specificity["primary"].keys()) + list(self.specificity["secondary"].keys())
+        return list(self.specificity["primary"].keys()) + list(self.specificity["secondary"].keys() if self.specificity["secondary"] else [])
 
     def show_info(self) -> None:
         "Displays formatted lectin information including specificities"

@@ -13,13 +13,14 @@
 ### motif
 #### tokenization
 ##### Added ✨
-- Added more element masses to `calculate_adduct_mass` (S, P, Na, K, Cl)
+- Added more element masses to `calculate_adduct_mass` (S, P, Na, K, Cl) (8f799c3)
 
 ##### Changed 🔄
+- `mz_to_composition` now returns the closest prioritized match instead of the first prioritized match within tolerance
 
 ##### Fixed 🐛
 - Fixed `glycan_to_composition` handling of narrow monosaccharide modification wildcards such as `HexNAc4/6S` (b3ad039)
-- `stemify_dataset` no longer mutates its `stem_lib` input
+- `stemify_dataset` no longer mutates its `stem_lib` input (8f799c3)
 
 ##### Deprecated ⚠️
 
@@ -42,23 +43,26 @@
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
-- `get_pvals_motifs` no longer mutates input dataframe
-- Fixed effect size handling in `get_meta_analysis` if `model="random"`
+- `get_pvals_motifs` no longer mutates input dataframe (8f799c3)
+- Fixed effect size handling in `get_meta_analysis` if `model="random"` (8f799c3)
 
 #### processing
 ##### Changed 🔄
 - `de_wildcard_glycoletter` now also supports narrow monosaccharide wildcards like `Gal/Glc` (5483f3c)
-- `canonicalize_iupac` is again made more robust in terms of what inputs it can handle
+- `canonicalize_iupac` is again made more robust in terms of what inputs it can handle (8f799c3)
 
 ##### Fixed 🐛
 - Fixed `canonicalize_iupac` messing up narrow modification wildcards (e.g., `Gal3/6S`) in side branches (3a02eff)
 - Fixed `canonicalize_iupac` sometimes ordering multiple floating bits wrongly (b6689a5)
-- Fixed `canonicalize_iupac` crashing on empty string inputs
-- `de_wildcard_glycoletter` now no longer can draw and return the wildcard itself
+- Fixed `canonicalize_iupac` crashing on empty string inputs (8f799c3)
+- `de_wildcard_glycoletter` now no longer can draw and return the wildcard itself (8f799c3)
 
 #### draw
 ##### Changed 🔄
 - Drawing "forbidden" monosaccharides, such as in `GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")`, now automatically makes the forbidden monosaccharides and their linkages transparent (3621350)
+
+##### Fixed 🐛
+- Fixed `GlycoDraw` being unusable if `Jupyter` was not installed
 
 #### graph
 ##### Changed 🔄
@@ -67,7 +71,8 @@
 ##### Fixed 🐛
 - Fixed `subgraph_isomorphism` counting too many isomorphic matches in certain scenarios of linkage ambiguity (81244c9)
 - `get_linkage_number` now always handles narrow linkage wildcards correctly for branch sorting purposes (d222f41)
-- Fixed edge case handling of sulfation wildcards in `subgraph_isomorphism`
+- Fixed edge case handling of sulfation wildcards in `subgraph_isomorphism` (8f799c3)
+- Fixed returned node numbering if glycans returned from the fast `compare_glycans` branch
 
 #### annotate
 ##### Added ✨
@@ -79,11 +84,12 @@
 - `annotate_dataset` will no longer split signal between pairs such as `Gal(b1-4)GlcNAc` and `Gal(b1-4)GlcNAc-ol` in free oligosaccharides (3737633)
 
 ##### Fixed 🐛
-- Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data
+- Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data (8f799c3)
+- Hardened `annotate_dataset` against duplicate motifs if the `"custom"` motif set is used
 
 #### regex
 ##### Fixed 🐛
-- Harden treatment of ?-wildcards in `parse_pattern`
+- Harden treatment of ?-wildcards in `parse_pattern` (8f799c3)
 
 ### network
 #### biosynthesis

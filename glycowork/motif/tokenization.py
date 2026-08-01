@@ -206,7 +206,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     # Theoretical m/z offset for proton ionization: [M-H]- or [M+H]+
     ion_offset = -HYDROGEN_MASS if max_charge < 0 else HYDROGEN_MASS
     tol = mass_tolerance if tolerance_unit == "Da" else mz_value * mass_tolerance / 1e6
-    comp_pool = [dict(t) for t in {tuple(d.items()) for d in df_use.Composition}]
+    comp_pool = [dict(t) for t in dict.fromkeys(tuple(d.items()) for d in df_use.Composition)]
     masses = [(comp, composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep,
                                          modification = modification)) for comp in comp_pool if
               not filter_out.intersection(comp.keys())]
@@ -217,14 +217,17 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     fallback = []
     # Compare each composition's theoretical m/z against the observed value; return first non-deprioritized hit, else first deprioritized fallback
     for kind, z in scenarios:
+        hits = []
         for comp, mass in masses:
             observed = (mass + z * ion_offset) / z if kind == 'proton' else (mass + (
-                        z - 1) * ion_offset + adduct_mass) / z
+                    z - 1) * ion_offset + adduct_mass) / z
             if abs(observed - mz_value) < tol:
-                if deprioritized.intersection(comp.keys()):
-                    fallback.append(comp)
-                else:
-                    return [comp]
+                hits.append((abs(observed - mz_value), comp))
+        for _, comp in sorted(hits, key = lambda x: x[0]):
+            if deprioritized.intersection(comp.keys()):
+                fallback.append(comp)
+            else:
+                return [comp]
     return fallback[:1]
 
 

@@ -12,7 +12,7 @@ from functools import lru_cache, wraps
 
 
 PTM_REGEX = re.compile(r"(?<!Neu)(?<=\D)(\d+/\d+|\d+)(?=\D)(?![^()]*\))")
-NEGATION_REGEX = re.compile(r'(!\w+\([^)]+\))')
+NEGATION_REGEX = re.compile(r'(?<!\()(!\w+(?:\([^)]+\))?)')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
 LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
 LINKAGE_LABEL = re.compile(r'^[ab?][12]-')
@@ -216,7 +216,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
                     ) -> bool: # True if glycans are same, False if not
     "Check whether two glycans are identical"
     if glycan_a == glycan_b:
-        return ((True, {i: i for i in range(len(glycan_a.nodes))}) if return_matches else True) if isinstance(glycan_a, nx.DiGraph) else (True, None) if return_matches else True
+        return ((True, {n: n for n in glycan_a.nodes}) if return_matches else True) if isinstance(glycan_a, nx.DiGraph) else (True, None) if return_matches else True
     if isinstance(glycan_a, str) and isinstance(glycan_b, str):
         if glycan_a.count('(') != glycan_b.count('(') or glycan_a.count("[") != glycan_b.count("[") :
             return (False, None) if return_matches else False
@@ -226,6 +226,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
         g1, g2 = glycan_to_nxGraph(glycan_a), glycan_to_nxGraph(glycan_b)
         g1_sl, g2_sl = nx.get_node_attributes(g1, "string_labels"), nx.get_node_attributes(g2, "string_labels")
     else:
+        glycan_a, glycan_b = ensure_graph(glycan_a), ensure_graph(glycan_b)
         if len(glycan_a.nodes) != len(glycan_b.nodes):
             return (False, None) if return_matches else False
         g1_sl, g2_sl = nx.get_node_attributes(glycan_a, "string_labels"), nx.get_node_attributes(glycan_b, "string_labels")
@@ -265,9 +266,8 @@ def expand_termini_list(motif: str | nx.DiGraph, # Glycan motif sequence or grap
                         termini_list: list[str] # List of monosaccharide/linkage positions from terminal/internal/flexible
                         ) -> tuple[str]: # Expanded termini list including linkages
     "Convert monosaccharide-only termini list into full termini list"
-    if len(termini_list[0]) < 2:
-        mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
-        termini_list = [mapping[t] for t in termini_list]
+    mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
+    termini_list = [mapping.get(t, t) for t in termini_list]
     num_linkages = motif.count('(') if isinstance(motif, str) else len(motif) - len(termini_list)
     result = ['flexible'] * (len(termini_list) + num_linkages)
     result[::2] = termini_list
@@ -360,8 +360,12 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
                                        ) -> bool | int | tuple[int, list[list[int]]]: # Boolean presence, count, or (count, matches)
     "Check if motif exists as subgraph in glycan, handling negation patterns"
     if isinstance(motif, str):
-        negated_part = NEGATION_REGEX.search(motif).group(1)
-        to_replace = '' if motif.startswith('!') or '[!' in motif else 'Monosaccharide(?1-?)'
+        if not (hit := NEGATION_REGEX.search(motif)) or hit.group(1) == motif:
+            raise ValueError(
+                f"Unsupported negation in motif '{motif}': negate a monosaccharide inside a larger motif (e.g. 'Gal(b1-4)[!Fuc(a1-3)]GlcNAc'), not a linkage or the whole motif")
+        negated_part = hit.group(1)
+        to_replace = '' if motif.startswith('!') or '[!' in motif else 'Monosaccharide(?1-?)' if negated_part.endswith(
+            ')') else 'Monosaccharide'
         motif_stub = motif.replace(negated_part, to_replace).replace('[]', '')
         negated_part_clean = glycan_to_nxGraph(negated_part.replace('!', ''))
     else:
@@ -618,7 +622,7 @@ def largest_subgraph(glycan_a: str | nx.DiGraph, # First glycan
     largest_common_subgraph = list(ismags.largest_common_subgraph(symmetry = False))
     if not largest_common_subgraph:
         return ''
-    return graph_to_string_int(graph_a.subgraph(largest_common_subgraph[0].keys()))
+    return graph_to_string(graph_a.subgraph(largest_common_subgraph[0].keys()))
 
 
 def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating substituent
