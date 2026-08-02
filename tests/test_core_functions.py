@@ -4972,6 +4972,21 @@ def test_get_jtk_with_transform(sample_jtk_df):
     assert isinstance(result, pd.DataFrame)
 
 
+@pytest.fixture(scope = 'module')
+def glycoform_timecourse():
+    df = glycoproteomics_data_loader.human_milk_N_PMID34087070.iloc[:60, :].copy()
+    df.columns = ['ID'] + [f'T1_h{t}_r{r}' for t in [1, 2, 3] for r in [1, 2]]
+    return df
+
+
+def test_time_series_and_jtk_accept_glycoforms(glycoform_timecourse, capsys):
+    ts = get_time_series(glycoform_timecourse, glycoproteomics = True)  # the IUPAC orientation heuristic must not transpose glycoform IDs
+    assert 'corr p-val' in ts.columns and len(ts) > 0
+    assert 'by_motif_family' in capsys.readouterr().out  # the composition DAG, not the Sia/Fuc fallback, drove the grouping
+    jtk = get_jtk(glycoform_timecourse, timepoints = 3, interval = 4, periods = [2], glycoproteomics = True)
+    assert 'Adjusted_P_value' in jtk.columns and len(jtk) > 0
+
+
 def test_multi_feature_scoring_basic(sample_df):
     """Test basic functionality of multi_feature_scoring"""
     np.random.seed(42)

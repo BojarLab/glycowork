@@ -930,7 +930,6 @@ def get_glycanova(
         groups: list[Any],  # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3])
         impute: bool = True,  # Replace zeros with Random Forest model
         motifs: bool = False,  # Analyze motifs instead of sequences
-        glycoproteomics: bool = False, # Whether rows are glycoforms from glycoproteomics instead of glycans
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         min_samples: float = 0.1,  # Min percent of non-zero samples required
@@ -941,6 +940,7 @@ def get_glycanova(
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+        glycoproteomics: bool = False, # Whether rows are glycoforms from glycoproteomics instead of glycans
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> tuple[GlycoDataFrame, dict[
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
@@ -1132,19 +1132,20 @@ def get_time_series(
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
-        custom_scale: float | dict = 0
+        custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+        glycoproteomics: bool = False, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
 ) -> GlycoDataFrame:  # DataFrame with regression coefficients and FDR-corrected p-values
     "Analyzes time series glycomics data using polynomial regression"
-    grouped_BH = motifs if grouped_BH is None else grouped_BH
+    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
     df = df.fillna(0)
     if isinstance(df.iloc[0, 0], str):
         df = df.set_index(df.columns[0])
-    if '-' not in df.index[0]:
-        df = df.T
+    if not glycoproteomics and '-' not in df.index[0]:
+        df = df.T  # glycan IUPAC labels always carry a linkage dash; glycoform IDs do not, so the orientation heuristic must not fire on them
     df = replace_outliers_winsorization(df).reset_index(names = 'glycan')
     df = impute_and_normalize(df, [df.columns[1:].tolist()], impute = impute, min_samples = min_samples)
     if transform is None:
@@ -1168,6 +1169,12 @@ def get_time_series(
         elif transform != "Nothing":
             raise ValueError("Only ALR and CLR are valid transforms for now.")
     else:
+        if glycoproteomics and grouped_BH:
+            # Composition containment off the raw glycoform frame (pre-transform), keeping the abundance-dominance prefilter valid
+            raw = df.iloc[:, 1:].copy()
+            raw.index = strip_suffixes(df.iloc[:, 0])
+            raw = raw.groupby(level = 0).mean()
+            dag = get_composition_dag(raw.index.tolist(), abundances = raw)
         if transform == "ALR":
             df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False,
                                                       gamma = gamma,
@@ -1218,10 +1225,11 @@ def get_jtk(
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         correction_method: str = "two-stage",  # Multiple testing correction method
-        grouped_BH: bool | None = None  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
+        grouped_BH: bool | None = None,  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
+        glycoproteomics: bool = False,  # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
 ) -> GlycoDataFrame:  # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
-    grouped_BH = motifs if grouped_BH is None else grouped_BH
+    grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if isinstance(df_in, (str, Path)):
         df = pd.read_csv(df_in) if Path(df_in).suffix.lower() == ".csv" else pd.read_csv(df_in, sep = "\t") if Path(
             df_in).suffix.lower() == ".tsv" else pd.read_excel(df_in)
@@ -1253,8 +1261,13 @@ def get_jtk(
         else:
             raise ValueError("Only ALR and CLR are valid transforms for now.")
     else:
+        if glycoproteomics and grouped_BH:
+            # Composition containment off the raw glycoform frame (pre-transform), keeping the abundance-dominance prefilter valid
+            raw = df.set_index(df.columns[0]).astype(float)
+            dag = get_composition_dag(raw.index.tolist(), abundances = raw)
         if transform == "ALR":
-            df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False, gamma = gamma)
+            df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False,
+                                                      gamma = gamma)
         elif transform == "CLR":
             df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma)
         elif transform != "Nothing":

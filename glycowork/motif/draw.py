@@ -123,11 +123,48 @@ _LABEL_PATTERN = re.compile(r'<!--\s*(.*?)\s*-->')
 _TRANSFORM_PATTERN = re.compile(r'transform\s*=\s*"([^"]*)"')
 _CONF_DISPLAY = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
 _SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
+_SVG_NUMBER = re.compile(r'-?\d+(?:\.\d+)?(?:e-?\d+)?')
 
 
 def _get_glycorender():
     from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
     return convert_svg_to_pdf, convert_svg_to_png
+
+
+def _drawn_extent(
+        element: Any, # drawsvg element or container to measure
+        acc: list # Accumulator of (x0, y0, x1, y1) boxes in user space
+) -> list: # The accumulator, so the caller can fold it in one expression
+    "Collects the bounding boxes of everything visible in a drawsvg tree, so a drawing can be cropped to what it actually contains"
+    a = getattr(element, 'args', {}) or {}
+    if isinstance(element, draw.Circle):
+        acc.append((a['cx'] - a['r'], a['cy'] - a['r'], a['cx'] + a['r'], a['cy'] + a['r']))
+    elif isinstance(element, draw.Rectangle):
+        acc.append((a['x'], a['y'], a['x'] + a['width'], a['y'] + a['height']))
+    elif isinstance(element, draw.Text):
+        size, shift = a.get('font-size', 10), 0
+        text = element.escaped_text or ''.join(str(getattr(k, 'escaped_text', '') or '') for c in (element.children or []) for k in (c.children or []))
+        if a.get('x') is None:
+            # Modification, conformation and linkage labels ride an invisible carrier path, anchored by startOffset along it and displaced by a dy in em
+            carrier = element.children[0]
+            pts = [float(k) for k in _SVG_NUMBER.findall(re.sub(r'[A-Za-z]', ' ', carrier.args['xlink:href'].args['d']))]
+            frac = {'50%': 0.5, '100%': 1.0}.get(carrier.args.get('startOffset'), 0.0)
+            x, y = pts[0] + frac * (pts[-2] - pts[0]), pts[1] + frac * (pts[-1] - pts[1])
+            for tspan in carrier.children or []:
+                shift = float(str(tspan.args.get('dy', '0em')).rstrip('em')) * size
+        else:
+            x, y = a['x'], a['y']
+        text_width = 0.62 * size * len(text)  # mean advance width of the label font; the crop margin absorbs the per-glyph error
+        x -= text_width / 2 if a.get('text-anchor') == 'middle' else text_width if a.get('text-anchor') == 'end' else 0
+        acc.append((x, y + shift - size, x + text_width, y + shift + 0.3 * size))
+    elif 'd' in a and (a.get('stroke-width') or a.get('fill', 'none') not in (None, 'none')):
+        # An invisible carrier path is not ink and must not enlarge the crop; its text is measured above instead
+        pts = [float(k) for k in _SVG_NUMBER.findall(re.sub(r'[A-Za-z]', ' ', a['d']))]
+        acc.append((min(pts[0::2]), min(pts[1::2]), max(pts[0::2]), max(pts[1::2])))
+    if not isinstance(element, draw.Text):
+        for child in getattr(element, 'children', []) or []:
+            _drawn_extent(child, acc)
+    return acc
 
 
 def draw_hex(
@@ -1258,6 +1295,7 @@ def GlycoDraw(
     "Renders glycan structure using SNFG symbols or chemical structure representation"
     if any(k in glycan for k in (';', 'β', 'α', 'RES', '=')):
         raise Exception
+    in_glycan = glycan  # motif names, repeat units, and trailing linkages all rewrite glycan below, while a caller-built filename still carries what was passed in
     if libr is None:
         libr = lib
     if glycan.startswith('Terminal') and glycan not in motif_list.motif_name.values.tolist():
@@ -1347,29 +1385,14 @@ def GlycoDraw(
     all_y = unwrap(l3_y_pos) + unwrap(l2_y_pos) + unwrap(l1_y_pos) + main_sugar_y_pos
     all_x = unwrap(l3_x_pos) + unwrap(l2_x_pos) + unwrap(l1_x_pos) + main_sugar_x_pos
     max_y, min_y = max(all_y), min(all_y)
-    max_x, min_x = max(all_x), min(all_x)
-    if reducing_end_label:
-        min_x = min(min_x, main_sugar_x_pos[0] - 1)
-    x_span = max_x - min_x
+    max_x = max(all_x)
     y_span = max_y - min_y
 
-    # Canvas size
-    width = ((((x_span+1)*2)-1)*dim)+dim
-    if floaty_bits:
-        len_one_gw = ((max([len(j) for k in min_process_glycans(floaty_bits) for j in k]) / 6) + 1) * dim
-        len_multiple_gw = (max([len(k) for k in min_process_glycans(floaty_bits)], default = 0) + 1) * dim
-        width += max(len_one_gw, len_multiple_gw)
-    if len(floaty_bits) > len(set(floaty_bits)):
-        width += dim
+    # Floaty bits are spread over the full height of their own lane, so they need vertical room of their own
     if len(floaty_bits) > y_span:
         y_span += 1.0
         max_y += 0.5
         min_y -= 0.5
-    height = ((((max(abs(min_y), max_y) + 1) * 2) - 1) * dim) + 60
-    height = max(height, width) if vertical else height
-    x_offset = abs(min_x) * dim * (1.2 if compact else 2) if reducing_end_label else 0
-    x_ori = -width + (dim / 2) + 0.5 * dim + x_offset
-    y_ori = (-height / 2) + (((max_y - abs(min_y)) / 2) * dim)
 
     # Generate default ALT text if not provided
     if alt_text is None:
@@ -1383,9 +1406,7 @@ def GlycoDraw(
             alt_text += f" Contains repeat unit (n={repeat if isinstance(repeat, (str, int)) and repeat != True else ''})."
 
     # Draw
-    d2 = draw.Drawing(width, height, origin = (x_ori, y_ori))
-    deg = 90 if vertical else 0
-    d = draw.Group(transform = f'rotate({deg} {x_ori + 0.5 * width} {y_ori + 0.5 * height})')
+    d = draw.Group()
 
     if reducing_end_label:
         bond_start_x = main_sugar_x_pos[0] - 0.5
@@ -1486,10 +1507,21 @@ def GlycoDraw(
             draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
             add_sugar('text', d, text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
 
+    # Canvas: crop to what was actually drawn, since a formula over sugar positions cannot know how far labels, brackets and highlight halos reach
+    boxes = _drawn_extent(d, [])
+    x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
+    x1, y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
+    if vertical:
+        # Rotating about the content centre keeps the crop a plain transpose of the box, instead of forcing the square canvas a canvas-centred rotation would need
+        c_x, c_y = (x0 + x1) / 2, (y0 + y1) / 2
+        d.args['transform'] = f'rotate(90 {c_x} {c_y})'
+        x0, y0, x1, y1 = c_x - (y1 - y0) / 2, c_y - (x1 - x0) / 2, c_x + (y1 - y0) / 2, c_y + (x1 - x0) / 2
+    margin = dim * 0.2
+    d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin))
     d2.append(d)
 
     if filepath:
-        filepath = Path(str(filepath).replace(glycan, re.sub(r'[<>:"/\\|?*]', '_', glycan)))
+        filepath = Path(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
         data = d2.as_svg()
         data = data.replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
         if filepath.suffix.lower() == '.svg':

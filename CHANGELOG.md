@@ -35,7 +35,7 @@
 - `get_roc` now also outputs the selected features if `multi_score=True` (5483f3c)
 - functions in `.analysis` now can read the stored metadata automatically and act accordingly, supporting easy-calls like `get_differential_expression(glycomics_data_loader.human_brain_N_PMID38343116)` (5483f3c)
 - `preprocess_data` now has the new optional keyword argument `glycoproteomics`, mainly for `get_differential_expression` to pass this info to be able to trigger `get_composition_dag` (c11b4d0)
-- `get_glycanova` now has the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type glycoform analysis of glycoproteomics data (c11b4d0)
+- `get_glycanova`, `get_time_series`, and `get_jtk` now have the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type, time series, and circadian glycoform analysis of glycoproteomics data (c11b4d0)
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
@@ -60,6 +60,7 @@
 #### draw
 ##### Changed 🔄
 - Drawing "forbidden" monosaccharides, such as in `GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")`, now automatically makes the forbidden monosaccharides and their linkages transparent (3621350)
+- Saved `GlycoDraw` outputs are now cropped much more tightly, producing less whitespace around the glycan
 
 ##### Fixed 🐛
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)
@@ -73,7 +74,7 @@
 - `get_linkage_number` now always handles narrow linkage wildcards correctly for branch sorting purposes (d222f41)
 - Fixed edge case handling of sulfation wildcards in `subgraph_isomorphism` (8f799c3)
 - Fixed returned node numbering if glycans returned from the fast `compare_glycans` branch (28769f5)
-- Fixed `compare_glycans`/`subgraph_isomorphism` not treating `HexOP`/`HexN` as proper wildcards
+- Fixed `compare_glycans`/`subgraph_isomorphism` not treating `HexOP`/`HexN` as proper wildcards (0602f71)
 
 #### annotate
 ##### Added ✨
