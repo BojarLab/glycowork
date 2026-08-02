@@ -1,4 +1,6 @@
 include LICENSE
 include CONTRIBUTING.md
 include README.md
+include CITATION.bib
+include CITATION.cff
 recursive-exclude * __pycache__

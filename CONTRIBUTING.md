@@ -65,7 +65,7 @@ pytest
 
 ## Do you want to contribute to the documentation?
 
-* Docs are automatically created from the notebooks in the nbs folder.
+* Docs are automatically created from the notebooks in the repository root (`index.ipynb`, `00_core.ipynb`, ... `05_examples.ipynb`).
 
 ## Wishlist for future glycowork updates (last update: 2025-03-25)
 

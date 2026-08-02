@@ -3,9 +3,9 @@
 ## [1.10.0]
 
 - Bumped required `glycorender` version from `0.2.5` to `0.3.0`, which drops the `reportlab` dependency (ec7a54c)
-- Moved `huggingface_hub` dependencies from the base install to the `ml` optional install
-- `Pillow` is no longer a dependency of `glycowork`
-- Moved several dependencies to lazy-load, to improve initial package start-up times
+- Moved `huggingface_hub` dependencies from the base install to the `ml` optional install (088c711)
+- `Pillow` is no longer a dependency of `glycowork` (088c711)
+- Moved several dependencies to lazy-load, to improve initial package start-up times (088c711)
 
 ### glycan_data
 #### loader
@@ -14,6 +14,21 @@
 
 ##### Changed 🔄
 - Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute (9afa2b3)
+
+#### stats
+##### Added ✨
+- `clr_transformation` now has a new `reference` keyword argument, to optionally specify from which variables the geometric mean should be constructed (a918a2e)
+- `MissForest` now runs left-censored draws where missingness is intensity-dependent (MNAR) and Random Forest for the rest (MAR), where intensity-dependence is estimated via logistic regression (7849b15)
+- `get_alphaN` now has a new `verbose` keyword argument to suppress its print (which is now default `False`, since its output will now be stored as dataframe attributes) (5483f3c)
+
+##### Changed 🔄
+- `hotellings_t2` is now more robust to tiny groups (a918a2e)
+- `TST_grouped_benjamini_hochberg` is now more robust to groups with π0 = 1 (c902297)
+- `replace_outliers_winsorization` now takes in the entire `df` as input, instead of only one `row` (5483f3c)
+- `replace_outliers_winsorization` and `omega_squared` are now much faster (5483f3c)
+
+##### Fixed 🐛
+- Fixed sum of squares calculation in `calculate_permanova_stat` (5483f3c)
 
 ### motif
 #### tokenization
@@ -102,22 +117,6 @@
 #### biosynthesis
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)
-
-### glycan_data
-#### stats
-##### Added ✨
-- `clr_transformation` now has a new `reference` keyword argument, to optionally specify from which variables the geometric mean should be constructed (a918a2e)
-- `MissForest` now runs left-censored draws where missingness is intensity-dependent (MNAR) and Random Forest for the rest (MAR), where intensity-dependence is estimated via logistic regression (7849b15)
-- `get_alphaN` now has a new `verbose` keyword argument to suppress its print (which is now default `False`, since its output will now be stored as dataframe attributes) (5483f3c)
-
-##### Changed 🔄
-- `hotellings_t2` is now more robust to tiny groups (a918a2e)
-- `TST_grouped_benjamini_hochberg` is now more robust to groups with π0 = 1 (c902297)
-- `replace_outliers_winsorization` now takes in the entire `df` as input, instead of only one `row` (5483f3c)
-- `replace_outliers_winsorization` and `omega_squared` are now much faster (5483f3c)
-
-##### Fixed 🐛
-- Fixed sum of squares calculation in `calculate_permanova_stat` (5483f3c)
 
 ### ml
 #### model_training

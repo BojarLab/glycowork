@@ -3,7 +3,6 @@ CLAUDE.md
 .gitattributes
 .last_checked
 .gitconfig
-*.bak
 *.log
 *~
 ~*
@@ -12,6 +11,7 @@ tmp*
 tags
 /build/
 /_proc/
+desktop.ini
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

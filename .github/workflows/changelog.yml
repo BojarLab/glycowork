@@ -10,7 +10,7 @@ jobs:
       - name: Check if CHANGELOG.md was modified
         run: |
           # Check if any code files were modified
-          if git diff --name-only origin/${{ github.base_ref }} HEAD | grep -E '\.py$|\.js$|\.cpp$'; then
+          if git diff --name-only origin/${{ github.base_ref }} HEAD | grep -E '\.py$|\.ipynb$'; then
             # If code was modified, require changelog update
             if git diff --name-only origin/${{ github.base_ref }} HEAD | grep -q "CHANGELOG.md"; then
               echo "Changelog was updated"

@@ -3,11 +3,11 @@ name: Testing
 on:
   push:
     branches:
-      - main
+      - master
       - dev
   pull_request:
     branches:
-      - main
+      - master
       - dev
   workflow_dispatch:  # make it manually start-able
 
@@ -54,6 +54,6 @@ jobs:
           pytest --cov=../glycowork --cov-config=../.coveragerc --cov-report=xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
+          files: ./tests/coverage.xml

@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use glycowork, please cite the article below."
+title: glycowork
+abstract: Package for processing and analyzing glycans
+type: software
+authors:
+  - family-names: Bojar
+    given-names: Daniel
+    email: daniel.bojar@gu.se
+    orcid: "https://orcid.org/0000-0002-3008-7851"
+repository-code: "https://github.com/BojarLab/glycowork"
+url: "https://bojarlab.github.io/glycowork/"
+license: MIT
+version: 1.10.0
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.10039202
+    description: Concept DOI for all versions
+preferred-citation:
+  type: article
+  title: "Glycowork: A Python package for glycan data science and machine learning"
+  authors:
+    - family-names: Thomès
+      given-names: Luc
+    - family-names: Burkholz
+      given-names: Rebekka
+    - family-names: Bojar
+      given-names: Daniel
+  journal: Glycobiology
+  volume: 31
+  issue: 10
+  start: 1240
+  end: 1244
+  year: 2021
+  month: 11
+  doi: 10.1093/glycob/cwab067
+  pmcid: PMC8600276
