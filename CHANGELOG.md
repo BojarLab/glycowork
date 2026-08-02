@@ -2,6 +2,8 @@
 
 ## [1.10.0]
 
+- Bumped required `glycorender` version from `0.2.5` to `0.3.0`, which drops the `reportlab` dependency
+
 ### glycan_data
 #### loader
 ##### Added ✨
@@ -35,7 +37,7 @@
 - `get_roc` now also outputs the selected features if `multi_score=True` (5483f3c)
 - functions in `.analysis` now can read the stored metadata automatically and act accordingly, supporting easy-calls like `get_differential_expression(glycomics_data_loader.human_brain_N_PMID38343116)` (5483f3c)
 - `preprocess_data` now has the new optional keyword argument `glycoproteomics`, mainly for `get_differential_expression` to pass this info to be able to trigger `get_composition_dag` (c11b4d0)
-- `get_glycanova`, `get_time_series`, and `get_jtk` now have the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type, time series, and circadian glycoform analysis of glycoproteomics data (c11b4d0)
+- `get_glycanova`, `get_time_series`, and `get_jtk` now have the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type, time series, and circadian glycoform analysis of glycoproteomics data (c11b4d0, f3ee7e0)
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
@@ -60,7 +62,7 @@
 #### draw
 ##### Changed 🔄
 - Drawing "forbidden" monosaccharides, such as in `GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")`, now automatically makes the forbidden monosaccharides and their linkages transparent (3621350)
-- Saved `GlycoDraw` outputs are now cropped much more tightly, producing less whitespace around the glycan
+- Saved `GlycoDraw` outputs are now cropped much more tightly, producing less whitespace around the glycan (f3ee7e0)
 
 ##### Fixed 🐛
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)

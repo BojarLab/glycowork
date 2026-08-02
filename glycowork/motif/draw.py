@@ -458,7 +458,7 @@ def add_bond(
     x_start, x_stop = [-x * scaling_factor * dim for x in (x_start, x_stop)]
     y_start, y_stop = [y * y_scaling * dim for y in (y_start, y_stop)]
     final_width = 0.12*dim if color_highlight else 0.08*dim
-    p = draw.Path(stroke_width = final_width, stroke = col_dict['snfg_red'] if color_highlight else col_dict['black'],)
+    p = draw.Path(stroke_width = final_width, stroke = col_dict['snfg_red'] if color_highlight else col_dict['black'], class_ = 'snfg-linkage')
     p.M(x_start, y_start).L(x_stop, y_stop)
     drawing.append(p)
     if label and label != '-':
