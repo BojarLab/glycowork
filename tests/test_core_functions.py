@@ -2392,7 +2392,7 @@ def test_get_glm():
     assert result == "No variables retained"
     assert vars_ == []
     # GLM fit raises → returns failure message
-    with patch('glycowork.glycan_data.stats.smf.glm', side_effect = ValueError("forced")):
+    with patch('statsmodels.formula.api.glm', side_effect = ValueError("forced")):
         result, vars_ = get_glm(data)
         assert "GLM fitting failed" in result
 

@@ -4,7 +4,6 @@ import numpy as np
 import re
 from collections import Counter, deque, defaultdict
 from functools import partial
-from scipy.spatial.distance import cosine
 
 from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species, Hex, dHex, HexNAc, HexA, Pen, Sia
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int, expand_termini_list
@@ -781,5 +780,6 @@ def get_glycan_similarity(
         feature_set: list = ['known', 'exhaustive', 'terminal'] # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
 ) -> float: # Cosine similarity between glycan1 and glycan2
     "Calculates cosine similarity between two glycans based on their motif count fingerprints"
+    from scipy.spatial.distance import cosine
     fp = annotate_dataset([glycan1, glycan2], motifs = motifs, feature_set = feature_set)
     return 1 - cosine(fp.iloc[0].values, fp.iloc[1].values)

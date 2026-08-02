@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 from collections import Counter, OrderedDict
-from scipy.sparse.linalg import eigsh
 from functools import lru_cache, wraps
 
 
@@ -451,6 +450,7 @@ def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or netwo
         features.update({'egap': 0.0, 'entropyStation': 0.0})
     else:
         M = ((A + np.diag(np.ones(N))).T / (deg + 1)).T
+        from scipy.sparse.linalg import eigsh
         eigval, vec = eigsh(M, 2, which = 'LM')
         distr = np.abs(vec[:, -1]) / sum(np.abs(vec[:, -1]))
         features.update({'egap': 1 - eigval[0], 'entropyStation': np.sum(distr * np.log(distr))})

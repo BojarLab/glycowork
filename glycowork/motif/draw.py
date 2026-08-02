@@ -4,13 +4,13 @@ from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices
-import matplotlib.pyplot as plt
 from io import BytesIO
 from typing import Any
 import networkx as nx
 import drawsvg as draw
 import numpy as np
 import pandas as pd
+import struct
 import re
 from math import sin, cos, radians, sqrt, atan, degrees
 
@@ -957,7 +957,7 @@ def display_svg_with_matplotlib(
 ) -> None:
     "Renders SVG using matplotlib for non-Jupyter environments"
     _, convert_svg_to_png = _get_glycorender()
-    from PIL import Image
+    import matplotlib.pyplot as plt
     # Get original SVG dimensions and scale them up
     size_multiplier = 4  # Make everything 4x bigger
     width, height = getattr(svg_data, 'width', 800), getattr(svg_data, 'height', 800)
@@ -965,20 +965,10 @@ def display_svg_with_matplotlib(
     # Convert to PNG with larger dimensions
     png_output = convert_svg_to_png(svg_data, output_width = width * size_multiplier,
                                     output_height = height * size_multiplier, scale = 2.0, return_bytes = True, chem = chem)
-    # Use PIL to crop aggressively
-    img = Image.open(BytesIO(png_output))
-    bbox = img.convert('RGBA').getbbox()
-    if bbox:
-        # Add minimal padding - just enough to not cut off edges
-        padding = int(10 * size_multiplier)
-        bbox = (max(0, bbox[0] - padding), max(0, bbox[1] - padding),
-                min(img.width, bbox[2] + padding), min(img.height, bbox[3] + padding))
-    img_cropped = img.crop(bbox).convert('RGBA')
-    # Display with appropriate figure size
+    img = plt.imread(BytesIO(png_output), format = 'png')
     dpi = plt.rcParams['figure.dpi']
-    figsize = (img_cropped.width / dpi, img_cropped.height / dpi)
-    plt.figure(figsize = figsize)
-    plt.imshow(img_cropped)
+    plt.figure(figsize = (img.shape[1] / dpi, img.shape[0] / dpi))
+    plt.imshow(img)
     plt.axis('off')
     plt.show()
 
@@ -1548,10 +1538,7 @@ def annotate_figure(
         x_metric: str = 'Log2FC' # X axis metric ('Log2FC', 'Effect size')
 ) -> str | None: # Modified SVG code
     "Replaces text labels with glycan drawings in SVG figure"
-    convert_svg_to_pdf, _ = _get_glycorender()
-    import tempfile
-    import fitz
-    import os
+    from glycorender.render import pdf_to_svg_bytes
     glycan_size_dict = {
         'small': 'scale(0.1 0.1)  translate(0, -74)',
         'medium': 'scale(0.2 0.2)  translate(0, -55)',
@@ -1609,15 +1596,7 @@ def annotate_figure(
                 _dim = (scale_range[1] - scale_range[0]) * (
                         (glycan_scale[0][glycan_scale[1].index(current_label)] - _y_min) / _y_range) + scale_range[0]
                 d = GlycoDraw(current_label, compact = compact, dim = _dim, suppress = True, restrict_vocab = True)
-            glycan_svg = d.as_svg()
-            with tempfile.NamedTemporaryFile(suffix = '.pdf', delete = False) as tmp_pdf:
-                tmp_pdf_path = tmp_pdf.name
-            convert_svg_to_pdf(glycan_svg, tmp_pdf_path)
-            doc = fitz.open(tmp_pdf_path)
-            page = doc[0]
-            svg_from_pdf = page.get_svg_image()
-            doc.close()
-            os.unlink(tmp_pdf_path)
+            svg_from_pdf = pdf_to_svg_bytes(d.as_svg())
             data = svg_from_pdf.replace('<?xml version="1.0" encoding="UTF-8"?>', '').replace('<?xml version="1.0"?>', '')
             id_matches = re.findall(r'(?:font_\d+_\d+|d\d+)', data)
             for idx in id_matches:
@@ -1652,7 +1631,19 @@ def plot_glycans_excel(
     _, convert_svg_to_png = _get_glycorender()
     from openpyxl.drawing.image import Image as OpenpyxlImage
     from openpyxl.utils import get_column_letter
-    from PIL import Image
+
+    class _PngImage(OpenpyxlImage):
+        "openpyxl only calls Pillow to learn a PNG's size and to hand its bytes back, both of which we already have"
+
+        def __init__(self, data, width, height):
+            self.ref = data
+            self.width, self.height = width, height
+            self.format = 'png'
+
+        def _data(self):
+            self.ref.seek(0)
+            return self.ref.read()
+
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
     df["SNFG"] = [np.nan for k in range(len(df))]
@@ -1663,44 +1654,25 @@ def plot_glycans_excel(
     # Load the workbook and get the active sheet
     workbook = writer.book
     sheet = writer.sheets["Sheet1"]
-    min_padding = 5  # Minimum padding in pixels
     for i, glycan_structure in enumerate(df.iloc[:, glycan_col_num]):
         if glycan_structure and glycan_structure[0]:
             if not isinstance(glycan_structure[0], str):
                 glycan_structure = glycan_structure[0][0]
             # Generate glycan image using GlycoDraw
             drawing = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True)
-            # Get SVG dimensions and scale them
-            width, height = getattr(drawing, 'width', 800), getattr(drawing, 'height', 800)
             svg_data = drawing.as_svg()
-            # Convert SVG data to image
-            temp_bytes = BytesIO(convert_svg_to_png(svg_data.encode('utf-8').decode('utf-8'), output_width = width,
-                                                    output_height = height, scale = 2.0, return_bytes = True))
-            # Load and crop image
-            img = Image.open(temp_bytes)
-            bbox = img.convert('RGBA').getbbox()
-            if bbox:
-                # Add minimal padding
-                bbox = (max(0, bbox[0] - min_padding), max(0, bbox[1] - min_padding),
-                        min(img.width, bbox[2] + min_padding), min(img.height, bbox[3] + min_padding))
-                img = img.crop(bbox).convert('RGBA')
-            # Apply user scaling factor
-            img_width, img_height = img.size
-            img = img.resize((int(img_width * scaling_factor), int(img_height * scaling_factor)), Image.BICUBIC)
-            # Save the image to a BytesIO object
-            img_stream = BytesIO()
-            img.save(img_stream, format = 'PNG')
-            img_stream.seek(0)
-            # Create an image
-            img_for_excel = OpenpyxlImage(img_stream)
-            img_for_excel.width, img_for_excel.height = img.width, img.height  # Set width and height
+            # Rasterize straight at the final size; no resampling step needed
+            png_bytes = convert_svg_to_png(svg_data, scale = 2.0 * scaling_factor, return_bytes = True)
+            img_width, img_height = struct.unpack('>II', png_bytes[16:24])  # PNG IHDR carries the dimensions
+            img_for_excel = _PngImage(BytesIO(png_bytes), img_width, img_height)
             # Find the cell to insert the image
-            cell = sheet.cell(row = i + 2, column = image_column_number)  # +2 because Excel is 1-indexed and there's a header row
+            cell = sheet.cell(row = i + 2,
+                              column = image_column_number)  # +2 because Excel is 1-indexed and there's a header row
             # Insert the image into the cell
             sheet.add_image(img_for_excel, cell.coordinate)
             # Resize the cell to fit the image
             column_letter = get_column_letter(image_column_number)
-            sheet.column_dimensions[column_letter].width = img.width * 0.1125
-            sheet.row_dimensions[cell.row].height = img.height * 0.75
+            sheet.column_dimensions[column_letter].width = img_width * 0.1125
+            sheet.row_dimensions[cell.row].height = img_height * 0.75
     # Save the workbook
     workbook.save(filename = Path(folder_filepath) / "output.xlsx")

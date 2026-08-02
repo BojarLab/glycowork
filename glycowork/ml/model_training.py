@@ -3,8 +3,6 @@ import time
 from typing import Any
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 try:
     import xgboost as xgb
@@ -22,8 +20,6 @@ try:
 except ImportError:
     raise ImportError(
         "<torch or torch_geometric or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
-from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error, \
-    label_ranking_average_precision_score, ndcg_score, roc_auc_score, mean_absolute_error, r2_score
 from glycowork.motif.annotate import annotate_dataset
 
 
@@ -103,6 +99,8 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 ) -> torch.nn.Module | tuple[torch.nn.Module, dict[
     str, dict[str, list[float]]]]:  # best model from training and the training and validation metrics
     "trains a deep learning model on predicting glycan properties"
+    from sklearn.metrics import accuracy_score, label_ranking_average_precision_score, matthews_corrcoef, mean_absolute_error, mean_squared_error, ndcg_score, r2_score, roc_auc_score
+    import matplotlib.pyplot as plt
     since = time.time()
     early_stopping = EarlyStopping(patience = patience, verbose = True)
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -473,6 +471,7 @@ def train_ml_model(X_train: pd.DataFrame | list,  # training data/glycans
                    ) -> xgb.XGBModel | tuple[
     xgb.XGBModel, pd.DataFrame, pd.DataFrame]:  # trained model and optionally features
     "wrapper function to train standard machine learning models on glycans"
+    from sklearn.metrics import accuracy_score, mean_squared_error
     # Choose model type
     if mode == 'classification':
         model = xgb.XGBClassifier(random_state = 42, n_estimators = 100, max_depth = 3)
@@ -522,6 +521,8 @@ def train_ml_model(X_train: pd.DataFrame | list,  # training data/glycans
 def analyze_ml_model(model: xgb.XGBModel  # trained ML model from train_ml_model
                      ) -> None:
     "plots relevant features for model prediction"
+    import matplotlib.pyplot as plt
+    import seaborn as sns
     # Get important features
     feat_imp = model.get_booster().get_score(importance_type = 'gain')
     feat_imp = pd.DataFrame(feat_imp, index = [0]).T

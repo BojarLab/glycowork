@@ -27,8 +27,6 @@ dependencies = [
     "bokeh",
     "IPython",
     "pandas>=2.1",
-    "setuptools>=64.0",
-    "huggingface_hub>=0.16.0",
     "drawSvg~=2.0",
     "openpyxl",
     "glycorender[png]~=0.3.0"
@@ -42,6 +40,7 @@ all = [
     "torch_geometric",
     "torch",
     "xgboost",
+    "huggingface_hub>=0.16.0",
     "glyles~=1.2.3a0",
     "pubchempy",
     "requests",
@@ -52,6 +51,7 @@ dev = [
     "torch_geometric",
     "torch",
     "xgboost",
+    "huggingface_hub>=0.16.0",
     "glyles~=1.2.3a0",
     "pubchempy",
     "requests",
@@ -62,7 +62,8 @@ dev = [
 ml = [
     "torch_geometric",
     "torch",
-    "xgboost"
+    "xgboost",
+    "huggingface_hub>=0.16.0"
 ]
 chem = [
     "glyles~=1.2.3a0",

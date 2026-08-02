@@ -6,7 +6,6 @@ import copy
 from random import sample
 from importlib import resources
 from collections import Counter, defaultdict
-from sklearn.cluster import DBSCAN
 from functools import reduce
 
 from glycowork.glycan_data.loader import lib, unwrap, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace
@@ -262,6 +261,7 @@ def condense_composition_matching(matched_composition: list[str] # List of match
         for j in range(i + 1, n):
             match_matrix[i][j] = match_matrix[j][i] = compare_glycans(matched_composition[i], matched_composition[j])
     # Cluster glycans by pairwise equality (given the wildcards)
+    from sklearn.cluster import DBSCAN
     clustering = DBSCAN(eps = 1, min_samples = 1).fit(match_matrix)
     num_clusters = len(set(clustering.labels_))
     sum_glycans = []

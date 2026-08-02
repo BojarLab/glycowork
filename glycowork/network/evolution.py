@@ -3,10 +3,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import networkx as nx
-import matplotlib.pyplot as plt
 from typing import Callable
-from scipy.spatial.distance import cosine, squareform
-from scipy.cluster.hierarchy import dendrogram, linkage
 from glycowork.glycan_data.loader import GlycoList
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -53,6 +50,7 @@ def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) a
                              averaging: str = 'median' # How to average embeddings: median/mean
                              ) -> pd.DataFrame: # Rank x rank distance matrix
     "Calculate cosine distance matrix from learned embeddings"
+    from scipy.spatial.distance import cosine
     if averaging not in ['mean', 'median']:
         print("Only 'median' and 'mean' are permitted averaging choices.")
         return
@@ -105,6 +103,9 @@ def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.
                              filepath: str = '' # Path to save plot including filename
                              ) -> None: # Displays or saves dendrogram plot
     "Plot dendrogram from distance matrix"
+    from scipy.cluster.hierarchy import dendrogram, linkage
+    from scipy.spatial.distance import squareform
+    import matplotlib.pyplot as plt
     # Hierarchical clustering on the distance matrix
     Z = linkage(squareform(dm.values))
     plt.figure(figsize = (10, 10))

@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import networkx as nx
-import statsmodels.api as sm
 import matplotlib.pyplot as plt
 
 plt.rcParams.update({
@@ -21,22 +20,6 @@ from collections import Counter
 from typing import Any
 from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway, spearmanr
 from scipy.spatial.distance import squareform, pdist
-from statsmodels.formula.api import ols
-from statsmodels.stats.multitest import multipletests
-from statsmodels.stats.multicomp import pairwise_tukeyhsd
-from sklearn.manifold import TSNE
-from sklearn.cluster import KMeans
-from sklearn.metrics import roc_auc_score, roc_curve, auc
-from sklearn.preprocessing import StandardScaler, label_binarize
-from sklearn.decomposition import PCA
-from sklearn.multiclass import OneVsRestClassifier
-from sklearn.feature_selection import SelectFromModel
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn import __version__ as _sklearn_version
-# sklearn 1.8 deprecated LogisticRegression's 'penalty' in favor of 'l1_ratio'; pick the right kwarg once
-_LR_L1 = {'l1_ratio': 1} if tuple(map(int, _sklearn_version.split('.')[:2])) >= (1, 8) else {'penalty': 'l1'}
-_LR_L2 = {'l1_ratio': 0} if 'l1_ratio' in _LR_L1 else {'penalty': 'l2'}
 
 from glycowork.glycan_data.loader import df_species, strip_suffixes, download_model, GlycoDataFrame
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
@@ -182,6 +165,7 @@ def get_pvals_motifs(
         custom_motifs: list[str] = []  # Custom motifs if using 'custom' feature set
 ) -> pd.DataFrame:  # DataFrame with p-values, FDR-corrected p-values, and Cohen's d effect sizes for glycan motifs
     "Identifies significantly enriched glycan motifs using Welch's t-test with FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
+    from statsmodels.stats.multitest import multipletests
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
@@ -351,6 +335,7 @@ def plot_embeddings(
         **kwargs: Any  # Keyword args passed to seaborn scatterplot
 ) -> None:
     "Visualizes learned glycan embeddings using t-SNE dimensionality reduction with optional group coloring"
+    from sklearn.manifold import TSNE
     idx = [i for i, g in enumerate(glycans) if '{' not in g]
     glycans = [glycans[i] for i in idx]
     if label_list is not None:
@@ -530,6 +515,8 @@ def get_pca(
         rarity_filter: float = 0.05  # Min proportion for non-zero values
 ) -> None:
     "Performs PCA on glycan/motif abundance data with group-based visualization"
+    from sklearn.decomposition import PCA
+    from sklearn.preprocessing import StandardScaler
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
@@ -664,6 +651,7 @@ def get_differential_expression(
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
+    from statsmodels.stats.multitest import multipletests
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     in_contrasts, in_name = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', '')
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
@@ -945,6 +933,9 @@ def get_glycanova(
 ) -> tuple[GlycoDataFrame, dict[
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
+    from statsmodels.formula.api import ols
+    from statsmodels.stats.multicomp import pairwise_tukeyhsd
+    import statsmodels.api as sm
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if len(set(groups)) < 3:
         raise ValueError(
@@ -1099,6 +1090,7 @@ def get_glycan_change_over_time(
         degree: int = 1  # Polynomial degree for regression
 ) -> tuple[float | np.ndarray, float]:  # (regression coefficients, t-test/F-test p-value)
     "Fits polynomial regression (default: linear) to glycan abundance time series data using OLS, testing significance of temporal changes"
+    import statsmodels.api as sm
     # Extract arrays for time and glycan abundance from the 2D input array
     time, glycan_abundance = data[:, 0], data[:, 1]
     if degree == 1:
@@ -1435,6 +1427,7 @@ def get_SparCC(
         partial_correlations: bool = False  # Use regularized partial correlations
 ) -> tuple[pd.DataFrame, pd.DataFrame]:  # (Spearman correlation matrix, FDR-corrected p-value matrix)
     "Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)"
+    from statsmodels.stats.multitest import multipletests
     if isinstance(df1, (str, Path)):
         df1 = pd.read_csv(df1) if Path(df1).suffix.lower() == ".csv" else pd.read_csv(df1, sep = "\t") if Path(
             df1).suffix.lower() == ".tsv" else pd.read_excel(df1)
@@ -1520,8 +1513,15 @@ def multi_feature_scoring(
         group2: list[str | int],  # Second group indices/names
         filepath: str = '',  # Path to save ROC plot
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
-) -> tuple[LogisticRegression, float, list[str]]:  # (L1-regularized logistic regression model, ROC AUC score, selected features)
+) -> tuple['LogisticRegression', float, list[str]]:  # (L1-regularized logistic regression model, ROC AUC score, selected features)
     "Identifies minimal glycan feature set for group classification using L1-regularized logistic regression"
+    from sklearn.feature_selection import SelectFromModel
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import roc_auc_score, roc_curve
+    from sklearn import __version__ as _sklearn_version
+    # sklearn 1.8 deprecated LogisticRegression's 'penalty' in favor of 'l1_ratio'; pick the right kwarg once
+    _LR_L1 = {'l1_ratio': 1} if tuple(map(int, _sklearn_version.split('.')[:2])) >= (1, 8) else {'penalty': 'l1'}
+    _LR_L2 = {'l1_ratio': 0} if 'l1_ratio' in _LR_L1 else {'penalty': 'l2'}
     if group2:
         y = [0] * len(group1) + [1] * len(group2)
     else:
@@ -1570,8 +1570,13 @@ def get_roc(
         multi_score: bool = False,  # Find best multi-glycan score
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> list[tuple[str, float]] | dict[Any, tuple[str, float]] | tuple[
-    LogisticRegression, float]:  # (Feature scores with ROC AUC values)
+    'LogisticRegression', float]:  # (Feature scores with ROC AUC values)
     "Calculates ROC curves and AUC scores for glycans/motifs or multi-glycan classifiers"
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import auc, roc_auc_score, roc_curve
+    from sklearn.model_selection import train_test_split
+    from sklearn.multiclass import OneVsRestClassifier
+    from sklearn.preprocessing import label_binarize
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
@@ -1661,6 +1666,7 @@ def get_lectin_array(
         transform: str = ''  # Optional log2 transformation
 ) -> pd.DataFrame:  # DataFrame with altered glycan motifs, supporting lectins, and effect sizes
     "Analyzes lectin microarray data by mapping lectin binding patterns to glycan motifs, calculating Cohen's d effect sizes between groups and clustering results by significance"
+    from sklearn.cluster import KMeans
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)

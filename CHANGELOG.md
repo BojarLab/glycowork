@@ -2,7 +2,10 @@
 
 ## [1.10.0]
 
-- Bumped required `glycorender` version from `0.2.5` to `0.3.0`, which drops the `reportlab` dependency
+- Bumped required `glycorender` version from `0.2.5` to `0.3.0`, which drops the `reportlab` dependency (ec7a54c)
+- Moved `huggingface_hub` dependencies from the base install to the `ml` optional install
+- `Pillow` is no longer a dependency of `glycowork`
+- Moved several dependencies to lazy-load, to improve initial package start-up times
 
 ### glycan_data
 #### loader

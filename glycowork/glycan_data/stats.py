@@ -2,19 +2,10 @@ import pandas as pd
 import numpy as np
 import warnings
 from collections import Counter
-from sklearn.linear_model import Ridge, LogisticRegression
-from sklearn.ensemble import RandomForestRegressor
 from scipy.stats import rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind
 from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
 import scipy.integrate as integrate
-from statsmodels.stats.multitest import multipletests
-from statsmodels.stats.weightstats import ttost_ind, ttost_paired
-from statsmodels.formula.api import ols
-from statsmodels.stats.anova import anova_lm
-from statsmodels.tools.sm_exceptions import ConvergenceWarning
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
 rng = np.random.default_rng(42)
 np.random.seed(0)
 
@@ -95,7 +86,7 @@ def variance_stabilization(data: pd.DataFrame, # dataframe with glycans/motifs a
 
 
 class MissForest:
-    def __init__(self, regressor: RandomForestRegressor | None = None, # estimator object for each imputation
+    def __init__(self, regressor: 'RandomForestRegressor | None' = None, # estimator object for each imputation
                  max_iter: int = 5, # number of iterations for imputation process
                  tol: float = 1e-5, # convergence tolerance
                  circadian: bool = False,  # inject sin/cos time features to exploit periodic structure
@@ -105,6 +96,7 @@ class MissForest:
                  replicates: int = 1  # replicates per timepoint (only relevant if circadian)
                  ) -> None:
         "A class to perform MissForest imputation adapted from https://github.com/yuenshingyan/MissForest"
+        from sklearn.ensemble import RandomForestRegressor
         self.regressor = regressor if regressor is not None else RandomForestRegressor(n_jobs = -1)
         self.max_iter = max_iter
         self.tol = tol
@@ -117,6 +109,7 @@ class MissForest:
     def fit_transform(self, X: pd.DataFrame # input dataframe with missing values
                       ) -> pd.DataFrame: # imputed dataframe
         "Replace missing values using the MissForest algorithm, blended with left-censored draws wherever missingness is intensity-dependent (MNAR)"
+        from sklearn.linear_model import LogisticRegression
         # Step 1: Initialization
         # Keep track of where NaNs are in the original dataset
         X_nan = X.isnull()
@@ -409,6 +402,8 @@ def compare_inter_vs_intra_group(cohort_b: pd.DataFrame, # dataframe of glycans 
                                  paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                                  ) -> tuple[float, float]: # (intra-group correlation, inter-group correlation)
     "estimates intra- and inter-group correlation of a given grouping of glycans via a mixed-effects model"
+    from statsmodels.tools.sm_exceptions import ConvergenceWarning
+    import statsmodels.formula.api as smf
     reverse_lookup = {k: v for v, l in grouped_glycans.items() for k in l}
     if paired:
         temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
@@ -556,6 +551,7 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
                          paired: bool = False # whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient)
                          ) -> float: # p-value for equivalence test
     "performs equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent"
+    from statsmodels.stats.weightstats import ttost_ind, ttost_paired
     na, nb = len(row_a), len(row_b)
     pooled_std = np.sqrt(((na - 1) * np.var(row_a, ddof = 1) + (nb - 1) * np.var(row_b, ddof = 1)) / (na + nb - 2))
     delta = 0.2 * pooled_std
@@ -768,6 +764,7 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
                              correction_method: str = "two-stage" # "two-stage" or "one-stage" Benjamini-Hochberg
                              ) -> tuple[list[float], list[bool]]: # (corrected p-values, significance True/False)
     "Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure"
+    from statsmodels.stats.multitest import multipletests
     pvals = list(pvals)
     if not pvals:
         return [], []
@@ -818,6 +815,8 @@ def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a g
             glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'] # extracted glycan features to consider as variables
             ) -> tuple[str | str, list[str]]: # (fitted GLM or failure message, list of variables)
     "given glycoform data from a glycosite, constructs & fits a GLM formula for main+interaction effects"
+    import statsmodels.api as sm
+    import statsmodels.formula.api as smf
     retained_vars = [c for c in glycan_features if c in group.columns and max(group[c]) > 0]
     if not retained_vars:
         return ("No variables retained", [])
@@ -866,6 +865,7 @@ def partial_corr(x: np.ndarray, # typically values from a column or row
                  motifs: bool = False # whether to analyze full sequences or motifs
                  ) -> tuple[float, float]: # (regularized partial correlation coefficient, p-value from Spearman correlation of residuals)
     "Compute regularized partial correlation of x and y, controlling for multiple other variables in controls"
+    from sklearn.linear_model import Ridge
     # Check if we have any controls
     if controls.size == 0 or controls.shape[1] == 0:
         return spearmanr(x, y)
@@ -916,6 +916,7 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
                               paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                               ) -> tuple[list[float], list[float], list[float]]: # (uncorrected p-vals, corrected p-vals, effect sizes)
     "Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, calculate effect sizes"
+    from statsmodels.stats.multitest import multipletests
     num_features, _ = group_a.shape
     avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes = np.zeros(num_features), np.zeros(num_features), np.zeros(num_features)
     n_samples = group_a.shape[1] // num_instances

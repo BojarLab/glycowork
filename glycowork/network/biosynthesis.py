@@ -5,10 +5,6 @@ from copy import deepcopy
 from functools import lru_cache
 from importlib import resources
 from collections import defaultdict, Counter
-from scipy.stats import ttest_rel, ttest_ind
-from statsmodels.formula.api import ols
-from statsmodels.stats.multitest import multipletests
-import statsmodels.api as sm
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -947,6 +943,10 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
                                   id_column: str = "ID" # Sample ID column for longitudinal analysis in the ID-style of participant_time_replicate
                                   ) -> pd.DataFrame: # Differential analysis results (differential flow features and statistics OR reaction changes over time
     "Compare biosynthetic patterns between conditions/timepoints"
+    from scipy.stats import ttest_ind, ttest_rel
+    from statsmodels.formula.api import ols
+    from statsmodels.stats.multitest import multipletests
+    import statsmodels.api as sm
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
@@ -1182,6 +1182,7 @@ def get_biosynthetic_coherence(
         paired: bool | None = None  # Whether samples are paired; default: from the frame
 ) -> pd.DataFrame: # Test results with group means, difference, t-statistic, p-value, and Cohen's d
     "Test whether biosynthetic coherence differs between two conditions using per-sample variance-weighted R²"
+    from scipy.stats import ttest_ind, ttest_rel
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
