@@ -35,7 +35,7 @@ dependencies = [
     "pandas>=2.1",
     "drawSvg~=2.0",
     "openpyxl",
-    "glycorender[png]~=0.3.0"
+    "glycorender[png]~=0.3.1"
 ]
 
 [project.urls]

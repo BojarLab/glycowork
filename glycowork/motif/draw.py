@@ -1,9 +1,9 @@
 from pathlib import Path
 from glycowork.glycan_data.loader import unwrap, motif_list, lib
 from glycowork.motif.regex import get_match
-from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string
+from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices
+from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit
 from io import BytesIO
 from typing import Any
 import networkx as nx
@@ -449,7 +449,8 @@ def add_bond(
         dim: float = 50, # Base dimension for scaling
         compact: bool = False, # Use compact drawing style
         highlight: str = 'show', # Highlight state: 'show' or 'hide'
-        color_highlight:  bool = False # Whether to highlight this linkage in red
+        color_highlight: bool = False,  # Whether to highlight this linkage in red
+        dashed: bool = False  # Whether to draw the bond dashed, for uncertain attachment
 ) -> None:
     "Draws glycosidic bond line with optional label between specified coordinates"
     col_dict = col_dict_transparent if highlight == 'hide' else col_dict_base
@@ -458,7 +459,12 @@ def add_bond(
     x_start, x_stop = [-x * scaling_factor * dim for x in (x_start, x_stop)]
     y_start, y_stop = [y * y_scaling * dim for y in (y_start, y_stop)]
     final_width = 0.12*dim if color_highlight else 0.08*dim
-    p = draw.Path(stroke_width = final_width, stroke = col_dict['snfg_red'] if color_highlight else col_dict['black'], class_ = 'snfg-linkage')
+    if dashed:  # A fixed dash period vanishes on the short bonds of compact mode, so scale it to the bond
+        length = ((x_stop - x_start) ** 2 + (y_stop - y_start) ** 2) ** 0.5
+        segment = length / (2 * max(3, round(length / (0.4 * dim))))
+    p = draw.Path(stroke_width = final_width, stroke = col_dict['snfg_red'] if color_highlight else col_dict['black'],
+                  class_ = 'snfg-linkage',
+                  **({'stroke_dasharray': f"{segment},{segment}"} if dashed else {}))
     p.M(x_start, y_start).L(x_stop, y_stop)
     drawing.append(p)
     if label and label != '-':
@@ -908,11 +914,20 @@ def get_coordinates_and_labels(
     l2_conf, l2_sugar_modification = extract_conformation(l2_sugar_modification)
     l3_conf, l3_sugar_modification = extract_conformation(l3_sugar_modification)
 
+    node_positions = {n: (0, 0, i) for i, n in enumerate(main_label_sugar[::-1])}
+    for lane, branches in enumerate((branch_level1, branch_level2, branch_level3), start = 1):
+        for b, branch in enumerate(branches):
+            node_positions.update({n: (lane, b, i) for i, n in enumerate(branch['sugar_nodes'])})
     data_combined = [
-        [main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_highlight, main_bond_highlight],
-        [l1_sugar, l1_x_pos, l1_y_pos, l1_sugar_modification, l1_bond, l1_connection, l1_conf, l1_sugar_label, l1_bond_label],
-        [l2_sugar, l2_x_pos, l2_y_pos, l2_sugar_modification, l2_bond, l2_connection, l2_conf, l2_sugar_label, l2_bond_label],
-        [l3_sugar, l3_x_pos, l3_y_pos, l3_sugar_modification, l3_bond, l3_connection, l3_conf, l3_sugar_label, l3_bond_label]
+        [main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf,
+         main_sugar_highlight, main_bond_highlight],
+        [l1_sugar, l1_x_pos, l1_y_pos, l1_sugar_modification, l1_bond, l1_connection, l1_conf, l1_sugar_label,
+         l1_bond_label],
+        [l2_sugar, l2_x_pos, l2_y_pos, l2_sugar_modification, l2_bond, l2_connection, l2_conf, l2_sugar_label,
+         l2_bond_label],
+        [l3_sugar, l3_x_pos, l3_y_pos, l3_sugar_modification, l3_bond, l3_connection, l3_conf, l3_sugar_label,
+         l3_bond_label],
+        node_positions
     ]
     return data_combined
 
@@ -1298,7 +1313,10 @@ def GlycoDraw(
         glycan = f'blank(?1-{_conn[-1]}){_backbone}{_conn[:2]}-?)'
     if glycan.endswith(')'):
         glycan += 'blank'
-    draw_this = graph_to_string(glycan_to_nxGraph(glycan), order_by = "linkage") if not glycan.startswith('[') else glycan
+    cut = glycan.rfind('}') + 1 if '^' in glycan else 0
+    draw_this = glycan[:cut] + (
+        graph_to_string(glycan_to_nxGraph(glycan[cut:]), order_by = "linkage") if not glycan[cut:].startswith(
+            '[') else glycan[cut:])
     if per_residue:
         main_per_residue, side_per_residue, branched_side_per_residue = process_per_residue(draw_this, per_residue, glycan)
     if highlight_linkages:
@@ -1319,11 +1337,22 @@ def GlycoDraw(
             raise ValueError('Method not supported. Please choose between "chem2d" and "chem3d".')
 
     # Handle floaty bits if present
-    floaty_bits = []
+    floaty_bits, anchored_bits = [], []
     for openpos, closepos, _ in get_matching_indices(draw_this, opendelim = '{', closedelim = '}'):
-        floaty_bits.append(f"{draw_this[openpos:closepos]}blank")
+        bit = draw_this[openpos:closepos]
+        if '^' in bit:
+            fragment, bit_anchors = parse_floating_bit(bit)
+            anchored_bits.append((f"{fragment}blank", bit_anchors))
+        else:
+            floaty_bits.append(f"{bit}blank")
         draw_this = draw_this[:openpos-1] + len(draw_this[openpos-1:closepos+1])*'*' + draw_this[closepos+1:]
     draw_this = draw_this.replace('*', '')
+    if anchored_bits:  # An anchor matching nothing must not silently delete its residue from the drawing
+        anchor_graph = glycan_to_nxGraph(draw_this)
+        placeable = [any(resolve_anchor(anchor_graph, anchor) for anchor in bit_anchors.values()) for _, bit_anchors in
+                     anchored_bits]
+        floaty_bits += [bit for (bit, _), ok in zip(anchored_bits, placeable) if not ok]
+        anchored_bits = [entry for entry, ok in zip(anchored_bits, placeable) if ok]
 
     if restrict_vocab and not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
         if "!" in draw_this:
@@ -1379,7 +1408,7 @@ def GlycoDraw(
     y_span = max_y - min_y
 
     # Floaty bits are spread over the full height of their own lane, so they need vertical room of their own
-    if len(floaty_bits) > y_span:
+    if len(floaty_bits) + len(anchored_bits) > y_span:
         y_span += 1.0
         max_y += 0.5
         min_y -= 0.5
@@ -1463,6 +1492,37 @@ def GlycoDraw(
         bracket_x = max_x * (2 if not compact else 1.2) + 1
         bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
         draw_bracket(bracket_x, bracket_y, d, direction = 'right', dim = dim, highlight = highlight)
+
+    if anchored_bits:
+        node_positions = data[4]
+        lanes = [(main_sugar_x_pos, main_sugar_y_pos), (l1_x_pos, l1_y_pos), (l2_x_pos, l2_y_pos), (l3_x_pos, l3_y_pos)]
+        occupied = {(round(x), round(y)) for x, y in zip(main_sugar_x_pos, main_sugar_y_pos)}
+        occupied |= {(round(x), round(y)) for xs, ys in
+                     zip(l1_x_pos + l2_x_pos + l3_x_pos, l1_y_pos + l2_y_pos + l3_y_pos) for x, y in zip(xs, ys)}
+        for bit, bit_anchors in anchored_bits:
+            a_sugar, a_x_pos, a_y_pos, a_modification, a_bond, a_conf, _, _ = \
+                get_coordinates_and_labels(bit, show_linkage = show_linkage, highlight_motif = None)[0]
+            for linkage, anchor in bit_anchors.items():
+                for n in resolve_anchor(anchor_graph, anchor):
+                    lane, b, i = node_positions[n]
+                    x_pos, y_pos = lanes[lane]
+                    target_x, target_y = (x_pos[i], y_pos[i]) if lane == 0 else (x_pos[b][i], y_pos[b][i])
+                    # A ghost copy beside every candidate acceptor beats one distant copy with lines crossing the structure
+                    ghost_y = next(
+                        (target_y + offset for offset in ((-3, 3, -4, 4, -5, 5) if compact else (-2, 2, -3, 3, -4, 4))
+                         if all(
+                            (round(target_x + a_x_pos[k]), round(target_y + offset)) not in occupied for k in
+                            range(1, len(a_sugar)))), target_y - (3 if compact else 2))
+                    occupied.update((round(target_x + a_x_pos[k]), round(ghost_y)) for k in range(1, len(a_sugar)))
+                    [add_bond(target_x + a_x_pos[k + 1], target_x + a_x_pos[k], ghost_y, ghost_y, d, a_bond[k],
+                              dim = dim,
+                              compact = compact, highlight = highlight) for k in range(1, len(a_sugar) - 1)]
+                    [add_sugar(a_sugar[k], d, target_x + a_x_pos[k], ghost_y, modification = a_modification[k],
+                               conf = a_conf[k],
+                               compact = compact, dim = dim, highlight = highlight) for k in range(1, len(a_sugar))]
+                    add_bond(target_x + a_x_pos[1], target_x, ghost_y, target_y, d,
+                             process_bonds([linkage])[0] if show_linkage else '-', dim = dim, compact = compact,
+                             highlight = highlight, dashed = True)
 
     # add brackets around repeating unit
     if repeat:

@@ -2,7 +2,7 @@ import re
 from copy import deepcopy
 from typing import Callable
 from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
-from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans
+from glycowork.motif.processing import min_process_glycans, get_possible_linkages, get_possible_monosaccharides, rescue_glycans, parse_floating_bit
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -43,6 +43,17 @@ def build_wildcard_cache(proc: set) -> dict:
     """Precompute all possible wildcard expansions"""
     return {k: get_possible_linkages(k) for k in proc if '?' in k or ('/' in k and '-' in k)} | \
         {k: get_possible_monosaccharides(k) for k in proc if MONO_PATTERN.match(k) or k.startswith('!') or ('/' in k and '-' not in k)}
+
+
+def resolve_anchor(ggraph: nx.DiGraph, # Glycan graph to search
+                   anchor: str # Anchor motif with ^ marking the acceptor residue
+                   ) -> set[int]: # Nodes of ggraph the marked residue could correspond to
+    "Find all residues of a glycan graph that match the ^-marked residue of an anchor motif"
+    idx = next(i for i, x in enumerate(min_process_glycans([anchor])[0]) if x.endswith('^'))
+    g2 = glycan_to_nxGraph(anchor.replace('^', ''))
+    matcher = nx.algorithms.isomorphism.DiGraphMatcher(ggraph, g2, node_match = categorical_node_match_wildcard(
+        'string_labels', 'unknown', build_wildcard_cache(set(_sl(ggraph)) | set(_sl(g2))), 'termini', 'flexible'))
+    return {k for m in matcher.subgraph_isomorphisms_iter() for k, v in m.items() if v == idx}
 
 
 def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence
@@ -125,12 +136,17 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
         raise Exception
     termini_list = expand_termini_list(glycan, termini_list) if termini_list else None
     if '{' in glycan:
+        chunks = [k for k in glycan.replace('}', '{').split('{') if k]
+        chunks, anchor_specs = zip(
+            *[(k, {}) if i == len(chunks) - 1 else parse_floating_bit(k) for i, k in enumerate(chunks)])
         parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
-                                       termini_list = termini_list) for k in glycan.replace('}', '{').split('{') if k]
+                                       termini_list = termini_list) for k in chunks]
         len_org = len(parts[-1])
         for i, p in enumerate(parts[:-1]):
-            parts[i] = nx.relabel_nodes(p, {pn: pn+len_org for pn in p.nodes()})
+            parts[i] = nx.relabel_nodes(p, {pn: pn + len_org for pn in p.nodes()})
             len_org += len(p)
+            if anchor_specs[i]:
+                parts[i].nodes[max(parts[i].nodes())]['anchors'] = anchor_specs[i]
         g1 = nx.compose_all(parts)
     else:
         g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
@@ -215,9 +231,18 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
                     ) -> bool: # True if glycans are same, False if not
     "Check whether two glycans are identical"
     if glycan_a == glycan_b:
-        return ((True, {n: n for n in glycan_a.nodes}) if return_matches else True) if isinstance(glycan_a, nx.DiGraph) else (True, None) if return_matches else True
+        return ((True, {n: n for n in glycan_a.nodes}) if return_matches else True) if isinstance(glycan_a,
+                                                                                                  nx.DiGraph) else (
+            True, None) if return_matches else True
+    anchored = lambda g: ('^' in g) if isinstance(g, str) else any('anchors' in d for _, d in g.nodes(data = True))
+    if anchored(glycan_a) or anchored(glycan_b):
+        topos = [get_possible_topologies(g, return_graphs = True) if anchored(g) else [ensure_graph(g)] for g in
+                 (glycan_a, glycan_b)]
+        same = len(topos[0]) == len(topos[1]) and all(
+            any(compare_glycans(ta, tb) for tb in topos[1]) for ta in topos[0])
+        return (same, None) if return_matches else same
     if isinstance(glycan_a, str) and isinstance(glycan_b, str):
-        if glycan_a.count('(') != glycan_b.count('(') or glycan_a.count("[") != glycan_b.count("[") :
+        if glycan_a.count('(') != glycan_b.count('(') or glycan_a.count("[") != glycan_b.count("["):
             return (False, None) if return_matches else False
         proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
         if 'O' in glycan_a or 'O' in glycan_b:
@@ -639,19 +664,26 @@ def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating sub
     main_part, floating_part = parts[-1], parts[0]
     dangling_linkage = max(floating_part.nodes())
     is_modification = len(floating_part.nodes()) == 1
+    anchors = ggraph.nodes[dangling_linkage].get('anchors', {})
     if is_modification:
         modification = ggraph.nodes[dangling_linkage]['string_labels']
-        dangling_carbon = modification[0]
     else:
-        dangling_carbon = ggraph.nodes[dangling_linkage]['string_labels'][-1]
         floating_monosaccharide = dangling_linkage - 1
     topologies = []
-    candidate_nodes = [k for i, k in enumerate(main_part.nodes()) if i % 2 == 0 and (exhaustive or is_modification or main_part.out_degree[k] == 0)]
-    for k in candidate_nodes:
+    if anchors:
+        candidates = [(n, link) for link, anchor in anchors.items() for n in resolve_anchor(main_part, anchor)]
+    else:
+        candidates = [(k, ggraph.nodes[dangling_linkage]['string_labels']) for i, k in enumerate(main_part.nodes()) if
+                      i % 2 == 0 and (exhaustive or is_modification or main_part.out_degree[k] == 0)]
+    for k, link in candidates:
+        dangling_carbon = modification[0] if is_modification else link[-1]
         neighbor_carbons = [ggraph.nodes[n]['string_labels'][-1] for n in ggraph.neighbors(k) if n < k]
         if dangling_carbon in neighbor_carbons:
             continue
         new_graph = deepcopy(ggraph)
+        new_graph.nodes[dangling_linkage].pop('anchors', None)
+        if not is_modification:
+            new_graph.nodes[dangling_linkage]['string_labels'] = link
         if is_modification:
             mono = new_graph.nodes[k]['string_labels']
             if modification_map and mono in modification_map.get(modification, set()):

@@ -85,6 +85,7 @@ _LINEARCODE_MAPPING = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Ne
 _GLYSEEKER_MAPPING = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a', 'X': 'Xyl(b', 'F': 'Fuc(a', 'L': 'GlcA(b'}
 _CSDB_AC_12 = re.compile(r'^Ac\(\??1-2\)')
 _CSDB_N_TO_NAC = re.compile(r'N(?=[^A-Za-z]|$)')
+FLOATY_ALT = re.compile(r'\{([^{}]*)\}')
 
 
 def rescue_glycans(func: Callable # Function to wrap
@@ -103,10 +104,44 @@ def rescue_glycans(func: Callable # Function to wrap
     return wrapper
 
 
+def parse_floating_bit(bit: str # Content of one {...} floating bit, without braces
+                       ) -> tuple[str, dict[str, str]]: # (shared fragment with merged linkage, {linkage: anchor motif})
+    "Split an anchored floating bit into its shared fragment and its linkage->anchor options"
+    alts = [a for a in bit.split('|') if a]
+    if not any('^' in a for a in alts):
+        return bit, {}
+    import networkx as nx
+    from glycowork.motif.graph import glycan_to_nxGraph_int, graph_to_string
+    fragments, links, anchors = set(), set(), {}
+    for a in alts:
+        marked = [i for i, x in enumerate(min_process_glycans([a])[0]) if x.endswith('^')]
+        if len(marked) != 1:
+            raise ValueError(f"Every floating-bit alternative needs exactly one '^' marking the uncertain residue: {a}")
+        g = glycan_to_nxGraph_int(a.replace('^', ''))
+        floating = nx.descendants(g, marked[0]) | {marked[0]}
+        link = next(g.predecessors(marked[0]))
+        linkage = g.nodes[link]['string_labels']
+        fragments.add(graph_to_string(g.subgraph(floating)))
+        links.add(linkage)
+        if (parent := next(g.predecessors(link), None)) is not None:
+            context = g.subgraph(set(g.nodes) - floating - {link}).copy()
+            context.nodes[parent]['string_labels'] += '^'
+            anchors[linkage] = graph_to_string(context)
+    if len(fragments) > 1:
+        raise ValueError(f"All alternatives of a floating bit must share the same fragment: {bit}")
+    prefixes = {l[:l.index('-')] for l in links}
+    positions = sorted({p for l in links for p in l[l.index('-') + 1:].split('/')})
+    merged = f"{prefixes.pop() if len(prefixes) == 1 else '?1'}-{'?' if '?' in positions else '/'.join(positions)}"
+    return f"{fragments.pop()}({merged})", anchors
+
+
 def min_process_glycans(glycan_list: list[str] # List of glycans in IUPAC-condensed format
                         ) -> list[list[str]]: # List of glycoletter lists
     "Convert list of glycans into a nested lists of glycoletters"
-    return [[x for x in k.replace('[', '').replace(']', '').replace('{', '(').replace('}', ')').replace(')', '(').split('(') if x] for k in glycan_list]
+    glycan_list = [FLOATY_ALT.sub(lambda m: '{' + parse_floating_bit(m.group(1))[0] + '}', k) if '^' in k else k for k in glycan_list]
+    return [
+        [x for x in k.replace('[', '').replace(']', '').replace('{', '(').replace('}', ')').replace(')', '(').split('(')
+         if x] for k in glycan_list]
 
 
 def get_lib(glycan_list: list[str] # List of IUPAC-condensed glycan sequences
@@ -459,30 +494,69 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
     global_replace = {'dman-OCT': 'Kdo'}
     glycoct = multireplace(glycoct, global_replace)
     if len(glycoct.split("UND")) > 1:
-        floating_bits = glycoct.split("UND")[2:]
-        floating_bits = ["RES" + f.split('RES')[1] for f in floating_bits]
+        floating_bits = [(f.split('RES')[0], "RES" + f.split('RES')[1]) for f in glycoct.split("UND")[2:]]
         glycoct = glycoct.split("UND")[0]
-    # Split the input by lines and iterate over them
+        # Split the input by lines and iterate over them
     residue_dic, iupac_parts, degrees = glycoct_to_iupac_int(glycoct, _GLYCOCT_MONO, _GLYCOCT_SUB)
-    if floating_bits:
-        for f in floating_bits:
-            residue_dic_f, iupac_parts_f, degrees_f = glycoct_to_iupac_int(f, _GLYCOCT_MONO, _GLYCOCT_SUB)
-            expr = "(1-?)}"
-            if len(residue_dic_f) == 1:
-                floating_part += f"{'{'}{list(residue_dic_f.values())[0]}{expr}"
-            else:
-                part = glycoct_build_iupac(iupac_parts_f, residue_dic_f, degrees_f)
-                floating_part += f"{'{'}{part}{expr}"
+    floating_specs = []
+    for header, f in floating_bits:
+        residue_dic_f, iupac_parts_f, degrees_f = glycoct_to_iupac_int(f, _GLYCOCT_MONO, _GLYCOCT_SUB)
+        part = list(residue_dic_f.values())[0] if len(residue_dic_f) == 1 else glycoct_build_iupac(iupac_parts_f,
+                                                                                                   residue_dic_f,
+                                                                                                   degrees_f)
+        hit_p, hit_l = re.search(r'ParentIDs:([\d|]+)', header), re.search(
+            r'SubtreeLinkageID\d+:\w\((-?\d+)\+(-?\d+)\)', header)
+        parents = [int(x) for x in hit_p.group(1).split('|')] if hit_p else []
+        pos_p, pos_c = (hit_l.group(1), hit_l.group(2)) if hit_l else ('-1', '1')
+        floating_specs.append((part, parents, f"{'?' if pos_c == '-1' else pos_c}-{'?' if pos_p == '-1' else pos_p}"))
     # Build the IUPAC-condensed string
     iupac = glycoct_build_iupac(iupac_parts, residue_dic, degrees)
-    iupac = floating_part + iupac[:-1]
+    iupac = iupac[:-1]
     pattern = re.compile(r'([ab\?])\(')
     iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
     iupac = re.sub(r'(\?)(?=S|P|Me)', 'O', iupac)
     iupac = re.sub(r'([1-9\?O](S|P|Ac|Me))NAc', r'NAc\1', iupac)
     if ']' in iupac and iupac.index(']') < iupac.index('['):
         iupac = iupac.replace(']', '', 1)
-    return iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
+    iupac = iupac.replace('[[', '[').replace(']]', ']').replace('Neu(', 'Kdn(')
+    if floating_specs:
+        from glycowork.motif.graph import glycan_to_nxGraph, resolve_anchor
+        parent_of = {c: (p, l) for p, kids in iupac_parts.items() for l, c in kids}
+
+        def gct_subtree(n, depth, extra = ''):
+            kids = iupac_parts.get(n, []) if depth > 0 else []
+            branches = ([extra] if extra else []) + [f"{gct_subtree(c, depth - 1)}({l})" for l, c in kids]
+            return (branches[0] if branches else '') + ''.join(f"[{b}]" for b in branches[1:]) + residue_dic[n]
+
+        def gct_rootward(n, radius):
+            chain = ''
+            for _ in range(radius):
+                if n not in parent_of:
+                    break
+                n, l = parent_of[n][0], parent_of[n][1]
+                chain += f"({l}){residue_dic[n]}"
+            return chain
+
+        main_graph = glycan_to_nxGraph(iupac)
+        for part, parents, linkage in floating_specs:
+            alternatives = []
+            for pid in parents:
+                for radius in range(4):
+                    context = pattern.sub(lambda match: f"({match.group(1)}",
+                                          gct_subtree(pid, radius)[:-1] + '^' + residue_dic[pid][-1] + gct_rootward(pid,
+                                                                                                                    radius))[
+                        :-1]
+                    if len(resolve_anchor(main_graph, context)) == 1:
+                        alternatives.append(pattern.sub(lambda match: f"({match.group(1)}",
+                                                        gct_subtree(pid, radius,
+                                                                    extra = f"{part[:-1]}^{part[-1]}({linkage})") + gct_rootward(
+                                                            pid, radius))[:-1])
+                        break
+            if alternatives and len(alternatives) == len(parents) and len(alternatives) * 3 <= len(residue_dic):
+                floating_part += '{' + '|'.join(alternatives) + '}'
+            else:
+                floating_part += '{' + pattern.sub(lambda match: f"({match.group(1)}", f"{part}({linkage})") + '}'
+    return floating_part + iupac
 
 
 def glycoctxml_to_iupac(glycan_xml: str # GlycoCT XML format string
@@ -1050,18 +1124,27 @@ def check_nomenclature(glycan: str # Glycan string to check
     if not isinstance(glycan, str):
         raise TypeError("Glycan sequences must be formatted as strings")
     if '@' in glycan:
-        raise ValueError("Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around.")
+        raise ValueError(
+            "Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around.")
+    if re.search(r'[\^|]', re.sub(r'\{[^{}]*\}', '', glycan)):
+        raise ValueError(
+            "'^' and '|' are only meaningful inside floating bits, e.g., {Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}")
+    for bit in re.findall(r'\{([^{}]*)\}', glycan):
+        if '^' in bit and any(a.count('^') != 1 for a in bit.split('|')):
+            raise ValueError(f"Each alternative of an anchored floating bit needs exactly one '^': {bit}")
 
 
 def sanitize_iupac(glycan: str # Glycan string to check
                    ) -> str: # Sanitized glycan string
     """Sanitize IUPAC glycan sequence by identifying and correcting chemical impossibilities."""
     # Handle NAc special case (any sugar with NAc can't have linkage at position 2)
-    glycan = re.sub(r'([A-Za-z]+)\(([ab?][1-2])-2\)([A-Za-z]+NAc)', r'\1(\2-?)\3', glycan)
+    glycan = re.sub(r'([A-Za-z]+\^?)\(([ab?][1-2])-2\)([A-Za-z]+NAc\^?)', r'\1(\2-?)\3', glycan)
     # Handle modifications (can't have a linkage to a position that's modified)
-    glycan = re.sub(r'\(([ab?][1-2])-(\d)\)([A-Za-z]+\2[A-Z])', r'(\1-?)\3', glycan)
+    glycan = re.sub(r'\(([ab?][1-2])-(\d)\)([A-Za-z]+\2[A-Z]\^?)', r'(\1-?)\3', glycan)
     # Handle branched cases with same linkage position
-    for match in re.finditer(r'([A-Za-z]+)\(([ab?][1-2])-(\d)\)\[((?:[A-Za-z]+\([ab?][1-2]-\d\))*)([A-Za-z]+)\(([ab?][1-2])-(\3)\)\]', glycan):
+    for match in re.finditer(
+            r'([A-Za-z]+\^?)\(([ab?][1-2])-(\d)\)\[((?:[A-Za-z]+\^?\([ab?][1-2]-\d\))*)([A-Za-z]+\^?)\(([ab?][1-2])-(\3)\)\]',
+            glycan):
         glycan = glycan.replace(match.group(0), f'{match.group(1)}({match.group(2)}-?)[{match.group(4)}{match.group(5)}({match.group(6)}-?)]')
     return glycan
 
@@ -1371,11 +1454,24 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     # Canonicalize branch ordering
     if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
         from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
-        glycan = graph_to_string(glycan_to_nxGraph.__wrapped__(glycan))
+        cut = glycan.rfind('}') + 1
+        if cut and '[' in glycan[cut:]:
+            glycan = glycan[:cut] + graph_to_string(glycan_to_nxGraph.__wrapped__(glycan[cut:]))
+        elif not cut:
+            glycan = graph_to_string(glycan_to_nxGraph.__wrapped__(glycan))
     if '{' in glycan:
+        if '^' in glycan:
+            from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
+            for bit in [b for b in re.findall(r'\{.*?\}', glycan) if '^' in b]:
+                alts = sorted((graph_to_string(glycan_to_nxGraph.__wrapped__(a)) for a in bit[1:-1].split('|')),
+                              key = lambda a: (not (p := re.search(r'\^\([ab?][12]-([\d?/]+)\)', a).group(1)).isdigit(),
+                                               int(p) if p.isdigit() else 99, a))
+                glycan = glycan.replace(bit, '{' + '|'.join(alts) + '}')
         floating_bits = re.findall(r'\{.*?\}', glycan)
-        sorted_floating_bits = ''.join(sorted(floating_bits, key = lambda x: (-x.count('('), (
-            2 if not (e := (re.findall(r'-([\d?/]+)\)', x) or ['?'])[-1]) or '?' in e else 1 if '/' in e else 0),
+        stripped = {x: parse_floating_bit(x[1:-1])[0] for x in floating_bits}
+        sorted_floating_bits = ''.join(sorted(floating_bits, key = lambda x: (-stripped[x].count('('), (
+            2 if not (
+                e := (re.findall(r'-([\d?/]+)\)', stripped[x]) or ['?'])[-1]) or '?' in e else 1 if '/' in e else 0),
                                                                               int(re.match(r'\d+', e).group()) if e[
                                                                                   0].isdigit() else 99, x)))
         glycan = sorted_floating_bits + glycan[glycan.rfind('}') + 1:]

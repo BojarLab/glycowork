@@ -43,7 +43,7 @@ from glycowork.motif.processing import (
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
-    max_specify_glycan
+    max_specify_glycan, parse_floating_bit, check_nomenclature
 )
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
@@ -66,7 +66,7 @@ from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph,
     compare_glycans, subgraph_isomorphism, generate_graph_features,
     graph_to_string, largest_subgraph, get_possible_topologies,
-    deduplicate_glycans, try_string_conversion,
+    deduplicate_glycans, try_string_conversion, resolve_anchor,
     subgraph_isomorphism_with_negation, categorical_node_match_wildcard,
     expand_termini_list, ensure_graph, possible_topology_check
 )
@@ -659,7 +659,7 @@ RES
 22b:a-dgro-dgal-NON-2:6|1:a|2:keto|3:d
 23s:n-acetyl
 LIN
-19:22d(5+1)23n""") == "{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-?)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-?)]Man(a1-?)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+19:22d(5+1)23n""") == "{Neu5Ac(a2-3)}{Neu5Ac(a2-3)}{Neu5Ac(a2-6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-?)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-?)]Man(a1-?)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("""RES
 1b:a-dgal-HEX-1:5
 2s:n-acetyl
@@ -2541,8 +2541,97 @@ def test_get_possible_topologies():
     assert all(isinstance(g, nx.Graph) for g in topologies)
     assert get_possible_topologies("{6S}Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc")[0] == "Neu5Ac(a2-3)Gal6S(b1-3)[Neu5Ac(a2-6)]GalNAc"
     assert get_possible_topologies("{OS}Gal(b1-3)GalNAc") == ['GalOS(b1-3)GalNAc', 'Gal(b1-3)GalNAcOS']
+    glycan = "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert 'Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc' in get_possible_topologies(glycan)
     with pytest.raises(ValueError, match="This glycan already has a defined topology; please don't use this function."):
         get_possible_topologies("Gal(b1-4)GlcNAc")
+
+
+CORE_FUC_GCT = """RES
+1b:x-dglc-HEX-1:5
+2s:n-acetyl
+3b:b-dglc-HEX-1:5
+4s:n-acetyl
+5b:b-dman-HEX-1:5
+6b:a-dman-HEX-1:5
+7b:b-dglc-HEX-1:5
+8s:n-acetyl
+9b:b-dgal-HEX-1:5
+10b:a-dman-HEX-1:5
+11b:b-dglc-HEX-1:5
+12s:n-acetyl
+13b:b-dgal-HEX-1:5
+LIN
+1:1d(2+1)2n
+2:1o(4+1)3d
+3:3d(2+1)4n
+4:3o(4+1)5d
+5:5o(3+1)6d
+6:6o(2+1)7d
+7:7d(2+1)8n
+8:7o(4+1)9d
+9:5o(6+1)10d
+10:10o(2+1)11d
+11:11d(2+1)12n
+12:11o(4+1)13d
+UND
+UND1:100.0:100.0
+ParentIDs:1
+SubtreeLinkageID1:o(6+1)d
+RES
+14b:a-lgal-HEX-1:5|6:d"""
+ANCHORED = "{Fuc^(a1-3)[Gal(b1-4)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+
+
+def test_parse_floating_bit():
+    fragment, anchors = parse_floating_bit(ANCHORED[1:ANCHORED.index('}')])
+    assert fragment == "Fuc(a1-3/6)"  # Anchored bits degrade to the legacy form
+    assert anchors == {'a1-3': 'Gal(b1-4)GlcNAc^', 'a1-6': 'GlcNAc(b1-4)GlcNAc^'}
+    assert parse_floating_bit("Fuc(a1-3/6)") == ("Fuc(a1-3/6)", {})
+    with pytest.raises(ValueError):
+        parse_floating_bit("Fuc^(a1-3)[Gal(b1-4)]GlcNAc^")
+
+
+def test_resolve_anchor():
+    graph = glycan_to_nxGraph("Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert len(resolve_anchor(graph, "GlcNAc(b1-4)GlcNAc^")) == 1
+    assert len(resolve_anchor(graph, "Gal(b1-4)GlcNAc^")) == 1
+    assert len(resolve_anchor(graph, "GlcNAc^")) == 3
+
+
+def test_anchored_topologies():
+    topologies = get_possible_topologies(ANCHORED)
+    assert len(topologies) == 2
+    assert "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" in topologies
+    assert "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc" in topologies
+
+
+def test_anchored_canonicalization():
+    assert canonicalize_iupac(ANCHORED) == ANCHORED
+    swapped = "{GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc|Gal(b1-4)[Fuc^(a1-3)]GlcNAc}" + ANCHORED[ANCHORED.index('}')+1:]
+    assert canonicalize_iupac(swapped) == ANCHORED  # Alternatives sort by attachment position, branches canonicalize
+    with pytest.raises(ValueError):
+        check_nomenclature("Fuc^(a1-3)Gal(b1-4)GlcNAc")
+    with pytest.raises(ValueError):
+        check_nomenclature("{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|Gal(b1-4)GlcNAc}Gal(b1-4)GlcNAc")
+
+
+def test_anchored_comparison():
+    single = "{Fuc^(a1-3)[Gal(b1-4)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert not compare_glycans(ANCHORED, single)  # Different hypothesis sets are different glycans
+    assert compare_glycans(single, "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert compare_glycans(ANCHORED, ANCHORED)
+
+
+def test_glycoct_anchors():
+    iupac = canonicalize_iupac(CORE_FUC_GCT)
+    assert iupac.startswith("{GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}")
+    assert get_possible_topologies(iupac) == ["Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]
+
+
+def test_glycodraw_anchored():
+    svg = GlycoDraw(ANCHORED, suppress = True).as_svg()
+    assert svg.count('stroke-dasharray') == 2  # One dashed bond per candidate acceptor
 
 
 def test_deduplicate_glycans():
@@ -3761,7 +3850,8 @@ def test_get_coordinates_and_labels():
     # Test basic linear glycan
     glycan = "GlcNAc(b1-4)GlcA"
     result = get_coordinates_and_labels(glycan, None)
-    assert len(result) == 4  # Should return main chain and branch data
+    assert len(result) == 5  # Should return main chain, branch data, and node positions
+    assert result[4] == {2: (0, 0, 0), 0: (0, 0, 1)}  # Maps graph nodes onto (lane, branch, index)
     # Check main chain data structure
     main_data = result[0]
     assert len(main_data) == 8  # Should have 8 components
