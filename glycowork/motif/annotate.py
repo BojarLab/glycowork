@@ -6,7 +6,7 @@ from collections import Counter, deque, defaultdict
 from functools import partial
 
 from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species, Hex, dHex, HexNAc, HexA, Pen, Sia
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int, expand_termini_list
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, get_possible_topologies, compare_glycans, graph_to_string_int, expand_termini_list
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition
 from glycowork.motif.regex import get_match
 
@@ -86,25 +86,29 @@ def annotate_glycan_topology_uncertainty(
         gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
     # Count the number of times each motif occurs in a glycan
     ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
-    glycan_len = glycan.count('(')
-    feasibles = [glycan_to_nxGraph(g, termini = 'calc') for g in feasibles if g.count('(') == glycan_len]
-    possibles = possible_topology_check(ggraph, feasibles, exhaustive = True)
+    termini = 'calc' if termini_list else 'ignore'
+    # round-trip through strings so termini are recalculated with the floating bit attached
+    tgraphs = [glycan_to_nxGraph(t, termini = termini) for t in get_possible_topologies(ggraph, exhaustive = True)]
+    if any('anchors' in d for _, d in ggraph.nodes(data = True)):
+        # anchored bits already enumerate the complete, exact topology set; the feasibles database can only lose information here
+        possibles = tgraphs
+    else:
+        sizes = {len(t) for t in tgraphs}
+        possibles = [g for g in
+                     (glycan_to_nxGraph(k, termini = 'calc') for k in feasibles if 2 * k.count('(') + 1 in sizes) if
+                     any(compare_glycans(t, g) for t in tgraphs)]
     res = []
     for i, g in enumerate(gmotifs):
-        temp_res = subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
-                                        count = True)
+        spec = termini_list[i] if termini_list else termini_list
+        temp_res = subgraph_isomorphism(ggraph, g, termini_list = spec, count = True)
         if temp_res:
-            res.append(temp_res)
+            res.append(float(temp_res))
             continue
-        temp_res = [subgraph_isomorphism(p, g, termini_list = termini_list[i] if termini_list else termini_list,
-                                         count = True) for p in possibles]
-        if temp_res and np.mean(temp_res) > 0.5:
-            res.append(1)
-        else:
-            res.append(0)
+        hits = [subgraph_isomorphism(p, g, termini_list = spec, count = True) for p in possibles]
+        res.append(float(np.mean(hits)) if hits else 0.0)
     out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
     out.loc[0] = res
-    out.loc[0] = out.loc[0].astype('int')
+    out.loc[0] = out.loc[0].astype('float')
     out.index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)]
     return out
 

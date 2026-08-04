@@ -2,11 +2,11 @@
 
 ## [1.10.0]
 
-- Bumped required `glycorender` version from `0.2.5` to `0.3.1`, which drops the `reportlab` dependency (ec7a54c)
+- Bumped required `glycorender` version from `0.2.5` to `0.3.1`, which drops the `reportlab` dependency (ec7a54c, 4894d1b)
 - Moved `huggingface_hub` dependencies from the base install to the `ml` optional install (088c711)
 - `Pillow` is no longer a dependency of `glycowork` (088c711)
 - Moved several dependencies to lazy-load, to improve initial package start-up times (088c711)
-- Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw`
+- Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw` (4894d1b)
 
 ### glycan_data
 #### loader
@@ -71,7 +71,7 @@
 ##### Changed 🔄
 - `de_wildcard_glycoletter` now also supports narrow monosaccharide wildcards like `Gal/Glc` (5483f3c)
 - `canonicalize_iupac` is again made more robust in terms of what inputs it can handle (8f799c3)
-- `UND` tokens in `GlycoCT` inputs are now better supported in `canonicalize_iupac`
+- `UND` tokens in `GlycoCT` inputs are now better supported in `canonicalize_iupac` (4894d1b)
 
 ##### Fixed 🐛
 - Fixed `canonicalize_iupac` messing up narrow modification wildcards (e.g., `Gal3/6S`) in side branches (3a02eff)
