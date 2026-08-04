@@ -2995,6 +2995,18 @@ def test_quantify_motifs_auto_glycans():
     assert len(result.columns) > 0
 
 
+def test_quantify_motifs_uncertain_topology():
+    # Uncertain topologies annotate fractionally, and a motif whose every hit is fractional must still carry abundance instead of collapsing to an all-zero row, which log2 turns into -inf and which then degenerates every downstream correlation
+    uncertain = "{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    df = pd.DataFrame({'glycan': ["Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc", uncertain],
+                       'sample1': [1.0, 2.0, 3.0], 'sample2': [2.0, 3.0, 4.0]})
+    result = quantify_motifs(df, feature_set=['known'], remove_redundant=False)
+    assert not (result == 0).all(axis=1).any()
+    df[['sample1', 'sample2']] = np.log2(df[['sample1', 'sample2']] / 10)
+    result = quantify_motifs(df, feature_set=['known'], remove_redundant=False)
+    assert np.isfinite(result.values).all()
+
+
 def test_quantify_motifs_no_glycans_numeric():
     df = pd.DataFrame({
         'sample1': [1, 2],
@@ -4453,15 +4465,21 @@ def test_get_SparCC():
         assert isinstance(pvals, pd.DataFrame)
 
 
+def test_get_SparCC_uncertain_topology():
+    # Fractional motif annotations must survive into the correlation matrix; a zeroed-out motif row makes spearmanr return bare scalars instead of a matrix
+    df1 = sample_comp_glycomics_data()
+    df1.loc[len(df1)] = ["{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"] + list(df1.iloc[0, 1:] * 1.3)
+    corr, pvals = get_SparCC(df1, sample_comp_glycomics_data_corr(), motifs=True, transform="CLR")
+    assert np.isfinite(corr.values).all()
+
+
 def test_get_SparCC_ec_csv():
     df1 = sample_comp_glycomics_data()
     df2 = sample_comp_glycomics_data_corr()
-
     tmp_dir = Path("test_tmp")
     tmp_dir.mkdir(exist_ok=True)
     df1.to_csv(tmp_dir / "df1.csv", index=False)
     df2.to_csv(tmp_dir / "df2.csv", index=False)
-
     corr, pvals = get_SparCC(str(tmp_dir / "df1.csv"), str(tmp_dir / "df2.csv"))
     assert isinstance(corr, pd.DataFrame)
     assert isinstance(pvals, pd.DataFrame)

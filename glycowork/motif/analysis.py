@@ -1496,6 +1496,9 @@ def get_SparCC(
                 p_value_matrix[i, j] = p_val
     else:
         corrs, pvals = spearmanr(df1.values, df2.values)
+        # spearmanr returns bare scalars, not matrices, whenever the stacked input holds only two variables; broadcasting keeps the slicing below well-defined
+        n = df1.shape[1] + df2.shape[1]
+        corrs, pvals = np.broadcast_to(corrs, (n, n)), np.broadcast_to(pvals, (n, n))
         correlation_matrix, p_value_matrix = corrs[:df1.shape[1], df1.shape[1]:], pvals[
             :df1.shape[1], df1.shape[1]:]
     p_value_matrix = multipletests(p_value_matrix.flatten(), method = 'fdr_tsbh')[1].reshape(p_value_matrix.shape)

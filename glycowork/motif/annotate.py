@@ -388,7 +388,7 @@ def quantify_motifs(
     log2 = (df.select_dtypes(include = 'number') < 0).any().any()
     # Motif quantification
     for col in df_motif.columns:
-        indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
+        indices = [i for i, x in enumerate(df_motif[col]) if x > 0]
         temp = df.iloc[:, indices]
         temp.columns = range(temp.columns.size)
         weights = df_motif[col].iloc[indices].reset_index(drop = True)
