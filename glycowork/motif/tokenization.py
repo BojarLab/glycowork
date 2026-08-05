@@ -89,9 +89,7 @@ def pad_sequence(seq: list[int], # Sequence to pad
     if pad_label is None:
         pad_label = len(libr)
     padding_needed = max_length - len(seq)
-    if padding_needed > 0:
-        seq.extend([pad_label] * padding_needed)
-    return seq
+    return seq + [pad_label] * padding_needed if padding_needed > 0 else seq
 
 
 def get_core(sugar: str # Monosaccharide or linkage
@@ -426,7 +424,7 @@ def structure_to_basic(glycan: str # Glycan in IUPAC-condensed format
         glycan = glycan[:-3]
     if '(' not in glycan:
         return map_to_basic(glycan)
-    ggraph = glycan_to_nxGraph(glycan)
+    ggraph = glycan_to_nxGraph(glycan).copy()
     node_dict = dict(ggraph.nodes(data = True))
     nx.set_node_attributes(ggraph, {k: map_to_basic(node_dict[k]['string_labels']) for k in ggraph.nodes}, 'string_labels')
     return graph_to_string(ggraph)

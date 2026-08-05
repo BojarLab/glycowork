@@ -252,27 +252,7 @@ class JTKTest:
         self.periods = periods  # Keep original periods
         self.timepoint_periods = np.array(periods) / interval
         self.variance = (self.n**2 * (2 * self.n + 3) - (squared_sizes * (2 * self.group_sizes + 3)).sum()) / 72
-        self.reference_dist = self._generate_exact_distribution()
         self.waveforms = self._generate_reference_waveforms(timepoints)
-
-    def _generate_exact_distribution(self) -> np.ndarray:
-        MM = int(self.max_stat // 2)
-        cf = np.ones(MM + 1)
-        size = np.sort(self.group_sizes)
-        N = np.cumsum(size[::-1])[::-1][1:]
-        for m, n in zip(size[:-1], N):
-            P, Q = min(m + n, MM), min(m, MM)
-            cf[n+1:P+1] -= cf[:P-n]
-            cf[1:Q+1] += cf[:Q]
-        if self.max_stat % 2:
-            double_MM = 2 * cf[MM]
-            jtkcf = np.concatenate((cf, double_MM - cf[MM-1::-1], [double_MM]))[::-1]
-        else:
-            sum_MM = cf[MM-1] + cf[MM]
-            jtkcf = np.concatenate((cf, sum_MM - cf[MM-2::-1], [sum_MM]))[::-1]
-        ajtkcf = [(jtkcf[i - 1] + jtkcf[i]) / 2 for i in range(1, len(jtkcf))]
-        cf = [ajtkcf[(j - 1) // 2] if j % 2 == 0 else jtkcf[j // 2] for j in range(1, 2 * int(self.max_stat) + 2)]
-        return np.array(cf) / (jtkcf[0] or 1)
 
     def _generate_reference_waveforms(self, timepoints: int) -> dict[int, list[np.ndarray]]:
         timerange = np.arange(timepoints) * self.interval
@@ -480,7 +460,7 @@ def replace_outliers_winsorization(df: pd.DataFrame, # features as rows, all but
     placeholder = np.nanmin(V, axis = 1) - 1
     V = np.where(np.isnan(V), placeholder[:, None], V)
     # Limits set to match typical IQR outlier detection
-    k = int(np.floor(max(0.05, 1 / n) * n))
+    k = min(int(np.floor(max(0.05, 1 / n) * n)), max((n - 3) // 2, 0))
     S = np.sort(V, axis = 1)
     lower = S[:, k][:, None] if cap_side in ('both', 'lower') else -np.inf
     upper = S[:, n - 1 - k][:, None] if cap_side in ('both', 'upper') else np.inf
@@ -620,14 +600,14 @@ def anosim(df: pd.DataFrame, # square distance matrix
         perm_mean_rank_between = np.mean(ranks[~permuted_within_group_indices])
         permuted_Rs[i] = (perm_mean_rank_between - perm_mean_rank_within) / divisor
     # Calculate the p-value
-    p_value = np.sum(permuted_Rs >= R) / permutations
+    p_value = (np.sum(permuted_Rs >= R) + 1) / (permutations + 1)
     return R, p_value
 
 
 def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
                              group_labels: list[str] # list of group membership for each sample
                              ) -> tuple[float, float] | None: # F statistic and p-value if groups have >1 sample, None otherwise
-    "Performs an ANOVA on the respective alpha diversity distance (Welch's ANOVA if scipy>=1.16)"
+    "Performs Welch's ANOVA on the respective alpha diversity distance"
     group_counts = Counter(group_labels)
     if all(count > 1 for count in group_counts.values()):
         stat_outputs = pd.DataFrame({'group': group_labels, 'diversity': df.squeeze()})
@@ -666,7 +646,7 @@ def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
     for i in range(permutations):
         permuted_labels = np.random.permutation(group_labels)
         permuted_fs[i] = calculate_permanova_stat(df, permuted_labels)
-    p_value = np.sum(permuted_fs >= observed_f) / permutations
+    p_value = (np.sum(permuted_fs >= observed_f) + 1) / (permutations + 1)
     return observed_f, p_value
 
 
@@ -804,7 +784,7 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
     label_col = 'Glycosite' if 'Glycosite' in df_res.columns else 'Glycan'
     labels = [k.split('_')[0] for k in df_res[label_col]] if level == 'protein' else ['_'.join(k.split('_')[:-1]) for k
                                                                                       in df_res[label_col]]
-    grouped = df_res['corr p-val'].groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
+    grouped = df_res['p-val'].groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
     mean_effect_size = df_res['Effect size'].groupby(labels).mean()
     pvals, sig = correct_multiple_testing(grouped, alpha)
     df_out = pd.DataFrame({'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})
@@ -843,7 +823,7 @@ def process_glm_results(df: pd.DataFrame, # CLR-transformed glycoproteomics data
     all_retained_vars = set()
     for _, retained_vars in results:
         all_retained_vars.update(retained_vars)
-    int_terms = ['Condition'] + [f'{v}_Condition' for v in all_retained_vars]
+    int_terms = ['Condition'] + [f'{v}_Condition' for v in sorted(all_retained_vars)]
     out = {idx: [v.pvalues.get(term, 1.0) for term in int_terms] if not isinstance(v, str) else [1.0] * len(int_terms) for idx, (v, _) in results.items()}
     out2 = {idx: [v.params.get(term, 0.0) for term in int_terms] if not isinstance(v, str) else [0.0] * len(int_terms) for idx, (v, _) in results.items()}
     df_pvals = pd.DataFrame(out).T

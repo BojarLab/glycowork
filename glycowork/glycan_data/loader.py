@@ -422,7 +422,11 @@ def reindex(df_new: pd.DataFrame, # dataframe with new row order
     "Returns columns values in order of new dataframe rows"
     if ind_col != inp_col:
         print("Mismatching column names for ind_col and inp_col. Doesn't mean it's wrong but pay attention.")
-    return [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
+    out_vals = df_old[out_col].tolist()
+    pos = {}
+    for i, k in enumerate(df_old[ind_col].tolist()):
+        pos.setdefault(k, i)
+    return [out_vals[pos[k]] for k in df_new[inp_col].tolist()]
 
 
 def stringify_dict(dicty: dict[Any, Any] # dictionary to convert

@@ -2359,6 +2359,7 @@ def test_get_glycoform_diff():
     # Test glycoform differential expression
     result_df = pd.DataFrame({
         'Glycosite': ['Prot1_123_H5N4', 'Prot1_123_H6N5', 'Prot2_456_H4N3'],
+        'p-val': [0.005, 0.01, 0.02],
         'corr p-val': [0.01, 0.02, 0.03],
         'Effect size': [0.5, 0.6, 0.7]
     })

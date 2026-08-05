@@ -42,6 +42,8 @@
 ##### Fixed 🐛
 - Fixed `glycan_to_composition` handling of narrow monosaccharide modification wildcards such as `HexNAc4/6S` (b3ad039)
 - `stemify_dataset` no longer mutates its `stem_lib` input (8f799c3)
+- Fixed edge cases where `structure_to_basic` could poison the graph cache
+- Made sure `pad_sequence` does not mutate its input
 
 ##### Deprecated ⚠️
 
@@ -66,6 +68,8 @@
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
 - `get_pvals_motifs` no longer mutates input dataframe (8f799c3)
 - Fixed effect size handling in `get_meta_analysis` if `model="random"` (8f799c3)
+- Made sure `get_SparCC` does not mutate its inputs
+- `get_representative_substructures` no longer crashes if only run on motif outputs of `feature_set=["known"]`
 
 #### processing
 ##### Changed 🔄
@@ -78,6 +82,7 @@
 - Fixed `canonicalize_iupac` sometimes ordering multiple floating bits wrongly (b6689a5)
 - Fixed `canonicalize_iupac` crashing on empty string inputs (8f799c3)
 - `de_wildcard_glycoletter` now no longer can draw and return the wildcard itself (8f799c3)
+- Made sure `process_for_glycoshift` does not mutate its input
 
 #### draw
 ##### Changed 🔄
@@ -97,6 +102,7 @@
 - Fixed edge case handling of sulfation wildcards in `subgraph_isomorphism` (8f799c3)
 - Fixed returned node numbering if glycans returned from the fast `compare_glycans` branch (28769f5)
 - Fixed `compare_glycans`/`subgraph_isomorphism` not treating `HexOP`/`HexN` as proper wildcards (0602f71)
+- Made sure `get_possible_topologies` doesn't swallow multiple floaty bits past the first one
 
 #### annotate
 ##### Added ✨
@@ -110,6 +116,7 @@
 ##### Fixed 🐛
 - Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data (8f799c3)
 - Hardened `annotate_dataset` against duplicate motifs if the `"custom"` motif set is used (28769f5)
+- Made `annotate_dataset` more robust to glyco-regex custom motifs in `feature_set`
 
 #### regex
 ##### Fixed 🐛
@@ -119,6 +126,10 @@
 #### biosynthesis
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)
+
+#### evolution
+##### Fixed 🐛
+- Made sure `check_conservation` no longer crashes if a rank has no matching network
 
 ### ml
 #### model_training

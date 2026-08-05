@@ -1544,7 +1544,8 @@ def parse_glycoform(glycoform: str | dict[str, int], # Composition in H5N4F1A2 f
 def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composition index
                            ) -> tuple[pd.DataFrame, list[str]]: # (Modified dataset with new columns for protein_site, composition, and composition counts, glycan features)
     "Extract and format compositions in glycoproteomics dataset"
-    df['Glycosite'] = [k.split('_')[0] + '_' + k.split('_')[1] for i, k in enumerate(df.index)]
+    df = df.copy()
+    df['Glycosite'] = [k.split('_')[0] + '_' + k.split('_')[1] for k in df.index]
     if '[' in df.index[0]:
         comps = ['['+k.split('[')[1] for k in df.index]
         comps = [list(map(int, re.findall(r'\d+', s))) for s in comps]

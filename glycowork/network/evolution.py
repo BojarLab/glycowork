@@ -153,6 +153,8 @@ def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
         rank_species = rank_df['Species'].unique()
         rank_networks = [filtered_network_dic[spec] for spec in rank_species if spec in filtered_network_dic]
         rank_nodes = [list(net.nodes()) for net in rank_networks]
+        if not rank_nodes:
+            continue
         if motif:
             if glycan[-1] == ')':
                 conserved[r] = sum(glycan in "".join(nodes) for nodes in rank_nodes) / len(rank_nodes)

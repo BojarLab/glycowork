@@ -237,11 +237,12 @@ def annotate_dataset(
         shopping_cart.append(pd.concat(list(map(annotate_switchboard, glycans)), axis = 0))
     if 'custom' in feature_set:
         normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
-        gmotifs = list(map(glycan_to_nxGraph, normal_motifs))
-        partial_annotate = partial(annotate_glycan, motifs = normal_motifs, gmotifs = gmotifs)
-        shopping_cart.append(pd.concat(list(map(partial_annotate, glycans)), axis = 0))
+        if normal_motifs:
+            gmotifs = list(map(glycan_to_nxGraph, normal_motifs))
+            partial_annotate = partial(annotate_glycan, motifs = normal_motifs, gmotifs = gmotifs)
+            shopping_cart.append(pd.concat(list(map(partial_annotate, glycans)), axis = 0))
         regex_motifs = [m[1:] for m in custom_motifs if m.startswith('r')]
-        shopping_cart.append(pd.concat([pd.DataFrame([len(get_match(p, k)) for p in regex_motifs], columns = regex_motifs, index = [k]) for k in glycans], axis = 0))
+        shopping_cart.append(pd.concat([pd.DataFrame([[len(get_match(p, k)) for p in regex_motifs]], columns = regex_motifs, index = [k]) for k in glycans], axis = 0))
     if 'graph' in feature_set:
         # Calculates graph features of each glycan
         shopping_cart.append(pd.concat(list(map(generate_graph_features, glycans)), axis = 0))
@@ -503,12 +504,14 @@ def get_k_saccharides(
         actual_glycans = [g for g in glycans if not is_composition(g)]
         lib = get_lib(actual_glycans)
         add_sia = {'Neu5Ac', 'Neu5Gc'}.issubset(lib)
+        mono_pats = {i: re.compile(rf'{re.escape(i)}(?=[\(}}]|$)') for i in lib if
+                     i not in linkages and not LINKAGE_NODE_PATTERN.match(i)}
         for g in glycans:
             if is_composition(g):
                 comp_dict = canonicalize_composition(g)
                 wga_letter_data.append(comp_dict)
             else:
-                d = {i: len(re.findall(rf'{re.escape(i)}(?=[\(}}]|$)', g)) for i in lib if i not in linkages and not LINKAGE_NODE_PATTERN.match(i)}
+                d = {i: len(p.findall(g)) for i, p in mono_pats.items()}
                 if add_sia:
                     d['Sia'] = d.get('Neu5Ac', 0) + d.get('Neu5Gc', 0)
                 wga_letter_data.append(d)

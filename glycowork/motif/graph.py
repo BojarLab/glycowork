@@ -305,8 +305,14 @@ def handle_negation(original_func: Callable # Function to wrap
     def wrapper(glycan, motif, *args, **kwargs):
         if isinstance(motif, str) and '!' in motif:
             return subgraph_isomorphism_with_negation(glycan, motif, *args, **kwargs)
-        elif hasattr(motif, 'nodes') and _NEG_CACHE.setdefault(motif, any('!' in d.get('string_labels', '') for _, d in motif.nodes(data = True))):
-            return subgraph_isomorphism_with_negation(glycan, motif, *args, **kwargs)
+        elif hasattr(motif, 'nodes'):
+            hit = _NEG_CACHE.get(motif)
+            if hit is None:
+                hit = _NEG_CACHE[motif] = any('!' in d.get('string_labels', '') for _, d in motif.nodes(data = True))
+            return subgraph_isomorphism_with_negation(glycan, motif, *args, **kwargs) if hit else original_func(glycan,
+                                                                                                                motif,
+                                                                                                                *args,
+                                                                                                                **kwargs)
         else:
             return original_func(glycan, motif, *args, **kwargs)
     return wrapper
@@ -613,8 +619,9 @@ def graph_to_string(graph: nx.DiGraph, # Glycan graph (assumes root node is the 
     "Convert glycan graph back to IUPAC-condensed format, handling disconnected components"
     if isinstance(graph, str):
         return graph
-    if len(list(nx.weakly_connected_components(graph))) > 1:
-        parts = [graph.subgraph(sorted(c)) for c in nx.weakly_connected_components(graph)]
+    components = sorted(nx.weakly_connected_components(graph), key = min, reverse = True)
+    if len(components) > 1:
+        parts = [graph.subgraph(sorted(c)) for c in components]
         len_org = len(parts[-1])
         for p in range(len(parts) - 1):
             parts[p] = nx.relabel_nodes(parts[p].copy(), {pn: pn - len_org for pn in parts[p].nodes()})
@@ -701,7 +708,7 @@ def get_possible_topologies(glycan: str | nx.DiGraph, # Glycan with floating sub
                     continue
         new_graph = nx.convert_node_labels_to_integers(new_graph)
         topologies.append(new_graph)
-    return topologies if return_graphs else [graph_to_string_int(t) for t in topologies]
+    return topologies if return_graphs else [graph_to_string(t) for t in topologies]
 
 
 def possible_topology_check(glycan: str | nx.DiGraph, # Glycan with floating substituent
@@ -718,7 +725,7 @@ def possible_topology_check(glycan: str | nx.DiGraph, # Glycan with floating sub
 def deduplicate_glycans(glycans: list[str] | set[str] # List/set of glycans to deduplicate
                         ) -> list[str]: # Deduplicated list of glycans
     "Remove duplicate glycans from a list/set, even if they have different strings"
-    glycans = list(set(glycans) if isinstance(glycans, list) else glycans)
+    glycans = sorted(set(glycans))
     if len(glycans) <= 1:
         return glycans
     ggraphs = list(map(glycan_to_nxGraph, glycans))

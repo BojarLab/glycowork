@@ -79,7 +79,7 @@ def convert_pattern_component(pattern_component: str # Chunk of glyco-regular ex
         else:
             occurrence = [0, 1]
             part = pattern if pattern else pattern_component
-        pattern = [replace_patterns(part)] if isinstance(part, str) else [replace_patterns(ps) for ps in part]
+        pattern = [replace_patterns(part)] if isinstance(part, str) else list(part)
     if pattern is None:
         pattern = replace_patterns(pattern_component)
     if occurrence is None:

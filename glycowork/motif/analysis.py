@@ -87,7 +87,7 @@ def preprocess_data(
     df = df.iloc[:, :len(group1) + 1].fillna(0) if experiment == "anova" else df.loc[
         :, [df.columns[0]] + group1 + group2].fillna(0)
     # Drop rows with all zero, followed by outlier removal and imputation & normalization
-    df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)]
+    df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)].reset_index(drop = True)
     df = replace_outliers_winsorization(df)
     if experiment == "diff":
         df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples,
@@ -222,13 +222,17 @@ def get_representative_substructures(
     glycans = list(set(df_species.glycan))
     # Only consider motifs that are significantly enriched
     filtered_df = enrichment_df[enrichment_df.corr_pval < 0.05].reset_index(drop = True)
+    if filtered_df.empty:
+        return []
     log_pvals = -np.log10(filtered_df.pval.values)
-    max_log_pval = np.max(log_pvals)
+    max_log_pval = np.max(log_pvals) or 1
     weights = log_pvals / max_log_pval
     motifs = filtered_df.motif.values.tolist()
     # Pair glycoletters & disaccharides with their pvalue-based weight
-    mono, mono_weights = list(zip(*[(motifs[k], weights[k]) for k in range(len(motifs)) if '(' not in motifs[k]]))
-    di, di_weights = list(zip(*[(motifs[k], weights[k]) for k in range(len(motifs)) if '(' in motifs[k]]))
+    mono_pairs = [(motifs[k], weights[k]) for k in range(len(motifs)) if '(' not in motifs[k]]
+    di_pairs = [(motifs[k], weights[k]) for k in range(len(motifs)) if '(' in motifs[k]]
+    mono, mono_weights = list(zip(*mono_pairs)) if mono_pairs else ((), ())
+    di, di_weights = list(zip(*di_pairs)) if di_pairs else ((), ())
     mono_scores = [sum([mono_weights[j] for j in range(len(mono)) if mono[j] in k]) for k in glycans]
     di_scores = [sum([di_weights[j] for j in range(len(di)) if subgraph_isomorphism(k, di[j])]) for k in glycans]
     # For each glycan, get their glycoletter & disaccharide scores, normalized by glycan length
@@ -804,7 +808,7 @@ def get_differential_expression(
             'glycoforms'] = df_out  # aggregating to glycosites drops the per-glycoform decomposition, so we keep it reachable
         return df_site
     else:
-        return df_out.dropna(subset = ['Log2FC', 'p-val']).sort_values(by = 'p-val').sort_values(by = 'corr p-val')
+        return df_out.dropna(subset = ['Log2FC', 'p-val']).sort_values(by = ['corr p-val', 'p-val'])
 
 
 def get_pval_distribution(
@@ -1412,7 +1416,7 @@ def get_biodiversity(
     df_out["significant"] = significance
     df_out.attrs.update(
         {'alpha': alpha, 'n': len(group_sizes), 'test': 'ANOVA/t-test per metric', 'transform': None, 'paired': paired})
-    return df_out.sort_values(by = 'p-val').sort_values(by = 'corr p-val').reset_index(drop = True), distance_matrix
+    return df_out.sort_values(by = ['corr p-val', 'p-val']).reset_index(drop = True), distance_matrix
 
 
 def get_SparCC(
@@ -1438,6 +1442,7 @@ def get_SparCC(
         common_columns = df1.columns.intersection(df2.columns)
         df1 = df1[common_columns]
         df2 = df2[common_columns]
+    df1, df2 = df1.copy(), df2.copy()
     df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
     df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
     # Drop rows with all zero, followed by outlier removal and imputation & normalization
@@ -1759,7 +1764,7 @@ def get_glycoshift_per_site(
         clr_transformation(group_df[group1 + group2], group1, group2, gamma = gamma, custom_scale = custom_scale)
         .assign(Glycosite = glycosite) for glycosite, group_df in df.groupby('Glycosite')
     ]
-    df = pd.concat(results, ignore_index = True)
+    df = pd.concat(results).sort_index()
     df = pd.concat([df, preserved_data.reset_index(drop = True)], axis = 1)
     df_long = pd.melt(df, id_vars = ['Glycosite', 'Glycoform'] + glycan_features, var_name = 'Sample',
                       value_name = 'Abundance')
