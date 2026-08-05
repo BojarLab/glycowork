@@ -243,7 +243,15 @@ def _graph_fp(g: nx.DiGraph) -> tuple:
     for _, d in g.out_degree():
         leaves += d == 0
         branching += d > 1
-    return (len(g), leaves, branching)
+    memo = {}
+
+    def enc(n):
+        r = memo.get(n)
+        if r is None:
+            r = memo[n] = '(' + ''.join(sorted(enc(c) for c in g.successors(n))) + ')'
+        return r
+
+    return (len(g), leaves, branching, ''.join(sorted(enc(n) for n in g if g.in_degree(n) == 0)))
 
 
 def build_network_from_glycans(glycans: list[str], # Observed glycans
@@ -299,7 +307,7 @@ def construct_network(glycans: list[str], # List of glycans
                       ) -> nx.DiGraph: # Biosynthetic network
     "Construct glycan biosynthetic network"
     # Canonicalize all input strings upfront so string equality == graph isomorphism throughout
-    glycans = list(set(canonicalize_iupac(g) for g in glycans))
+    glycans = sorted(set(canonicalize_iupac(g) for g in glycans))
     stem_lib = get_stem_lib(get_lib(glycans))
     if permitted_roots is None:
         permitted_roots = infer_roots(frozenset(glycans))
@@ -343,6 +351,7 @@ def construct_network(glycans: list[str], # List of glycans
     for n in network.nodes():
         size_buckets[len(safe_index(n, graph_dic))].append(n)
     node_fps = {n: _graph_fp(safe_index(n, graph_dic)) for n in network.nodes()}
+    cmp_cache = {}
     for size, bigger in size_buckets.items():
         for n_big in bigger:
             fp_big = node_fps[n_big]
@@ -353,13 +362,26 @@ def construct_network(glycans: list[str], # List of glycans
                 continue
             # Lazily compute removal strings only when candidates exist; node names are canonical so direct string match suffices; fallback: graph isomorphism for wildcard cases
             g = safe_index(n_big, graph_dic)
-            rs = set()
+            rs = {}
             for term_node in (nd for nd in g.nodes() if g.out_degree(nd) == 0 and g.in_degree(nd) > 0):
                 link_node = next(g.predecessors(term_node))
-                rs.add(graph_to_string(g.subgraph(set(g.nodes()) - {term_node, link_node})))
+                sub = g.subgraph(set(g.nodes()) - {term_node, link_node})
+                rs[graph_to_string(sub)] = _graph_fp(sub)
             for n_small in candidates:
-                if n_small in rs or any(
-                        compare_glycans(safe_index(r, graph_dic), safe_index(n_small, graph_dic)) for r in rs):
+                hit = n_small in rs
+                if not hit:
+                    fp_small = node_fps[n_small]
+                    for r, fp_r in rs.items():
+                        if fp_r != fp_small:
+                            continue
+                        res = cmp_cache.get((r, n_small))
+                        if res is None:
+                            res = cmp_cache[(r, n_small)] = compare_glycans(safe_index(r, graph_dic),
+                                                                            safe_index(n_small, graph_dic))
+                        if res:
+                            hit = True
+                            break
+                if hit:
                     network.add_edge(n_big, n_small)
     network = deorphanize_edge_labels(network, graph_dic, allowed_ptms = allowed_ptms)
     for node in network:

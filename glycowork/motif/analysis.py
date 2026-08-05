@@ -92,13 +92,13 @@ def preprocess_data(
     if experiment == "diff":
         df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples,
                                   circadian = circadian, timepoints = circadian_timepoints, periods = circadian_periods,
-                                  interval = circadian_interval, replicates = circadian_replicates)
+                                  interval = circadian_interval, replicates = circadian_replicates, random_state = random_state)
     elif experiment == "anova":
         groups_unq = sorted(set(group1))
         df = impute_and_normalize(df, [[df.columns[i + 1] for i, x in enumerate(group1) if x == g] for g in groups_unq],
                                   impute = impute, min_samples = min_samples,
                                   circadian = circadian, timepoints = circadian_timepoints, periods = circadian_periods,
-                                  interval = circadian_interval, replicates = circadian_replicates)
+                                  interval = circadian_interval, replicates = circadian_replicates, random_state = random_state)
     df_org = df.copy(deep = True)
     if transform is None:
         transform = "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(df.iloc[0, 0], "N")) and len(
@@ -1131,6 +1131,7 @@ def get_time_series(
         custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         glycoproteomics: bool = False, # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
+        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with regression coefficients and FDR-corrected p-values
     "Analyzes time series glycomics data using polynomial regression"
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
@@ -1143,7 +1144,7 @@ def get_time_series(
     if not glycoproteomics and '-' not in df.index[0]:
         df = df.T  # glycan IUPAC labels always carry a linkage dash; glycoform IDs do not, so the orientation heuristic must not fire on them
     df = replace_outliers_winsorization(df).reset_index(names = 'glycan')
-    df = impute_and_normalize(df, [df.columns[1:].tolist()], impute = impute, min_samples = min_samples)
+    df = impute_and_normalize(df, [df.columns[1:].tolist()], impute = impute, min_samples = min_samples, random_state = random_state)
     if transform is None:
         transform = "ALR" if enforce_class(df.iloc[0, 0], "N") and len(df) > 50 else "CLR"
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
@@ -1158,10 +1159,10 @@ def get_time_series(
         dag = get_motif_dag(df.index.tolist(), abundances = df) if grouped_BH else None
         if transform == "ALR":
             df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False,
-                                                      gamma = gamma, custom_scale = custom_scale)
+                                                      gamma = gamma, custom_scale = custom_scale, random_state = random_state)
             df = df.set_index(df.columns[0])
         elif transform == "CLR":
-            df = clr_transformation(df, df.columns.tolist(), [], gamma = gamma, custom_scale = custom_scale)
+            df = clr_transformation(df, df.columns.tolist(), [], gamma = gamma, custom_scale = custom_scale, random_state = random_state)
         elif transform != "Nothing":
             raise ValueError("Only ALR and CLR are valid transforms for now.")
     else:
@@ -1174,10 +1175,10 @@ def get_time_series(
         if transform == "ALR":
             df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False,
                                                       gamma = gamma,
-                                                      custom_scale = custom_scale)
+                                                      custom_scale = custom_scale, random_state = random_state)
         elif transform == "CLR":
             df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma,
-                                                custom_scale = custom_scale)
+                                                custom_scale = custom_scale, random_state = random_state)
         elif transform != "Nothing":
             raise ValueError("Only ALR and CLR are valid transforms for now.")
         df.index = strip_suffixes(df.iloc[:, 0])
@@ -1223,6 +1224,7 @@ def get_jtk(
         correction_method: str = "two-stage",  # Multiple testing correction method
         grouped_BH: bool | None = None,  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
         glycoproteomics: bool = False,  # Whether rows are glycoforms, ordered by composition containment instead of substructure containment
+        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with JTK results: adjusted p-values, period length, lag phase, amplitude
     "Identifies rhythmically expressed glycans using Jonckheere-Terpstra-Kendall algorithm for time series analysis"
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
@@ -1235,7 +1237,8 @@ def get_jtk(
     alpha = get_alphaN(df.shape[1] - 1)
     jtk = JTKTest(timepoints, periods, interval, replicates)
     df = replace_outliers_winsorization(df)
-    mf = MissForest(circadian = True, timepoints = timepoints, periods = periods, interval = interval, replicates = replicates)
+    mf = MissForest(circadian = True, timepoints = timepoints, periods = periods, interval = interval, replicates = replicates,
+                    random_state = random_state)
     df = df.replace(0, np.nan)
     annot = df.pop(df.columns[0])
     df = mf.fit_transform(df)
@@ -1248,10 +1251,10 @@ def get_jtk(
         # Containment DAG off the raw motif frame (pre-transform), keeping the abundance-dominance prefilter valid
         dag = get_motif_dag(df.index.tolist(), abundances = df) if grouped_BH else None
         if transform == "CLR":
-            df = clr_transformation(df, df.columns.tolist(), [], gamma = gamma).reset_index()
+            df = clr_transformation(df, df.columns.tolist(), [], gamma = gamma, random_state = random_state).reset_index()
         elif transform == "ALR":
             df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False,
-                                                      gamma = gamma)
+                                                      gamma = gamma, random_state = random_state)
         elif transform == "Nothing":
             df = df.reset_index()
         else:
@@ -1263,9 +1266,9 @@ def get_jtk(
             dag = get_composition_dag(raw.index.tolist(), abundances = raw)
         if transform == "ALR":
             df = get_additive_logratio_transformation(df, df.columns[1:].tolist(), [], paired = False,
-                                                      gamma = gamma)
+                                                      gamma = gamma, random_state = random_state)
         elif transform == "CLR":
-            df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma)
+            df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], df.columns[1:].tolist(), [], gamma = gamma, random_state = random_state)
         elif transform != "Nothing":
             raise ValueError("Only ALR and CLR are valid transforms for now.")
     results = []
@@ -1428,7 +1431,8 @@ def get_SparCC(
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
-        partial_correlations: bool = False  # Use regularized partial correlations
+        partial_correlations: bool = False,  # Use regularized partial correlations
+        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> tuple[pd.DataFrame, pd.DataFrame]:  # (Spearman correlation matrix, FDR-corrected p-value matrix)
     "Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)"
     from statsmodels.stats.multitest import multipletests
@@ -1448,21 +1452,21 @@ def get_SparCC(
     # Drop rows with all zero, followed by outlier removal and imputation & normalization
     df1 = df1.loc[~(df1.iloc[:, 1:] == 0).all(axis = 1)]
     df1 = replace_outliers_winsorization(df1)
-    df1 = impute_and_normalize(df1, [df1.columns.tolist()[1:]])
+    df1 = impute_and_normalize(df1, [df1.columns.tolist()[1:]], random_state = random_state)
     df2 = df2.loc[~(df2.iloc[:, 1:] == 0).all(axis = 1)]
     df2 = replace_outliers_winsorization(df2)
-    df2 = impute_and_normalize(df2, [df2.columns.tolist()[1:]])
+    df2 = impute_and_normalize(df2, [df2.columns.tolist()[1:]], random_state = random_state)
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(df1.shape[1] - 1)
     if transform is None:
         transform = "ALR" if (enforce_class(df1.iloc[0, 0], "N") and len(df1) > 50) and (
                     enforce_class(df2.iloc[0, 0], "N") and len(df2) > 50) else "CLR"
     if transform == "ALR":
-        df1 = get_additive_logratio_transformation(df1, df1.columns[1:].tolist(), [], paired = False, gamma = gamma)
-        df2 = get_additive_logratio_transformation(df2, df2.columns[1:].tolist(), [], paired = False, gamma = gamma)
+        df1 = get_additive_logratio_transformation(df1, df1.columns[1:].tolist(), [], paired = False, gamma = gamma, random_state = random_state)
+        df2 = get_additive_logratio_transformation(df2, df2.columns[1:].tolist(), [], paired = False, gamma = gamma, random_state = random_state)
     elif transform == "CLR":
-        df1.iloc[:, 1:] = clr_transformation(df1.iloc[:, 1:], df1.columns.tolist()[1:], [], gamma = gamma)
-        df2.iloc[:, 1:] = clr_transformation(df2.iloc[:, 1:], df2.columns.tolist()[1:], [], gamma = gamma)
+        df1.iloc[:, 1:] = clr_transformation(df1.iloc[:, 1:], df1.columns.tolist()[1:], [], gamma = gamma, random_state = random_state)
+        df2.iloc[:, 1:] = clr_transformation(df2.iloc[:, 1:], df2.columns.tolist()[1:], [], gamma = gamma, random_state = random_state)
     elif transform == "Nothing":
         pass
     else:
@@ -1761,7 +1765,7 @@ def get_glycoshift_per_site(
     df = df.div(df.sum(axis = 0), axis = 1) * 100
     df = df.reset_index()
     results = [
-        clr_transformation(group_df[group1 + group2], group1, group2, gamma = gamma, custom_scale = custom_scale)
+        clr_transformation(group_df[group1 + group2], group1, group2, gamma = gamma, custom_scale = custom_scale, random_state = random_state)
         .assign(Glycosite = glycosite) for glycosite, group_df in df.groupby('Glycosite')
     ]
     df = pd.concat(results).sort_index()

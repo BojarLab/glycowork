@@ -124,6 +124,7 @@ def get_stem_lib(libr: dict[str, int] # Dictionary mapping glycoletters to indic
 
 
 stem_lib = get_stem_lib(lib)
+_STEM_LIB = stem_lib
 
 
 def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
@@ -133,7 +134,7 @@ def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
     """Remove modifications from all monosaccharides in glycan"""
     if libr is None:
         libr = lib
-    stem_lib = get_stem_lib(libr) if stem_lib is None else dict(stem_lib)
+    stem_lib = (_STEM_LIB if libr is lib else get_stem_lib(libr)) if stem_lib is None else stem_lib
     if '(' not in glycan:
         return get_core(glycan)
     sorted_keys = sorted(stem_lib.keys(), key = len, reverse = True)

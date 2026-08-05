@@ -141,12 +141,12 @@ def filter_matches_by_location(matches: list[list[int]], # List of node index li
         match_location = {match_location}
     if 'start' in match_location:
         degrees = {node: ggraph.out_degree[node] for node in ggraph}
-        matches = [m for m in matches if degrees[m[0]] == 0]
+        matches = [m for m in matches if m and degrees[m[0]] == 0]
     if 'end' in match_location:
         location_idx = len(ggraph) - 1
         matches = [m for m in matches if location_idx in m]
     if 'internal' in match_location:
-        matches = [m for m in matches if m[0] > 0 and m[-1] < len(ggraph) - 1]
+        matches = [m for m in matches if m and m[0] > 0 and m[-1] < len(ggraph) - 1]
     return matches
 
 
@@ -243,29 +243,6 @@ def match_it_up(pattern_components: list[str], # Pattern chunks
     return pattern_matches
 
 
-def all_combinations(nested_list: list[list[int]], # List of match indices
-                     min_len: int = 1, # Minimum combination length
-                     max_len: int = 2 # Maximum combination length
-                     ) -> list[tuple[int, ...]]: # Possible index combinations
-    "Create possible combinations from nested list of matches"
-    # Flatten each sublist for intra-list combinations
-    if isinstance(nested_list[0][0], int):
-        nested_list = [nested_list]
-    flat_sublists = [sorted(chain.from_iterable(sublist)) for sublist in nested_list]
-    # Generate all combinations within each flattened sublist
-    intra_list_combinations = set()
-    for flat_list in flat_sublists:
-        for i in range(min_len, max_len + 1):
-            intra_list_combinations.update(combinations(flat_list, i))
-    # Generate all combinations for inter-list combinations
-    all_elements = sorted(chain.from_iterable(chain.from_iterable(nested_list)))
-    inter_list_combinations = set()
-    for i in range(min_len, max_len + 1):
-        inter_list_combinations.update(set(combinations(all_elements, i)))
-    # Combine intra-list and inter-list combinations, remove duplicates and sort
-    return sorted(intra_list_combinations | inter_list_combinations)
-
-
 def try_matching(current_trace: list[int], # Current match indices
                  all_match_nodes: list[list[int]], # Next component matches
                  edges: list[tuple[int, int]], # Graph edges
@@ -281,9 +258,13 @@ def try_matching(current_trace: list[int], # Current match indices
     last_node = current_trace[-1]
     edges_set = set(edges)
     if max_occur > 1:
-        all_match_nodes = all_combinations(all_match_nodes, min_len = min_occur, max_len = max_occur)
-        #currently only working for branches of size 1
-        idx = [all(last_node - node == -2 * (i + 1) for i, node in enumerate(groupy)) for groupy in all_match_nodes]
+        # currently only working for branches of size 1; only runs of the form last_node+2, last_node+4, ...
+        # can satisfy the stride test, so build them directly instead of enumerating all combinations
+        elements = set(chain.from_iterable(chain.from_iterable(
+            [all_match_nodes] if isinstance(all_match_nodes[0][0], int) else all_match_nodes)))
+        all_match_nodes = [t for t in (tuple(last_node + 2 * (i + 1) for i in range(k))
+                                       for k in range(min_occur, max_occur + 1)) if all(v in elements for v in t)]
+        idx = [True] * len(all_match_nodes)
     else:
         if all_match_nodes[0] and isinstance(all_match_nodes[0][0], list):
             all_match_nodes = unwrap(all_match_nodes)

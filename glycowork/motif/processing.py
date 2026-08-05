@@ -3,7 +3,7 @@ import copy
 import json
 import re
 from random import choice
-from functools import wraps
+from functools import wraps, lru_cache
 from collections import defaultdict
 from pathlib import Path
 from itertools import combinations
@@ -173,19 +173,30 @@ def in_lib(glycan: str, # Glycan in IUPAC-condensed nomenclature
     return set(glycan).issubset(libr.keys())
 
 
-def get_possible_linkages(wildcard: str, # Pattern to match, ? can be wildcard
-                          linkage_list: list[str] = linkages # List of linkages to search
-                          ) -> set[str]: # Matching linkages
-    "Retrieves all linkages that match a given wildcard pattern"
+@lru_cache(maxsize = None)
+def _possible_linkages(wildcard: str, # Pattern to match, ? can be wildcard
+                       linkage_list: tuple[str, ...] # Linkages to search, as a hashable tuple
+                       ) -> frozenset[str]: # Matching linkages
+    "Cached core of get_possible_linkages; both arguments must be hashable"
     if '/' in wildcard:
         prefix = wildcard[:wildcard.index('-')].replace('?', '[ab?]')
         numbers = re.search(r'-(\d+(?:/\d+)*)', wildcard).group(1).split('/')
         pat = re.compile(f"^{prefix}-({('|'.join(numbers))}|\\?)$")
-        return {l for l in linkage_list if pat.fullmatch(l)} | \
+        return frozenset({l for l in linkage_list if pat.fullmatch(l)} | \
             ({f"{wildcard[:wildcard.index('-')]}-{'/'.join(sorted(combo))}"
-              for combo in combinations(numbers, r = 2)} if len(numbers) > 2 else set())
+              for combo in combinations(numbers, r = 2)} if len(numbers) > 2 else set()))
     pat = re.compile(f"^{wildcard.replace('?', '[ab1-9?]')}$")
-    return {l for l in linkage_list if pat.fullmatch(l)}
+    return frozenset(l for l in linkage_list if pat.fullmatch(l))
+
+
+_LINKAGES_TUPLE = tuple(linkages)
+
+
+def get_possible_linkages(wildcard: str, # Pattern to match, ? can be wildcard
+                          linkage_list: list[str] = linkages # List of linkages to search
+                          ) -> frozenset[str]: # Matching linkages
+    "Retrieves all linkages that match a given wildcard pattern"
+    return _possible_linkages(wildcard, _LINKAGES_TUPLE if linkage_list is linkages else tuple(linkage_list))
 
 
 def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: Hex, HexNAc, dHex, Sia, HexA, Pen, HexOS, HexNAcOS

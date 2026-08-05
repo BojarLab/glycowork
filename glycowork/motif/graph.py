@@ -18,6 +18,8 @@ LINKAGE_LABEL = re.compile(r'^[ab?][12]-')
 from weakref import WeakKeyDictionary
 _SL_CACHE = WeakKeyDictionary()
 _NEG_CACHE = WeakKeyDictionary()
+_PTM_CACHE = WeakKeyDictionary()
+_HAS_O_CACHE = WeakKeyDictionary()
 
 def memoize_node_match(func):
     """Memoization decorator for narrow wildcard lists"""
@@ -35,6 +37,20 @@ def _sl(g):  # cached string_labels, keyed on graph identity (subgraph views sha
     v = _SL_CACHE.get(g)
     if v is None:
         v = _SL_CACHE[g] = [d['string_labels'] for _, d in g.nodes(data = True)]
+    return v
+
+
+def _has_o(g):  # cached "needs PTM wildcarding" flag, keyed on graph identity
+    v = _HAS_O_CACHE.get(g)
+    if v is None:
+        v = _HAS_O_CACHE[g] = any('O' in s for s in _sl(g))
+    return v
+
+
+def _ptm_wildcarded(g):  # cached PTM-wildcarded copy, keyed on graph identity
+    v = _PTM_CACHE.get(g)
+    if v is None:
+        v = _PTM_CACHE[g] = ptm_wildcard_for_graph(g.copy())
     return v
 
 
@@ -195,6 +211,8 @@ def ptm_wildcard_for_graph(graph: nx.DiGraph # Input graph
                            ) -> nx.DiGraph: # Modified graph with PTM wildcards
     "Standardize PTM wildcards in graph"
     _SL_CACHE.pop(graph, None)
+    _PTM_CACHE.pop(graph, None)
+    _HAS_O_CACHE.pop(graph, None)
     for node in graph.nodes:
         if not LINKAGE_LABEL.match(label := graph.nodes[node]['string_labels']):
             graph.nodes[node]['string_labels'] = PTM_REGEX.sub('O', label)
@@ -256,7 +274,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
         g1_sl, g2_sl = nx.get_node_attributes(glycan_a, "string_labels"), nx.get_node_attributes(glycan_b, "string_labels")
         proc = set(g1_sl.values()) | set(g2_sl.values())
         if any('O' in s for s in proc):
-            g1, g2 = ptm_wildcard_for_graph(glycan_a.copy()), ptm_wildcard_for_graph(glycan_b.copy())
+            g1, g2 = _ptm_wildcarded(glycan_a), _ptm_wildcarded(glycan_b)
             g1_sl = nx.get_node_attributes(g1, "string_labels")
             g2_sl = nx.get_node_attributes(g2, "string_labels")
         else:
@@ -345,8 +363,8 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
         if termini_list and not nx.get_node_attributes(motif, 'termini'):
             motif = motif.copy()
             nx.set_node_attributes(motif, dict(zip(motif.nodes(), expand_termini_list(motif, termini_list) if len(termini_list) < len(motif) else termini_list)), 'termini')
-        if any('O' in s for s in _sl(motif) + _sl(glycan)):
-            g1, g2 = ptm_wildcard_for_graph(glycan.copy()), ptm_wildcard_for_graph(motif.copy())
+        if _has_o(motif) or _has_o(glycan):
+            g1, g2 = _ptm_wildcarded(glycan), _ptm_wildcarded(motif)
         else:
             g1, g2 = glycan, motif
         motif_comp = [_sl(g2), _sl(g1)]

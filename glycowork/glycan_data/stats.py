@@ -93,11 +93,14 @@ class MissForest:
                  timepoints: int | list | np.ndarray | None = None,  # number of timepoints, or explicit time values per column (only relevant if circadian)
                  periods: list[int] | None = None,  # cycle lengths to encode (e.g., [12, 24]) (only relevant if circadian)
                  interval: int = 1,  # time units between experimental timepoints (only relevant if circadian)
-                 replicates: int = 1  # replicates per timepoint (only relevant if circadian)
+                 replicates: int = 1,  # replicates per timepoint (only relevant if circadian)
+                 random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
                  ) -> None:
         "A class to perform MissForest imputation adapted from https://github.com/yuenshingyan/MissForest"
         from sklearn.ensemble import RandomForestRegressor
-        self.regressor = regressor if regressor is not None else RandomForestRegressor(n_jobs = -1)
+        seed = random_state if random_state is None or isinstance(random_state, (int, np.integer)) else int(np.random.default_rng(random_state).integers(2 ** 32))
+        self.regressor = regressor if regressor is not None else RandomForestRegressor(random_state = seed)
+        self._auto_n_jobs = regressor is None
         self.max_iter = max_iter
         self.tol = tol
         self.circadian = circadian
@@ -113,6 +116,8 @@ class MissForest:
         # Step 1: Initialization
         # Keep track of where NaNs are in the original dataset
         X_nan = X.isnull()
+        if self._auto_n_jobs:
+            self.regressor.n_jobs = -1 if X.shape[0] >= 150 else 1
         # Replace NaNs with row medians (each glycan's median across its observed samples)
         row_medians = X.median(axis = 1)
         # Intensity-dependent missingness: features sitting near the detection limit are missing not at random, which random forest (an MAR method) systematically over-imputes towards the feature median
@@ -200,8 +205,9 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
                          timepoints: int | list | np.ndarray | None = None, # number of timepoints, or explicit time values per column (only relevant if circadian)
                          periods: list[int] | None = None, # cycle lengths to encode (e.g., [12, 24]) (only relevant if circadian)
                          interval: int = 1, # time units between experimental timepoints (only relevant if circadian)
-                         replicates: int = 1 # replicates per timepoint (only relevant if circadian)
-                         ) -> pd.DataFrame: # normalized dataframe in same style as input
+                         replicates: int = 1,  # replicates per timepoint (only relevant if circadian)
+                         random_state: int | np.random.Generator | None = None # optional random state for reproducibility
+                         ) -> pd.DataFrame:  # normalized dataframe in same style as input
     "discards rows with too many missings, imputes the rest, and normalizes"
     df = df_in.copy()
     if min_samples:
@@ -222,7 +228,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
         df.columns = df.columns.astype(str)
     if impute:
         mf = MissForest(circadian = circadian, timepoints = timepoints, periods = periods,
-                        interval = interval, replicates = replicates)
+                        interval = interval, replicates = replicates, random_state = random_state)
         df = df.replace(0, np.nan)
         df = mf.fit_transform(df)
     df = (df / df.sum(axis = 0)) * 100

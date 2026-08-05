@@ -58,10 +58,8 @@ def annotate_glycan(
     ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
     res = [subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
                                 count = True) for i, g in enumerate(gmotifs)]
-    out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
-    out.loc[0] = res
-    out.loc[0] = out.loc[0].astype('int')
-    out.index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)]
+    out = pd.DataFrame([res], columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs,
+                       index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)], dtype = 'int')
     return out if not condense else out.loc[:, (out != 0).any(axis = 0)]
 
 
@@ -106,11 +104,8 @@ def annotate_glycan_topology_uncertainty(
             continue
         hits = [subgraph_isomorphism(p, g, termini_list = spec, count = True) for p in possibles]
         res.append(float(np.mean(hits)) if hits else 0.0)
-    out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
-    out.loc[0] = res
-    out.loc[0] = out.loc[0].astype('float')
-    out.index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)]
-    return out
+    return pd.DataFrame([res], columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs,
+                       index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)], dtype = 'float')
 
 
 def get_molecular_properties(

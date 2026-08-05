@@ -21,6 +21,7 @@
 - `clr_transformation` now has a new `reference` keyword argument, to optionally specify from which variables the geometric mean should be constructed (a918a2e)
 - `MissForest` now runs left-censored draws where missingness is intensity-dependent (MNAR) and Random Forest for the rest (MAR), where intensity-dependence is estimated via logistic regression (7849b15)
 - `get_alphaN` now has a new `verbose` keyword argument to suppress its print (which is now default `False`, since its output will now be stored as dataframe attributes) (5483f3c)
+- `impute_and_normalize` and `MissForest` now have the new `random_state` keyword argument to make imputation fully reproducible
 
 ##### Changed 🔄
 - `hotellings_t2` is now more robust to tiny groups (a918a2e)
@@ -42,8 +43,8 @@
 ##### Fixed 🐛
 - Fixed `glycan_to_composition` handling of narrow monosaccharide modification wildcards such as `HexNAc4/6S` (b3ad039)
 - `stemify_dataset` no longer mutates its `stem_lib` input (8f799c3)
-- Fixed edge cases where `structure_to_basic` could poison the graph cache
-- Made sure `pad_sequence` does not mutate its input
+- Fixed edge cases where `structure_to_basic` could poison the graph cache (78fe195)
+- Made sure `pad_sequence` does not mutate its input (78fe195)
 
 ##### Deprecated ⚠️
 
@@ -59,17 +60,19 @@
 - functions in `.analysis` now can read the stored metadata automatically and act accordingly, supporting easy-calls like `get_differential_expression(glycomics_data_loader.human_brain_N_PMID38343116)` (5483f3c)
 - `preprocess_data` now has the new optional keyword argument `glycoproteomics`, mainly for `get_differential_expression` to pass this info to be able to trigger `get_composition_dag` (c11b4d0)
 - `get_glycanova`, `get_time_series`, and `get_jtk` now have the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type, time series, and circadian glycoform analysis of glycoproteomics data (c11b4d0, f3ee7e0)
+- Added the new optional keyword argument `random_state` to `get_time_series`, `get_jtk`, and `get_SparCC` to make them fully reproducible
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
 - `get_differential_expression`, `get_glycanova`, `get_time_series`, and `get_jtk` now default to `grouped_BH=True` if they are run in motif-analysis mode (`motifs=True`) (7849b15)
+- `preprocess_data` now propagates `random_state` to data imputation for full re-run reprodubility
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
 - `get_pvals_motifs` no longer mutates input dataframe (8f799c3)
 - Fixed effect size handling in `get_meta_analysis` if `model="random"` (8f799c3)
-- Made sure `get_SparCC` does not mutate its inputs
-- `get_representative_substructures` no longer crashes if only run on motif outputs of `feature_set=["known"]`
+- Made sure `get_SparCC` does not mutate its inputs (78fe195)
+- `get_representative_substructures` no longer crashes if only run on motif outputs of `feature_set=["known"]` (78fe195)
 
 #### processing
 ##### Changed 🔄
@@ -82,7 +85,7 @@
 - Fixed `canonicalize_iupac` sometimes ordering multiple floating bits wrongly (b6689a5)
 - Fixed `canonicalize_iupac` crashing on empty string inputs (8f799c3)
 - `de_wildcard_glycoletter` now no longer can draw and return the wildcard itself (8f799c3)
-- Made sure `process_for_glycoshift` does not mutate its input
+- Made sure `process_for_glycoshift` does not mutate its input (78fe195)
 
 #### draw
 ##### Changed 🔄
@@ -102,7 +105,7 @@
 - Fixed edge case handling of sulfation wildcards in `subgraph_isomorphism` (8f799c3)
 - Fixed returned node numbering if glycans returned from the fast `compare_glycans` branch (28769f5)
 - Fixed `compare_glycans`/`subgraph_isomorphism` not treating `HexOP`/`HexN` as proper wildcards (0602f71)
-- Made sure `get_possible_topologies` doesn't swallow multiple floaty bits past the first one
+- Made sure `get_possible_topologies` doesn't swallow multiple floaty bits past the first one (78fe195)
 
 #### annotate
 ##### Added ✨
@@ -116,20 +119,25 @@
 ##### Fixed 🐛
 - Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data (8f799c3)
 - Hardened `annotate_dataset` against duplicate motifs if the `"custom"` motif set is used (28769f5)
-- Made `annotate_dataset` more robust to glyco-regex custom motifs in `feature_set`
+- Made `annotate_dataset` more robust to glyco-regex custom motifs in `feature_set` (78fe195)
 
 #### regex
 ##### Fixed 🐛
 - Harden treatment of ?-wildcards in `parse_pattern` (8f799c3)
+- `filter_matches_by_location` no longer crashes on empty inner matches
+
+##### Deprecated ⚠️
+- Deprecated `all_combinations` (will be handled in-line instead)
 
 ### network
 #### biosynthesis
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)
+- Improved graph caching, which should result in faster `construct_network` calls
 
 #### evolution
 ##### Fixed 🐛
-- Made sure `check_conservation` no longer crashes if a rank has no matching network
+- Made sure `check_conservation` no longer crashes if a rank has no matching network (78fe195)
 
 ### ml
 #### model_training
