@@ -143,7 +143,13 @@ def resolve_motif_name(
         if len(hits) > 1:
             raise ValueError(f"Motif name '{name}' is ambiguous between {hits}; please use exact capitalization.")
         if not hits:
-            return None
+            generic = [n for n in names if re.sub(r'[\s_-]', '', n.lower()) in (f'terminal{key}', f'internal{key}')]
+            if not generic:
+                return None
+            # A position-less name (e.g., 'LewisX') means the motif wherever it sits, so take the variant without positional negations and relax its termini
+            idx = min((names.index(n) for n in generic), key = lambda i: motif_list.motif.values[i].count('!'))
+            return motif_list.motif.values[idx], ['flexible'] * len(
+                ast.literal_eval(motif_list.termini_spec.values[idx]))
         name = hits[0]
     idx = names.index(name)
     return motif_list.motif.values[idx], ast.literal_eval(motif_list.termini_spec.values[idx])

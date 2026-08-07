@@ -89,12 +89,12 @@
 
 #### draw
 ##### Added ✨
-- The `highlight_motif` argument in `GlycoDraw` now also accepts motif common names (such as `Internal_LewisX`)
+- The `highlight_motif` argument in `GlycoDraw` now also accepts motif common names (such as `Internal_LewisX`) (8925497)
 
 ##### Changed 🔄
 - Drawing "forbidden" monosaccharides, such as in `GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")`, now automatically makes the forbidden monosaccharides and their linkages transparent (3621350)
 - Saved `GlycoDraw` outputs are now cropped much more tightly, producing less whitespace around the glycan (f3ee7e0)
-- Using named motifs in `GlycoDraw`, such as `Internal_LewisX` is now robust to variant capitalization, spaces, underscores, and hyphens
+- Using named motifs in `GlycoDraw`, such as `Internal_LewisX` is now robust to variant capitalization, spaces, underscores, and hyphens (8925497)
 
 ##### Fixed 🐛
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)

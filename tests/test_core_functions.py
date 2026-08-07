@@ -3399,6 +3399,9 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_motif="iNtErNaLlEwIsX", suppress=True)
     assert result is not None
+    result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc",
+                       highlight_motif = "LewisX", suppress = True)
+    assert result is not None
     result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_linkages=[0, 3], suppress=True)
     assert result is not None
     result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", reducing_end_label = "Mucin", suppress=True)
