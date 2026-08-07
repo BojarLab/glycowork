@@ -3397,6 +3397,8 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)GlcNAc", highlight_motif="Xyl(b1-2)Man", reverse_highlight=True, suppress=True)
     assert result is not None
+    result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_motif="iNtErNaLlEwIsX", suppress=True)
+    assert result is not None
     result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_linkages=[0, 3], suppress=True)
     assert result is not None
     result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", reducing_end_label = "Mucin", suppress=True)
@@ -3420,6 +3422,8 @@ def test_glycodraw():
     result = GlycoDraw("DManpa1-3[DManpa1-6][DXylpb1-2]DManpb1-4DGlcpNAcb1-4[LFucpa1-3]DGlcpNAca1-OH", suppress=True)
     assert result is not None
     result = GlycoDraw("Internal_LewisA", restrict_vocab=True, suppress=True)
+    assert result is not None
+    result = GlycoDraw("oglycan-core1", suppress=True)
     assert result is not None
     # Test narrow monosaccharide wildcards
     result = GlycoDraw("GalNAc/GlcNAc(?1-3/4)Gal/Glc(b1-3)GalNAc", suppress = True)

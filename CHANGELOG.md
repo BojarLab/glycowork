@@ -21,7 +21,7 @@
 - `clr_transformation` now has a new `reference` keyword argument, to optionally specify from which variables the geometric mean should be constructed (a918a2e)
 - `MissForest` now runs left-censored draws where missingness is intensity-dependent (MNAR) and Random Forest for the rest (MAR), where intensity-dependence is estimated via logistic regression (7849b15)
 - `get_alphaN` now has a new `verbose` keyword argument to suppress its print (which is now default `False`, since its output will now be stored as dataframe attributes) (5483f3c)
-- `impute_and_normalize` and `MissForest` now have the new `random_state` keyword argument to make imputation fully reproducible
+- `impute_and_normalize` and `MissForest` now have the new `random_state` keyword argument to make imputation fully reproducible (9630cd0)
 
 ##### Changed 🔄
 - `hotellings_t2` is now more robust to tiny groups (a918a2e)
@@ -60,12 +60,12 @@
 - functions in `.analysis` now can read the stored metadata automatically and act accordingly, supporting easy-calls like `get_differential_expression(glycomics_data_loader.human_brain_N_PMID38343116)` (5483f3c)
 - `preprocess_data` now has the new optional keyword argument `glycoproteomics`, mainly for `get_differential_expression` to pass this info to be able to trigger `get_composition_dag` (c11b4d0)
 - `get_glycanova`, `get_time_series`, and `get_jtk` now have the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type, time series, and circadian glycoform analysis of glycoproteomics data (c11b4d0, f3ee7e0)
-- Added the new optional keyword argument `random_state` to `get_time_series`, `get_jtk`, and `get_SparCC` to make them fully reproducible
+- Added the new optional keyword argument `random_state` to `get_time_series`, `get_jtk`, and `get_SparCC` to make them fully reproducible (9630cd0)
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
 - `get_differential_expression`, `get_glycanova`, `get_time_series`, and `get_jtk` now default to `grouped_BH=True` if they are run in motif-analysis mode (`motifs=True`) (7849b15)
-- `preprocess_data` now propagates `random_state` to data imputation for full re-run reprodubility
+- `preprocess_data` now propagates `random_state` to data imputation for full re-run reprodubility (9630cd0)
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
@@ -88,9 +88,13 @@
 - Made sure `process_for_glycoshift` does not mutate its input (78fe195)
 
 #### draw
+##### Added ✨
+- The `highlight_motif` argument in `GlycoDraw` now also accepts motif common names (such as `Internal_LewisX`)
+
 ##### Changed 🔄
 - Drawing "forbidden" monosaccharides, such as in `GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")`, now automatically makes the forbidden monosaccharides and their linkages transparent (3621350)
 - Saved `GlycoDraw` outputs are now cropped much more tightly, producing less whitespace around the glycan (f3ee7e0)
+- Using named motifs in `GlycoDraw`, such as `Internal_LewisX` is now robust to variant capitalization, spaces, underscores, and hyphens
 
 ##### Fixed 🐛
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)
@@ -124,16 +128,16 @@
 #### regex
 ##### Fixed 🐛
 - Harden treatment of ?-wildcards in `parse_pattern` (8f799c3)
-- `filter_matches_by_location` no longer crashes on empty inner matches
+- `filter_matches_by_location` no longer crashes on empty inner matches (9630cd0)
 
 ##### Deprecated ⚠️
-- Deprecated `all_combinations` (will be handled in-line instead)
+- Deprecated `all_combinations` (will be handled in-line instead) (9630cd0)
 
 ### network
 #### biosynthesis
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)
-- Improved graph caching, which should result in faster `construct_network` calls
+- Improved graph caching, which should result in faster `construct_network` calls (9630cd0)
 
 #### evolution
 ##### Fixed 🐛

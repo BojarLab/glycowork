@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import struct
 import re
+import ast
 from math import sin, cos, radians, sqrt, atan, degrees
 
 
@@ -129,6 +130,23 @@ _SVG_NUMBER = re.compile(r'-?\d+(?:\.\d+)?(?:e-?\d+)?')
 def _get_glycorender():
     from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
     return convert_svg_to_pdf, convert_svg_to_png
+
+
+def resolve_motif_name(
+        name: str, # candidate motif_list name
+) -> tuple[str, list] | None: # (motif sequence, termini spec), or None if name is not a known motif
+    "Maps a motif_list name to its sequence and termini spec, tolerating case/underscore/space/hyphen differences"
+    names = motif_list.motif_name.values.tolist()
+    if name not in names:
+        key = re.sub(r'[\s_-]', '', name.lower())
+        hits = [n for n in names if re.sub(r'[\s_-]', '', n.lower()) == key]
+        if len(hits) > 1:
+            raise ValueError(f"Motif name '{name}' is ambiguous between {hits}; please use exact capitalization.")
+        if not hits:
+            return None
+        name = hits[0]
+    idx = names.index(name)
+    return motif_list.motif.values[idx], ast.literal_eval(motif_list.termini_spec.values[idx])
 
 
 def _drawn_extent(
@@ -1303,10 +1321,11 @@ def GlycoDraw(
     in_glycan = glycan  # motif names, repeat units, and trailing linkages all rewrite glycan below, while a caller-built filename still carries what was passed in
     if libr is None:
         libr = lib
-    if glycan.startswith('Terminal') and glycan not in motif_list.motif_name.values.tolist():
+    if glycan.lower().startswith('terminal') and resolve_motif_name(glycan) is None:
         glycan = glycan.split('_')[-1]
-    if glycan in motif_list.motif_name.values.tolist():
-        glycan = motif_list.loc[motif_list.motif_name == glycan].motif.values[0]
+    motif_hit = resolve_motif_name(glycan)
+    if motif_hit:
+        glycan = motif_hit[0]
     if repeat and not repeat_range:
         _backbone = re.findall(r'.*\((?!.*\()', glycan)[0]
         _conn = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', glycan))
@@ -1323,9 +1342,15 @@ def GlycoDraw(
         main_per_linkage, side_per_linkage, branched_side_per_linkage = process_per_linkage(draw_this, highlight_linkages, glycan)
     if compact:
         show_linkage = False
-    if isinstance(highlight_motif, str) and highlight_motif.startswith('r'):
-        temp = get_match(highlight_motif[1:], draw_this)
-        highlight_motif = temp[0] if temp else None
+    if isinstance(highlight_motif, str):
+        highlight_hit = resolve_motif_name(highlight_motif)
+        if highlight_hit:
+            highlight_motif = highlight_hit[0]
+            if not highlight_termini_list:
+                highlight_termini_list = highlight_hit[1]
+        elif highlight_motif.startswith('r'):
+            temp = get_match(highlight_motif[1:], draw_this)
+            highlight_motif = temp[0] if temp else None
 
     # toggle SNFG vs 2D/3D chem
     if draw_method:
@@ -1621,11 +1646,10 @@ def annotate_figure(
     svg_tmp = svg_tmp.replace('</svg>', '')
     element_id = 0
     edit_svg = False
-    motifs = motif_list.motif_name.values.tolist()
     for match in matches:
         # Keep track of current label and position in figure
         current_label = _LABEL_PATTERN.findall(match)[0]
-        if current_label.startswith('Terminal') and current_label not in motifs:
+        if current_label.lower().startswith('terminal') and resolve_motif_name(current_label) is None:
             if in_lib(current_label.split('_')[-1], lib):
                 edit_svg = True
         # Check if label is glycan
@@ -1634,7 +1658,7 @@ def annotate_figure(
         else:
             pass
         try:
-            glycan = motif_list.loc[motif_list.motif_name == current_label].motif.values.tolist()[0]
+            glycan = resolve_motif_name(current_label)[0]
             if in_lib(glycan, lib) or "!" in glycan:
                 edit_svg = True
             else:
