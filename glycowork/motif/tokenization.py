@@ -38,6 +38,8 @@ with resources.files("glycowork.motif").joinpath("mz_to_composition.csv").open(e
     mapping_file = pd.read_csv(f)
 mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
 HYDROGEN_MASS = 1.007825
+ELECTRON_MASS = 0.000548580
+PROTON_MASS = HYDROGEN_MASS - ELECTRON_MASS  # charge carrier; the H atom is 0.55 mDa heavier
 METHYL_MASS = 14.01565
 modification_mass_dict = {'reduced': 2 * HYDROGEN_MASS, '2AA': 121.0528, '2AB': 120.0688, 'procainamide': 219.1736}
 
@@ -202,7 +204,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
         mz_value -= mass_tag
     adduct_mass = mass_dict['Acetate'] if max_charge < 0 else mass_dict['Na+']
     # Theoretical m/z offset for proton ionization: [M-H]- or [M+H]+
-    ion_offset = -HYDROGEN_MASS if max_charge < 0 else HYDROGEN_MASS
+    ion_offset = -PROTON_MASS if max_charge < 0 else PROTON_MASS
     tol = mass_tolerance if tolerance_unit == "Da" else mz_value * mass_tolerance / 1e6
     comp_pool = [dict(t) for t in dict.fromkeys(tuple(d.items()) for d in df_use.Composition)]
     masses = [(comp, composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep,
@@ -473,7 +475,7 @@ def calculate_adduct_mass(formula: str, # Chemical formula of adduct (e.g., "C2H
     elif enforce_sign:
         return 0
     element_masses = {
-        'monoisotopic': {'C': 12.0000, 'H': 1.0078, 'O': 15.9949, 'N': 14.0031, 'S': 31.9721, 'P': 30.9738, 'Na': 22.9898, 'K': 38.9637, 'Cl': 34.9689},
+        'monoisotopic': {'C': 12.0000, 'H': 1.007825, 'O': 15.994915, 'N': 14.0031, 'S': 31.9721, 'P': 30.9738, 'Na': 22.9898, 'K': 38.9637, 'Cl': 34.9689},
         'average': {'C': 12.0107, 'H': 1.00794, 'O': 15.9994, 'N': 14.0067, 'S': 32.065, 'P': 30.9738, 'Na': 22.9898, 'K': 39.0983, 'Cl': 35.453}
     }
     mass = sum(element_masses[mass_value][el] * (int(n) if n else 1)

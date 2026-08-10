@@ -45,6 +45,8 @@
 - `stemify_dataset` no longer mutates its `stem_lib` input (8f799c3)
 - Fixed edge cases where `structure_to_basic` could poison the graph cache (78fe195)
 - Made sure `pad_sequence` does not mutate its input (78fe195)
+- `Na+` and `K+` masses in `mz_to_composition` now correctly use the cationic mass, rather than the neutral mass
+- Fixed charge modulator from hydrogen mass to proton mass in `mz_to_composition`
 
 ##### Deprecated ⚠️
 
