@@ -3450,7 +3450,7 @@ def test_glycodraw():
 def test_glycodraw_branch_spacing():
     # Verify that heavily branched glycans keep long antennas separated vertically
     glycan = canonicalize_iupac("FA3F2G3S[3,6,6]3")
-    data = get_coordinates_and_labels(glycan, show_linkage=True, highlight_motif=None,
+    data = get_coordinates_and_labels(glycan, highlight_motif=None,
                                       termini_list=[], reverse_highlight=False)
     l1_sugars, l1_y_pos = data[1][0], data[1][2]
     # Extract y positions for branches that contain multiple residues (long arms)

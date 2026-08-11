@@ -1,5 +1,4 @@
 from pathlib import Path
-import inspect
 import pickle
 import pandas as pd
 import numpy as np
@@ -18,7 +17,7 @@ plt.rcParams.update({
 })
 from collections import Counter
 from typing import Any
-from scipy.stats import ttest_ind, ttest_rel, norm, levene, f_oneway, spearmanr
+from scipy.stats import ttest_ind, ttest_rel, norm, levene, f, f_oneway, spearmanr
 from scipy.spatial.distance import squareform, pdist
 
 from glycowork.glycan_data.loader import df_species, strip_suffixes, download_model, GlycoDataFrame
@@ -117,7 +116,9 @@ def preprocess_data(
                                 name = getattr(df, '_glyco_name', ''))
         else:
             df.iloc[:, 1:] = df.iloc[:, 1:] + 0.0000001
-            df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1 if experiment == "diff" else df.columns[1:],
+            clr_group1 = (group1 + group2) if paired else group1
+            df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:],
+                                                clr_group1 if experiment == "diff" else df.columns[1:].tolist(),
                                                 [] if paired else group2, gamma = gamma,
                                                 custom_scale = 0 if paired else custom_scale,
                                                 random_state = random_state)
@@ -133,7 +134,8 @@ def preprocess_data(
         df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist(), abundances = df_org)
         df = df_org + 0.0000001
         if transform == "CLR":
-            df = clr_transformation(df, group1 if experiment == "diff" else df.columns.tolist(),
+            df = clr_transformation(df, (group1 + group2) if paired else (
+                group1 if experiment == "diff" else df.columns.tolist()),
                                     [] if paired else group2,
                                     gamma = gamma, custom_scale = 0 if paired else custom_scale,
                                     random_state = random_state)
@@ -1107,11 +1109,12 @@ def get_glycan_change_over_time(
     else:
         # Polynomial Regression
         coefficients = np.polyfit(time, glycan_abundance, degree)
-        # Calculate the residuals
         residuals = glycan_abundance - np.polyval(coefficients, time)
-        # Perform F-test to get p_value
-        _, p_value = f_oneway(glycan_abundance, residuals,
-                              **({'equal_var': False} if 'equal_var' in inspect.signature(f_oneway).parameters else {}))
+        n = len(time)
+        ss_res, ss_tot = float(np.sum(residuals ** 2)), float(np.sum((glycan_abundance - glycan_abundance.mean()) ** 2))
+        df_resid = n - degree - 1
+        p_value = 1.0 if (df_resid < 1 or ss_res <= 0 or ss_tot <= ss_res) else float(
+            f.sf(((ss_tot - ss_res) / degree) / (ss_res / df_resid), degree, df_resid))
     return coefficients, p_value
 
 

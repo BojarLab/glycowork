@@ -496,9 +496,9 @@ def train_ml_model(X_train: pd.DataFrame | list,  # training data/glycans
             X_test[k] = 0
         X_train = X_train.apply(pd.to_numeric)
         X_test = X_test.apply(pd.to_numeric)
-    if additional_features_train is not None:
-        additional_features_train.index = X_train.index
-        additional_features_test.index = X_test.index
+    if additional_features_train is not None and additional_features_test is not None:
+        additional_features_train = additional_features_train.set_axis(X_train.index)
+        additional_features_test = additional_features_test.set_axis(X_test.index)
         X_train = pd.concat([X_train, additional_features_train], axis = 1)
         X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")

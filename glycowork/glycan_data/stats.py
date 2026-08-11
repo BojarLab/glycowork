@@ -45,7 +45,7 @@ def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group contai
         x = np.array(x) - np.array(y)
         y = np.zeros_like(x)
     x, y = np.asarray(x), np.asarray(y)
-    pooled_cov_inv = np.linalg.pinv((np.cov(x) + np.cov(y)) / 2)
+    pooled_cov_inv = np.linalg.pinv(np.cov(x) if paired else (np.cov(x) + np.cov(y)) / 2)
     diff_means = (np.mean(y, axis = 1) - np.mean(x, axis = 1)).reshape(-1, 1)
     mahalanobis_d = np.sqrt(np.clip(diff_means.T @ pooled_cov_inv @ diff_means, 0, None))
     return mahalanobis_d[0][0]
@@ -717,7 +717,7 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
         variances = abs(df[group1].var(axis = 1))
     procrustes_corr = [1 - procrustes(ref_matrix.drop(ref_matrix.index[i]),
                                       alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng))[2] for i in range(df.shape[0])]
-    return [a * (1/b) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
+    return [a / max(b, 1e-8) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
 
 def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
@@ -757,7 +757,7 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
     corrpvals = multipletests(pvals, method = 'fdr_tsbh' if correction_method == "two-stage" else 'fdr_bh')[1]
     corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
     significance = [bool(p < alpha) for p in corrpvals]
-    if sum(significance) > 0.9*len(significance):
+    if len(significance) >= 10 and sum(significance) > 0.9*len(significance):
         print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value.\
              Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
         corrpvals = multipletests(pvals, method = 'bonferroni')[1]

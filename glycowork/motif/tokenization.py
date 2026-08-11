@@ -249,7 +249,7 @@ def match_composition_relaxed(composition: dict[str, int], # Dictionary indicati
         for glycan in df_use.glycan.values.tolist():
             index[frozenset(glycan_to_composition(glycan).items())].append(glycan)
         _COMPOSITION_INDEX[key] = (df_use, index)
-    return _COMPOSITION_INDEX[key][1].get(frozenset(composition.items()), [])
+    return list(_COMPOSITION_INDEX[key][1].get(frozenset(composition.items()), []))
 
 
 def condense_composition_matching(matched_composition: list[str] # List of matching glycans

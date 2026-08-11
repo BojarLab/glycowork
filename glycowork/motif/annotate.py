@@ -492,7 +492,7 @@ def get_k_saccharides(
         raise TypeError("The input has to be a list or set of glycans")
     if any(k in ''.join(glycans) for k in (';', 'β', 'α', 'RES', '=')):
         raise Exception
-    if not up_to and max(g.count('(') + 1 for g in glycans) < size:
+    if not glycans or (not up_to and max(g.count('(') + 1 for g in glycans) < size):
         return [] if just_motifs else pd.DataFrame()
     if up_to:
         wga_letter_data = []

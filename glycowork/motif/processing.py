@@ -203,8 +203,8 @@ def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: H
                                  ) -> set[str]: # Matching monosaccharides
     "Retrieves all matching common monosaccharides of a type"
     if '/' in wildcard:
-        return set(wildcard.split('/'))
-    return _WILDCARD_MONO.get(wildcard, set())
+        return frozenset(wildcard.split('/'))
+    return frozenset(_WILDCARD_MONO.get(wildcard, ()))
 
 
 def de_wildcard_glycoletter(glycoletter: str # Monosaccharide or linkage with wildcards
@@ -1269,7 +1269,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = glycoworkbench_to_iupac(glycan)
     elif bool(re.fullmatch(r'^[UDGIg][02][AaSH](0|3|4|6|9|10)$', glycan)):
         glycan = GAG_disaccharide_to_iupac(glycan)
-    elif not isinstance(glycan, str) or '@' in glycan:
+    elif '@' in glycan:
         check_nomenclature(glycan)
     elif "(Man)3(GlcNAc)2" in glycan:
         glycan = nglycan_stub_to_iupac(glycan)

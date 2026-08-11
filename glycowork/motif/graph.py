@@ -108,8 +108,6 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
                           termini_list: tuple[str] | None = None # List of positions from terminal/internal/flexible
                           ) -> nx.DiGraph: # NetworkX graph object of glycan
     "Convert glycans into networkx graphs"
-    if isinstance(libr, dict):
-        libr = HashableDict(libr)  # Convert to HashableDict for consistency and user friendliness
     # This allows to make glycan graphs of motifs ending in a linkage
     appended_hex = glycan.endswith(')')
     if appended_hex:
@@ -120,7 +118,7 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
     edges = np.where(np.triu(adj_matrix, k = 1).T)  # k=1 excludes diagonal
     g1 = nx.DiGraph()
     g1.add_nodes_from(node_dict.keys())
-    g1.add_edges_from(zip(edges[0], edges[1]))
+    g1.add_edges_from(zip(edges[0].tolist(), edges[1].tolist()))
     # Remove the helper monosaccharide if used
     if appended_hex and glycan.endswith('x'):
         last_node = len(node_dict) - 1
@@ -148,6 +146,8 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
     "Wrapper for converting glycans into networkx graphs; also works with floating substituents"
     if not glycan:
         return nx.DiGraph()
+    if isinstance(libr, dict) and not isinstance(libr, HashableDict):
+        libr = HashableDict(libr)
     if any(k in glycan for k in [';', 'β', 'α', 'RES', '=']):
         raise Exception
     termini_list = expand_termini_list(glycan, termini_list) if termini_list else None
@@ -355,8 +355,8 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
         if 'O' in glycan or 'O' in motif:
             glycan, motif = PTM_REGEX.sub('O', glycan), PTM_REGEX.sub('O', motif)
         motif_comp = min_process_glycans([motif, glycan])
-        g1 = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else None)
-        g2 = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else None, termini_list = termini_list)
+        g1 = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else 'ignore')
+        g2 = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else 'ignore', termini_list = termini_list)
     else:
         if len(glycan.nodes) < len(motif.nodes):
             return (0, []) if return_matches else 0 if count else False
@@ -436,8 +436,8 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
         return (0, []) if return_matches else 0 if count else False
     valid_matches = []
     negated_len = len(negated_part_clean)
+    ggraph = glycan_to_nxGraph(glycan) if isinstance(glycan, str) else glycan
     for match_nodes in res[1]:
-        ggraph = glycan_to_nxGraph(glycan) if isinstance(glycan, str) else glycan.copy()
         context_nodes = set(match_nodes)
         for _ in range(negated_len):
             for node in list(context_nodes):

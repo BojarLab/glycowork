@@ -454,7 +454,6 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                'kamada_kawai': lambda: nx.kamada_kawai_layout(network),
                'spring': lambda: nx.spring_layout(network, k = 0.5, seed = 42)}.get(plot_format, lambda: nx.kamada_kawai_layout(network))()
     node_attributes = nx.get_node_attributes(network, 'abundance')
-    node_sizes = list(node_attributes.values()) if node_attributes else [50] * network.number_of_nodes()
     virtual_attrs = nx.get_node_attributes(network, 'virtual')
     origin_attrs = nx.get_node_attributes(network, 'origin')
     edge_attributes = nx.get_edge_attributes(network, 'diffs')
@@ -465,7 +464,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         node_data['x'].append(x)
         node_data['y'].append(y)
         node_data['name'].append(str(node))
-        node_data['size'].append(node_sizes[i]/2 if node_sizes else 25)
+        node_data['size'].append(node_attributes.get(node, 50) / 2)
         if origin_attrs:
             node_data['color'].append(origin_attrs.get(node, 'cornflowerblue'))
         else:
@@ -669,7 +668,7 @@ def choose_path(diamond: dict[int, str], # Diamond node positions mapping to gly
     source, target = diamond[1], diamond[path_length]
     alternatives = [tuple(diamond[k] for k in range(2, path_length)),
                     tuple(diamond[k] for k in range(path_length + 1, 2 * path_length - 1))]
-    if len(alternatives) < 2:
+    if any(not alt for alt in alternatives) or alternatives[0] == alternatives[1]:
         return {}
     alts = {alt: [] for alt in alternatives}
     # For each species, check whether an alternative has been observed
@@ -849,17 +848,18 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
     elif highlight == 'conservation':
         species_list = conservation_df['Species'].unique().tolist()
         spec_nodes = {k: set(network_dic[k].nodes()) for k in species_list}
-        flat_spec_nodes = [node for nodes in spec_nodes.values() for node in nodes]
-        node_conservation = {k: flat_spec_nodes.count(k) * 100 for k in network_out.nodes()}
+        node_counts = Counter(node for nodes in spec_nodes.values() for node in nodes)
+        node_conservation = {k: node_counts[k] * 100 for k in network_out.nodes()}
         nx.set_node_attributes(network_out, node_conservation, name = 'abundance')
     return network_out
 
 
-def get_edge_weight_by_abundance(network: nx.DiGraph, # Biosynthetic network
+def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
                                  root: str = "Gal(b1-4)Glc-ol", # Root node
                                  root_default: float = 10.0 # Root abundance
                                  ) -> nx.DiGraph: # Network with edge capacities
     "Estimate reaction capacity (edge attribute) from node abundances"
+    network = network_in.copy()
     abundance_dict = nx.get_node_attributes(network, 'abundance')
     if abundance_dict.get(root, 1) < 0.1:
         abundance_dict[root] = root_default
@@ -878,12 +878,14 @@ def estimate_weights(network: nx.DiGraph, # Biosynthetic network
     "Estimate reaction capacity (edge attribute) and missing abundances"
     net_estimated = get_edge_weight_by_abundance(network, root = root, root_default = root_default)
     # Function to estimate weight based on neighboring edges
+
     def estimate_weight(node):
-        in_weights = [network[u][node]['capacity'] for u in network.predecessors(node) if network[u][node]['capacity'] != 0]
-        out_weights = [network[node][v]['capacity'] for v in network.successors(node) if network[node][v]['capacity'] != 0]
-        return np.mean(in_weights + out_weights) if in_weights or out_weights else min_default  # Small default value if no non-zero neighboring weights
+        in_weights = [net_estimated[u][node]['capacity'] for u in net_estimated.predecessors(node) if net_estimated[u][node]['capacity'] != 0]
+        out_weights = [net_estimated[node][v]['capacity'] for v in net_estimated.successors(node) if net_estimated[node][v]['capacity'] != 0]
+        return np.mean(in_weights + out_weights) if in_weights or out_weights else min_default
+
     # Estimate weights for zero-weight intermediates
-    zero_weight_nodes = [node for node in net_estimated.nodes if all(net_estimated[node][v]['capacity'] == 0 for v in net_estimated.successors(node))]
+    zero_weight_nodes = [node for node in net_estimated.nodes if net_estimated.out_degree(node) > 0 and all(net_estimated[node][v]['capacity'] == 0 for v in net_estimated.successors(node))]
     for node in zero_weight_nodes:
         estimated_weight = estimate_weight(node)
         for v in net_estimated.successors(node):
@@ -1010,7 +1012,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     else:
         df_analysis = df_analysis.T
     # Network analysis
-    root = list(infer_roots(frozenset(df_analysis.index.tolist())))
+    root = sorted(infer_roots(frozenset(df_analysis.index.tolist())))
     root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
     min_default = 0.1 if root.endswith('GlcNAc') else 0.001
     core_net = construct_network(df_analysis.index.tolist())
@@ -1043,8 +1045,9 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         res2 = {k: {**v, **{r: np.mean([v[k2] for k2 in shadow_reactions[r]]) for r in shadow_reactions}} for k, v in
                 res2.items()}
     elif analysis == "flow":
-        res2 = {col: [res[col][sink]['flow_value'] for sink in res[col].keys()] for col in nets}
-        features = res[col].keys()
+        sinks = sorted({sink for r in res.values() for sink in r})
+        res2 = {col: [res[col][sink]['flow_value'] if sink in res[col] else 0.0 for sink in sinks] for col in nets}
+        features = sinks
     else:
         raise ValueError("Only 'reaction' and 'flow' are currently supported analysis modes.")
     res2 = pd.DataFrame(res2).T

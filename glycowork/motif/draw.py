@@ -689,12 +689,11 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
 def get_coordinates_and_labels(
         draw_this: str, # IUPAC-condensed glycan sequence
         highlight_motif: str | None, # Motif to highlight
-        show_linkage: bool = True, # Show linkage labels
         termini_list: list = [], # Terminal position specifications (from 'terminal', 'internal', and 'flexible')
         reverse_highlight: bool = False # Whether to highlight everything EXCEPT highlight_motif
 ) -> list[list]: # Drawing coordinates and labels (monosaccharide label, x position, y position, modification, bond, conformation)
     "Calculates drawing coordinates and formats labels for glycan visualization"
-    graph = glycan_to_nxGraph(draw_this, termini = 'calc' if termini_list else 'ignore')
+    graph = glycan_to_nxGraph(draw_this, termini = 'calc' if termini_list else 'ignore').copy()
     graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list, reverse_highlight = reverse_highlight)
     node_values = list(nx.get_node_attributes(graph, 'string_labels').values())
     highlight_values = list(nx.get_node_attributes(graph, 'highlight_labels').values())
@@ -1391,7 +1390,7 @@ def GlycoDraw(
         else:
             raise Exception('Did you enter a real glycan or motif?')
 
-    data = get_coordinates_and_labels(draw_this, show_linkage = show_linkage, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
+    data = get_coordinates_and_labels(draw_this, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
 
     main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label = data[0]
     l1_sugar, l1_x_pos, l1_y_pos, l1_sugar_modification, l1_bond, l1_connection, l1_conf, l1_sugar_label, l1_bond_label = data[1]
@@ -1498,9 +1497,9 @@ def GlycoDraw(
         floaty_data = []
         for k, k_val in enumerate(floaty_bits):
             if in_lib(min_process_glycans([k_val])[0][0], libr):
-                floaty_data.append(get_coordinates_and_labels(k_val, show_linkage = show_linkage, highlight_motif = None))
+                floaty_data.append(get_coordinates_and_labels(k_val, highlight_motif = None))
             else:
-                floaty_data.append(get_coordinates_and_labels('blank(-)blank', show_linkage = show_linkage, highlight_motif = None))
+                floaty_data.append(get_coordinates_and_labels('blank(-)blank', highlight_motif = None))
         n_floats = len(floaty_bits)
         y_spacing = (y_span / (n_floats - 1)) if n_floats > 1 else 0
         for j, j_val in enumerate(floaty_data):
@@ -1532,7 +1531,7 @@ def GlycoDraw(
                      zip(l1_x_pos + l2_x_pos + l3_x_pos, l1_y_pos + l2_y_pos + l3_y_pos) for x, y in zip(xs, ys)}
         for bit, bit_anchors in anchored_bits:
             a_sugar, a_x_pos, a_y_pos, a_modification, a_bond, a_conf, _, _ = \
-                get_coordinates_and_labels(bit, show_linkage = show_linkage, highlight_motif = None)[0]
+                get_coordinates_and_labels(bit, highlight_motif = None)[0]
             for linkage, anchor in bit_anchors.items():
                 for n in resolve_anchor(anchor_graph, anchor):
                     lane, b, i = node_positions[n]
@@ -1735,7 +1734,10 @@ def plot_glycans_excel(
             return self.ref.read()
 
     if isinstance(df, (str, Path)):
-        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(df).suffix.lower() == ".tsv" else pd.read_excel(df)
+        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
+            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    else:
+        df = df.copy()
     df["SNFG"] = [np.nan for k in range(len(df))]
     image_column_number = df.columns.tolist().index("SNFG") + 1
     # Convert df_out to Excel
