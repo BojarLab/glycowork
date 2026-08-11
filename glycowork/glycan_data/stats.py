@@ -6,6 +6,7 @@ from math import factorial
 from collections import Counter
 from scipy.stats import rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
 from scipy.spatial import procrustes
+from scipy.special import digamma, polygamma
 from scipy.spatial.distance import squareform
 import scipy.integrate as integrate
 rng = np.random.default_rng(42)
@@ -794,6 +795,45 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
         corrpvals = multipletests(pvals, method = 'bonferroni')[1]
         significance = [bool(p < alpha) for p in corrpvals]
     return corrpvals, significance
+
+
+def moderated_variance(residual_var: np.ndarray, # per-feature within-group variance
+                       df_resid: int, # residual degrees of freedom of the design
+                       neighbors: list[list[int]] | None = None # per-feature indices of containment neighbors, for a local prior
+                       ) -> tuple[np.ndarray, float]: # (posterior variance per feature, posterior degrees of freedom)
+    "Empirical-Bayes moderation of feature variances; the prior is the geometric mean over each feature's containment neighborhood, or over all features when no graph is given"
+    s2 = np.maximum(np.asarray(residual_var, dtype = float), 1e-12)
+    ls2 = np.log(s2)
+    # Smyth's moment estimator for the prior degrees of freedom, so the amount of shrinkage is set by the data rather than chosen
+    z = ls2 - digamma(df_resid / 2) + np.log(df_resid / 2)
+    v = (np.var(z, ddof = 1) if len(z) > 1 else 0.0) - polygamma(1, df_resid / 2)
+    if v <= 0 or not np.isfinite(v):
+        d0 = float(df_resid)  # variances look homogeneous, so shrink as hard as the cap allows
+    else:
+        x = 0.5 / v + 0.5
+        for _ in range(50):  # Newton inversion of the trigamma function
+            tri = polygamma(1, x)
+            dx = tri * (1 - tri / v) / polygamma(2, x)
+            x += dx
+            if abs(dx / x) < 1e-8:
+                break
+        # the prior may contribute at most as much information as the data, which stops a chance-homogeneous variance set from producing absurdly small p-values in tiny cohorts
+        d0 = float(np.clip(2 * x, 0.1, df_resid))
+    # Motifs that contain one another are measured on overlapping structures and so share measurement noise, which makes them a better variance reference than unrelated motifs
+    prior = np.array([np.exp(np.mean(ls2[nb + [i]])) if neighbors and nb else np.exp(np.mean(ls2))
+                      for i, nb in enumerate(neighbors if neighbors else [[]] * len(s2))])
+    return (d0 * prior + df_resid * s2) / (d0 + df_resid), df_resid + d0
+
+
+def dag_neighbors(index: list[str], # feature labels in the order they are tested
+                   dag # containment DAG, or None for a global prior
+                   ) -> list[list[int]] | None: # per-feature positions of parents and children
+    "Positions of each feature's parents and children in the containment DAG, for use as a local variance prior"
+    if dag is None:
+        return None
+    pos = {g: i for i, g in enumerate(index)}
+    return [sorted({pos[x] for x in list(dag.predecessors(g)) + list(dag.successors(g)) if x in pos}) if g in dag else []
+            for g in index]
 
 
 def omega_squared(row: pd.Series | np.ndarray | pd.DataFrame, # values for one feature, or a whole feature x sample frame

@@ -17,7 +17,7 @@ plt.rcParams.update({
 })
 from collections import Counter
 from typing import Any
-from scipy.stats import ttest_ind, ttest_rel, norm, levene, f, f_oneway, spearmanr
+from scipy.stats import ttest_ind, ttest_rel, norm, levene, f, f_oneway, spearmanr, t as t_dist
 from scipy.spatial.distance import squareform, pdist
 
 from glycowork.glycan_data.loader import df_species, strip_suffixes, download_model, GlycoDataFrame
@@ -29,7 +29,8 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation,
                                          correct_multiple_testing,
-                                         omega_squared, get_glycoform_diff, process_glm_results, partial_corr,
+                                         omega_squared, moderated_variance, dag_neighbors,
+                                         get_glycoform_diff, process_glm_results, partial_corr,
                                          estimate_technical_variance,
                                          perform_tests_monte_carlo)
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
@@ -661,6 +662,8 @@ def get_differential_expression(
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
+        moderate_variance: bool = True,
+        # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool = False,  # Whether data is from glycoproteomics
         level: str = 'peptide',  # Analysis level for glycoproteomics
         monte_carlo: bool = False,  # Use Monte Carlo for technical variation
@@ -724,7 +727,20 @@ def get_differential_expression(
             levene_pvals = [1.0] * len(pvals)
         else:
             A, B = df_a.values, df_b.values
-            pvals = list((ttest_rel(B, A, axis = 1) if paired else ttest_ind(B, A, axis = 1, equal_var = False))[1])
+            if moderate_variance and len(A) > 1:
+                # Shrinking each feature's variance toward its containment neighborhood stabilizes the small samples typical of glycomics, without touching the reported effect sizes
+                D = B - A if paired else None
+                resid = (D.var(axis = 1, ddof = 1) if paired else
+                         ((A.shape[1] - 1) * A.var(axis = 1, ddof = 1) + (B.shape[1] - 1) * B.var(axis = 1,
+                                                                                                  ddof = 1)) / (
+                                     A.shape[1] + B.shape[1] - 2))
+                dfr = (A.shape[1] - 1) if paired else (A.shape[1] + B.shape[1] - 2)
+                s2, dfp = moderated_variance(resid, dfr, dag_neighbors(glycans, df_org.attrs.get('motif_dag')))
+                se = np.sqrt(s2 / A.shape[1]) if paired else np.sqrt(s2 * (1 / A.shape[1] + 1 / B.shape[1]))
+                delta = D.mean(axis = 1) if paired else (B.mean(axis = 1) - A.mean(axis = 1))
+                pvals = list(2 * t_dist.sf(np.abs(delta / se), dfp))
+            else:
+                pvals = list((ttest_rel(B, A, axis = 1) if paired else ttest_ind(B, A, axis = 1, equal_var = False))[1])
             equivalence_pvals = np.full(len(A), np.nan)
             todo = np.array(pvals) > alpha
             if todo.any():
@@ -956,7 +972,9 @@ def get_glycanova(
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
-        glycoproteomics: bool = False, # Whether rows are glycoforms from glycoproteomics instead of glycans
+        moderate_variance: bool = True,
+        # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
+        glycoproteomics: bool = False,  # Whether rows are glycoforms from glycoproteomics instead of glycans
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> tuple[GlycoDataFrame, dict[
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
@@ -980,6 +998,15 @@ def get_glycanova(
     garr, X = np.asarray(groups), df.values
     # One-way ANOVA on a fixed design is the same F for every feature, so all features go through one vectorized call instead of one formula parse and OLS fit each
     f_values, p_values = f_oneway(*[X[:, garr == g] for g in np.unique(garr)], axis = 1)
+    if moderate_variance and len(X) > 1:
+        # Shrinking each feature's residual variance toward its containment neighborhood stabilizes the F test without touching the reported effect sizes
+        ug = np.unique(garr)
+        gm, dfr = X.mean(axis = 1, keepdims = True), X.shape[1] - len(ug)
+        ssb = sum(((X[:, garr == g].mean(axis = 1, keepdims = True) - gm) ** 2).ravel() * (garr == g).sum() for g in ug)
+        ssw = sum(((X[:, garr == g] - X[:, garr == g].mean(axis = 1, keepdims = True)) ** 2).sum(axis = 1) for g in ug)
+        s2, dfp = moderated_variance(ssw / dfr, dfr, dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag')))
+        f_values = (ssb / (len(ug) - 1)) / s2
+        p_values = f.sf(f_values, len(ug) - 1, dfp)
     results = list(zip(df.index, f_values, p_values))
     if posthoc:
         for i, glycan in enumerate(df.index):

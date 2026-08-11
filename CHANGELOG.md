@@ -32,7 +32,7 @@
 
 ##### Fixed 🐛
 - Fixed sum of squares calculation in `calculate_permanova_stat` (5483f3c)
-- `hsic` is now correctly symmetrical
+- `hsic` is now correctly symmetrical (7bf463b)
 
 ### motif
 #### tokenization
@@ -65,6 +65,7 @@
 - `preprocess_data` now has the new optional keyword argument `glycoproteomics`, mainly for `get_differential_expression` to pass this info to be able to trigger `get_composition_dag` (c11b4d0)
 - `get_glycanova`, `get_time_series`, and `get_jtk` now have the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type, time series, and circadian glycoform analysis of glycoproteomics data (c11b4d0, f3ee7e0)
 - Added the new optional keyword argument `random_state` to `get_time_series`, `get_jtk`, and `get_SparCC` to make them fully reproducible (9630cd0)
+- Added the new optional keyword argument `moderate_variance` to `get_differential_expression` and `get_glycanova` to support Empirical-Bayes variance moderation
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
