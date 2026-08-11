@@ -334,16 +334,23 @@ def get_composition_dag(
     cols = list(comp)
     residues = sorted({r for d in comp.values() for r in d})
     V = np.array([[comp[c].get(r, 0) for r in residues] for c in cols])
+    A = abundances.loc[cols].values if abundances is not None else None
     dag = nx.DiGraph()
     dag.add_nodes_from(cols)
-    A = abundances.loc[cols].values if abundances is not None else None
-    for i, p in enumerate(cols):
-        # p contained in c implies every glycoform counted toward c is counted toward p, hence abundance dominance is a necessary condition and an exact prefilter
-        dom = (A <= A[i] + 1e-9).all(axis = 1) if A is not None else np.ones(len(cols), dtype = bool)
-        for j, c in enumerate(cols):
-            # equal compositions are ordered by position, which makes the order total and the DAG acyclic; glycoforms of different glycosites are separate compositional systems and never contain one another
-            if i != j and site[p] == site[c] and dom[j] and (V[i] <= V[j]).all() and ((V[i] < V[j]).any() or i < j):
-                dag.add_edge(p, c)
+    blocks = {}
+    for i, c in enumerate(cols):
+        blocks.setdefault(site[c], []).append(i)
+    for members in blocks.values():
+        # glycoforms of different glycosites are separate compositional systems and never contain one another, so containment is decided one site block at a time and never across the full n^2
+        m = np.array(members)
+        le = (V[m][:, None, :] <= V[m][None, :, :]).all(2)
+        # equal compositions are ordered by position, which makes the order total and the DAG acyclic
+        M = le & (~le.T | (m[:, None] < m[None, :]))
+        if A is not None:
+            # p contained in c implies every glycoform counted toward c is counted toward p, hence abundance dominance is a necessary condition and an exact prefilter
+            M &= (A[m][None, :, :] <= A[m][:, None, :] + 1e-9).all(2)
+        np.fill_diagonal(M, False)
+        dag.add_edges_from((cols[m[i]], cols[m[j]]) for i, j in zip(*np.nonzero(M)))
     return nx.transitive_reduction(dag)
 
 

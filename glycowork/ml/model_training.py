@@ -185,8 +185,10 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                         pred2 = (pred_proba >= 0.5).astype(int)
                     running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
                     running_metrics["mcc"].append(matthews_corrcoef(y_det, pred2))
+                    # A batch that happens to hold one class has no defined AUROC; sklearn already returns nan for it, just noisily
                     running_metrics["auroc"].append(
-                        roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' else np.nan)
+                        roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' and len(
+                            np.unique(y_det)) > 1 else np.nan)
                 elif mode == 'multilabel':
                     pred_proba = sigmoid(pred_det)
                     pred2 = (pred_proba >= 0.5).astype(int)
@@ -202,7 +204,11 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
             for key in running_metrics:
                 if key == "weights":
                     continue
-                metrics[phase][key].append(np.average(running_metrics[key], weights = running_metrics["weights"]))
+                vals, wts = np.asarray(running_metrics[key], dtype = float), np.asarray(running_metrics["weights"],
+                                                                                        dtype = float)
+                ok = ~np.isnan(vals)
+                # A metric that is undefined for some batches (AUROC on a single-class batch) should drop those batches, not poison the epoch average
+                metrics[phase][key].append(np.average(vals[ok], weights = wts[ok]) if ok.any() else np.nan)
             if mode == 'classification':
                 print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1],
                                                                             metrics[phase]["acc"][-1],

@@ -1,8 +1,10 @@
 import pandas as pd
 import numpy as np
-import warnings
+from functools import lru_cache
+from itertools import permutations as iter_permutations
+from math import factorial
 from collections import Counter
-from scipy.stats import rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind
+from scipy.stats import rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
 from scipy.spatial import procrustes
 from scipy.spatial.distance import squareform
 import scipy.integrate as integrate
@@ -14,25 +16,24 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
             y: np.ndarray | list[float], # comparison group containing numerical data
             paired: bool = False # whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient)
             ) -> tuple[float, float]: # (Cohen's d, variance) where d: 0.2 small; 0.5 medium; 0.8 large effect size
-    "calculates effect size between two groups"
+    "calculates effect size between two groups, for one feature or for a whole feature x sample frame"
+    X, Y = np.atleast_2d(np.asarray(x, dtype = float)), np.atleast_2d(np.asarray(y, dtype = float))
     if paired:
-        assert len(x) == len(y), "For paired samples, the size of x and y should be the same"
-        diff = np.asarray(x) - np.asarray(y)
-        diff_std = np.std(diff, ddof = 1)
-        if diff_std == 0:
-            return (np.inf if np.mean(diff) > 0 else -np.inf), 0
-        n = len(diff)
-        d = np.mean(diff) / diff_std
-        var_d = 1 / n + d**2 / (2 * n)
+        assert X.shape == Y.shape, "For paired samples, the size of x and y should be the same"
+        diff = X - Y
+        n, mean_diff = diff.shape[1], diff.mean(axis = 1)
+        diff_std = np.std(diff, axis = 1, ddof = 1)
+        # A degenerate difference has an unbounded standardized effect and no sampling variance left to report
+        degenerate = diff_std == 0
+        d = np.where(degenerate, np.where(mean_diff == 0, 0.0, np.where(mean_diff > 0, np.inf, -np.inf)),
+                     mean_diff / np.where(degenerate, 1, diff_std))
+        var_d = np.where(degenerate, 0.0, 1 / n + np.where(degenerate, 0, d) ** 2 / (2 * n))
     else:
-        nx = len(x)
-        ny = len(y)
-        sx = max(np.std(x, ddof = 1), 1e-6)
-        sy = max(np.std(y, ddof = 1), 1e-6)
-        dof = nx + ny - 2
-        d = (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1) * sx ** 2 + (ny-1) * sy ** 2) / dof)
+        nx, ny = X.shape[1], Y.shape[1]
+        sx, sy = np.maximum(np.std(X, axis = 1, ddof = 1), 1e-6), np.maximum(np.std(Y, axis = 1, ddof = 1), 1e-6)
+        d = (X.mean(axis = 1) - Y.mean(axis = 1)) / np.sqrt(((nx-1) * sx ** 2 + (ny-1) * sy ** 2) / (nx + ny - 2))
         var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
-    return d, var_d
+    return (d, var_d) if np.ndim(x) > 1 else (d[0], var_d[0])
 
 
 def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
@@ -189,8 +190,8 @@ class MissForest:
                         # Replace missing values in the current column with predictions
                         total_change += np.sum(np.abs(X_transform.loc[missing_idx, column] - y_missing_pred))
                         X_transform.loc[missing_idx, column] = y_missing_pred
-            # Check for convergence
-            if total_change < self.tol:
+            # Convergence has to be judged against the scale of the values being imputed, or an absolute threshold on a sum of abundances is never met and every pass is always paid for
+            if total_change < self.tol * max(np.abs(X_transform.values[X_nan.values]).sum(), 1.0):
                 break  # Break out of the loop if converged
         # Avoiding zeros
         X_transform += 1e-6
@@ -211,8 +212,8 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     "discards rows with too many missings, imputes the rest, and normalizes"
     df = df_in.copy()
     if min_samples:
-        min_count = max(np.floor(df.shape[1] * min_samples), 1) + 1
-        mask = (df != 0).sum(axis = 1) >= min_count
+        min_count = max(np.floor((df.shape[1] - 1) * min_samples), 1)
+        mask = (df.iloc[:, 1:] != 0).sum(axis = 1) >= min_count
         df = df[mask].reset_index(drop = True)
     colname = df.columns[0]
     glycans = df[colname]
@@ -290,7 +291,10 @@ class JTKTest:
                 jtk = (abs(S) + self.max_stat) / 2
                 p_val = 2 * norm.cdf(-(jtk - 0.5), -self.max_stat/2, np.sqrt(self.variance))
                 if p_val < best_stats[0]:
-                    best_stats = (p_val, period, phase * self.interval, S/self.max_stat)
+                    # The reference waveform is shifted backwards, and |S| makes an antiphase match score identically, so the reported lag has to be un-mirrored and offset by half a period when S is negative
+                    best_stats = (p_val, period,
+                                  (period - phase * self.interval - (0 if S > 0 else period / 2)) % period,
+                                  S / self.max_stat)
         return best_stats
 
 
@@ -335,6 +339,8 @@ def pi0_tst(p_values: np.ndarray, # array of p-values
     "estimate the proportion of true null hypotheses in a set of p-values"
     alpha_prime = alpha / (1 + alpha)
     n = len(p_values)
+    if not n:
+        return 1.0  # an empty family has nothing to reject, so no signal is the only defensible estimate
     # Apply the BH procedure at level α'
     sorted_indices = np.argsort(p_values)
     sorted_p_values = p_values[sorted_indices]
@@ -358,7 +364,9 @@ def TST_grouped_benjamini_hochberg(identifiers_grouped: dict[str, list], # dicti
     adjusted_p_values = {}
     significance_dict = {}
     for group, group_p_values in p_values_grouped.items():
-        group_p_values = np.array(group_p_values)
+        group_p_values = np.array(group_p_values, dtype = float)
+        if not len(group_p_values):
+            continue
         # Estimate π0 for the group within the Two-Stage method
         pi0_estimate = pi0_tst(group_p_values, alpha)
         # π0 = 1 just means stage 1 found no signal in this family; standard TST then falls back to ordinary within-group BH (adjusted_alpha = alpha below), instead of discarding the whole family, which silently wipes out sparse-signal conditions
@@ -387,42 +395,32 @@ def compare_inter_vs_intra_group(cohort_b: pd.DataFrame, # dataframe of glycans 
                                  grouped_glycans: dict[str, list[str]], # dictionary of type group : glycans
                                  paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
                                  ) -> tuple[float, float]: # (intra-group correlation, inter-group correlation)
-    "estimates intra- and inter-group correlation of a given grouping of glycans via a mixed-effects model"
-    from statsmodels.tools.sm_exceptions import ConvergenceWarning
-    import statsmodels.formula.api as smf
+    "estimates intra- and inter-group correlation of a given grouping of glycans via a two-way variance decomposition"
+    # With no features or no samples left there is no variance to decompose, and every mean below would reduce over an empty axis
+    if not len(glycans) or not cohort_b.shape[0] or not cohort_b.shape[1]:
+        return (0.0, 0.0)
     reverse_lookup = {k: v for v, l in grouped_glycans.items() for k in l}
     if paired:
-        temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8))))
+        Y = np.log2(abs((cohort_b.values + 1e-8) / (cohort_a.values + 1e-8)))
     else:
-        mean_cohort_a = np.mean(cohort_a, axis = 1).values[:, np.newaxis] + 1e-8
-        temp = pd.DataFrame(np.log2(abs((cohort_b.values + 1e-8) / mean_cohort_a)))
-    temp.index = glycans
-    temp = temp.reset_index()
-    # Melt the dataframe to long format
-    temp = temp.melt(id_vars = 'index', var_name = 'glycan', value_name = 'measurement')
-    # Rename the columns appropriately
-    temp.columns= ["glycan", "sample_id", "diffs"]
-    temp["group_id"] = [reverse_lookup[g] for g in temp.glycan]
-    # Define the model
-    md = smf.mixedlm("diffs ~ C(group_id)", temp,
-                     groups = temp["sample_id"],
-                     re_formula = "~1",  # Random intercept for glycans
-                     vc_formula = {"glycan": "0 + C(glycan)"}) # Variance component for glycans
-    # Fit the model
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category = ConvergenceWarning)
-        mdf = md.fit()
-    # Extract variance components
-    var_samples = mdf.cov_re.iloc[0, 0]  # Variance due to differences among groups of glycans (inter-group)
-    var_glycans_within_group = mdf.vcomp[0] # Variance due to differences among glycans within the same group (intra-group)
-    residual_var = mdf.scale  # Residual variance
-    # Total variance
-    total_var = var_samples + var_glycans_within_group + residual_var
-    # Calculate Intra-group Correlation (ICC)
-    icc = var_glycans_within_group / total_var
-    # Calculate Inter-group Correlation
-    inter_group_corr = var_samples / total_var
-    return icc, inter_group_corr
+        Y = np.log2(abs((cohort_b.values + 1e-8) / (np.mean(cohort_a, axis = 1).values[:, np.newaxis] + 1e-8)))
+    # Every glycan is observed in every sample, so the glycans-nested-in-families components are the classic ANOVA contrasts, which need no iterative fit and do not leave the family, glycan, and residual terms confounded
+    codes = pd.factorize(np.asarray([reverse_lookup[g] for g in glycans], dtype = object))[0]
+    G, S = Y.shape
+    K = codes.max() + 1 if G else 1
+    row_mean, col_mean, grand = Y.mean(axis = 1), Y.mean(axis = 0), Y.mean()
+    counts = np.bincount(codes, minlength = K)
+    fam_mean = np.array([row_mean[codes == k].mean() for k in range(K)])
+    ms_resid = ((Y - row_mean[:, None] - col_mean[None, :] + grand) ** 2).sum() / max((G - 1) * (S - 1), 1)
+    ms_within = S * ((row_mean - fam_mean[codes]) ** 2).sum() / max(G - K, 1)
+    var_glycans_within_group = max((ms_within - ms_resid) / S, 0.0)
+    # A grouping earns its own pi0 estimate when membership explains variance, so the criterion is the between-family component, expected over the nested within-family term rather than over the residual
+    ms_family = S * (counts * (fam_mean - grand) ** 2).sum() / max(K - 1, 1)
+    n0 = (G - (counts ** 2).sum() / G) / max(K - 1, 1) if G else 1.0
+    var_between_families = max((ms_family - ms_within) / max(S * n0, 1e-12), 0.0)
+    # Sample and residual variance are identical for every candidate grouping, so the shares that discriminate between them are the glycan-level ones
+    total_var = var_between_families + var_glycans_within_group
+    return (var_between_families / total_var, var_glycans_within_group / total_var) if total_var else (0.0, 0.0)
 
 
 def replace_outliers_with_IQR_bounds(full_row: pd.Series, # row from dataframe, with all but possibly first value numerical
@@ -462,16 +460,18 @@ def replace_outliers_winsorization(df: pd.DataFrame, # features as rows, all but
     num = df.select_dtypes('number')
     V = num.to_numpy(float)
     n = V.shape[1]
-    # Park NaNs below the minimum so they never affect the order statistics, then restore them
-    placeholder = np.nanmin(V, axis = 1) - 1
-    V = np.where(np.isnan(V), placeholder[:, None], V)
+    nan_mask = np.isnan(V)
+    # NaNs sort to the front, so the k-th slot is the (k - #NaN)-th real order statistic; the rank has to be taken per row against the observed count, not against n
+    obs = n - nan_mask.sum(axis = 1)
+    V = np.where(nan_mask, np.inf, V)
     # Limits set to match typical IQR outlier detection
-    k = min(int(np.floor(max(0.05, 1 / n) * n)), max((n - 3) // 2, 0))
+    kk = np.minimum(np.floor(np.maximum(0.05, 1 / np.maximum(obs, 1)) * obs).astype(int), np.maximum((obs - 3) // 2, 0))
     S = np.sort(V, axis = 1)
-    lower = S[:, k][:, None] if cap_side in ('both', 'lower') else -np.inf
-    upper = S[:, n - 1 - k][:, None] if cap_side in ('both', 'upper') else np.inf
+    rows = np.arange(V.shape[0])
+    lower = S[rows, kk][:, None] if cap_side in ('both', 'lower') else -np.inf
+    upper = S[rows, np.maximum(obs - 1 - kk, 0)][:, None] if cap_side in ('both', 'upper') else np.inf
     out = np.clip(V, lower, upper)
-    out[out == placeholder[:, None]] = np.nan
+    out[nan_mask] = np.nan
     res = df.copy()
     res[num.columns] = out
     return res
@@ -536,13 +536,21 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
                          row_b: np.ndarray, # array of case samples for one glycan/motif
                          paired: bool = False # whether samples are paired or not (e.g., tumor & tumor-adjacent tissue from same patient)
                          ) -> float: # p-value for equivalence test
-    "performs equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent"
-    from statsmodels.stats.weightstats import ttost_ind, ttost_paired
-    na, nb = len(row_a), len(row_b)
-    pooled_std = np.sqrt(((na - 1) * np.var(row_a, ddof = 1) + (nb - 1) * np.var(row_b, ddof = 1)) / (na + nb - 2))
+    "performs equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent, for one feature or for a whole feature x sample frame"
+    A, B = np.atleast_2d(np.asarray(row_a, dtype = float)), np.atleast_2d(np.asarray(row_b, dtype = float))
+    na, nb = A.shape[1], B.shape[1]
+    pooled_std = np.sqrt(((na - 1) * np.var(A, axis = 1, ddof = 1) + (nb - 1) * np.var(B, axis = 1, ddof = 1)) / (na + nb - 2))
     delta = 0.2 * pooled_std
-    low, up = -delta, delta
-    return ttost_paired(row_a, row_b, low, up)[0] if paired else ttost_ind(row_a, row_b, low, up)[0]
+    if paired:
+        assert na == nb, "For paired samples, the size of row_a and row_b should be the same"
+        diff = A - B
+        mdiff, se, dof = diff.mean(axis = 1), np.std(diff, axis = 1, ddof = 1) / np.sqrt(na), na - 1
+    else:
+        mdiff, se, dof = A.mean(axis = 1) - B.mean(axis = 1), pooled_std * np.sqrt(1 / na + 1 / nb), na + nb - 2
+    # TOST: the equivalence p-value is the larger of the two one-sided t-tests against the -delta and +delta bounds
+    se = np.maximum(se, 1e-300)
+    p = np.maximum(t.sf((mdiff + delta) / se, dof), t.cdf((mdiff - delta) / se, dof))
+    return p if np.ndim(row_a) > 1 else p[0]
 
 
 def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
@@ -556,7 +564,7 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
     "performs the Center Log-Ratio (CLR) Transformation with scale model adjustment"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     geometric_mean = gmean((df if reference is None else df.loc[reference]).replace(0, np.nan), axis = 0, nan_policy = 'omit')
-    clr_adjusted = np.zeros_like(df.values)
+    clr_adjusted = np.zeros(df.shape, dtype = float)
     if gamma and not isinstance(custom_scale, dict):
         group1i = [df.columns.get_loc(c) for c in group1]
         group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
@@ -645,19 +653,36 @@ def calculate_permanova_stat(df: pd.DataFrame, # square distance matrix
     return f_stat
 
 
+@lru_cache(maxsize = 16)
+def _permutation_labels(codes: tuple, # integer group code per sample
+                        permutations: int # number of random draws requested
+                        ) -> np.ndarray: # label matrix whose first row is the observed labelling
+    "Builds the label matrix of a permutation test once per design, enumerated exactly where the design has fewer distinct labellings than requested draws"
+    n = len(codes)
+    distinct = factorial(n) // int(np.prod([factorial(v) for v in Counter(codes).values()]))
+    if n <= 8 and distinct <= permutations + 1:
+        # A small design has very few distinct labellings, so enumerating them is both cheaper than sampling and free of Monte Carlo error
+        return np.array([list(codes)] + [list(r) for r in sorted(set(iter_permutations(codes)) - {codes})])
+    return np.vstack([np.asarray(codes), rng.permuted(np.tile(np.asarray(codes), (permutations, 1)), axis = 1)])
+
+
 def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
                                group_labels: list[str], # list of group membership for each sample
                                permutations: int = 999 # number of permutations for test
                                ) -> tuple[float, float]: # (F statistic, p-value)
     "Performs permutational multivariate analysis of variance (PERMANOVA)"
     D2 = np.square(np.asarray(df, dtype = float))
-    observed_f = calculate_permanova_stat(df, group_labels, D2 = D2)
-    permuted_fs = np.zeros(permutations)
-    for i in range(permutations):
-        permuted_labels = np.random.permutation(group_labels)
-        permuted_fs[i] = calculate_permanova_stat(df, permuted_labels, D2 = D2)
-    p_value = (np.sum(permuted_fs >= observed_f) + 1) / (permutations + 1)
-    return observed_f, p_value
+    codes, ug = pd.factorize(np.asarray(group_labels))
+    n = len(codes)
+    # The labelling depends only on the design, so it is built once and reused by every feature tested against it; the observed labelling rides along as row 0 so that a draw reproducing it stays a bitwise tie
+    P = _permutation_labels(tuple(codes.tolist()), permutations)
+    ss_within = np.zeros(len(P))
+    for g in range(len(ug)):
+        M = (P == g).astype(float)
+        ss_within += ((M @ D2) * M).sum(axis = 1) / (2 * M.sum(axis = 1))
+    ss_between = D2.sum() / (2 * n) - ss_within
+    fs = (ss_between / max(len(ug) - 1, 1e-10)) / (ss_within / max(n - len(ug), 1e-10))
+    return fs[0], (np.sum(fs[1:] >= fs[0]) + 1) / len(P)
 
 
 def alr_transformation(df: pd.DataFrame, # dataframe with features as rows and samples as columns
@@ -671,7 +696,7 @@ def alr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
     "Given a reference feature, performs additive log-ratio transformation (ALR) on the data"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     reference_values = df.iloc[reference_component_index, :]
-    alr_transformed = np.zeros_like(df.values)
+    alr_transformed = np.zeros(df.shape, dtype = float)
     group1i = [df.columns.get_loc(c) for c in group1]
     group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
     if not isinstance(custom_scale, dict):
@@ -740,7 +765,9 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
     print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")
     if procrustes_corr[ref_component] < 0.9 or variances[ref_component] > 0.1:
         print("Metrics of chosen reference component not good enough for ALR; switching to CLR instead.")
-        df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale, random_state = local_rng)
+        df = df.astype({c: float for c in df.columns[1:]})
+        df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], group1, group2, gamma = gamma, custom_scale = custom_scale,
+                                            random_state = local_rng)
         return df
     glycans = df.iloc[:, 0].values.tolist()
     glycans = glycans[:ref_component] + glycans[ref_component+1:]
@@ -951,7 +978,9 @@ def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
     stat = np.trace(Kc @ Lc) / (n - 1) ** 2
     ev_K = np.linalg.eigvalsh(Kc)
     ev_L = np.linalg.eigvalsh(Lc)
-    ev_K, ev_L = ev_K[ev_K > 1e-12], ev_L[ev_L > 1e-12]
-    theta = np.mean(ev_K) * np.mean(ev_L)
-    df = 4 * np.mean(ev_K) ** 2 / np.var(ev_K) if np.var(ev_K) > 0 else 1.0
-    return stat, 1 - chi2.cdf(stat * (n - 1) ** 2 / theta, df)
+    ev_K, ev_L = ev_K[ev_K > 1e-12] / n, ev_L[ev_L > 1e-12] / n
+    # Under H0 the statistic is a weighted sum of chi2(1) terms with weights lambda_i * mu_j, so matching its first two moments gives a gamma tail that is symmetric in x and y
+    w = np.outer(ev_K, ev_L).ravel()
+    mean_T, var_T = w.sum(), 2 * (w ** 2).sum()
+    return stat, (float(
+        gamma_dist.sf(stat * (n - 1) ** 2 / n, mean_T ** 2 / var_T, scale = var_T / mean_T)) if var_T > 0 else 1.0)

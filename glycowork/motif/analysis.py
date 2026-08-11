@@ -102,7 +102,11 @@ def preprocess_data(
     if transform is None:
         transform = "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(df.iloc[0, 0], "N")) and len(
             df) > 50 else "CLR"
-    if transform == "ALR":
+    if transform not in ("ALR", "CLR", "Nothing"):
+        raise ValueError("Only ALR and CLR are valid transforms for now.")
+    if motifs:
+        pass  # subsequent lines overwrite df with the motif-level transform, so running the sequence-level one here only pays for ALR's O(features) Procrustes search and prints a reference component that is never used
+    elif transform == "ALR":
         df = get_additive_logratio_transformation(df, df.columns[1:].tolist() if experiment == "anova" else group1,
                                                   group2, paired = paired, gamma = gamma, custom_scale = custom_scale,
                                                   random_state = random_state)
@@ -122,10 +126,6 @@ def preprocess_data(
                                                 [] if paired else group2, gamma = gamma,
                                                 custom_scale = 0 if paired else custom_scale,
                                                 random_state = random_state)
-    elif transform == "Nothing":
-        pass
-    else:
-        raise ValueError("Only ALR and CLR are valid transforms for now.")
     if motifs:
         # Motif extraction and quantification
         df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs)
@@ -134,8 +134,8 @@ def preprocess_data(
         df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist(), abundances = df_org)
         df = df_org + 0.0000001
         if transform == "CLR":
-            df = clr_transformation(df, (group1 + group2) if paired else (
-                group1 if experiment == "diff" else df.columns.tolist()),
+            df = clr_transformation(df, (
+                (group1 + group2) if paired else group1) if experiment == "diff" else df.columns.tolist(),
                                     [] if paired else group2,
                                     gamma = gamma, custom_scale = 0 if paired else custom_scale,
                                     random_state = random_state)
@@ -589,12 +589,18 @@ def select_grouping(
         return {"group1": glycans}, {"group1": p_values}
     if dag is not None:
         # Family = rarest root ancestor, so that branches with different null proportions each get their own pi0 estimate instead of sharing a global one
-        breadth = {r: len(nx.descendants(dag, r)) for r in dag if not dag.in_degree(r)}
+        desc = {r: nx.descendants(dag, r) for r in dag if not dag.in_degree(r)}
+        breadth = {r: len(d) for r, d in desc.items()}
+        # a node's root ancestors are exactly the roots whose descendant set already contains it, so no per-node ancestor walk is needed
+        anc_roots = {}
+        for r, d in desc.items():
+            for g in d:
+                anc_roots.setdefault(g, []).append(r)
 
         def group_by_family(gs, ps):
             gg, gp = {}, {}
             for g, p in zip(gs, ps):
-                anc = [a for a in ((nx.ancestors(dag, g) | {g}) if g in dag else set()) if a in breadth]
+                anc = anc_roots.get(g, []) + ([g] if g in breadth else [])
                 grp = min(anc, key = lambda a: (breadth[a], a)) if anc else "rest"
                 gg.setdefault(grp, []).append(g)
                 gp.setdefault(grp, []).append(p)
@@ -603,13 +609,16 @@ def select_grouping(
                 gp.setdefault("rest", []).extend(gp.pop(k))
             return gg, gp
 
-        funcs = {"by_motif_family": group_by_family}
-    else:
-        funcs = {"by_Sia/Fuc": group_glycans_sia_fuc}
-        if any([g.endswith("GalNAc") for g in glycans]):
-            funcs["by_core"] = group_glycans_core
-        elif any([g.endswith("GlcNAc(b1-4)GlcNAc") for g in glycans]):
-            funcs["by_Ntype"] = group_glycans_N_glycan_type
+        grouped_glycans, grouped_p_values = group_by_family(glycans, p_values)
+        if all(len(g) > 1 for g in grouped_glycans.values()):
+            print("Chosen grouping: by_motif_family")
+            return grouped_glycans, grouped_p_values
+        return {"group1": glycans}, {"group1": p_values}
+    funcs = {"by_Sia/Fuc": group_glycans_sia_fuc}
+    if any([g.endswith("GalNAc") for g in glycans]):
+        funcs["by_core"] = group_glycans_core
+    elif any([g.endswith("GlcNAc(b1-4)GlcNAc") for g in glycans]):
+        funcs["by_Ntype"] = group_glycans_N_glycan_type
     out = {}
     for desc, func in funcs.items():
         grouped_glycans, grouped_p_values = func(glycans, p_values)
@@ -622,7 +631,7 @@ def select_grouping(
     desc = list(out.keys())[np.argmax([v[0][0] - v[0][1] for k, v in out.items()])]
     intra, inter = out[desc][0]
     grouped_glycans, grouped_p_values = out[desc][1]
-    if (intra > 3 * inter) or (intra > inter and intra > .1):
+    if intra > 3 * inter or intra > inter:
         print("Chosen grouping: " + desc)
         print("ICC of grouping: " + str(intra))
         print("Inter-group correlation of grouping: " + str(inter))
@@ -714,20 +723,23 @@ def get_differential_expression(
             equivalence_pvals = [1.0] * len(pvals)
             levene_pvals = [1.0] * len(pvals)
         else:
-            pvals = [ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1] for
-                     row_a, row_b in zip(df_a.values, df_b.values)]
-            equivalence_pvals = np.array(
-                [get_equivalence_test(row_a, row_b, paired = paired) if pvals[i] > alpha else np.nan for
-                 i, (row_a, row_b) in enumerate(zip(df_a.values, df_b.values))])
+            A, B = df_a.values, df_b.values
+            pvals = list((ttest_rel(B, A, axis = 1) if paired else ttest_ind(B, A, axis = 1, equal_var = False))[1])
+            equivalence_pvals = np.full(len(A), np.nan)
+            todo = np.array(pvals) > alpha
+            if todo.any():
+                equivalence_pvals[todo] = get_equivalence_test(A[todo], B[todo], paired = paired)
             valid_equivalence_pvals = equivalence_pvals[~np.isnan(equivalence_pvals)]
             corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_tsbh')[1] if len(
                 valid_equivalence_pvals) else []
             equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
             equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
-            levene_pvals = [levene(row_b, row_a)[1] for row_a, row_b in zip(df_a.values, df_b.values)] if (
-                        df_a.shape[1] > 2 and df_b.shape[1] > 2) else [1.0] * len(df_a)
-            effects = [cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)]
-            effect_sizes, variances = list(zip(*effects)) if effects else [[0] * len(glycans), [0] * len(glycans)]
+            # Levene with the default median center is a one-way ANOVA on absolute deviations from the group medians, which reduces along the sample axis in one call
+            levene_pvals = f_oneway(np.abs(B - np.median(B, axis = 1, keepdims = True)),
+                                    np.abs(A - np.median(A, axis = 1, keepdims = True)), axis = 1)[1] if (
+                    df_a.shape[1] > 2 and df_b.shape[1] > 2) else [1.0] * len(df_a)
+            effect_sizes, variances = cohen_d(B, A, paired = paired) if len(A) else ([0] * len(glycans),
+                                                                                     [0] * len(glycans))
     # Multiple testing correction
     if not monte_carlo and pvals:
         if grouped_BH:
@@ -765,34 +777,42 @@ def get_differential_expression(
             'Equivalence p-val': [1.0] * len(df_prison)})
         prison_rows = prison_rows.astype({'significant': 'bool'})
         if len(prison_rows) > 0:
-            df_out = GlycoDataFrame(pd.concat([df_out, prison_rows], ignore_index = True),
-                                    contrasts = in_contrasts, paired = paired, name = in_name)
+            df_out = GlycoDataFrame(
+                prison_rows if df_out.empty else pd.concat([df_out, prison_rows], ignore_index = True),
+                contrasts = in_contrasts, paired = paired, name = in_name)
     df_out['significant'] = df_out['significant'].astype('bool')
     if effect_size_variance:
         df_out['Effect size variance'] = list(variances) + [0] * len(df_prison)
-    if (motifs or glycoproteomics) and not sets and not monte_carlo and df_org.attrs.get('motif_dag') is not None:
+    if (motifs or glycoproteomics) and not sets and not monte_carlo and df_org.attrs.get(
+            'motif_dag') is not None and not df.empty:
         dag, full = df_org.attrs['motif_dag'], pd.concat([df_org, df_org_prison])
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
         ref = np.median(np.log2(df_org.values + 0.0000001) - df.values, axis = 0)
         fc, rows = dict(zip(df_out['Glycan'], df_out['Log2FC'])), {}
+        pos, F = {m: i for i, m in enumerate(full.index)}, full.values
+        g1i = [full.columns.get_loc(c) for c in group1]
+        g2i = [full.columns.get_loc(c) for c in group2]
         for p in [m for m in full.index if m in dag and dag.out_degree(m)]:
-            kids = [c for c in dag.successors(p) if c in full.index]
-            kid_vals = full.loc[kids]
-            resid = full.loc[p] - kid_vals.sum(axis = 0)
+            kids = [c for c in dag.successors(p) if c in pos]
+            kv = F[[pos[c] for c in kids]]
+            resid = F[pos[p]] - kv.sum(axis = 0)
             # A per-sample scalar cancels from a parent/child logratio, so these balances carry no reference frame and no scale model; alone among the outputs they are pure data
-            parts = pd.DataFrame(np.vstack([kid_vals.values, resid.clip(lower = 0).values]), columns = full.columns)
-            parts = parts[(parts > 1e-6).any(axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
+            parts = np.vstack([kv, np.clip(resid, 0, None)])
+            parts = parts[(parts > 1e-6).any(
+                axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
             # Children and residual sum to the parent, so they are a genuine sub-composition; subtracting one part gives its additive logratio, which is the isometric test in disguise (Hotelling's T2 is affine-invariant) and drops the evenness direction that dividing by the parent leaves behind
             bal = np.log2(parts + 0.0000001)
-            bal = bal.iloc[1:] - bal.iloc[0] if len(bal) > 1 else bal.iloc[:0]
-            bal = bal[bal.std(axis = 1) > 1e-9]
-            bal_p = hotellings_t2(bal[group1].values.T, bal[group2].values.T, paired = paired)[1] if 0 < len(bal) < min(len(group1), len(group2)) else np.nan
+            bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
+            bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9]
+            bal_p = hotellings_t2(bal[:, g1i].T, bal[:, g2i].T, paired = paired)[1] if 0 < len(bal) < min(len(group1),
+                                                                                                          len(group2)) else np.nan
             explained = ', '.join((f'{c} ({fc[c] - fc[p]:+.2f})' if p in fc else c) for c in kids if c in fc)
             if (resid <= 1e-6).all():
-                rows[p] = (explained, 1.0, 0.0, bal_p)  # parent occurs only inside its children: no context of its own left to test
+                rows[p] = (explained, 1.0, 0.0,
+                           bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
-            r = np.log2(resid.clip(lower = 0.0000001)) - ref
-            r_a, r_b = r[group1].values, r[group2].values
+            r = np.log2(np.clip(resid, 0.0000001, None)) - ref
+            r_a, r_b = r[g1i], r[g2i]
             rows[p] = (explained, ttest_rel(r_b, r_a)[1] if paired else ttest_ind(r_b, r_a, equal_var = False)[1],
                        cohen_d(r_b, r_a, paired = paired)[0], bal_p)
         # Residuals and balances answer different questions than the marginals, so each is corrected as its own, much smaller family
@@ -941,9 +961,7 @@ def get_glycanova(
 ) -> tuple[GlycoDataFrame, dict[
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
-    from statsmodels.formula.api import ols
     from statsmodels.stats.multicomp import pairwise_tukeyhsd
-    import statsmodels.api as sm
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if len(set(groups)) < 3:
         raise ValueError(
@@ -959,19 +977,16 @@ def get_glycanova(
     effect_sizes = omega_squared(df, groups)
     # Variance-based filtering of features
     df, df_prison = variance_based_filtering(df)
-    for glycan in df.index:
-        # Create a DataFrame with the glycan abundance and group identifier for each sample
-        data = pd.DataFrame({"Abundance": df.loc[glycan], "Group": groups})
-        # Run an ANOVA
-        model = ols("Abundance ~ C(Group)", data = data).fit()
-        anova_table = sm.stats.anova_lm(model, typ = 2)
-        f_value = anova_table["F"]["C(Group)"]
-        p_value = anova_table["PR(>F)"]["C(Group)"]
-        results.append((glycan, f_value, p_value))
-        if p_value < alpha and posthoc:
-            posthoc_res = pairwise_tukeyhsd(endog = data['Abundance'], groups = data['Group'], alpha = alpha)
-            posthoc_results[glycan] = pd.DataFrame(data = posthoc_res._results_table.data[1:],
-                                                   columns = posthoc_res._results_table.data[0])
+    garr, X = np.asarray(groups), df.values
+    # One-way ANOVA on a fixed design is the same F for every feature, so all features go through one vectorized call instead of one formula parse and OLS fit each
+    f_values, p_values = f_oneway(*[X[:, garr == g] for g in np.unique(garr)], axis = 1)
+    results = list(zip(df.index, f_values, p_values))
+    if posthoc:
+        for i, glycan in enumerate(df.index):
+            if p_values[i] < alpha:
+                posthoc_res = pairwise_tukeyhsd(endog = X[i], groups = garr, alpha = alpha)
+                posthoc_results[glycan] = pd.DataFrame(data = posthoc_res._results_table.data[1:],
+                                                       columns = posthoc_res._results_table.data[0])
     df_out = GlycoDataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
     dag = df_org.attrs.get('motif_dag') if motifs or glycoproteomics else None
     if grouped_BH and dag is not None:
@@ -993,35 +1008,37 @@ def get_glycanova(
         'significant': [False] * len(df_prison)})
     prison_rows = prison_rows.astype({'significant': 'bool'})
     if len(prison_rows) > 0:
-        df_out = pd.concat([df_out, prison_rows], ignore_index = True)
+        # An all-prison run leaves df_out empty with object dtypes, and inferring result dtypes from that is what pandas is deprecating
+        df_out = GlycoDataFrame(prison_rows) if df_out.empty else pd.concat([df_out, prison_rows], ignore_index = True)
     df_out['significant'] = df_out['significant'].astype('bool')
     df_out['Effect size'] = effect_sizes.reindex(df_out['Glycan']).values
-    if (motifs or glycoproteomics) and df_org.attrs.get('motif_dag') is not None:
+    # With no feature surviving the variance filter there is no transformed frame to read the per-sample offset off, so the residuals have no reference frame to land in
+    if (motifs or glycoproteomics) and df_org.attrs.get('motif_dag') is not None and not df.empty:
         dag, full = df_org.attrs['motif_dag'], df_org
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
         ref = np.median(np.log2(full.loc[df.index].values + 0.0000001) - df.values, axis = 0)
         levels, garr = sorted(set(groups)), np.asarray(groups)
         eff, rows = dict(zip(df_out['Glycan'], df_out['Effect size'])), {}
+        pos, F = {m: i for i, m in enumerate(full.index)}, full.values
         for p in [m for m in full.index if m in dag and dag.out_degree(m)]:
-            kids = [c for c in dag.successors(p) if c in full.index]
-            resid = full.loc[p] - full.loc[kids].sum(axis = 0)
+            kids = [c for c in dag.successors(p) if c in pos]
+            kv = F[[pos[c] for c in kids]]
+            resid = F[pos[p]] - kv.sum(axis = 0)
             # Children and residual sum to the parent, so subtracting one part's log gives the additive logratios of a genuine sub-composition; a one-way PERMANOVA on those balances asks whether the parent redistributes across contexts, free of any reference frame or scale model
-            parts = pd.DataFrame(np.vstack([full.loc[kids].values, resid.clip(lower = 0).values]),
-                                 columns = full.columns)
+            parts = np.vstack([kv, np.clip(resid, 0, None)])
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
             bal = np.log2(parts + 0.0000001)
-            bal = bal.iloc[1:] - bal.iloc[0] if len(bal) > 1 else bal.iloc[:0]
-            bal = bal[bal.std(axis = 1) > 1e-9]
-            bal_p = \
-            permanova_with_permutation(pd.DataFrame(squareform(pdist(bal.values.T, metric = 'euclidean'))), groups,
-                                       999)[1] if len(bal) else np.nan
+            bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
+            bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9]
+            bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), groups, 999)[1] if len(
+                bal) else np.nan
             explained = ', '.join((f'{c} ({eff[c] - eff[p]:+.2f})' if p in eff else c) for c in kids if c in eff)
             if (resid <= 1e-6).all():
                 rows[p] = (explained, 1.0, 0.0,
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
-            r = (np.log2(resid.clip(lower = 0.0000001)) - ref).values
+            r = np.log2(np.clip(resid, 0.0000001, None)) - ref
             rows[p] = (explained, f_oneway(*[r[garr == g] for g in levels])[1], omega_squared(r, groups), bal_p)
         # Residuals and balances answer different questions than the marginals, so each is corrected as its own, much smaller family
         cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
@@ -1210,7 +1227,7 @@ def get_time_series(
     df_out['corr p-val'] = corrpvals
     df_out['significant'] = significance
     df_out.attrs.update(
-        {'alpha': alpha, 'n': df.shape[1] - 1, 'test': 'OLS trend', 'transform': transform, 'paired': False})
+        {'alpha': alpha, 'n': df.shape[0], 'test': 'OLS trend', 'transform': transform, 'paired': False})
     return df_out.sort_values(by = 'corr p-val')
 
 
@@ -1355,7 +1372,7 @@ def get_biodiversity(
                 shopping_cart.append(pd.DataFrame(
                     {'Metric': f'{metric_name} (JTK)', 'p-val': p_val, 'Period length': period, 'Lag phase': phase,
                      'Amplitude': abs(tau)}, index = [0]))
-        elif len(group_counts) == 2:
+        elif len(group_counts) == 2 and group2:
             df_a, df_b = a_df[group1], a_df[group2]
             mean_a, mean_b = [np.mean(row_a) for row_a in df_a.values], [np.mean(row_b) for row_b in df_b.values]
             if paired:
@@ -1466,25 +1483,24 @@ def get_SparCC(
     if transform is None:
         transform = "ALR" if (enforce_class(df1.iloc[0, 0], "N") and len(df1) > 50) and (
                     enforce_class(df2.iloc[0, 0], "N") and len(df2) > 50) else "CLR"
-    if transform == "ALR":
-        df1 = get_additive_logratio_transformation(df1, df1.columns[1:].tolist(), [], paired = False, gamma = gamma, random_state = random_state)
-        df2 = get_additive_logratio_transformation(df2, df2.columns[1:].tolist(), [], paired = False, gamma = gamma, random_state = random_state)
-    elif transform == "CLR":
-        df1.iloc[:, 1:] = clr_transformation(df1.iloc[:, 1:], df1.columns.tolist()[1:], [], gamma = gamma, random_state = random_state)
-        df2.iloc[:, 1:] = clr_transformation(df2.iloc[:, 1:], df2.columns.tolist()[1:], [], gamma = gamma, random_state = random_state)
-    elif transform == "Nothing":
-        pass
-    else:
+    if transform not in ("ALR", "CLR", "Nothing"):
         raise ValueError("Only ALR and CLR are valid transforms for now.")
+        # Quantify on raw abundances, then transform the motif composition, as preprocess_data/get_pca/get_time_series do; transforming glycans first centers motifs by the glycan geometric mean instead of the motif one
     if motifs:
         df1 = quantify_motifs(df1, feature_set = feature_set, custom_motifs = custom_motifs)
-        if '(' in df2.iloc[:, 0].values.tolist()[0]:
-            df2 = quantify_motifs(df2, feature_set = feature_set, custom_motifs = custom_motifs)
-        else:
-            df2 = df2.set_index(df2.columns.tolist()[0])
+        df2 = quantify_motifs(df2, feature_set = feature_set, custom_motifs = custom_motifs) if '(' in df2.iloc[
+            :, 0].values.tolist()[0] else df2.set_index(df2.columns.tolist()[0])
     else:
         df1 = df1.set_index(df1.columns.tolist()[0])
         df2 = df2.set_index(df2.columns.tolist()[0])
+    if transform == "ALR":
+        df1 = get_additive_logratio_transformation(df1.reset_index(), df1.columns.tolist(), [], paired = False,
+                                                   gamma = gamma, random_state = random_state).set_index('glycan')
+        df2 = get_additive_logratio_transformation(df2.reset_index(), df2.columns.tolist(), [], paired = False,
+                                                   gamma = gamma, random_state = random_state).set_index('glycan')
+    elif transform == "CLR":
+        df1 = clr_transformation(df1 + 0.0000001, df1.columns.tolist(), [], gamma = gamma, random_state = random_state)
+        df2 = clr_transformation(df2 + 0.0000001, df2.columns.tolist(), [], gamma = gamma, random_state = random_state)
     df1, df2 = df1.T, df2.T
     correlation_matrix = np.zeros((df1.shape[1], df2.shape[1]))
     p_value_matrix = np.zeros((df1.shape[1], df2.shape[1]))
@@ -1714,12 +1730,10 @@ def get_lectin_array(
     idf = np.sqrt(lectin_variance)
     if group2:
         df_a, df_b = df[group1], df[group2]
-        effects = [cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)]
-        effect_sizes, _ = list(zip(*effects)) if effects else [[0] * len(df), [0] * len(df)]
+        effect_sizes = cohen_d(df_b.values, df_a.values, paired = paired)[0] if len(df) else [0] * len(df)
     else:
         effect_sizes = omega_squared(df, group1)
-    lectin_score_dict = {lec: effect_sizes[i] if isinstance(effect_sizes, tuple) else effect_sizes.iloc[i] for i, lec in
-                         enumerate(lectin_list)}
+    lectin_score_dict = {lec: effect_sizes[i] if group2 else effect_sizes.iloc[i] for i, lec in enumerate(lectin_list)}
     df_out = lectin_motif_scoring(useable_lectin_mapping, motif_mapping, lectin_score_dict, lectin_lib, idf)
     df_out = df_out.sort_values(by = "score", ascending = False)
     scores = df_out['score'].values.reshape(-1, 1)

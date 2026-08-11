@@ -32,6 +32,7 @@
 
 ##### Fixed 🐛
 - Fixed sum of squares calculation in `calculate_permanova_stat` (5483f3c)
+- `hsic` is now correctly symmetrical
 
 ### motif
 #### tokenization
