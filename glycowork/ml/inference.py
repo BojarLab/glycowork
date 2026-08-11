@@ -199,7 +199,8 @@ def get_esm_representations(prots: list[str],
     if model == "esm2":
         esm_model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
     else:
-        esm_model, alphabet = esm.pretrained.esm1b_t33_650M_UR50D()
+        esm_model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
+
 
     esm_model = esm_model.eval().to(device)
     batch_converter = alphabet.get_batch_converter()
