@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from importlib import resources
 import math
+import warnings
 from typing import Literal
 
 try:
@@ -41,6 +42,38 @@ def sigmoid(x: float  # input value
     if hasattr(x, 'item') or hasattr(x, 'dtype'):
         x = x.item()
     return 1 / (1 + math.exp(-x))
+
+
+_VALID_PROTEIN_CHARS = set("ACDEFGHIKLMNPQRSTVWYBXZOU.-")
+
+
+def _clean_protein_sequences(prots: list[str],  # protein sequences to filter
+                             max_len: int = 1000  # maximum sequence length to keep
+                             ) -> list[str]:
+    """Filter protein sequences to valid ESM input and remove duplicates."""
+    cleaned = []
+    skipped = 0
+    for raw_seq in prots:
+        if not isinstance(raw_seq, str):
+            skipped += 1
+            continue
+        seq = raw_seq.strip().upper()
+        if not seq:
+            skipped += 1
+            continue
+        if set(seq) - _VALID_PROTEIN_CHARS:
+            skipped += 1
+            continue
+        cleaned.append(seq[:max_len])
+    if skipped:
+        warnings.warn(
+            f"Skipped {skipped} invalid or empty protein sequence(s) before ESM encoding.",
+            stacklevel = 2,
+        )
+    unique = list(dict.fromkeys(cleaned))
+    if not unique:
+        raise ValueError("No valid protein sequences remained after cleaning.")
+    return unique
 
 
 def glycans_to_emb(glycans: list[str],  # list of glycans in IUPAC-condensed
@@ -177,18 +210,23 @@ def get_esmc_representations(prots: list[str],  # list of protein sequences to c
             logits_output = model.logits(protein_tensor, None)
         return torch.mean(logits_output.embeddings, dim = 1).squeeze().tolist()
 
-    unique_prots = list(dict.fromkeys(prots))
+    unique_prots = _clean_protein_sequences(prots)
     return {p: prot_to_ESMC(p) for p in unique_prots}
 
 
 def get_esm_representations(prots: list[str],
-                            model: Literal["esm2", "esm1b"] = "esm2"
+                            model: Literal["esm2", "esm1b"] = "esm2",
+                            batch_size: int = 8,
+                            max_sequence_length: int = 1000,
+                            use_mixed_precision: bool = True
                             ) -> dict[str, list[float]]:
     """Retrieve mean-pooled ESM-2 or ESM-1b representations for protein sequences."""
     if model not in {"esm2", "esm1b"}:
         raise ValueError("model must be 'esm2' or 'esm1b'")
     if not prots:
         return {}
+    if batch_size < 1:
+        raise ValueError("batch_size must be at least 1")
     try:
         import esm
     except ImportError as exc:
@@ -196,31 +234,61 @@ def get_esm_representations(prots: list[str],
             "<fair-esm missing; install glycowork[ml] or run 'pip install fair-esm'>"
         ) from exc
 
+    unique_prots = _clean_protein_sequences(prots, max_len = max_sequence_length)
     if model == "esm2":
         esm_model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
     else:
         esm_model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
 
-
     esm_model = esm_model.eval().to(device)
     batch_converter = alphabet.get_batch_converter()
-    unique_prots = list(dict.fromkeys(prots))
-    data = [(str(i), seq) for i, seq in enumerate(unique_prots)]
-    _, _, batch_tokens = batch_converter(data)
-    batch_tokens = batch_tokens.to(device)
-
-    with torch.no_grad():
-        results = esm_model(
-            batch_tokens,
-            repr_layers=[esm_model.num_layers],
-            return_contacts=False,
-        )
-
-    reps = results["representations"][esm_model.num_layers]
+    device_type = "cuda" if str(device).startswith("cuda") else "cpu"
     out = {}
-    for i, (_, seq) in enumerate(data):
-        seq_len = (batch_tokens[i] != alphabet.padding_idx).sum().item()
-        out[seq] = reps[i, 1:seq_len - 1].mean(0).cpu().tolist()
+    current_batch_size = min(batch_size, len(unique_prots))
+    batch_start = 0
+    while batch_start < len(unique_prots):
+        batch_end = min(batch_start + current_batch_size, len(unique_prots))
+        batch_prots = unique_prots[batch_start:batch_end]
+        data = [(f"protein_{batch_start + i}", seq) for i, seq in enumerate(batch_prots)]
+        _, _, batch_tokens = batch_converter(data)
+        batch_tokens = batch_tokens.to(device, non_blocking = True)
+
+        try:
+            with torch.inference_mode():
+                with torch.autocast(
+                    device_type = device_type,
+                    dtype = torch.float16,
+                    enabled = device_type == "cuda" and use_mixed_precision,
+                ):
+                    results = esm_model(
+                        batch_tokens,
+                        repr_layers = [esm_model.num_layers],
+                        return_contacts = False,
+                    )
+        except torch.OutOfMemoryError as exc:
+            if device_type == "cuda":
+                torch.cuda.empty_cache()
+            del batch_tokens
+            if current_batch_size == 1:
+                raise RuntimeError(
+                    "CUDA ran out of memory while encoding protein sequences with ESM. "
+                    "Reduce batch_size, shorten max_sequence_length, or use a larger GPU."
+                ) from exc
+            current_batch_size = max(1, current_batch_size // 2)
+            continue
+
+        reps = results["representations"][esm_model.num_layers]
+        for i, (_, seq) in enumerate(data):
+            seq_len = (batch_tokens[i] != alphabet.padding_idx).sum().item()
+            out[seq] = reps[i, 1:seq_len - 1].mean(0).float().cpu().tolist()
+
+        del batch_tokens
+        del results
+        del reps
+        if device_type == "cuda":
+            torch.cuda.empty_cache()
+
+        batch_start = batch_end
     return out
 
 

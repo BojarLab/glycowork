@@ -119,7 +119,7 @@ from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRa
                           init_weights, prep_model, LectinOracle_flex
 )
 from glycowork.ml.inference import (SimpleDataset, sigmoid, glycans_to_emb, get_multi_pred, get_lectin_preds,
-                          get_esmc_representations, get_Nsequon_preds
+                          get_esmc_representations, get_esm_representations, get_Nsequon_preds
 )
 device = "cpu"
 if torch.cuda.is_available():
@@ -7515,6 +7515,58 @@ def test_get_esmc_representations(sample_data):
     assert len(result) == len(set(proteins))
     assert all(isinstance(v, list) for v in result.values())
     assert all(len(v) == 960 for v in result.values())
+
+
+def test_get_esm_representations_batches_and_cleans_inputs():
+    class MockESM(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.num_layers = 33
+            self.calls = []
+
+        def forward(self, batch_tokens, repr_layers, return_contacts=False):
+            self.calls.append(batch_tokens.shape[0])
+            batch_size, seq_len = batch_tokens.shape
+            reps = torch.arange(
+                batch_size * seq_len * 4,
+                dtype=torch.float32,
+                device=batch_tokens.device,
+            ).view(batch_size, seq_len, 4)
+            return {"representations": {33: reps}}
+
+    class MockAlphabet:
+        padding_idx = 0
+
+        def get_batch_converter(self):
+            def batch_converter(data):
+                seqs = [seq for _, seq in data]
+                max_len = max(len(seq) for seq in seqs)
+                batch_tokens = torch.zeros(len(seqs), max_len + 2, dtype=torch.long)
+                for idx, seq in enumerate(seqs):
+                    batch_tokens[idx, 0] = 1
+                    batch_tokens[idx, 1 : len(seq) + 1] = 2
+                    batch_tokens[idx, len(seq) + 1] = 3
+                return [label for label, _ in data], seqs, batch_tokens
+
+            return batch_converter
+
+    mock_model = MockESM()
+    mock_esm = Mock()
+    mock_esm.pretrained.esm1b_t33_650M_UR50S.return_value = (mock_model, MockAlphabet())
+
+    proteins = ["AAA", None, "BBB", "AAA", "CCC"]
+    with patch.dict(sys.modules, {"esm": mock_esm}):
+        result = get_esm_representations(
+            proteins,
+            model="esm1b",
+            batch_size=2,
+            max_sequence_length=10,
+        )
+
+    assert list(result) == ["AAA", "BBB", "CCC"]
+    assert mock_model.calls == [2, 1]
+    assert all(isinstance(v, list) for v in result.values())
+    assert all(len(v) == 4 for v in result.values())
 
 
 def test_get_Nsequon_preds(sample_data, mock_models):
