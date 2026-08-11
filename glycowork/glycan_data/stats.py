@@ -180,7 +180,7 @@ class MissForest:
                     features = observed.drop(columns = column)
                     if features.notna().any().any():
                         # Use other columns to predict the current column
-                        self.regressor.fit(observed.drop(columns = column), observed[column])
+                        self.regressor.fit(features, observed[column])
                         y_missing_pred = self.regressor.predict(missing.drop(columns = column))
                         # Pull the prediction back towards the left-censored draw in proportion to how much of this feature's missingness is intensity-driven
                         wm, mn = w[missing_idx].values, mnar.loc[missing_idx, column].values
@@ -622,18 +622,21 @@ def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
 
 
 def calculate_permanova_stat(df: pd.DataFrame, # square distance matrix
-                             group_labels: list[str] # list of group membership for each sample
+                             group_labels: list[str], # list of group membership for each sample
+                             D2: np.ndarray | None = None # precomputed elementwise square of df, to avoid recomputing it per permutation
                              ) -> float: # F statistic - higher means effect more likely
     "Performs multivariate analysis of variance"
-    unique_groups = np.unique(group_labels)
-    n = len(group_labels)
-    # Between-group and within-group sums of squares
-    ss_total = np.sum(squareform(df) ** 2) / n
+    if D2 is None:
+        D2 = np.square(np.asarray(df, dtype = float))
+    labels = np.asarray(group_labels)
+    unique_groups = np.unique(labels)
+    n = len(labels)
+    # Between-group and within-group sums of squares; the full matrix counts every pair twice, hence the factor 2
+    ss_total = D2.sum() / (2 * n)
     ss_within = 0
     for group in unique_groups:
-        group_mask = np.array(group_labels) == group
-        group_matrix = df.values[np.ix_(group_mask, group_mask)]
-        ss_within += np.sum(squareform(group_matrix) ** 2) / group_mask.sum()
+        group_mask = labels == group
+        ss_within += D2[np.ix_(group_mask, group_mask)].sum() / (2 * group_mask.sum())
     ss_between = ss_total - ss_within
     # Calculate the PERMANOVA test statistic: pseudo-F
     ms_between = ss_between / max(len(unique_groups) - 1, 1e-10)
@@ -647,11 +650,12 @@ def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
                                permutations: int = 999 # number of permutations for test
                                ) -> tuple[float, float]: # (F statistic, p-value)
     "Performs permutational multivariate analysis of variance (PERMANOVA)"
-    observed_f = calculate_permanova_stat(df, group_labels)
+    D2 = np.square(np.asarray(df, dtype = float))
+    observed_f = calculate_permanova_stat(df, group_labels, D2 = D2)
     permuted_fs = np.zeros(permutations)
     for i in range(permutations):
         permuted_labels = np.random.permutation(group_labels)
-        permuted_fs[i] = calculate_permanova_stat(df, permuted_labels)
+        permuted_fs[i] = calculate_permanova_stat(df, permuted_labels, D2 = D2)
     p_value = (np.sum(permuted_fs >= observed_f) + 1) / (permutations + 1)
     return observed_f, p_value
 

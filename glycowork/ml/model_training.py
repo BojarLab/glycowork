@@ -131,7 +131,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                     x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
                 x = x.to(device)
                 if mode == 'multilabel':
-                    y = y.view(max(batch) + 1, -1).to(device)
+                    y = y.view(int(batch.max()) + 1, -1).to(device)
                 elif mode == "regression":
                     y = y.view(-1, 1).to(device)
                 else:
@@ -145,7 +145,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                     batch = batch.to(device)
                 prot = getattr(data, 'train_idx', None)
                 if prot is not None:
-                    prot = prot.view(max(batch) + 1, -1).to(device)
+                    prot = prot.view(int(batch.max()) + 1, -1).to(device)
                 optimizer.zero_grad()
                 with torch.set_grad_enabled(phase == 'train'):
                     # First forward pass

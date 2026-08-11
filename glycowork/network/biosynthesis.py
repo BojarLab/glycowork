@@ -163,6 +163,8 @@ def process_ptm(glycans: list[str], # List of glycans
     "Find PTM-containing glycans and their precursors"
     # Get glycans with PTMs and convert them to graphs
     ptm_glycans = [glycan for glycan in glycans if any(ptm in glycan for ptm in allowed_ptms)]
+    if not ptm_glycans:
+        return ([], [])
     ggraphs = [safe_index(k, graph_dic) for k in glycans]
     # Connect modified glycans to their unmodified counterparts
     edges = [find_ptm(k, glycans, graph_dic, stem_lib, allowed_ptms = allowed_ptms,

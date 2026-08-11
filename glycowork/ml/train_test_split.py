@@ -47,22 +47,24 @@ def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and ta
     df = pd.concat(temp).reset_index(drop = True)
     # Only keep classes in rank with minimum number of glycans
     counts = df[rank].value_counts()
-    allowed_classes = [counts.index.tolist()[k] for k in range(len(counts.index.tolist())) if (counts >= min_seq).values.tolist()[k]]
+    allowed_classes = counts.index[counts >= min_seq].tolist()
     df = df[df[rank].isin(allowed_classes)]
     # Map string classes to integers
     class_list = list(sorted(list(set(df[rank].values.tolist()))))
     class_converter = {class_list[k]: k for k in range(len(class_list))}
     df[rank] = [class_converter[k] for k in df[rank]]
     # Split each class proportionally
+    all_x, all_y = df[col].values.tolist(), df[rank].values.tolist()
     sss = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2)
-    sss.get_n_splits(df[col].values.tolist(), df[rank].values.tolist())
-    for i, j in sss.split(df[col].values.tolist(), df[rank].values.tolist()):
-        train_x = [df[col].values.tolist()[k] for k in i]
-        train_y = [df[rank].values.tolist()[k] for k in i]
+    sss.get_n_splits(all_x, all_y)
+    for i, j in sss.split(all_x, all_y):
+        train_x = [all_x[k] for k in i]
+        train_y = [all_y[k] for k in i]
         if wildcard_seed:
-            train_x, train_y = seed_wildcard_hierarchy(train_x, train_y, wildcard_list = wildcard_list, wildcard_name = wildcard_name, r = r)
-        val_x = [df[col].values.tolist()[k] for k in j]
-        val_y = [df[rank].values.tolist()[k] for k in j]
+            train_x, train_y = seed_wildcard_hierarchy(train_x, train_y, wildcard_list = wildcard_list,
+                                                       wildcard_name = wildcard_name, r = r)
+        val_x = [all_x[k] for k in j]
+        val_y = [all_y[k] for k in j]
         if wildcard_seed:
             val_x, val_y = seed_wildcard_hierarchy(val_x, val_y, wildcard_list = wildcard_list, wildcard_name = wildcard_name, r = r)
         id_val = list(range(len(val_x)))

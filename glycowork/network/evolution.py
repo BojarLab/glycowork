@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 from typing import Callable
+from functools import lru_cache
 from glycowork.glycan_data.loader import GlycoList
 from glycowork.motif.graph import subgraph_isomorphism
 
@@ -11,10 +12,21 @@ from glycowork.motif.graph import subgraph_isomorphism
 this_dir = Path(__file__).parent
 this_filename = Path(__file__).name
 
-# Construct the path to the data file and load it
+# Construct the path to the data file; unpickled lazily on first use
 data_path = this_dir / 'milk_networks_exhaustive.pkl'
-with open(data_path, 'rb') as f:
-    net_dic = pickle.load(f)
+
+
+@lru_cache(maxsize = 1)
+def _load_net_dic() -> dict[str, nx.Graph]: # Species:biosynthetic network mapping
+    "Lazily load and cache the bundled milk biosynthetic networks"
+    with open(data_path, 'rb') as f:
+        return pickle.load(f)
+
+
+def __getattr__(name):
+    if name == "net_dic":
+        return _load_net_dic()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def calculate_distance_matrix(to_compare: dict[str, list] | list, # Objects to compare - dict values must be lists
@@ -136,7 +148,7 @@ def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
                        ) -> dict[str, float]: # Taxonomic group-to-conservation mapping
     "Estimate evolutionary conservation of glycans via biosynthetic networks"
     if network_dic is None:
-        network_dic = net_dic
+        network_dic = _load_net_dic()
     # Subset species with at least the threshold-number of glycans
     species_counts = df['Species'].value_counts()
     valid_species = species_counts.index[species_counts >= threshold]

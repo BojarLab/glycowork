@@ -347,11 +347,12 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
     if isinstance(glycan, str) and isinstance(motif, str):
         if motif.count('(') > glycan.count('('):
             return (0, []) if return_matches else 0 if count else False
-        if not count and not return_matches and not termini_list and any(
-                glycan[i:i + len(motif)] == motif and (i == 0 or glycan[i - 1] in '([)]') and (
-                        i + len(motif) == len(glycan) or glycan[i + len(motif)] in ')]') for i in
-                range(len(glycan) - len(motif) + 1)):
-            return True
+        if not count and not return_matches and not termini_list:
+            m_len, i = len(motif), glycan.find(motif)
+            while i != -1:
+                if (i == 0 or glycan[i - 1] in '([)]') and (i + m_len == len(glycan) or glycan[i + m_len] in ')]'):
+                    return True
+                i = glycan.find(motif, i + 1)
         if 'O' in glycan or 'O' in motif:
             glycan, motif = PTM_REGEX.sub('O', glycan), PTM_REGEX.sub('O', motif)
         motif_comp = min_process_glycans([motif, glycan])

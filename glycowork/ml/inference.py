@@ -97,7 +97,7 @@ def get_multi_pred(prot: str,  # protein amino acid sequence
     for k in train_loader:
         with torch.no_grad():
             x, y, edge_index, prot, batch = k.labels, k.y, k.edge_index, k.train_idx, k.batch
-            x, y, edge_index, prot, batch = x.to(device), y.to(device), edge_index.to(device), prot.view(max(batch) + 1,
+            x, y, edge_index, prot, batch = x.to(device), y.to(device), edge_index.to(device), prot.view(int(batch.max()) + 1,
                                                                                                          -1).float().to(
                 device), batch.to(device)
             pred = model(prot, x, edge_index, batch)
@@ -192,11 +192,10 @@ def get_Nsequon_preds(prots: list[str],  # 20 AA + N + 20 AA sequences; replace 
     model = model.eval()
     preds = []
     # Get predictions for each mini-batch
-    for x, _ in loader:
-        x = x.to(device)
-        pred = model(x)
-        pred = [sigmoid(x) for x in pred.cpu().detach().numpy()]
-        preds.extend(pred)
+    with torch.no_grad():
+        for x, _ in loader:
+            pred = model(x.to(device))
+            preds.extend((1 / (1 + np.exp(-pred.cpu().numpy().astype(float)))).ravel().tolist())
     df_pred = pd.DataFrame({
         'seq': prots,
         'glycosylated': preds

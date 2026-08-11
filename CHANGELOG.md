@@ -27,8 +27,8 @@
 - `hotellings_t2` is now more robust to tiny groups (a918a2e)
 - `TST_grouped_benjamini_hochberg` is now more robust to groups with π0 = 1 (c902297)
 - `replace_outliers_winsorization` now takes in the entire `df` as input, instead of only one `row` (5483f3c)
-- `replace_outliers_winsorization` and `omega_squared` are now much faster (5483f3c)
-- `mahalanobis_distance` can now properly account for paired data as well
+- `replace_outliers_winsorization`, `omega_squared`, and `permanova_with_permutation` are now much faster (5483f3c)
+- `mahalanobis_distance` can now properly account for paired data as well (f5ba41f)
 
 ##### Fixed 🐛
 - Fixed sum of squares calculation in `calculate_permanova_stat` (5483f3c)
@@ -69,7 +69,7 @@
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
 - `get_differential_expression`, `get_glycanova`, `get_time_series`, and `get_jtk` now default to `grouped_BH=True` if they are run in motif-analysis mode (`motifs=True`) (7849b15)
 - `preprocess_data` now propagates `random_state` to data imputation for full re-run reprodubility (9630cd0)
-- The p-value in the polynomial case in `get_glycan_change_over_time` now has a better relationship with the trend line (rather than a mean shift)
+- The p-value in the polynomial case in `get_glycan_change_over_time` now has a better relationship with the trend line (rather than a mean shift) (f5ba41f)
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
@@ -104,7 +104,7 @@
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)
 
 ##### Deprecated ⚠️
-- Removed the `show_linkage` keyword argument in `get_coordinates_and_labels` (it was dead and handled within `GlycoDraw`)
+- Removed the `show_linkage` keyword argument in `get_coordinates_and_labels` (it was dead and handled within `GlycoDraw`) (f5ba41f)
 
 #### graph
 ##### Changed 🔄
@@ -147,6 +147,9 @@
 - Improved graph caching, which should result in faster `construct_network` calls (9630cd0)
 
 #### evolution
+##### Changed 🔄
+- Milk networks are now loaded lazily instead of eagerly upon module load, improving package start-up time
+
 ##### Fixed 🐛
 - Made sure `check_conservation` no longer crashes if a rank has no matching network (78fe195)
 

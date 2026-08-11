@@ -436,13 +436,14 @@ def characterize_monosaccharide(
         color_map = {key: color_list(idx / len(cou_k2)) for idx, key in enumerate(cou_k2)}
         palette = [color_map[k] for k in cou_k2]
         # Start linking downstream monosaccharides / linkages to the input monosaccharide + its modifications
-        pool_in2 = [k for k in pool_in if k.split('*')[2 if mode == 'sugar' else 1] in cou_k]
+        pos, cou_k_set, by_key = 2 if mode == 'sugar' else 1, set(cou_k), {}
+        for k in pool_in_split:
+            if k[pos] in cou_k_set:
+                by_key.setdefault(k[0], []).append(k[pos])
         cou_for_df = []
         for key in cou_k2:
-            idx = [item.split('*')[2 if mode == 'sugar' else 1] for item in pool_in2 if item.split('*')[0] == key]
-            cou_t = Counter(idx).most_common()
-            cou_v_t = {item[0]: item[1] for item in cou_t}
-            cou_v_t = [cou_v_t.get(item, 0) for item in cou_k]
+            counts = Counter(by_key.get(key, []))
+            cou_v_t = [counts.get(item, 0) for item in cou_k]
             if len(cou_k2) > 1:
                 cou_for_df.append(
                     pd.DataFrame({'monosaccharides': cou_k, 'counts': cou_v_t, 'colors': [key] * len(cou_k)}))
@@ -776,9 +777,10 @@ def get_differential_expression(
         fc, rows = dict(zip(df_out['Glycan'], df_out['Log2FC'])), {}
         for p in [m for m in full.index if m in dag and dag.out_degree(m)]:
             kids = [c for c in dag.successors(p) if c in full.index]
-            resid = full.loc[p] - full.loc[kids].sum(axis = 0)
+            kid_vals = full.loc[kids]
+            resid = full.loc[p] - kid_vals.sum(axis = 0)
             # A per-sample scalar cancels from a parent/child logratio, so these balances carry no reference frame and no scale model; alone among the outputs they are pure data
-            parts = pd.DataFrame(np.vstack([full.loc[kids].values, resid.clip(lower = 0).values]), columns = full.columns)
+            parts = pd.DataFrame(np.vstack([kid_vals.values, resid.clip(lower = 0).values]), columns = full.columns)
             parts = parts[(parts > 1e-6).any(axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
             # Children and residual sum to the parent, so they are a genuine sub-composition; subtracting one part gives its additive logratio, which is the isometric test in disguise (Hotelling's T2 is affine-invariant) and drops the evenness direction that dividing by the parent leaves behind
             bal = np.log2(parts + 0.0000001)
@@ -1775,5 +1777,5 @@ def get_glycoshift_per_site(
     df = pd.concat([df, preserved_data.reset_index(drop = True)], axis = 1)
     df_long = pd.melt(df, id_vars = ['Glycosite', 'Glycoform'] + glycan_features, var_name = 'Sample',
                       value_name = 'Abundance')
-    df_long['Condition'] = df_long['Sample'].apply(lambda x: 0 if x in group1 else 1)
+    df_long['Condition'] = (~df_long['Sample'].isin(set(group1))).astype(int)
     return process_glm_results(df_long, alpha, glycan_features)

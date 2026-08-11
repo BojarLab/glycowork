@@ -127,6 +127,8 @@ def get_stem_lib(libr: dict[str, int] # Dictionary mapping glycoletters to indic
 
 stem_lib = get_stem_lib(lib)
 _STEM_LIB = stem_lib
+_STEM_LIB_SORTED = sorted(_STEM_LIB.keys(), key = len, reverse = True)
+_STEM_LIB_VALUES = set(_STEM_LIB.values())
 
 
 def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
@@ -139,8 +141,10 @@ def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
     stem_lib = (_STEM_LIB if libr is lib else get_stem_lib(libr)) if stem_lib is None else stem_lib
     if '(' not in glycan:
         return get_core(glycan)
-    sorted_keys = sorted(stem_lib.keys(), key = len, reverse = True)
-    clean_values = set(stem_lib.values())
+    if stem_lib is _STEM_LIB:
+        sorted_keys, clean_values = _STEM_LIB_SORTED, _STEM_LIB_VALUES
+    else:
+        sorted_keys, clean_values = sorted(stem_lib.keys(), key = len, reverse = True), set(stem_lib.values())
     for key in sorted_keys:
         if key in glycan and '-' not in key:
             glycan = glycan.replace(key, stem_lib[key])

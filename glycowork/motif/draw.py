@@ -125,6 +125,11 @@ _TRANSFORM_PATTERN = re.compile(r'transform\s*=\s*"([^"]*)"')
 _CONF_DISPLAY = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
 _SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
 _SVG_NUMBER = re.compile(r'-?\d+(?:\.\d+)?(?:e-?\d+)?')
+_MOTIF_NAMES = motif_list.motif_name.values.tolist()
+_MOTIF_NAME_IDX = {n: i for i, n in enumerate(_MOTIF_NAMES)}
+_MOTIF_NORM_IDX = {}
+for _i, _n in enumerate(_MOTIF_NAMES):
+    _MOTIF_NORM_IDX.setdefault(re.sub(r'[\s_-]', '', _n.lower()), []).append(_i)
 
 
 def _get_glycorender():
@@ -136,22 +141,22 @@ def resolve_motif_name(
         name: str, # candidate motif_list name
 ) -> tuple[str, list] | None: # (motif sequence, termini spec), or None if name is not a known motif
     "Maps a motif_list name to its sequence and termini spec, tolerating case/underscore/space/hyphen differences"
-    names = motif_list.motif_name.values.tolist()
-    if name not in names:
+    idx = _MOTIF_NAME_IDX.get(name)
+    if idx is None:
         key = re.sub(r'[\s_-]', '', name.lower())
-        hits = [n for n in names if re.sub(r'[\s_-]', '', n.lower()) == key]
+        hits = _MOTIF_NORM_IDX.get(key, [])
         if len(hits) > 1:
-            raise ValueError(f"Motif name '{name}' is ambiguous between {hits}; please use exact capitalization.")
+            raise ValueError(
+                f"Motif name '{name}' is ambiguous between {[_MOTIF_NAMES[i] for i in hits]}; please use exact capitalization.")
         if not hits:
-            generic = [n for n in names if re.sub(r'[\s_-]', '', n.lower()) in (f'terminal{key}', f'internal{key}')]
+            generic = sorted(_MOTIF_NORM_IDX.get(f'terminal{key}', []) + _MOTIF_NORM_IDX.get(f'internal{key}', []))
             if not generic:
                 return None
             # A position-less name (e.g., 'LewisX') means the motif wherever it sits, so take the variant without positional negations and relax its termini
-            idx = min((names.index(n) for n in generic), key = lambda i: motif_list.motif.values[i].count('!'))
+            idx = min(generic, key = lambda i: motif_list.motif.values[i].count('!'))
             return motif_list.motif.values[idx], ['flexible'] * len(
                 ast.literal_eval(motif_list.termini_spec.values[idx]))
-        name = hits[0]
-    idx = names.index(name)
+        idx = hits[0]
     return motif_list.motif.values[idx], ast.literal_eval(motif_list.termini_spec.values[idx])
 
 

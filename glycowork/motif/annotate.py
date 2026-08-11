@@ -267,8 +267,8 @@ def annotate_dataset(
         counts_dict = {motif: [subgraph_isomorphism(g, m, count = True, termini_list = specs[motif]) for g in ggraphs]
                        for motif, m in zip(new_additions, gmotifs_terminal)}
         sia_motifs = {k for k in counts_dict if 'Sia' in k and 'Neu5Ac' not in k and 'Neu5Gc' not in k}
-        specific_vals = [v for k, v in counts_dict.items() if k not in sia_motifs]
-        counts_dict = {k: v for k, v in counts_dict.items() if k not in sia_motifs or v not in specific_vals}
+        specific_vals = {tuple(v) for k, v in counts_dict.items() if k not in sia_motifs}
+        counts_dict = {k: v for k, v in counts_dict.items() if k not in sia_motifs or tuple(v) not in specific_vals}
         bag_out = pd.DataFrame(counts_dict).fillna(0).astype(int)
         bag_out.index = glycans
         bag_out.columns = ['Terminal_' + c for c in bag_out.columns]

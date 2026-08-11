@@ -155,15 +155,10 @@ class LectinOracle(torch.nn.Module):
         h_n = torch.cat((embedded_prot, x), 1)
         # Fully connected part
         h_n = self.act1(self.bn1(self.fc1(h_n)))
-        x1 = self.fc2(self.dp1(h_n))
-        x2 = self.fc2(self.dp1(h_n))
-        x3 = self.fc2(self.dp1(h_n))
-        x4 = self.fc2(self.dp1(h_n))
-        x5 = self.fc2(self.dp1(h_n))
-        x6 = self.fc2(self.dp1(h_n))
-        x7 = self.fc2(self.dp1(h_n))
-        x8 = self.fc2(self.dp1(h_n))
-        out = self.sigmoid(torch.mean(torch.stack([x1, x2, x3, x4, x5, x6, x7, x8]), dim = 0))
+        if self.training:
+            out = self.sigmoid(torch.mean(torch.stack([self.fc2(self.dp1(h_n)) for _ in range(8)]), dim = 0))
+        else:
+            out = self.sigmoid(self.fc2(h_n))
         if inference:
             return out, embedded_prot, x
         else:
@@ -212,7 +207,6 @@ class LectinOracle_flex(torch.nn.Module):
         self.act_prot1 = torch.nn.LeakyReLU()
         self.act_prot2 = torch.nn.LeakyReLU()
         # Combined fully connected part
-        self.dp1_n = torch.nn.Dropout(0.5)
         self.fc1_n = torch.nn.Linear(128+self.hidden_size, int(np.round(self.hidden_size/2)))
         self.fc2_n = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
         self.bn1_n = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
@@ -240,15 +234,10 @@ class LectinOracle_flex(torch.nn.Module):
         h_n = torch.cat((embedded_prot, x), 1)
         # Fully connected part
         h_n = self.act1_n(self.bn1_n(self.fc1_n(h_n)))
-        x1 = self.fc2_n(self.dp1(h_n))
-        x2 = self.fc2_n(self.dp1(h_n))
-        x3 = self.fc2_n(self.dp1(h_n))
-        x4 = self.fc2_n(self.dp1(h_n))
-        x5 = self.fc2_n(self.dp1(h_n))
-        x6 = self.fc2_n(self.dp1(h_n))
-        x7 = self.fc2_n(self.dp1(h_n))
-        x8 = self.fc2_n(self.dp1(h_n))
-        out = self.sigmoid(torch.mean(torch.stack([x1, x2, x3, x4, x5, x6, x7, x8]), dim = 0))
+        if self.training:
+            out = self.sigmoid(torch.mean(torch.stack([self.fc2_n(self.dp1(h_n)) for _ in range(8)]), dim = 0))
+        else:
+            out = self.sigmoid(self.fc2_n(h_n))
         if inference:
             return out, embedded_prot, x
         else:
