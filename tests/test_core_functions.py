@@ -115,6 +115,7 @@ from glycowork.ml.model_training import (EarlyStopping, sigmoid, disable_running
                           enable_running_stats, train_model, SAM, Poly1CrossEntropyLoss, training_setup,
                           train_ml_model, analyze_ml_model, get_mismatch, WarmupScheduler
 )
+import glycowork.ml.model_training as model_training_module
 from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRange, LectinOracle,
                           init_weights, prep_model, LectinOracle_flex
 )
@@ -6683,6 +6684,8 @@ def test_dataset_to_graphs(mock_glycan_dataset, mock_library):
     assert all(isinstance(data, Data) for data in data_list)
     assert all(hasattr(data, 'y') for data in data_list)
     assert all(data.y.dtype == torch.long for data in data_list)
+    assert all(hasattr(data, 'num_nodes') for data in data_list)
+    assert all(data.num_nodes > 0 for data in data_list)
     data_list = dataset_to_graphs(
         glycans[:2],
         labels[:2],
@@ -7652,6 +7655,50 @@ def test_train_model_all_modes(mode, expected_metrics, mock_model, mock_dataload
         mode2='multi' if mode != 'regression' else 'binary',
         return_metrics=False
     )
+
+
+def test_train_model_moves_model_to_device():
+    class TrackingModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.to_calls = []
+            self.prot_encoder = nn.Linear(960, 1)
+
+        def to(self, *args, **kwargs):
+            target = args[0] if args else kwargs.get("device")
+            self.to_calls.append(str(target))
+            return super().to(*args, **kwargs)
+
+        def forward(self, prot, x, edge_index, batch):
+            return self.prot_encoder(prot)
+
+    model = TrackingModel()
+    sample = Data(
+        labels=torch.tensor([0], dtype=torch.long),
+        y=torch.tensor([0.5], dtype=torch.float),
+        edge_index=torch.empty((2, 0), dtype=torch.long),
+        batch=torch.tensor([0], dtype=torch.long),
+        train_idx=torch.randn(960, dtype=torch.float),
+    )
+    dataloaders = {"train": [sample], "val": [sample]}
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1)
+
+    _ = train_model(
+        model,
+        dataloaders,
+        criterion,
+        optimizer,
+        scheduler,
+        num_epochs=1,
+        mode="regression",
+        mode2="binary",
+        return_metrics=False,
+    )
+
+    assert model.to_calls
+    assert model.to_calls[0] == str(model_training_module.device)
 
 
 def test_train_model_plotting(mock_model, mock_dataloader):
