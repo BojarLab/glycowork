@@ -27,7 +27,7 @@
 - `hotellings_t2` is now more robust to tiny groups (a918a2e)
 - `TST_grouped_benjamini_hochberg` is now more robust to groups with π0 = 1 (c902297)
 - `replace_outliers_winsorization` now takes in the entire `df` as input, instead of only one `row` (5483f3c)
-- `replace_outliers_winsorization`, `omega_squared`, and `permanova_with_permutation` are now much faster (5483f3c)
+- `replace_outliers_winsorization`, `omega_squared`, and `permanova_with_permutation` are now much faster (5483f3c, 0b0085c)
 - `mahalanobis_distance` can now properly account for paired data as well (f5ba41f)
 
 ##### Fixed 🐛
@@ -148,7 +148,7 @@
 
 #### evolution
 ##### Changed 🔄
-- Milk networks are now loaded lazily instead of eagerly upon module load, improving package start-up time
+- Milk networks are now loaded lazily instead of eagerly upon module load, improving package start-up time (0b0085c)
 
 ##### Fixed 🐛
 - Made sure `check_conservation` no longer crashes if a rank has no matching network (78fe195)

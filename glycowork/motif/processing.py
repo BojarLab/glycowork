@@ -1227,6 +1227,7 @@ def _sort_mono_mods(m):
     return base + ''.join(non_numeric) + ''.join(numeric)
 
 
+@lru_cache(maxsize = None)
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                        ) -> str: # Standardized IUPAC-condensed format
     "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, KCF, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"

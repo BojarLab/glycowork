@@ -1,4 +1,5 @@
 import re
+import sys
 from copy import deepcopy
 from typing import Callable
 from glycowork.glycan_data.loader import unwrap, modification_map, HashableDict
@@ -101,7 +102,7 @@ def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence
     return mask_dic, adj_matrix
 
 
-@lru_cache(maxsize = 128)
+@lru_cache(maxsize = None)
 def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
                           libr: dict[str, int] | HashableDict[str, int] | None = None, # Dictionary of form glycoletter:index
                           termini: str = 'ignore', # How to encode terminal/internal position; options: ignore, calc, provided
@@ -125,8 +126,9 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
         node_dict.pop(last_node, None)
         g1.remove_node(last_node)
     # Add node labels
-    node_attributes = {i: {'string_labels': v} if libr is None else {'labels': libr[v], 'string_labels': v}
-                       for i, v in node_dict.items()}
+    node_attributes = {
+        i: {'string_labels': sys.intern(v)} if libr is None else {'labels': libr[v], 'string_labels': sys.intern(v)}
+        for i, v in node_dict.items()}
     nx.set_node_attributes(g1, node_attributes)
     if termini == 'calc':
         last_node = max(g1.nodes())
@@ -750,17 +752,28 @@ def deduplicate_glycans(glycans: list[str] | set[str] # List/set of glycans to d
     ggraphs = list(map(glycan_to_nxGraph, glycans))
     n = len(glycans)
     keep = [True] * n
-    for i in range(n):
-        if not keep[i]:
-            continue
-        for j in range(i + 1, n):
-            if not keep[j]:
+    # graph_to_string is a total canonicalization, so it decides isomorphism outright once no token can match anything but itself; build_wildcard_cache is the predicate compare_glycans itself uses, so this gate cannot drift when MONO_PATTERN grows
+    if build_wildcard_cache(set(unwrap(min_process_glycans(glycans)))) or any(c in g for g in glycans for c in 'O^{'):
+        groups = [list(range(n))]
+    else:
+        buckets = {}
+        for i in range(n):
+            buckets.setdefault(graph_to_string(ggraphs[i]), []).append(i)
+        groups = [b for b in buckets.values() if len(b) > 1]
+    for group in groups:
+        for gi, i in enumerate(group):
+            if not keep[i]:
                 continue
-            if compare_glycans(ggraphs[i], ggraphs[j]):
-                correct_glycan = graph_to_string(ggraphs[i])
-                if correct_glycan == glycans[i]:
-                    keep[j] = False
-                else:
-                    keep[i] = False
-                    break
+            correct_glycan = None
+            for j in group[gi + 1:]:
+                if not keep[j]:
+                    continue
+                if compare_glycans(ggraphs[i], ggraphs[j]):
+                    if correct_glycan is None:
+                        correct_glycan = graph_to_string(ggraphs[i])
+                    if correct_glycan == glycans[i]:
+                        keep[j] = False
+                    else:
+                        keep[i] = False
+                        break
     return [g for i, g in enumerate(glycans) if keep[i]]
