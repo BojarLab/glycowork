@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from importlib import resources
 import math
+from typing import Literal
 
 try:
     import torch
@@ -176,8 +177,50 @@ def get_esmc_representations(prots: list[str],  # list of protein sequences to c
             logits_output = model.logits(protein_tensor, None)
         return torch.mean(logits_output.embeddings, dim = 1).squeeze().tolist()
 
-    unique_prots = list(set(prots))
+    unique_prots = list(dict.fromkeys(prots))
     return {p: prot_to_ESMC(p) for p in unique_prots}
+
+
+def get_esm_representations(prots: list[str],
+                            model: Literal["esm2", "esm1b"] = "esm2"
+                            ) -> dict[str, list[float]]:
+    """Retrieve mean-pooled ESM-2 or ESM-1b representations for protein sequences."""
+    if model not in {"esm2", "esm1b"}:
+        raise ValueError("model must be 'esm2' or 'esm1b'")
+    if not prots:
+        return {}
+    try:
+        import esm
+    except ImportError as exc:
+        raise ImportError(
+            "<fair-esm missing; install glycowork[ml] or run 'pip install fair-esm'>"
+        ) from exc
+
+    if model == "esm2":
+        esm_model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+    else:
+        esm_model, alphabet = esm.pretrained.esm1b_t33_650M_UR50D()
+
+    esm_model = esm_model.eval().to(device)
+    batch_converter = alphabet.get_batch_converter()
+    unique_prots = list(dict.fromkeys(prots))
+    data = [(str(i), seq) for i, seq in enumerate(unique_prots)]
+    _, _, batch_tokens = batch_converter(data)
+    batch_tokens = batch_tokens.to(device)
+
+    with torch.no_grad():
+        results = esm_model(
+            batch_tokens,
+            repr_layers=[esm_model.num_layers],
+            return_contacts=False,
+        )
+
+    reps = results["representations"][esm_model.num_layers]
+    out = {}
+    for i, (_, seq) in enumerate(data):
+        seq_len = (batch_tokens[i] != alphabet.padding_idx).sum().item()
+        out[seq] = reps[i, 1:seq_len - 1].mean(0).cpu().tolist()
+    return out
 
 
 def get_Nsequon_preds(prots: list[str],  # 20 AA + N + 20 AA sequences; replace missing with 'z'
