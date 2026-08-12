@@ -102,7 +102,6 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
     from sklearn.metrics import accuracy_score, label_ranking_average_precision_score, matthews_corrcoef, mean_absolute_error, mean_squared_error, ndcg_score, r2_score, roc_auc_score
     import matplotlib.pyplot as plt
     since = time.time()
-    model = model.to(device)
     early_stopping = EarlyStopping(patience = patience, verbose = True)
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = float("inf")
