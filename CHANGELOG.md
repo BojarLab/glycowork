@@ -12,6 +12,7 @@
 #### loader
 ##### Added ✨
 - Added the `meta_filter` attribute to `GlycoDataFrame`, to filter datasets by metadata, such as `df_glycan.meta_filter(Order = 'Perissodactyla')`, which can be chained like any `pandas` attribute, such as `df_glycan.meta_filter(Order = 'Perissodactyla').glyco_filter('Sia(a2-3)Gal')` (c11b4d0)
+- Added newly curated comparative glycomics datasets to `glycomics_data_loader`: `human_serum_parkinson_GSL_PMID40379659`, `mouse_brain_tango2ko_GSL_10_1002pgr2_70042`, `mouse_brain_tango2ko_N_10_1002pgr2_70042`, `mouse_brain_tango2ko_O_10_1002pgr2_70042`, `fish_gill_infection_O_PMID41435595`, `fish_intestine_infection_O_10_2139ssrn_7005880`, `human_colorectal_butyrate_O_PMID36669592`, `human_celllines_N_PMID38022636`, `human_serum_gangliosidosis_GSL_PMID39190143`
 
 ##### Changed 🔄
 - Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute (9afa2b3)
@@ -65,7 +66,7 @@
 - `preprocess_data` now has the new optional keyword argument `glycoproteomics`, mainly for `get_differential_expression` to pass this info to be able to trigger `get_composition_dag` (c11b4d0)
 - `get_glycanova`, `get_time_series`, and `get_jtk` now have the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type, time series, and circadian glycoform analysis of glycoproteomics data (c11b4d0, f3ee7e0)
 - Added the new optional keyword argument `random_state` to `get_time_series`, `get_jtk`, and `get_SparCC` to make them fully reproducible (9630cd0)
-- Added the new optional keyword argument `moderate_variance` to `get_differential_expression` and `get_glycanova` to support Empirical-Bayes variance moderation
+- Added the new optional keyword argument `moderate_variance` to `get_differential_expression` and `get_glycanova` to support Empirical-Bayes variance moderation (afa0634)
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
