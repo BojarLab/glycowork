@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from importlib import resources
 import math
+import warnings
 
 try:
     import torch
@@ -150,12 +151,42 @@ def get_lectin_preds(prot: str,  # protein amino acid sequence
     return df_pred
 
 
+def _clean_protein_sequences(prots: list[str],  # protein sequences to filter
+                             max_len: int = 1000  # maximum sequence length to keep
+                             ) -> list[str]:
+    """Filter protein sequences to valid ESM input and remove duplicates."""
+    valid_protein_char = set("ACDEFGHIKLMNPQRSTVWYBXZOU.-")
+    cleaned = []
+    skipped = 0
+    for raw_seq in prots:
+        if not isinstance(raw_seq, str):
+            skipped += 1
+            continue
+        seq = raw_seq.strip().upper()
+        if not seq:
+            skipped += 1
+            continue
+        if set(seq) - valid_protein_char:
+            skipped += 1
+            continue
+        cleaned.append(seq[:max_len])
+    if skipped:
+        warnings.warn(
+            f"Skipped {skipped} invalid or empty protein sequence(s) before ESM encoding.",
+            stacklevel = 2,
+        )
+    unique = list(dict.fromkeys(cleaned))
+    if not unique:
+        raise ValueError("No valid protein sequences remained after cleaning.")
+    return unique
+
 def get_esmc_representations(prots: list[str],  # list of protein sequences to convert
                              model: torch.nn.Module,  # trained ESMC model
                              ) -> dict[str, list[float]]:  # dict of protein sequence:ESMC-300M representation
     "Retrieves ESMC-300M representations of protein for using them as input for LectinOracle"
     # from esm.models.esmc import ESMC
     # model = ESMC.from_pretrained("esmc_300m").to(device)
+    prots=_clean_protein_sequences(prots)
     try:
         from esm.sdk.api import ESMProtein, LogitsConfig
         use_esm_api = True
