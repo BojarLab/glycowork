@@ -105,7 +105,7 @@ class LectinOracle(torch.nn.Module):
                  num_classes: int = 1, # number of output classes (>1 for multilabel)
                  data_min: float = -11.355, # minimum observed value in training data
                  data_max: float = 23.892, # maximum observed value in training data
-                 input_size_prot: int = 960 # dimensionality of protein representations
+                 input_size_prot: int = 1280 # dimensionality of protein representations
                  ) -> None:
         "given glycan graphs and protein representations as input, predicts protein-glycan binding"
         super(LectinOracle, self).__init__()
