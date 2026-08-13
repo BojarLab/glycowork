@@ -429,9 +429,9 @@ def draw_shape(
             points.extend([x_base+half_dim*cos(radians(angle)), y_base-half_dim*sin(radians(angle))])
         points.extend([x_base+inside_hex_dim*cos(radians(end_angle)), y_base-inside_hex_dim*sin(radians(end_angle))])
         drawing.append(draw.Lines(*points, close = True, fill = segment_fill, stroke = col_dict['black'], stroke_width = 0))
-        # Draw the dividing line - either center-to-edge or edge-to-edge
+        # Draw the dividing line; either center-to-edge or edge-to-edge
         if shape[:2] in {'25', '03', '14'}:
-            p = draw.Path(stroke_width=stroke_w, stroke=col_dict['black'])
+            p = draw.Path(stroke_width = stroke_w, stroke = col_dict['black'])
             p.M(x_base+inside_hex_dim*cos(radians(start_angle)), y_base-inside_hex_dim*sin(radians(start_angle)))
             p.L(x_base+inside_hex_dim*cos(radians(end_angle)), y_base-inside_hex_dim*sin(radians(end_angle)))
             drawing.append(p)
@@ -465,7 +465,8 @@ def draw_shape(
         if shape == 'C':
             drawing.append(draw.Circle(x_base - 0.4 * dim, y_base, 0.15 * dim, fill = 'none', stroke_width = stroke_w, stroke = col_dict['black']))
     if shape not in {'empty', 'text', 'red_end', 'free', 'Z', 'Y', 'B', 'C'} and shape[:2] not in _SEGMENT_PREFIXES:
-        add_customization(drawing, x_base, y_base, dim, modification, col_dict, conf, furanose, text_anchor)
+        add_customization(drawing, x_base = x_base, y_base = y_base, dim = dim, modification = modification,
+                          col_dict = col_dict, conf = conf, furanose = furanose, text_anchor = text_anchor)
 
 
 def add_bond(
@@ -584,7 +585,8 @@ def add_sugar(
             div_y = ((sqrt(3)) / 2) * half_dim if shape == 'dHex' else half_dim
             p.M(x_base, y_base - div_y).L(x_base, y_base + div_y)
         drawing.append(p)
-        add_customization(drawing, x_base, y_base, dim, modification, col_dict, conf, furanose, text_anchor)
+        add_customization(drawing, x_base = x_base, y_base = y_base, dim = dim, modification = modification,
+                          col_dict = col_dict, conf = conf, furanose = furanose, text_anchor = text_anchor)
     else:
         x_base = -x_pos * dim
         y_base = y_pos * dim
@@ -702,7 +704,6 @@ def get_coordinates_and_labels(
     graph = get_highlight_attribute(graph, highlight_motif, termini_list = termini_list, reverse_highlight = reverse_highlight)
     node_values = list(nx.get_node_attributes(graph, 'string_labels').values())
     highlight_values = list(nx.get_node_attributes(graph, 'highlight_labels').values())
-
     parsed_sugars = {}
     for idx, raw_label in enumerate(node_values):
         if idx % 2:
@@ -726,7 +727,6 @@ def get_coordinates_and_labels(
             modification_text = f"{match.group(1)}Subst" if match else (
                 modification_text if ('Subst' in modification_text or normalized_label != 'Unknown') else '')
         parsed_sugars[idx] = (normalized_label, ('!' + modification_text) if negated else modification_text)
-
     root = max(graph.nodes())
     leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
     main_chain = nx.shortest_path(graph.reverse(), leaves[0], root) if leaves else []
@@ -737,7 +737,6 @@ def get_coordinates_and_labels(
     main_sugar_highlight = [highlight_values[node] for node in main_chain if node % 2 == 0][::-1]
     main_bond_highlight = [highlight_values[node] for node in main_chain if node % 2 == 1][::-1]
     main_sugar_x_pos = list(range(len(main_sugar)))
-
     branch_level1, branch_level2, branch_level3 = get_branches_from_graph(graph, main_chain, main_label_sugar)
 
     def process_branch_data(branches: list):
@@ -759,13 +758,11 @@ def get_coordinates_and_labels(
     l1_sugar, l1_sugar_modification, l1_bond, l1_connection, l1_sugar_label, l1_bond_label = process_branch_data(branch_level1)
     l2_sugar, l2_sugar_modification, l2_bond, l2_connection, l2_sugar_label, l2_bond_label = process_branch_data(branch_level2)
     l3_sugar, l3_sugar_modification, l3_bond, l3_connection, l3_sugar_label, l3_bond_label = process_branch_data(branch_level3)
-
     # Process linkages
     main_bond = process_bonds(main_bond)
     l1_bond = process_bonds(l1_bond)
     l2_bond = process_bonds(l2_bond)
     l3_bond = process_bonds(l3_bond)
-
     # Main chain x
     if (main_sugar[-1]  == 'Fuc' and len(main_bond) > 1) or (main_sugar[-1] == 'Xyl' and len(main_bond) > 1 and main_bond[-1] == 'β 2'):
         main_sugar_x_pos[-1] -= 1
@@ -789,13 +786,11 @@ def get_coordinates_and_labels(
     l1_x_pos = calculate_x_positions(l1_sugar, l1_connection, main_sugar_x_pos)
     l2_x_pos = calculate_x_positions(l2_sugar, l2_connection, l1_x_pos, level = 2)
     l3_x_pos = calculate_x_positions(l3_sugar, l3_connection, l2_x_pos, level = 3)
-
     # Initialize y positions - ALL START AT Y=0 (except Fuc)
     main_sugar_y_pos = [2 if s == "Fuc" and i == len(main_sugar)-1 and draw_this.count('(') > 1 else 0 for i, s in enumerate(main_sugar)]
     l1_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l1_sugar]
     l2_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l2_sugar]
     l3_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l3_sugar]
-
     SPACING = 1
     # Main chain goes down, branches go up
     branch_points = {conn[1] for conn in l1_connection}
@@ -838,7 +833,6 @@ def get_coordinates_and_labels(
             # Push main chain down after branch point
             for i in range(parent_idx + 1, len(main_sugar)):
                 main_sugar_y_pos[i] += spacing_spec
-
     # All branches go up
     for j, conn in enumerate(l1_connection):
         parent_idx = conn[1]
@@ -941,7 +935,6 @@ def get_coordinates_and_labels(
     l1_conf, l1_sugar_modification = extract_conformation(l1_sugar_modification)
     l2_conf, l2_sugar_modification = extract_conformation(l2_sugar_modification)
     l3_conf, l3_sugar_modification = extract_conformation(l3_sugar_modification)
-
     node_positions = {n: (0, 0, i) for i, n in enumerate(main_label_sugar[::-1])}
     for lane, branches in enumerate((branch_level1, branch_level2, branch_level3), start = 1):
         for b, branch in enumerate(branches):
@@ -1361,7 +1354,6 @@ def GlycoDraw(
         elif highlight_motif.startswith('r'):
             temp = get_match(highlight_motif[1:], draw_this)
             highlight_motif = temp[0] if temp else None
-
     # toggle SNFG vs 2D/3D chem
     if draw_method:
         if draw_method == 'chem2d':
@@ -1370,7 +1362,6 @@ def GlycoDraw(
             return draw_chem3d(draw_this = draw_this, mono_list = mono_list, filepath = filepath, pdb_file = pdb_file)
         else:
             raise ValueError('Method not supported. Please choose between "chem2d" and "chem3d".')
-
     # Handle floaty bits if present
     floaty_bits, anchored_bits = [], []
     for openpos, closepos, _ in get_matching_indices(draw_this, opendelim = '{', closedelim = '}'):
@@ -1388,20 +1379,16 @@ def GlycoDraw(
                      anchored_bits]
         floaty_bits += [bit for (bit, _), ok in zip(anchored_bits, placeable) if not ok]
         anchored_bits = [entry for entry, ok in zip(anchored_bits, placeable) if ok]
-
     if restrict_vocab and not in_lib(draw_this, expand_lib(libr, list(sugar_dict.keys()) + [k for k in min_process_glycans([draw_this])[0] if '/' in k])): # support for super-narrow wildcard linkages
         if "!" in draw_this:
             draw_this = re.sub(r'\[!.*?\)\]|!.*?\)', '', draw_this)
         else:
             raise Exception('Did you enter a real glycan or motif?')
-
     data = get_coordinates_and_labels(draw_this, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
-
     main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label = data[0]
     l1_sugar, l1_x_pos, l1_y_pos, l1_sugar_modification, l1_bond, l1_connection, l1_conf, l1_sugar_label, l1_bond_label = data[1]
     l2_sugar, l2_x_pos, l2_y_pos, l2_sugar_modification, l2_bond, l2_connection, l2_conf, l2_sugar_label, l2_bond_label = data[2]
     l3_sugar, l3_x_pos, l3_y_pos, l3_sugar_modification, l3_bond, l3_connection, l3_conf, l3_sugar_label, l3_bond_label = data[3]
-
     if not show_linkage:
         main_bond = ['-'] * len(main_bond)
         l1_bond = [['-' for _ in y] for y in l1_bond]
@@ -1414,7 +1401,6 @@ def GlycoDraw(
 
     main_deg = [calculate_degree(main_sugar_y_pos[k], main_sugar_y_pos[k - 1], main_sugar_x_pos[k], main_sugar_x_pos[k - 1])
         if sugar in {'Z', 'Y'} and k > 0 else 0 for k, sugar in enumerate(main_sugar)]
-
     # Calculate angles for branch Y, Z fragments
     l1_deg = []
     for k, sugars in enumerate(l1_sugar):
@@ -1424,7 +1410,6 @@ def GlycoDraw(
             calculate_degree(l1_y_pos[k][j], l1_y_pos[k][j-1], l1_x_pos[k][j], l1_x_pos[k][j-1])
             if sugar in {'Z', 'Y'} else 0 for j, sugar in enumerate(sugars)
         ])
-
     # Calculate angles for branch_branch Y, Z fragments
     l2_deg = []
     for k, sugars in enumerate(l2_sugar):
@@ -1434,20 +1419,17 @@ def GlycoDraw(
             calculate_degree(l2_y_pos[k][j], l2_y_pos[k][j-1], l2_x_pos[k][j], l2_x_pos[k][j-1])
             if sugar in {'Z', 'Y'} else 0 for j, sugar in enumerate(sugars)
         ])
-
     # Adjust drawing dimensions
     all_y = unwrap(l3_y_pos) + unwrap(l2_y_pos) + unwrap(l1_y_pos) + main_sugar_y_pos
     all_x = unwrap(l3_x_pos) + unwrap(l2_x_pos) + unwrap(l1_x_pos) + main_sugar_x_pos
     max_y, min_y = max(all_y), min(all_y)
     max_x = max(all_x)
     y_span = max_y - min_y
-
     # Floaty bits are spread over the full height of their own lane, so they need vertical room of their own
     if len(floaty_bits) + len(anchored_bits) > y_span:
         y_span += 1.0
         max_y += 0.5
         min_y -= 0.5
-
     # Generate default ALT text if not provided
     if alt_text is None:
         orientation = "vertical" if vertical else "horizontal"
@@ -1458,43 +1440,39 @@ def GlycoDraw(
             alt_text += f" The motif {highlight_motif} is highlighted."
         if repeat:
             alt_text += f" Contains repeat unit (n={repeat if isinstance(repeat, (str, int)) and repeat != True else ''})."
-
     # Draw
     d = draw.Group()
-
     if reducing_end_label:
         bond_start_x = main_sugar_x_pos[0] - 0.5
         label_x = main_sugar_x_pos[0] - 0.55 - (len(reducing_end_label) * 0.1)
         label_y = main_sugar_y_pos[0]
-        add_bond(bond_start_x, main_sugar_x_pos[0], label_y, main_sugar_y_pos[0], d, '-', dim = dim, compact = compact, highlight = main_sugar_label[0])
+        add_bond(bond_start_x, main_sugar_x_pos[0], label_y, main_sugar_y_pos[0], d, label = '-', dim = dim, compact = compact, highlight = main_sugar_label[0])
         col_dict = col_dict_transparent if main_sugar_label[0] == 'hide' else col_dict_base
         x_base = -label_x * dim * (1.2 if compact else 2)
         y_base = label_y * dim * (0.6 if compact else 1) + 5
         d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
     # Bond main chain
-    [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = main_per_linkage[k] if highlight_linkages else False) for k in range(len(main_sugar)-1)]
+    [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, label = main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = main_per_linkage[k] if highlight_linkages else False) for k in range(len(main_sugar)-1)]
     # Bond branch
-    [add_bond(l1_x_pos[b_idx][s_idx+1], l1_x_pos[b_idx][s_idx], l1_y_pos[b_idx][s_idx+1], l1_y_pos[b_idx][s_idx], d, l1_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l1_bond_label[b_idx][s_idx+1], color_highlight = side_per_linkage[b_idx][s_idx+1] if highlight_linkages else False) for b_idx in range(len(l1_sugar)) for s_idx in range(len(l1_sugar[b_idx])-1) if len(l1_sugar[b_idx]) > 1]
+    [add_bond(l1_x_pos[b_idx][s_idx+1], l1_x_pos[b_idx][s_idx], l1_y_pos[b_idx][s_idx+1], l1_y_pos[b_idx][s_idx], d, label = l1_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l1_bond_label[b_idx][s_idx+1], color_highlight = side_per_linkage[b_idx][s_idx+1] if highlight_linkages else False) for b_idx in range(len(l1_sugar)) for s_idx in range(len(l1_sugar[b_idx])-1) if len(l1_sugar[b_idx]) > 1]
     # Bond branch to main chain
-    [add_bond(l1_x_pos[k][0], main_sugar_x_pos[l1_connection[k][1]], l1_y_pos[k][0], main_sugar_y_pos[l1_connection[k][1]], d, l1_bond[k][0], dim = dim, compact = compact, highlight = l1_bond_label[k][0], color_highlight = side_per_linkage[k][0] if highlight_linkages else False) for k in range(len(l1_sugar))]
+    [add_bond(l1_x_pos[k][0], main_sugar_x_pos[l1_connection[k][1]], l1_y_pos[k][0], main_sugar_y_pos[l1_connection[k][1]], d, label = l1_bond[k][0], dim = dim, compact = compact, highlight = l1_bond_label[k][0], color_highlight = side_per_linkage[k][0] if highlight_linkages else False) for k in range(len(l1_sugar))]
     # Bond branch branch
-    [add_bond(l2_x_pos[b_idx][s_idx+1], l2_x_pos[b_idx][s_idx], l2_y_pos[b_idx][s_idx+1], l2_y_pos[b_idx][s_idx], d, l2_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l2_bond_label[b_idx][s_idx+1], color_highlight = branched_side_per_linkage[b_idx][s_idx+1] if highlight_linkages else False) for b_idx in range(len(l2_sugar)) for s_idx in range(len(l2_sugar[b_idx])-1) if len(l2_sugar[b_idx]) > 1]
+    [add_bond(l2_x_pos[b_idx][s_idx+1], l2_x_pos[b_idx][s_idx], l2_y_pos[b_idx][s_idx+1], l2_y_pos[b_idx][s_idx], d, label = l2_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l2_bond_label[b_idx][s_idx+1], color_highlight = branched_side_per_linkage[b_idx][s_idx+1] if highlight_linkages else False) for b_idx in range(len(l2_sugar)) for s_idx in range(len(l2_sugar[b_idx])-1) if len(l2_sugar[b_idx]) > 1]
     # Bond branch branch branch
-    [add_bond(l3_x_pos[b_idx][s_idx+1], l3_x_pos[b_idx][s_idx], l3_y_pos[b_idx][s_idx+1], l3_y_pos[b_idx][s_idx], d, l3_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l3_bond_label[b_idx][s_idx+1]) for b_idx in range(len(l3_sugar)) for s_idx in range(len(l3_sugar[b_idx])-1) if len(l3_sugar[b_idx]) > 1]
+    [add_bond(l3_x_pos[b_idx][s_idx+1], l3_x_pos[b_idx][s_idx], l3_y_pos[b_idx][s_idx+1], l3_y_pos[b_idx][s_idx], d, label = l3_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l3_bond_label[b_idx][s_idx+1]) for b_idx in range(len(l3_sugar)) for s_idx in range(len(l3_sugar[b_idx])-1) if len(l3_sugar[b_idx]) > 1]
     # Bond branch_branch to branch
-    [add_bond(l2_x_pos[k][0], l1_x_pos[l2_connection[k][0]][l2_connection[k][1]], l2_y_pos[k][0], l1_y_pos[l2_connection[k][0]][l2_connection[k][1]], d, l2_bond[k][0], dim = dim, compact = compact, highlight = l2_bond_label[k][0], color_highlight = branched_side_per_linkage[k][0] if highlight_linkages else False) for k in range(len(l2_sugar))]
+    [add_bond(l2_x_pos[k][0], l1_x_pos[l2_connection[k][0]][l2_connection[k][1]], l2_y_pos[k][0], l1_y_pos[l2_connection[k][0]][l2_connection[k][1]], d, label = l2_bond[k][0], dim = dim, compact = compact, highlight = l2_bond_label[k][0], color_highlight = branched_side_per_linkage[k][0] if highlight_linkages else False) for k in range(len(l2_sugar))]
     # Bond branch_branch_branch to branch_branch
-    [add_bond(l3_x_pos[k][0], l2_x_pos[l3_connection[k][0]][l3_connection[k][1]], l3_y_pos[k][0], l2_y_pos[l3_connection[k][0]][l3_connection[k][1]], d, l3_bond[k][0], dim = dim, compact = compact, highlight = l3_bond_label[k][0]) for k in range(len(l3_sugar))]
-
+    [add_bond(l3_x_pos[k][0], l2_x_pos[l3_connection[k][0]][l3_connection[k][1]], l3_y_pos[k][0], l2_y_pos[l3_connection[k][0]][l3_connection[k][1]], d, label = l3_bond[k][0], dim = dim, compact = compact, highlight = l3_bond_label[k][0]) for k in range(len(l3_sugar))]
     # Sugar main chain
-    [add_sugar(main_sugar[k], d, main_sugar_x_pos[k], main_sugar_y_pos[k], modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim, deg = main_deg[k], highlight = main_sugar_label[k], scalar = main_per_residue[k] if per_residue else 0) for k in range(len(main_sugar))]
+    [add_sugar(main_sugar[k], d, x_pos = main_sugar_x_pos[k], y_pos = main_sugar_y_pos[k], modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim, deg = main_deg[k], highlight = main_sugar_label[k], scalar = main_per_residue[k] if per_residue else 0) for k in range(len(main_sugar))]
     # Sugar branch
-    [add_sugar(l1_sugar[b_idx][s_idx], d, l1_x_pos[b_idx][s_idx], l1_y_pos[b_idx][s_idx], modification = l1_sugar_modification[b_idx][s_idx], conf = l1_conf[b_idx][s_idx], compact = compact, dim = dim, deg = l1_deg[b_idx][s_idx], highlight = l1_sugar_label[b_idx][s_idx], scalar = side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(l1_sugar)) for s_idx in range(len(l1_sugar[b_idx]))]
+    [add_sugar(l1_sugar[b_idx][s_idx], d, x_pos = l1_x_pos[b_idx][s_idx], y_pos = l1_y_pos[b_idx][s_idx], modification = l1_sugar_modification[b_idx][s_idx], conf = l1_conf[b_idx][s_idx], compact = compact, dim = dim, deg = l1_deg[b_idx][s_idx], highlight = l1_sugar_label[b_idx][s_idx], scalar = side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(l1_sugar)) for s_idx in range(len(l1_sugar[b_idx]))]
     # Sugar branch_branch
-    [add_sugar(l2_sugar[b_idx][s_idx], d, l2_x_pos[b_idx][s_idx], l2_y_pos[b_idx][s_idx], modification = l2_sugar_modification[b_idx][s_idx], conf = l2_conf[b_idx][s_idx], compact = compact, dim = dim, deg = l2_deg[b_idx][s_idx], highlight = l2_sugar_label[b_idx][s_idx], scalar = branched_side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(l2_sugar)) for s_idx in range(len(l2_sugar[b_idx]))]
+    [add_sugar(l2_sugar[b_idx][s_idx], d, x_pos = l2_x_pos[b_idx][s_idx], y_pos = l2_y_pos[b_idx][s_idx], modification = l2_sugar_modification[b_idx][s_idx], conf = l2_conf[b_idx][s_idx], compact = compact, dim = dim, deg = l2_deg[b_idx][s_idx], highlight = l2_sugar_label[b_idx][s_idx], scalar = branched_side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(l2_sugar)) for s_idx in range(len(l2_sugar[b_idx]))]
     # Sugar branch branch branch
-    [add_sugar(l3_sugar[b_idx][s_idx], d, l3_x_pos[b_idx][s_idx], l3_y_pos[b_idx][s_idx], modification = l3_sugar_modification[b_idx][s_idx], conf = l3_conf[b_idx][s_idx], compact = compact, dim = dim, highlight = l3_sugar_label[b_idx][s_idx]) for b_idx in range(len(l3_sugar)) for s_idx in range(len(l3_sugar[b_idx]))]
-
+    [add_sugar(l3_sugar[b_idx][s_idx], d, x_pos = l3_x_pos[b_idx][s_idx], y_pos = l3_y_pos[b_idx][s_idx], modification = l3_sugar_modification[b_idx][s_idx], conf = l3_conf[b_idx][s_idx], compact = compact, dim = dim, highlight = l3_sugar_label[b_idx][s_idx]) for b_idx in range(len(l3_sugar)) for s_idx in range(len(l3_sugar[b_idx]))]
     highlight = 'show' if highlight_motif == None else 'hide'
     if floaty_bits != []:
         fb_count = {i: floaty_bits.count(i) for i in floaty_bits}
@@ -1515,19 +1493,16 @@ def GlycoDraw(
             current_y = (min_y + (j * y_spacing)) if n_floats > 1 else ((min_y + max_y) / 2)
             floaty_sugar_y_pos = [current_y for _ in range(len(floaty_sugar_y_pos))]
             if floaty_sugar != ['blank', 'blank']:
-                [add_bond(floaty_sugar_x_pos[k + 1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k + 1], floaty_sugar_y_pos[k], d, floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar) - 1)]
-                [add_sugar(floaty_sugar[k], d, floaty_sugar_x_pos[k], floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf[k], compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
+                [add_bond(floaty_sugar_x_pos[k + 1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k + 1], floaty_sugar_y_pos[k], d, label = floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar) - 1)]
+                [add_sugar(floaty_sugar[k], d, x_pos = floaty_sugar_x_pos[k], y_pos = floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf[k], compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
             else:
-                add_sugar('text', d, min(floaty_sugar_x_pos) - 0.3, floaty_sugar_y_pos[-1], modification = floaty_bits[j].translate(str.maketrans("123456789", "\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089")).replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
-
+                add_sugar('text', d, x_pos = min(floaty_sugar_x_pos) - 0.3, y_pos = floaty_sugar_y_pos[-1], modification = floaty_bits[j].translate(str.maketrans("123456789", "\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089")).replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
             if fb_count[floaty_bits[j]] > 1:
                 x_offset = 0.5 if not compact else 0.75
-                add_sugar('text', d, max(floaty_sugar_x_pos) + x_offset, floaty_sugar_y_pos[-1], modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)
-
+                add_sugar('text', d, x_pos = max(floaty_sugar_x_pos) + x_offset, y_pos = floaty_sugar_y_pos[-1], modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)
         bracket_x = max_x * (2 if not compact else 1.2) + 1
         bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
         draw_bracket(bracket_x, bracket_y, d, direction = 'right', dim = dim, highlight = highlight)
-
     if anchored_bits:
         node_positions = data[4]
         lanes = [(main_sugar_x_pos, main_sugar_y_pos), (l1_x_pos, l1_y_pos), (l2_x_pos, l2_y_pos), (l3_x_pos, l3_y_pos)]
@@ -1549,16 +1524,15 @@ def GlycoDraw(
                             (round(target_x + a_x_pos[k]), round(target_y + offset)) not in occupied for k in
                             range(1, len(a_sugar)))), target_y - (3 if compact else 2))
                     occupied.update((round(target_x + a_x_pos[k]), round(ghost_y)) for k in range(1, len(a_sugar)))
-                    [add_bond(target_x + a_x_pos[k + 1], target_x + a_x_pos[k], ghost_y, ghost_y, d, a_bond[k],
+                    [add_bond(target_x + a_x_pos[k + 1], target_x + a_x_pos[k], ghost_y, ghost_y, d, label = a_bond[k],
                               dim = dim,
                               compact = compact, highlight = highlight) for k in range(1, len(a_sugar) - 1)]
-                    [add_sugar(a_sugar[k], d, target_x + a_x_pos[k], ghost_y, modification = a_modification[k],
+                    [add_sugar(a_sugar[k], d, x_pos = target_x + a_x_pos[k], y_pos = ghost_y, modification = a_modification[k],
                                conf = a_conf[k],
                                compact = compact, dim = dim, highlight = highlight) for k in range(1, len(a_sugar))]
                     add_bond(target_x + a_x_pos[1], target_x, ghost_y, target_y, d,
-                             process_bonds([linkage])[0] if show_linkage else '-', dim = dim, compact = compact,
+                             label = process_bonds([linkage])[0] if show_linkage else '-', dim = dim, compact = compact,
                              highlight = highlight, dashed = True)
-
     # add brackets around repeating unit
     if repeat:
         # process annotation
@@ -1573,7 +1547,7 @@ def GlycoDraw(
             text_y = main_sugar_y_pos[0] + 1.05 if not compact else (main_sugar_y_pos[0] + 1.03) / 0.6
             draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
             draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = 0)
-            add_sugar('text', d, text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
+            add_sugar('text', d, x_pos = text_x, y_pos = text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
         # repeat unit code block
         else:
             open_deg = calculate_degree(main_sugar_y_pos[-1], main_sugar_y_pos[-2], main_sugar_x_pos[-1], main_sugar_x_pos[-2])
@@ -1590,8 +1564,7 @@ def GlycoDraw(
             text_y = main_sugar_y_pos[0] + 1.05 if not compact else (main_sugar_y_pos[0] + 1.03) / 0.6
             draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = open_deg)
             draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
-            add_sugar('text', d, text_x, text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
-
+            add_sugar('text', d, x_pos = text_x, y_pos = text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
     # Canvas: crop to what was actually drawn, since a formula over sugar positions cannot know how far labels, brackets and highlight halos reach
     boxes = _drawn_extent(d, [])
     x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
@@ -1604,7 +1577,6 @@ def GlycoDraw(
     margin = dim * 0.2
     d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin))
     d2.append(d)
-
     if filepath:
         filepath = Path(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
         data = d2.as_svg()

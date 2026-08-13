@@ -138,7 +138,7 @@ class GlycoDataFrame(pd.DataFrame):
                      ) -> 'GlycoDataFrame':
         from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
         indices = [i for i, g in enumerate(self.glycans) if
-                   isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list, count = True) >= (
+                   isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list = termini_list, count = True) >= (
                        1 if min_count is None else min_count)]
         return self.iloc[indices, :].reset_index(drop = True)
 

@@ -674,7 +674,7 @@ def get_differential_expression(
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     in_contrasts, in_name = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', '')
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
-    df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = motifs,
+    df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = "diff", motifs = motifs,
                                                  glycoproteomics = glycoproteomics, impute = impute,
                                                  min_samples = min_samples, transform = transform,
                                                  feature_set = feature_set,
@@ -735,7 +735,7 @@ def get_differential_expression(
                                                                                                   ddof = 1)) / (
                                      A.shape[1] + B.shape[1] - 2))
                 dfr = (A.shape[1] - 1) if paired else (A.shape[1] + B.shape[1] - 2)
-                s2, dfp = moderated_variance(resid, dfr, dag_neighbors(glycans, df_org.attrs.get('motif_dag')))
+                s2, dfp = moderated_variance(resid, df_resid = dfr, neighbors = dag_neighbors(glycans, df_org.attrs.get('motif_dag')))
                 se = np.sqrt(s2 / A.shape[1]) if paired else np.sqrt(s2 * (1 / A.shape[1] + 1 / B.shape[1]))
                 delta = D.mean(axis = 1) if paired else (B.mean(axis = 1) - A.mean(axis = 1))
                 pvals = list(2 * t_dist.sf(np.abs(delta / se), dfp))
@@ -984,7 +984,7 @@ def get_glycanova(
     if len(set(groups)) < 3:
         raise ValueError(
             "You have fewer than three groups. We suggest get_differential_expression for those cases. ANOVA is for >= three groups.")
-    df, df_org, groups, _ = preprocess_data(df, groups, [], experiment = "anova", motifs = motifs, impute = impute,
+    df, df_org, groups, _ = preprocess_data(df, group1 = groups, group2 = [], experiment = "anova", motifs = motifs, impute = impute,
                                        glycoproteomics = glycoproteomics,
                                        min_samples = min_samples, transform = transform, feature_set = feature_set,
                                        gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,
@@ -1004,7 +1004,7 @@ def get_glycanova(
         gm, dfr = X.mean(axis = 1, keepdims = True), X.shape[1] - len(ug)
         ssb = sum(((X[:, garr == g].mean(axis = 1, keepdims = True) - gm) ** 2).ravel() * (garr == g).sum() for g in ug)
         ssw = sum(((X[:, garr == g] - X[:, garr == g].mean(axis = 1, keepdims = True)) ** 2).sum(axis = 1) for g in ug)
-        s2, dfp = moderated_variance(ssw / dfr, dfr, dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag')))
+        s2, dfp = moderated_variance(ssw / dfr, df_resid = dfr, neighbors = dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag')))
         f_values = (ssb / (len(ug) - 1)) / s2
         p_values = f.sf(f_values, len(ug) - 1, dfp)
     results = list(zip(df.index, f_values, p_values))
@@ -1058,7 +1058,7 @@ def get_glycanova(
             bal = np.log2(parts + 0.0000001)
             bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9]
-            bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), groups, 999)[1] if len(
+            bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), group_labels = groups, permutations = 999)[1] if len(
                 bal) else np.nan
             explained = ', '.join((f'{c} ({eff[c] - eff[p]:+.2f})' if p in eff else c) for c in kids if c in eff)
             if (resid <= 1e-6).all():
@@ -1373,7 +1373,7 @@ def get_biodiversity(
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     experiment = "diff" if group2 else "anova"
-    df, df_org, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs,
+    df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = experiment, motifs = motifs,
                                                  impute = False,
                                                  transform = transform, feature_set = feature_set, paired = paired,
                                                  gamma = gamma,
@@ -1454,11 +1454,11 @@ def get_biodiversity(
         elif all(count > 1 for count in group_counts.values()):
             beta_df_out = pd.DataFrame(distance_matrix, index = range(len(df.columns)),
                                        columns = range(len(df.columns)))
-            r, p = anosim(beta_df_out, group_sizes, permutations)
+            r, p = anosim(beta_df_out, group_labels_in = group_sizes, permutations = permutations)
             b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (ANOSIM)', 'p-val': p, 'Effect size': r},
                                         index = [0])
             shopping_cart.append(b_test_stats)
-            f, p = permanova_with_permutation(beta_df_out, group_sizes, permutations)
+            f, p = permanova_with_permutation(beta_df_out, group_labels = group_sizes, permutations = permutations)
             b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (PERMANOVA)', 'p-val': p, 'Effect size': f},
                                         index = [0])
             shopping_cart.append(b_test_stats)
@@ -1641,7 +1641,7 @@ def get_roc(
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     experiment = "diff" if group2 else "anova"
-    df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = experiment, motifs = motifs,
+    df, _, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = experiment, motifs = motifs,
                                             impute = impute,
                                             transform = transform, feature_set = feature_set, paired = paired,
                                             gamma = gamma,
@@ -1799,7 +1799,7 @@ def get_glycoshift_per_site(
 ) -> pd.DataFrame:  # DataFrame with GLM coefficients and FDR-corrected p-values
     "Analyzes site-specific glycosylation changes in glycoproteomics data using generalized linear models (GLM) with compositional data normalization"
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
-    df, _, group1, group2 = preprocess_data(df, group1, group2, experiment = "diff", motifs = False, impute = impute,
+    df, _, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = "diff", motifs = False, impute = impute,
                                             min_samples = min_samples, transform = "Nothing", paired = paired,
                                             random_state = random_state)
     alpha = get_alphaN(len(group1 + group2))

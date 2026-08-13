@@ -203,6 +203,8 @@ def get_possible_monosaccharides(wildcard: str # Monosaccharide type; options: H
                                  ) -> set[str]: # Matching monosaccharides
     "Retrieves all matching common monosaccharides of a type"
     if '/' in wildcard:
+        if m := re.fullmatch(r'(\D*)(\d+(?:/\d+)+)(\D*)', wildcard):
+            return frozenset(f"{m.group(1)}{p}{m.group(3)}" for p in m.group(2).split('/'))
         return frozenset(wildcard.split('/'))
     return frozenset(_WILDCARD_MONO.get(wildcard, ()))
 
@@ -947,7 +949,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
     iupac = iupac.replace("GlcNAc(b1-?)Man", "GlcNAc(b1-2)Man")
     antenna_number = match.group(2) if (match := re.search(r'A\d+(B)?\[([36])\]', oxford)) else None
     if not is_hybrid:
-        iupac = balance_mannose_branch_linkages(iupac, antenna_number)
+        iupac = balance_mannose_branch_linkages(iupac, antenna_number = antenna_number)
     return floaty + iupac.strip('[]')
 
 
@@ -1111,7 +1113,7 @@ def kcf_to_iupac(kcf_string: str # Glycan sequence in KCF format
 
     def build_iupac(node_id: int):
         monosaccharide = nodes[node_id]
-        node_children = sorted(children[node_id], key=lambda e: int(e['acceptor_carbon']) if e['acceptor_carbon'].isdigit() else -1, reverse = True)
+        node_children = sorted(children[node_id], key = lambda e: int(e['acceptor_carbon']) if e['acceptor_carbon'].isdigit() else -1, reverse = True)
         if not node_children:
             return monosaccharide
         child_strings = []
@@ -1223,7 +1225,7 @@ def _sort_mono_mods(m):
     if ''.join(mods) != mod_str or len(mods) < 2:
         return m.group()
     non_numeric = sorted(x for x in mods if not x[0].isdigit())
-    numeric = sorted((x for x in mods if x[0].isdigit()), key=lambda x: int(re.match(r'\d+', x).group()))
+    numeric = sorted((x for x in mods if x[0].isdigit()), key = lambda x: int(re.match(r'\d+', x).group()))
     return base + ''.join(non_numeric) + ''.join(numeric)
 
 
@@ -1285,7 +1287,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
         glycan = re.sub(r'([βα])(\()', r'\2\1', glycan)
     ac_multi = r'\d+(?:,\d+)+Ac\d*|\d+Ac\d*(?:,\d+Ac\d*)+'  # Neu9,5Ac to Neu5Ac9Ac
-    glycan = re.sub(ac_multi, lambda m: ''.join(n+'Ac' for n in sorted(re.findall(r'\d+(?=,|Ac)', m.group()), key=int)), glycan)
+    glycan = re.sub(ac_multi, lambda m: ''.join(n+'Ac' for n in sorted(re.findall(r'\d+(?=,|Ac)', m.group()), key = int)), glycan)
     ac_to_nac = r'Ac\((?:\?1|1)-2\)(?P<branch>\[[^\]]*\])?(?P<prefix>[abx\?]?(?:[DL]-?)?)(?P<base>[A-Z][a-z]{2,})(?P<pflag>p)?N\b'  # Ac(1-2)bDGlcpN to bDGlcNAc
     glycan = re.sub(ac_to_nac, lambda m: f"{m.group('branch') or ''}{m.group('prefix') or ''}{m.group('base')}{m.group('pflag') or ''}NAc", glycan)
     glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)

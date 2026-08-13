@@ -435,13 +435,15 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
     if plot_format == 'hierarchical':
         roots = [n for n in network.nodes() if network.in_degree(n) == 0]
         levels = {}
-        queue = [(r, 0) for r in roots]
+        queue = [(r, 0) for r in roots or list(network.nodes())[:1]]
         while queue:
             node, level = queue.pop(0)
-            if node not in levels or levels[node] < level:
-                levels[node] = level
-                for s in network.successors(node):
-                    queue.append((s, level + 1))
+            if node in levels:
+                continue
+            levels[node] = level
+            for s in network.successors(node):
+                queue.append((s, level + 1))
+        levels.update({n: 0 for n in network.nodes() if n not in levels})
         level_nodes = defaultdict(list)
         for node, level in levels.items():
             level_nodes[level].append(node)
@@ -1142,6 +1144,8 @@ def choose_leaves_to_extend(leaf_glycans: set[str], # Terminal glycans in a netw
         return sum((target_comp - comp).values())
 
     scored_glycans = [(glycan, score_glycan(glycan)) for glycan in leaf_glycans]
+    if not scored_glycans:
+        return set()
     min_score = min(score for _, score in scored_glycans)
     if min_score == 0:
         print("Target composition found in leaf nodes")
@@ -1193,7 +1197,9 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
     for _ in range(steps):
         new_leaf_glycans = extend_glycans(leaf_glycans, reactions, allowed_disaccharides = mammal_disac)
         if isinstance(to_extend, dict):
-            leaf_glycans = choose_leaves_to_extend(leaf_glycans, to_extend)
+            new_leaf_glycans = choose_leaves_to_extend(new_leaf_glycans, to_extend)
+        if not new_leaf_glycans:
+            break
         new_edges, new_edge_labels = edges_for_extension(leaf_glycans, new_leaf_glycans, graphs)
         network = update_network(network, new_edges, edge_labels = new_edge_labels, node_labels = {k: 1 for k in new_leaf_glycans})
         leaf_glycans = new_leaf_glycans

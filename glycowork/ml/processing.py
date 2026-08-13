@@ -61,7 +61,7 @@ class AugmentedGlycanDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int) -> torch.utils.data.Dataset:
         glycan_data = self.dataset[idx]
         if random() < self.augment_prob:
-            glycan_data = augment_glycan(glycan_data, self.libr, self.generalization_prob)
+            glycan_data = augment_glycan(glycan_data, libr = self.libr, generalization_prob = self.generalization_prob)
         return glycan_data
 
 
@@ -242,13 +242,13 @@ class GIFFLARTransform(BaseTransform):
                 ) -> HeteroData:  # transformed data
         """Transform the data into a GIFFLAR format. This means to compute the simplex network and create a heterogenous graph from it"""
         # Set up the atom information
-        data["atoms"].x = torch.tensor([atom_map.get(atom.GetAtomicNum(), 1) for atom in data["mol"].GetAtoms()])
+        data["atoms"].x = torch.tensor([atom_map.get(atom.GetAtomicNum(), 0) for atom in data["mol"].GetAtoms()])
         data["atoms"].num_nodes = len(data["atoms"].x)
         # Prepare all data that can be extracted from one iteration over all bonds
         bonds_x, atoms_coboundary, atoms_to_bonds, bonds_to_monosacchs = [], [], [], []
         # Fill all bond-related information
         for bond in data["mol"].GetBonds():
-            bonds_x.append(bond_map.get(bond.GetBondDir(), 1))
+            bonds_x.append(bond_map.get(bond.GetBondDir(), 0))
             b_idx, e_idx, idx = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), bond.GetIdx()
             atoms_coboundary.extend([(b_idx, e_idx), (e_idx, b_idx)])
             atoms_to_bonds.extend([(b_idx, idx), (e_idx, idx)])
@@ -263,7 +263,7 @@ class GIFFLARTransform(BaseTransform):
         data["bonds", "boundary", "bonds"].edge_index = torch.tensor([(bond1.GetIdx(), bond2.GetIdx()) for atom in data["mol"].GetAtoms() for bond1 in atom.GetBonds() for bond2 in atom.GetBonds() if bond1.GetIdx() != bond2.GetIdx()], dtype = torch.long).t()
         data["bonds", "coboundary", "bonds"].edge_index = torch.tensor([(bond1, bond2) for ring in data["mol"].GetRingInfo().BondRings() for bond1 in ring for bond2 in ring if bond1 != bond2], dtype = torch.long).t()
         # Set up the monosaccharide information; This does not make sense. The monomer-ids are categorical features
-        data["monosacchs"].x = torch.tensor([lib.get(data["tree"].nodes[node]["name"], 1) for node in data["tree"].nodes])
+        data["monosacchs"].x = torch.tensor([lib.get(data["tree"].nodes[node]["name"], len(lib)) for node in data["tree"].nodes])
         data["monosacchs"].num_nodes = len(data["monosacchs"].x)
         monosacchs_boundary = [(a, b) for a, b in data["tree"].edges] + [(b, a) for a, b in data["tree"].edges]
         data["monosacchs", "boundary", "monosacchs"].edge_index = torch.tensor(monosacchs_boundary, dtype = torch.long).t()

@@ -55,7 +55,7 @@ def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and ta
     df[rank] = [class_converter[k] for k in df[rank]]
     # Split each class proportionally
     all_x, all_y = df[col].values.tolist(), df[rank].values.tolist()
-    sss = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2)
+    sss = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2, random_state = 42)
     sss.get_n_splits(all_x, all_y)
     for i, j in sss.split(all_x, all_y):
         train_x = [all_x[k] for k in i]

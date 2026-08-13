@@ -149,8 +149,7 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 optimizer.zero_grad()
                 with torch.set_grad_enabled(phase == 'train'):
                     # First forward pass
-                    if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
-                        enable_running_stats(model)
+                    enable_running_stats(model)
                     pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
                     loss = criterion(pred, y)
                     if phase == 'train':

@@ -2491,6 +2491,7 @@ def test_compare_glycans():
     # Test with PTM wildcards
     assert compare_glycans("Gal6S(b1-4)GlcNAc", "GalOS(b1-4)GlcNAc")
     assert compare_glycans("Gal6S(b1-3)GalNAc4S", "GalOS(b1-3)GalNAc4/6S")
+    assert compare_glycans("Gal6S(b1-4)GlcNAc", "Gal3/6S(b1-4)GlcNAc")
     res, mappy = compare_glycans('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc', graph_to_string(glycan_to_nxGraph('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc'), order_by='linkage'), return_matches=True)
     # Test narrow monosaccharide wildcards
     assert compare_glycans("GlcNAc/GalNAc(?1-3/4)Gal(b1-3)GalNAc", "GlcNAc(a1-4)Gal(b1-3)GalNAc")

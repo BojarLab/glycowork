@@ -180,13 +180,14 @@ def _clean_protein_sequences(prots: list[str],  # protein sequences to filter
         raise ValueError("No valid protein sequences remained after cleaning.")
     return unique
 
+
 def get_esmc_representations(prots: list[str],  # list of protein sequences to convert
                              model: torch.nn.Module,  # trained ESMC model
                              ) -> dict[str, list[float]]:  # dict of protein sequence:ESMC-300M representation
     "Retrieves ESMC-300M representations of protein for using them as input for LectinOracle"
     # from esm.models.esmc import ESMC
     # model = ESMC.from_pretrained("esmc_300m").to(device)
-    prots=_clean_protein_sequences(prots)
+    prots = _clean_protein_sequences(prots)
     try:
         from esm.sdk.api import ESMProtein, LogitsConfig
         use_esm_api = True

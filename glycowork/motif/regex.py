@@ -319,7 +319,7 @@ def do_trace(start_pattern: tuple[str, list[list[int]]], # (Pattern, Match indic
             extended = False
             min_occur, max_occur = optional_components.get(component, (1, 1))
             branch = '(' in component and '(?' not in component
-            to_extend = try_matching(trace, component_matches, edges, min_occur, max_occur, branch = branch)
+            to_extend = try_matching(trace, component_matches, edges, min_occur = min_occur, max_occur = max_occur, branch = branch)
             if to_extend:
                 extend = to_extend[-1] if not isinstance(to_extend, bool) else []
                 extend = list(extend) if isinstance(extend, tuple) else extend
@@ -332,7 +332,7 @@ def do_trace(start_pattern: tuple[str, list[list[int]]], # (Pattern, Match indic
         if successful and idx + 1 >= len(pattern_matches) and start_pattern[0] in optional_components:
             min_occur, max_occur = optional_components[start_pattern[0]]
             if min_occur > 1:
-                to_extend = try_matching(trace, start_pattern[1], edges, min_occur - 1, max_occur - 1)
+                to_extend = try_matching(trace, start_pattern[1], edges, min_occur = min_occur - 1, max_occur = max_occur - 1)
                 if to_extend and not isinstance(to_extend, bool):
                     extend = to_extend[-1]
                     extend = list(extend) if isinstance(extend, tuple) else extend

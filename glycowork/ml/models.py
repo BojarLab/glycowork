@@ -30,7 +30,7 @@ class SweetNet(torch.nn.Module):
         self.conv2 = GraphConv(hidden_dim, hidden_dim)
         self.conv3 = GraphConv(hidden_dim, hidden_dim)
         # Node embedding
-        self.item_embedding = torch.nn.Embedding(num_embeddings=lib_size+1, embedding_dim=hidden_dim)
+        self.item_embedding = torch.nn.Embedding(num_embeddings = lib_size + 1, embedding_dim = hidden_dim)
         # Fully connected part
         self.lin1 = torch.nn.Linear(hidden_dim, 1024)
         self.lin2 = torch.nn.Linear(1024, 128)
@@ -293,7 +293,7 @@ class GIFFLAR(torch.nn.Module):
         for conv in self.convs:
             x_dict = conv(x_dict, batch.edge_index_dict)
         graph_embed = self.pool(x_dict, batch.batch_dict)
-        pred = self.head(graph_embed).squeeze()
+        pred = self.head(graph_embed).squeeze(-1)
         if embeddings:
             return {
                 "node_embed": x_dict,

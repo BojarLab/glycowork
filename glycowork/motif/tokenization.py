@@ -203,7 +203,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     if deprioritized is None:
         deprioritized = set()
     if adduct:
-        mz_value -= calculate_adduct_mass(adduct, mass_value)
+        mz_value -= calculate_adduct_mass(adduct, mass_value = mass_value)
     if mass_tag:
         mz_value -= mass_tag
     adduct_mass = mass_dict['Acetate'] if max_charge < 0 else mass_dict['Na+']
@@ -291,8 +291,6 @@ def compositions_to_structures(composition_list: list[dict[str, int]], # List of
                                verbose: bool = False # Whether to print non-matching compositions
                                ) -> pd.DataFrame: # DataFrame of structures x intensities
     """Map compositions to structures, supporting accompanying relative intensities"""
-    if df_use is None:
-        df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
     if abundances is None:
         abundances = pd.DataFrame([range(len(composition_list))] * 2).T
     abundances_values = abundances.iloc[:, 1:].values.tolist()
@@ -503,11 +501,11 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
             dict_comp[new_key] = dict_comp.pop(old_key)
     # O-acetylation adds acetyl minus H (net +C2H2O = 42.0106 monoisotopic), not full acetate (59 Da)
     ac_count = dict_comp.pop('Ac', 0)
-    total_mass = sum(v * (mass_dict_in.get(k) or calculate_adduct_mass(k, mass_value, enforce_sign = True))
+    total_mass = sum(v * (mass_dict_in.get(k) or calculate_adduct_mass(k, mass_value = mass_value, enforce_sign = True))
                      for k, v in dict_comp.items()) + mass_dict_in['red_end'] + ac_count * calculate_adduct_mass(
-        'C2H2O', mass_value)
+        'C2H2O', mass_value = mass_value)
     if adduct:
-        total_mass += calculate_adduct_mass(adduct, mass_value) if isinstance(adduct, str) else adduct
+        total_mass += calculate_adduct_mass(adduct, mass_value = mass_value) if isinstance(adduct, str) else adduct
     if modification:
         mod_mass = modification_mass_dict.get(modification, 0)
         if modification == 'reduced' and sample_prep == 'permethylated':

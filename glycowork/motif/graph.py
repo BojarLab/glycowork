@@ -393,7 +393,7 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
         key = frozenset(mapping.keys())
         if key not in seen:
             seen.add(key)
-            valid_mappings.append(list(mapping.keys()))
+            valid_mappings.append(sorted(mapping.keys()))
     if count:
         total = len(valid_mappings)
         return (total, valid_mappings) if return_matches else total
@@ -489,8 +489,8 @@ def generate_graph_features(glycan: str | nx.DiGraph, # Glycan sequence or netwo
         'avgDeg': np.mean(deg), 'varDeg': np.var(deg),
         'maxDeg': np.max(deg), 'nbrDeg4': np.sum(deg > 3),
         'max_deg_leaves': np.max(deg_to_leaves), 'mean_deg_leaves': np.mean(deg_to_leaves),
-        'deg_assort': 0.0 if N == 1 else nx.degree_assortativity_coefficient(g_undir), 'size_corona': 0 if N <= 1 else len(nx.k_corona(g_undir, N).nodes()),
-        'size_core': 0 if N <= 1 else len(nx.k_core(g_undir, N).nodes()), 'nbr_node_types': nbr_node_types,
+        'deg_assort': 0.0 if N == 1 else nx.degree_assortativity_coefficient(g_undir), 'size_corona': 0 if N <= 1 else len(nx.k_corona(g_undir, max(nx.core_number(g_undir).values())).nodes()),
+        'size_core': 0 if N <= 1 else len(nx.k_core(g_undir).nodes()), 'nbr_node_types': nbr_node_types,
         'N': N, 'dens': np.sum(deg) / 2
     }
     for centr, vals in centralities.items():
@@ -640,13 +640,11 @@ def graph_to_string(graph: nx.DiGraph, # Glycan graph (assumes root node is the 
     "Convert glycan graph back to IUPAC-condensed format, handling disconnected components"
     if isinstance(graph, str):
         return graph
-    components = sorted(nx.weakly_connected_components(graph), key = min, reverse = True)
+    components = sorted(nx.weakly_connected_components(graph), key = min)
     if len(components) > 1:
-        parts = [graph.subgraph(sorted(c)) for c in components]
-        len_org = len(parts[-1])
-        for p in range(len(parts) - 1):
-            parts[p] = nx.relabel_nodes(parts[p].copy(), {pn: pn - len_org for pn in parts[p].nodes()})
-            len_org += len(parts[p])
+        # glycan_to_nxGraph numbers the main part first and each floating bit after it, so the parts are emitted in that same order and each is put back on its own 0-based range
+        parts = [graph.subgraph(sorted(c)) for c in components[1:] + components[:1]]
+        parts = [nx.relabel_nodes(p.copy(), {pn: pn - min(p.nodes()) for pn in p.nodes()}) for p in parts]
         parts = '}'.join(['{' + graph_to_string_int(p, canonicalize = canonicalize, order_by = order_by) for p in parts])
         return parts[:parts.rfind('{')] + parts[parts.rfind('{') + 1:]
     else:
