@@ -37,7 +37,7 @@ from glycowork.motif.tokenization import (
     get_random_glycan, HYDROGEN_MASS, mass_dict
 )
 from glycowork.motif.processing import (
-    min_process_glycans, get_lib, expand_lib, get_possible_linkages,
+    min_process_glycans, get_lib, expand_lib, get_possible_linkages, looks_like_linearcode,
     get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac,
     glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
@@ -49,7 +49,7 @@ from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan,
-    GlycoList, GlycoDataFrame, NamedGroup, NamedGroups, glycoproteomics_data_loader
+    GlycoList, GlycoDataFrame, NamedGroup, NamedGroups, glycoproteomics_data_loader, download_model
 )
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
@@ -80,7 +80,7 @@ from glycowork.motif.annotate import (
 )
 from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
                   convert_pattern_component, reformat_glycan_string,
-                  motif_to_regex, get_match, calculate_len_matches_comb,
+                  motif_to_regex, get_match, calculate_len_matches_comb, fill_missing_in_list,
                   check_negative_look, get_match_batch,
                   filter_matches_by_location, parse_pattern, compile_pattern
 )
@@ -99,9 +99,10 @@ from glycowork.network.biosynthesis import (safe_compare, safe_index, create_nei
                          extend_glycans, highlight_network, infer_roots, get_edge_weight_by_abundance,
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
                          deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme, infer_network,
-                         get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
+                         choose_path, get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
                          plot_network, add_high_man_removal, net_dic, find_ptm, get_biosynthetic_coherence
 )
+import glycowork.network.evolution as evolution_module
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
                       jaccard, distance_from_metric, check_conservation, get_communities, dendrogram_from_distance
 )
@@ -1702,6 +1703,7 @@ def test_find_nth_reverse():
     # Test missing
     assert find_nth_reverse("hello", "j", 1) == -1
     assert find_nth_reverse("Gal(b1-4)[Fuc(a1-3)]GlcNAc", "GlcNAc", 1, ignore_branches = True) == 9
+    assert find_nth_reverse("Neu5Ac(a2-3)[Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-3)]Gal", "Gal", 1, ignore_branches = True) == 12
 
 
 def test_remove_unmatched_brackets():
@@ -7862,3 +7864,111 @@ def test_sequence_analysis_gets_no_decomposition_columns():
     out = get_differential_expression(glycomics_data_loader.human_skin_O_PMC5871710_BCC, motifs = False,
                                       random_state = 42)
     assert 'Redistribution p-val' not in out.columns
+
+
+def test_glycodataframe_meta_helpers():
+    df = GlycoDataFrame(pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal', 'Man(a1-3)Man'],
+        'Species': [['Homo_sapiens', 'Mus_musculus'], ['Homo_sapiens'], 'Gallus_gallus'],
+        'Order': [['Primates', 'Rodentia'], ['Primates'], 'Galliformes']}))
+    assert df.meta_values('Species')['Homo_sapiens'] == 2
+    assert len(df.meta_values('Species', top = 1)) == 1
+    assert len(df.meta_filter(Species = lambda v: 'Mus' in v)) == 1
+    assert len(df.meta_filter(Species = 'Gallus gallus')) == 1  # scalar entries skip the list-narrowing branch
+    with pytest.raises(KeyError):
+        df.meta_filter(NotAColumn = 'x')
+    single = GlycoDataFrame(pd.DataFrame({'glycan': ['Gal'], 's1': [1.0]}), contrasts = {'s1': 'control'})
+    assert single.group1.name == 'control' and single.group2.name == '' and list(single.group2) == []
+
+
+def test_download_model():
+    with patch.dict(sys.modules, {'huggingface_hub': None}):
+        with pytest.raises(ImportError):
+            download_model("does_not_exist.pkl")
+    fake = MagicMock()
+    fake.hf_hub_download.return_value = "/tmp/model.pkl"
+    with patch.dict(sys.modules, {'huggingface_hub': fake}):
+        assert download_model("glycan_representations.pkl") == "/tmp/model.pkl"
+
+
+def test_stats_degenerate_inputs():
+    assert get_alphaN(20, verbose = True) > 0
+    assert pi0_tst(np.array([]), alpha = 0.05) == 1.0
+    assert TST_grouped_benjamini_hochberg({'empty': []}, {'empty': []}, 0.05) == ({}, {})
+    assert compare_inter_vs_intra_group(pd.DataFrame(), pd.DataFrame(), [], {}) == (0.0, 0.0)
+    F, p = hotellings_t2(np.array([[1.0, 2.0], [3.0, 4.0]]), np.array([[1.0, 2.0], [3.0, 4.0]]), paired = True)
+    assert F == 0 and p == 1.0
+
+
+def test_graph_edge_cases():
+    assert glycan_to_nxGraph('Gal(b1-4)Glc', libr = dict(lib)).number_of_nodes() == 3
+    with pytest.raises(Exception):
+        glycan_to_nxGraph('a=b')
+    negation_match = categorical_node_match_wildcard('string_labels', 'unknown', {}, 'termini', 'flexible')
+    assert negation_match({'string_labels': 'Gal'}, {'string_labels': '!Fuc'})
+    assert not negation_match({'string_labels': 'Fuc'}, {'string_labels': '!Fuc'})
+    with pytest.raises(ValueError):
+        subgraph_isomorphism_with_negation('Gal(b1-4)GlcNAc', '!Fuc')
+    assert try_string_conversion('Gal(b1-4)Glc') == 'Gal(b1-4)Glc'
+    assert try_string_conversion(nx.DiGraph()) is None
+    assert largest_subgraph('Gal', 'Fuc') == ''
+
+
+def test_regex_edge_cases():
+    assert filter_matches_by_location([[1, 2]], None, None) == [[1, 2]]
+    assert calculate_len_matches_comb([]) == [0]
+    assert fill_missing_in_list([[], [1, 3]]) == [[], [1, 2, 3]]
+
+
+def test_tokenization_edge_cases():
+    assert structure_to_basic('Gal(b1-4)Glc-ol') == structure_to_basic('Gal(b1-4)Glc')
+    assert mz_to_structures([1000.0], 'nonsense').empty
+
+
+def test_looks_like_linearcode():
+    assert not looks_like_linearcode('Ma3#Mb4GN')  # illegal character
+    assert not looks_like_linearcode('Ma3(Mb4GN')  # unbalanced parenthesis
+
+
+def test_get_insight_fallbacks(capsys):
+    get_insight('Gal(b1-?)GlcNAc(b1-4)GlcNAc')  # not stored verbatim, but compare_glycans finds it
+    capsys.readouterr()
+    get_insight('Api(b1-4)Api(b1-4)Api(b1-4)Api')
+    assert "double-check" in capsys.readouterr().out
+
+
+def test_evolution_net_dic_lazy():
+    assert isinstance(evolution_module.net_dic, dict)
+    with pytest.raises(AttributeError):
+        evolution_module.not_a_real_attribute
+    df = pd.DataFrame({'Species': ['Species1'] * 2 + ['Species2'] * 2 + ['Species3'] * 2,
+                       'Order': ['Order1'] * 4 + ['Order2'] * 2, 'glycan': ['Gal(b1-4)Glc-ol'] * 6})
+    network_dic = {'Species1': nx.Graph([('Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol')]),
+                   'Species2': nx.Graph([('Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol')])}
+    assert list(check_conservation('Gal(b1-4)Glc-ol', df, network_dic, threshold = 1)) == ['Order1']  # Order2 has no networks
+    assert check_conservation('Gal(b1-4)Glc-ol', df, None, threshold = 1) == {}  # falls back to the bundled networks
+
+
+def test_analysis_edge_cases():
+    df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal'], 'a': [1.0, 2.0], 'b': [2.0, 1.0]})
+    assert preprocess_data(df, group1 = ['a', 'b'], group2 = None, experiment = "anova")[3] == []
+    assert get_representative_substructures(pd.DataFrame({'motif': [], 'pval': [], 'corr_pval': []})) == []
+    assert select_grouping(pd.DataFrame(np.ones((2, 4))), pd.DataFrame(np.ones((2, 4))),
+                           ['Gal(b1-4)Glc', 'Fuc(a1-2)Gal'], [0.01, 0.4])[0] == {'group1': ['Gal(b1-4)Glc', 'Fuc(a1-2)Gal']}
+    with pytest.raises(ValueError):
+        get_glycanova(df, groups = ['a', 'b'])
+
+
+def test_biosynthesis_weight_estimation():
+    assert choose_path({1: 'a', 2: 'b', 3: 'c'}, [], {}, nb_intermediates = 0) == {}
+    net = nx.DiGraph([('Glc', 'Gal(b1-4)Glc'), ('Gal(b1-4)Glc', 'Gal(b1-4)Gal(b1-4)Glc')])
+    nx.set_node_attributes(net, {'Glc': 0.0, 'Gal(b1-4)Glc': 0.0, 'Gal(b1-4)Gal(b1-4)Glc': 0.0}, 'abundance')
+    out = estimate_weights(net, root = 'Glc')  # root abundance below 0.1 falls back to root_default
+    assert out['Gal(b1-4)Glc']['Gal(b1-4)Gal(b1-4)Glc']['capacity'] == 5.0
+
+
+def test_quantify_motifs_from_file(tmp_path):
+    path = tmp_path / "abundances.csv"
+    pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc'], 's1': [1.0, 2.0], 's2': [2.0, 1.0]}).to_csv(path, index = False)
+    assert not quantify_motifs(str(path), feature_set = ['known']).empty
+    assert get_size_branching_features(['Gal(b1-4)Glc', 'Gal(b1-3)Glc'], n_bins = 2).shape[0] == 2

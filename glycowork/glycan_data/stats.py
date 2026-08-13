@@ -7,7 +7,6 @@ from collections import Counter
 from scipy.stats import rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
 from scipy.spatial import procrustes
 from scipy.special import digamma, polygamma
-from scipy.spatial.distance import squareform
 import scipy.integrate as integrate
 rng = np.random.default_rng(42)
 np.random.seed(0)

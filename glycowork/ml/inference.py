@@ -3,10 +3,8 @@ import numpy as np
 from importlib import resources
 import math
 import warnings
-
 try:
     import torch
-
     # Choosing the right computing architecture
     device = "cpu"
     if torch.cuda.is_available():

@@ -1510,7 +1510,7 @@ def GlycoDraw(
         occupied |= {(round(x), round(y)) for xs, ys in
                      zip(l1_x_pos + l2_x_pos + l3_x_pos, l1_y_pos + l2_y_pos + l3_y_pos) for x, y in zip(xs, ys)}
         for bit, bit_anchors in anchored_bits:
-            a_sugar, a_x_pos, a_y_pos, a_modification, a_bond, a_conf, _, _ = \
+            a_sugar, a_x_pos, _, a_modification, a_bond, a_conf, _, _ = \
                 get_coordinates_and_labels(bit, highlight_motif = None)[0]
             for linkage, anchor in bit_anchors.items():
                 for n in resolve_anchor(anchor_graph, anchor):
