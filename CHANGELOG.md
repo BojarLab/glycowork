@@ -73,8 +73,8 @@
 - `get_differential_expression`, `get_glycanova`, `get_time_series`, and `get_jtk` now default to `grouped_BH=True` if they are run in motif-analysis mode (`motifs=True`) (7849b15)
 - `preprocess_data` now propagates `random_state` to data imputation for full re-run reprodubility (9630cd0)
 - The p-value in the polynomial case in `get_glycan_change_over_time` now has a better relationship with the trend line (rather than a mean shift) (f5ba41f)
-- `get_pvals_motifs` has been brought in line with the other analysis functions: enrichment is now tested with an Empirical-Bayes moderated t-test using the containment DAG as variance prior (new `moderate_variance` keyword argument), corrected by two-stage Benjamini-Hochberg within DAG-grouped motif families (new `grouped_BH` keyword argument) against a sample-size-adjusted alpha, on a motif set deduplicated via `deduplicate_motifs`, and additionally reports `significant` and `equivalence_pval` columns
-- `get_representative_substructures` now uses the sample-size-adjusted significance from `get_pvals_motifs`, instead of a hardcoded corrected p-value threshold of 0.05
+- `get_pvals_motifs` has been brought in line with the other analysis functions: enrichment is now tested with an Empirical-Bayes moderated t-test using the containment DAG as variance prior (new `moderate_variance` keyword argument), corrected by two-stage Benjamini-Hochberg within DAG-grouped motif families (new `grouped_BH` keyword argument) against a sample-size-adjusted alpha, on a motif set deduplicated via `deduplicate_motifs`, and additionally reports `significant` and `equivalence_pval` columns (42edfc9)
+- `get_representative_substructures` now uses the sample-size-adjusted significance from `get_pvals_motifs`, instead of a hardcoded corrected p-value threshold of 0.05 (42edfc9)
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
@@ -82,8 +82,8 @@
 - Fixed effect size handling in `get_meta_analysis` if `model="random"` (8f799c3)
 - Made sure `get_SparCC` does not mutate its inputs (78fe195)
 - `get_representative_substructures` no longer crashes if only run on motif outputs of `feature_set=["known"]` (78fe195)
-- Fixed `get_pvals_motifs` calculating effect sizes from padded arrays, which gave motifs that do not occur in the data a large spurious Cohen's d and, given the default sorting, placed them at the top of the output
-- Fixed `get_pvals_motifs` assuming the glycan column is the first column when z-scoring and renaming, rather than the detected glycan column
+- Fixed `get_pvals_motifs` calculating effect sizes from padded arrays, which gave motifs that do not occur in the data a large spurious Cohen's d and, given the default sorting, placed them at the top of the output (42edfc9)
+- Fixed `get_pvals_motifs` assuming the glycan column is the first column when z-scoring and renaming, rather than the detected glycan column (42edfc9)
 
 #### processing
 ##### Changed 🔄

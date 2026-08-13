@@ -209,19 +209,23 @@ def get_pvals_motifs(
     alpha = get_alphaN(na + nb)
     dag = get_motif_dag(motif_names, abundances = pd.DataFrame(X.T, index = motif_names))
     # Test statistical enrichment for motifs in above vs below
-    if moderate_variance and len(A) > 1 and na > 1 and nb > 1:
+    live = (A.var(axis = 1, ddof = 1) > 1e-12) | (B.var(axis = 1, ddof = 1) > 1e-12)
+    Al, Bl = A[live], B[live]
+    ttests, effect_sizes = np.ones(len(motif_names)), np.zeros(len(motif_names))
+    if moderate_variance and len(Al) > 1 and na > 1 and nb > 1:
         # Shrinking each motif's variance toward its containment neighborhood stabilizes the many rare motifs an exhaustive feature set produces
-        resid = ((na - 1) * A.var(axis = 1, ddof = 1) + (nb - 1) * B.var(axis = 1, ddof = 1)) / (na + nb - 2)
-        s2, dfp = moderated_variance(resid, df_resid = na + nb - 2, neighbors = dag_neighbors(motif_names, dag))
+        resid = ((na - 1) * Al.var(axis = 1, ddof = 1) + (nb - 1) * Bl.var(axis = 1, ddof = 1)) / (na + nb - 2)
+        s2, dfp = moderated_variance(resid, df_resid = na + nb - 2,
+                                     neighbors = dag_neighbors([m for m, k in zip(motif_names, live) if k], dag))
         se = np.maximum(np.sqrt(s2 * (1 / na + 1 / nb)), 1e-300)
-        ttests = list(2 * t_dist.sf(np.abs((B.mean(axis = 1) - A.mean(axis = 1)) / se), dfp))
-    else:
-        ttests = list(ttest_ind(B, A, axis = 1, equal_var = False)[1])
-    # A motif that is constant in both groups has nothing to test, rather than a p-value driven by a padding value
+        ttests[live] = 2 * t_dist.sf(np.abs((Bl.mean(axis = 1) - Al.mean(axis = 1)) / se), dfp)
+    elif len(Al):
+        ttests[live] = ttest_ind(Bl, Al, axis = 1, equal_var = False)[1]
     ttests = [1.0 if not np.isfinite(p) else float(p) for p in ttests]
-    effect_sizes, _ = cohen_d(B, A, paired = False)
+    if len(Al):
+        effect_sizes[live] = cohen_d(Bl, Al, paired = False)[0]
     equivalence_pvals = np.full(len(motif_names), np.nan)
-    todo = np.array(ttests) > alpha
+    todo = (np.array(ttests) > alpha) & live
     if todo.any() and na > 1 and nb > 1:
         equivalence_pvals[todo] = get_equivalence_test(A[todo], B[todo], paired = False)
         valid = ~np.isnan(equivalence_pvals)

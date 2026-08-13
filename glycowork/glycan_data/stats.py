@@ -32,7 +32,7 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
     else:
         nx, ny = X.shape[1], Y.shape[1]
         sx, sy = np.maximum(np.std(X, axis = 1, ddof = 1), 1e-6), np.maximum(np.std(Y, axis = 1, ddof = 1), 1e-6)
-        d = (X.mean(axis = 1) - Y.mean(axis = 1)) / np.sqrt(((nx-1) * sx ** 2 + (ny-1) * sy ** 2) / (nx + ny - 2))
+        d = (X.mean(axis = 1) - Y.mean(axis = 1)) / np.sqrt(((nx - 1) * sx ** 2 + (ny - 1) * sy ** 2) / (nx + ny - 2))
         var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
     return (d, var_d) if np.ndim(x) > 1 else (d[0], var_d[0])
 
