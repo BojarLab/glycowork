@@ -165,26 +165,30 @@ def get_pvals_motifs(
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         multiple_samples: bool = False,  # Multiple samples with glycan columns
         motifs: pd.DataFrame | None = None,  # Modified motif_list
-        custom_motifs: list[str] = []  # Custom motifs if using 'custom' feature set
-) -> pd.DataFrame:  # DataFrame with p-values, FDR-corrected p-values, and Cohen's d effect sizes for glycan motifs
-    "Identifies significantly enriched glycan motifs using Welch's t-test with FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
-    from statsmodels.stats.multitest import multipletests
+        custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
+        grouped_BH: bool = True,  # Two-stage adaptive Benjamini-Hochberg within DAG-grouped motif families
+        moderate_variance: bool = True
+        # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
+) -> GlycoDataFrame:  # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
+    "Identifies significantly enriched glycan motifs using a moderated t-test with DAG-grouped FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    in_name = getattr(df, '_glyco_name', '')
     glycan_col_name = GlycoDataFrame(df)._glycan_col or df.columns[0]
     # Reformat to allow for proper annotation in all samples
     df = df.copy()
+    value_cols = [c for c in df.columns if c != glycan_col_name]
     if not zscores:
-        means = df.iloc[:, 1:].mean()
-        std_devs = df.iloc[:, 1:].std()
-        df.iloc[:, 1:] = (df.iloc[:, 1:] - means) / (std_devs + 1e-6)
+        df[value_cols] = (df[value_cols] - df[value_cols].mean()) / (df[value_cols].std() + 1e-6)
     if multiple_samples:
-        df.columns = [glycan_col_name] + [label_col_name] * (len(df.columns) - 1)
+        df.columns = [glycan_col_name if c == glycan_col_name else label_col_name for c in df.columns]
     # Annotate glycan motifs in dataset
     df_motif = annotate_dataset(df[glycan_col_name].values.tolist(),
                                 motifs = motifs, feature_set = feature_set, condense = True,
                                 custom_motifs = custom_motifs)
+    # Motifs with identical presence across all glycans are one hypothesis, not several, and would otherwise inflate their own family during correction
+    df_motif = deduplicate_motifs(df_motif.T).T
     # Broadcast the dataframe to the correct size given the number of samples
     if multiple_samples:
         df = df.set_index(glycan_col_name)
@@ -194,27 +198,60 @@ def get_pvals_motifs(
         df_motif = df_motif[cols]
     else:
         df_motif[label_col_name] = df[label_col_name].values.tolist()
-    # Divide into motifs with expression above threshold & below
-    df_pos = df_motif[df_motif[label_col_name] > thresh]
-    df_neg = df_motif[df_motif[label_col_name] <= thresh]
+    motif_names = df_motif.columns.tolist()[:-1]
+    labels = df_motif.iloc[:, -1].values.astype(float)
+    X = df_motif.iloc[:, :-1].values.astype(float)
+    # Divide into motifs with expression above threshold & below, weighting each motif count by the binding strength it was observed at
+    pos, neg = labels > thresh, labels <= thresh
+    B, A = (X[pos] * labels[pos, None]).T, (X[neg] * labels[neg, None]).T
+    na, nb = A.shape[1], B.shape[1]
+    # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
+    alpha = get_alphaN(na + nb)
+    dag = get_motif_dag(motif_names, abundances = pd.DataFrame(X.T, index = motif_names))
     # Test statistical enrichment for motifs in above vs below
-    ttests = [ttest_ind(np.append(df_pos.iloc[:, k] * df_pos[label_col_name], [1]),
-                        np.append(df_neg.iloc[:, k] * df_neg[label_col_name], [1]),
-                        equal_var = False)[1] for k in range(df_motif.shape[1] - 1)]
-    ttests_corr = multipletests(ttests, method = 'fdr_tsbh')[1].tolist()
-    effect_sizes, _ = zip(*[cohen_d(np.append(df_pos.iloc[:, k].values, [1, 0]),
-                                    np.append(df_neg.iloc[:, k].values, [1, 0]), paired = False) for k in
-                            range(df_motif.shape[1] - 1)])
-    out = pd.DataFrame({
-        'motif': df_motif.columns.tolist()[:-1],
+    if moderate_variance and len(A) > 1 and na > 1 and nb > 1:
+        # Shrinking each motif's variance toward its containment neighborhood stabilizes the many rare motifs an exhaustive feature set produces
+        resid = ((na - 1) * A.var(axis = 1, ddof = 1) + (nb - 1) * B.var(axis = 1, ddof = 1)) / (na + nb - 2)
+        s2, dfp = moderated_variance(resid, df_resid = na + nb - 2, neighbors = dag_neighbors(motif_names, dag))
+        se = np.maximum(np.sqrt(s2 * (1 / na + 1 / nb)), 1e-300)
+        ttests = list(2 * t_dist.sf(np.abs((B.mean(axis = 1) - A.mean(axis = 1)) / se), dfp))
+    else:
+        ttests = list(ttest_ind(B, A, axis = 1, equal_var = False)[1])
+    # A motif that is constant in both groups has nothing to test, rather than a p-value driven by a padding value
+    ttests = [1.0 if not np.isfinite(p) else float(p) for p in ttests]
+    effect_sizes, _ = cohen_d(B, A, paired = False)
+    equivalence_pvals = np.full(len(motif_names), np.nan)
+    todo = np.array(ttests) > alpha
+    if todo.any() and na > 1 and nb > 1:
+        equivalence_pvals[todo] = get_equivalence_test(A[todo], B[todo], paired = False)
+        valid = ~np.isnan(equivalence_pvals)
+        equivalence_pvals[valid] = correct_multiple_testing(equivalence_pvals[valid], alpha)[0]
+    equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
+    # Multiple testing correction
+    if grouped_BH:
+        grouped_motifs, grouped_pvals = select_grouping(pd.DataFrame(B, index = motif_names),
+                                                        pd.DataFrame(A, index = motif_names), motif_names, ttests,
+                                                        grouped_BH = True, dag = dag)
+        corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_motifs, grouped_pvals, alpha)
+        ttests_corr = [max(corrpvals[m], ttests[i]) for i, m in enumerate(motif_names)]
+        significance = [significance_dict[m] for m in motif_names]
+    else:
+        ttests_corr, significance = correct_multiple_testing(ttests, alpha)
+    out = GlycoDataFrame(pd.DataFrame({
+        'motif': motif_names,
         'pval': ttests,
         'corr_pval': ttests_corr,
-        'effect_size': effect_sizes
-    })
+        'significant': significance,
+        'effect_size': effect_sizes,
+        'equivalence_pval': equivalence_pvals
+    }), name = in_name)
+    out['significant'] = out['significant'].astype('bool')
     if sorting:
         out['abs_effect_size'] = out['effect_size'].abs()
         out = out.sort_values(by = ['abs_effect_size', 'corr_pval', 'pval'], ascending = [False, True, True])
         out = out.drop('abs_effect_size', axis = 1)
+    out.attrs.update({'alpha': alpha, 'n': na + nb,
+                      'test': "moderated t-test" if moderate_variance else "Welch's t-test"})
     return out
 
 
@@ -224,7 +261,8 @@ def get_representative_substructures(
     "Constructs minimal glycan structures that represent significantly enriched motifs by optimizing for motif content while minimizing structure size using subgraph isomorphism"
     glycans = list(set(df_species.glycan))
     # Only consider motifs that are significantly enriched
-    filtered_df = enrichment_df[enrichment_df.corr_pval < 0.05].reset_index(drop = True)
+    filtered_df = (enrichment_df[enrichment_df.significant] if 'significant' in enrichment_df else
+                   enrichment_df[enrichment_df.corr_pval < 0.05]).reset_index(drop = True)
     if filtered_df.empty:
         return []
     log_pvals = -np.log10(filtered_df.pval.values)

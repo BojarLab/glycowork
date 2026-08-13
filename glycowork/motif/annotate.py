@@ -358,13 +358,14 @@ def deduplicate_motifs(
         df: pd.DataFrame # DataFrame with glycan motifs as rows, samples as columns
 ) -> pd.DataFrame: # DataFrame with redundant motifs removed
     "Removes redundant motif entries from glycan abundance data while preserving the most informative labels"
-    df = df.copy()
     # Keep the least ambiguous label per group of identical rows; wildcards are longer than the specifics they abstract, so length only ever breaks ties between equally specific labels
     ranks = [_motif_ambiguity(m) for m in df.index]
-    df['_original_position'] = range(len(df))
+    # Grouped on positional column labels, since a repeated label (e.g., an annotated glycan list with duplicates) makes a label-based grouper ambiguous
+    grouper = df.set_axis(range(df.shape[1]), axis = 1)
+    grouper['_original_position'] = range(len(df))
     keep = [g['_original_position'].iloc[min(range(len(g)), key = lambda k: ranks[g['_original_position'].iloc[k]])]
-            for _, g in df.groupby(list(df.columns[:-1]), sort = False, dropna = False)]
-    return df.iloc[keep].drop(['_original_position'], axis = 1)
+            for _, g in grouper.groupby(list(grouper.columns[:-1]), sort = False, dropna = False)]
+    return df.iloc[keep]
 
 
 def quantify_motifs(
