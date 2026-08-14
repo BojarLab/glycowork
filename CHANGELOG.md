@@ -7,6 +7,7 @@
 - `Pillow` is no longer a dependency of `glycowork` (088c711)
 - Moved several dependencies to lazy-load, to improve initial package start-up times (088c711)
 - Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw` (4894d1b)
+- `glycoworkGUI` is updated, making it more robust
 
 ### glycan_data
 #### loader
@@ -110,8 +111,8 @@
 - `GlycoDraw` drawings with gradients now have a 2x smaller filesize and smoother gradients (9741f72)
 - Saved `.png` outputs from `GlycoDraw` now have a transparent background (9741f72)
 - Glycan drawings in `annotate_figure` are now positioned much better to reduce overlap (9741f72)
-- Improved overlaps/positioning in `GlycoDraw`
-- `GlycoDraw` will now automatically reduce the font size of overly long narrow wildcard linkages (e.g., `b1-2/4/6`) to let them fit on linkages
+- Improved overlaps/positioning in `GlycoDraw` (14c7f0c)
+- `GlycoDraw` will now automatically reduce the font size of overly long narrow wildcard linkages (e.g., `b1-2/4/6`) to let them fit on linkages (14c7f0c)
 
 ##### Fixed 🐛
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)
