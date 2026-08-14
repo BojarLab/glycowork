@@ -38,7 +38,7 @@ from glycowork.motif.tokenization import (
 )
 from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages, looks_like_linearcode,
-    get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac,
+    get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac, looks_like_oxford,
     glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
@@ -7918,6 +7918,11 @@ def test_regex_edge_cases():
     assert filter_matches_by_location([[1, 2]], None, None) == [[1, 2]]
     assert calculate_len_matches_comb([]) == [0]
     assert fill_missing_in_list([[], [1, 3]]) == [[], [1, 2, 3]]
+    assert fill_missing_in_list([[1, 5]]) == [[1, 2, 5]]  # even gaps larger than 2 fill from the left
+    alt = convert_pattern_component('Gal-[Fuc(a1-3)|Gal(b1-4)]-GlcNAc')  # alternatives that carry linkages stay a list
+    assert len(alt) == 2 and all(v == [1, 1] for v in alt.values())
+    assert convert_pattern_component('Gal[b|a]GlcNAc') == 'Gal(?1-?)b/a(?1-?)GlcNAc'
+    assert convert_pattern_component('Man=')  # neither the bracket nor the occurrence branch fires
 
 
 def test_tokenization_edge_cases():
@@ -7972,3 +7977,85 @@ def test_quantify_motifs_from_file(tmp_path):
     pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc'], 's1': [1.0, 2.0], 's2': [2.0, 1.0]}).to_csv(path, index = False)
     assert not quantify_motifs(str(path), feature_set = ['known']).empty
     assert get_size_branching_features(['Gal(b1-4)Glc', 'Gal(b1-3)Glc'], n_bins = 2).shape[0] == 2
+
+def test_looks_like_oxford():
+    for oxford in ['Bi', 'M5', 'Man-5', 'A2G2S2', 'FA2G2S(3,6)2', 'M9Glc', 'A2G2LacDiNAc1', 'A2[SO4-2]', 'A2G2(s)2']:
+        assert looks_like_oxford(oxford)
+    # Glycosphingolipid series shorthand is not Oxford
+    for gsl in ['Neu5Ac-Fuc-nLc10Cer', 'Neu5Ac-nLc6Cer', 'GalNAc-Gb4Cer', 'nLc4Cer', 'Gb3Cer', 'iGb3Cer']:
+        assert not looks_like_oxford(gsl)
+    assert not looks_like_oxford('Fuc1Gal2')
+    assert canonicalize_iupac('Gal-Cer') == 'Gal1Cer'  # ceramide linker still resolves
+    assert canonicalize_iupac('Gal(b1-4)Glc-Sp8') == 'Gal(b1-4)Glc'  # spacer trimming still works
+
+
+def test_graph_to_string_ordering_and_dedup():
+    g = 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert graph_to_string(glycan_to_nxGraph(g), canonicalize = False, order_by = "length") == g
+    special = 'Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert graph_to_string(glycan_to_nxGraph(special), canonicalize = False, order_by = "linkage") == special
+    # Wildcards force the all-pairs comparison instead of the canonical-string bucket shortcut
+    assert deduplicate_glycans(['Gal(b1-4)Glc', 'Gal(b1-?)Glc', 'Gal(b1-4)Glc-ol']) == ['Gal(b1-4)Glc', 'Gal(b1-4)Glc-ol']
+    # Here the canonical form is the second entry, so the first is the one dropped
+    assert deduplicate_glycans(['Gal(b1-4)[Neu5Ac(a2-3)]GlcNAc', 'Neu5Ac(a2-3)[Gal(b1-4)]GlcNAc']) == ['Neu5Ac(a2-3)[Gal(b1-4)]GlcNAc']
+
+
+def test_get_molecular_properties_mocked():
+    hit, miss = MagicMock(), MagicMock()
+    hit.cid, miss.cid = 123, None
+    fake = MagicMock()
+    fake.get_compounds.side_effect = [[miss], [hit], [hit]]  # first glycan misses, then the placeholder and the second glycan hit
+    fake.compounds_to_frame.return_value = pd.DataFrame({'molecular_weight': [180.0, 180.0]})
+    with patch.dict(sys.modules, {'pubchempy': fake}):
+        assert len(get_molecular_properties(['Gal(b1-4)Glc', 'Glc'], placeholder = True, verbose = True)) == 2
+    broken = MagicMock()
+    broken.get_compounds.side_effect = Exception('boom')
+    broken.compounds_to_frame.side_effect = KeyError('molecular_weight')
+    with patch.dict(sys.modules, {'pubchempy': broken}):
+        assert get_molecular_properties(['Gal(b1-4)Glc'], verbose = True).empty
+    with patch.dict(sys.modules, {'pubchempy': None}):
+        with pytest.raises(ImportError):
+            get_molecular_properties(['Glc'])
+    assert 'Size_2 - 3' not in get_composition_dag(['Hex5HexNAc2', 'Hex4HexNAc2', 'Size_2 - 3']).nodes()
+
+
+def test_analysis_filepath_and_contrast_branches(tmp_path):
+    df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal', 'Fuc(a1-3)GlcNAc'],
+                       'sample1': [100, 200, 150, 300], 'sample2': [110, 220, 140, 280], 'sample3': [120, 210, 160, 290],
+                       'sample4': [500, 600, 450, 700], 'sample5': [480, 580, 470, 680], 'sample6': [520, 620, 430, 720]})
+    gdf = GlycoDataFrame(df, contrasts = {f'sample{i}': ('control' if i < 4 else 'tumor') for i in range(1, 7)})
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        characterize_monosaccharide('a1-3', mode = 'bond', modifications = True, rank = "Class", focus = "Actinopterygii",
+                                    filepath = tmp_path / "mono.png")
+        get_pca(df, [1, 1, 1, 2, 2, 2], filepath = tmp_path / "pca.png")
+        get_roc(gdf, filepath = tmp_path / "roc.png")  # groups read off the contrasts
+        multi = df.copy()
+        for i in range(7, 10):
+            multi[f'sample{i}'] = np.random.RandomState(i).randint(50, 500, 4)
+        get_roc(multi, [1, 2, 3] * 3, [], filepath = tmp_path / "roc_multi.png")
+        assert mock_savefig.call_count >= 4
+    assert get_biodiversity(gdf)[0].shape[0] > 0
+    res = pd.DataFrame({'Glycan': ['Gal(b1-4)Glc', 'Gal(b1-4)GlcNAc', 'Man(a1-3)Man'], 'Mean abundance': [.3, .35, .4],
+                        'Log2FC': [1.5, -.5, .8], 'Effect size': [.6, -.3, .4], 'p-val': [.01, .04, .002], 'corr p-val': [.03, .06, .006]})
+    get_volcano(res, filepath = str(tmp_path / "volcano.png"), annotate_volcano = True)
+    assert (tmp_path / "volcano.png").exists()
+
+
+def test_biosynthesis_contrast_and_extension_branches(tmp_path):
+    raw = pd.DataFrame({'glycan': ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"],
+                        'sample1': [10.0, 5.0, 7.0], 'sample2': [8.0, 6.0, 8.0], 'sample3': [9.0, 4.0, 6.0], 'sample4': [11.0, 7.0, 9.0]})
+    contrasts = {'sample1': 'ctrl', 'sample2': 'ctrl', 'sample3': 'tumor', 'sample4': 'tumor'}
+    assert not get_differential_biosynthesis(GlycoDataFrame(raw, contrasts = contrasts), analysis = "reaction").empty
+    path = tmp_path / "ab.csv"
+    raw.to_csv(path, index = False)
+    assert not get_differential_biosynthesis(str(path), group1 = ['sample1', 'sample2'], group2 = ['sample3', 'sample4'],
+                                             analysis = "reaction").empty
+    assert not get_biosynthetic_coherence(GlycoDataFrame(raw.set_index('glycan'), contrasts = contrasts)).empty
+    net = construct_network(['Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol'])
+    conservation_df = pd.DataFrame({'Species': ['Species1', 'Species2'], 'glycan': ['Gal(b1-4)Glc-ol'] * 2})
+    network_dic = {'Species1': nx.Graph([('Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol')]),
+                   'Species2': nx.Graph([('Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol')])}
+    highlighted = highlight_network(net, highlight = 'conservation', conservation_df = conservation_df, network_dic = network_dic)
+    assert nx.get_node_attributes(highlighted, 'abundance')['Gal(b1-4)Glc-ol'] == 200
+    # Target composition is further away than the step budget allows
+    assert extend_network(net, steps = 1, to_extend = {'Hex': 8, 'HexNAc': 4, 'dHex': 2}, auto_steps = True)[-1] == -1

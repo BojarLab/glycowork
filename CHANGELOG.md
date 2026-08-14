@@ -2,7 +2,7 @@
 
 ## [1.10.0]
 
-- Bumped required `glycorender` version from `0.2.5` to `0.3.1`, which drops the `reportlab` dependency (ec7a54c, 4894d1b)
+- Bumped required `glycorender` version from `0.2.5` to `0.4.0`, which drops the `reportlab` and `pymupdf` dependencies (ec7a54c, 4894d1b)
 - Moved `huggingface_hub` dependencies from the base install to the `ml` optional install (088c711)
 - `Pillow` is no longer a dependency of `glycowork` (088c711)
 - Moved several dependencies to lazy-load, to improve initial package start-up times (088c711)
@@ -101,14 +101,19 @@
 #### draw
 ##### Added ✨
 - The `highlight_motif` argument in `GlycoDraw` now also accepts motif common names (such as `Internal_LewisX`) (8925497)
+- `GlycoDraw` has a new optional `shadow=False` keyword argument, to give the SNFG monosaccharides a drop shadow, if desired
 
 ##### Changed 🔄
 - Drawing "forbidden" monosaccharides, such as in `GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")`, now automatically makes the forbidden monosaccharides and their linkages transparent (3621350)
 - Saved `GlycoDraw` outputs are now cropped much more tightly, producing less whitespace around the glycan (f3ee7e0)
 - Using named motifs in `GlycoDraw`, such as `Internal_LewisX` is now robust to variant capitalization, spaces, underscores, and hyphens (8925497)
+- `GlycoDraw` drawings with gradients now have a 2x smaller filesize and smoother gradients
+- Saved `.png` outputs from `GlycoDraw` now have a transparent background
+- Glycan drawings in `annotate_figure` are now positioned much better to reduce overlap
 
 ##### Fixed 🐛
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)
+- `annotate_figure` is now much more robust to detect glycan strings in figures and draw them
 
 ##### Deprecated ⚠️
 - Removed the `show_linkage` keyword argument in `get_coordinates_and_labels` (it was dead and handled within `GlycoDraw`) (f5ba41f)

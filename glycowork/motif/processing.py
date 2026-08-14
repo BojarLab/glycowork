@@ -60,6 +60,7 @@ OXFORD_FORBIDDEN_IUPAC = re.compile(r"\([a-z]?\d-\d\)")
 OXFORD_FORBIDDEN_LINKAGE = re.compile(r"[ab]\d")
 OXFORD_REQ_TOKEN = re.compile(r"(?:A\d+|G(?:\(\d\))?\d+|Sg?(?:\([368](?:,[368])*\))?\d+|F(?:\(\d\))?|F\d+|Bi?|M\d+|H\d+|N\d+|E\d+|L\d+|Lac(?:DiNAc)?\d+|GalNAc\d+|GlcNAc\d+|GlcN\d+|Gluc\d+|Sulf)")
 OXFORD_BODY = re.compile(r"\A(?:[A-Za-z0-9-]+|\((?:[3468](?:,[3468]){0,5}|2,[36]|Ac1?|s)\)|\[(?:[368](?:,[368]){0,3}|SO4-2)\]|,)+\Z", re.VERBOSE)
+OXFORD_ALLOWED_TOKEN = re.compile(r"LacDiNAc|GalNAc|GlcNAc|GlcN|Gluc|Glc|Gal|Lac|Man|Sulf|Sg|Ga|Bi|Ac|s(?=\))|[A-Z0-9,()\[\]/-]")
 _OXFORD_HARDCODED = {"M3": "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                      "M4": "Man(a1-2/3/6)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
                      "M9": "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
@@ -1212,6 +1213,9 @@ def looks_like_oxford(glycan: str) -> bool:
     if OXFORD_FORBIDDEN_IUPAC.search(glycan):
         return False
     if not OXFORD_REQ_TOKEN.search(glycan):
+        return False
+    if OXFORD_ALLOWED_TOKEN.sub('',
+                                glycan):  # anything outside the Oxford vocabulary disqualifies
         return False
     return bool(OXFORD_BODY.fullmatch(glycan))
 

@@ -1472,12 +1472,14 @@ def get_biodiversity(
     if 'beta' in metrics:
         if not isinstance(df.index[0], str):
             df = df.set_index(df.columns[0])
-        distance_matrix = squareform(pdist(df.values.T, metric = 'euclidean'))
+        distance_matrix = squareform(pdist(df.values.T, metric = 'braycurtis' if transform is None else 'euclidean'))
         if circadian:
             n = distance_matrix.shape[0]
             tvec = np.repeat(np.arange(timepoints) * interval, n // timepoints)[:n].astype(float)
             J = np.eye(n) - np.ones((n, n)) / n
             G = -0.5 * J @ (distance_matrix ** 2) @ J  # Gower-centered distances for db-RDA
+            rng = np.random.default_rng(random_state) if not isinstance(random_state,
+                                                                        np.random.Generator) else random_state
             for period in periods:
                 w = 2 * np.pi / period
                 X = np.column_stack([np.ones(n), np.cos(w * tvec), np.sin(w * tvec)])
@@ -1486,7 +1488,7 @@ def get_biodiversity(
                             np.trace((np.eye(n) - H) @ G @ (np.eye(n) - H)) / (n - p)))(
                     design @ np.linalg.pinv(design.T @ design) @ design.T)
                 f_obs = pseudo_f(X)
-                perm_f = np.array([pseudo_f(X[np.random.permutation(n)]) for _ in range(
+                perm_f = np.array([pseudo_f(X[rng.permutation(n)]) for _ in range(
                     permutations)])  # free permutation of cosinor design against fixed turnover structure
                 p_val = (np.sum(perm_f >= f_obs) + 1) / (permutations + 1)
                 shopping_cart.append(pd.DataFrame(

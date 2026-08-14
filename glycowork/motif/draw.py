@@ -989,18 +989,18 @@ def is_jupyter() -> bool:
 
 def display_svg_with_matplotlib(
         svg_data: Any, # SVG drawing object
-        chem: bool = False # Whether svg_data comes from RDKit chemical
+        chem: bool = False, # Whether svg_data comes from RDKit chemical
+        shadow: bool = False # Draw a soft drop shadow under the monosaccharide symbols
 ) -> None:
     "Renders SVG using matplotlib for non-Jupyter environments"
     _, convert_svg_to_png = _get_glycorender()
     import matplotlib.pyplot as plt
     # Get original SVG dimensions and scale them up
-    size_multiplier = 4  # Make everything 4x bigger
     width, height = getattr(svg_data, 'width', 800), getattr(svg_data, 'height', 800)
     svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
     # Convert to PNG with larger dimensions
-    png_output = convert_svg_to_png(svg_data, output_width = width * size_multiplier,
-                                    output_height = height * size_multiplier, scale = 2.0, return_bytes = True, chem = chem)
+    png_output = convert_svg_to_png(svg_data, output_width = width, background = (1.0, 1.0, 1.0), shadow = shadow,
+                                    output_height = height, scale = 2.0, return_bytes = True, chem = chem)
     img = plt.imread(BytesIO(png_output), format = 'png')
     dpi = plt.rcParams['figure.dpi']
     plt.figure(figsize = (img.shape[1] / dpi, img.shape[0] / dpi))
@@ -1284,15 +1284,17 @@ def draw_chem3d(
 
 
 class GlycanDrawing:
-    def __init__(self, drawing_obj):
+    def __init__(self, drawing_obj, shadow = False):
         self.drawing_obj = drawing_obj
+        self.shadow = shadow
     def as_svg(self):
         return self.drawing_obj.as_svg()
     def save_svg(self, filepath):
         return self.drawing_obj.save_svg(filepath)
     def _repr_png_(self):
         _, convert_svg_to_png = _get_glycorender()
-        return convert_svg_to_png(self.as_svg(), None, return_bytes = True)
+        return convert_svg_to_png(self.as_svg(), None, return_bytes = True, shadow = self.shadow,
+                                  background = (1.0, 1.0, 1.0))
 
 
 @rescue_glycans
@@ -1316,8 +1318,9 @@ def GlycoDraw(
         alt_text: str | None = None,  # Custom ALT text for accessibility
         libr: dict | None = None,  # Can be modified for drawing too exotic monosaccharides
         reducing_end_label: str | None = None,  # Label to be drawn connected to the reducing end
-        restrict_vocab: bool = False, # Whether only tokens present in libr can be drawn
-) -> Any: # Drawing object
+        restrict_vocab: bool = False,  # Whether only tokens present in libr can be drawn
+        shadow: bool = False, # Draw a soft drop shadow under the monosaccharide symbols
+) -> Any:  # Drawing object
     "Renders glycan structure using SNFG symbols or chemical structure representation"
     if any(k in glycan for k in (';', 'β', 'α', 'RES', '=')):
         raise Exception
@@ -1586,11 +1589,75 @@ def GlycoDraw(
                 f.write(data)
         elif filepath.suffix.lower() == '.pdf':
             convert_svg_to_pdf, _ = _get_glycorender()
-            convert_svg_to_pdf(data, str(filepath))
+            convert_svg_to_pdf(data, str(filepath), shadow = shadow)
         elif filepath.suffix.lower() == '.png':
             _, convert_svg_to_png = _get_glycorender()
-            convert_svg_to_png(data, str(filepath))
-    return GlycanDrawing(d2) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2)
+            convert_svg_to_png(data, str(filepath), shadow = shadow)
+    return GlycanDrawing(d2, shadow = shadow) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2, shadow = shadow)
+
+
+def _drawable(glycan: str, # Candidate label
+              libr: dict | None = None # Vocabulary to check against
+              ) -> bool: # Whether GlycoDraw could render this
+    "Mirrors GlycoDraw's own restrict_vocab test, so annotate_figure never rejects a label GlycoDraw can draw"
+    if libr is None:
+        libr = lib
+    return in_lib(glycan, expand_lib(libr, list(sugar_dict.keys())
+                                     + [k for k in min_process_glycans([glycan])[0] if '/' in k]))
+
+
+def _spread_glycans(placements: list, # (x, y, w, h, anchor_x, anchor_y) per glycan, (x, y) being its natural corner
+                    canvas: tuple, # (width, height) of the figure
+                    iterations: int = 300, # Relaxation passes
+                    pad: float = 4.0 # Minimum gap to open between boxes
+                    ) -> list: # Settled top-left corners
+    "Nudges overlapping glycan boxes apart while keeping them near their anchors"
+    pos = [[x, y] for x, y, _w, _h, _ax, _ay in placements]
+    n = len(placements)
+    if n < 2:
+        return pos
+    cw, ch = canvas
+    for _ in range(iterations):
+        hot = [False] * n
+        for i in range(n):
+            for j in range(i + 1, n):
+                (xi, yi), (xj, yj) = pos[i], pos[j]
+                wi, hi, wj, hj = placements[i][2], placements[i][3], placements[j][2], placements[j][3]
+                ox = min(xi + wi, xj + wj) - max(xi, xj) + pad
+                oy = min(yi + hi, yj + hj) - max(yi, yj) + pad
+                if ox <= 0 or oy <= 0:
+                    continue
+                hot[i] = hot[j] = True
+                if ox < oy:  # separate along whichever axis needs the smaller push
+                    d = ox / 2.0 * (1 if xi < xj else -1)
+                    pos[i][0] -= d
+                    pos[j][0] += d
+                else:
+                    d = oy / 2.0 * (1 if yi < yj else -1)
+                    pos[i][1] -= d
+                    pos[j][1] += d
+        for i, (x, y, w, h, _ax, _ay) in enumerate(placements):
+            if not hot[i]:  # only drift home once this box has stopped colliding
+                pos[i][0] += (x - pos[i][0]) * 0.05
+                pos[i][1] += (y - pos[i][1]) * 0.05
+            pos[i][0] = max(0.0, min(cw - w, pos[i][0]))
+            pos[i][1] = max(0.0, min(ch - h, pos[i][1]))
+        if not any(hot):
+            break
+    return pos
+
+
+def _leader_line(anchor: tuple, # (x, y) of the data point
+                 box: tuple # (x, y, w, h) of the placed glycan
+                 ) -> str: # SVG path, or '' when the anchor sits inside the box
+    "Draws a thin line from a data point to the glycan that was moved away from it"
+    ax, ay = anchor
+    x, y, w, h = box
+    cx, cy = max(x, min(x + w, ax)), max(y, min(y + h, ay))
+    if abs(cx - ax) < 1 and abs(cy - ay) < 1:
+        return ''
+    return ('<path d="M%.2f,%.2f L%.2f,%.2f" stroke="#7a7a7a" stroke-width="0.8" '
+            'fill="none" stroke-linecap="round" />' % (ax, ay, cx, cy))
 
 
 def annotate_figure(
@@ -1606,11 +1673,8 @@ def annotate_figure(
 ) -> str | None: # Modified SVG code
     "Replaces text labels with glycan drawings in SVG figure"
     from glycorender.render import pdf_to_svg_bytes
-    glycan_size_dict = {
-        'small': 'scale(0.1 0.1)  translate(0, -74)',
-        'medium': 'scale(0.2 0.2)  translate(0, -55)',
-        'large': 'scale(0.3 0.3)  translate(0, -49)'
-    }
+    glycan_size_dict = {'small': (0.1, -74), 'medium': (0.2, -55), 'large': (0.3, -49)}
+    glyc_scale, glyc_offset = glycan_size_dict[glycan_size]
     glycan_scale = ''
     if scale_by_DE_res is not None:
         res_df = scale_by_DE_res.loc[(abs(scale_by_DE_res[x_metric]) > x_thresh) & (scale_by_DE_res['corr p-val'] < y_thresh)]
@@ -1628,33 +1692,33 @@ def annotate_figure(
     svg_tmp = svg_tmp.replace('</svg>', '')
     element_id = 0
     edit_svg = False
+    drawn = []
     for match in matches:
         # Keep track of current label and position in figure
         current_label = _LABEL_PATTERN.findall(match)[0]
         if current_label.lower().startswith('terminal') and resolve_motif_name(current_label) is None:
-            if in_lib(current_label.split('_')[-1], lib):
+            if _drawable(current_label.split('_')[-1]):
                 edit_svg = True
         # Check if label is glycan
-        if in_lib(current_label, lib):
+        if _drawable(current_label):
             edit_svg = True
-        else:
-            pass
         try:
             glycan = resolve_motif_name(current_label)[0]
-            if in_lib(glycan, lib) or "!" in glycan:
+            if _drawable(glycan) or "!" in glycan:
                 edit_svg = True
-            else:
-                pass
         except Exception:
             pass
-        # Delete text label, append glycan figure
+        # Delete text label, collect the glycan for placement once every label is known
         if edit_svg:
             transform_val = _TRANSFORM_PATTERN.findall(match)
             if not transform_val:
                 edit_svg = False
                 continue
-            translate_part = re.search(r'translate\([^)]+\)', transform_val[0])
-            current_pos = f'<g transform="{translate_part.group() if translate_part else ""} {glycan_size_dict[glycan_size]}">'
+            translate_part = re.search(r'translate\(([^)]+)\)', transform_val[0])
+            if not translate_part:
+                edit_svg = False
+                continue
+            anchor = [float(v) for v in re.split(r'[,\s]+', translate_part.group(1).strip())[:2]]
             svg_tmp = svg_tmp.replace(match, '')
             if glycan_scale == '':
                 d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
@@ -1668,8 +1732,16 @@ def annotate_figure(
             for idx in id_matches:
                 data = data.replace(idx, 'd' + str(element_id))
                 element_id += 1
-            svg_tmp += '\n' + current_pos + '\n' + data + '\n</g>'
-            edit_svg = False
+            size = re.search(r'<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', data)
+            gw, gh = (float(size.group(1)) * glyc_scale, float(size.group(2)) * glyc_scale) if size else (0.0, 0.0)
+            drawn.append((anchor[0], anchor[1] + glyc_offset * glyc_scale, gw, gh, anchor[0], anchor[1], data))
+        edit_svg = False
+    canvas = re.search(r'<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', svg_tmp)
+    canvas = (float(canvas.group(1)), float(canvas.group(2))) if canvas else (1000.0, 1000.0)
+    for (_x, _y, gw, gh, ax, ay, data), (nx, ny) in zip(drawn, _spread_glycans([d[:6] for d in drawn], canvas)):
+        svg_tmp += '\n' + _leader_line((ax, ay), (nx, ny, gw, gh))
+        svg_tmp += '\n<g transform="translate(%.2f %.2f) scale(%s %s)">\n%s\n</g>' % (nx, ny, glyc_scale,
+                                                                                      glyc_scale, data)
     svg_tmp += '</svg>'
     if filepath:
         filepath = str(filepath)
