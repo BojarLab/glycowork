@@ -498,7 +498,11 @@ def add_bond(
     p.M(x_start, y_start).L(x_stop, y_stop)
     drawing.append(p)
     if label and label != '-':
-        drawing.append(draw.Text(label, dim*0.4, path = p, text_anchor = 'middle', fill = col_dict['black'], valign = 'middle', line_offset = -0.5))
+        # A wildcard linkage such as "β 2/4/6" is far wider than the bond it rides on, so shrink it to what fits between the two symbols
+        span = (((x_stop - x_start) ** 2 + (y_stop - y_start) ** 2) ** 0.5) - dim
+        drawing.append(draw.Text(label, min(dim * 0.4, max(dim * 0.22, span / (0.6 * len(label)))), path = p,
+                                 text_anchor = 'middle', fill = col_dict['black'], valign = 'middle',
+                                 line_offset = -0.5))
 
 
 def add_sugar(
@@ -764,7 +768,9 @@ def get_coordinates_and_labels(
     l2_bond = process_bonds(l2_bond)
     l3_bond = process_bonds(l3_bond)
     # Main chain x
-    if (main_sugar[-1]  == 'Fuc' and len(main_bond) > 1) or (main_sugar[-1] == 'Xyl' and len(main_bond) > 1 and main_bond[-1] == 'β 2'):
+    tucked_end = (main_sugar[-1] == 'Fuc' and draw_this.count('(') > 1) or (
+                main_sugar[-1] == 'Xyl' and len(main_bond) > 1 and main_bond[-1] == 'β 2')
+    if tucked_end:
         main_sugar_x_pos[-1] -= 1
 
     # Calculate x positions for branches
@@ -787,10 +793,13 @@ def get_coordinates_and_labels(
     l2_x_pos = calculate_x_positions(l2_sugar, l2_connection, l1_x_pos, level = 2)
     l3_x_pos = calculate_x_positions(l3_sugar, l3_connection, l2_x_pos, level = 3)
     # Initialize y positions - ALL START AT Y=0 (except Fuc)
-    main_sugar_y_pos = [2 if s == "Fuc" and i == len(main_sugar)-1 and draw_this.count('(') > 1 else 0 for i, s in enumerate(main_sugar)]
-    l1_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l1_sugar]
-    l2_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l2_sugar]
-    l3_y_pos = [[2 if s == "Fuc" else 0 for s in sugars] for sugars in l3_sugar]
+    main_sugar_y_pos = [2 if tucked_end and i == len(main_sugar) - 1 else 0 for i in range(len(main_sugar))]
+    l1_y_pos = [[2 if s == "Fuc" or (s == "Xyl" and i == len(sugars) - 1) else 0 for i, s in enumerate(sugars)] for
+                sugars in l1_sugar]
+    l2_y_pos = [[2 if s == "Fuc" or (s == "Xyl" and i == len(sugars) - 1) else 0 for i, s in enumerate(sugars)] for
+                sugars in l2_sugar]
+    l3_y_pos = [[2 if s == "Fuc" or (s == "Xyl" and i == len(sugars) - 1) else 0 for i, s in enumerate(sugars)] for
+                sugars in l3_sugar]
     SPACING = 1
     # Main chain goes down, branches go up
     branch_points = {conn[1] for conn in l1_connection}
@@ -800,7 +809,7 @@ def get_coordinates_and_labels(
         branch_indices = [j for j, conn in enumerate(l1_connection) if conn[1] == parent_idx]
         core_branches = [l1_sugar[j] for j in branch_indices]
         is_core_fuc = all(j in [['Fuc'], ['Xyl']] for j in core_branches)
-        is_fuc_partner = main_sugar[parent_idx + 1] == 'Fuc'
+        is_fuc_partner = main_sugar[parent_idx + 1] == 'Fuc' or (tucked_end and parent_idx + 2 == len(main_sugar))
         if not is_core_fuc and not is_fuc_partner:
             branch_sugar = max(core_branches, key = len)
             l2_connected_indices = [k for k, conn in enumerate(l2_connection) if conn[0] in branch_indices]
@@ -840,18 +849,18 @@ def get_coordinates_and_labels(
         # Special case for core fucose
         if parent_idx == 0 and branch_sugar == ['Fuc'] and l1_bond[j] == ['α 6']:
             # Core fucose goes up
-            l1_y_pos[j] = [-2*SPACING] * len(branch_sugar)
+            l1_y_pos[j] = [-2 * SPACING] * len(branch_sugar)
         else:
             is_bisecting = branch_sugar[0] in ['GlcNAc'] and main_sugar[parent_idx] == 'Man' and main_bond[parent_idx-1] == 'β 4'
             is_leading_xyl = main_sugar[-1] == 'Xyl'
-            is_fuc_partner = main_sugar[parent_idx+1] == 'Fuc'
+            is_fuc_partner = main_sugar[parent_idx + 1] == 'Fuc' or (tucked_end and parent_idx + 2 == len(main_sugar))
             parent_branches = [(k, c) for k, c in enumerate(l1_connection) if c[1] == parent_idx]  # + 1 from main chain
             is_triple_branch = len(parent_branches) == 2 and j == parent_branches[0][0]
             # All other branches go up by spacing amount
             if len(branch_sugar) == 1 and branch_sugar[0] in ['Fuc', 'Xyl']:
-                l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] + 2*SPACING
+                l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] + 2 * SPACING
             elif is_leading_xyl and j == 0:
-                l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] + SPACING
+                l1_y_pos[j] = [p + main_sugar_y_pos[parent_idx] + SPACING - l1_y_pos[j][0] for p in l1_y_pos[j]]
             elif len(branch_sugar) == 1 and (is_bisecting or is_fuc_partner or is_triple_branch):
                 l1_y_pos[j][0] = main_sugar_y_pos[parent_idx]
             elif len(branch_sugar) == 1:
@@ -860,8 +869,16 @@ def get_coordinates_and_labels(
                 offset = main_sugar_y_pos[parent_idx + 1] - main_sugar_y_pos[parent_idx]
                 shift_amount = main_sugar_y_pos[parent_idx] - offset
                 l1_y_pos[j] = [p + shift_amount for p in l1_y_pos[j]]
+    for parent_idx in branch_points:
+        sibs = [j for j, conn in enumerate(l1_connection) if conn[1] == parent_idx and len(l1_sugar[j]) == 1]
+        order = sorted(sibs, key = lambda j: -l1_y_pos[j][0])
+        for k in range(1, len(order)):
+            room = l1_y_pos[order[k - 1]][0] - 2 * SPACING
+            if l1_y_pos[order[k]][0] > room:
+                l1_y_pos[order[k]][0] = room
 
-    def process_branch_level(level_sugar, level_y_pos, level_connection, next_level_sugar, next_level_connection, parent_level_y_pos, parent_level_sugar):
+    def process_branch_level(level_sugar, level_y_pos, level_connection, next_level_sugar, next_level_connection,
+                             parent_level_y_pos, parent_level_sugar):
         # At each branch point, push remaining sugars down
         for idx, (parent_branch, parent_idx) in enumerate(level_connection):
             is_fuc_partner = parent_level_sugar[parent_branch][parent_idx+1] == 'Fuc' if parent_idx+1 < len(parent_level_sugar[parent_branch]) else False
@@ -880,7 +897,10 @@ def get_coordinates_and_labels(
             parent_y = parent_level_y_pos[parent_branch][parent_idx]
             is_fuc_partner = parent_level_sugar[parent_branch][parent_idx+1] == 'Fuc' if parent_idx+1 < len(parent_level_sugar[parent_branch]) else False
             if len(level_sugar[j]) == 1 and level_sugar[j][0] in ['Fuc', 'Xyl']:
-                level_y_pos[j][0] = parent_y + 2*SPACING
+                nxt = parent_level_y_pos[parent_branch][parent_idx + 1] if parent_idx + 1 < len(
+                    parent_level_y_pos[parent_branch]) else parent_y
+                away = -1 if nxt > parent_y else 1
+                level_y_pos[j][0] = parent_y + away * 2 * SPACING
             elif len(level_sugar[j]) == 1 and is_fuc_partner:
                 level_y_pos[j][0] = parent_y
             else:
@@ -892,36 +912,83 @@ def get_coordinates_and_labels(
     l2_y_pos = process_branch_level(l2_sugar, l2_y_pos, l2_connection, l3_sugar, l3_connection, l1_y_pos, l1_sugar)
     l3_y_pos = process_branch_level(l3_sugar, l3_y_pos, l3_connection, [], [], l2_y_pos, l2_sugar)
 
-    # Keep long level-1 branches separated so their antennas do not overlap
-    def collect_child_map(connections: list):
-        child_map = {}
-        for idx, (parent_branch, _) in enumerate(connections):
-            child_map.setdefault(parent_branch, []).append(idx)
-        return child_map
+    # The rules above fix the arrangement; this pass fixes the spacing, by pushing whole subtrees apart (or together) until every column has exactly the clearance its symbols need
+    lanes_x = [[main_sugar_x_pos], l1_x_pos, l2_x_pos, l3_x_pos]
+    lanes_y = [[main_sugar_y_pos], l1_y_pos, l2_y_pos, l3_y_pos]
+    parent, children = {}, {}
+    for i in range(1, len(main_sugar_y_pos)):
+        parent[(0, 0, i)] = (0, 0, i - 1)
+    for lane, conns in ((1, l1_connection), (2, l2_connection), (3, l3_connection)):
+        for b, conn in enumerate(conns):
+            for i in range(len(lanes_y[lane][b])):
+                parent[(lane, b, i)] = (lane, b, i - 1) if i else (
+                    (0, 0, conn[1]) if lane == 1 else (lane - 1, conn[0], conn[1]))
+    for node, par in parent.items():
+        children.setdefault(par, []).append(node)
 
-    l1_children = collect_child_map(l2_connection) if l2_connection else {}
-    l2_children = collect_child_map(l3_connection) if l3_connection else {}
-    MIN_LONG_BRANCH_GAP = 1.25 * max(1.0, SPACING)
+    def subtree(node: tuple):
+        out, stack = [], [node]
+        while stack:
+            n = stack.pop()
+            out.append(n)
+            stack.extend(children.get(n, []))
+        return out
 
-    def offset_branch_stack(branch_idx: int, delta: float):
-        if delta <= 0:
-            return
-        l1_y_pos[branch_idx] = [y + delta for y in l1_y_pos[branch_idx]]
-        for l2_idx in l1_children.get(branch_idx, []):
-            l2_y_pos[l2_idx] = [y + delta for y in l2_y_pos[l2_idx]]
-            for l3_idx in l2_children.get(l2_idx, []):
-                l3_y_pos[l3_idx] = [y + delta for y in l3_y_pos[l3_idx]]
+    def contour(nodes: list):
+        # Per column, how far this subtree's symbols reach up and down; modification labels ride inside the clearance band and are not measured
+        c = {}
+        for lane, b, i in nodes:
+            x, y = lanes_x[lane][b][i], lanes_y[lane][b][i]
+            lo, hi = c.get(x, (y - 0.5, y + 0.5))
+            c[x] = (min(lo, y - 0.5), max(hi, y + 0.5))
+        return c
 
-    long_branches = [(idx, l1_y_pos[idx][0]) for idx, branch in enumerate(l1_sugar) if len(branch) > 1]
-    long_branches.sort(key = lambda item: item[1])
-    prev_y = None
-    for branch_idx, branch_y in long_branches:
-        if prev_y is not None:
-            gap = branch_y - prev_y
-            if gap < MIN_LONG_BRANCH_GAP:
-                offset_branch_stack(branch_idx, MIN_LONG_BRANCH_GAP - gap)
-                branch_y = l1_y_pos[branch_idx][0]
-        prev_y = branch_y
+    CLEARANCE, PARENT_SPAN = 1.0, 1.0
+    for node in sorted(children, key = lambda n: len(subtree(n))):
+        kids = children[node]
+        if len(kids) < 2:
+            continue
+        px, py = lanes_x[node[0]][node[1]][node[2]], lanes_y[node[0]][node[1]][node[2]]
+        chain, pins, free, taken = (node[0], node[1], node[2] + 1), [], [], {(px, py)}
+        for k in sorted(kids, key = lambda k: abs(lanes_y[k[0]][k[1]][k[2]] - py)):
+            slot = (lanes_x[k[0]][k[1]][k[2]], lanes_y[k[0]][k[1]][k[2]])
+            # A Fuc tucked into its parent's column and a bisecting GlcNAc drawn level with it sit where SNFG convention put them; a second residue claiming the same slot cannot
+            if (slot[0] == px or slot[1] == py) and slot not in taken:
+                pins.append(k)
+                taken.add(slot)
+            else:
+                free.append(k)
+        acc = contour([node] + unwrap([subtree(k) for k in pins]))
+        # The chain continues downwards and every side branch goes up; with no free chain residue to hold the lower side, the branches keep the side the rules above chose for them and straddle the parent instead of stacking above it
+        sides = {k: 1 if (k == chain if chain in free else lanes_y[k[0]][k[1]][k[2]] > py) else -1 for k in free}
+        seed, near = dict(acc), {}
+        for side in (1, -1):
+            for k in sorted([k for k in free if sides[k] == side],
+                            key = lambda k: side * lanes_y[k[0]][k[1]][k[2]]):
+                nodes = subtree(k)
+                c = contour(nodes)
+                shared = [x for x in c if x in acc]
+                delta = py + side * PARENT_SPAN - lanes_y[k[0]][k[1]][k[2]]
+                if shared:
+                    gap = min((c[x][0] - acc[x][1]) if side > 0 else (acc[x][0] - c[x][1]) for x in shared)
+                    delta = side * max(side * delta, CLEARANCE - gap)
+                for lane, b, i in nodes:
+                    lanes_y[lane][b][i] += delta
+                near.setdefault(side, side * (lanes_y[k[0]][k[1]][k[2]] - py))
+                for x, (lo, hi) in contour(nodes).items():
+                    plo, phi = acc.get(x, (lo, hi))
+                    acc[x] = (min(plo, lo), max(phi, hi))
+        # Placing each side at its own minimum leaves one linkage of the branch point far longer than the other; sliding both sides together splits the separation evenly, at no cost in height
+        if len(near) == 2 and near[1] != near[-1]:
+            far = -1 if near[-1] > near[1] else 1
+            moving = unwrap([subtree(k) for k in free])
+            c = contour(unwrap([subtree(k) for k in free if sides[k] == far]))
+            shared = [x for x in c if x in seed]
+            room = min((c[x][0] - seed[x][1]) if far > 0 else (seed[x][0] - c[x][1]) for x in
+                       shared) - CLEARANCE if shared else abs(near[1] - near[-1])
+            shift = -far * min(abs(near[1] - near[-1]) / 2, max(0, room))
+            for lane, b, i in moving:
+                lanes_y[lane][b][i] += shift
 
     def extract_conformation(sugar_modifications: list):
         if sugar_modifications and isinstance(sugar_modifications[0], list):
