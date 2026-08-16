@@ -525,6 +525,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("WURCS=2.0/1,2,1/[a2122h-1b_1-5]/1-1/a4-b1*OSO*/3=O/3=O") == "Glc1S(b1-4)Glc"
     assert canonicalize_iupac("WURCS=2.0/4,8,7/[a1211h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a2211h-1a_1-5][a1122h-1a_1-5]/1-2-3-3-3-3-4-4/a4-b1_b3-c1_b6-e1_c2-d1_e3-f1_e6-g1_g2-h1") == "Man(a1-2)Man(a1-6)[L-Man(a1-3)]L-Man(a1-6)[L-Man(a1-2)L-Man(a1-3)]Man(b1-4)L-GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/6,13,12/[a2122h-1x_1-5_2*NCC/3=O][a1221m-1a_1-5][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a212h-1b_1-5][a1122h-1a_1-5]/1-2-3-4-5-6-6-6-6-6-6-6-6/a3-b1_a4-c1_c4-d1_d2-e1_d3-f1_d6-j1_f3-g1_f6-h1_h2-i1_j3-k1_j6-l1_l2-m1") == "Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-3)[Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/3,6,10/[u2122h_2*NSO/3=O/3=O][u21FFA][u2121A]/1-1-1-2-3-3/a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?") == "{GlcNS(?1-?)}{GlcNS(?1-?)}{HexA(?1-?)}{IdoA(?1-?)}{IdoA(?1-?)}GlcNS"
     assert canonicalize_iupac("G07426YY") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("G96417BZ") == "Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G26039ES") == "Gal(b1-4)Glc-ol"
@@ -533,6 +534,14 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac(782) == "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"
     assert canonicalize_iupac(72) == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)[Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)]Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
     assert canonicalize_iupac("RES 1b:a-lgal-HEX-1:5|6:d") == "Fuc"
+    assert canonicalize_iupac("""RES
+1b:x-HEX-x:x
+2b:x-HEX-x:x
+3b:x-HEX-x:x
+4b:x-HEX-x:x
+5b:x-HEX-x:x
+6b:x-HEX-x:x
+7b:x-HEX-x:x|6:d""") == "{6dHex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}Hex"
     assert canonicalize_iupac("""RES
 1b:b-dglc-HEX-1:5
 2s:n-acetyl

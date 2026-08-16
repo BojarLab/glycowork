@@ -79,7 +79,7 @@ _GAG_HEXOSAMINE = {'A': 'GlcNAc', 'a': 'GalNAc', 'S': 'GlcNS', 'H': 'GlcN'}
 _GAG_HEXOSAMINE_SULF = {'0': '', '3': '3S', '4': '4S', '6': '6S', '9': '3S6S', '10': '4S6S'}
 _GLYCOCT_MONO = {'dglc': 'Glc', 'dgal': 'Gal', 'dman': 'Man', 'lgal': 'Fuc', 'dgro': 'Neu', 'lido': 'Ido',
                  'dxyl': 'Xyl', 'dara': 'D-Ara', 'lara': 'Ara', 'HEX': 'Hex', 'lman': 'Rha', 'lxyl': 'Col', 'dgul': 'Gul'}
-_GLYCOCT_SUB = {'n-acetyl': 'NAc', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc', 'acetyl': 'OAc', 'methyl': 'OMe', 'amino': 'N'}
+_GLYCOCT_SUB = {'n-acetyl': 'NAc', 'n-sulfate': 'NS', 'sulfate': 'OS', 'phosphate': 'OP', 'n-glycolyl': '5Gc', 'acetyl': 'OAc', 'methyl': 'OMe', 'amino': 'N'}
 _LINEARCODE_MAPPING = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GlcN': 'GlcNAc', 'GN': 'GlcNAc',
                        'GalN': 'GalNAc', 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
                        'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac'}
@@ -432,6 +432,9 @@ def glycoct_to_iupac_int(glycoct: str, # GlycoCT format string
                 clean_mono = multireplace(res_type, mono_replace)
                 if suffix:
                     clean_mono = clean_mono[:-1] + suffix + clean_mono[-1]
+                if len(parts) == 4 and parts[3].startswith('d') and clean_mono.startswith('Hex') and '|' in parts[2]:
+                    clean_mono = parts[2].split('|')[
+                                     -1] + 'd' + clean_mono  # unspecified deoxyhexose, x-HEX-x:x|6:d -> 6dHex
                 residue_dic[res_id] = clean_mono
             #modification
             elif parts[0][-1] == 's':
@@ -523,6 +526,29 @@ def glycoct_to_iupac(glycoct: str # Glycan in GlycoCT format
         parents = [int(x) for x in hit_p.group(1).split('|')] if hit_p else []
         pos_p, pos_c = (hit_l.group(1), hit_l.group(2)) if hit_l else ('-1', '1')
         floating_specs.append((part, parents, f"{'?' if pos_c == '-1' else pos_c}-{'?' if pos_p == '-1' else pos_p}"))
+    # Composition-like records: residues without residue-residue linkages become floating bits
+    components, seen = [], set()
+    for r in sorted(residue_dic):
+        if r in seen:
+            continue
+        stack, comp = [r], []
+        while stack:
+            n = stack.pop()
+            if n in seen:
+                continue
+            seen.add(n)
+            comp.append(n)
+            stack += [c for _, c in iupac_parts.get(n, [])] + [p for p, kids in iupac_parts.items() if any(c == n for _, c in kids)]
+        components.append(sorted(comp))
+    if len(components) > 1:
+        components.sort(key = lambda c: (-len(c), c[0]))
+        for comp in components[1:]:
+            res_c = {k: residue_dic[k] for k in comp}
+            parts_c = defaultdict(list, {k: iupac_parts[k] for k in comp if k in iupac_parts})
+            floating_specs.append((res_c[comp[0]] if len(comp) == 1 else glycoct_build_iupac(parts_c, res_c, degrees), [], '1-?'))
+        residue_dic = {k: residue_dic[k] for k in components[0]}
+        iupac_parts = defaultdict(list, {k: iupac_parts[k] for k in components[0] if k in iupac_parts})
+        floating_specs = [(part, [p for p in parents if p in residue_dic], link) for part, parents, link in floating_specs]
     # Build the IUPAC-condensed string
     iupac = glycoct_build_iupac(iupac_parts, residue_dic, degrees)
     iupac = iupac[:-1]
@@ -653,6 +679,8 @@ def get_mono(token: str # WURCS monosaccharide token
                 mono = monosaccharide_mapping.get(token, None)
                 if mono:
                     break
+        if not mono and len(token.split('-')[0]) == 6:  # unknown stereochemistry, e.g., a21FFA -> axxxxA (HexA)
+            mono = monosaccharide_mapping.get(f"axxxx{token.split('-')[0][-1]}-1x_1-5", None)
         if not mono:
             raise Exception(f"Token {token} not recognized.")
     mono += anomer if anomer and anomer in ['a', 'b'] else '?'
@@ -678,12 +706,17 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
     wurcs = re.sub(additional_pattern, '?', wurcs)
     wurcs = re.sub(r'([a-z][\d\?])\*O([PS])O\*\/3(=?)O\/3\=O', r'\1\2', wurcs)  # phospho/sulfo-linkages
     floating_part, floating_parts = '', []
-    parts = wurcs.split('/')
-    topology = parts[-1].split('_')
-    monosaccharides = '/'.join(parts[1:-2]).strip('[]').split('][')
-    connectivity = parts[-2].split('-')
+    res_end = wurcs.rindex(
+        ']') + 1  # residue block can contain '/', so delimit it by brackets instead of splitting on '/'
+    monosaccharides = wurcs[wurcs.index('['):res_end].strip('[]').split('][')
+    connectivity, _, topology = wurcs[res_end + 1:].partition('/')
+    topology, connectivity = topology.split('_'), connectivity.split('-')
     connectivity = {chr(97 + i) if i < 26 else chr(65 + i - 26) if i < 52 else chr(97) + chr(97 + i - 52) if i < 78 else chr(97) + chr(65 + i - 78): int(num) for i, num in enumerate(connectivity)}
     degrees = {c: ''.join(topology).count(c) for c in connectivity}
+    if len(connectivity) > 1 and not any(link.split('-')[0][:-1] in connectivity for link in topology if '-' in link):
+        monos = [get_mono(monosaccharides[i - 1]) for i in
+                 connectivity.values()]  # composition-like record, fully ambiguous linkages
+        return ''.join('{' + f"{m[:-1]}({m[-1]}1-?)" + '}' for m in monos[1:]) + monos[0][:-1]
     inverted_connectivity, iupac_parts = {}, []
     for link in topology:
         if '-' not in link:
