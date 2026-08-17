@@ -2,6 +2,7 @@ import pickle
 import re
 from pathlib import Path
 from copy import deepcopy
+from itertools import chain
 from functools import lru_cache
 from importlib import resources
 from collections import defaultdict, Counter
@@ -729,8 +730,8 @@ def find_diamonds(network: nx.DiGraph, # Biosynthetic network
             if node not in desc_cache:
                 desc_cache[node] = nx.descendants(network, node)
         if all(mn in desc_cache[substrate_node] and product_node in desc_cache[mn] for mn in middle_nodes):
-            virtual_states = (virtual_attr.get(mn, 0) for mn in middle_nodes)
-            if any(vs == 1 for vs in virtual_states) or mode == 'abundance':
+            # 'presence' keeps only diamonds with an unobserved intermediate (network completion); 'abundance' keeps all (reaction order)
+            if mode == 'abundance' or any(virtual_attr.get(mn, 0) == 1 for mn in middle_nodes):
                 # Filter out non-diamond shapes with any cross-connections
                 if nb_intermediates > 2:
                     sub = network.subgraph(d.values()).to_undirected()
@@ -867,10 +868,20 @@ def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
     abundance_dict = nx.get_node_attributes(network, 'abundance')
     if abundance_dict.get(root, 1) < 0.1:
         abundance_dict[root] = root_default
+    missing = {n for n, v in network.nodes(data = 'virtual') if v == 1 or abundance_dict.get(n, 0.0) <= 0.0} - {root}
+    for _ in range(len(missing)):
+        updated = False
+        for n in missing:
+            known = [a for a in
+                     (abundance_dict.get(m, 0.0) for m in chain(network.predecessors(n), network.successors(n))) if
+                     a > 0.0]
+            if known and float(np.mean(known)) > abundance_dict.get(n, 0.0):
+                abundance_dict[n] = float(np.mean(known))
+                updated = True
+        if not updated:
+            break
     for u, v in network.edges():
-        source_abundance = abundance_dict.get(u, 0.1)
-        sink_abundance = abundance_dict.get(v, 0.1)
-        network[u][v]['capacity'] = (source_abundance + sink_abundance) / 2
+        network[u][v]['capacity'] = (abundance_dict.get(u, 0.1) + abundance_dict.get(v, 0.1)) / 2
     return network
 
 
@@ -888,9 +899,8 @@ def estimate_weights(network: nx.DiGraph, # Biosynthetic network
         out_weights = [net_estimated[node][v]['capacity'] for v in net_estimated.successors(node) if net_estimated[node][v]['capacity'] != 0]
         return np.mean(in_weights + out_weights) if in_weights or out_weights else min_default
 
-    # Estimate weights for zero-weight intermediates
-    zero_weight_nodes = [node for node in net_estimated.nodes if net_estimated.out_degree(node) > 0 and all(net_estimated[node][v]['capacity'] == 0 for v in net_estimated.successors(node))]
-    for node in zero_weight_nodes:
+    for node in [n for n in net_estimated.nodes if net_estimated.out_degree(n) > 0 and all(
+            net_estimated[n][v]['capacity'] <= 0 for v in net_estimated.successors(n))]:
         estimated_weight = estimate_weight(node)
         for v in net_estimated.successors(node):
             net_estimated[node][v]['capacity'] = estimated_weight
@@ -911,13 +921,13 @@ def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
         try:
             if sink not in path_lengths:
                 raise nx.NetworkXNoPath(f"No path between {source} and {sink}.")
-            path_length = path_lengths[sink]
             try:
                 flow_value, flow_dict = nx.maximum_flow(network, source, sink)
             except Exception:
-                flow_value, flow_dict = nx.maximum_flow(network, source, sink, flow_func = nx.algorithms.flow.edmonds_karp)
+                flow_value, flow_dict = nx.maximum_flow(network, source, sink,
+                                                        flow_func = nx.algorithms.flow.edmonds_karp)
             flow_results[sink] = {
-                'flow_value': flow_value * path_length,
+                'flow_value': flow_value,
                 'flow_dict': flow_dict
             }
         except (nx.NetworkXError, nx.NetworkXNoPath):
@@ -1212,7 +1222,9 @@ def get_biosynthetic_coherence(
         group1: list[str] | None = None,  # First group column names; default: from the frame's contrasts
         group2: list[str] | None = None,  # Second group column names; default: from the frame's contrasts
         network: nx.DiGraph | None = None,  # Pre-built network; built from df if not provided
-        paired: bool | None = None  # Whether samples are paired; default: from the frame
+        paired: bool | None = None,  # Whether samples are paired; default: from the frame
+        n_permutations: int = 200,  # Label permutations for the group-level null; 0 to skip
+        random_state: int = 42  # Seed for permutation reproducibility
 ) -> pd.DataFrame: # Test results with group means, difference, t-statistic, p-value, and Cohen's d
     "Test whether biosynthetic coherence differs between two conditions using per-sample variance-weighted R²"
     from scipy.stats import ttest_ind, ttest_rel
@@ -1223,8 +1235,8 @@ def get_biosynthetic_coherence(
         df = df.set_index(df.columns[0])
     if network is None:
         network = construct_network(df.index.tolist())
-    glycans_in_net = GlycoList([n for n in network.nodes() if network.nodes[n].get('virtual', 1) == 0])
-    glycans = [g for g in df.index if g in glycans_in_net]
+    df.index = [canonicalize_iupac(g) for g in df.index]
+    glycans = [g for g in df.index if network.nodes.get(g, {}).get('virtual', 1) == 0]
     gidx = {g: i for i, g in enumerate(glycans)}
     col_sums = df.loc[glycans].sum(axis = 0)
     X = ((df.loc[glycans] / col_sums.where(col_sums > 0, 1)) * 100).values.astype(float)
@@ -1243,32 +1255,50 @@ def get_biosynthetic_coherence(
                 queue.extend(network.predecessors(node))
         preds_map[g] = preds
     col_idx = {c: i for i, c in enumerate(df.columns.tolist())}
+
     def _sample_r2(col, group):
-        "Variance-weighted R² using leave-one-out regression of each glycan on its observed precursors"
+        "Variance-weighted out-of-sample R² of each glycan predicted from its observed precursors, held-out sample scored against the training mean"
         train_idx = [col_idx[c] for c in group if c != col]
+        test_idx = col_idx[col]
         scores, weights = [], []
         for g in glycans:
             preds = preds_map[g]
-            y_train = X[gidx[g], train_idx]
+            y_train, y_test = X[gidx[g], train_idx], X[gidx[g], test_idx]
             var_y = float(np.var(y_train))
-            if not preds or len(train_idx) <= len(preds) + 1 or var_y < 1e-3:
+            if not preds or var_y < 1e-3:
                 continue
-            Xp_train = np.column_stack([X[gidx[p], train_idx] for p in preds] + [np.ones(len(train_idx))])
-            coef, _, _, _ = np.linalg.lstsq(Xp_train, y_train, rcond = None)
-            ss_tot = np.sum((y_train - y_train.mean()) ** 2)
-            r2 = max(0.0, 1.0 - np.sum((y_train - Xp_train @ coef) ** 2) / ss_tot) if ss_tot > 0 else 0.0
-            k, n = len(preds), len(train_idx)
-            r2_adj = max(0.0, 1.0 - (1.0 - r2) * (n - 1) / (n - k - 1))
-            scores.append(r2_adj)
+            center = np.array([X[gidx[p], train_idx].mean() for p in preds])
+            Zt = np.column_stack(
+                [X[gidx[p], train_idx] - center[i] for i, p in enumerate(preds)] + [np.ones(len(train_idx))])
+            Xp_test = np.concatenate([np.array([X[gidx[p], test_idx] for p in preds]) - center, [1.0]])
+            gram = Zt.T @ Zt
+            gram[np.diag_indices(len(preds))] += max(0.1 * np.trace(gram[:-1, :-1]) / len(preds), 1e-8)
+            coef = np.linalg.solve(gram, Zt.T @ y_train)
+            ss_res, ss_base = float((y_test - Xp_test @ coef) ** 2), float((y_test - y_train.mean()) ** 2)
+            scores.append(max(0.0, 1.0 - ss_res / ss_base) if ss_base > 0 else 0.0)
             weights.append(var_y)
         total_w = sum(weights)
         return float(sum(s * w for s, w in zip(scores, weights)) / total_w) if total_w > 0 else 0.0
+
     scores1 = np.array([_sample_r2(c, group1) for c in group1])
     scores2 = np.array([_sample_r2(c, group2) for c in group2])
     stat, pval = ttest_rel(scores2, scores1) if paired else ttest_ind(scores2, scores1, equal_var = False)
     effect, _ = cohen_d(scores2, scores1, paired = paired)
+    rng = np.random.default_rng(random_state)
+    obs, null = scores2.mean() - scores1.mean(), []
+    for _ in range(n_permutations):
+        if paired:
+            flip = rng.random(len(group1)) < 0.5
+            a = [g2 if f else g1 for g1, g2, f in zip(group1, group2, flip)]
+            b = [g1 if f else g2 for g1, g2, f in zip(group1, group2, flip)]
+        else:
+            perm = list(rng.permutation(group1 + group2))
+            a, b = perm[:len(group1)], perm[len(group1):]
+        null.append(np.mean([_sample_r2(c, b) for c in b]) - np.mean([_sample_r2(c, a) for c in a]))
+    p_perm = (np.sum(np.abs(null) >= abs(obs)) + 1) / (n_permutations + 1)
     return pd.DataFrame([{
         'group1_mean': float(scores1.mean()), 'group2_mean': float(scores2.mean()),
         'difference': float(scores2.mean() - scores1.mean()),
-        't_statistic': float(stat), 'p_val': float(pval), 'cohens_d': float(effect)
+        't_statistic': float(stat), 'p_val': float(pval), 'p_val_permutation': float(p_perm),
+        'null_sd': float(np.std(null)) if null else np.nan, 'cohens_d': float(effect)
     }], index = ['global_r2_weighted']).assign(group1_scores = [scores1.tolist()], group2_scores = [scores2.tolist()])

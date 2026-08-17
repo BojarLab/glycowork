@@ -41,7 +41,7 @@ class NamedGroups(list):
 
 
 class GlycoDataFrame(pd.DataFrame):
-    _metadata = ['_contrasts', '_paired', '_glyco_name']
+    _metadata = ['_contrasts', '_paired', '_glyco_name', '_provenance']
     _meta_groups = [('Species', 'Genus', 'Family', 'Order', 'Class', 'Phylum', 'Kingdom', 'Domain', 'ref'),
                     ('disease_association', 'disease_id', 'disease_sample', 'disease_direction', 'disease_ref', 'disease_species'),
                     ('tissue_sample', 'tissue_id', 'tissue_ref', 'tissue_species')]
@@ -118,6 +118,7 @@ class GlycoDataFrame(pd.DataFrame):
         contrasts = kwargs.pop('contrasts', None)
         paired = kwargs.pop('paired', None)
         name = kwargs.pop('name', None)
+        self._provenance = kwargs.pop('provenance', {})
         super().__init__(*args, **kwargs)
         if contrasts is not None:
             self._contrasts = contrasts
@@ -282,6 +283,12 @@ class LazyLoader:
             except FileNotFoundError:
                 self._contrasts_map = {}
                 self._paired_map = {}
+            try:
+                with resources.files(f"{self.package}.{self.directory}").joinpath("datasets_metadata.csv").open(
+                        encoding = 'utf-8-sig') as f:
+                    self._provenance_map = pd.read_csv(f).set_index('dataset').to_dict(orient = 'index')
+            except FileNotFoundError:
+                self._provenance_map = {}
         return
 
     def __getattr__(self, name):
@@ -297,7 +304,8 @@ class LazyLoader:
                     dataset_key = f"{self.prefix}{name}"
                     contrasts = self._contrasts_map.get(dataset_key, {})
                     paired = self._paired_map.get(dataset_key, False)
-                    self._datasets[name] = GlycoDataFrame(_df, contrasts = contrasts, paired = paired, name = name)
+                    self._datasets[name] = GlycoDataFrame(_df, contrasts = contrasts, paired = paired, name = name,
+                                                          provenance = self._provenance_map.get(name, {}))
             except FileNotFoundError:
                 raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
         return self._datasets[name]

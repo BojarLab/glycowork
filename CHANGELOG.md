@@ -12,8 +12,9 @@
 ### glycan_data
 #### loader
 ##### Added ✨
-- Added the `meta_filter` attribute to `GlycoDataFrame`, to filter datasets by metadata, such as `df_glycan.meta_filter(Order = 'Perissodactyla')`, which can be chained like any `pandas` attribute, such as `df_glycan.meta_filter(Order = 'Perissodactyla').glyco_filter('Sia(a2-3)Gal')` (c11b4d0)
+- Added the `meta_filter` method to `GlycoDataFrame`, to filter datasets by metadata, such as `df_glycan.meta_filter(Order = 'Perissodactyla')`, which can be chained like any `pandas` attribute, such as `df_glycan.meta_filter(Order = 'Perissodactyla').glyco_filter('Sia(a2-3)Gal')` (c11b4d0)
 - Added newly curated comparative glycomics datasets to `glycomics_data_loader`: `human_serum_parkinson_GSL_PMID40379659`, `mouse_brain_tango2ko_GSL_10_1002pgr2_70042`, `mouse_brain_tango2ko_N_10_1002pgr2_70042`, `mouse_brain_tango2ko_O_10_1002pgr2_70042`, `fish_gill_infection_O_PMID41435595`, `fish_intestine_infection_O_10_2139ssrn_7005880`, `human_colorectal_butyrate_O_PMID36669592`, `human_celllines_N_PMID38022636`, `human_serum_gangliosidosis_GSL_PMID39190143` (dfbc225)
+- Added the `_provenance` attribute to `GlycoDataFrame` that stores metadata about the `glycowork`-internal datasets
 
 ##### Changed 🔄
 - Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute (9afa2b3)
@@ -91,7 +92,8 @@
 - `de_wildcard_glycoletter` now also supports narrow monosaccharide wildcards like `Gal/Glc` (5483f3c)
 - `canonicalize_iupac` is again made more robust in terms of what inputs it can handle (8f799c3)
 - `UND` tokens in `GlycoCT` inputs are now better supported in `canonicalize_iupac` (4894d1b)
-- `canonicalize_iupac` can now correctly process composition-like `GlycoCT` and `WURCS` entries (i.e., no topology)
+- `canonicalize_iupac` can now correctly process composition-like `GlycoCT` and `WURCS` entries (i.e., no topology) (d132d2f)
+- Improved conversion handling of `GlycoCT`, `WURCS`, and `GlycoWorkbench` via `canonicalize_iupac`
 
 ##### Fixed 🐛
 - Fixed `canonicalize_iupac` messing up narrow modification wildcards (e.g., `Gal3/6S`) in side branches (3a02eff)
@@ -161,6 +163,7 @@
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)
 - Improved graph caching, which should result in faster `construct_network` calls (9630cd0)
+- Improved statistical baselines in `get_biosynthetic_coherence`
 
 #### evolution
 ##### Changed 🔄
