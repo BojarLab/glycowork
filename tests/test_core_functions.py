@@ -550,6 +550,20 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac(
         "WURCS=2.0/2,2,1/[a2112h-1x_1-4_2*NCC/3=O][a2112h-1x_1-5_2*NCC/3=O]/1-2/a?-b1") == "GalNAc(?1-?)GalfNAc"
     assert canonicalize_iupac("Gala") == "Gal"
+    assert canonicalize_iupac("RES\n1b:b-dara-HEX-2:5|2:keto\n2b:a-dglc-HEX-1:5\nLIN\n1:1o(2+1)2d") == "Glc(a1-2)Fruf"
+    assert canonicalize_iupac(
+        "RES\n1b:x-dglc-HEX-1:5\n2s:n-acetyl\n3b:b-dgal-HEX-1:5\n4b:a-lxyl-HEX-1:5|4:d|6:d\nLIN\n1:1d(2+1)2n\n2:1o(4+1)3d\n3:3o(2+1)4d") == "4d6dHex(a1-2)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "RES\n1b:b-dglc-HEX-1:5\n2s:n-acetyl\n3b:b-dgal-HEX-1:5\n4b:a-lxyl-HEX-1:5|3:d|6:d\n5b:a-lxyl-HEX-1:5|3:d|6:d\nLIN\n1:1d(2+1)2n\n2:1o(3+1)3d\n3:3o(2+1)4d\n4:1o(4+1)5d") == "Col(a1-2)Gal(b1-3)[Col(a1-4)]GlcNAc"
+    assert canonicalize_iupac("RES\n1b:x-lxyl-PEN-1:5") == "L-Xyl"
+    assert canonicalize_iupac(
+        "RES\n1b:x-dglc-HEX-1:5\n2b:x-dgal-HEX-1:5\n3b:x-dgro-dgal-NON-2:6|1:a|2:keto|3:d\n4s:n-acetyl\n5s:amino\nLIN\n1:1o(-1+1)2d\n2:2o(-1+2)3d\n3:3d(5+1)4n\n4:3d(1+1)5n") == "Neu5Ac1N(?2-?)Gal(?1-?)Glc"
+    assert canonicalize_iupac(
+        "WURCS=2.0/2,2,1/[a2122h-1b_1-5_2*NCC/3=O][a5122h-1b_1-5_2*NCC/3=O]/1-2/a4-b2") == "ManNAc(b2-4)GlcNAc"
+    assert canonicalize_iupac(
+        "WURCS=2.0/3,3,2/[a2122h-1x_1-5_2*NCC/3=O][a2112h-1b_1-5][a12d1m-1a_1-5]/1-2-3/a4-b1_b2-c1") == "4d6dHex(a1-2)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Gal(b1-4)[Hex6S(?1-?)]HexNAc") == "Gal(b1-4)[Hex6S(?1-?)]HexNAc"
+    assert canonicalize_iupac("Gal(b1-4)GlcNSOS") == "Gal(b1-4)GlcNSOS"
     assert canonicalize_iupac("RES 1b:a-lgal-HEX-1:5|6:d") == "Fuc"
     assert canonicalize_iupac("""RES
 1b:x-HEX-x:x
