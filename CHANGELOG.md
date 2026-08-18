@@ -19,6 +19,9 @@
 ##### Changed 🔄
 - Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute (9afa2b3)
 
+##### Fixed 🐛
+- Datasets `human_brain_N_PMID38343116`, `human_brain_O_PMID38343116`, and `human_brain_GSL_PMID38343116` in `glycomics_data_loader` have been renamed to `mouse_brain_N_PMID38343116`, `mouse_brain_O_PMID38343116`, and `mouse_brain_GSL_PMID38343116`
+
 #### stats
 ##### Added ✨
 - `clr_transformation` now has a new `reference` keyword argument, to optionally specify from which variables the geometric mean should be constructed (a918a2e)
