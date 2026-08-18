@@ -40,6 +40,7 @@ from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages, looks_like_linearcode,
     get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac, looks_like_oxford,
     glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
+    glycoworkbench_to_iupac,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
@@ -49,7 +50,7 @@ from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan,
-    GlycoList, GlycoDataFrame, NamedGroup, NamedGroups, glycoproteomics_data_loader, download_model
+    GlycoList, GlycoDataFrame, NamedGroup, NamedGroups, glycoproteomics_data_loader, download_model, LazyLoader
 )
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
@@ -87,7 +88,7 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
 from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, col_dict_base,
                  get_hit_atoms_and_bonds, add_colours_to_map, is_jupyter, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
-                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure
+                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, resolve_motif_name, _spread_glycans
 )
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
@@ -95,7 +96,7 @@ from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_
                      characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site
 )
 from glycowork.network.biosynthesis import (safe_compare, safe_index, create_neighbors,
-                         find_diff, construct_network, prune_network, estimate_weights, network_alignment, export_network,
+                         find_diff, construct_network, prune_network, network_alignment, export_network,
                          extend_glycans, highlight_network, infer_roots, get_edge_weight_by_abundance,
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
                          deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme, infer_network,
@@ -120,7 +121,7 @@ from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRa
                           init_weights, prep_model, LectinOracle_flex
 )
 from glycowork.ml.inference import (SimpleDataset, sigmoid, glycans_to_emb, get_multi_pred, get_lectin_preds,
-                          get_esmc_representations, get_Nsequon_preds
+                          get_esmc_representations, get_Nsequon_preds, _clean_protein_sequences
 )
 device = "cpu"
 if torch.cuda.is_available():
@@ -347,6 +348,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Gal3S-[NeuAca2-6]GlcNAc-Gal(b1-3)GalNAc") == "Neu5Ac(a2-6)[Gal3S(?1-?)]GlcNAc(?1-?)Gal(b1-3)GalNAc"
     assert canonicalize_iupac("Manα-Manβ-Glc") == "Man(a1-?)Man(b1-?)Glc"
     assert canonicalize_iupac("Gal((b1-4))Glc") == "Gal(b1-4)Glc"
+    assert canonicalize_iupac("Galb1-Glcb1-4Man") == "Gal(b1-?)Glc(b1-4)Man"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -5517,7 +5519,7 @@ def test_trace_diamonds(simple_glycans):
 
 
 def test_get_maximum_flow(sample_network):
-    sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
+    sample_network = get_edge_weight_by_abundance(sample_network, root = "Gal(b1-4)Glc-ol")
     flow_results = get_maximum_flow(sample_network,
                                   source="Gal(b1-4)Glc-ol")
     assert isinstance(flow_results, dict)
@@ -5528,7 +5530,7 @@ def test_get_maximum_flow(sample_network):
 
 
 def test_get_reaction_flow(sample_network):
-    sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
+    sample_network = get_edge_weight_by_abundance(sample_network, root = "Gal(b1-4)Glc-ol")
     flow_results = get_maximum_flow(sample_network,
                                   source="Gal(b1-4)Glc-ol")
     reaction_flows = get_reaction_flow(sample_network, flow_results, aggregate="sum")
@@ -5620,7 +5622,7 @@ def test_process_ptm_with_multiple_ptms():
 def test_get_maximum_flow_with_no_path(sample_network):
     # Add isolated node with no path from source
     sample_network.add_node("IsolatedGlycan", virtual=0, abundance=1.0)
-    sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
+    sample_network = get_edge_weight_by_abundance(sample_network, root = "Gal(b1-4)Glc-ol")
     flow_results = get_maximum_flow(sample_network,
                                   source="Gal(b1-4)Glc-ol",
                                   sinks=["IsolatedGlycan"])
@@ -8018,12 +8020,12 @@ def test_biosynthesis_weight_estimation():
     assert choose_path({1: 'a', 2: 'b', 3: 'c'}, [], {}, nb_intermediates = 0) == {}
     net = nx.DiGraph([('Glc', 'Gal(b1-4)Glc'), ('Gal(b1-4)Glc', 'Gal(b1-4)Gal(b1-4)Glc')])
     nx.set_node_attributes(net, {'Glc': 0.0, 'Gal(b1-4)Glc': 0.0, 'Gal(b1-4)Gal(b1-4)Glc': 0.0}, 'abundance')
-    out = estimate_weights(net, root = 'Glc')  # root abundance below 0.1 falls back to root_default
+    out = get_edge_weight_by_abundance(net, root = 'Glc')  # root abundance below 0.1 falls back to root_default
     assert out['Glc']['Gal(b1-4)Glc']['capacity'] == pytest.approx(np.sqrt(
         10 * 5))  # undetected intermediates are damped to half their neighbour, capacity is the geometric mean of both ends
     assert out['Gal(b1-4)Glc']['Gal(b1-4)Gal(b1-4)Glc']['capacity'] == pytest.approx(
         np.sqrt(5 * 2.5))  # damping compounds per hop away from observed data
-    assert estimate_weights(net, root = 'Glc', virtual_damping = 1.0)['Glc']['Gal(b1-4)Glc'][
+    assert get_edge_weight_by_abundance(net, root = 'Glc', virtual_damping = 1.0)['Glc']['Gal(b1-4)Glc'][
                'capacity'] == pytest.approx(10.0)
 
 
@@ -8114,3 +8116,135 @@ def test_biosynthesis_contrast_and_extension_branches(tmp_path):
     assert nx.get_node_attributes(highlighted, 'abundance')['Gal(b1-4)Glc-ol'] == 200
     # Target composition is further away than the step budget allows
     assert extend_network(net, steps = 1, to_extend = {'Hex': 8, 'HexNAc': 4, 'dHex': 2}, auto_steps = True)[-1] == -1
+
+
+_MILK_BIO = ["Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)Glc-ol", "Neu5Ac(a2-6)Gal(b1-4)Glc-ol",
+             "Fuc(a1-2)Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"]
+
+
+def test_get_differential_biosynthesis_branchpoint_and_shadow():
+    df = pd.DataFrame({'glycan': _MILK_BIO, 'sample1': [10., 5., 7., 3., 4.], 'sample2': [8., 6., 8., 2., 5.],
+                       'sample3': [9., 4., 6., 6., 2.], 'sample4': [11., 7., 9., 7., 3.]})
+    g1, g2 = ['sample1', 'sample2'], ['sample3', 'sample4']
+    bp = get_differential_biosynthesis(df, group1 = g1, group2 = g2, analysis = "branchpoint")
+    assert len(bp) > 0 and all(' -> ' in i for i in bp.index)
+    rx = get_differential_biosynthesis(df, group1 = g1, group2 = g2, analysis = "reaction")
+    assert "Neu5Ac(a2-3/6)" in rx.index  # shadow reaction merging both linkage variants
+
+
+def test_get_biosynthetic_coherence_nothing_scorable():
+    glycans = ["Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)[Neu5Ac(a2-6)]Gal(b1-4)Glc-ol",  # both intermediates stay virtual
+               "Fuc(a1-2)Gal(b1-4)Glc-ol"]
+    df = pd.DataFrame(np.tile(np.array([[60., 20., 20.]]).T, (1, 6)), index = glycans,
+                      columns = [f"g1_{i}" for i in range(3)] + [f"g2_{i}" for i in range(3)])
+    with pytest.raises(ValueError):
+        get_biosynthetic_coherence(df, list(df.columns[:3]), list(df.columns[3:]), n_permutations = 0)
+
+
+@patch('bokeh.io.output_notebook')
+@patch('bokeh.plotting.show')
+def test_plot_network_hierarchical_and_origin(mock_show, mock_enable, sample_network):
+    assert plot_network(sample_network, plot_format = 'hierarchical') is not None  # diamond revisits a levelled node
+    nx.set_node_attributes(sample_network, {n: 'red' for n in sample_network.nodes()}, 'origin')
+    assert plot_network(sample_network, plot_format = 'hierarchical') is not None
+    plt.close('all')
+
+
+def test_choose_path_missing_alternative():
+    g1 = nx.DiGraph([("A", "B"), ("A", "C"), ("B", "D"), ("C", "D")])
+    nx.set_node_attributes(g1, {n: 0 for n in g1.nodes()}, 'virtual')
+    g2 = nx.DiGraph([("A", "B"), ("B", "D")])  # lacks the C alternative
+    nx.set_node_attributes(g2, {n: 0 for n in g2.nodes()}, 'virtual')
+    out = choose_path({1: "A", 2: "B", 3: "D", 4: "C"}, ["s1", "s2"], {"s1": g1, "s2": g2})
+    assert set(out) == {"B", "C"} and out["B"] > out["C"]
+
+
+def test_lazy_loader_missing_metadata():
+    loader = LazyLoader("glycowork", "motif")  # directory without contrasts.csv/datasets_metadata.csv
+    loader._load_contrasts()
+    assert loader._contrasts_map == {} and loader._paired_map == {} and loader._provenance_map == {}
+
+
+def test_permanova_with_permutation_sampled():
+    coords = np.random.default_rng(42).normal(size = (10, 3))
+    dist = pd.DataFrame(np.abs(coords[:, None, :] - coords[None, :, :]).sum(-1))
+    f, p = permanova_with_permutation(dist, ['a'] * 5 + ['b'] * 5, permutations = 50)  # n>8 draws labels randomly
+    assert np.isfinite(f) and 0 < p <= 1
+
+
+def test_estimate_technical_variance_custom_scale():
+    df = pd.DataFrame({'a1': [10., 20., 30.], 'a2': [12., 18., 33.], 'b1': [5., 25., 40.], 'b2': [6., 22., 38.]})
+    out = estimate_technical_variance(df, ['a1', 'a2'], ['b1', 'b2'], num_instances = 4, custom_scale = 2.0)
+    assert out.shape == (3, 16) and np.isfinite(out.values).all()
+
+
+def test_parse_floating_bit_conflicting_fragments():
+    with pytest.raises(ValueError):
+        parse_floating_bit("Gal(b1-^)Glc|Man(b1-^)Glc")
+
+
+@pytest.mark.parametrize("wurcs,expected", [
+    ("WURCS=2.0/1,1,0/[a2122h-1b_1-5_2*NCC/3=O]/1/", "GlcNAcb"),  # single residue, no linkage block
+    ("WURCS=2.0/1,1,0/[a2122h-1b_1-5_2*ZZZ]/1/", "Hexb"),  # unmappable modification falls back to the skeleton
+])
+def test_wurcs_to_iupac_edge_cases(wurcs, expected):
+    assert wurcs_to_iupac(wurcs) == expected
+
+
+def test_resolve_motif_name_ambiguous():
+    with pytest.raises(ValueError):
+        resolve_motif_name("i antigen")  # normalizes onto both I_antigen and i_antigen
+
+
+def test_add_sugar_ambiguous_monosaccharide():
+    d = draw.Drawing(100, 100)
+    add_sugar('Glc/Bogus', d)  # fewer than two known alternatives: nothing drawn
+    assert len(d.elements) == 0
+    add_sugar('Ara/Lyx', d)  # shape without a bicolour recipe falls back to a single symbol
+    assert len(d.elements) > 0
+
+
+def test_GlycoDraw_rescue_and_bad_method():
+    assert GlycoDraw("Neu5Acα2-3Galβ1-4Glc", suppress = True) is not None  # greek letters route via rescue_glycans
+    with pytest.raises(ValueError):
+        GlycoDraw("Gal(b1-4)Glc", draw_method = 'bogus')
+
+
+def test_GlycanDrawing_save_and_png(tmp_path):
+    d = GlycoDraw("Gal(b1-4)Glc", suppress = True, shadow = True)
+    d.save_svg(str(tmp_path / "x.svg"))
+    assert (tmp_path / "x.svg").exists()
+    assert isinstance(d._repr_png_(), bytes)
+
+
+def test_spread_glycans_single_and_overlapping():
+    assert _spread_glycans([(0., 0., 10., 10., 0., 0.)], (100., 100.)) == [[0.0, 0.0]]
+    out = _spread_glycans([(0., 0., 10., 10., 0., 0.), (2., 2., 10., 10., 2., 2.)], (100., 100.), iterations = 3)
+    assert abs(out[0][1] - out[1][1]) > 2  # overlap deeper in y: pushed apart vertically
+    out = _spread_glycans([(0., 0., 10., 40., 0., 0.), (5., 0., 10., 40., 5., 0.)], (200., 200.), iterations = 2)
+    assert abs(out[0][0] - out[1][0]) > 5  # overlap deeper in x: pushed apart horizontally
+
+
+def test_get_time_series_motifs_transforms(sample_time_series_data):
+    assert not get_time_series(sample_time_series_data, impute = False, motifs = True, transform = "ALR").empty
+    with pytest.raises(ValueError):
+        get_time_series(sample_time_series_data, impute = False, motifs = True, transform = "wrong")
+
+
+def test_get_jtk_motifs_transforms(sample_jtk_df):
+    for transform in ("ALR", "Nothing"):
+        assert not get_jtk(sample_jtk_df, timepoints = 8, interval = 3, periods = [12, 24], motifs = True,
+                           transform = transform).empty
+    with pytest.raises(ValueError):
+        get_jtk(sample_jtk_df, timepoints = 8, interval = 3, periods = [12], motifs = True, transform = "wrong")
+
+
+def test_clean_protein_sequences_filters_and_raises():
+    with pytest.warns(UserWarning, match = "Skipped 3 invalid"):
+        assert _clean_protein_sequences(["ACDEF", None, "  ", "ACD1EF", "acdef", "ACDEF"], max_len = 3) == ["ACD"]
+    with pytest.raises(ValueError):
+        _clean_protein_sequences([])
+
+
+def test_glycoworkbench_to_iupac_unparseable():
+    assert glycoworkbench_to_iupac("nonsense") == "nonsense"

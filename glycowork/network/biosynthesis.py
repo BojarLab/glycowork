@@ -892,30 +892,6 @@ def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
     return network
 
 
-def estimate_weights(network: nx.DiGraph, # Biosynthetic network
-                     root: str = "Gal(b1-4)Glc-ol", # Root node
-                     root_default: float = 10, # Root abundance
-                     min_default: float = 0.001,  # Minimum weight
-                     virtual_damping: float = 0.5  # Per-hop abundance decay for undetected intermediates
-                     ) -> nx.DiGraph:  # Network with estimated weights
-    "Estimate reaction capacity (edge attribute) and missing abundances"
-    net_estimated = get_edge_weight_by_abundance(network, root = root, root_default = root_default,
-                                                 virtual_damping = virtual_damping)
-    # Function to estimate weight based on neighboring edges
-
-    def estimate_weight(node):
-        in_weights = [net_estimated[u][node]['capacity'] for u in net_estimated.predecessors(node) if net_estimated[u][node]['capacity'] != 0]
-        out_weights = [net_estimated[node][v]['capacity'] for v in net_estimated.successors(node) if net_estimated[node][v]['capacity'] != 0]
-        return np.mean(in_weights + out_weights) if in_weights or out_weights else min_default
-
-    for node in [n for n in net_estimated.nodes if net_estimated.out_degree(n) > 0 and all(
-            net_estimated[n][v]['capacity'] <= 0 for v in net_estimated.successors(n))]:
-        estimated_weight = estimate_weight(node)
-        for v in net_estimated.successors(node):
-            net_estimated[node][v]['capacity'] = estimated_weight
-    return net_estimated
-
-
 def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
                      source: str = "Gal(b1-4)Glc-ol", # Source node
                      sinks: list[str] | None = None # Target nodes; default:all terminal nodes
@@ -1038,14 +1014,13 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     # Network analysis
     root = sorted(infer_roots(frozenset(df_analysis.index.tolist())))
     root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
-    min_default = 0.1 if root.endswith('GlcNAc') else 0.001
     core_net = construct_network(df_analysis.index.tolist(), edge_type = edge_type)
     nets, features = {}, []
     for col in df_analysis.columns:
         temp = deepcopy(core_net)
         abundance_mapping = dict(zip(df_analysis.index.tolist(), df_analysis[col].values.tolist()))
         nx.set_node_attributes(temp, {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in temp.nodes()})
-        nets[col] = estimate_weights(temp, root = root, min_default = min_default, virtual_damping = virtual_damping)
+        nets[col] = get_edge_weight_by_abundance(temp, root = root, virtual_damping = virtual_damping)
     if analysis == "flow":
         res = {col: get_maximum_flow(nets[col], source = root) for col in nets}
     else:

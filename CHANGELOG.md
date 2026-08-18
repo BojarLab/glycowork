@@ -93,7 +93,7 @@
 - `canonicalize_iupac` is again made more robust in terms of what inputs it can handle (8f799c3)
 - `UND` tokens in `GlycoCT` inputs are now better supported in `canonicalize_iupac` (4894d1b)
 - `canonicalize_iupac` can now correctly process composition-like `GlycoCT` and `WURCS` entries (i.e., no topology) (d132d2f)
-- Improved conversion handling of `GlycoCT`, `WURCS`, and `GlycoWorkbench` via `canonicalize_iupac` (d41806a, d7f31a5)
+- Improved conversion handling of `GlycoCT`, `WURCS`, and `GlycoWorkbench` via `canonicalize_iupac` (d41806a, d7f31a5, 7cfb5ea)
 
 ##### Fixed 🐛
 - Fixed `canonicalize_iupac` messing up narrow modification wildcards (e.g., `Gal3/6S`) in side branches (3a02eff)
@@ -161,21 +161,24 @@
 ### network
 #### biosynthesis
 ##### Added ✨
-- `get_differential_biosynthesis` has the new `analysis="branchpoint"` mode, testing which way flux goes at each branch point in the network (e.g., sialylation vs fucosylation of the same precursor), which detects rewiring that leaves total flux unchanged ()
-- `get_differential_biosynthesis` has the new `edge_type` keyword argument, to run the analysis at the level of monosaccharides or glycoenzymes instead of monolinks ()
-- `get_differential_biosynthesis`, `estimate_weights`, and `get_edge_weight_by_abundance` have the new `virtual_damping` keyword argument, to control how much flux may run through unobserved intermediates ()
-- `get_biosynthetic_coherence` now reports which precursor changed for each rewired glycan, via the new `top_changed_precursor` and `precursor_coef_change` columns ()
+- `get_differential_biosynthesis` has the new `analysis="branchpoint"` mode, testing which way flux goes at each branch point in the network (e.g., sialylation vs fucosylation of the same precursor), which detects rewiring that leaves total flux unchanged (7cfb5ea)
+- `get_differential_biosynthesis` has the new `edge_type` keyword argument, to run the analysis at the level of monosaccharides or glycoenzymes instead of monolinks (7cfb5ea)
+- `get_differential_biosynthesis` and `get_edge_weight_by_abundance` have the new `virtual_damping` keyword argument, to control how much flux may run through unobserved intermediates (7cfb5ea)
+- `get_biosynthetic_coherence` now reports which precursor changed for each rewired glycan, via the new `top_changed_precursor` and `precursor_coef_change` columns (7cfb5ea)
 
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)
 - Improved graph caching, which should result in faster `construct_network` calls (9630cd0)
 - Improved statistical baselines in `get_biosynthetic_coherence` (d41806a)
-- `get_differential_biosynthesis` is now considerably more sensitive, via an Empirical-Bayes moderated t-test and testing flux shares rather than absolute flows, which stops low-abundance reactions from being filtered out before testing ()
-- Linkage-collapsed reactions in `get_differential_biosynthesis` are now corrected for multiple testing separately from their own linkage variants, so reporting both no longer costs significance ()
-- Reactions upstream of many end products are no longer inflated relative to reactions feeding a single one ()
-- Unobserved intermediates now carry less flux than observed structures, so paths that were never measured no longer compete with the ones that were ()
-- `get_biosynthetic_coherence` now reports many more rewired glycans, as strongly decoupled glycans no longer saturate at the same value as mildly decoupled ones ()
-- Significance in `get_differential_biosynthesis` and `get_biosynthetic_coherence` is now judged against a sample-size-adjusted alpha, in line with the `.motif.analysis` functions ()
+- `get_differential_biosynthesis` is now considerably more sensitive, via an Empirical-Bayes moderated t-test and testing flux shares rather than absolute flows, which stops low-abundance reactions from being filtered out before testing (7cfb5ea)
+- Linkage-collapsed reactions in `get_differential_biosynthesis` are now corrected for multiple testing separately from their own linkage variants, so reporting both no longer costs significance (7cfb5ea)
+- Reactions upstream of many end products are no longer inflated relative to reactions feeding a single one (7cfb5ea)
+- Unobserved intermediates now carry less flux than observed structures, so paths that were never measured no longer compete with the ones that were (7cfb5ea)
+- `get_biosynthetic_coherence` now reports many more rewired glycans, as strongly decoupled glycans no longer saturate at the same value as mildly decoupled ones (7cfb5ea)
+- Significance in `get_differential_biosynthesis` and `get_biosynthetic_coherence` is now judged against a sample-size-adjusted alpha, in line with the `.motif.analysis` functions (7cfb5ea)
+
+##### Deprecated ⚠️
+- Deprecated `estimate_weights`, which will be handled by `get_edge_weight_by_abundance` instead
 
 #### evolution
 ##### Changed 🔄
