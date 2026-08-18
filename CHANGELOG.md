@@ -14,13 +14,13 @@
 ##### Added ✨
 - Added the `meta_filter` method to `GlycoDataFrame`, to filter datasets by metadata, such as `df_glycan.meta_filter(Order = 'Perissodactyla')`, which can be chained like any `pandas` attribute, such as `df_glycan.meta_filter(Order = 'Perissodactyla').glyco_filter('Sia(a2-3)Gal')` (c11b4d0)
 - Added newly curated comparative glycomics datasets to `glycomics_data_loader`: `human_serum_parkinson_GSL_PMID40379659`, `mouse_brain_tango2ko_GSL_10_1002pgr2_70042`, `mouse_brain_tango2ko_N_10_1002pgr2_70042`, `mouse_brain_tango2ko_O_10_1002pgr2_70042`, `fish_gill_infection_O_PMID41435595`, `fish_intestine_infection_O_10_2139ssrn_7005880`, `human_colorectal_butyrate_O_PMID36669592`, `human_celllines_N_PMID38022636`, `human_serum_gangliosidosis_GSL_PMID39190143` (dfbc225)
-- Added the `_provenance` attribute to `GlycoDataFrame` that stores metadata about the `glycowork`-internal datasets (d41806a)
+- Added the `_provenance` attribute to `GlycoDataFrame` that stores metadata about the `glycowork`-internal datasets (d41806a, 7c89d24)
 
 ##### Changed 🔄
 - Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute (9afa2b3)
 
 ##### Fixed 🐛
-- Datasets `human_brain_N_PMID38343116`, `human_brain_O_PMID38343116`, and `human_brain_GSL_PMID38343116` in `glycomics_data_loader` have been renamed to `mouse_brain_N_PMID38343116`, `mouse_brain_O_PMID38343116`, and `mouse_brain_GSL_PMID38343116`
+- Datasets `human_brain_N_PMID38343116`, `human_brain_O_PMID38343116`, and `human_brain_GSL_PMID38343116` in `glycomics_data_loader` have been renamed to `mouse_brain_N_PMID38343116`, `mouse_brain_O_PMID38343116`, and `mouse_brain_GSL_PMID38343116`(7c89d24)
 
 #### stats
 ##### Added ✨

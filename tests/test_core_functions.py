@@ -1939,7 +1939,7 @@ def test_glycan_binding():
 
 def test_glycomics_data_loader():
     dir(glycomics_data_loader)
-    assert len(glycomics_data_loader.human_brain_GSL_PMID38343116) > 0
+    assert len(glycomics_data_loader.mouse_brain_GSL_PMID38343116) > 0
 
 
 def test_count_nested_brackets():
