@@ -2817,7 +2817,9 @@ def test_annotate_dataset(test_glycans):
     assert result.shape[1] == 6
     result = annotate_dataset(test_glycans, feature_set=['custom', 'terminal2', 'terminal3'], custom_motifs=["Gal(b1-4)GlcNAc"])
     few_glycans = ["LacNAc", "Ma3(Ma6)Mb4GNb4GN;"]
-    result = annotate_dataset(few_glycans, feature_set=['exhaustive', 'wrong'])
+    result = annotate_dataset(few_glycans, feature_set = ['exhaustive'])
+    with pytest.raises(ValueError):
+        annotate_dataset(few_glycans, feature_set = ['exhaustive', 'wrong'])
     assert "Oglycan_core6" not in annotate_dataset(["Fuc(a1-2)Gal(b1-3)GalNAc", "Gal(b1-3)[GlcNAc(b1-6)]GalNAc"],  condense=True).columns
     glycan = "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert annotate_dataset([glycan], condense=True)["Terminal_LewisX"].values[0] > 0.5
@@ -6328,12 +6330,12 @@ def test_distance_from_embeddings(sample_taxonomy_data, sample_embeddings):
 
 
 def test_distance_from_embeddings_invalid_averaging(sample_taxonomy_data, sample_embeddings):
-    result = distance_from_embeddings(
-        sample_taxonomy_data,
-        sample_embeddings,
-        averaging="invalid"
-    )
-    assert result is None
+    with pytest.raises(ValueError):
+        distance_from_embeddings(
+            sample_taxonomy_data,
+            sample_embeddings,
+            averaging="invalid"
+        )
 
 
 def test_check_conservation():

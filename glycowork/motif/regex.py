@@ -408,13 +408,16 @@ def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.
               return_matches: bool = True # Whether to return matches vs boolean
               ) -> bool | list[str]: # Match results
     "Find matches for glyco-regular expression in glycan"
-    if any(k in glycan for k in (';', '-D-', 'RES', '=')):
-        glycan = canonicalize_iupac(glycan)
     if isinstance(glycan, str):
+        if any(k in glycan for k in (';', '-D-', 'RES', '=', 'α', 'β')):
+            glycan = canonicalize_iupac(glycan)
         ggraph = glycan_to_nxGraph(glycan)
-    else:
+    elif isinstance(glycan, nx.Graph):
         ggraph = glycan
         glycan = graph_to_string(ggraph)
+    else:
+        raise ValueError(
+            f"get_match expects one glycan as a string or graph, got {type(glycan).__name__}; for several glycans at once use get_match_batch.")
     pattern_components = preprocess_pattern(pattern) if isinstance(pattern, str) else pattern
     pattern_matches = match_it_up(pattern_components, glycan, ggraph)
     if pattern_matches:
@@ -427,13 +430,19 @@ def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.
     return False if not return_matches else []
 
 
-def get_match_batch(pattern: str, # Glyco-regular expression; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
+def get_match_batch(pattern: str | list[str], # Expression or pre-compiled pattern; e.g., "Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc"
                     glycan_list: list[str | nx.DiGraph], # List of glycans
                     return_matches: bool = True # Whether to return matches vs boolean
                     ) -> list[bool] | list[list[str]]: # Match results for each glycan
     "Find glyco-regular expression matches in list of glycans"
-    pattern = compile_pattern(pattern)
-    return [get_match(pattern, g, return_matches = return_matches) for g in glycan_list]
+    pattern = compile_pattern(pattern) if isinstance(pattern, str) else pattern
+    out = []
+    for g in glycan_list:
+        try:
+            out.append(get_match(pattern, g, return_matches = return_matches))
+        except Exception as e:
+            raise ValueError(f"get_match failed on glycan '{g}': {e}") from e
+    return out
 
 
 def reformat_glycan_string(glycan: str # Glycan in IUPAC-condensed
@@ -452,5 +461,6 @@ def motif_to_regex(motif: str # Glycan in IUPAC-condensed
     motif = canonicalize_iupac(motif)
     pattern = reformat_glycan_string(motif)
     if not get_match(pattern, motif, return_matches = False):
-        raise ValueError("Failed to make effective regular expression.")
+        raise ValueError(
+            f"Could not build a working glyco-regular expression for motif '{motif}' (generated pattern: '{pattern}').")
     return pattern

@@ -1070,10 +1070,11 @@ def display_svg_with_matplotlib(
                                     output_height = height, scale = 2.0, return_bytes = True, chem = chem)
     img = plt.imread(BytesIO(png_output), format = 'png')
     dpi = plt.rcParams['figure.dpi']
-    plt.figure(figsize = (img.shape[1] / dpi, img.shape[0] / dpi))
+    fig = plt.figure(figsize = (img.shape[1] / dpi, img.shape[0] / dpi))
     plt.imshow(img)
     plt.axis('off')
     plt.show()
+    plt.close(fig)
 
 
 def process_per_residue(
@@ -1082,13 +1083,16 @@ def process_per_residue(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> tuple[list[float], list[list[float]], list[list[float]]]: # (main chain values, side chain values, branched side chain values)
     "Maps per-residue scalar values to main chain, side chains, and branched side chains"
+    temp = re.sub(r'\([^)]*\)', 'x', draw_this) + 'x'
+    temp = re.sub(r'[^x\[\]]', '', temp)
+    if temp.count('x') != len(per_residue):
+        raise ValueError(
+            f"per_residue has {len(per_residue)} values but {glycan} has {temp.count('x')} monosaccharides to color")
     if glycan != draw_this:
         g1 = glycan_to_nxGraph(glycan)
         g2 = glycan_to_nxGraph(draw_this)
         _, mappy = compare_glycans(g2, g1, return_matches = True)
-        per_residue = [per_residue[mappy[i*2]//2] for i in range(len(per_residue))]
-    temp = re.sub(r'\([^)]*\)', 'x', draw_this) + 'x'
-    temp = re.sub(r'[^x\[\]]', '', temp)
+        per_residue = [per_residue[mappy[i * 2] // 2] for i in range(len(per_residue))]
     main_chain_indices, l1_indices = [], []
     l2_indices, l1_stack = [], []
     idx = 0
@@ -1649,15 +1653,19 @@ def GlycoDraw(
     d2.append(d)
     if filepath:
         filepath = Path(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
+        suffix = filepath.suffix.lower()
+        if suffix not in {'.svg', '.pdf', '.png'}:
+            raise ValueError(f"Cannot save to '{filepath.name}': filepath has to end in .svg, .pdf, or .png")
+        filepath.parent.mkdir(parents = True, exist_ok = True)
         data = d2.as_svg()
         data = data.replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
-        if filepath.suffix.lower() == '.svg':
+        if suffix == '.svg':
             with open(filepath, 'w', encoding = "utf-8") as f:
                 f.write(data)
-        elif filepath.suffix.lower() == '.pdf':
+        elif suffix == '.pdf':
             convert_svg_to_pdf, _ = _get_glycorender()
             convert_svg_to_pdf(data, str(filepath), shadow = shadow)
-        elif filepath.suffix.lower() == '.png':
+        else:
             _, convert_svg_to_png = _get_glycorender()
             convert_svg_to_png(data, str(filepath), shadow = shadow)
     return GlycanDrawing(d2, shadow = shadow) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2, shadow = shadow)
@@ -1744,15 +1752,21 @@ def annotate_figure(
     glyc_scale, glyc_offset = glycan_size_dict[glycan_size]
     glycan_scale = ''
     if scale_by_DE_res is not None:
-        res_df = scale_by_DE_res.loc[(abs(scale_by_DE_res[x_metric]) > x_thresh) & (scale_by_DE_res['corr p-val'] < y_thresh)]
-        y = -np.log10(res_df['corr p-val'].values.tolist())
-        labels = res_df['Glycan'].values.tolist()
-        glycan_scale = [y, labels]
-        if glycan_scale != '':
-            _y_min, _y_max = min(glycan_scale[0]), max(glycan_scale[0])
+        label_col = 'Glycan' if 'Glycan' in scale_by_DE_res.columns else 'Glycosite'
+        if missing := {label_col, 'corr p-val', x_metric} - set(scale_by_DE_res.columns):
+            raise ValueError(
+                f"scale_by_DE_res is missing the column(s) {', '.join(sorted(missing))}; pass the output of get_differential_expression.")
+        res_df = scale_by_DE_res.loc[
+            (abs(scale_by_DE_res[x_metric]) > x_thresh) & (scale_by_DE_res['corr p-val'] < y_thresh)]
+        labels = res_df[label_col].values.tolist()
+        if labels:  # with nothing above the thresholds there is no scale to build, so everything is drawn at default size instead of crashing
+            y = -np.log10(res_df['corr p-val'].values.tolist())
+            glycan_scale = [y, labels]
+            _y_min, _y_max = min(y), max(y)
             _y_range = max(_y_max - _y_min, 1e-6)
     # Get svg code
-    svg_tmp = Path(svg_input).read_text(encoding = "utf-8") if '?xml' not in svg_input else svg_input
+    svg_tmp = svg_input if isinstance(svg_input, str) and '<svg' in svg_input else Path(svg_input).read_text(
+        encoding = "utf-8")
     # Get all text labels
     matches = re.findall(r"<!--.*-->[\s\S]*?<\/g>", svg_tmp)
     # Prepare for appending
@@ -1787,7 +1801,8 @@ def annotate_figure(
                 continue
             anchor = [float(v) for v in re.split(r'[,\s]+', translate_part.group(1).strip())[:2]]
             svg_tmp = svg_tmp.replace(match, '')
-            if glycan_scale == '':
+            if glycan_scale == '' or current_label not in glycan_scale[
+                1]:  # a label the DE table does not rank still gets drawn, just unscaled
                 d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
             else:
                 _dim = (scale_range[1] - scale_range[0]) * (
@@ -1811,14 +1826,18 @@ def annotate_figure(
                                                                                       glyc_scale, data)
     svg_tmp += '</svg>'
     if filepath:
-        filepath = str(filepath)
-        if filepath.endswith('.pdf'):
+        filepath = Path(filepath)
+        suffix = filepath.suffix.lower()
+        if suffix not in {'.pdf', '.svg', '.png'}:
+            raise ValueError(f"Cannot save to '{filepath.name}': filepath has to end in .svg, .pdf, or .png")
+        filepath.parent.mkdir(parents = True, exist_ok = True)
+        if suffix == '.pdf':
             from glycorender.render import simple_svg_to_pdf
             simple_svg_to_pdf(svg_tmp, str(filepath))
-        elif filepath.endswith('.svg'):
+        elif suffix == '.svg':
             with open(filepath, 'w', encoding = "utf-8") as f:
                 f.write(svg_tmp)
-        elif filepath.endswith('.png'):
+        else:
             from glycorender.render import simple_svg_to_png
             simple_svg_to_png(svg_tmp, str(filepath))
     else:
@@ -1857,17 +1876,24 @@ def plot_glycans_excel(
     df["SNFG"] = [np.nan for k in range(len(df))]
     image_column_number = df.columns.tolist().index("SNFG") + 1
     # Convert df_out to Excel
+    if Path(folder_filepath).suffix:
+        raise ValueError(
+            f"folder_filepath has to be a directory; the workbook is always written as 'output.xlsx' inside it (got '{folder_filepath}').")
+    Path(folder_filepath).mkdir(parents = True, exist_ok = True)
     writer = pd.ExcelWriter(Path(folder_filepath) / "output.xlsx", engine = "openpyxl")
     df.to_excel(writer, index = False)
     # Load the workbook and get the active sheet
     workbook = writer.book
     sheet = writer.sheets["Sheet1"]
     for i, glycan_structure in enumerate(df.iloc[:, glycan_col_num]):
-        if glycan_structure and glycan_structure[0]:
-            if not isinstance(glycan_structure[0], str):
-                glycan_structure = glycan_structure[0][0]
+        if isinstance(glycan_structure, (list, tuple)) and glycan_structure:
+            glycan_structure = glycan_structure[0] if isinstance(glycan_structure[0], str) else glycan_structure[0][0]
+        if isinstance(glycan_structure, str) and glycan_structure:
             # Generate glycan image using GlycoDraw
-            drawing = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True)
+            try:
+                drawing = GlycoDraw(glycan_structure, compact = compact, suppress = True, restrict_vocab = True)
+            except Exception as e:
+                raise ValueError(f"Could not draw the glycan in row {i + 2} of the sheet: {glycan_structure}") from e
             svg_data = drawing.as_svg()
             # Rasterize straight at the final size; no resampling step needed
             png_bytes = convert_svg_to_png(svg_data, scale = 2.0 * scaling_factor, return_bytes = True)

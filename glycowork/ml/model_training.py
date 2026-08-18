@@ -173,8 +173,6 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 pred_det = pred.cpu().detach().numpy()
                 if mode == 'classification':
                     if mode2 == 'multi':
-                        pred_proba = np.exp(pred_det) / np.sum(np.exp(pred_det), axis = 1,
-                                                               keepdims = True)  # numpy softmax
                         pred2 = np.argmax(pred_det, axis = 1)
                     else:
                         if pred_det.ndim > 1 and pred_det.shape[1] == 2:
@@ -482,6 +480,8 @@ def train_ml_model(X_train: pd.DataFrame | list,  # training data/glycans
         model = xgb.XGBClassifier(random_state = 42, n_estimators = 100, max_depth = 3)
     elif mode == 'regression':
         model = xgb.XGBRegressor(random_state = 42, n_estimators = 100, objective = 'reg:squarederror')
+    else:
+        raise ValueError(f"mode = '{mode}' is not supported; please use 'classification' or 'regression'.")
     # Get features
     if isinstance(X_train, list) and isinstance(X_train[0], str) and not feature_calc:
         feature_calc = True

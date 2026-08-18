@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import warnings
 from functools import lru_cache
 from itertools import permutations as iter_permutations
 from math import factorial
@@ -90,8 +91,8 @@ class MissForest:
     def __init__(self, regressor: 'RandomForestRegressor | None' = None, # estimator object for each imputation
                  max_iter: int = 5, # number of iterations for imputation process
                  tol: float = 1e-5, # convergence tolerance
-                 circadian: bool = False,  # inject sin/cos time features to exploit periodic structure
-                 timepoints: int | list | np.ndarray | None = None,  # number of timepoints, or explicit time values per column (only relevant if circadian)
+                 circadian: bool = False, # initialize missing values from the same feature's median at the same circadian phase
+                 timepoints: int | list | np.ndarray | None = None, # number of timepoints, or explicit time values per column (required if circadian)
                  periods: list[int] | None = None,  # cycle lengths to encode (e.g., [12, 24]) (only relevant if circadian)
                  interval: int = 1,  # time units between experimental timepoints (only relevant if circadian)
                  replicates: int = 1,  # replicates per timepoint (only relevant if circadian)
@@ -148,7 +149,10 @@ class MissForest:
             r = rankdata(feat_mu.reindex(idx).fillna(-np.inf).values, method = 'ordinal')
             mnar.loc[idx, col] = norm.ppf((r - 0.5) / len(idx) * b) * mad_c[col] + med_c[col]
         mnar, wv = np.exp2(mnar), w.values[:, None]
-        if self.circadian and self.timepoints is not None:
+        if self.circadian and self.timepoints is None:
+            raise ValueError(
+                "circadian = True requires timepoints: either the number of timepoints or the explicit time value of each column.")
+        if self.circadian:
             time_values = np.array(self.timepoints) if isinstance(self.timepoints, (list, np.ndarray)) \
                 else np.repeat(np.arange(self.timepoints) * self.interval, self.replicates)[:X.shape[1]]
             phases = time_values % max(self.periods)
@@ -310,8 +314,10 @@ def get_BF(n: int, # sample size
         integrand = lambda x: np.exp(-n * x**2 / 4)
         method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
     t_statistic = norm.ppf(1 - p/2) if z else t.ppf(1 - p/2, n - 2)
-    b = method_dict.get(method, lambda n: 1/n)(n)
-    BF = np.exp(0.5 * t_statistic**2) * np.sqrt(b)
+    if method not in method_dict:
+        raise ValueError(f"'{method}' is not a valid method; choose from 'JAB', 'min', 'robust', or 'balanced'.")
+    b = method_dict[method](n)
+    BF = np.exp(0.5 * t_statistic ** 2) * np.sqrt(b)
     return BF
 
 
@@ -326,7 +332,9 @@ def get_alphaN(n: int, # sample size
     if method == "balanced":
         integrand = lambda x: np.exp(-n * x**2 / 4)
         method_dict["balanced"] = lambda n: max(2/n, min(0.5, integrate.quad(integrand, 0, upper)[0]))
-    b = method_dict.get(method, lambda n: 1/n)(n)
+    if method not in method_dict:
+        raise ValueError(f"'{method}' is not a valid method; choose from 'JAB', 'min', 'robust', or 'balanced'.")
+    b = method_dict[method](n)
     alpha = 1 - chi2.cdf(2 * np.log(BF / np.sqrt(b)), 1)
     if verbose:
         print(f"You're working with an alpha of {alpha} that has been adjusted for your sample size of {n}.")
@@ -427,6 +435,8 @@ def replace_outliers_with_IQR_bounds(full_row: pd.Series, # row from dataframe, 
                                      cap_side: str = 'both' # which side(s) to cap outliers on: 'both', 'lower', or 'upper'
                                      ) -> pd.Series: # row with replaced outliers
     "caps outlier values at the IQR fences"
+    if cap_side not in ('both', 'lower', 'upper'):
+        raise ValueError(f"cap_side has to be 'both', 'lower', or 'upper', got '{cap_side}'.")
     row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
     # Calculate Q1, Q3, and IQR for each row
     Q1 = row.quantile(0.25)
@@ -521,15 +531,22 @@ def sequence_richness(counts: np.ndarray # array of counts per feature
 def shannon_diversity_index(counts: np.ndarray # array of counts
                             ) -> float: # Shannon diversity index value
     "calculates Shannon diversity index"
-    proportions = counts / counts.sum()
-    return entropy(proportions)
+    total = counts.sum()
+    if total == 0:
+        warnings.warn("A sample has no non-zero abundances at all; its Shannon diversity is undefined and is reported as 0.")
+        return 0.0
+    return entropy(counts / total)
 
 
 def simpson_diversity_index(counts: np.ndarray # array of counts
                             ) -> float: # Simpson diversity index value
     "calculates Simpson diversity index"
-    proportions = counts / counts.sum()
-    return 1 - np.sum(proportions**2)
+    total = counts.sum()
+    if total == 0:
+        warnings.warn("A sample has no non-zero abundances at all; its Simpson diversity is undefined and is reported as 0.")
+        return 0.0
+    proportions = counts / total
+    return 1 - np.sum(proportions ** 2)
 
 
 def get_equivalence_test(row_a: np.ndarray, # array of control samples for one glycan/motif
@@ -593,6 +610,12 @@ def anosim(df: pd.DataFrame, # square distance matrix
     "Performs analysis of similarity (ANOSIM) statistical test"
     group_labels = list(group_labels_in)
     n = df.shape[0]
+    if len(group_labels) != n:
+        raise ValueError(
+            f"anosim got {len(group_labels)} group labels for a {n}x{n} distance matrix; exactly one label per sample is required.")
+    if len(set(group_labels)) < 2 or max(Counter(group_labels).values()) < 2:
+        raise ValueError(
+            f"anosim needs at least two groups and at least one group with more than one sample, otherwise within- or between-group distances are empty; got {dict(Counter(group_labels))}.")
     condensed_dist = df.values[np.tril_indices(n, k = -1)]
     ranks = rankdata(condensed_dist, method = 'average')
     # Boolean array for within and between group comparisons
@@ -841,7 +864,13 @@ def omega_squared(row: pd.Series | np.ndarray | pd.DataFrame, # values for one f
     "Calculates Omega squared, as an effect size in an ANOVA setting"
     X = np.atleast_2d(np.asarray(row, dtype = float))
     g = np.asarray(groups)
+    if len(g) != X.shape[1]:
+        raise ValueError(
+            f"omega_squared got {len(g)} group labels for {X.shape[1]} samples; exactly one label per sample is required.")
     ug = np.unique(g)
+    if X.shape[1] <= len(ug):
+        raise ValueError(
+            f"omega_squared needs more samples than groups, got {X.shape[1]} samples for {len(ug)} groups; with one sample per group there is no within-group variance and the effect size is undefined.")
     ns = np.array([(g == u).sum() for u in ug])
     group_means = np.stack([X[:, g == u].mean(1) for u in ug], 1)
     grand_mean = X.mean(1)

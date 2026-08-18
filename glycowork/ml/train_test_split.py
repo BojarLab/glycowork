@@ -36,8 +36,7 @@ def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and ta
     rank_list.remove(rank)
     df.drop(rank_list, axis = 1, inplace = True)
     # Get unique classes in rank
-    class_list = list(set(df[rank].values.tolist()))
-    class_list = [k for k in class_list if k != 'undetermined']
+    class_list = sorted(set(df[rank].values.tolist()) - {'undetermined'})
     temp = []
     # For each class in rank, get unique set of glycans
     for classy in class_list:

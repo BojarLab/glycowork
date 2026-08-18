@@ -8,6 +8,7 @@
 - Moved several dependencies to lazy-load, to improve initial package start-up times (088c711)
 - Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw` (4894d1b)
 - `glycoworkGUI` is updated, making it more robust (628ee17)
+- Added more informative error messages throughout the package ()
 
 ### glycan_data
 #### loader
@@ -47,6 +48,8 @@
 
 ##### Changed 🔄
 - `mz_to_composition` now returns the closest prioritized match instead of the first prioritized match within tolerance (28769f5)
+- `glycan_to_mass` will now actively error out if no valid composition can be assigned to glycan (instead of returning an empty mass) ()
+- `compositions_to_structures` is less chatty now if everything can be matched ()
 
 ##### Fixed 🐛
 - Fixed `glycan_to_composition` handling of narrow monosaccharide modification wildcards such as `HexNAc4/6S` (b3ad039)
@@ -152,6 +155,7 @@
 - Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data (8f799c3)
 - Hardened `annotate_dataset` against duplicate motifs if the `"custom"` motif set is used (28769f5)
 - Made `annotate_dataset` more robust to glyco-regex custom motifs in `feature_set` (78fe195)
+- Fixed an issue in `get_molecular_properties` where `placeholder=True` could lead to mismatched index ()
 
 #### regex
 ##### Fixed 🐛

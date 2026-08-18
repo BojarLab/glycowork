@@ -64,8 +64,7 @@ def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) a
     "Calculate cosine distance matrix from learned embeddings"
     from scipy.spatial.distance import cosine
     if averaging not in ['mean', 'median']:
-        print("Only 'median' and 'mean' are permitted averaging choices.")
-        return
+        raise ValueError(f"averaging = '{averaging}' is not supported; please use 'mean' or 'median'.")
     # Subset df to only contain ranks with a minimum number of data points
     value_counts = df[rank].value_counts()
     valid_ranks = value_counts.index[value_counts >= cut_off]
@@ -178,7 +177,8 @@ def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
 
 
 def get_communities(network_list: list[nx.Graph], # List of undirected biosynthetic networks
-                    label_list: list[str] | None = None # Labels for community names, running_number + _ + label_list[k]  for network_list[k]; default:range(len(graph_list))
+                    label_list: list[str] | None = None, # Labels for community names, running_number + _ + label_list[k]  for network_list[k]; default:range(len(graph_list))
+                    random_state: int = 42 # Random seed for reproducible community detection
                     ) -> dict[str, list[str]]: # Community-to-glycan list mapping
     "Find communities for each graph in list of graphs"
     if label_list is None:
@@ -186,7 +186,7 @@ def get_communities(network_list: list[nx.Graph], # List of undirected biosynthe
     final_comm_dict = {}
     # Label the communities by species name and running number to distinguish them afterwards
     for i, network in enumerate(network_list):
-        communities = nx.algorithms.community.louvain.louvain_communities(network)
+        communities = nx.algorithms.community.louvain.louvain_communities(network, seed = random_state)
         for comm_index, community in enumerate(communities):
             comm_name = f"{comm_index}_{label_list[i]}"
             final_comm_dict[comm_name] = list(community)

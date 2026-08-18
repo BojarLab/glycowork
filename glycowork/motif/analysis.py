@@ -63,7 +63,7 @@ def preprocess_data(
         monte_carlo: bool = False,
         # Use Monte Carlo simulation to control for technical variation (will take longer to run)
         random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
-        circadian: bool = False,  # inject sin/cos time features into MissForest
+        circadian: bool = False,  # initialize missing values from the same feature's median at the same circadian phase
         circadian_timepoints: int | list | np.ndarray | None = None,  # number of timepoints or explicit time values (only relevant if circadian)
         circadian_periods: list[int] | None = None,  # cycle lengths to encode (only relevant if circadian)
         circadian_interval: int = 1,  # time units between timepoints (only relevant if circadian)
@@ -78,6 +78,9 @@ def preprocess_data(
         group1, group2 = list(df.group1), list(df.group2)
     if group2 is None:
         group2 = []
+    if not group1:
+        raise ValueError(
+            "No groups given: pass group1 (and group2 for a two-group comparison) as lists of column names or column indices; groups are only inferred automatically from a GlycoDataFrame that carries contrasts.")
     if paired is None:
         paired = df.paired if isinstance(df, GlycoDataFrame) else False
     if not isinstance(group1[0], str) and experiment == "diff":
@@ -176,6 +179,9 @@ def get_pvals_motifs(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
     in_name = getattr(df, '_glyco_name', '')
     glycan_col_name = GlycoDataFrame(df)._glycan_col or df.columns[0]
+    if not multiple_samples and label_col_name not in df.columns:
+        raise ValueError(
+            f"No column '{label_col_name}' in the input; set label_col_name to the name of your label column (available: {', '.join(map(str, df.columns))}), or set multiple_samples = True if every column after the glycans is a sample.")
     # Reformat to allow for proper annotation in all samples
     df = df.copy()
     value_cols = [c for c in df.columns if c != glycan_col_name]
@@ -263,7 +269,7 @@ def get_representative_substructures(
         enrichment_df: pd.DataFrame  # Output from get_pvals_motifs
 ) -> list[str]:  # Up to 10 minimal glycans containing enriched motifs
     "Constructs minimal glycan structures that represent significantly enriched motifs by optimizing for motif content while minimizing structure size using subgraph isomorphism"
-    glycans = list(set(df_species.glycan))
+    glycans = sorted(set(df_species.glycan))
     # Only consider motifs that are significantly enriched
     filtered_df = (enrichment_df[enrichment_df.significant] if 'significant' in enrichment_df else
                    enrichment_df[enrichment_df.corr_pval < 0.05]).reset_index(drop = True)
@@ -430,6 +436,13 @@ def characterize_monosaccharide(
         thresh: int = 10  # Minimum count threshold for inclusion
 ) -> None:
     "Analyzes connectivity and modification patterns of specified monosaccharides/linkages in glycan sequences"
+    if mode not in ('sugar', 'bond', 'sugarbond'):
+        raise ValueError(f"mode has to be 'sugar', 'bond', or 'sugarbond', got '{mode}'.")
+    if modifications and mode == 'bond':
+        print("Modifications currently only work in mode == 'sugar' and mode == 'sugarbond'; continuing without them.")
+        modifications = False
+    if (rank is None) != (focus is None):
+        raise ValueError("rank and focus have to be given together: rank is the column to filter on (e.g., 'Kingdom'), focus the value to keep (e.g., 'Animalia').")
     if df is None:
         df = df_species
     glycan_col_name = GlycoDataFrame(df)._glycan_col
@@ -467,8 +480,6 @@ def characterize_monosaccharide(
     # Start plotting
     fig, (a0, a1) = plt.subplots(1, 2, figsize = (8, 4), gridspec_kw = {'width_ratios': [1, 1]})
     if modifications:
-        if mode == 'bond':
-            print("Modifications currently only work in mode == 'sugar' and mode == 'sugarbond'.")
         # Get counts and proportions for the input monosaccharide + its modifications
         cou2 = Counter(sugars).most_common()
         filtered_items = [(item, count) for item, count in cou2 if count > thresh]
@@ -953,6 +964,8 @@ def get_volcano(
         **kwargs: Any  # Keyword args passed to seaborn scatterplot
 ) -> None:  # Displays volcano plot
     "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
+    if annotate_volcano and not filepath:
+        raise ValueError("annotate_volcano = True draws the SNFG annotations into a saved figure and therefore needs a filepath, e.g., filepath = 'volcano.svg'.")
     if isinstance(df_res, (str, Path)):
         df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res,
                                                                                                sep = "\t") if Path(
@@ -1276,7 +1289,11 @@ def get_time_series(
         df = df.drop([df.columns[0]], axis = 1)
         df = df.groupby(df.index).mean()
     df = df.T.reset_index()
-    df[df.columns[0]] = df.iloc[:, 0].apply(lambda x: float(x.split('_')[1][1:]))
+    try:
+        df[df.columns[0]] = df.iloc[:, 0].apply(lambda x: float(x.split('_')[1][1:]))
+    except (IndexError, ValueError) as e:
+        raise ValueError(
+            f"Sample columns have to be named 'sampleID_timepoint_replicate' (e.g., 'T1_h5_r1'); could not read a timepoint from {df.iloc[:, 0].tolist()[:3]}") from e
     df = df.sort_values(by = df.columns[0])
     time = df.iloc[:, 0].to_numpy()  # Time points
     df_out = [(c, *get_glycan_change_over_time(np.column_stack((time, df[c].to_numpy())), degree = degree)) for c in
@@ -1444,8 +1461,9 @@ def get_biodiversity(
         elif len(group_counts) == 2 and group2:
             df_a, df_b = a_df[group1], a_df[group2]
             mean_a, mean_b = [np.mean(row_a) for row_a in df_a.values], [np.mean(row_b) for row_b in df_b.values]
-            if paired:
-                assert len(df_a) == len(df_b), "For paired samples, the size of group1 and group2 should be the same"
+            if paired and len(group1) != len(group2):
+                raise ValueError(
+                    f"For paired samples, group1 and group2 have to be the same size; got {len(group1)} and {len(group2)}.")
             pvals = []
             effect_sizes = []
             for row_a, row_b in zip(df_a.values, df_b.values):

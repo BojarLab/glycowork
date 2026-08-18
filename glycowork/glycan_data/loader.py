@@ -434,7 +434,11 @@ def reindex(df_new: pd.DataFrame, # dataframe with new row order
     pos = {}
     for i, k in enumerate(df_old[ind_col].tolist()):
         pos.setdefault(k, i)
-    return [out_vals[pos[k]] for k in df_new[inp_col].tolist()]
+    new_keys = df_new[inp_col].tolist()
+    if missing := [k for k in new_keys if k not in pos]:
+        raise KeyError(
+            f"{len(missing)} value(s) of df_new['{inp_col}'] have no match in df_old['{ind_col}'], e.g., {missing[:3]}")
+    return [out_vals[pos[k]] for k in new_keys]
 
 
 def stringify_dict(dicty: dict[Any, Any] # dictionary to convert

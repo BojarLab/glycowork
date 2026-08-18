@@ -125,14 +125,14 @@ def get_molecular_properties(
         try:
             c = pcp.get_compounds(s, 'smiles')[0]
             if c.cid is None:
-                compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0]) if placeholder else failed_requests.append(s)
-                if placeholder:
-                    succeeded_requests.append(dummy)
-            else:
-                compounds_list.append(c)
-                succeeded_requests.append(g)
+                raise ValueError("no PubChem match")
+            compounds_list.append(c)
+            succeeded_requests.append(g)
         except Exception:
             failed_requests.append(s)
+            if placeholder:  # the placeholder row belongs to this glycan, otherwise the index silently stops matching the input
+                compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0])
+                succeeded_requests.append(g)
     if verbose and len(failed_requests) >= 1:
         print('The following SMILES were not found on PubChem:\n')
         print(failed_requests)
@@ -206,9 +206,13 @@ def annotate_dataset(
     # Reducing-end position is expressed through termini specs, not through the residue label
     original_glycans = glycans
     glycans = [g[:-3] if g.endswith('-ol') and not _STRUCTURAL_ALDITOL.search(g) else g for g in glycans]
-    invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive', 'size_branch'}
-    if invalid_features:
-        print(f"Warning: {', '.join(invalid_features)} not recognized as features.")
+    if isinstance(feature_set, str):
+        feature_set = [feature_set]
+    valid_features = {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical',
+                      'exhaustive', 'size_branch'}
+    if invalid_features := set(feature_set) - valid_features:
+        raise ValueError(
+            f"Unrecognized feature(s) {', '.join(sorted(invalid_features))}; choose from {', '.join(sorted(valid_features))}.")
     if motifs is None:
         motifs = motif_list
     # Checks whether termini information is provided
@@ -376,8 +380,10 @@ def quantify_motifs(
         remove_redundant: bool = True  # Remove redundant motifs via deduplicate_motifs
 ) -> pd.DataFrame:  # DataFrame with motif abundances (motifs as rows, samples as columns)
     "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences"
-    if isinstance(df, str):
-        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    if not isinstance(df, pd.DataFrame):
+        df = str(df)
+        df = pd.read_csv(df) if df.lower().endswith(".csv") else pd.read_csv(df, sep = "\t") if df.lower().endswith(
+            ".tsv") else pd.read_excel(df)
     if glycans is None:
         if pd.api.types.is_string_dtype(df.iloc[:, 0]):
             glycans = df.iloc[:, 0].tolist()

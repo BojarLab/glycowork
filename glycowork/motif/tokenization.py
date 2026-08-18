@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import networkx as nx
 import re
-import copy
 from random import sample
 from importlib import resources
 from collections import Counter, defaultdict
@@ -169,7 +168,7 @@ def stemify_dataset(df: pd.DataFrame, # DataFrame with glycan column
     pool_count = Counter(pool)
     stem_lib = {**stem_lib, **{k: k for k, v in pool_count.items() if v > rarity_filter}}
     # Stemify all offending monosaccharides
-    df_out = copy.deepcopy(df)
+    df_out = df.copy()
     df_out[glycan_col_name] = df_out[glycan_col_name].apply(lambda x: stemify_glycan(x, stem_lib = stem_lib, libr = libr))
     return df_out
 
@@ -311,9 +310,9 @@ def compositions_to_structures(composition_list: list[dict[str, int]], # List of
                 not_matched_list.append(comp)
     if df_out:
         df_out = pd.DataFrame(df_out, columns = ['glycan'] + ['abundance'] * (abundances.shape[1] - 1))
-    print(f"{not_matched_count} compositions could not be matched. Run with verbose = True to see which compositions.")
-    if verbose:
-        print(not_matched_list)
+    if not_matched_count:
+        print(f"{not_matched_count} compositions could not be matched." + (
+            f" Not matched: {not_matched_list}" if verbose else " Run with verbose = True to see which compositions."))
     return df_out if isinstance(df_out, pd.DataFrame) else pd.DataFrame()
 
 
@@ -448,7 +447,13 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
         while mod in glycan:
             diff_moieties[info['diff_moiety']] += 1
             glycan = glycan.replace(mod, info['replacement'])
-    composition = Counter(sorted([map_to_basic(stem_libr.get(key := re.sub(r"/\d", "", k), get_core(key)) if '/' in k else stem_libr[k]) for k in min_process_glycans([glycan])[0]]))
+    letters = min_process_glycans([glycan])[0]
+    if unknown := [k for k in letters if '/' not in k and k not in stem_libr]:
+        raise ValueError(
+            f"Cannot map the glycoletter(s) {unknown} of glycan '{glycan}' onto a core monosaccharide; check their spelling or pass an extended stem_libr via get_stem_lib(expand_lib(lib, [glycan])).")
+    composition = Counter(sorted(
+        [map_to_basic(stem_libr.get(key := re.sub(r"/\d", "", k), get_core(key)) if '/' in k else stem_libr[k]) for k in
+         letters]))
     composition.update(diff_moieties)
     for mod in ('Me', 'PCho', 'PEtN'):
         if mod in glycan:
@@ -525,7 +530,11 @@ def glycan_to_mass(glycan: str, # Glycan in IUPAC-condensed format
     if stem_libr is None:
         stem_libr = stem_lib
     comp = glycan_to_composition(glycan, stem_libr = stem_libr)
-    return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct, modification = modification)
+    if not comp:
+        raise ValueError(
+            f"No valid composition could be derived from '{glycan}' (it contains components outside {sorted(_VALID_COMPONENTS)}), so no mass can be calculated.")
+    return composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep, adduct = adduct,
+                               modification = modification)
 
 
 @rescue_compositions

@@ -314,6 +314,9 @@ def construct_network(glycans: list[str], # List of glycans
     stem_lib = get_stem_lib(get_lib(glycans))
     if permitted_roots is None:
         permitted_roots = infer_roots(frozenset(glycans))
+        if not permitted_roots:
+            raise ValueError(
+                f"Could not detect the glycan class (e.g., from '{glycans[0] if glycans else ''}'), so no biosynthetic roots can be inferred; glycans should end in '-ol' (free), 'GalNAc' (O-linked), 'GlcNAc' (N-linked), or '1Cer'/'Ins' (glycolipid), or pass permitted_roots explicitly.")
     abundance_mapping = dict(zip(glycans, abundances)) if abundances else {}
     # Generating graph from adjacency of observed glycans
     min_size = min(k.count('(') for k in permitted_roots) + 1
@@ -813,11 +816,12 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
                       species: str | None = None # Species to highlight; highlight=species
                       ) -> nx.DiGraph: # Network with highlight attributes ('origin' (motif/species) or 'abundance' (abundance/conservation) node attribute)
     "Add visual highlighting to network nodes, to be used in plot_network"
-    if network_dic is None:
-        network_dic = pickle.load(open(data_path, 'rb'))
     # Determine highlight validity
     if highlight not in ['motif', 'species', 'abundance', 'conservation']:
         raise ValueError(f"Invalid highlight argument: {highlight}")
+    if network_dic is None and highlight in {'species', 'conservation'}:
+        with open(data_path, 'rb') as f:
+            network_dic = pickle.load(f)
     if highlight == 'motif' and motif is None:
         raise ValueError("You have to provide a glycan motif to highlight")
     elif highlight == 'species' and species is None:
@@ -1013,6 +1017,9 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         df_analysis = df_analysis.T
     # Network analysis
     root = sorted(infer_roots(frozenset(df_analysis.index.tolist())))
+    if not root:
+        raise ValueError(
+            f"Could not detect the glycan class (e.g., from '{df_analysis.index[0]}'), so no biosynthetic root can be inferred; glycans should end in '-ol' (free), 'GalNAc' (O-linked), 'GlcNAc' (N-linked), or '1Cer'/'Ins' (glycolipid).")
     root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
     core_net = construct_network(df_analysis.index.tolist(), edge_type = edge_type)
     nets, features = {}, []
@@ -1292,7 +1299,7 @@ def get_biosynthetic_coherence(
         df = df.set_index(df.columns[0])
     if network is None:
         network = construct_network(df.index.tolist())
-    df.index = [canonicalize_iupac(g) for g in df.index]
+    df = df.set_axis([canonicalize_iupac(g) for g in df.index])
     glycans = [g for g in df.index if network.nodes.get(g, {}).get('virtual', 1) == 0]
     gidx = {g: i for i, g in enumerate(glycans)}
     cols = list(group1) + list(group2)

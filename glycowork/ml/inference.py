@@ -86,8 +86,10 @@ def get_multi_pred(prot: str,  # protein amino acid sequence
         prot = prot_to_coded([prot])
         feature = prot * len(glycans)
     else:
-        rep = prot_dic.get(prot, "new protein, no stored embedding")
-        feature = [rep] * len(glycans)
+        if prot not in prot_dic:
+            raise KeyError(
+                f"No stored embedding for the protein sequence of length {len(prot)} starting with '{prot[:20]}'; compute it with get_esmc_representations and add it to prot_dic, or use a LectinOracle_flex model with flex = True.")
+        feature = [prot_dic[prot]] * len(glycans)
     train_loader = dataset_to_dataloader(glycans, [0.99] * len(glycans), libr = libr, batch_size = batch_size,
                                          label_type = torch.float, shuffle = False, extra_feature = feature)
     model = model.eval()
@@ -128,7 +130,7 @@ def get_lectin_preds(prot: str,  # protein amino acid sequence
     "Wrapper that uses LectinOracle-type model for predicting binding of protein to glycans"
     if libr is None:
         libr = lib
-    if correction_df is None:
+    if correction_df is None and background_correction:
         with resources.files("glycowork.ml").joinpath("glycowork_lectinoracle_background_correction.csv").open(
                 encoding = 'utf-8-sig') as f:
             correction_df = pd.read_csv(f)
@@ -206,8 +208,7 @@ def get_esmc_representations(prots: list[str],  # list of protein sequences to c
             logits_output = model.logits(protein_tensor, None)
         return torch.mean(logits_output.embeddings, dim = 1).squeeze().tolist()
 
-    unique_prots = list(set(prots))
-    return {p: prot_to_ESMC(p) for p in unique_prots}
+    return {p: prot_to_ESMC(p) for p in prots}
 
 
 def get_Nsequon_preds(prots: list[str],  # 20 AA + N + 20 AA sequences; replace missing with 'z'

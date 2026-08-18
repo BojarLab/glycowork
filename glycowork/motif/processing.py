@@ -113,7 +113,12 @@ def rescue_glycans(func: Callable # Function to wrap
             return func(*args, **kwargs)
         except Exception:
             # If an error occurs, attempt to rescue the glycan sequences
-            rescued_args = [canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
+            rescued_args = [
+                canonicalize_iupac(arg) if isinstance(arg, str) else [canonicalize_iupac(a) for a in arg] if isinstance(
+                    arg, list) and arg and isinstance(arg[0], str) else arg for arg in args]
+            if rescued_args == list(
+                    args):  # nothing to rescue, so the error was not a formatting problem and re-running would only hide it behind a chained traceback
+                raise
             # After rescuing, attempt to run the function again
             return func(*rescued_args, **kwargs)
     return wrapper
@@ -150,9 +155,11 @@ def parse_floating_bit(bit: str # Content of one {...} floating bit, without bra
     return f"{fragments.pop()}({merged})", anchors
 
 
-def min_process_glycans(glycan_list: list[str] # List of glycans in IUPAC-condensed format
+def min_process_glycans(glycan_list: str | list[str] # Glycan(s) in IUPAC-condensed format
                         ) -> list[list[str]]: # List of glycoletter lists
     "Convert list of glycans into a nested lists of glycoletters"
+    if isinstance(glycan_list, str):
+        glycan_list = [glycan_list]
     glycan_list = [FLOATY_ALT.sub(lambda m: '{' + parse_floating_bit(m.group(1))[0] + '}', k) if '^' in k else k for k in glycan_list]
     return [
         [x for x in k.replace('[', '').replace(']', '').replace('{', '(').replace('}', ')').replace(')', '(').split('(')
@@ -374,8 +381,8 @@ def IUPAC_to_SMILES(glycan_list: str | list[str] # List of IUPAC-condensed glyca
     if not isinstance(glycan_list, list):
         glycan_list = [glycan_list]
     res = [convert(g)[0][1] for g in glycan_list]
-    if len(res) == 1 and res[0] == '':
-        return [convert(canonicalize_iupac(g))[0][1] for g in glycan_list]
+    if not all(res):
+        res = [r if r else convert(canonicalize_iupac(g))[0][1] for r, g in zip(res, glycan_list)]
     return res
 
 
@@ -485,9 +492,6 @@ def glycoct_to_iupac_int(glycoct: str, # GlycoCT format string
             if not link_type.startswith('99'):
                 iupac_parts[parent_id].append((f"{parts[2]}-{parts[1]}", child_id))
                 degrees[parent_id] += 1
-    for r in residue_dic:
-        if r not in degrees:
-            degrees[r] = 1
     return residue_dic, iupac_parts, degrees
 
 
@@ -656,9 +660,6 @@ def glycoctxml_to_iupac(glycan_xml: str # GlycoCT XML format string
                 else:
                     iupac_parts[parent_id].append((f"{child_pos}-{parent_pos}", child_id))
                     degrees[parent_id] += 1
-    for r in residue_dic:
-        if r not in degrees:
-            degrees[r] = 1
     iupac = glycoct_build_iupac(iupac_parts, residue_dic, degrees)
     pattern = re.compile(r'([ab\?])\(')
     return pattern.sub(lambda match: f"({match.group(1)}", iupac)
@@ -716,7 +717,8 @@ def get_mono(token: str # WURCS monosaccharide token
         if not mono and len(token.split('-')[0]) == 6:  # unknown stereochemistry, e.g., a21FFA -> axxxxA (HexA)
             mono = monosaccharide_mapping.get(f"axxxx{token.split('-')[0][-1]}-1x_1-5", None)
         if not mono:
-            raise Exception(f"Token {token} not recognized.")
+            raise ValueError(
+                f"WURCS monosaccharide token '{token}' is not supported yet, so this WURCS string cannot be converted to IUPAC-condensed; please report the token as an issue at https://github.com/BojarLab/glycowork/issues.")
     mono += anomer if anomer and anomer in ['a', 'b'] else '?'
     return mono
 
@@ -1252,6 +1254,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if isinstance(glycan, int):
         glycan = str(glycan)
         glycan = GLYCONNECT_TO_GLYTOUCAN.get(glycan, glycan)
+    if not isinstance(glycan, str) or not glycan.strip():
+        raise ValueError(
+            f"canonicalize_iupac needs a non-empty glycan string but got {glycan!r}; empty cells/NaN have to be filtered out of your data first.")
     if glycan.startswith("ENTRY"):
         glycan = kcf_to_iupac(glycan)
     glycan = glycan.strip().replace('–', '-').replace(' ', '')
@@ -1588,7 +1593,7 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
         glycan_features = ['H', 'N', 'A', 'F', 'G']
     else:
         df['Glycoform'] = [canonicalize_composition(k.split('_')[-1]) for k in df.index]
-        glycan_features = set(unwrap([list(c.keys()) for c in df.Glycoform]))
+        glycan_features = sorted(set(unwrap([list(c.keys()) for c in df.Glycoform])))
     org_cols = df.columns.tolist()
     df = df.join(df['Glycoform'].apply(parse_glycoform, glycan_features = glycan_features).apply(pd.Series))
     return df, [c for c in df.columns if c not in org_cols]
