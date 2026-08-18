@@ -1,5 +1,4 @@
 import pandas as pd
-import copy
 import json
 import re
 from random import choice
@@ -26,7 +25,7 @@ with open(_parent / "glyconnect_to_glytoucan.json") as f:
 replace_dic = {'αα': 'a', 'alpha': 'a', 'beta': 'b', 'Nac': 'NAc', 'nac': 'NAc', 'AC': 'Ac', 'Nc': 'NAc', 'Nue': 'Neu', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'NeuGc': 'Neu5Gc', 'b)': ')', 'a)': ')', '-man': '-Man',
                'α': 'a', 'ββ': 'b', 'β': 'b', 'N(Gc)': 'NGc', 'GL': 'Gl', 'GaN': 'GalN', '(9Ac)': '9Ac', '5,9Ac2': '5Ac9Ac', '4,5Ac2': '4Ac5Ac', '4,5Ac': '4Ac5Ac', 'Talp': 'Tal', 'manp': 'man', 'Ribp': 'Rib',
                'KDN': 'Kdn', 'OSO3': 'S', '-O-Su-': 'S', '(S)': 'S', 'SO3-': 'S', 'SO3(-)': 'S', 'SO3': 'S', 'So3': 'S', '-O-sulfo': 'S', 'H2PO3': 'P', '(P)': 'P', 'PO4': 'P', 'L-6dGal': 'Fuc', 'Hepp': 'Hep', 'Arap': 'Ara', 'Lyxp': 'Lyx',
-               '–': '-', ' ': '', 'ß': 'b', '.': '', '((': '(', '))': ')', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'PCho': 'PCho', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui', 'Sorp': 'Sor', 'Tagp': 'Tag',
+               '–': '-', ' ': '', 'ß': 'b', '.': '', '→': '-', '*': '', 'Ga(': 'Gal(', 'aa': 'a', 'bb': 'b', 'PCho': 'PCho', 'Pc': 'PCho', 'PC': 'PCho', 'Rhap': 'Rha', 'Quip': 'Qui', 'Sorp': 'Sor', 'Tagp': 'Tag',
                'Glcp': 'Glc', 'Galp': 'Gal', 'Manp': 'Man', 'Fucp': 'Fuc', 'Neup': 'Neu', 'a?': 'a1', 'Kdop': 'Kdo', 'Abep': 'Abe', 'Kdnp': 'Kdn', 'KDNp': 'Kdn', 'GlN': 'GlcN', 'Altp': 'Alt', 'Allp': 'All',
                '5Ac4Ac': '4Ac5Ac', '(-)': '(?1-?)', '(?-?)': '(?1-?)', '?-?)': '1-?)', '5ac': '5Ac', '-_': '-?', 'Idop': 'Ido', 'Xylp': 'Xyl', 'Gulp': 'Gul', '-Cer': '1Cer', '(z': '(?', '-z)': '-?)', '-glcp': '-Glc',
                'lXGc?': 'Gc', 'lXGc': 'Gc', 'lXAc?': 'Ac', 'lXAc': 'Ac', 'CER': 'Cer', 'anh': '-Anhydro-', 'euac': 'eu5Ac', '⍺': 'a'}
@@ -93,6 +92,7 @@ _WURCS_MOD = {'Br': 'Br', 'C': 'CMe', 'Cl': 'Cl', 'F': 'F', 'I': 'I', 'N': 'N', 
 _WURCS_MODSPLIT = re.compile(r'_(?=(?:\?|\d+(?:\|\d+)*)\*)')
 _WURCS_SIA_N = {'N': 'Neu', 'NCC/3=O': 'Neu5Ac', 'NCCO/3=O': 'Neu5Gc'}
 _WURCS_HLOSE = str.maketrans('5678', '1234')
+_GWB_RESIDUE = re.compile(r'^([\d?])(?:([ab?])(\d))?(?:([DLX])-)?([A-Za-z0-9]+?)(?:,([pfo]))?$')
 _MONO_STEM = re.compile(rf'(?:[\d?/]+[A-Za-z]+|{_MOD_NAMES})+$')  # strips trailing modifications to expose the monosaccharide stem
 _LINEARCODE_MAPPING = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Neu5Ac', 'GlcN': 'GlcNAc', 'GN': 'GlcNAc',
                        'GalN': 'GalNAc', 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
@@ -724,11 +724,10 @@ def get_mono(token: str # WURCS monosaccharide token
 def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
                    ) -> str: # Basic IUPAC-condensed format
     "Convert glycan from WURCS to barebones IUPAC-condensed format"
-    node_marker = lambda letter: f"<<{letter}>>"
-    splice = lambda text, start, end, repl='': text[:start] + repl + text[end:]
-    wurcs = wurcs[wurcs.index('/')+1:]
+    wurcs = wurcs[wurcs.index('/') + 1:]
     pattern = r'\b([a-z])\d(?:\|\1\d)+\}?|\b[a-z](\d)(?:\|[a-z]\2)+\}?'
     additional_pattern = r'\b([a-z])\?(?:\|\w\?)+\}?'
+
     def replacement(match):
         text = match.group(0)
         if '|' in text and text[-1].isdigit():  # Case like r3|r6
@@ -736,99 +735,48 @@ def wurcs_to_iupac(wurcs: str # Glycan in WURCS format
             nums = [c for c in text if c.isdigit()]
             return f'{letter}{nums[0]}*{nums[1]}'
         return f'{match.group(1)}?' if match.group(1) else f'?{match.group(2)}'
+
     wurcs = re.sub(pattern, replacement, wurcs)
     wurcs = re.sub(additional_pattern, '?', wurcs)
     wurcs = re.sub(r'([a-z][\d\?])\*O([PS])O\*\/3(=?)O\/3\=O', r'\1\2', wurcs)  # phospho/sulfo-linkages
-    floating_part, floating_parts = '', []
     res_end = wurcs.rindex(
         ']') + 1  # residue block can contain '/', so delimit it by brackets instead of splitting on '/'
     monosaccharides = wurcs[wurcs.index('['):res_end].strip('[]').split('][')
     connectivity, _, topology = wurcs[res_end + 1:].partition('/')
     topology, connectivity = topology.split('_'), connectivity.split('-')
     connectivity = {chr(97 + i) if i < 26 else chr(65 + i - 26) if i < 52 else chr(97) + chr(97 + i - 52) if i < 78 else chr(97) + chr(65 + i - 78): int(num) for i, num in enumerate(connectivity)}
-    degrees = {c: ''.join(topology).count(c) for c in connectivity}
     if len(connectivity) > 1 and not any(link.split('-')[0][:-1] in connectivity for link in topology if '-' in link):
         monos = [get_mono(monosaccharides[i - 1]) for i in
                  connectivity.values()]  # composition-like record, fully ambiguous linkages
         return ''.join('{' + f"{m[:-1]}({m[-1]}1-?)" + '}' for m in monos[1:]) + monos[0][:-1]
-    inverted_connectivity, iupac_parts = {}, []
+    kids, floaty = defaultdict(list), []
     for link in topology:
         if '-' not in link:
             return get_mono(monosaccharides[0])
         source, target = link.split('-')
-        source_index, source_carbon = connectivity[source[:-1]], source[-1]
-        source_mono = get_mono(monosaccharides[int(source_index)-1])
+        source_carbon = source[-1]
         if target[0] == '?':
-            floating_part += f"{'{'}{node_marker(source[0])}{source_mono}(1-{target[1:]}){'}'}"
-            floating_parts.append(source[0])
+            floaty.append((source[0], target[1:]))
             continue
-        target_index, target_carbon = connectivity[target[0]], target[1:]
-        target_mono = get_mono(monosaccharides[int(target_index)-1])
-        if '*' in target[1:]:  # Ultra-narrow wildcards
-            target_carbon = '/'.join(target[1:].split('*'))
-            iupac_parts.append((f"{source_mono}({source_carbon}-{target_carbon}){target_mono}", source[0], target[0]))
-        elif '?' in target:
-            iupac_parts.append((f"{source_mono}({source_carbon}-{target_carbon}){target_mono}", source[0], target[0]))
+        target_carbon = '/'.join(target[1:].split('*')) if '*' in target[1:] else target[1:]
+        if '*' in target[
+            1:] or '?' in target:  # ultra-narrow wildcards and unknown anomeric carbon flip donor and acceptor
+            kids[target[0]].append((f"{source_carbon}-{target_carbon}", source[0]))
         else:
-            iupac_parts.append((f"{target_mono}({target_carbon}-{source_carbon}){source_mono}", target[0], source[0]))
-    degrees_for_brackets = copy.deepcopy(degrees)
-    iupac_parts = sorted(iupac_parts, key = lambda x: (degrees[x[1]] == 1, x[2]))
-    iupac = iupac_parts[0][0]
-    inverted_connectivity.setdefault(connectivity[iupac_parts[0][2]], []).append(iupac_parts[0][2])
-    inverted_connectivity.setdefault(connectivity[iupac_parts[0][1]], []).append(iupac_parts[0][1])
-    degrees_for_brackets[iupac_parts[0][2]] -= 1
-    prefix = '[' if degrees[iupac_parts[0][1]] == 1 else ''
-    suffix = ']' if prefix == '[' and iupac_parts[0][2] == 'a' else ''
-    iupac = prefix + iupac[:iupac.index(')')+1] + suffix + iupac[iupac.index(')')+1:]
-    iupac = floating_part + iupac
-    for fp in floating_parts:
-        inverted_connectivity.setdefault(connectivity[fp], []).append(fp)
-    marker = node_marker
-    # Seed markers for the initial disaccharide so later insertions can find both nodes.
-    child_core = iupac_parts[0][0][:iupac_parts[0][0].index(')')+1]
-    child_plain = prefix + child_core + suffix
-    child_marker = marker(iupac_parts[0][1])
-    parent_marker = marker(iupac_parts[0][2])
-    child_start = len(floating_part)
-    child_end = child_start + len(child_plain)
-    child_marked = prefix + child_marker + child_core + suffix
-    iupac = splice(iupac, child_start, child_end, child_marked)
-    parent_insert = child_start + len(child_marked)
-    iupac = splice(iupac, parent_insert, parent_insert, parent_marker)
-    for parts, tgt, src in iupac_parts[1:]:
-        parent_marker = marker(src)
-        idx = iupac.find(parent_marker)
-        prefix = '[' if degrees[tgt] == 1 else ''
-        suffix = ']' if (degrees[src] > 2 and degrees_for_brackets[src] < degrees[src]) or (degrees[src] == 2 and degrees_for_brackets[src] < degrees[src] and src == 'a') or (degrees[src] > 3 and degrees[tgt] == 1) or (degrees[tgt] == 1 and src =='a')  else ''
-        child_marker = marker(tgt)
-        insert_segment = parts.split(')')[0]+')'
-        insert_text = prefix + child_marker + insert_segment + suffix
-        iupac = splice(iupac, idx, idx, insert_text)
-        degrees_for_brackets[src] -= 1
-        insertion_idx = iupac[:idx].count(parts.split(')')[0][:-4])
-        if insertion_idx > 0:
-            inverted_connectivity.setdefault(connectivity[tgt], []).insert(-insertion_idx, tgt)
-        else:
-            inverted_connectivity.setdefault(connectivity[tgt], []).append(tgt)
-    iupac = iupac[:-1].strip('[]').replace('}[', '}').replace('{[', '{')
-    pattern = re.compile(r'([ab\?])\(')
-    iupac = pattern.sub(lambda match: f"({match.group(1)}", iupac)
-    # Define the pattern to find two ][ separated by a string with exactly one (
-    pattern = r'(\]\[[^\[\]]*\([^][]*\)\][^\[\]]*)\]\['
-    iupac = re.sub(pattern, r'\1[', iupac)
-    if ']' in iupac and '[' in iupac and iupac.index(']') < iupac.index('['):
-        iupac = iupac.replace(']', '', 1)
-    if '[' in iupac and ']' not in iupac[iupac.index('['):]:
-        iupac = iupac[:iupac.rfind(')')+1] + ']' + iupac[iupac.rfind(')')+1:]
-    def remove_first_unmatched_opening_bracket(s):
-        balance = 0
-        for i, char in enumerate(s):
-            balance += (char == '[') - (char == ']')
-            if balance < 0:
-                return s[:i] + s[i + 1:]
-        return s
-    iupac = remove_first_unmatched_opening_bracket(iupac)
-    iupac = re.sub(r'<<[A-Za-z0-9]+>>', '', iupac)
+            kids[source[0]].append((f"{target_carbon}-{source_carbon}", target[0]))
+
+    def subtree(node, seen):
+        branches = sorted((subtree(c, seen | {c}) + f"({l})" for l, c in kids.get(node, []) if c not in seen),
+                          key = lambda b: (-b.count('('), b))
+        return (branches[0] if branches else '') + ''.join(f"[{b}]" for b in branches[1:]) + get_mono(
+            monosaccharides[connectivity[node] - 1])
+
+    attached = {c for kid in kids.values() for _, c in kid}.union(n for n, _ in floaty)
+    root = next(n for n in connectivity if n not in attached)
+    floating_part = ''.join('{' + f"{subtree(n, {n})}(1-{pos})" + '}' for n, pos in
+                            floaty)  # a floating bit can be a whole subtree, not just its attachment residue
+    iupac = (floating_part + subtree(root, {root}))[:-1]
+    iupac = re.sub(r'([ab\?])\(', lambda match: f"({match.group(1)}", iupac)
     return re.sub(r'(\d)([PS])\-', r'\1-\2-', iupac)
 
 
@@ -1041,55 +989,52 @@ def glycam_to_iupac(glycan: str # Glycan in GLYCAM nomenclature
 def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
                             ) -> str: # Basic IUPAC-condensed format
     """Convert GlycoWorkBench nomenclature to IUPAC-condensed format."""
-    glycan = glycan.replace("--?[", '')
-    repeat_pattern = r'--(\d+)\[(.*?)\]'
-    main_part = glycan.split('$MONO')[0]
-    while re.search(repeat_pattern, main_part):
-        match = re.search(repeat_pattern, main_part)
-        repeat_count = int(match.group(1))
-        repeat_unit = match.group(2)
-        expanded = repeat_unit * repeat_count
-        main_part = main_part[:match.start()] + expanded + main_part[match.end():]
-    glycan = (main_part + glycan[glycan.index('$MONO'):] if '$MONO' in glycan else main_part).replace("--?]", '')
-    # Handle floating parts if present
-    floaty_parts = []
-    if '}' in glycan:
-        glycan, floaty_section = glycan.split('}')
-        floaty_section = floaty_section.split('$MONO')[0]
-        # Process floating sections into parts
-        content = floaty_section.strip('()')
-        content = re.sub(r'\(+', '(', content)
-        parts = [part.strip('()') for part in re.split(r'\)\-\-', content) if part]
-        # Convert each floating part to IUPAC format
-        for part in parts:
-            new_float = ''.join(part.split(',p'))
-            processed_monos = [f"{x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})".strip('-') for x in new_float.split('--') if x]
-            floaty_parts.append(''.join(processed_monos[::-1]))
-    # Process main glycan structure
-    split_monos = [x for x in glycan.split('$MONO')[0].split('--')[1:] if x != '?']
-    if ',' not in split_monos[-1]:
-        split_monos[-1] = split_monos[-1] + ',p'
-    # Convert monosaccharides to IUPAC format
-    converted_monos = [f"{x[1:]}(?1-?)" if re.match(r"^\?[A-Z]", x) else
-                       f"{re.sub('[A-Z][a-z]{2}', lambda m: m.group() + 'f', x.split(',')[0][3:], count = 1) if ',f' in x else x.split(',')[0][3:]}({x[1]}{x[2]}-{x[0]})" +
-                       "".join(re.findall("[()]+", y)).replace("(","]").replace(")","[")
-                       for x, y in zip(split_monos, glycan.split('--'))]
-    converted_glycan = ''.join(converted_monos[::-1])
-    # Fix double branch notation if present
-    if ']]' in converted_glycan:
-        double_brack_idx = converted_glycan.index(']]')
-        branch_str = converted_glycan[:double_brack_idx + 2]
-        second_brack_end = [(m.start(0), m.end(0)) for m in re.finditer(re.escape('['), branch_str)][-1][0]
-        converted_glycan = branch_str[:second_brack_end] + ']' + branch_str[second_brack_end:-1] + converted_glycan[double_brack_idx+2:]
-    if floaty_parts:  # Add floating parts to final structure
-        converted_glycan = ''.join(f"{{{part}}}" for part in floaty_parts) + converted_glycan
-    converted_glycan = converted_glycan.replace('((', '(').replace('))', ')').replace(')(', '(')
-    converted_glycan = re.sub(r'([SP])[\)\(]*\?1-([\?\d])\)\[(.*?)\]([^(]+)', r'\3\4\2\1', converted_glycan)  # sulfate/phosphate with intervening branch
-    converted_glycan = re.sub(r'\[([SP])[\)\(]*\?1-([\?\d])\)([^(]+)', r'[\3\2\1', converted_glycan)  # sulfate/phosphate
-    converted_glycan = converted_glycan.replace('((', '(').replace('))', ')')
-    base = converted_glycan[:-6]
-    base = re.sub(r',[pfo]$', '', base)
-    return f"{base}-ol" if ',o' in split_monos[0] else base  # only an open-ring reducing end is an alditol
+    glycan = glycan.replace("--?[", '').split('$MONO')[0]
+    while re.search(r'--(\d+)\[(.*?)\]', glycan):
+        match = re.search(r'--(\d+)\[(.*?)\]', glycan)
+        glycan = glycan[:match.start()] + match.group(2) * int(match.group(1)) + glycan[match.end():]
+    main, _, floaty = re.sub(r'@\d+', '', glycan.replace("--?]", '')).partition('}')
+
+    def parse(text):  # children are written as a left-nested paren chain, ((c1)c2)c3
+        tokens, idx = [t[2:] if t.startswith('--') else t for t in (m.group() for m in re.finditer(r'\(|\)|--(?:[^-(){}]|-(?!-))+', text)) if t in '()' or t[2:] != '?'], [0]
+
+        def children():
+            if idx[0] >= len(tokens) or tokens[idx[0]] == ')':
+                return []
+            if tokens[idx[0]] != '(':
+                token = tokens[idx[0]]
+                idx[0] += 1
+                return [(token, children())]
+            idx[0] += 1
+            kids = children()
+            idx[0] += 1
+            return kids + children()
+
+        return children()
+
+    def render(node):  # returns the subtree string and the linkage onto its parent
+        token, kids = node
+        hit = _GWB_RESIDUE.match(token)
+        pos, anomer, carbon, config, name, ring = hit.groups() if hit else ('?', '?', '1', None, token, None)
+        if ring == 'f':
+            name = re.sub('[A-Z][a-z]{2}', lambda m: m.group() + 'f', name, count = 1)
+        name, branches, mods = f"{config}-{name}" if config else name, [], []
+        for kid in kids:
+            sub = _GWB_RESIDUE.match(kid[0])
+            if sub and sub.group(5) in ('S', 'P') and not kid[1]:
+                mods.append((sub.group(1) if sub.group(1).isdigit() else 'O') + sub.group(5))
+            else:
+                branches.append('{}({})'.format(*render(kid)))
+        branches.sort(key = lambda b: (-b.count('('), b))
+        name += ''.join(sorted(mods))
+        return (branches[0] if branches else '') + ''.join(f"[{b}]" for b in branches[1:]) + name, f"{anomer or '?'}{carbon or '1'}-{pos}"
+
+    roots = parse(main)
+    if not roots:
+        return glycan
+    body, _ = render(roots[0])
+    floating = ''.join('{{{}({})}}'.format(*render(f)) for f in parse(floaty))
+    return floating + body + ('-ol' if ',o' in roots[0][0] else '')
 
 
 def glytoucan_to_glycan(ids: list[str], # List of GlyTouCan IDs or glycans
@@ -1363,6 +1308,9 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     ac_to_nac = r'Ac\((?:\?1|1)-2\)(?P<branch>\[[^\]]*\])?(?P<prefix>[abx\?]?(?:[DL]-?)?)(?P<base>[A-Z][a-z]{2,})(?P<pflag>p)?N\b'  # Ac(1-2)bDGlcpN to bDGlcNAc
     glycan = re.sub(ac_to_nac, lambda m: f"{m.group('branch') or ''}{m.group('prefix') or ''}{m.group('base')}{m.group('pflag') or ''}NAc", glycan)
     glycan = CANONICALIZE.sub(lambda mo: replace_dic[mo.group()], glycan)
+    glycan = re.sub(r'\(\((?=[abx?]?[12][-/])', '(',
+                    glycan)  # accidental doubled parenthesis; only a linkage is ever wrapped twice, a nested branch such as ((3S)Gal is not
+    glycan = re.sub(r'(\([abx?]?[12][-/][^()]*\))\)', r'\1', glycan)
     glycan = multireplace(glycan, COMMON_ENANTIOMER)
     glycan = re.sub(r'(?:[abx?][DLRSX?]-?)?Pyr\??\((\d+)-(\d+):\1-(\d+)\)((?:[abx?][DLX?]-?)?)([A-Z][A-Za-z]*)',
                     lambda m: f"{m.group(4)}{m.group(5)}{min(int(m.group(2)), int(m.group(3)))}Pyr{max(int(m.group(2)), int(m.group(3)))}Pyr",

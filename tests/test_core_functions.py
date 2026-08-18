@@ -346,6 +346,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Neuac + Gal(b1-3)[Gal-GlcNAc(b1-6)]GalNAc") == "{Neu5Ac(a2-3/6)}Gal(?1-?)GlcNAc(b1-6)[Gal(b1-3)]GalNAc"
     assert canonicalize_iupac("Gal3S-[NeuAca2-6]GlcNAc-Gal(b1-3)GalNAc") == "Neu5Ac(a2-6)[Gal3S(?1-?)]GlcNAc(?1-?)Gal(b1-3)GalNAc"
     assert canonicalize_iupac("Manα-Manβ-Glc") == "Man(a1-?)Man(b1-?)Glc"
+    assert canonicalize_iupac("Gal((b1-4))Glc") == "Gal(b1-4)Glc"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -511,7 +512,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("freeEnd--??1L-Ara--5[--5a1L-Ara,f--?]--5a1L-Ara,f$MONO,perMe,Na,0,freeEnd") == "Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Ara"
     assert canonicalize_iupac("freeEnd--??1D-GlcNAc,o(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--2b1D-GlcNAc,p--4b1D-Gal,p)--4b1D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-Gal,p)--6a1D-Man,p--2b1D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-Gal,p)--6a1L-Fuc,p$MONO,perMe,Na,0,freeEnd") == "Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol"
     assert canonicalize_iupac("freeEnd--?D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-GlcNAc,p--4b1D-Man,p((--2b1D-Xyl,p)--3a1D-Man,p--2b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p$MONO,perMe,Na,0,freeEnd") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
-    assert canonicalize_iupac("freeEnd--?D-Ara,f--2?1D-Ara,f--5?1D-Man,p--2?1D-Man,p--2?1D-Man,p$MONO,perMe,Na,0,freeEnd") == "Man(?1-2)Man(?1-2)Man(?1-5)D-Araf(?1-2)D-Ara"
+    assert canonicalize_iupac("freeEnd--?D-Ara,f--2?1D-Ara,f--5?1D-Man,p--2?1D-Man,p--2?1D-Man,p$MONO,perMe,Na,0,freeEnd") == "Man(?1-2)Man(?1-2)Man(?1-5)D-Araf(?1-2)D-Araf"
     assert canonicalize_iupac("EtOH=28.0000u--?b1D-Glc,p--4b1D-Gal,p(--4b1D-GalNAc,p--3b1D-Gal,p)--3a2D-NeuAc,p}--?a2D-NeuAc,p$MONO,Und,-H,0,EtOH=28.0000u") == "{Neu5Ac(a2-3/6)}Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc"
     assert canonicalize_iupac("WURCS=2.0/5,7,6/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O]/1-2-3-4-2-5-4/a4-b1_b4-c1_c3-d1_c6-g1_d2-e1_e4-f1") == "GalNAc4S(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/8,15,14/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O][Aad21122h-2a_2-6_5*NCC/3=O]/1-2-3-4-2-5-6-7-8-4-2-5-6-8-5/a4-b1_a6-o1_b4-c1_c3-d1_c6-j1_d2-e1_e3-f1_e4-g1_h8-i2_j2-k1_k3-l1_k4-m1_h2-g3|g6_n2-m3|m6 ") == "Neu5Ac(a2-8)Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
@@ -564,6 +565,10 @@ def test_canonicalize_iupac():
         "WURCS=2.0/3,3,2/[a2122h-1x_1-5_2*NCC/3=O][a2112h-1b_1-5][a12d1m-1a_1-5]/1-2-3/a4-b1_b2-c1") == "4d6dHex(a1-2)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("Gal(b1-4)[Hex6S(?1-?)]HexNAc") == "Gal(b1-4)[Hex6S(?1-?)]HexNAc"
     assert canonicalize_iupac("Gal(b1-4)GlcNSOS") == "Gal(b1-4)GlcNSOS"
+    assert canonicalize_iupac("freeEnd--1?1D-GlcNAc,p(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--2b1D-GlcNAc,p--4b1D-Gal,p--3a2D-NeuAc,p)--4b1D-GlcNAc,p--4b1D-Gal,p--3S)--6a1D-Man,p(--2b1D-GlcNAc,p--4b1D-Gal,p--3a2D-NeuAc,p)--6b1D-GlcNAc,p--4b1D-Gal,p--3a2D-NeuAc,p)--6a1L-Fuc,p$MONO,Und,0,0,freeEnd") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal3S(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/3,10,9/[a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5]/1-1-2-3-1-1-3-1-1-1/a4-b1_b4-c1_c3-d1_c4-f1_c6-g1_d2-e1_g2-h1_g4-i1_g6-j1") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4)][GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("NeuAca2-3Galb1-4GlcNAcb1-2((3S)Galb1-4GlcNAcb1-4)Mana1-3(NeuAca2-3Galb1-4GlcNAcb1-2(NeuAca2-3Galb1-4GlcNAcb1-6)Mana1-6)Manb1-4GlcNAcb1-4(Fuca1-6)GlcNAc") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal3S(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/5,13,12/[a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5][a2112h-1a_1-5]/1-1-2-3-1-1-1-3-1-1-1-4-5/a4-b1_b4-c1_c3-d1_c4-g1_c6-h1_d2-e1_d4-f1_h2-i1_h4-j1_h6-k1_l3-m1_l1-a4|b4|c4|d4|e4|f4|g4|h4|i4|j4|k4}") == "{Gal(a1-3)Gal(b1-4)}GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4)][GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("RES 1b:a-lgal-HEX-1:5|6:d") == "Fuc"
     assert canonicalize_iupac("""RES
 1b:x-HEX-x:x
@@ -6105,7 +6110,10 @@ _GLYCANS = [
   "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol",
 ]
 _RNG = np.random.default_rng(42)
-_EXPECTED_COLS = {"group1_mean", "group2_mean", "difference", "t_statistic", "p_val", "p_val_permutation", "null_sd", "cohens_d", "group1_scores", "group2_scores"}
+_EXPECTED_COLS = {"group1_mean", "group2_mean", "difference", "t_statistic", "p_val", "cohens_d", "shared_model_difference",
+                  "shared_model_p_val", "shared_model_p_val_permutation", "null_sd", "n_rewired_glycans", "n_rewired_up",
+                  "group1_name", "group2_name", "n_glycans_scored", "n_glycans_observed", "coverage", "dropped",
+                  "group1_scores", "group2_scores", "shared_group1_scores", "shared_group2_scores"}
 
 
 def _make_df(n=5):
@@ -6118,11 +6126,13 @@ def test_get_biosynthetic_coherence_unpaired():
   df = _make_df()
   g1 = [c for c in df.columns if c.startswith("g1_")]
   g2 = [c for c in df.columns if c.startswith("g2_")]
-  result = get_biosynthetic_coherence(df, g1, g2)
+  result, per_glycan = get_biosynthetic_coherence(df, g1, g2)
   assert list(result.index) == ["global_r2_weighted"]
   assert set(result.columns) == _EXPECTED_COLS
-  assert 0.0 <= result.at["global_r2_weighted", "group1_mean"] <= 1.0
-  assert 0.0 <= result.at["global_r2_weighted", "group2_mean"] <= 1.0
+  assert -3.0 <= result.at[
+      "global_r2_weighted", "group1_mean"] <= 1.0  # decoupled glycans score below zero instead of saturating there
+  assert -3.0 <= result.at["global_r2_weighted", "group2_mean"] <= 1.0
+  assert {"group1_r2", "group2_r2", "rewired", "top_changed_precursor"} <= set(per_glycan.columns)
   assert len(result.at["global_r2_weighted", "group1_scores"]) == len(g1)
   assert len(result.at["global_r2_weighted", "group2_scores"]) == len(g2)
 
@@ -6131,7 +6141,7 @@ def test_get_biosynthetic_coherence_paired():
   df = _make_df()
   g1 = [c for c in df.columns if c.startswith("g1_")]
   g2 = [c for c in df.columns if c.startswith("g2_")]
-  result = get_biosynthetic_coherence(df, g1, g2, paired=True)
+  result, _ = get_biosynthetic_coherence(df, g1, g2, paired = True)
   assert list(result.index) == ["global_r2_weighted"]
   assert set(result.columns) == _EXPECTED_COLS
 
@@ -6141,7 +6151,7 @@ def test_get_biosynthetic_coherence_prebuilt_network_and_column_index():
   g1 = [c for c in df.columns if c.startswith("g1_")]
   g2 = [c for c in df.columns if c.startswith("g2_")]
   net = construct_network(_GLYCANS)
-  result = get_biosynthetic_coherence(df, g1, g2, network=net)
+  result, _ = get_biosynthetic_coherence(df, g1, g2, network = net)
   assert list(result.index) == ["global_r2_weighted"]
   assert set(result.columns) == _EXPECTED_COLS
 
@@ -8009,8 +8019,12 @@ def test_biosynthesis_weight_estimation():
     net = nx.DiGraph([('Glc', 'Gal(b1-4)Glc'), ('Gal(b1-4)Glc', 'Gal(b1-4)Gal(b1-4)Glc')])
     nx.set_node_attributes(net, {'Glc': 0.0, 'Gal(b1-4)Glc': 0.0, 'Gal(b1-4)Gal(b1-4)Glc': 0.0}, 'abundance')
     out = estimate_weights(net, root = 'Glc')  # root abundance below 0.1 falls back to root_default
-    assert out['Glc']['Gal(b1-4)Glc']['capacity'] == 10.0  # zero-abundance intermediates inherit the root estimate
-    assert out['Gal(b1-4)Glc']['Gal(b1-4)Gal(b1-4)Glc']['capacity'] == 10.0
+    assert out['Glc']['Gal(b1-4)Glc']['capacity'] == pytest.approx(np.sqrt(
+        10 * 5))  # undetected intermediates are damped to half their neighbour, capacity is the geometric mean of both ends
+    assert out['Gal(b1-4)Glc']['Gal(b1-4)Gal(b1-4)Glc']['capacity'] == pytest.approx(
+        np.sqrt(5 * 2.5))  # damping compounds per hop away from observed data
+    assert estimate_weights(net, root = 'Glc', virtual_damping = 1.0)['Glc']['Gal(b1-4)Glc'][
+               'capacity'] == pytest.approx(10.0)
 
 
 def test_quantify_motifs_from_file(tmp_path):
@@ -8091,7 +8105,7 @@ def test_biosynthesis_contrast_and_extension_branches(tmp_path):
     raw.to_csv(path, index = False)
     assert not get_differential_biosynthesis(str(path), group1 = ['sample1', 'sample2'], group2 = ['sample3', 'sample4'],
                                              analysis = "reaction").empty
-    assert not get_biosynthetic_coherence(GlycoDataFrame(raw.set_index('glycan'), contrasts = contrasts)).empty
+    assert not get_biosynthetic_coherence(GlycoDataFrame(raw.set_index('glycan'), contrasts = contrasts))[0].empty
     net = construct_network(['Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol'])
     conservation_df = pd.DataFrame({'Species': ['Species1', 'Species2'], 'glycan': ['Gal(b1-4)Glc-ol'] * 2})
     network_dic = {'Species1': nx.Graph([('Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol')]),

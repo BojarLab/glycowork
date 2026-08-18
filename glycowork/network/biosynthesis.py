@@ -10,7 +10,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from glycowork.glycan_data.loader import unwrap, linkages, lib, GlycoList, GlycoDataFrame
-from glycowork.glycan_data.stats import cohen_d, get_alphaN
+from glycowork.glycan_data.stats import cohen_d, get_alphaN, correct_multiple_testing, moderated_variance, dag_neighbors
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, graph_to_string_int, subgraph_isomorphism, get_possible_topologies
 from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class, canonicalize_iupac, canonicalize_composition, is_composition
 from glycowork.motif.tokenization import get_stem_lib, glycan_to_composition, map_to_basic
@@ -861,13 +861,16 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
 
 def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
                                  root: str = "Gal(b1-4)Glc-ol", # Root node
-                                 root_default: float = 10.0 # Root abundance
-                                 ) -> nx.DiGraph: # Network with edge capacities
+                                 root_default: float = 10.0,  # Root abundance
+                                 virtual_damping: float = 0.5  # Per-hop abundance decay for undetected intermediates
+                                 ) -> nx.DiGraph:  # Network with edge capacities
     "Estimate reaction capacity (edge attribute) from node abundances"
     network = network_in.copy()
     abundance_dict = nx.get_node_attributes(network, 'abundance')
     if abundance_dict.get(root, 1) < 0.1:
         abundance_dict[root] = root_default
+    detected = [a for a in abundance_dict.values() if a > 0.0]
+    floor = min(detected) if detected else 0.1
     missing = {n for n, v in network.nodes(data = 'virtual') if v == 1 or abundance_dict.get(n, 0.0) <= 0.0} - {root}
     for _ in range(len(missing)):
         updated = False
@@ -875,23 +878,29 @@ def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
             known = [a for a in
                      (abundance_dict.get(m, 0.0) for m in chain(network.predecessors(n), network.successors(n))) if
                      a > 0.0]
-            if known and float(np.mean(known)) > abundance_dict.get(n, 0.0):
-                abundance_dict[n] = float(np.mean(known))
-                updated = True
+            # Abundances are log-normal, so pool geometrically; a virtual node was not detected, so it cannot exceed the detection limit, and each further hop into unobserved territory decays
+            if known:
+                est = min(float(np.exp(np.mean(np.log(known)))) * virtual_damping, floor)
+                if est > abundance_dict.get(n, 0.0):
+                    abundance_dict[n] = est
+                    updated = True
         if not updated:
             break
     for u, v in network.edges():
-        network[u][v]['capacity'] = (abundance_dict.get(u, 0.1) + abundance_dict.get(v, 0.1)) / 2
+        network[u][v]['capacity'] = float(
+            np.sqrt(max(abundance_dict.get(u, 0.1), 1e-6) * max(abundance_dict.get(v, 0.1), 1e-6)))
     return network
 
 
 def estimate_weights(network: nx.DiGraph, # Biosynthetic network
                      root: str = "Gal(b1-4)Glc-ol", # Root node
                      root_default: float = 10, # Root abundance
-                     min_default: float = 0.001 # Minimum weight
-                     ) -> nx.DiGraph: # Network with estimated weights
+                     min_default: float = 0.001,  # Minimum weight
+                     virtual_damping: float = 0.5  # Per-hop abundance decay for undetected intermediates
+                     ) -> nx.DiGraph:  # Network with estimated weights
     "Estimate reaction capacity (edge attribute) and missing abundances"
-    net_estimated = get_edge_weight_by_abundance(network, root = root, root_default = root_default)
+    net_estimated = get_edge_weight_by_abundance(network, root = root, root_default = root_default,
+                                                 virtual_damping = virtual_damping)
     # Function to estimate weight based on neighboring edges
 
     def estimate_weight(node):
@@ -975,15 +984,16 @@ def get_reaction_flow(network: nx.DiGraph, # Biosynthetic network
 def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance data (first column: glycan sequences)
                                   group1: list[str | int] | None = None, # First group column indices/names (or time points in longitudinal analysis); default: from the frame's contrasts
                                   group2: list[str | int] | None = None, # Second group column indices/names (or time points in longitudinal analysis)
-                                  analysis: str = "reaction", # Type: reaction/flow
-                                  paired: bool | None = None, # Whether samples are paired; default: from the frame
-                                  longitudinal: bool = False, # Whether to do perform longitudinal analysis
-                                  id_column: str = "ID" # Sample ID column for longitudinal analysis in the ID-style of participant_time_replicate
+                                  analysis: str = "reaction",  # Type: reaction/flow/branchpoint
+                                  paired: bool | None = None,  # Whether samples are paired; default: from the frame
+                                  longitudinal: bool = False,  # Whether to do perform longitudinal analysis
+                                  id_column: str = "ID", # Sample ID column for longitudinal analysis in the ID-style of participant_time_replicate
+                                  edge_type: str = "monolink",  # Reaction resolution: monolink/monosaccharide/enzyme
+                                  virtual_damping: float = 0.5  # Per-hop abundance decay for undetected intermediates
                                   ) -> pd.DataFrame: # Differential analysis results (differential flow features and statistics OR reaction changes over time
     "Compare biosynthetic patterns between conditions/timepoints"
-    from scipy.stats import ttest_ind, ttest_rel
+    from scipy.stats import t as tdist
     from statsmodels.formula.api import ols
-    from statsmodels.stats.multitest import multipletests
     import statsmodels.api as sm
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
@@ -1029,15 +1039,29 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     root = sorted(infer_roots(frozenset(df_analysis.index.tolist())))
     root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
     min_default = 0.1 if root.endswith('GlcNAc') else 0.001
-    core_net = construct_network(df_analysis.index.tolist())
+    core_net = construct_network(df_analysis.index.tolist(), edge_type = edge_type)
     nets, features = {}, []
     for col in df_analysis.columns:
         temp = deepcopy(core_net)
         abundance_mapping = dict(zip(df_analysis.index.tolist(), df_analysis[col].values.tolist()))
         nx.set_node_attributes(temp, {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in temp.nodes()})
-        nets[col] = estimate_weights(temp, root = root, min_default = min_default)
-    res = {col: get_maximum_flow(nets[col], source = root) for col in nets}
+        nets[col] = estimate_weights(temp, root = root, min_default = min_default, virtual_damping = virtual_damping)
+    if analysis == "flow":
+        res = {col: get_maximum_flow(nets[col], source = root) for col in nets}
+    else:
+        # One solve to a shared super-sink: adding up per-sink solutions counts a trunk edge once per downstream sink, and how many sinks stay reachable differs between samples, so that multiplicity leaks into every trunk feature
+        res = {}
+        for col, net in nets.items():
+            aug = net.copy()
+            aug.add_edges_from([(t, '__sink__') for t, d in net.out_degree() if d == 0])
+            try:
+                flow_value, flow_dict = nx.maximum_flow(aug, root, '__sink__')
+            except Exception:
+                flow_value, flow_dict = nx.maximum_flow(aug, root, '__sink__',
+                                                        flow_func = nx.algorithms.flow.edmonds_karp)
+            res[col] = {'__sink__': {'flow_value': flow_value, 'flow_dict': flow_dict}}
     # Perform reaction or flow analysis
+    shadow_set = set()
     if analysis == "reaction":
         res2 = {col: get_reaction_flow(nets[col], res[col], aggregate = "sum") for col in nets}
         linkage_pat = re.compile(r'\(([ab?])([0-9?/]+)-([0-9?/]+)\)')
@@ -1058,17 +1082,47 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
             shadow_reactions[canonical] = variants
         res2 = {k: {**v, **{r: np.mean([v[k2] for k2 in shadow_reactions[r]]) for r in shadow_reactions}} for k, v in
                 res2.items()}
+        shadow_set = set(shadow_reactions)
+    elif analysis == "branchpoint":
+        # Competition at a branch point is the closest network-level proxy for relative enzyme activity, and as a ratio it survives global abundance shifts that swamp absolute flows
+        res2 = {}
+        for col, net in nets.items():
+            merged = defaultdict(float)
+            for sink_data in res[col].values():
+                fd = sink_data['flow_dict']
+                for u, v in net.edges():
+                    merged[(u, v)] += fd[u][v]
+            vals = {}
+            for u in net.nodes():
+                outs = [(v, merged[(u, v)]) for v in net.successors(u)]
+                tot = sum(f for _, f in outs)
+                if len(outs) < 2 or tot <= 0:
+                    continue
+                for v, f in outs:
+                    vals[f"{u} -> {net[u][v]['diffs']}"] = f / tot
+            res2[col] = vals
     elif analysis == "flow":
         sinks = sorted({sink for r in res.values() for sink in r})
         res2 = {col: [res[col][sink]['flow_value'] if sink in res[col] else 0.0 for sink in sinks] for col in nets}
         features = sinks
     else:
-        raise ValueError("Only 'reaction' and 'flow' are currently supported analysis modes.")
-    res2 = pd.DataFrame(res2).T
-    if analysis == "reaction" and not longitudinal:
-        res2 = res2.loc[:, res2.var(axis = 0) > 0.01]
-    elif analysis == "flow" and not longitudinal:
+        raise ValueError("Only 'reaction', 'flow', and 'branchpoint' are currently supported analysis modes.")
+    res2 = pd.DataFrame(res2).T.fillna(0.0)
+    if analysis == "flow" and not longitudinal:
         res2.columns = features
+    if not longitudinal:
+        if analysis == "branchpoint":
+            # Already a proportion, so logit instead of share-normalizing
+            p = res2.clip(0.001, 0.999)
+            res_lin, res2 = res2, np.log2(p / (1 - p))
+            keep = res_lin.std(axis = 0) > 0
+        else:
+            # Flux shares strip the per-sample total-flow factor; the log puts trunk and peripheral reactions on a comparable spread so the variance filter stops being an abundance filter
+            totals = res2.sum(axis = 1)
+            res_lin = res2.div(totals.where(totals > 0, 1), axis = 0) * 100
+            res2 = np.log2(res_lin + 0.01)
+            keep = res_lin.mean(axis = 0) > 0.01
+        res2, res_lin = res2.loc[:, keep], res_lin.loc[:, keep]
     features = res2.columns.tolist()
     # Perform statistical analysis
     if longitudinal:
@@ -1096,18 +1150,42 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
                 'Average Slope': average_slope
             })
         out = pd.DataFrame(results)
-        out['corr p-val'] = multipletests(out['p-val'], method = 'fdr_bh')[1]
-        out['significant'] = out['corr p-val'] < 0.05
+        out['corr p-val'], out['significant'] = correct_multiple_testing(out['p-val'], get_alphaN(len(all_groups)), correction_method = "one-stage")
     else:
-        mean_abundance = res2.mean(axis = 0)
+        mean_abundance = res_lin.mean(axis = 0)
         df_a, df_b = res2.loc[group1, :].T, res2.loc[group2, :].T
-        log2fc = np.log2((df_b.values + 1e-8) / (df_a.values + 1e-8)).mean(axis = 1) if paired else np.log2(df_b.mean(axis = 1) / df_a.mean(axis = 1))
-        pvals = [ttest_rel(row_a, row_b)[1] if paired else ttest_ind(row_a, row_b, equal_var = False)[1] for row_a, row_b in zip(df_a.values, df_b.values)]
-        pvals = [max(p, np.finfo(float).tiny) if p == p else 1.0 for p in pvals]
-        corrpvals = multipletests(pvals, method = 'fdr_tsbh')[1] if pvals else []
+        log2fc = (df_b.values - df_a.values).mean(axis = 1) if paired else df_b.values.mean(
+            axis = 1) - df_a.values.mean(axis = 1)
+        # Sinks adjacent in the network share precursors, and the branches leaving one node are one flux split, so both make a sharper variance reference than unrelated features
+        if analysis == "flow":
+            neighbors = dag_neighbors(features, core_net)
+        elif analysis == "branchpoint":
+            by_node = defaultdict(list)
+            for i, f in enumerate(features):
+                by_node[f.rsplit(' -> ', 1)[0]].append(i)
+            neighbors = [sorted(set(by_node[f.rsplit(' -> ', 1)[0]]) - {i}) for i, f in enumerate(features)]
+        else:
+            neighbors = None
+        if paired:
+            D = df_b.values - df_a.values
+            eff, dfree, scale = D.mean(axis = 1), D.shape[1] - 1, 1 / D.shape[1]
+            s2 = D.var(axis = 1, ddof = 1)
+        else:
+            na, nb = df_a.shape[1], df_b.shape[1]
+            eff, dfree, scale = df_b.values.mean(axis = 1) - df_a.values.mean(axis = 1), na + nb - 2, 1 / na + 1 / nb
+            s2 = ((na - 1) * df_a.values.var(axis = 1, ddof = 1) + (nb - 1) * df_b.values.var(axis = 1,
+                                                                                              ddof = 1)) / dfree
+        s2_mod, df_post = moderated_variance(s2, dfree, neighbors)
+        pvals = np.maximum(2 * tdist.sf(np.abs(eff / np.sqrt(s2_mod * scale)), df_post), np.finfo(float).tiny)
+        # Shadow reactions are averages of their own variants, so testing both in one family nearly doubles it with redundant hypotheses
         alpha = get_alphaN(len(all_groups))
-        significance = [p < alpha for p in corrpvals] if pvals else []
-        effect_sizes, _ = zip(*[cohen_d(row_b, row_a, paired = paired) for row_a, row_b in zip(df_a.values, df_b.values)])
+        corrpvals, significance = np.ones(len(pvals)), np.zeros(len(pvals), dtype = bool)
+        fam = np.isin(features, list(shadow_set))
+        for m in (~fam, fam):
+            if m.any():
+                corrpvals[m], significance[m] = correct_multiple_testing(pvals[m], alpha)
+        pvals, corrpvals, significance = list(pvals), list(corrpvals), list(significance)
+        effect_sizes, _ = cohen_d(df_b.values, df_a.values, paired = paired)
         out = pd.DataFrame({'Glycan': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
                             'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
     out = out.set_index('Glycan')
@@ -1223,14 +1301,18 @@ def get_biosynthetic_coherence(
         group2: list[str] | None = None,  # Second group column names; default: from the frame's contrasts
         network: nx.DiGraph | None = None,  # Pre-built network; built from df if not provided
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
-        n_permutations: int = 200,  # Label permutations for the group-level null; 0 to skip
+        n_permutations: int = 20000,  # Label permutations for the exact shared-model null; 0 to skip
         random_state: int = 42  # Seed for permutation reproducibility
-) -> pd.DataFrame: # Test results with group means, difference, t-statistic, p-value, and Cohen's d
-    "Test whether biosynthetic coherence differs between two conditions using per-sample variance-weighted R²"
-    from scipy.stats import ttest_ind, ttest_rel
+) -> tuple[
+    pd.DataFrame, pd.DataFrame]:  # (Group-level results under both models, per-glycan coherence and its group difference)
+    "Quantify how strongly each condition's glycome follows its own biosynthetic network, and which glycans decouple from it"
+    from scipy.stats import ttest_ind, ttest_rel, t as tdist
+    names = ('group1', 'group2')
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
+        names = (df.group1.name, df.group2.name)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
+    paired = paired and len(group1) == len(group2)
     if not isinstance(df.index[0], str):
         df = df.set_index(df.columns[0])
     if network is None:
@@ -1238,8 +1320,12 @@ def get_biosynthetic_coherence(
     df.index = [canonicalize_iupac(g) for g in df.index]
     glycans = [g for g in df.index if network.nodes.get(g, {}).get('virtual', 1) == 0]
     gidx = {g: i for i, g in enumerate(glycans)}
-    col_sums = df.loc[glycans].sum(axis = 0)
-    X = ((df.loc[glycans] / col_sums.where(col_sums > 0, 1)) * 100).values.astype(float)
+    cols = list(group1) + list(group2)
+    sub = df.loc[glycans, cols]
+    col_sums = sub.sum(axis = 0)
+    X_lin = ((sub / col_sums.where(col_sums > 0, 1)) * 100).values.astype(float)
+    # Fractional conversion is multiplicative, so fit in log space; this also stops variance weighting from collapsing onto the few most abundant glycans
+    X = np.log2(X_lin + 0.01)
     preds_map = {}
     for g in glycans:
         queue = list(network.predecessors(g))
@@ -1254,51 +1340,113 @@ def get_biosynthetic_coherence(
             else:
                 queue.extend(network.predecessors(node))
         preds_map[g] = preds
-    col_idx = {c: i for i, c in enumerate(df.columns.tolist())}
+    n, n1 = X.shape[1], len(group1)
+    idx_own = {t: [j for j in (range(n1) if t < n1 else range(n1, n)) if j != t] for t in range(n)}
+    idx_shared = {t: [j for j in range(n) if j != t] for t in range(n)}
+    own, shared, weights, dropped = {}, {}, {}, Counter()
 
-    def _sample_r2(col, group):
-        "Variance-weighted out-of-sample R² of each glycan predicted from its observed precursors, held-out sample scored against the training mean"
-        train_idx = [col_idx[c] for c in group if c != col]
-        test_idx = col_idx[col]
-        scores, weights = [], []
-        for g in glycans:
-            preds = preds_map[g]
-            y_train, y_test = X[gidx[g], train_idx], X[gidx[g], test_idx]
-            var_y = float(np.var(y_train))
-            if not preds or var_y < 1e-3:
-                continue
-            center = np.array([X[gidx[p], train_idx].mean() for p in preds])
-            Zt = np.column_stack(
-                [X[gidx[p], train_idx] - center[i] for i, p in enumerate(preds)] + [np.ones(len(train_idx))])
-            Xp_test = np.concatenate([np.array([X[gidx[p], test_idx] for p in preds]) - center, [1.0]])
-            gram = Zt.T @ Zt
-            gram[np.diag_indices(len(preds))] += max(0.1 * np.trace(gram[:-1, :-1]) / len(preds), 1e-8)
-            coef = np.linalg.solve(gram, Zt.T @ y_train)
-            ss_res, ss_base = float((y_test - Xp_test @ coef) ** 2), float((y_test - y_train.mean()) ** 2)
-            scores.append(max(0.0, 1.0 - ss_res / ss_base) if ss_base > 0 else 0.0)
-            weights.append(var_y)
-        total_w = sum(weights)
-        return float(sum(s * w for s, w in zip(scores, weights)) / total_w) if total_w > 0 else 0.0
+    def _ridge(g, preds, idx):
+        "Ridge precursor fit on a sample subset; coefficients are the fractional conversion precursor->product"
+        center = np.array([X[gidx[p], idx].mean() for p in preds])
+        Z = np.column_stack([X[gidx[p], idx] - center[i] for i, p in enumerate(preds)] + [np.ones(len(idx))])
+        gram = Z.T @ Z
+        gram[np.diag_indices(len(preds))] += max(0.1 * np.trace(gram[:-1, :-1]) / len(preds), 1e-8)
+        return np.linalg.solve(gram, Z.T @ X[gidx[g], idx]), center
 
-    scores1 = np.array([_sample_r2(c, group1) for c in group1])
-    scores2 = np.array([_sample_r2(c, group2) for c in group2])
-    stat, pval = ttest_rel(scores2, scores1) if paired else ttest_ind(scores2, scores1, equal_var = False)
-    effect, _ = cohen_d(scores2, scores1, paired = paired)
+    def _fit_predict(g, preds, train, t):
+        "Leave-one-out R2 of the precursor model, scored on held-out sample `t`"
+        y = X[gidx[g]]
+        coef, center = _ridge(g, preds, train)
+        ss_base = (y[t] - y[train].mean()) ** 2
+        pred = np.concatenate([np.array([X[gidx[p], t] for p in preds]) - center, [1.0]]) @ coef
+        return float(np.clip(1.0 - float((y[t] - pred) ** 2) / ss_base, -3.0, 1.0)) if ss_base > 0 else np.nan
+
+    # Two models, two questions: 'own' asks how tightly each condition follows its own network, 'shared' asks how
+    # far each sample deviates from one common network and makes the label permutation below exact
+    for g in glycans:
+        preds = preds_map[g]
+        var_g = float(np.var(X[gidx[g]]))
+        if not preds:
+            dropped['no observed precursor'] += 1
+            continue
+        if var_g < 1e-3:
+            dropped['near-zero variance'] += 1
+            continue
+        rs = np.array([_fit_predict(g, preds, idx_shared[t], t) for t in range(n)])
+        if np.isnan(rs).all():
+            dropped['no scorable sample'] += 1
+            continue
+        own[g] = np.array([_fit_predict(g, preds, idx_own[t], t) if len(idx_own[t]) > 1 else np.nan for t in range(n)])
+        shared[g], weights[g] = rs, var_g
+    if not shared:
+        raise ValueError("No glycan had both an observed precursor and enough variance to be scored")
+    S = pd.DataFrame(shared, index = cols).T
+    O = pd.DataFrame(own, index = cols).T.loc[S.index]
+    w = np.array([weights[g] for g in S.index])[:, None]
+    own_den = np.nansum(~np.isnan(O.values) * w,
+                        axis = 0)  # zero when a group is too small to leave out a sample and still fit
+    own_scores = np.divide(np.nansum(O.values * w, axis = 0), own_den, out = np.full(n, np.nan), where = own_den > 0)
+    shared_scores = np.nansum(S.values * w, axis = 0) / np.nansum(~np.isnan(S.values) * w, axis = 0)
+    o1, o2, s1, s2 = own_scores[:n1], own_scores[n1:], shared_scores[:n1], shared_scores[n1:]
+    stat_o, p_o = ttest_rel(o2, o1) if paired else ttest_ind(o2, o1, equal_var = False)
+    stat_s, p_s = ttest_rel(s2, s1) if paired else ttest_ind(s2, s1, equal_var = False)
+    effect, _ = cohen_d(o2, o1, paired = paired)
     rng = np.random.default_rng(random_state)
-    obs, null = scores2.mean() - scores1.mean(), []
+    obs, null = float(s2.mean() - s1.mean()), []
     for _ in range(n_permutations):
         if paired:
-            flip = rng.random(len(group1)) < 0.5
-            a = [g2 if f else g1 for g1, g2, f in zip(group1, group2, flip)]
-            b = [g1 if f else g2 for g1, g2, f in zip(group1, group2, flip)]
+            diffs = s2 - s1
+            null.append(float(np.where(rng.random(len(diffs)) < 0.5, -diffs, diffs).mean()))
         else:
-            perm = list(rng.permutation(group1 + group2))
-            a, b = perm[:len(group1)], perm[len(group1):]
-        null.append(np.mean([_sample_r2(c, b) for c in b]) - np.mean([_sample_r2(c, a) for c in a]))
-    p_perm = (np.sum(np.abs(null) >= abs(obs)) + 1) / (n_permutations + 1)
+            perm = rng.permutation(shared_scores)
+            null.append(float(perm[n1:].mean() - perm[:n1].mean()))
+    p_perm = float((np.sum(np.abs(null) >= abs(obs)) + 1) / (n_permutations + 1)) if n_permutations else np.nan
+    rows, A, B = [], [], []
+    for g in S.index:
+        a, b = S.loc[g, group1].values.astype(float), S.loc[g, group2].values.astype(float)
+        if np.isnan(a).any() or np.isnan(b).any():
+            continue
+        # Below three samples a group the centered design is rank-deficient and the ridge floor, not the data, sets the coefficient
+        dc = _ridge(g, preds_map[g], list(range(n1, n)))[0][:-1] - _ridge(g, preds_map[g], list(range(n1)))[0][
+            :-1] if min(n1, n - n1) > 2 else None
+        k = int(np.argmax(np.abs(dc))) if dc is not None else None
+        A.append(a)
+        B.append(b)
+        rows.append({'glycan': g, 'top_changed_precursor': preds_map[g][k] if k is not None else None,
+                     'precursor_coef_change': float(dc[k]) if k is not None else np.nan,
+                     'group1_r2': float(a.mean()), 'group2_r2': float(b.mean()),
+                     'difference': float(b.mean() - a.mean()), 'n_precursors': len(preds_map[g]),
+                     'branches': g.count('['), 'n_Fuc': g.count('Fuc'), 'n_Sia': g.count('Neu5Ac') + g.count('Neu5Gc'),
+                     'mean_abundance': float(X_lin[gidx[g]].mean()), 'variance_weight': weights[g]})
+    per_glycan_df = pd.DataFrame(rows).set_index('glycan') if rows else pd.DataFrame(columns = ['glycan']).set_index('glycan')
+    if len(per_glycan_df):
+        A, B = np.array(A), np.array(B)
+        if paired:
+            D = B - A
+            eff, dfree, scale, resid_var = D.mean(axis = 1), D.shape[1] - 1, 1 / D.shape[1], D.var(axis = 1, ddof = 1)
+        else:
+            na, nb = A.shape[1], B.shape[1]
+            eff, dfree, scale = B.mean(axis = 1) - A.mean(axis = 1), na + nb - 2, 1 / na + 1 / nb
+            resid_var = ((na - 1) * A.var(axis = 1, ddof = 1) + (nb - 1) * B.var(axis = 1, ddof = 1)) / dfree
+        # A handful of R2 values per group leaves each glycan's variance dominated by noise; neighbors in the biosynthetic graph share precursors and so make a local prior
+        s2_mod, df_post = moderated_variance(resid_var, dfree, dag_neighbors(list(per_glycan_df.index), network))
+        per_glycan_df['p_val'] = np.maximum(2 * tdist.sf(np.abs(eff / np.sqrt(s2_mod * scale)), df_post),
+                                            np.finfo(float).tiny)
+        per_glycan_df['corr_p_val'], per_glycan_df['rewired'] = correct_multiple_testing(per_glycan_df.p_val,
+                                                                                         get_alphaN(len(cols)))
+        per_glycan_df = per_glycan_df.sort_values('corr_p_val')
     return pd.DataFrame([{
-        'group1_mean': float(scores1.mean()), 'group2_mean': float(scores2.mean()),
-        'difference': float(scores2.mean() - scores1.mean()),
-        't_statistic': float(stat), 'p_val': float(pval), 'p_val_permutation': float(p_perm),
-        'null_sd': float(np.std(null)) if null else np.nan, 'cohens_d': float(effect)
-    }], index = ['global_r2_weighted']).assign(group1_scores = [scores1.tolist()], group2_scores = [scores2.tolist()])
+        'group1_mean': float(o1.mean()), 'group2_mean': float(o2.mean()), 'difference': float(o2.mean() - o1.mean()),
+        't_statistic': float(stat_o), 'p_val': float(p_o), 'cohens_d': float(effect),
+        'shared_model_difference': obs, 'shared_model_p_val': float(p_s), 'shared_model_p_val_permutation': p_perm,
+        'null_sd': float(np.std(null)) if null else np.nan,
+        'n_rewired_glycans': int(per_glycan_df.rewired.sum()) if len(per_glycan_df) else 0,
+        'n_rewired_up': int((per_glycan_df.rewired & (per_glycan_df.difference > 0)).sum()) if len(
+            per_glycan_df) else 0,
+        'group1_name': names[0], 'group2_name': names[1],
+        'n_glycans_scored': len(S), 'n_glycans_observed': len(glycans),
+        'coverage': float(sum(weights.values()) / sum(float(np.var(X[gidx[g]])) for g in glycans)),
+        'dropped': dict(dropped)
+    }], index = ['global_r2_weighted']).assign(group1_scores = [o1.tolist()], group2_scores = [o2.tolist()],
+                                               shared_group1_scores = [s1.tolist()],
+                                               shared_group2_scores = [s2.tolist()]), per_glycan_df
