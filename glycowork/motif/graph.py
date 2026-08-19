@@ -11,7 +11,7 @@ from collections import Counter, OrderedDict
 from functools import lru_cache, wraps
 
 
-PTM_REGEX = re.compile(r"(?<!Neu)(?<=\D)(\d+/\d+|\d+)(?=\D)(?![^()]*\))")
+PTM_REGEX = re.compile(r"(?<=[A-Za-z])(?<!Neu)(\d+/\d+|\d+)(?=\D)(?![^()]*\))")
 NEGATION_REGEX = re.compile(r'(?<!\()(!\w+(?:\([^)]+\))?)')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
 LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
@@ -409,7 +409,12 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
                                        count: bool = False, # Whether to return count instead of presence/absence
                                        return_matches: bool = False # Whether to return matched subgraphs as node lists
                                        ) -> bool | int | tuple[int, list[list[int]]]: # Boolean presence, count, or (count, matches)
-    "Check if motif exists as subgraph in glycan, handling negation patterns"
+    """Check if motif exists as subgraph in glycan, handling negation patterns
+    Where the negated residue sits decides what the negation means:
+    1. Leaf position, i.e., leading ('!Neu5Ac(a2-3)Gal(b1-4)GlcNAc') or a bracketed branch ('Gal(b1-3)[!GlcNAc(b1-6)]GalNAc'):
+       the residue is dropped from the motif and the match requires its absence, so bare Gal(b1-4)GlcNAc matches the first
+    2. Internal or root position ('Neu5Ac(a2-3)!Gal(b1-4)GlcNAc', 'Gal(b1-4)!GlcNAc'): dropping it would disconnect the motif,
+       so it becomes a wildcard that must be filled by something other than the negated residue"""
     if isinstance(motif, str):
         if not (hit := NEGATION_REGEX.search(motif)) or hit.group(1) == motif:
             raise ValueError(
@@ -437,16 +442,23 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
                                            return_matches = True)
     if not res[0]:
         return (0, []) if return_matches else 0 if count else False
-    valid_matches = []
-    negated_len = len(negated_part_clean)
     ggraph = glycan_to_nxGraph(glycan) if isinstance(glycan, str) else glycan
+    if isinstance(motif, str):
+        positive = glycan_to_nxGraph(motif.replace('!', ''))
+    else:
+        positive = motif_copy
+        for node in positive.nodes():
+            positive.nodes[node]['string_labels'] = positive.nodes[node]['string_labels'].replace('!', '')
+    # A stub hit only dies to a hit of the fully positive motif that contains it, so the negated part has to sit exactly where the motif puts it instead of anywhere in the neighborhood
+    extra = len(positive) - len(res[1][0])
+    _, positive_matches = subgraph_isomorphism.__wrapped__(ggraph, positive, count = True, return_matches = True)
+    valid_matches = []
     for match_nodes in res[1]:
-        context_nodes = set(match_nodes)
-        for _ in range(negated_len):
-            for node in list(context_nodes):
-                context_nodes.update(list(ggraph.neighbors(node)))
-        context_subgraph = ggraph.subgraph(context_nodes)
-        if not subgraph_isomorphism.__wrapped__(context_subgraph, negated_part_clean):
+        match_set = set(match_nodes)
+        if not any(len(hit) - len(match_nodes) == extra and match_set.issubset(hit) and
+                   (not extra or subgraph_isomorphism.__wrapped__(ggraph.subgraph(set(hit) - match_set),
+                                                                  negated_part_clean))
+                   for hit in positive_matches):
             valid_matches.append(match_nodes)
     if count:
         total = len(valid_matches)

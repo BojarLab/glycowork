@@ -8,7 +8,7 @@
 - Moved several dependencies to lazy-load, to improve initial package start-up times (088c711)
 - Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw` (4894d1b)
 - `glycoworkGUI` is updated, making it more robust (628ee17)
-- Added more informative error messages throughout the package ()
+- Added more informative error messages throughout the package (105f416)
 
 ### glycan_data
 #### loader
@@ -48,8 +48,8 @@
 
 ##### Changed 🔄
 - `mz_to_composition` now returns the closest prioritized match instead of the first prioritized match within tolerance (28769f5)
-- `glycan_to_mass` will now actively error out if no valid composition can be assigned to glycan (instead of returning an empty mass) ()
-- `compositions_to_structures` is less chatty now if everything can be matched ()
+- `glycan_to_mass` will now actively error out if no valid composition can be assigned to glycan (instead of returning an empty mass) (105f416)
+- `compositions_to_structures` is less chatty now if everything can be matched (105f416)
 
 ##### Fixed 🐛
 - Fixed `glycan_to_composition` handling of narrow monosaccharide modification wildcards such as `HexNAc4/6S` (b3ad039)
@@ -141,6 +141,7 @@
 - Fixed returned node numbering if glycans returned from the fast `compare_glycans` branch (28769f5)
 - Fixed `compare_glycans`/`subgraph_isomorphism` not treating `HexOP`/`HexN` as proper wildcards (0602f71)
 - Made sure `get_possible_topologies` doesn't swallow multiple floaty bits past the first one (78fe195)
+- Fixed `subgraph_isomorphism_with_negation` occasionally rejecting valid sequences ()
 
 #### annotate
 ##### Added ✨
@@ -150,20 +151,26 @@
 - Refined counting of `Terminal_` motifs in `annotate_dataset` (a918a2e)
 - `deduplicate_motifs` will now (given the choice) always prefer the specified motif over the unspecified motif, all else being equal (e.g., `Fuc` > `dHex`) (81e769c)
 - `annotate_dataset` will no longer split signal between pairs such as `Gal(b1-4)GlcNAc` and `Gal(b1-4)GlcNAc-ol` in free oligosaccharides (3737633)
+- `group_glycans_N_glycan_type` now uses glyco-regex patterns to better detect complex/hybrid N-glycans ()
+- The motifs `high_mannose`, `Nglycan_complex`, and `Nglycan_hybrid` now use glyco-regex expressions to better capture these motifs ()
 
 ##### Fixed 🐛
 - Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data (8f799c3)
 - Hardened `annotate_dataset` against duplicate motifs if the `"custom"` motif set is used (28769f5)
 - Made `annotate_dataset` more robust to glyco-regex custom motifs in `feature_set` (78fe195)
-- Fixed an issue in `get_molecular_properties` where `placeholder=True` could lead to mismatched index ()
+- Fixed an issue in `get_molecular_properties` where `placeholder=True` could lead to mismatched index (105f416)
+- Fixed edge-case wrong annotations by `get_terminal_structures` in the case of floating substituents ()
 
 #### regex
+##### Added ✨
+- Added the new `compile_component` and `trace_matches` functions that take over many of the old functions for improved functionality ()
+
 ##### Fixed 🐛
 - Harden treatment of ?-wildcards in `parse_pattern` (8f799c3)
 - `filter_matches_by_location` no longer crashes on empty inner matches (9630cd0)
 
 ##### Deprecated ⚠️
-- Deprecated `all_combinations` (will be handled in-line instead) (9630cd0)
+- Deprecated `all_combinations` (will be handled in-line instead), `process_simple_pattern`, `calculate_len_matches_comb`, `process_complex_pattern`, `match_it_up`, `try_matching`, `do_trace`, `trace_path`, `fill_missing_in_list`, and `check_negative_look` (9630cd0)
 
 ### network
 #### biosynthesis
@@ -185,7 +192,7 @@
 - Significance in `get_differential_biosynthesis` and `get_biosynthetic_coherence` is now judged against a sample-size-adjusted alpha, in line with the `.motif.analysis` functions (7cfb5ea)
 
 ##### Deprecated ⚠️
-- Deprecated `estimate_weights`, which will be handled by `get_edge_weight_by_abundance` instead
+- Deprecated `estimate_weights`, which will be handled by `get_edge_weight_by_abundance` instead (7cfb5ea)
 
 #### evolution
 ##### Changed 🔄
