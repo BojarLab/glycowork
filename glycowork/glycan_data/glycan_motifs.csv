@@ -126,7 +126,7 @@ B-GD1b,Fuc(a1-2)[Gal(a1-3)]Gal(b1-3)GalNAc(b1-4)[Sia(a2-8)Sia(a2-3)]Gal(b1-4)Glc
 GP1ca,Sia(a2-3)Gal(b1-3)[Sia(a2-6)]GalNAc(b1-4)[Sia(a2-8)Sia(a2-8)Sia(a2-3)]Gal(b1-4)Glc1Cer,"['terminal', 'flexible', 'terminal', 'flexible', 'terminal', 'flexible', 'flexible', 'flexible', 'terminal']"
 Isoglobotetraosylceramide,GalNAc(b1-3)Gal(a1-3)Gal1Cer,"['flexible', 'flexible', 'terminal']"
 polySia,Sia(a2-8)Sia(a2-8)Sia,"['flexible', 'flexible', 'flexible']"
-high_mannose,r(?<!HexNAc-)Man-(?<!HexNAc-)Man-(?<!HexNAc-)([Man]){1}-Manb4-GlcNAcb4-GlcNAc,[]
+high_mannose,r(?<!HexNAc-)Man-Man-(?<!HexNAc-)([Man]){1}-Manb4-GlcNAcb4-GlcNAc,[]
 Gala_series,Gal(a1-4)Gal1Cer,"['flexible', 'terminal']"
 LPS_core,Kdo(a2-4)Kdo(a2-6)GlcN(b1-6)GlcN,"['flexible', 'flexible', 'flexible', 'terminal']"
 Nglycan_complex,r[HexNAc-Mana3|HexNAcOS-Mana3]{1}-([HexNAc-Mana6|HexNAcOS-Mana6]){1}-Manb4-GlcNAcb4-GlcNAc,[]

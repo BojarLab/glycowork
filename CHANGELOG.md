@@ -141,7 +141,7 @@
 - Fixed returned node numbering if glycans returned from the fast `compare_glycans` branch (28769f5)
 - Fixed `compare_glycans`/`subgraph_isomorphism` not treating `HexOP`/`HexN` as proper wildcards (0602f71)
 - Made sure `get_possible_topologies` doesn't swallow multiple floaty bits past the first one (78fe195)
-- Fixed `subgraph_isomorphism_with_negation` occasionally rejecting valid sequences ()
+- Fixed `subgraph_isomorphism_with_negation` occasionally rejecting valid sequences (6cb8de8)
 
 #### annotate
 ##### Added ✨
@@ -151,19 +151,20 @@
 - Refined counting of `Terminal_` motifs in `annotate_dataset` (a918a2e)
 - `deduplicate_motifs` will now (given the choice) always prefer the specified motif over the unspecified motif, all else being equal (e.g., `Fuc` > `dHex`) (81e769c)
 - `annotate_dataset` will no longer split signal between pairs such as `Gal(b1-4)GlcNAc` and `Gal(b1-4)GlcNAc-ol` in free oligosaccharides (3737633)
-- `group_glycans_N_glycan_type` now uses glyco-regex patterns to better detect complex/hybrid N-glycans ()
-- The motifs `high_mannose`, `Nglycan_complex`, and `Nglycan_hybrid` now use glyco-regex expressions to better capture these motifs ()
+- `group_glycans_N_glycan_type` now uses glyco-regex patterns to better detect complex/hybrid N-glycans (6cb8de8)
+- The motifs `high_mannose`, `Nglycan_complex`, and `Nglycan_hybrid` now use glyco-regex expressions to better capture these motifs (6cb8de8)
 
 ##### Fixed 🐛
 - Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data (8f799c3)
 - Hardened `annotate_dataset` against duplicate motifs if the `"custom"` motif set is used (28769f5)
 - Made `annotate_dataset` more robust to glyco-regex custom motifs in `feature_set` (78fe195)
 - Fixed an issue in `get_molecular_properties` where `placeholder=True` could lead to mismatched index (105f416)
-- Fixed edge-case wrong annotations by `get_terminal_structures` in the case of floating substituents ()
+- Fixed edge-case wrong annotations by `get_terminal_structures` in the case of floating substituents (6cb8de8)
 
 #### regex
 ##### Added ✨
-- Added the new `compile_component` and `trace_matches` functions that take over many of the old functions for improved functionality ()
+- Added the new `compile_component` and `trace_matches` functions that take over many of the old functions for improved functionality (6cb8de8)
+- Added the `explain_match` function to explain why and how a pattern matches a glycan sequence
 
 ##### Fixed 🐛
 - Harden treatment of ?-wildcards in `parse_pattern` (8f799c3)

@@ -82,7 +82,7 @@ from glycowork.motif.annotate import (
 from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
                   convert_pattern_component, reformat_glycan_string,
                   motif_to_regex, get_match,
-                  get_match_batch,
+                  get_match_batch, explain_match,
                   filter_matches_by_location, parse_pattern, compile_pattern
 )
 from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, col_dict_base,
@@ -3163,7 +3163,8 @@ def test_get_match():
     # Test no match with positions
     pattern = "'^HexNAc-HexNAc"
     glycan = "Gal(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert get_match(pattern, glycan, return_matches=False) is False
+    with pytest.warns(UserWarning):  # the stray quote leaves "'HexNAc" as an unknown glycoletter
+        assert get_match(pattern, glycan, return_matches = False) is False
     # Test pattern with quantifier
     pattern = "Hex-[HexNAc]{1,2}"
     glycan = "Gal(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -3263,6 +3264,44 @@ def test_get_match_batch():
     glycan_list = ["Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-4)GlcNAc"]
     pattern = "r[Sia]{,1}-[.]{,1}-([dHex]){,1}-.b3(?=-GalNAc)"
     assert len(get_match_batch(pattern, glycan_list)) == 2
+
+
+def test_explain_match():
+    glycan = "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    out = explain_match("Hex-HexNAc-([dHex]){1}-Hex", glycan)
+    assert list(out['chunk']) == ['Hex-HexNAc', '([dHex]){1}', 'Hex']
+    assert list(out['matches']) == ['Hex(?1-?)HexNAc', 'dHex', 'Hex']
+    assert list(out['branch']) == [False, True, False]
+    assert all(n > 0 for n in out['hits_in_glycan'])
+    # a chunk that cannot be satisfied shows up as zero hits
+    out = explain_match("Hex-HexNAc-([Xyl]){1}-Hex", glycan)
+    assert list(out['hits_in_glycan'])[1] == 0
+    assert get_match("Hex-HexNAc-([Xyl]){1}-Hex", glycan) == []
+    # modifiers are reported per chunk
+    out = explain_match("(?<!Neu5Ac-)Galb4-([Fuca3]){1}-GlcNAc$", glycan)
+    assert list(out['lookaround']) == ['?<!:Neu5Ac', '', '']
+    assert list(out['position']) == ['', '', 'end']
+    assert list(out['occurrences']) == ['1-1', '1-1', '1-1']
+    assert explain_match("Galb3-([!GlcNAcb6]){1}-GalNAc", "Gal(b1-3)GalNAc")['hits_in_glycan'][1] == 'asserts absence'
+
+
+def test_get_match_malformed_patterns():
+    glycan = "Gal(b1-4)GlcNAc(b1-2)Man"
+    for pattern in ["Hex-[HexNAc", "Hex-HexNAc]", "[]", "Hex-[HexNAc]{2,1}", "Hex-[Hex|]-HexNAc", "Hex-HexNAc(?=)", "Hex{a}"]:
+        with pytest.raises(ValueError):
+            get_match(pattern, glycan)
+    # an unknown glycoletter is suspicious but not fatal
+    with pytest.warns(UserWarning):
+        assert get_match("Hex-HexNac", glycan) == []
+
+
+def test_motif_to_regex_dangling_linkage():
+    # A motif can end in a linkage, which puts a linkage rather than a monosaccharide at the root
+    assert motif_to_regex("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-?)") == "Fuca3-([Galb4]){1}-GlcNAcb?"
+    assert motif_to_regex("Man(a1-3)[Man(a1-6)]Man(b1-4)") == "Mana3-([Mana6]){1}-Manb4"
+    assert get_match("Fuca3-([Galb4]){1}-GlcNAcb?",
+                     "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == [
+        'Fuc(a1-3)[Gal(b1-4)]GlcNAc']
 
 
 def test_get_match_branch_position():
