@@ -9,6 +9,9 @@
 - Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw` (4894d1b)
 - `glycoworkGUI` is updated, making it more robust (628ee17)
 - Added more informative error messages throughout the package (105f416)
+- `glyles` is no longer a hidden required dependency for `glycowork[ml]` applications that do not use `GIFFLAR` ()
+- Most operations in `glycowork` are now more performant ()
+- Package start-up times have been greatly improved ()
 
 ### glycan_data
 #### loader
@@ -164,7 +167,7 @@
 #### regex
 ##### Added ✨
 - Added the new `compile_component` and `trace_matches` functions that take over many of the old functions for improved functionality (6cb8de8)
-- Added the `explain_match` function to explain why and how a pattern matches a glycan sequence
+- Added the `explain_match` function to explain why and how a pattern matches a glycan sequence (9f800a1)
 
 ##### Fixed 🐛
 - Harden treatment of ?-wildcards in `parse_pattern` (8f799c3)

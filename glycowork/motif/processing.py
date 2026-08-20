@@ -7,8 +7,8 @@ from collections import defaultdict
 from pathlib import Path
 from itertools import combinations
 from typing import Callable, Generator
-from glycowork.glycan_data.loader import (unwrap, multireplace, df_glycan, df_species,
-                                          find_nth, lib, HexOS, HexNAcOS,
+from glycowork.glycan_data import loader
+from glycowork.glycan_data.loader import (unwrap, multireplace, find_nth, lib, HexOS, HexNAcOS,
                                           linkages, Hex, HexNAc, dHex, Sia, HexA, Pen)
 
 _parent = Path(__file__).parent
@@ -1045,8 +1045,8 @@ def glytoucan_to_glycan(ids: list[str], # List of GlyTouCan IDs or glycans
                         ) -> list[str]: # List of glycans or IDs
     "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
     if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
-        glytoucan_to_glycan.glycan_dict = dict(zip(df_glycan.glytoucan_id, df_glycan.glycan))
-        glytoucan_to_glycan.id_dict = dict(zip(df_glycan.glycan, df_glycan.glytoucan_id))
+        glytoucan_to_glycan.glycan_dict = dict(zip(loader.df_glycan.glytoucan_id, loader.df_glycan.glycan))
+        glytoucan_to_glycan.id_dict = dict(zip(loader.df_glycan.glycan, loader.df_glycan.glytoucan_id))
     lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
     result, not_found = [], []
     for item in ids:
@@ -1608,7 +1608,7 @@ def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
                        species: str = "Homo_sapiens" # Species for biosynthetic inferences
                        ) -> str: # Maximally inferred glycan string
     "Infers sequence ambiguities/uncertainties via biosynthetic invariances"
-    tax = df_species[df_species['Species'] == species].iloc[0, 2:9].to_dict()
+    tax = loader.df_species[loader.df_species['Species'] == species].iloc[0, 2:9].to_dict()
     if glycan.endswith("GlcNAc(b1-?)GlcNAc"):
         glycan = glycan.replace("GlcNAc(b1-?)GlcNAc", "GlcNAc(b1-4)GlcNAc")
     if tax['Kingdom'] == 'Animalia':

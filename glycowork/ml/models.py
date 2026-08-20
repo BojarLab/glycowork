@@ -6,15 +6,12 @@ try:
     import torch.nn.functional as F
     from torch_geometric.nn import GraphConv, HeteroConv, GINConv
     from torch_geometric.nn import global_mean_pool as gap
+    from glycowork.ml.processing import HeteroDataBatch, atom_map, bond_map
     device = "cpu"
     if torch.cuda.is_available():
         device = "cuda:0"
 except ImportError:
     raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
-try:
-    from glycowork.ml.processing import HeteroDataBatch, atom_map, bond_map
-except ImportError:
-    raise ImportError("<torch or torch_geometric or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
 from glycowork.glycan_data.loader import lib, download_model
 
 

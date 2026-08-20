@@ -5,13 +5,14 @@ import re
 from collections import Counter, deque, defaultdict
 from functools import partial
 
-from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species, Hex, dHex, HexNAc, HexA, Pen, Sia
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, get_possible_topologies, compare_glycans, graph_to_string_int, expand_termini_list
+from glycowork.glycan_data import loader
+from glycowork.glycan_data.loader import linkages, motif_list, unwrap, Hex, dHex, HexNAc, HexA, Pen, Sia
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, get_possible_topologies, compare_glycans, graph_to_string_int, expand_termini_list, build_wildcard_cache, _sl, _has_o
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition
 from glycowork.motif.regex import get_match, get_match_batch, compile_pattern
 
 
-LINKAGE_NODE_PATTERN = re.compile(r'^[ab?][0-9?/]+-[0-9?/]+$')
+LINKAGE_NODE_PATTERN = re.compile(r'^[ab?]?[0-9?/]+-[0-9?/]+$')
 _WILDCARD_RE = re.compile(r'(?<![A-Za-z0-9])(?:Monosaccharide|HexNAcOS|HexNAcOP|HexNAc|HexAOS|HexOS|HexOP|HexNS|HexN|HexA|dHex|Hex|Sia|Pen)(?![A-Za-z0-9])')
 _STRUCTURAL_ALDITOL = re.compile(r'(?:Thre|Ery|Rib|Gro|Ara)[A-Za-z0-9]*-ol$')
 _MOTIF_SEQ = dict(zip(motif_list.motif_name, motif_list.motif))
@@ -62,8 +63,9 @@ def annotate_glycan(
            subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
                                 count = True)
            for i, g in enumerate(gmotifs)]
-    out = pd.DataFrame([res], columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs,
-                       index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)], dtype = 'int')
+    out = pd.DataFrame(np.array([res], dtype = int),
+                       columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs,
+                       index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)])
     return out if not condense else out.loc[:, (out != 0).any(axis = 0)]
 
 
@@ -78,7 +80,7 @@ def annotate_glycan_topology_uncertainty(
     if motifs is None:
         motifs = motif_list
     if feasibles is None:
-        feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
+        feasibles = set(loader.df_species[loader.df_species.Class == "Mammalia"].glycan.values.tolist())
     # Check whether termini are specified
     if not termini_list and isinstance(motifs, pd.DataFrame):
         termini_list = list(map(eval, motifs.termini_spec))
@@ -237,7 +239,7 @@ def annotate_dataset(
         # Counts literature-annotated motifs in each glycan
         partial_annotate = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
         if '{' in ''.join(glycans):
-            feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
+            feasibles = set(loader.df_species[loader.df_species.Class == "Mammalia"].glycan.values.tolist())
             partial_annotate_topology_uncertainty = partial(annotate_glycan_topology_uncertainty, feasibles = feasibles, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
         else:
             partial_annotate_topology_uncertainty = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
@@ -551,10 +553,18 @@ def get_k_saccharides(
     counts_dict = {}
     ggraphs = [glycan_to_nxGraph(g) for g in glycans]
     for s in range(2, size + 1):
-        potentials = get_minimal_ksaccharide_ambiguity(glycans, size = s)
-        new_additions = [(addy, glycan_to_nxGraph(addy)) for addy in sorted(set(list(potentials.keys()) + list(potentials.values())))]
-        for n, m in new_additions:
-            counts_dict[n] = [subgraph_isomorphism(g, m, count = True) for g in ggraphs]
+        frags = [count_unique_subgraphs_of_size_k(g, size = s, terminal = terminal) for g in ggraphs]
+        vocab = sorted({f for d in frags for f in d})
+        vgraphs = {f: glycan_to_nxGraph(f) for f in vocab}
+        fuzzy = [f for f in vocab if build_wildcard_cache(set(_sl(vgraphs[f]))) or _has_o(vgraphs[f])]
+        potentials = get_minimal_ksaccharide_ambiguity(glycans, size = s, motifs = vocab)
+        for n in sorted(set(potentials.keys()) | set(potentials.values())):
+            m = glycan_to_nxGraph(n)
+            hits = [f for f in vocab if subgraph_isomorphism(vgraphs[f], m, count = True)] if build_wildcard_cache(
+                set(_sl(m))) or _has_o(m) else ([n] if n in vgraphs else []) + [f for f in fuzzy if
+                                                                                f != n and subgraph_isomorphism(
+                                                                                    vgraphs[f], m, count = True)]
+            counts_dict[n] = [sum(d.get(f, 0) for f in hits) for d in frags]
     df_counts = pd.DataFrame(counts_dict)
     if up_to:
         combined_df = pd.concat([wga_letter, df_counts], axis = 1).fillna(0).astype(int)

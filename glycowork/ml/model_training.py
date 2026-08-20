@@ -18,8 +18,7 @@ except ImportError:
 try:
     from glycowork.ml.processing import HeteroDataBatch
 except ImportError:
-    raise ImportError(
-        "<torch or torch_geometric or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
+    raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
 from glycowork.motif.annotate import annotate_dataset
 
 

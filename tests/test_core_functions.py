@@ -245,9 +245,12 @@ def test_torch_import_error():
         importlib.import_module('glycowork.ml.inference')
       with pytest.raises(ImportError, match="torch missing;"):
         importlib.import_module('glycowork.ml.model_training')
-    with patch.dict('sys.modules', {'glyles': None}):
-      with pytest.raises(ImportError, match="rdkit missing"):
-        importlib.import_module('glycowork.ml.processing')
+    with patch.dict('sys.modules', {'glyles': None, 'rdkit': None}):
+        processing = importlib.import_module('glycowork.ml.processing')
+        with pytest.raises(ImportError, match = "rdkit or glyles missing"):
+            processing.iupac2mol("Gal(b1-4)Glc")
+        with pytest.raises(ImportError, match = "rdkit or glyles missing"):
+            processing.nx2mol(nx.Graph())
   finally:
     # Restore original states
     if original_processing is not None:
@@ -1348,15 +1351,17 @@ def test_rescue_compositions():
     (1, "lipid", "Fungi", str),
 ])
 def test_get_random_glycan(n, glycan_class, kingdom, expected_type):
-    # Mock the DataFrame and sample function
-    mock_df = Mock()
-    mock_df.glycan.values.tolist.return_value = ["Glycan1", "Glycan2", "Glycan3", "Glycan4"]
+    # A real (tiny) frame, so the Kingdom/glycan_type filtering in get_random_glycan actually runs
+    mock_df = pd.DataFrame({"glycan": ["Glycan1", "Glycan2", "Glycan3", "Glycan4"],
+                            "glycan_type": [glycan_class] * 4,
+                            "Kingdom": [[kingdom]] * 4})
     with patch("glycowork.glycan_data.loader.df_glycan", mock_df):
-        with patch("random.sample", lambda x, n: x[:n]):
-            result = get_random_glycan(n, glycan_class, kingdom)
-            assert isinstance(result, expected_type)
-            if n > 1:
-                assert len(result) == n
+        result = get_random_glycan(n, glycan_class, kingdom)
+        assert isinstance(result, expected_type)
+        # asserts the patch actually reached the function, rather than it sampling the real SugarBase
+        assert set(result if n > 1 else [result]).issubset(set(mock_df.glycan))
+        if n > 1:
+            assert len(result) == n
 
 
 def test_min_process_glycans():

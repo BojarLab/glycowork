@@ -20,7 +20,8 @@ from typing import Any
 from scipy.stats import ttest_ind, ttest_rel, norm, levene, f, f_oneway, spearmanr, t as t_dist
 from scipy.spatial.distance import squareform, pdist
 
-from glycowork.glycan_data.loader import df_species, strip_suffixes, download_model, GlycoDataFrame
+from glycowork.glycan_data import loader
+from glycowork.glycan_data.loader import strip_suffixes, download_model, GlycoDataFrame
 from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalanobis_variance,
                                          impute_and_normalize, variance_based_filtering, JTKTest,
                                          MissForest, get_alphaN, TST_grouped_benjamini_hochberg,
@@ -269,7 +270,7 @@ def get_representative_substructures(
         enrichment_df: pd.DataFrame  # Output from get_pvals_motifs
 ) -> list[str]:  # Up to 10 minimal glycans containing enriched motifs
     "Constructs minimal glycan structures that represent significantly enriched motifs by optimizing for motif content while minimizing structure size using subgraph isomorphism"
-    glycans = sorted(set(df_species.glycan))
+    glycans = sorted(set(loader.df_species.glycan))
     # Only consider motifs that are significantly enriched
     filtered_df = (enrichment_df[enrichment_df.significant] if 'significant' in enrichment_df else
                    enrichment_df[enrichment_df.corr_pval < 0.05]).reset_index(drop = True)
@@ -444,7 +445,7 @@ def characterize_monosaccharide(
     if (rank is None) != (focus is None):
         raise ValueError("rank and focus have to be given together: rank is the column to filter on (e.g., 'Kingdom'), focus the value to keep (e.g., 'Animalia').")
     if df is None:
-        df = df_species
+        df = loader.df_species
     glycan_col_name = GlycoDataFrame(df)._glycan_col
     if rank is not None and focus is not None:
         df = df[df[rank] == focus]

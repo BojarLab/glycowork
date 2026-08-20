@@ -7,7 +7,8 @@ from importlib import resources
 from collections import Counter, defaultdict
 from functools import reduce
 
-from glycowork.glycan_data.loader import lib, unwrap, df_glycan, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace
+from glycowork.glycan_data import loader
+from glycowork.glycan_data.loader import lib, unwrap, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 
@@ -192,9 +193,9 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     """Map m/z value to matching monosaccharide composition"""
     if df_use is None:
         if glycan_class == "all":
-            df_use = df_glycan[df_glycan.Kingdom.apply(lambda x: kingdom in x)]
+            df_use = loader.df_glycan[loader.df_glycan.Kingdom.apply(lambda x: kingdom in x)]
         else:
-            df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
+            df_use = loader.df_glycan[(loader.df_glycan.glycan_type == glycan_class) & (loader.df_glycan.Kingdom.apply(lambda x: kingdom in x))]
     elif glycan_class != "all":
         df_use = df_use[df_use.glycan_type == glycan_class] if 'glycan_type' in df_use.columns else df_use
     if filter_out is None:
@@ -243,7 +244,7 @@ def match_composition_relaxed(composition: dict[str, int], # Dictionary indicati
     """Map coarse-grained composition to matching glycans"""
     if df_use is None:
         key = (glycan_class, kingdom)
-        df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
+        df_use = loader.df_glycan[(loader.df_glycan.glycan_type == glycan_class) & (loader.df_glycan.Kingdom.apply(lambda x: kingdom in x))]
     else:
         key = id(df_use)
         # Index the database by composition once; the reference to df_use keeps its id from being recycled
@@ -334,7 +335,7 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
                      ) -> pd.DataFrame | list: # DataFrame of structures x intensities or empty list
     """Map precursor masses to structures, supporting accompanying relative intensities"""
     if df_use is None:
-        df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))]
+        df_use = loader.df_glycan[(loader.df_glycan.glycan_type == glycan_class) & (loader.df_glycan.Kingdom.apply(lambda x: kingdom in x))]
     if filter_out is None:
         filter_out = set()
     if abundances is None:
@@ -547,7 +548,7 @@ def get_unique_topologies(composition: dict[str, int], # Composition dictionary 
                           ) -> list[str]: # List of unique base topologies
     """Get all observed unique base topologies for composition"""
     if df_use is None:
-        df_use = df_glycan
+        df_use = loader.df_glycan
     if universal_replacers is None:
         universal_replacers = {}
     df_use = df_use[df_use.Composition == composition]
@@ -563,7 +564,7 @@ def get_random_glycan(n: int = 1, # How many random glycans to sample
                       ) -> str | list[str]: # Returns a random glycan or list of glycans if n > 1
     """Sample random glycans from the SugarBase database"""
     if glycan_class == "all":
-        df_use = df_glycan[df_glycan.Kingdom.apply(lambda x: kingdom in x)].glycan.values.tolist()
+        df_use = loader.df_glycan[loader.df_glycan.Kingdom.apply(lambda x: kingdom in x)].glycan.values.tolist()
     else:
-        df_use = df_glycan[(df_glycan.glycan_type == glycan_class) & (df_glycan.Kingdom.apply(lambda x: kingdom in x))].glycan.values.tolist()
+        df_use = loader.df_glycan[(loader.df_glycan.glycan_type == glycan_class) & (loader.df_glycan.Kingdom.apply(lambda x: kingdom in x))].glycan.values.tolist()
     return sample(df_use, n)[0] if n == 1 else sample(df_use, n)

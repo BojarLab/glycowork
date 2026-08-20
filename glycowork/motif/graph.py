@@ -16,6 +16,8 @@ NEGATION_REGEX = re.compile(r'(?<!\()(!\w+(?:\([^)]+\))?)')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
 LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
 LINKAGE_LABEL = re.compile(r'^[ab?][12]-')
+IS_LINKAGE = re.compile(r'^[ab?]?[0-9?/]+-[0-9?/]+$').match
+TOKEN_PATTERN = re.compile(r'\d+|\[|\]')
 from weakref import WeakKeyDictionary
 _SL_CACHE = WeakKeyDictionary()
 _NEG_CACHE = WeakKeyDictionary()
@@ -73,32 +75,36 @@ def resolve_anchor(ggraph: nx.DiGraph, # Glycan graph to search
     return {k for m in matcher.subgraph_isomorphisms_iter() for k, v in m.items() if v == idx}
 
 
-def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence
-                    ) -> tuple[dict[int, str], np.ndarray]: # (Dictionary of node:monosaccharide/linkage, Adjacency matrix)
-    "Convert glycans into graphs"
-    # Get glycoletters
+def glycan_to_edges(glycan: str  # IUPAC-condensed glycan sequence
+                    ) -> tuple[dict[int, str], list[tuple[int, int]]]: # (Dictionary of node:monosaccharide/linkage, list of parent->child edges)
+    "Convert glycans into a node dictionary and an edge list"
     glycan_proc = tuple(min_process_glycans([glycan])[0])
-    n = len(glycan_proc)
-    # Map glycoletters to integers
     mask_dic = dict(enumerate(glycan_proc))
     temp_glycan = glycan
     for i, gl in mask_dic.items():
         temp_glycan = temp_glycan.replace(gl, str(i), 1)
-    # Initialize adjacency matrix
-    adj_matrix = np.zeros((n, n), dtype = np.uint8)
-    tokens = re.findall(r'\d+|\[|\]', temp_glycan)
-    current_node = None
-    stack = []
-    for token in reversed(tokens):
+    edges, stack, current_node = [], [], None
+    for token in reversed(TOKEN_PATTERN.findall(temp_glycan)):
         if token == ']':
             stack.append(current_node)
         elif token == '[':
             current_node = stack.pop()
         else:
             node_idx = int(token)
-            if current_node is not None:
-                adj_matrix[node_idx, current_node] = 1
+            if current_node is not None and node_idx < current_node:
+                edges.append((current_node, node_idx))
             current_node = node_idx
+    edges.sort()
+    return mask_dic, edges
+
+
+def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence
+                    ) -> tuple[dict[int, str], np.ndarray]: # (Dictionary of node:monosaccharide/linkage, Adjacency matrix)
+    "Convert glycans into graphs"
+    mask_dic, edges = glycan_to_edges(glycan)
+    adj_matrix = np.zeros((len(mask_dic), len(mask_dic)), dtype = np.uint8)
+    for parent, child in edges:
+        adj_matrix[child, parent] = 1
     return mask_dic, adj_matrix
 
 
@@ -114,22 +120,16 @@ def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
     if appended_hex:
         glycan += 'Hex'
     # Map glycan string to node labels and adjacency matrix
-    node_dict, adj_matrix = glycan_to_graph(glycan)
-    # Create directed graph directly from adjacency matrix
-    edges = np.where(np.triu(adj_matrix, k = 1).T)  # k=1 excludes diagonal
-    g1 = nx.DiGraph()
-    g1.add_nodes_from(node_dict.keys())
-    g1.add_edges_from(zip(edges[0].tolist(), edges[1].tolist()))
-    # Remove the helper monosaccharide if used
+    node_dict, edges = glycan_to_edges(glycan)
     if appended_hex and glycan.endswith('x'):
         last_node = len(node_dict) - 1
         node_dict.pop(last_node, None)
-        g1.remove_node(last_node)
-    # Add node labels
-    node_attributes = {
-        i: {'string_labels': sys.intern(v)} if libr is None else {'labels': libr[v], 'string_labels': sys.intern(v)}
-        for i, v in node_dict.items()}
-    nx.set_node_attributes(g1, node_attributes)
+        edges = [e for e in edges if last_node not in e]
+    g1 = nx.DiGraph()
+    g1.add_nodes_from(
+        (i, {'string_labels': sys.intern(v)} if libr is None else {'labels': libr[v], 'string_labels': sys.intern(v)})
+        for i, v in node_dict.items())
+    g1.add_edges_from(edges)
     if termini == 'calc':
         last_node = max(g1.nodes())
         degrees = dict(g1.degree())
@@ -193,13 +193,14 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
         data1_labels, data2_labels = data1.get(attr, default), data2.get(attr, default)
         if data1_labels == data2_labels:
             return True
-        if (data1_labels == "Monosaccharide" or data2_labels == "Monosaccharide") and '-' not in data1_labels and '-' not in data2_labels:
+        if (data1_labels == "Monosaccharide" or data2_labels == "Monosaccharide") and not IS_LINKAGE(
+                data1_labels) and not IS_LINKAGE(data2_labels):
             return True
         if data1_labels == "?1-?" or data2_labels == "?1-?":
-            if data1_labels.count('-') == 1 and data2_labels.count('-') == 1:
+            if IS_LINKAGE(data1_labels) and IS_LINKAGE(data2_labels):
                 return True
         if data2_labels.startswith('!'):
-            if data1_labels != data2_labels[1:] and '-' not in data1_labels:
+            if data1_labels != data2_labels[1:] and not IS_LINKAGE(data1_labels):
                 return True
         if data1_labels in narrow_wildcard_list and data2_labels in narrow_wildcard_list[data1_labels]:
             return True
@@ -231,10 +232,11 @@ def _prefilter_labels(g1_labels: list, # G1 node labels
         have = 0
         for l1, cnt in g1_counter.items():
             if (l1 == l2
-                    or ((l1 == 'Monosaccharide' or l2 == 'Monosaccharide') and '-' not in l1 and '-' not in l2)
-                    or ((l1 == '?1-?' or l2 == '?1-?') and '-' in l1 and '-' in l2)
-                    or (l2.startswith('!') and l1 != l2[1:] and '-' not in l1)
-                    or (l1.startswith('!') and l2 != l1[1:] and '-' not in l2)
+                    or ((l1 == 'Monosaccharide' or l2 == 'Monosaccharide') and not IS_LINKAGE(l1) and not IS_LINKAGE(
+                        l2))
+                    or ((l1 == '?1-?' or l2 == '?1-?') and IS_LINKAGE(l1) and IS_LINKAGE(l2))
+                    or (l2.startswith('!') and l1 != l2[1:] and not IS_LINKAGE(l1))
+                    or (l1.startswith('!') and l2 != l1[1:] and not IS_LINKAGE(l2))
                     or l2 in narrow_wildcard_list.get(l1, frozenset())
                     or l1 in narrow_wildcard_list.get(l2, frozenset())):
                 have += cnt

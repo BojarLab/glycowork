@@ -1,7 +1,9 @@
 import networkx as nx
 from copy import deepcopy
 from random import getrandbits, random
-from typing import Any
+from typing import Any, TYPE_CHECKING
+if TYPE_CHECKING:
+    from rdkit import Chem
 from glycowork.motif.graph import glycan_to_nxGraph
 from glycowork.motif.tokenization import map_to_basic
 from glycowork.motif.processing import de_wildcard_glycoletter
@@ -15,17 +17,10 @@ try:
     from torch_geometric.transforms.base_transform import BaseTransform
 except ImportError:
     raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
-try:
-    import glyles
-    from glyles.glycans.factory.factory import MonomerFactory
-    from glyles.glycans.poly.merger import Merger
-    from rdkit import Chem
-    from rdkit.Chem import rdDepictor
-except ImportError:
-    raise ImportError("<rdkit missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
+_MISSING = "<rdkit or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>"
 
 atom_map = {6: 1, 7: 2, 8: 3, 15: 4, 16: 5}
-bond_map = {Chem.BondDir.BEGINDASH: 1, Chem.BondDir.BEGINWEDGE: 2, Chem.BondDir.NONE: 3}
+bond_map = {'BEGINDASH': 1, 'BEGINWEDGE': 2, 'NONE': 3}
 
 
 def augment_glycan(glycan_data: torch.utils.data.Dataset, # glycan as a networkx graph
@@ -248,7 +243,7 @@ class GIFFLARTransform(BaseTransform):
         bonds_x, atoms_coboundary, atoms_to_bonds, bonds_to_monosacchs = [], [], [], []
         # Fill all bond-related information
         for bond in data["mol"].GetBonds():
-            bonds_x.append(bond_map.get(bond.GetBondDir(), 0))
+            bonds_x.append(bond_map.get(bond.GetBondDir().name, 0))
             b_idx, e_idx, idx = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), bond.GetIdx()
             atoms_coboundary.extend([(b_idx, e_idx), (e_idx, b_idx)])
             atoms_to_bonds.extend([(b_idx, idx), (e_idx, idx)])
@@ -288,8 +283,12 @@ class HeteroDataset(Dataset):
 
 def nx2mol(G: nx.Graph,  # graph representing a molecule
            sanitize: bool = True  # bool flag indicating to sanitize the resulting molecule (should be True for "production mode" and False when debugging this function)
-           ) -> Chem.Mol:  # converted, sanitized molecules in RDKit represented by the input graph
+           ) -> "Chem.Mol":  # converted, sanitized molecules in RDKit represented by the input graph
     """Convert a molecules from a networkx.Graph to RDKit"""
+    try:
+        from rdkit import Chem
+    except ImportError:
+        raise ImportError(_MISSING)
     # Create the molecule
     mol = Chem.RWMol()
     # Create all atoms based on their representing nodes
@@ -315,7 +314,7 @@ def clean_tree(tree: nx.Graph  # tree to clean
     """Clean the tree from unnecessary node features and store only the IUPAC name"""
     for node in tree.nodes:
         attrs = deepcopy(tree.nodes[node])
-        if "type" in attrs and isinstance(attrs["type"], glyles.glycans.mono.monomer.Monomer): # type: ignore
+        if hasattr(attrs.get("type"), "recipe"):
             tree.nodes[node].clear()
             tree.nodes[node].update({"iupac": "".join([x[0] for x in attrs["type"].recipe]), "name": attrs["type"].name, "recipe": attrs["type"].recipe})
         else:
@@ -326,6 +325,14 @@ def clean_tree(tree: nx.Graph  # tree to clean
 def iupac2mol(iupac: str  # IUPAC-condensed string of the glycan to convert
               ) -> HeteroData | None:  # HeteroData object containing the IUPAC string, the SMILES representation, the RDKit molecule, and the monosaccharide tree
     """Convert a glycan stored given as IUPAC-condensed string into an RDKit molecule while keeping the information of which atom and which bond belongs to which monosaccharide"""
+    try:
+        import glyles
+        from glyles.glycans.factory.factory import MonomerFactory
+        from glyles.glycans.poly.merger import Merger
+        from rdkit import Chem
+        from rdkit.Chem import rdDepictor
+    except ImportError:
+        raise ImportError(_MISSING)
     if "{" in iupac or "?" in iupac or "/" in iupac:
         return None
     # Convert the IUPAC string using GlyLES
