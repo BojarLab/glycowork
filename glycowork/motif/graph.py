@@ -108,7 +108,7 @@ def glycan_to_graph(glycan: str  # IUPAC-condensed glycan sequence
     return mask_dic, adj_matrix
 
 
-@lru_cache(maxsize = None)
+@lru_cache(maxsize = 50_000)
 def glycan_to_nxGraph_int(glycan: str, # Glycan in IUPAC-condensed format
                           libr: dict[str, int] | HashableDict[str, int] | None = None, # Dictionary of form glycoletter:index
                           termini: str = 'ignore', # How to encode terminal/internal position; options: ignore, calc, provided

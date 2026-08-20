@@ -15,7 +15,7 @@ skeleton's own heteroatom, 'O' for a hydroxyl and 'N' for an amine.
 import re
 from typing import NamedTuple
 import networkx as nx
-from glycowork.motif.graph import glycan_to_nxGraph
+from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
 
 CERAMIDE = 'OC[C@@H](NC(=O)CCCCCCCCCCCCCCC)[C@H](O)/C=C/CCCCCCCCCCCCC'  # d18:1/16:0, the placeholder used whenever a sequence just says 'Cer'
 UNKNOWN_POSITION = 'lowest'  # where a modification without a position number goes; 'lowest' free slot reproduces what GlyLES did
@@ -171,7 +171,7 @@ ANOMERIC = {  # what a modification on the anomeric position replaces that whole
     'N': 'N', 'NAc': 'CC(=O)N', 'NMe': 'CN', 'NGc': 'OCC(=O)N', 'NS': 'OS(=O)(=O)N', 'NFo': 'C(=O)N',
 }
 ESTERIFIED = {'Me': 'C', 'Et': 'CC'}  # what a modification on the carbon of a uronic acid does to that acid
-URONIC = 'C(=O)O'  # what 'A' does to the primary alcohol: oxidise it to a carboxylic acid
+URONIC = 'C(=O)O'  # what 'A' does to the primary alcohol: oxidize it to a carboxylic acid
 AMIDATED = 'C(=O)N'  # what 'Am', 'NAm' or 'N' then does to that acid
 WILDCARDS = {'Sia', 'dNon', 'ddNon', 'ddHex', 'Monosaccharide', 'Unknown', 'Assigned'}  # 'Hex', 'dHex' and 'Pen' are stereochemistry-free skeletons instead
 _MOD_NAMES = set(SUBSTITUENTS) | {'A'} | {'O' + m for m in SUBSTITUENTS if m[0] not in 'ON'}  # an 'O' prefix means the position is unknown
@@ -250,7 +250,7 @@ def _residue(token: str, # Monosaccharide token
         if mod == 'A':
             acid = max((p for p in hetero if 'C{p%d}' % p in template), default = None)
             if acid is None:
-                raise GlycanSMILESError(f"'{token}' has no primary alcohol to oxidise")
+                raise GlycanSMILESError(f"'{token}' has no primary alcohol to oxidize")
             template = template.replace('C{p%d}' % acid, URONIC)
             hetero.pop(acid)
             continue
@@ -403,12 +403,15 @@ _TOKEN_RE = re.compile(r'\[[^\]]*\]|Br|Cl|[BCNOPSFI]|%\d\d|\d|[()=#/\\.\-+]')
 _BRACKET_RE = re.compile(r'^\[(\d*)([A-Z][a-z]?|\*)(@{0,2})(?:H(\d*))?([+-]\d*)?\]$')
 
 
-def parse_smiles(smiles: str # SMILES string, as written by this module
-                 ) -> tuple: # Atoms as (element, charge, chirality), bonds as (first atom, second atom, order), and rings as tuples of bond indices
-    "Read a SMILES back into atoms, bonds and rings, for the restricted subset this module emits"
-    atoms, bonds, rings, parent, branches, pending_rings = [], [], [], [], [], {}
+def parse_smiles(smiles: str # SMILES string
+                 ) -> tuple: # Atoms as (element, charge, chirality), bonds as (first, second, order), rings as tuples of bond indices, and each atom's neighbors in the order the string writes them
+    "Read a SMILES into atoms, bonds, rings and written neighbor order, which is what the chirality tags refer to"
+    atoms, bonds, rings, parent, branches, pending_rings, neighbors = [], [], [], [], [], {}, []
     previous, order = None, 1
-    for token in _TOKEN_RE.findall(smiles):
+    tokens = _TOKEN_RE.findall(smiles)
+    if ''.join(tokens) != smiles:
+        raise GlycanSMILESError('this is not a SMILES string this module can read')
+    for token in tokens:
         if token == '(':
             branches.append(previous)
         elif token == ')':
@@ -420,9 +423,11 @@ def parse_smiles(smiles: str # SMILES string, as written by this module
         elif token[0].isdigit() or token[0] == '%':
             label = token.lstrip('%')
             if label not in pending_rings:
-                pending_rings[label] = previous
+                pending_rings[label] = (previous, len(neighbors[previous]))
+                neighbors[previous].append(None)
             else:
-                opened = pending_rings.pop(label)
+                opened, slot = pending_rings.pop(label)
+                neighbors[opened][slot], _ = previous, neighbors[previous].append(opened)
                 up = {}  # ancestors of the closing atom, and the bond that leads to each
                 walk, trail = previous, []
                 while walk is not None:
@@ -445,12 +450,16 @@ def parse_smiles(smiles: str # SMILES string, as written by this module
             atoms.append((element, charge, match.group(3) if match else ''))
             index = len(atoms) - 1
             parent.append((previous, len(bonds) if previous is not None else None))
+            neighbors.append([] if previous is None else [previous])
+            if match and match.group(3) and match.group(4) != '0' and 'H' in token:
+                neighbors[index].append('H')  # a hydrogen inside the brackets counts where it is written
             if previous is not None:
+                neighbors[previous].append(index)
                 bonds.append((previous, index, order))
             previous, order = index, 1
     if pending_rings:
         raise GlycanSMILESError(f'unclosed ring bond {sorted(pending_rings)}')
-    return atoms, bonds, rings
+    return atoms, bonds, rings, neighbors
 
 
 class Molecule(NamedTuple):
@@ -468,7 +477,488 @@ def glycan_to_molecule(glycan: str | nx.DiGraph, # Glycan in IUPAC-condensed for
                        ) -> Molecule: # Atoms, bonds, rings, and the graph node every atom and bond came from
     "Build a glycan's molecular graph without a cheminformatics toolkit, keeping every atom's monosaccharide of origin"
     smiles, owners = graph_to_smiles(glycan if isinstance(glycan, nx.Graph) else glycan_to_nxGraph(glycan), mapping = True, strict = strict)
-    atoms, bonds, rings = parse_smiles(smiles)
+    atoms, bonds, rings, neighbors = parse_smiles(smiles)
     if len(atoms) != len(owners):
         raise GlycanSMILESError('atom mapping does not line up with the parsed SMILES')
     return Molecule(smiles, atoms, bonds, rings, owners, [owners[first] for first, second, order in bonds])
+
+
+def _parity(written: list, # Neighbors in the order the SMILES writes them
+            target: list # The same neighbors in the canonical order
+            ) -> int: # 1 if the reordering is even, -1 if it is odd
+    "Sign of the permutation that takes one neighbor ordering to another, which is what flips a chirality tag"
+    order, sign = [written.index(atom) for atom in target], 1
+    for i in range(len(order)):
+        for j in range(i + 1, len(order)):
+            if order[i] > order[j]:
+                sign = -sign
+    return sign
+
+
+def _neighbor_key(atom: int | str, # Neighbor to sort, or 'H'
+                   number: dict, # {atom: carbon number} for this residue
+                   ring_oxygen: int, # The ring oxygen of this residue
+                   elements: list # Element of every atom
+                   ) -> tuple: # Sort key placing ring atoms first, then substituents, then hydrogen
+    "Canonical order of a stereocentre's neighbors: around the ring first, then what hangs off it"
+    if atom == 'H':
+        return (3, 0)
+    if atom == ring_oxygen:
+        return (0, 0)
+    if atom in number:
+        return (1, number[atom])
+    return (2, {'O': 0, 'N': 1}.get(elements[atom], 2))
+
+
+def _chirality(centre: int, # Atom to describe
+               atoms: list, # Atoms of the molecule
+               neighbors: list, # Written neighbor order per atom
+               number: dict, # {atom: carbon number} for this residue
+               ring_oxygen: int # The ring oxygen of this residue
+               ) -> str: # '@', '@@' or '' when the centre carries no tag
+    "Rewrite an atom's chirality tag in terms of a canonical neighbor order, so it can be compared between molecules"
+    tag = atoms[centre][2]
+    if not tag:
+        return ''
+    elements = [element for element, charge, chirality in atoms]
+    written = list(neighbors[centre])
+    if len(written) != 4:
+        raise GlycanSMILESError(f'stereocentre at atom {centre} has {len(written)} neighbors instead of 4')
+    target = sorted(written, key = lambda atom: _neighbor_key(atom, number, ring_oxygen, elements))
+    return tag if _parity(written, target) == 1 else ('@@' if tag == '@' else '@')
+
+
+def _rings_of_atoms(bonds: list, # Bonds of the molecule
+                    rings: list # Rings as tuples of bond indices
+                    ) -> list: # Rings as lists of atom indices, in ring order
+    "Turn each ring's bonds into the cycle of atoms it runs through"
+    out = []
+    for ring in rings:
+        adjacency = {}
+        for bond in ring:
+            first, second, order = bonds[bond]
+            adjacency.setdefault(first, []).append(second)
+            adjacency.setdefault(second, []).append(first)
+        start = min(adjacency)
+        cycle, previous, current = [start], None, start
+        while True:
+            following = [atom for atom in adjacency[current] if atom != previous]
+            if not following or following[0] == start:
+                break
+            previous, current = current, following[0]
+            cycle.append(current)
+        out.append(cycle)
+    return out
+
+
+def _number_residue(cycle: list, # Ring atoms in ring order
+                    atoms: list, # Atoms of the molecule
+                    adjacency: dict # {atom: set of bonded atoms}
+                    ) -> tuple: # {atom: carbon number}, the ring oxygen, and the anomeric carbon
+    "Number a sugar ring the way a chemist would, starting from the anomeric carbon"
+    elements = [element for element, charge, chirality in atoms]
+    oxygens = [atom for atom in cycle if elements[atom] == 'O']
+    if len(oxygens) != 1 or any(elements[atom] != 'C' for atom in cycle if atom not in oxygens):
+        raise GlycanSMILESError('not a sugar ring')
+    ring_oxygen, ring = oxygens[0], set(cycle)
+    candidates = [atom for atom in adjacency[ring_oxygen]
+                  if any(elements[other] in 'ON' and other not in ring for other in adjacency[atom])]
+    if len(candidates) != 1:
+        raise GlycanSMILESError('anomeric carbon is ambiguous')
+    anomeric = candidates[0]
+    head = [other for other in adjacency[anomeric] if elements[other] == 'C' and other not in ring]
+    number, index = {}, 1
+    if len(head) == 1:  # a ketose or ulosonic acid carries C1 outside the ring
+        number[head[0]], index = 1, 2
+    elif len(head) > 1:
+        raise GlycanSMILESError('branched anomeric carbon')
+    number[anomeric], previous, current = index, ring_oxygen, anomeric
+    while True:
+        following = [other for other in adjacency[current] if other in ring and other not in (previous, ring_oxygen)]
+        if not following:
+            break
+        index += 1
+        previous, current = current, following[0]
+        number[current] = index
+    while True:  # walk out along the exocyclic chain, as in a heptose or a sialic acid
+        following = [other for other in adjacency[current] if elements[other] == 'C' and other not in number and other not in ring]
+        if len(following) != 1:
+            break
+        index += 1
+        current = following[0]
+        number[current] = index
+    return number, ring_oxygen, anomeric
+
+
+def _slot_kind(carbon: int, # Numbered carbon of a residue
+               atoms: list, # Atoms of the molecule
+               adjacency: dict, # {atom: set of bonded atoms}
+               ring: set, # Ring atoms of this residue
+               root_oxygen: int # The anomeric oxygen, which is a linkage rather than a slot
+               ) -> tuple: # What sits at this position ('O', 'N', 'acid' or '-') and the atom carrying it
+    "What a carbon carries besides the skeleton: a hydroxyl, an amine, a carboxyl, or nothing"
+    elements = [element for element, charge, chirality in atoms]
+    if any(elements[other] == 'O' and len(adjacency[other]) == 1 and other != root_oxygen
+           for other in adjacency[carbon]) and sum(elements[other] == 'O' for other in adjacency[carbon]) > 1:
+        return 'acid', None
+    exocyclic = [other for other in adjacency[carbon]
+                 if elements[other] in 'ON' and other not in ring and other != root_oxygen]
+    if len(exocyclic) == 1:
+        return elements[exocyclic[0]], exocyclic[0]
+    return '-', None
+
+
+def _key(ring_size: int, # Number of atoms in the ring
+         positions: list, # (number, slot, chirality, branches) per numbered carbon
+         anomeric_index: int # Which number the anomeric carbon has
+         ) -> tuple: # Lookup key into the signature table
+    "The part of a residue's description that identifies its skeleton, leaving the anomeric configuration aside"
+    anomeric = positions[anomeric_index - 1]
+    return (ring_size, tuple(entry for entry in positions if entry[0] != anomeric_index) + ((anomeric_index, anomeric[1], anomeric[3]),))
+
+
+def _branch_size(start: int, # First atom of the branch
+                 came_from: int, # Atom the branch hangs off
+                 adjacency: dict # {atom: set of bonded atoms}
+                 ) -> int: # Number of heavy atoms in the branch
+    "How big a carbon branch is, so that two sugars differing only in what hangs off a ring carbon stay distinguishable"
+    seen, stack = {came_from, start}, [start]
+    while stack:
+        for other in adjacency[stack.pop()]:
+            if other not in seen:
+                seen.add(other)
+                stack.append(other)
+    return len(seen) - 1
+
+
+def _signature(cycle: list, # Ring atoms in ring order
+               atoms: list, # Atoms of the molecule
+               bonds: list, # Bonds of the molecule
+               neighbors: list, # Written neighbor order per atom
+               adjacency: dict # {atom: set of bonded atoms}
+               ) -> tuple: # Lookup key, anomeric descriptor, numbering, ring oxygen, anomeric oxygen, anomeric carbon, positions and ring size
+    "Describe a sugar ring in a way that is independent of how the SMILES was written"
+    number, ring_oxygen, anomeric = _number_residue(cycle, atoms, adjacency)
+    elements = [element for element, charge, chirality in atoms]
+    ring = set(cycle)
+    root = next(other for other in adjacency[anomeric] if elements[other] in 'ON' and other not in ring)
+    positions = []
+    for carbon, index in sorted(number.items(), key = lambda item: item[1]):
+        slot, holder = _slot_kind(carbon, atoms, adjacency, ring, root)
+        branches = tuple(sorted(_branch_size(other, carbon, adjacency) for other in adjacency[carbon]
+                                if elements[other] == 'C' and other not in number))
+        positions.append((index, slot, _chirality(carbon, atoms, neighbors, number, ring_oxygen), branches))
+    anomeric_index = number[anomeric]
+    return _key(len(cycle), positions, anomeric_index), positions[anomeric_index - 1][2], number, ring_oxygen, root, anomeric, positions, len(cycle)
+
+
+_SIGNATURES = {}
+
+
+def _signature_table() -> dict: # {signature: {chirality: (skeleton, anomer)}}
+    "Fingerprint every skeleton by writing it out and reading it back, so perception is the exact inverse of generation"
+    if _SIGNATURES:
+        return _SIGNATURES
+    best = {}
+    tokens = [(name, name) for name in SKELETONS]
+    tokens += [(f"{'D' if ENANTIOMER[name] == 'L' else 'L'}-{name}", name) for name in SKELETONS if name in ENANTIOMER]
+    for token, name in tokens:
+        for anomer in ('a', 'b'):
+            try:
+                template, hetero, pending = _residue(token, anomer, '1', '51', set())
+                free = len(_free_slots(template, hetero))
+                for position, element in hetero.items():
+                    template = template.replace('{p%d}' % position, element)
+                atoms, bonds, rings, neighbors = parse_smiles(template)
+                adjacency = _adjacency(atoms, bonds)
+                key, chirality, number, ring_oxygen, root, anomeric, positions, ring_size = _signature(_rings_of_atoms(bonds, rings)[0], atoms, bonds, neighbors, adjacency)
+                orders = {}
+                for first, second, order in bonds:
+                    orders[(first, second)] = orders[(second, first)] = order
+                holders, carbons = _holders(number, set(_rings_of_atoms(bonds, rings)[0]), root, atoms, adjacency)
+                fixed = {position: fragment for position, fragment in _fragments(holders, atoms, adjacency, orders, carbons).items()
+                         if fragment not in ('O', 'N')}  # groups the skeleton itself carries, such as the lactyl ether of muramic acid
+            except (GlycanSMILESError, IndexError, StopIteration):
+                continue
+            previous = best.get((key, chirality))
+            if previous and previous[0] == token:  # a skeleton without stereocentres cannot tell its anomers apart
+                best[(key, chirality)] = (token, '?', free, fixed)
+            elif not previous or free > previous[2]:  # prefer the plain skeleton over one that bakes a substituent in
+                best[(key, chirality)] = (token, anomer, free, fixed)
+    for (key, chirality), (name, anomer, free, fixed) in best.items():
+        _SIGNATURES.setdefault(key, {})[chirality] = (name, anomer, fixed)
+    return _SIGNATURES
+
+
+def _adjacency(atoms: list, # Atoms of the molecule
+               bonds: list # Bonds of the molecule
+               ) -> dict: # {atom: set of bonded atoms}
+    "Neighbor sets, which is how everything downstream walks the molecule"
+    adjacency = {index: set() for index in range(len(atoms))}
+    for first, second, order in bonds:
+        adjacency[first].add(second)
+        adjacency[second].add(first)
+    return adjacency
+
+
+def _fragment_key(atom: int, # Atom to serialize
+                  came_from: int | None, # Where the walk arrived from
+                  atoms: list, # Atoms of the molecule
+                  adjacency: dict, # {atom: set of bonded atoms}
+                  orders: dict, # {(first, second): bond order}
+                  seen: set, # Atoms already visited, shared so that a ketal ring cannot be walked twice
+                  budget: list = None # Single-element list counting down the atoms left to spend
+                  ) -> str: # Canonical string for this fragment
+    "Serialize a substituent into a canonical string, so it can be looked up whatever order the SMILES wrote it in"
+    budget = [60] if budget is None else budget
+    budget[0] -= 1
+    if budget[0] < 0:
+        return '...'  # too big to be a substituent worth naming, and not worth walking further
+    element, charge, chirality = atoms[atom]
+    seen.add(atom)
+    children = sorted(('=' if orders[(atom, other)] == 2 else '') + (_fragment_key(other, atom, atoms, adjacency, orders, seen, budget = budget) if other not in seen else 'R')
+                      for other in adjacency[atom] if other != came_from)
+    return element + ('%+d' % charge if charge else '') + ('(' + ')('.join(children) + ')' if children else '')
+
+
+_MODIFICATIONS = {}
+
+
+def _modification_table() -> dict: # {heteroatom: {canonical fragment: modification}}
+    "Invert the substituent table by serializing every group the way perception will see it"
+    if _MODIFICATIONS:
+        return _MODIFICATIONS
+    _MODIFICATIONS.update({'O': {}, 'N': {}})
+    for name, forms in SUBSTITUENTS.items():
+        short = name[1:] if name.startswith('N') and len(name) > 1 else name  # the leading N is put back only where the skeleton lacks one
+        for element, form in zip('ON', forms):
+            if form is None or form[0] != element:
+                continue
+            atoms, bonds, rings, neighbors = parse_smiles(form)
+            adjacency, orders = _adjacency(atoms, bonds), {}
+            for first, second, order in bonds:
+                orders[(first, second)] = orders[(second, first)] = order
+            _MODIFICATIONS[element].setdefault(_fragment_key(0, None, atoms, adjacency, orders, set()), short)
+    return _MODIFICATIONS
+
+
+def _fragments(holders: dict, # {position: holder atom}
+               atoms: list, # Atoms of the molecule
+               adjacency: dict, # {atom: set of bonded atoms}
+               orders: dict, # {(first, second): bond order}
+               carbons: dict # {position: the carbon the holder hangs off}
+               ) -> dict: # {position: canonical fragment string}
+    "Serialize whatever sits at each position, so a skeleton's own groups can be told from added ones"
+    return {position: _fragment_key(holder, carbons[position], atoms, adjacency, orders, set()) for position, holder in holders.items()}
+
+
+def _holders(number: dict, # {atom: carbon number}
+             ring: set, # Ring atoms of this residue
+             root: int, # The anomeric oxygen
+             atoms: list, # Atoms of the molecule
+             adjacency: dict # {atom: set of bonded atoms}
+             ) -> tuple: # {position: holder atom} and {position: the carbon it hangs off}
+    "Find the oxygen or nitrogen sitting at every numbered position of a residue"
+    elements, holders, carbons = [element for element, charge, chirality in atoms], {}, {}
+    for carbon, position in number.items():
+        holder = next((other for other in adjacency[carbon] if elements[other] in 'ON' and other not in ring and other != root), None)
+        if holder is not None:
+            holders[position], carbons[position] = holder, carbon
+    return holders, carbons
+
+
+def _match_residue(positions: list, # (number, slot, chirality, branches) per numbered carbon
+                   ring_size: int, # Number of atoms in the ring
+                   anomeric_index: int, # Which number the anomeric carbon has
+                   chirality: str, # Canonical descriptor of the anomeric carbon
+                   fragments: dict # {position: canonical fragment string} of what sits at each position
+                   ) -> tuple: # Skeleton, anomer, implied modifications, and the groups the skeleton brings itself
+    "Look a perceived ring up in the skeleton table, allowing for an oxidized or aminated position"
+    table = _signature_table()
+    acid = max((entry[0] for entry in positions if entry[1] == 'acid'), default = None)
+    variants = [(positions, [])]
+    if acid is not None and acid == max(entry[0] for entry in positions):  # a uronic acid is a modified sugar, not a skeleton of its own
+        variants.append(([(n, 'O' if n == acid else s, c, b) for n, s, c, b in positions], [(None, 'A')]))
+    for base, implied in list(variants):
+        if any(slot == 'N' for n, slot, c, b in base):  # an amine the skeleton does not have is a modification
+            variants.append(([(n, 'O' if slot == 'N' else slot, c, b) for n, slot, c, b in base], implied))
+    for base, implied in variants:
+        entry = table.get(_key(ring_size, base, anomeric_index))
+        if not entry:
+            continue
+        for descriptor, (skeleton, anomer, fixed) in sorted(entry.items(), key = lambda item: item[0] != chirality):
+            if all(fragments.get(position) == fragment for position, fragment in fixed.items()):
+                return skeleton, anomer if descriptor == chirality else '?', implied, fixed
+    raise GlycanSMILESError('no monosaccharide matches this ring')
+
+
+def _name_modification(residue: dict, # Perceived residue
+                       position: int, # Carbon the group sits on
+                       atoms: list, # Atoms of the molecule
+                       adjacency: dict # {atom: set of bonded atoms}
+                       ) -> tuple: # Position (None where the forward reading would put it back) and modification name
+    "Name what sits at one position, dropping the position number wherever reading the token back would restore it"
+    template, tag, hetero = SKELETONS[residue['skeleton'].split('-')[-1]]
+    holder, elements = residue['holders'][position], [element for element, charge, chirality in atoms]
+    carbon = next(atom for atom, spot in residue['number'].items() if spot == position)
+    default = next((spot for spot in _free_slots(template, hetero) if spot != 1), None)
+    if len([other for other in adjacency[holder] if other != carbon]) == 0:  # nothing hangs off it
+        if elements[holder] != 'N' or hetero.get(position) == 'N':
+            return position, None
+        return (None if position == default else position), 'N'
+    name = _modification_table()[elements[holder]].get(residue['fragments'][position])
+    if name is None or elements[holder] != 'N':
+        return position, name
+    if position == default:  # written without a number, as in GlcNAc or MurNAc, so the N has to be spelt out
+        return None, 'N' + name
+    return position, name if hetero.get(position) == 'N' else 'N' + name  # a numbered position on a sugar that already has the nitrogen, as in Neu5Ac
+
+
+def _residue_graph(residues: list, # Perceived residues
+                   root: int, # Index of the reducing-end residue
+                   strict: bool # Raise on a group that cannot be named
+                   ) -> nx.DiGraph: # Graph in the same shape glycan_to_nxGraph produces
+    "Build the glycan graph so that glycowork's own writer can put the string together"
+    graph, counter = nx.DiGraph(), [0]
+
+    def add(label):
+        graph.add_node(counter[0], string_labels = label, labels = 0)
+        counter[0] += 1
+        return counter[0] - 1
+
+    def build(index):
+        residue = residues[index]
+        if strict and any(name is None for position, name in residue['mods']):
+            raise GlycanSMILESError(f"unrecognized substituent on '{residue['skeleton']}'")
+        edges = []
+        for child in residue['children']:
+            other, built = residues[child], build(child)  # children first, so that indices grow towards the reducing end
+            edges.append((add(f"{other['anomer']}{other['anomeric']}-{other['parent'][1]}"), built))
+        token = residue['skeleton'] + ''.join(('' if position is None else str(position)) + name
+                                              for position, name in sorted(residue['mods'], key = lambda mod: (mod[0] is not None, mod[0] or 0)) if name)
+        here = add(token)
+        for linkage, child in edges:
+            graph.add_edge(here, linkage)
+            graph.add_edge(linkage, child)
+        return here
+
+    build(root)
+    return graph
+
+
+def smiles_to_iupac(smiles: str, # SMILES string of a glycan
+                    strict: bool = False # Raise on a substituent that cannot be named instead of dropping it
+                    ) -> str: # Glycan in IUPAC-condensed format
+    "Read a glycan's SMILES back into IUPAC-condensed format, the inverse of glycan_to_smiles"
+    atoms, bonds, rings, neighbors = parse_smiles(smiles)
+    adjacency, orders = _adjacency(atoms, bonds), {}
+    for first, second, order in bonds:
+        orders[(first, second)] = orders[(second, first)] = order
+    residues, of_root = [], {}
+    for cycle in _rings_of_atoms(bonds, rings):  # first find every sugar ring and how its carbons are numbered
+        try:
+            key, chirality, number, ring_oxygen, root, anomeric, positions, ring_size = _signature(cycle, atoms, bonds, neighbors, adjacency)
+        except (GlycanSMILESError, StopIteration):
+            continue
+        holders, carbons = _holders(number, set(cycle), root, atoms, adjacency)
+        of_root[root] = len(residues)
+        residues.append({'chirality': chirality, 'number': number, 'ring': set(cycle), 'root': root, 'positions': positions,
+                         'ring_size': ring_size, 'anomeric': number[anomeric], 'holders': holders, 'carbons': carbons,
+                         'mods': [], 'children': []})
+    if not residues:
+        raise GlycanSMILESError('no monosaccharide ring found in this SMILES')
+    for index, residue in enumerate(residues):  # then split the oxygens into glycosidic bonds and substituents
+        residue['links'] = {position: of_root[holder] for position, holder in residue['holders'].items()
+                            if holder in of_root and of_root[holder] != index}
+        for position, child in residue['links'].items():
+            residues[child]['parent'] = (index, position)
+            residue['children'].append(child)
+    for index, residue in enumerate(residues):  # only now is it safe to serialize what hangs off a position
+        residue['fragments'] = _fragments({position: holder for position, holder in residue['holders'].items() if position not in residue['links']},
+                                          atoms, adjacency, orders, residue['carbons'])
+        residue['skeleton'], residue['anomer'], implied, residue['fixed'] = _match_residue(
+            residue['positions'], residue['ring_size'], residue['anomeric'], residue['chirality'], residue['fragments'])
+        residue['mods'] += implied
+        for position in sorted(residue['fragments']):
+            if position not in residue['fixed']:  # a group the skeleton's own name already covers, such as the lactyl of muramic acid
+                residue['mods'].append(_name_modification(residue, position, atoms, adjacency))
+        _link_through_root(residues, index, of_root, atoms, adjacency, orders)
+    for index, residue in enumerate(residues):  # two residues sharing one anomeric oxygen are linked to each other, as in trehalose
+        twin = next((other for other, host in enumerate(residues) if other != index and host['root'] == residue['root']), None)
+        if twin is not None and 'parent' not in residue and 'parent' not in residues[twin] and residue['chirality'] != '':
+            residue['parent'] = (twin, residues[twin]['anomeric'])
+            residues[twin]['children'].append(index)
+    roots = [index for index, residue in enumerate(residues) if 'parent' not in residue]
+    if len(roots) != 1:
+        raise GlycanSMILESError(f'found {len(roots)} reducing ends; this does not look like a single glycan')
+    _check_coverage(residues, atoms, adjacency, orders)
+    return graph_to_string(_residue_graph(residues, roots[0], strict))
+
+
+def _check_coverage(residues: list, # Perceived residues
+                    atoms: list, # Atoms of the molecule
+                    adjacency: dict, # {atom: set of bonded atoms}
+                    orders: dict # {(first, second): bond order}
+                    ) -> None:
+    "Refuse to return a glycan that quietly leaves a sugar-like piece of the molecule out of the name"
+    covered = set()
+    for residue in residues:
+        covered |= set(residue['number']) | residue['ring'] | set(residue['holders'].values()) | {residue['root']}
+        named = any(name for position, name in residue['mods'] if position == residue['anomeric'])
+        for holder in list(residue['holders'].values()) + ([residue['root']] if named else []):
+            _fragment_key(holder, None, atoms, adjacency, orders, covered)
+    elements = [element for element, charge, chirality in atoms]
+    left = [atom for atom in range(len(atoms)) if atom not in covered]
+    sugary = [atom for atom in left if elements[atom] == 'C' and any(elements[other] == 'O' for other in adjacency[atom])]
+    if len(sugary) >= 3:
+        raise GlycanSMILESError('part of this molecule looks like a residue but could not be named; an open-chain sugar perhaps')
+
+
+def _link_through_root(residues: list, # Perceived residues
+                       index: int, # Residue to look at
+                       of_root: dict, # {anomeric oxygen: residue}
+                       atoms: list, # Atoms of the molecule
+                       adjacency: dict, # {atom: set of bonded atoms}
+                       orders: dict # {(first, second): bond order}
+                       ) -> None:
+    "Read what hangs off a residue's own anomeric oxygen: an aglycon, a phosphate, or a phosphodiester to its parent"
+    residue = residues[index]
+    carbon = next(atom for atom, position in residue['number'].items() if position == residue['anomeric'])
+    beyond = [other for other in adjacency[residue['root']] if other != carbon]
+    if not beyond:
+        return
+    elements = [element for element, charge, chirality in atoms]
+    bridge = beyond[0]
+    if elements[bridge] == 'P':  # a phosphodiester: the phosphate belongs to this residue and the bond to its parent
+        for oxygen in adjacency[bridge]:
+            for other in adjacency[oxygen]:
+                if oxygen == residue['root'] or elements[oxygen] != 'O':
+                    continue
+                for parent, host in enumerate(residues):
+                    if parent != index and other in host['number']:
+                        residue['parent'] = (parent, host['number'][other])
+                        host['children'].append(index)
+                        residue['mods'].append((residue['anomeric'], 'P'))
+                        return
+    residue['mods'].append((residue['anomeric'], _modification_table()['O'].get(_fragment_key(residue['root'], carbon, atoms, adjacency, orders, set()))))
+
+
+_IUPAC_LINKAGE = re.compile(r'\([ab?][0-9?]')
+
+
+def looks_like_smiles(text: str # String to classify
+                      ) -> bool: # Whether it reads as SMILES rather than as a glycan sequence
+    "Tell a SMILES string apart from the glycan formats canonicalize_iupac already understands"
+    if not text or _IUPAC_LINKAGE.search(text):
+        return False
+    if '@' in text:  # no other format glycowork reads uses it, so this is SMILES even if it turns out to be malformed
+        return True
+    if '-' in text.replace('[O-]', '').replace('[N+]', ''):
+        return False
+    if not any(character.isdigit() for character in text) or 'O' not in text:
+        return False
+    try:
+        atoms, bonds, rings, neighbors = parse_smiles(text)
+    except GlycanSMILESError:
+        return False
+    return len(atoms) > 4 and bool(rings)

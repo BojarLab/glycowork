@@ -47,7 +47,8 @@ from glycowork.motif.processing import (
     max_specify_glycan, parse_floating_bit, check_nomenclature
 )
 from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, GlycanSMILESError,
-                                    glycan_to_smiles, glycan_to_molecule, _split_token, _anomeric_position)
+                                    glycan_to_smiles, glycan_to_molecule, smiles_to_iupac, looks_like_smiles,
+                                    parse_smiles, _split_token, _anomeric_position)
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
@@ -868,11 +869,34 @@ EDGE        7
 LIN
 1:1o(8+2)2d
 2:2o(8+2)3d""") == "Kdo(a2-8)Kdo(a2-8)Kdo"
+    # Test SMILES, written by other toolkits so that atom order, ring digits and branch order differ from our own writer
+    assert canonicalize_iupac(
+        "O1[C@H](CO)[C@@H](O)[C@H](O)[C@@H](O)[C@H]1O[C@@]2(O[C@@H]([C@@H](O)[C@@H]2O)CO)CO") == "Glc(a1-2)Fruf"  # sucrose
+    assert canonicalize_iupac(
+        "OC[C@H]1O[C@@H](O[C@H]2[C@H](O)[C@@H](O)C(O)O[C@@H]2CO)[C@H](O)[C@@H](O)[C@H]1O") == "Gal(b1-4)Glc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1C(O)O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@@H]1O") == "Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1[C@H](O[C@H]2[C@H](O)[C@@H](NC(C)=O)C(O)O[C@@H]2CO)O[C@H](CO)[C@@H](O)[C@@H]1O") == "GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1[C@H]([C@H](O)[C@H](O)CO)O[C@@](O[C@H]2[C@@H](O)[C@@H](CO)O[C@@H](O[C@H]3[C@H](O)[C@@H](O)C(O)O[C@@H]3CO)[C@@H]2O)(C(=O)O)C[C@@H]1O") == "Neu5Ac(a2-3)Gal(b1-4)Glc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1C(O)O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@@H]1O[C@@H]1O[C@@H](C)[C@@H](O)[C@@H](O)[C@@H]1O") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1[C@H](O[C@H]2[C@H](O)[C@@H](NC(C)=O)C(O)O[C@@H]2CO)O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO[C@H]3O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]3O)[C@@H](O)[C@H](O[C@H]3O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]3O)[C@@H]2O)[C@@H]1O") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "O=C(O)[C@@H]1OC(O)[C@H](OS(=O)(=O)O)[C@@H](O)[C@@H]1O[C@H]1O[C@H](COS(=O)(=O)O)[C@@H](O)[C@H](O)[C@H]1NS(=O)(=O)O") == "GlcNS6S(a1-4)IdoA2S"
+    assert canonicalize_iupac(
+        "O=C(O)C1(O)C[C@@H](O[C@]2(C(=O)O)C[C@@H](O)[C@@H](O)[C@@H]([C@H](O)CO)O2)[C@@H](O)[C@@H]([C@H](O)CO)O1") == "Kdo(a2-4)Kdo"
+    assert canonicalize_iupac(
+        "OC[C@H](O)[C@H]1O[C@H](O[C@H]2[C@H](O)[C@@H](CO)OC(O)[C@@H]2O)[C@@H](O)[C@@H](O)[C@@H]1O") == "LDManHep(a1-3)Glc"
+    assert canonicalize_iupac(
+        "C[C@@H]1OC(O)[C@H](O)[C@H](O)[C@H]1O[C@@H]1O[C@@H]([C@H](O)CO)[C@H](O)[C@H]1O") == "Galf(b1-4)Rha"
+    assert canonicalize_iupac(
+        "O=P(O)(O)OC[C@H]1O[C@H](O[C@@H]2C(O)O[C@H](CO)[C@@H](O)[C@@H]2O)[C@@H](O)[C@@H](O)[C@@H]1O") == "Man6P(a1-2)Man"
     # Test raised errors
-    with pytest.raises(ValueError, match="Mismatching brackets in formatted glycan string"):
+    with pytest.raises(ValueError, match = "Mismatching brackets in formatted glycan string"):
         canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol")
-    with pytest.raises(ValueError, match="Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around."):
-        canonicalize_iupac("O[C@@H]1[C@H](O)[C@@H](O)[C@H](O)[C@@]([H])(CO)O1")
 
 
 KNOWN = [
@@ -1026,6 +1050,45 @@ def test_molecule_graph_is_self_consistent():
         assert len(molecule.bond_monos) == len(molecule.bonds)
         assert all(0 <= f < len(molecule.atoms) and 0 <= s < len(molecule.atoms) for f, s, o in molecule.bonds)
         assert all(0 <= b < len(molecule.bonds) for ring in molecule.rings for b in ring)
+
+
+# reading a SMILES back cannot yet handle an open-chain reducing end, a pyruvate ketal spanning two positions,
+# a wildcard residue, or inositol's all-carbon ring, and it names QuiNAc4NAc by its synonym BacNAc4Ac
+UNREADABLE = ('-ol', 'Pyr', 'Hex', 'Ins', 'QuiNAc4NAc')
+ROUND_TRIP = [glycan for glycan, expected in KNOWN if not any(piece in glycan for piece in UNREADABLE)]
+
+
+@pytest.mark.parametrize('glycan', ROUND_TRIP)
+def test_round_trip(glycan):
+    assert canonicalize_iupac(smiles_to_iupac(glycan_to_smiles(glycan))) == canonicalize_iupac(glycan)
+
+
+def test_round_trip_keeps_every_residue():
+    for glycan in ROUND_TRIP:
+        back = smiles_to_iupac(glycan_to_smiles(glycan))
+        assert back.count('(') == glycan.count('('), glycan
+
+
+def test_refuses_to_drop_a_residue_it_cannot_name():
+    with pytest.raises(GlycanSMILESError):
+        smiles_to_iupac(glycan_to_smiles('Gal(b1-4)Glc-ol'))  # an open-chain reducing end is not perceived yet
+
+
+@pytest.mark.parametrize('text, expected', [
+    ('OC1O[C@H](CO)[C@@H](O)[C@H](O)[C@H]1O', True),
+    ('Gal(b1-4)Glc', False),
+    ('Neu5Ac(a2-3)Gal(b1-4)GlcNAc', False),
+    ('Hex5HexNAc4Fuc1', False),
+    ('WURCS=2.0/2,2,1/[a2122h-1b_1-5]', False),
+    ('', False),
+])
+def test_looks_like_smiles(text, expected):
+    assert looks_like_smiles(text) is expected
+
+
+def test_parse_smiles_refuses_what_it_cannot_read():
+    with pytest.raises(GlycanSMILESError):
+        parse_smiles('Gal(b1-4)Glc')
 
 
 def test_constrain_prot():
@@ -1811,10 +1874,6 @@ def test_bracket_removal():
 
 
 def test_check_nomenclature():
-    # Test SMILES format (should print warning)
-    with pytest.raises(ValueError) as exc_info:
-        check_nomenclature("C@C(=O)NC1C(O)OC(CO)C(O)C1O")
-    assert "can only convert IUPAC-->SMILES" in str(exc_info.value)
     # Test non-string input
     with pytest.raises(TypeError) as exc_info:
         check_nomenclature(123)

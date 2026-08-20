@@ -9,10 +9,10 @@
 - Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw` (4894d1b)
 - `glycoworkGUI` is updated, making it more robust (628ee17)
 - Added more informative error messages throughout the package (105f416)
-- `glyles` is no longer a dependency of the `glycowork[chem]` optional install, while `rdkit>=2021.9.2` still is (now explicitly) (2caae7a, )
+- `glyles` is no longer a dependency of the `glycowork[chem]` optional install, while `rdkit>=2021.9.2` still is (now explicitly) (2caae7a, 3f4d7c5)
 - Most operations in `glycowork` are now more performant (2caae7a)
 - Package start-up times have been greatly improved (2caae7a)
-- The new `glycowork.motif.smiles` module has been added, to convert glycan sequences to canonical SMILES strings (100x as fast as before and with 30% more coverage over `df_glycan`) ()
+- The new `glycowork.motif.smiles` module has been added, to convert glycan sequences to canonical SMILES strings (100x as fast as before and with 30% more coverage over `df_glycan`) (3f4d7c5)
 
 ### glycan_data
 #### loader
@@ -104,6 +104,7 @@
 - `UND` tokens in `GlycoCT` inputs are now better supported in `canonicalize_iupac` (4894d1b)
 - `canonicalize_iupac` can now correctly process composition-like `GlycoCT` and `WURCS` entries (i.e., no topology) (d132d2f)
 - Improved conversion handling of `GlycoCT`, `WURCS`, and `GlycoWorkbench` via `canonicalize_iupac` (d41806a, d7f31a5, 7cfb5ea)
+- `canonicalize_iupac` now supports conversion of SMILES into IUPAC-condensed ()
 
 ##### Fixed 🐛
 - Fixed `canonicalize_iupac` messing up narrow modification wildcards (e.g., `Gal3/6S`) in side branches (3a02eff)
@@ -133,7 +134,7 @@
 
 ##### Deprecated ⚠️
 - Removed the `show_linkage` keyword argument in `get_coordinates_and_labels` (it was dead and handled within `GlycoDraw`) (f5ba41f)
-- `get_hit_atoms_and_bonds` has been replaced by the new `get_mono_atoms` and `color_by_mono` functions ()
+- `get_hit_atoms_and_bonds` has been replaced by the new `get_mono_atoms` and `color_by_mono` functions (3f4d7c5)
 
 #### graph
 ##### Changed 🔄
@@ -208,7 +209,7 @@
 - Made sure `check_conservation` no longer crashes if a rank has no matching network (78fe195)
 
 ### ml
-- Using the `GIFFLAR` model no longer requires the `glycowork[all]` optional install, as all chemistry-related operations have been internalized ()
+- Using the `GIFFLAR` model no longer requires the `glycowork[all]` optional install, as all chemistry-related operations have been internalized (3f4d7c5)
 
 #### model_training
 ##### Fixed 🐛
@@ -220,4 +221,4 @@
 
 #### processing
 ##### Deprecated ⚠️
-- Deprecated `nx2mol` and `clean_tree`; will all be handled by `iupac2mol` now ()
+- Deprecated `nx2mol` and `clean_tree`; will all be handled by `iupac2mol` now (3f4d7c5)

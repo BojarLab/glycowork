@@ -1154,9 +1154,6 @@ def check_nomenclature(glycan: str # Glycan string to check
     "Check whether glycan has correct nomenclature for glycowork"
     if not isinstance(glycan, str):
         raise TypeError("Glycan sequences must be formatted as strings")
-    if '@' in glycan:
-        raise ValueError(
-            "Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around.")
     if re.search(r'[\^|]', re.sub(r'\{[^{}]*\}', '', glycan)):
         raise ValueError(
             "'^' and '|' are only meaningful inside floating bits, e.g., {Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}")
@@ -1253,7 +1250,7 @@ def _sort_mono_mods(m):
 @lru_cache(maxsize = None)
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                        ) -> str: # Standardized IUPAC-condensed format
-    "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, KCF, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
+    "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, KCF, SMILES, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
     if isinstance(glycan, int):
         glycan = str(glycan)
         glycan = GLYCONNECT_TO_GLYTOUCAN.get(glycan, glycan)
@@ -1272,6 +1269,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     if mapped_glycan:
         return glycan
     mapped_glycan = GLYCAN_MAPPINGS.get(glycan.lower())
+    from glycowork.motif.smiles import smiles_to_iupac, looks_like_smiles
     if mapped_glycan and not (glycan[-1] in 'ab' and glycan[
         :-1] in lib):  # 'Gala' is Gal with an a-anomer, not the alpha-Gal epitope 'gala'
         return mapped_glycan
@@ -1297,8 +1295,6 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = glycoworkbench_to_iupac(glycan)
     elif bool(re.fullmatch(r'^[UDGIg][02][AaSH](0|3|4|6|9|10)$', glycan)):
         glycan = GAG_disaccharide_to_iupac(glycan)
-    elif '@' in glycan:
-        check_nomenclature(glycan)
     elif "(Man)3(GlcNAc)2" in glycan:
         glycan = nglycan_stub_to_iupac(glycan)
     elif looks_like_linearcode(glycan):
@@ -1307,6 +1303,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = oxford_to_iupac(glycan)
     elif glycan.startswith('<?xml') or '<sugar' in glycan:
         glycan = glycoctxml_to_iupac(glycan)
+    elif looks_like_smiles(glycan):  # SMILES hook
+        glycan = smiles_to_iupac(glycan)
     # Canonicalize usage of monosaccharides and linkages
     # Anomeric indicator placed before parentheses
     if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
