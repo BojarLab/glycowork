@@ -1175,29 +1175,36 @@ chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
                    '#C23537']                           # red
 
 
-def get_hit_atoms_and_bonds(
+def get_mono_atoms(
+        draw_this: str, # IUPAC-condensed glycan sequence
+        mono_list: list[str] # List of monosaccharides to highlight
+) -> tuple[str, dict[int, int]]: # (SMILES, {atom index: index into mono_list})
+    "Maps every atom of a glycan's SMILES onto the monosaccharide it was built from"
+    from glycowork.motif.smiles import glycan_to_smiles
+    smiles, owners = glycan_to_smiles(draw_this, mapping = True)
+    graph = glycan_to_nxGraph(draw_this)
+    cores = {node: get_core(graph.nodes[node]['string_labels']) for node in set(owners)}
+    return smiles, {atom: mono_list.index(cores[owner]) for atom, owner in enumerate(owners) if cores[owner] in mono_list}
+
+
+def color_by_mono(
         mol: Any, # RDKit molecule object
-        smt: str # SMARTS pattern string
-) -> tuple[list[int], list[int]]: # (matching atom indices, matching bond indices)
-    "Identifies atoms and bonds matching SMARTS pattern in molecule"
-    # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
-    try:
-        from rdkit.Chem import MolFromSmarts
-    except ImportError:
-        raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
-    bonds = []
-    q = MolFromSmarts(smt)
-    atoms = [atom for match in mol.GetSubstructMatches(q, useChirality = True) for atom in match]
-    for ha1 in atoms:
-        for ha2 in atoms:
-            if ha1 > ha2:
-                b = mol.GetBondBetweenAtoms(ha1, ha2)
-                if b:
-                    bonds.append(b.GetIdx())
-    return atoms, bonds
+        atom_monos: dict[int, int], # {atom index: index into mono_list}
+        atom_colors: dict[int, list], # Color map to fill for atoms
+        bond_colors: dict[int, list], # Color map to fill for bonds
+        alpha: bool = True, # Use alpha-adjusted colors
+        hex_codes: bool = True # Return hex color codes
+) -> None:
+    "Colours every atom by the monosaccharide it came from, and every bond whose two atoms agree"
+    for atom, i in atom_monos.items():
+        add_colors_to_map([atom], atom_colors, i, alpha = alpha, hex_codes = hex_codes)
+    for bond in mol.GetBonds():
+        begin, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+        if atom_monos.get(begin, -1) == atom_monos.get(end, -2):
+            add_colors_to_map([bond.GetIdx()], bond_colors, atom_monos[begin], alpha = alpha, hex_codes = hex_codes)
 
 
-def add_colours_to_map(
+def add_colors_to_map(
         els: list[int], # Element indices
         cols: dict[int, list], # Color map dictionary
         col_num: int, # Color index
@@ -1221,22 +1228,18 @@ def draw_chem2d(
     "Creates 2D chemical structure drawing with highlighted monosaccharides using RDKit"
     # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py
     try:
-        from glycowork.motif.processing import IUPAC_to_SMILES
         from rdkit.Chem import MolFromSmiles
         from rdkit.Chem.Draw import PrepareMolForDrawing
         from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
         from IPython.display import SVG
     except ImportError:
-        raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
-    mol = MolFromSmiles(IUPAC_to_SMILES([draw_this])[0])
-    mol = PrepareMolForDrawing(mol)
+        raise ImportError(
+            "You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
+    smiles, atom_monos = get_mono_atoms(draw_this, mono_list)
+    mol = PrepareMolForDrawing(
+        MolFromSmiles(smiles))  # only appends hydrogens, so the heavy-atom indices of atom_monos still hold
     atom_colors, bond_colors = {}, {}
-    for i, smarts in enumerate(IUPAC_to_SMILES(mono_list)):
-        atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
-        add_colours_to_map(atoms, atom_colors, i, hex_codes = False)
-        add_colours_to_map(bonds, bond_colors, i, hex_codes = False)
-    atom_colors = {k: v for k, v in atom_colors.items() if len(v) == 1}
-    bond_colors = {k: [v[0]] for k, v in bond_colors.items() if len(v) == 1}
+    color_by_mono(mol, atom_monos, atom_colors, bond_colors, hex_codes = False)
     d = MolDraw2DSVG(250, 250)
     d.drawOptions().fillHighlights = True
     d.drawOptions().useBWAtomPalette()
@@ -1265,7 +1268,6 @@ def draw_chem3d(
     "Generates 3D chemical structure model with highlighted monosaccharides using RDKit and py3Dmol"
     # Adapted from https://github.com/rdkit/rdkit/blob/master/Docs/Book/data/test_multi_colours.py and https://github.com/rdkit/rdkit/blob/master/Docs/Book/GettingStartedInPython.rst
     try:
-        from glycowork.motif.processing import IUPAC_to_SMILES
         from rdkit.Chem import MolFromSmiles, AddHs, RemoveHs, MolToPDBFile, MolFromPDBFile
         from rdkit.Chem.AllChem import EmbedMolecule, MMFFOptimizeMolecule
         if is_jupyter():
@@ -1276,8 +1278,8 @@ def draw_chem3d(
             from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
     except ImportError:
         raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
-    smiles_mol = MolFromSmiles(IUPAC_to_SMILES([draw_this])[0])
-    mono_smarts = IUPAC_to_SMILES(mono_list)
+    smiles, atom_monos = get_mono_atoms(draw_this, mono_list)
+    smiles_mol = MolFromSmiles(smiles)
     from_pdb = False
     if pdb_file:
         mol = MolFromPDBFile(str(pdb_file))
@@ -1310,7 +1312,7 @@ def draw_chem3d(
             for atom_idx, mono_name in atom_monos.items():
                 for i, mono in enumerate(mono_list):
                     if mono_name == mono:
-                        add_colours_to_map([atom_idx], atom_colors, i, alpha = False)
+                        add_colors_to_map([atom_idx], atom_colors, i, alpha = False)
                         break
         except Exception:
             pass
@@ -1323,10 +1325,7 @@ def draw_chem3d(
                         atom_colors[atom.GetIdx()] = atom_colors[neighbor.GetIdx()]
                         break
     else:
-        for i, smarts in enumerate(mono_smarts):
-            atoms, bonds = get_hit_atoms_and_bonds(mol, smarts)
-            add_colours_to_map(atoms, atom_colors, i, alpha = False)
-            add_colours_to_map(bonds, bond_colors, i, alpha = False)
+        color_by_mono(mol, atom_monos, atom_colors, bond_colors, alpha = False)
     atom_colors = {k: ['#ECECEC'] if len(v) > 1 else v for k, v in atom_colors.items()}
     if filepath:
         filepath = Path(filepath)

@@ -46,7 +46,7 @@ Issues = "https://github.com/BojarLab/glycowork/issues"
 
 [project.optional-dependencies]
 ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0"]
-chem = ["glyles~=1.2.3a0", "pubchempy", "requests", "py3Dmol"]
+chem = ["rdkit>=2021.9.2", "pubchempy", "requests", "py3Dmol"]
 all = ["glycowork[ml,chem]"]
 dev = ["glycowork[all]", "nbdev", "pytest", "glycontact>=0.3.3"]
 

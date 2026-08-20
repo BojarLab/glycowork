@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import seaborn as sns
-import sys, os
+import sys, os, re
 import shutil
 import torch
 import torch.nn as nn
@@ -46,6 +46,8 @@ from glycowork.motif.processing import (
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
     max_specify_glycan, parse_floating_bit, check_nomenclature
 )
+from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, GlycanSMILESError,
+                                    glycan_to_smiles, glycan_to_molecule, _split_token, _anomeric_position)
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
     reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
@@ -86,7 +88,7 @@ from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
                   filter_matches_by_location, parse_pattern, compile_pattern
 )
 from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, col_dict_base,
-                 get_hit_atoms_and_bonds, add_colours_to_map, is_jupyter, draw_bracket,
+                 add_colors_to_map, is_jupyter, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
                  draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, resolve_motif_name, _spread_glycans
 )
@@ -220,55 +222,53 @@ GLYCAN_TEST_CASES = [
 
 
 def test_torch_import_error():
-  # Store original module states
-  original_processing = sys.modules.get('glycowork.ml.processing')
-  original_models = sys.modules.get('glycowork.ml.models')
-  original_inference = sys.modules.get('glycowork.ml.inference')
-  original_model_training = sys.modules.get('glycowork.ml.model_training')
-  try:
-    # Remove modules if they exist
-    if 'glycowork.ml.processing' in sys.modules:
-      del sys.modules['glycowork.ml.processing']
-    if 'glycowork.ml.models' in sys.modules:
-      del sys.modules['glycowork.ml.models']
-    if 'glycowork.ml.inference' in sys.modules:
-      del sys.modules['glycowork.ml.inference']
-    if 'glycowork.ml.model_training' in sys.modules:
-      del sys.modules['glycowork.ml.model_training']
-    # Patch the imports to fail
-    with patch.dict('sys.modules', {'torch': None, 'torch_geometric': None, 'torch_geometric.loader': None, 'torch_geometric.utils': None, 'torch_geometric.utils.convert': None}):
-      with pytest.raises(ImportError, match="torch or torch_geometric missing"):
-        importlib.import_module('glycowork.ml.processing')
-      with pytest.raises(ImportError, match="torch or torch_geometric missing"):
-        importlib.import_module('glycowork.ml.models')
-      with pytest.raises(ImportError, match="torch missing;"):
-        importlib.import_module('glycowork.ml.inference')
-      with pytest.raises(ImportError, match="torch missing;"):
-        importlib.import_module('glycowork.ml.model_training')
-    with patch.dict('sys.modules', {'glyles': None, 'rdkit': None}):
-        processing = importlib.import_module('glycowork.ml.processing')
-        with pytest.raises(ImportError, match = "rdkit or glyles missing"):
-            processing.iupac2mol("Gal(b1-4)Glc")
-        with pytest.raises(ImportError, match = "rdkit or glyles missing"):
-            processing.nx2mol(nx.Graph())
-  finally:
-    # Restore original states
-    if original_processing is not None:
-      sys.modules['glycowork.ml.processing'] = original_processing
-    elif 'glycowork.ml.processing' in sys.modules:
-      del sys.modules['glycowork.ml.processing']
-    if original_models is not None:
-      sys.modules['glycowork.ml.models'] = original_models
-    elif 'glycowork.ml.models' in sys.modules:
-      del sys.modules['glycowork.ml.models']
-    if original_inference is not None:
-      sys.modules['glycowork.ml.inference'] = original_inference
-    elif 'glycowork.ml.inference' in sys.modules:
-      del sys.modules['glycowork.ml.inference']
-    if original_model_training is not None:
-      sys.modules['glycowork.ml.model_training'] = original_model_training
-    elif 'glycowork.ml.model_training' in sys.modules:
-      del sys.modules['glycowork.ml.model_training']
+    # Store original module states
+    original_processing = sys.modules.get('glycowork.ml.processing')
+    original_models = sys.modules.get('glycowork.ml.models')
+    original_inference = sys.modules.get('glycowork.ml.inference')
+    original_model_training = sys.modules.get('glycowork.ml.model_training')
+    try:
+        # Remove modules if they exist
+        if 'glycowork.ml.processing' in sys.modules:
+            del sys.modules['glycowork.ml.processing']
+        if 'glycowork.ml.models' in sys.modules:
+            del sys.modules['glycowork.ml.models']
+        if 'glycowork.ml.inference' in sys.modules:
+            del sys.modules['glycowork.ml.inference']
+        if 'glycowork.ml.model_training' in sys.modules:
+            del sys.modules['glycowork.ml.model_training']
+        # Patch the imports to fail
+        with patch.dict('sys.modules', {'torch': None, 'torch_geometric': None, 'torch_geometric.loader': None, 'torch_geometric.utils': None, 'torch_geometric.utils.convert': None}):
+            with pytest.raises(ImportError, match="torch or torch_geometric missing"):
+                importlib.import_module('glycowork.ml.processing')
+            with pytest.raises(ImportError, match="torch or torch_geometric missing"):
+                importlib.import_module('glycowork.ml.models')
+            with pytest.raises(ImportError, match="torch missing;"):
+                importlib.import_module('glycowork.ml.inference')
+            with pytest.raises(ImportError, match="torch missing;"):
+                importlib.import_module('glycowork.ml.model_training')
+        with patch.dict('sys.modules', {'glyles': None, 'rdkit': None}):
+            processing = importlib.import_module('glycowork.ml.processing')
+            data = processing.iupac2mol("Gal(b1-4)Glc")  # neither is needed any more
+            assert data.smiles and len(data["tree"].nodes) == 2
+    finally:
+        # Restore original states
+        if original_processing is not None:
+            sys.modules['glycowork.ml.processing'] = original_processing
+        elif 'glycowork.ml.processing' in sys.modules:
+            del sys.modules['glycowork.ml.processing']
+        if original_models is not None:
+            sys.modules['glycowork.ml.models'] = original_models
+        elif 'glycowork.ml.models' in sys.modules:
+            del sys.modules['glycowork.ml.models']
+        if original_inference is not None:
+            sys.modules['glycowork.ml.inference'] = original_inference
+        elif 'glycowork.ml.inference' in sys.modules:
+            del sys.modules['glycowork.ml.inference']
+        if original_model_training is not None:
+            sys.modules['glycowork.ml.model_training'] = original_model_training
+        elif 'glycowork.ml.model_training' in sys.modules:
+            del sys.modules['glycowork.ml.model_training']
 
 
 @pytest.mark.parametrize("glycan", GLYCAN_TEST_CASES)
@@ -873,6 +873,159 @@ LIN
         canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol")
     with pytest.raises(ValueError, match="Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around."):
         canonicalize_iupac("O[C@@H]1[C@H](O)[C@@H](O)[C@H](O)[C@@]([H])(CO)O1")
+
+
+KNOWN = [
+    ('Gal(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('GlcNAc(b1-4)GlcNAc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@H]2NC(C)=O)[C@H](O)[C@H]1NC(C)=O'),
+    ('Neu5Ac(a2-3)Gal(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O[C@]3(C(=O)O)C[C@H](O)[C@@H](NC(C)=O)[C@H]([C@H](O)[C@H](O)CO)O3)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('Neu5Gc(a2-6)GalNAc', 'OC1O[C@H](CO[C@]2(C(=O)O)C[C@H](O)[C@@H](NC(=O)CO)[C@H]([C@H](O)[C@H](O)CO)O2)[C@H](O)[C@H](O)[C@H]1NC(C)=O'),
+    ('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@@H](O[C@@H]3O[C@H](CO[C@H]4O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]4O)[C@@H](O)[C@H](O[C@H]4O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]4O)[C@@H]3O)[C@H](O)[C@H]2NC(C)=O)[C@H](O)[C@H]1NC(C)=O'),
+    ('Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-3)Gal(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O[C@@H]3O[C@H](CO)[C@@H](O[C@@H]4O[C@H](CO)[C@H](O)[C@H](O[C@]5(C(=O)O)C[C@H](O)[C@@H](NC(C)=O)[C@H]([C@H](O)[C@H](O)CO)O5)[C@H]4O)[C@H](O[C@@H]4O[C@@H](C)[C@@H](O)[C@@H](O)[C@@H]4O)[C@H]3NC(C)=O)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('Fuc(a1-2)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O)[C@H]1O[C@@H]2O[C@@H](C)[C@@H](O)[C@@H](O)[C@@H]2O'),
+    ('GlcA(b1-3)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O[C@@H]2O[C@H](C(=O)O)[C@@H](O)[C@H](O)[C@H]2O)[C@H]1O'),
+    ('IdoA2S(a1-4)GlcNS6S', 'OC1O[C@H](COS(=O)(=O)O)[C@@H](O[C@@H]2O[C@@H](C(=O)O)[C@@H](O)[C@H](O)[C@H]2OS(=O)(=O)O)[C@H](O)[C@H]1NS(=O)(=O)O'),
+    ('Gal6S(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](COS(=O)(=O)O)[C@H](O)[C@H](O)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('GlcNAc6S(b1-4)GlcA', 'OC1O[C@H](C(=O)O)[C@@H](O[C@@H]2O[C@H](COS(=O)(=O)O)[C@@H](O)[C@H](O)[C@H]2NC(C)=O)[C@H](O)[C@H]1O'),
+    ('Kdo(a2-4)Kdo', 'OC1(C(=O)O)C[C@@H](O[C@]2(C(=O)O)C[C@@H](O)[C@@H](O)[C@@H]([C@H](O)CO)O2)[C@@H](O)[C@@H]([C@H](O)CO)O1'),
+    ('LDManHep(a1-3)Glc', 'OC1O[C@H](CO)[C@@H](O)[C@H](O[C@H]2O[C@H]([C@@H](O)CO)[C@@H](O)[C@H](O)[C@@H]2O)[C@H]1O'),
+    ('DDManHep(a1-5)Kdo', 'OC1(C(=O)O)C[C@@H](O)[C@@H](O[C@H]2O[C@H]([C@H](O)CO)[C@@H](O)[C@H](O)[C@@H]2O)[C@@H]([C@H](O)CO)O1'),
+    ('Galf(b1-4)Rha', 'OC1O[C@@H](C)[C@H](O[C@@H]2O[C@@H]([C@H](O)CO)[C@H](O)[C@H]2O)[C@@H](O)[C@H]1O'),
+    ('Fruf(b2-1)Glc', 'O([C@]2(CO)O[C@H](CO)[C@@H](O)[C@@H]2O)C1O[C@H](CO)[C@@H](O)[C@H](O)[C@H]1O'),
+    ('Glc(a1-1)Glc', 'O([C@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@H]2O)C1O[C@H](CO)[C@@H](O)[C@H](O)[C@H]1O'),
+    ('Man1P(a1-6)Man', 'OC1O[C@H](COP(=O)(O)O[C@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]2O)[C@@H](O)[C@H](O)[C@@H]1O'),
+    ('Ins', 'O[C@@H]1[C@H](O)[C@H](O)[C@@H](O)[C@H](O)[C@H]1O'),
+    ('GlcN(a1-6)Ins', 'O[C@@H]1[C@H](O)[C@H](O)[C@@H](O)[C@H](O)[C@H]1O[C@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@H]2N'),
+    ('Glc-ol', 'OC[C@H](O)[C@@H](O)[C@H](O)[C@H](O)CO'),
+    ('Gal(b1-4)Glc-ol', 'OC[C@H](O)[C@@H](O)[C@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@H](O)CO'),
+    ('Pse5Ac7Ac(a2-6)GlcNAc', 'OC1O[C@H](CO[C@]2(C(=O)O)C[C@H](O)[C@H](NC(C)=O)[C@H]([C@@H](NC(C)=O)[C@@H](O)C)O2)[C@@H](O)[C@H](O)[C@H]1NC(C)=O'),
+    ('QuiNAc4NAc(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](C)[C@@H](NC(C)=O)[C@H](O)[C@H]2NC(C)=O)[C@H](O)[C@H]1O'),
+    ('Tyv(a1-3)Man', 'OC1O[C@H](CO)[C@@H](O)[C@H](O[C@H]2O[C@H](C)[C@@H](O)C[C@@H]2O)[C@@H]1O'),
+    ('D-Fuc(a1-2)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O)[C@H]1O[C@H]2O[C@H](C)[C@H](O)[C@H](O)[C@H]2O'),
+    ('Xyl(b1-4)Hex', 'OC1OC(CO)C(O[C@@H]2OC[C@@H](O)[C@H](O)[C@H]2O)C(O)C1O'),
+    ('Gal4Pyr6Pyr(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO%52)[C@H](OC%52(C)C(=O)O)[C@H](O)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('ManNAcA(b1-4)GlcNAc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](C(=O)O)[C@@H](O)[C@H](O)[C@@H]2NC(C)=O)[C@H](O)[C@H]1NC(C)=O'),
+    ('Neu5Ac(a2-8)Neu5Ac(a2-3)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O[C@]2(C(=O)O)C[C@H](O)[C@@H](NC(C)=O)[C@H]([C@H](O)[C@H](O[C@]3(C(=O)O)C[C@H](O)[C@@H](NC(C)=O)[C@H]([C@H](O)[C@H](O)CO)O3)CO)O2)[C@H]1O'),
+]
+IP3 = '[C@H]1([C@@H]([C@H]([C@@H]([C@H]([C@@H]1OP(=O)(O)O)O)OP(=O)(O)O)OP(=O)(O)O)O)O'  # 1D-myo-inositol 1,4,5-trisphosphate
+
+
+@pytest.mark.parametrize('glycan, expected', KNOWN)
+def test_known_structures(glycan, expected):
+    assert glycan_to_smiles(glycan) == expected
+
+
+@pytest.mark.parametrize('glycan, expected', KNOWN)
+def test_known_structures_parse(glycan, expected):
+    Chem = pytest.importorskip('rdkit.Chem')
+    assert Chem.MolFromSmiles(expected) is not None
+
+
+def test_templates_are_well_formed():
+    for name, (template, tag, hetero) in SKELETONS.items():
+        assert tag in ('', '@'), name
+        assert template.count('{r}') in (0, 2), name
+        assert set(int(p) for p in re.findall(r'\{p(\d)\}', template)) == set(hetero), name
+        assert template.count('(') == template.count(')'), name
+    for name, (template, hetero) in ALDITOLS.items():
+        assert '{r}' not in template and '{a}' not in template, name
+        assert set(int(p) for p in re.findall(r'\{p(\d)\}', template)) == set(hetero), name
+    for name in ENANTIOMER:
+        assert name in SKELETONS, name
+
+
+def test_every_skeleton_builds():
+    Chem = pytest.importorskip('rdkit.Chem')
+    for name in SKELETONS:
+        donor = _anomeric_position(name)
+        for anomer in ('a', 'b', '?') if donor else ('?',):
+            smiles = glycan_to_smiles(name) if anomer == '?' else glycan_to_smiles(f'{name}({anomer}{donor}-4)Glc')
+            assert Chem.MolFromSmiles(smiles) is not None, (name, anomer)
+    for name in ALDITOLS:
+        assert Chem.MolFromSmiles(glycan_to_smiles(f'{name}-ol')) is not None, name
+
+
+def test_every_substituent_builds():
+    Chem = pytest.importorskip('rdkit.Chem')
+    for name, (on_oxygen, on_nitrogen) in SUBSTITUENTS.items():
+        if on_oxygen:
+            assert Chem.MolFromSmiles(glycan_to_smiles(f'Gal6{name}' if name[0] != 'N' else f'Gal2{name}')) is not None, name
+        if on_nitrogen:
+            assert Chem.MolFromSmiles(glycan_to_smiles(f'GlcN2{name}')) is not None, name
+
+
+def test_anomers_differ_only_in_the_anomeric_centre():
+    for name, (template, tag, _) in SKELETONS.items():
+        alpha, beta = template.replace('{a}', tag), template.replace('{a}', '@' if tag == '' else '')
+        assert alpha.replace('@@', '@') == beta.replace('@@', '@'), name
+
+
+def test_inositol_is_1D_myo():
+    Chem = pytest.importorskip('rdkit.Chem')
+    assert Chem.CanonSmiles(glycan_to_smiles('Ins1P4P5P')) == Chem.CanonSmiles(IP3)
+
+
+def test_enantiomer_prefix_mirrors():
+    Chem = pytest.importorskip('rdkit.Chem')
+    mirrored = Chem.CanonSmiles(glycan_to_smiles('D-Fuc(a1-2)Gal').replace('@@', '\x00').replace('@', '@@').replace('\x00', '@'))
+    assert mirrored == Chem.CanonSmiles(glycan_to_smiles('Fuc(a1-2)L-Gal'))
+
+
+def test_atom_mapping_covers_every_atom():
+    Chem = pytest.importorskip('rdkit.Chem')
+    smiles, atoms = glycan_to_smiles('Neu5Ac(a2-3)Gal(b1-4)Glc', mapping = True)
+    assert len(atoms) == Chem.MolFromSmiles(smiles).GetNumAtoms()
+    assert sorted(Counter(atoms).values()) == [11, 11, 21]  # Glc, Gal, Neu5Ac
+
+
+def test_token_splitting():
+    assert _split_token('GlcNAc6S') == ('Glc', [(None, 'NAc'), (6, 'S')], '', False)
+    assert _split_token('LDManHepOPEtN') == ('LDManHep', [(None, 'OPEtN')], '', False)
+    assert _split_token('D-Fuc') == ('Fuc', [], 'D', False)
+    assert _split_token('GlcNAc-ol') == ('Glc', [(None, 'NAc')], '', True)
+    assert _anomeric_position('Neu5Ac') == 2 and _anomeric_position('Glc') == 1 and _anomeric_position('Glc-ol') is None
+
+
+@pytest.mark.parametrize('glycan, message', [
+    ('Sia(a2-3)Gal', 'wildcard'),
+    ('Nonsense(b1-4)Glc', 'no skeleton'),
+    ('Gal(b1-6)Man6P', 'no free position'),
+    ('Fru(b1-4)Glc', 'anomeric carbon'),
+    ('{Fuc(a1-?)}Gal(b1-4)Glc', 'disconnected'),
+])
+def test_refuses_what_it_cannot_build(glycan, message):
+    with pytest.raises(GlycanSMILESError) as error:
+        glycan_to_smiles(glycan)
+    assert message in str(error.value)
+
+
+def test_strict_refuses_to_guess_a_position():
+    assert glycan_to_smiles('Gal(b1-?)Glc')
+    with pytest.raises(GlycanSMILESError):
+        glycan_to_smiles('Gal(b1-?)Glc', strict = True)
+
+
+def test_molecule_graph_matches_rdkit():
+    Chem = pytest.importorskip('rdkit.Chem')
+    for glycan, expected in KNOWN:
+        molecule = glycan_to_molecule(glycan)
+        mol = Chem.MolFromSmiles(molecule.smiles)
+        assert [a[0] for a in molecule.atoms] == [a.GetSymbol() for a in mol.GetAtoms()], glycan
+        assert {frozenset((f, s)): o for f, s, o in molecule.bonds} == {
+            frozenset((b.GetBeginAtomIdx(), b.GetEndAtomIdx())): int(b.GetBondTypeAsDouble()) for b in mol.GetBonds()}, glycan
+        mine = {frozenset(frozenset(molecule.bonds[b][:2]) for b in ring) for ring in molecule.rings}
+        theirs = {frozenset(frozenset((mol.GetBondWithIdx(b).GetBeginAtomIdx(), mol.GetBondWithIdx(b).GetEndAtomIdx())) for b in r)
+                  for r in mol.GetRingInfo().BondRings()}
+        assert mine == theirs, glycan
+
+
+def test_molecule_graph_is_self_consistent():
+    for glycan, expected in KNOWN:
+        molecule = glycan_to_molecule(glycan)
+        assert len(molecule.atom_monos) == len(molecule.atoms)
+        assert len(molecule.bond_monos) == len(molecule.bonds)
+        assert all(0 <= f < len(molecule.atoms) and 0 <= s < len(molecule.atoms) for f, s, o in molecule.bonds)
+        assert all(0 <= b < len(molecule.bonds) for ring in molecule.rings for b in ring)
 
 
 def test_constrain_prot():
@@ -1671,39 +1824,24 @@ def test_check_nomenclature():
 
 
 def test_IUPAC_to_SMILES():
-    try:
-        # Test basic conversion
-        glycans = ["Gal(b1-4)GlcNAc"]
-        smiles = IUPAC_to_SMILES(glycans)
-        assert isinstance(smiles, list)
-        assert len(smiles) == 1
-        assert all('@' in s for s in smiles)  # SMILES should contain stereochemistry
-        # Test multiple glycans
-        glycans = ["Gal(b1-4)GlcNAc", "Man(a1-3)Man"]
-        smiles = IUPAC_to_SMILES(glycans)
-        assert len(smiles) == 2
-        smiles = iupac_to_smiles(glycans)
-        # Test string input type
-        smiles = IUPAC_to_SMILES("Gal(b1-4)GlcNAc")
-        smiles = iupac_to_smiles("F(3)XA2")
-        assert '@' in smiles[0]
-    except ImportError:
-        pytest.skip("glyles package not installed")
-    # Mock ImportError for chem dependencies
-    import builtins
-    original_import = builtins.__import__
-
-    def mock_import(name, *args, **kwargs):
-        if name == 'glyles':
-            raise ImportError()
-        return original_import(name, *args, **kwargs)
-
-    try:
-        builtins.__import__ = mock_import
-        with pytest.raises(ImportError, match=r"You must install the 'chem' dependencies to use this feature\. Try 'pip install glycowork\[chem\]'\."):
-            IUPAC_to_SMILES(["Gal(b1-4)GlcNAc"])
-    finally:
-        builtins.__import__ = original_import
+    # Test basic conversion
+    glycans = ["Gal(b1-4)GlcNAc"]
+    smiles = IUPAC_to_SMILES(glycans)
+    assert isinstance(smiles, list)
+    assert len(smiles) == 1
+    assert all('@' in s for s in smiles)  # SMILES should contain stereochemistry
+    # Test multiple glycans
+    glycans = ["Gal(b1-4)GlcNAc", "Man(a1-3)Man"]
+    smiles = IUPAC_to_SMILES(glycans)
+    assert len(smiles) == 2
+    smiles = iupac_to_smiles(glycans)
+    # Test string input type
+    smiles = IUPAC_to_SMILES("Gal(b1-4)GlcNAc")
+    # Test a non-IUPAC format, which only converts after canonicalization
+    smiles = iupac_to_smiles("F(3)XA2")
+    assert '@' in smiles[0]
+    # Anything without a defined structure comes back empty rather than raising
+    assert IUPAC_to_SMILES(["HexNAc(b1-4)Sia"]) == ['']
 
 
 def test_max_specify_glycan():
@@ -3781,20 +3919,11 @@ except ImportError:
 
 
 @pytest.mark.skipif(not RDKIT_AVAILABLE, reason="RDKit not installed")
-def test_get_hit_atoms_and_bonds():
-    # Create a simple molecule
-    mol = Chem.MolFromSmiles("CC(=O)O")
-    atoms, bonds = get_hit_atoms_and_bonds(mol, "CC(=O)O")
-    assert isinstance(atoms, list)
-    assert isinstance(bonds, list)
-
-
-@pytest.mark.skipif(not RDKIT_AVAILABLE, reason="RDKit not installed")
-def test_add_colours_to_map():
+def test_add_colors_to_map():
     # Test color assignment
     cols = {}
     els = [1, 2, 3]
-    add_colours_to_map(els, cols, 0, alpha=True)
+    add_colors_to_map(els, cols, 0, alpha=True)
     assert len(cols) == 3
     assert all(isinstance(v, list) for v in cols.values())
 

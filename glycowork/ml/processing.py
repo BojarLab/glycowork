@@ -1,9 +1,7 @@
 import networkx as nx
 from copy import deepcopy
 from random import getrandbits, random
-from typing import Any, TYPE_CHECKING
-if TYPE_CHECKING:
-    from rdkit import Chem
+from typing import Any
 from glycowork.motif.graph import glycan_to_nxGraph
 from glycowork.motif.tokenization import map_to_basic
 from glycowork.motif.processing import de_wildcard_glycoletter
@@ -17,10 +15,8 @@ try:
     from torch_geometric.transforms.base_transform import BaseTransform
 except ImportError:
     raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
-_MISSING = "<rdkit or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>"
-
-atom_map = {6: 1, 7: 2, 8: 3, 15: 4, 16: 5}
-bond_map = {'BEGINDASH': 1, 'BEGINWEDGE': 2, 'NONE': 3}
+atom_map = {'C': 1, 'N': 2, 'O': 3, 'P': 4, 'S': 5}
+bond_map = {'@': 1, '@@': 2, '': 3}  # chirality of the bond's first atom, replacing the wedge/dash of a 2D depiction
 
 
 def augment_glycan(glycan_data: torch.utils.data.Dataset, # glycan as a networkx graph
@@ -237,17 +233,20 @@ class GIFFLARTransform(BaseTransform):
                 ) -> HeteroData:  # transformed data
         """Transform the data into a GIFFLAR format. This means to compute the simplex network and create a heterogenous graph from it"""
         # Set up the atom information
-        data["atoms"].x = torch.tensor([atom_map.get(atom.GetAtomicNum(), 0) for atom in data["mol"].GetAtoms()])
+        molecule = data["mol"]
+        data["atoms"].x = torch.tensor([atom_map.get(element, 0) for element, charge, chirality in molecule.atoms])
         data["atoms"].num_nodes = len(data["atoms"].x)
         # Prepare all data that can be extracted from one iteration over all bonds
         bonds_x, atoms_coboundary, atoms_to_bonds, bonds_to_monosacchs = [], [], [], []
+        incident = [[] for _ in molecule.atoms]  # which bonds meet at each atom, for the bond boundaries below
         # Fill all bond-related information
-        for bond in data["mol"].GetBonds():
-            bonds_x.append(bond_map.get(bond.GetBondDir().name, 0))
-            b_idx, e_idx, idx = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), bond.GetIdx()
+        for idx, ((b_idx, e_idx, order), mono_id) in enumerate(zip(molecule.bonds, molecule.bond_monos)):
+            bonds_x.append(bond_map.get(molecule.atoms[b_idx][2], 0))
             atoms_coboundary.extend([(b_idx, e_idx), (e_idx, b_idx)])
             atoms_to_bonds.extend([(b_idx, idx), (e_idx, idx)])
-            bonds_to_monosacchs.append((idx, bond.GetIntProp("mono_id")))
+            bonds_to_monosacchs.append((idx, mono_id))
+            incident[b_idx].append(idx)
+            incident[e_idx].append(idx)
         # Transform the data into tensors
         data["bonds"].x = torch.tensor(bonds_x)
         data["bonds"].num_nodes = len(bonds_x)
@@ -255,8 +254,12 @@ class GIFFLARTransform(BaseTransform):
         data["atoms", "to", "bonds"].edge_index = torch.tensor(atoms_to_bonds, dtype = torch.long).t()
         data["bonds", "to", "monosacchs"].edge_index = torch.tensor(bonds_to_monosacchs, dtype = torch.long).t()
         # Compute both types of linkages between bonds
-        data["bonds", "boundary", "bonds"].edge_index = torch.tensor([(bond1.GetIdx(), bond2.GetIdx()) for atom in data["mol"].GetAtoms() for bond1 in atom.GetBonds() for bond2 in atom.GetBonds() if bond1.GetIdx() != bond2.GetIdx()], dtype = torch.long).t()
-        data["bonds", "coboundary", "bonds"].edge_index = torch.tensor([(bond1, bond2) for ring in data["mol"].GetRingInfo().BondRings() for bond1 in ring for bond2 in ring if bond1 != bond2], dtype = torch.long).t()
+        data["bonds", "boundary", "bonds"].edge_index = torch.tensor(
+            [(bond1, bond2) for at_atom in incident for bond1 in at_atom for bond2 in at_atom if bond1 != bond2],
+            dtype = torch.long).t()
+        data["bonds", "coboundary", "bonds"].edge_index = torch.tensor(
+            [(bond1, bond2) for ring in molecule.rings for bond1 in ring for bond2 in ring if bond1 != bond2],
+            dtype = torch.long).t()
         # Set up the monosaccharide information; This does not make sense. The monomer-ids are categorical features
         data["monosacchs"].x = torch.tensor([lib.get(data["tree"].nodes[node]["name"], len(lib)) for node in data["tree"].nodes])
         data["monosacchs"].num_nodes = len(data["monosacchs"].x)
@@ -281,72 +284,26 @@ class HeteroDataset(Dataset):
         return self.data_list[idx]
 
 
-def nx2mol(G: nx.Graph,  # graph representing a molecule
-           sanitize: bool = True  # bool flag indicating to sanitize the resulting molecule (should be True for "production mode" and False when debugging this function)
-           ) -> "Chem.Mol":  # converted, sanitized molecules in RDKit represented by the input graph
-    """Convert a molecules from a networkx.Graph to RDKit"""
-    try:
-        from rdkit import Chem
-    except ImportError:
-        raise ImportError(_MISSING)
-    # Create the molecule
-    mol = Chem.RWMol()
-    # Create all atoms based on their representing nodes
-    node_to_idx = {}
-    for node, attrs in G.nodes(data = True):
-        a = Chem.Atom(attrs['atomic_num'])
-        a.SetChiralTag(attrs['chiral_tag'])
-        a.SetFormalCharge(attrs['formal_charge'])
-        a.SetIsAromatic(attrs['is_aromatic'])
-        a.SetIntProp("mono_id", attrs['mono_id'])
-        node_to_idx[node] = mol.AddAtom(a)
-    # Connect the atoms based on the edges from the graph
-    for first, second, attrs in G.edges(data = True):
-        idx = mol.AddBond(node_to_idx[first], node_to_idx[second], attrs['bond_type']) - 1
-        mol.GetBondWithIdx(idx).SetIntProp("mono_id", attrs['mono_id'])
-    if sanitize:
-        Chem.SanitizeMol(mol)
-    return mol
-
-
-def clean_tree(tree: nx.Graph  # tree to clean
-               ) -> nx.Graph | None:  # cleaned tree
-    """Clean the tree from unnecessary node features and store only the IUPAC name"""
-    for node in tree.nodes:
-        attrs = deepcopy(tree.nodes[node])
-        if hasattr(attrs.get("type"), "recipe"):
-            tree.nodes[node].clear()
-            tree.nodes[node].update({"iupac": "".join([x[0] for x in attrs["type"].recipe]), "name": attrs["type"].name, "recipe": attrs["type"].recipe})
-        else:
-            return None
-    return tree
-
-
 def iupac2mol(iupac: str  # IUPAC-condensed string of the glycan to convert
-              ) -> HeteroData | None:  # HeteroData object containing the IUPAC string, the SMILES representation, the RDKit molecule, and the monosaccharide tree
-    """Convert a glycan stored given as IUPAC-condensed string into an RDKit molecule while keeping the information of which atom and which bond belongs to which monosaccharide"""
-    try:
-        import glyles
-        from glyles.glycans.factory.factory import MonomerFactory
-        from glyles.glycans.poly.merger import Merger
-        from rdkit import Chem
-        from rdkit.Chem import rdDepictor
-    except ImportError:
-        raise ImportError(_MISSING)
+              ) -> HeteroData | None:  # HeteroData object containing the IUPAC string, the SMILES representation, the molecular graph, and the monosaccharide tree
+    """Convert a glycan given as IUPAC-condensed string into a molecular graph while keeping the information of which atom and which bond belongs to which monosaccharide"""
+    from glycowork.motif.smiles import glycan_to_molecule, GlycanSMILESError
     if "{" in iupac or "?" in iupac or "/" in iupac:
         return None
-    # Convert the IUPAC string using GlyLES
-    glycan = glyles.Glycan(iupac)
-    # Get its underlying monosaccharide-tree
-    tree = glycan.parse_tree
-    # Re-merge the monosaccharide tree using networkx graphs to keep the assignment of atoms and bonds to monosacchs.
-    _, merged = Merger(MonomerFactory()).merge(tree, glycan.root_orientation, glycan.start, smiles_only = False)
-    mol = nx2mol(merged)
-    if not mol.GetNumConformers():
-        rdDepictor.Compute2DCoords(mol)
-    Chem.WedgeMolBonds(mol, mol.GetConformer())
-    smiles = Chem.MolToSmiles(mol)
-    if len(smiles) < 10 or not isinstance(tree, nx.Graph):
+    try:
+        molecule = glycan_to_molecule(iupac)
+    except GlycanSMILESError:
         return None
-    tree = clean_tree(tree)
-    return HeteroData(IUPAC = iupac, smiles = smiles, mol = mol, tree = tree) if tree else None
+    if len(molecule.smiles) < 10:
+        return None
+    graph = glycan_to_nxGraph(iupac)
+    index = {node: i for i, node in enumerate(sorted(set(molecule.atom_monos)))}  # renumbered 0..n-1, as GIFFLARTransform indexes them
+    molecule = molecule._replace(atom_monos = [index[owner] for owner in molecule.atom_monos], bond_monos = [index[owner] for owner in molecule.bond_monos])
+    tree = nx.Graph()
+    for node, i in index.items():
+        tree.add_node(i, iupac = graph.nodes[node]['string_labels'], name = graph.nodes[node]['string_labels'])
+    for node in index:
+        for linkage in graph.successors(node):
+            for child in graph.successors(linkage):
+                tree.add_edge(index[node], index[child], linkage = graph.nodes[linkage]['string_labels'])
+    return HeteroData(IUPAC = iupac, smiles = molecule.smiles, mol = molecule, tree = tree)

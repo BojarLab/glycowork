@@ -372,17 +372,20 @@ def canonicalize_composition(comp: str # Composition in Hex5HexNAc4Fuc1Neu5Ac2 o
 
 
 def IUPAC_to_SMILES(glycan_list: str | list[str] # List of IUPAC-condensed glycans or single glycan
-                    ) -> list[str]: # List of corresponding SMILES strings
-    "Convert list of IUPAC-condensed glycans to isomeric SMILES using GlyLES"
-    try:
-        from glyles import convert
-    except ImportError:
-        raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
+                    ) -> list[str]: # List of corresponding SMILES strings; empty for anything without a defined structure
+    "Convert list of IUPAC-condensed glycans to isomeric SMILES"
+    from glycowork.motif.smiles import glycan_to_smiles, GlycanSMILESError
     if not isinstance(glycan_list, list):
         glycan_list = [glycan_list]
-    res = [convert(g)[0][1] for g in glycan_list]
-    if not all(res):
-        res = [r if r else convert(canonicalize_iupac(g))[0][1] for r, g in zip(res, glycan_list)]
+    res = []
+    for g in glycan_list:
+        try:
+            res.append(glycan_to_smiles(g))
+        except GlycanSMILESError:
+            try:
+                res.append(glycan_to_smiles(canonicalize_iupac(g)))
+            except GlycanSMILESError:
+                res.append('')
     return res
 
 

@@ -9,9 +9,10 @@
 - Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw` (4894d1b)
 - `glycoworkGUI` is updated, making it more robust (628ee17)
 - Added more informative error messages throughout the package (105f416)
-- `glyles` is no longer a hidden required dependency for `glycowork[ml]` applications that do not use `GIFFLAR` ()
-- Most operations in `glycowork` are now more performant ()
-- Package start-up times have been greatly improved ()
+- `glyles` is no longer a dependency of the `glycowork[chem]` optional install, while `rdkit>=2021.9.2` still is (now explicitly) (2caae7a, )
+- Most operations in `glycowork` are now more performant (2caae7a)
+- Package start-up times have been greatly improved (2caae7a)
+- The new `glycowork.motif.smiles` module has been added, to convert glycan sequences to canonical SMILES strings (100x as fast as before and with 30% more coverage over `df_glycan`) ()
 
 ### glycan_data
 #### loader
@@ -132,6 +133,7 @@
 
 ##### Deprecated ⚠️
 - Removed the `show_linkage` keyword argument in `get_coordinates_and_labels` (it was dead and handled within `GlycoDraw`) (f5ba41f)
+- `get_hit_atoms_and_bonds` has been replaced by the new `get_mono_atoms` and `color_by_mono` functions ()
 
 #### graph
 ##### Changed 🔄
@@ -206,6 +208,8 @@
 - Made sure `check_conservation` no longer crashes if a rank has no matching network (78fe195)
 
 ### ml
+- Using the `GIFFLAR` model no longer requires the `glycowork[all]` optional install, as all chemistry-related operations have been internalized ()
+
 #### model_training
 ##### Fixed 🐛
 - Fixed double softmax in `train_model` (5483f3c)
@@ -213,3 +217,7 @@
 #### inference
 ##### Changed 🔄
 - `get_esmc_representations` now auto-cleans protein sequences via the new `_clean_protein_sequences` function (8b0a73e)
+
+#### processing
+##### Deprecated ⚠️
+- Deprecated `nx2mol` and `clean_tree`; will all be handled by `iupac2mol` now ()
