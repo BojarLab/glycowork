@@ -1,4 +1,5 @@
 import networkx as nx
+import warnings
 from copy import deepcopy
 from random import getrandbits, random
 from typing import Any
@@ -15,6 +16,9 @@ try:
     from torch_geometric.transforms.base_transform import BaseTransform
 except ImportError:
     raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
+# One list, since the collator, the model and the builder must agree; the ring relation was missing from the first two, so every ring the builder encoded was silently dropped
+GIFFLAR_EDGE_TYPES = [("atoms", "coboundary", "atoms"), ("atoms", "to", "bonds"), ("bonds", "to", "monosacchs"),
+                      ("bonds", "boundary", "bonds"), ("bonds", "coboundary", "bonds"), ("monosacchs", "boundary", "monosacchs")]
 atom_map = {'C': 1, 'N': 2, 'O': 3, 'P': 4, 'S': 5}
 bond_map = {'@': 1, '@@': 2, '': 3}  # chirality of the bond's first atom, replacing the wedge/dash of a 2D depiction
 
@@ -88,12 +92,32 @@ def dataset_to_dataloader(glycan_list: list[str], # list of IUPAC-condensed glyc
                           drop_last: bool = False, # drop last batch
                           extra_feature: list[float] | None = None, # additional input features
                           label_type: torch.dtype = torch.long, # tensor type for label
-                          augment_prob: float = 0., # probability of data augmentation
-                          generalization_prob: float = 0.2 # probability of wildcarding
-                          ) -> torch.utils.data.DataLoader: # dataloader for training
+                          augment_prob: float = 0.,  # probability of data augmentation
+                          generalization_prob: float = 0.2,  # probability of wildcarding
+                          hetero: bool = False
+                          # build atom-level molecular heterographs for GIFFLAR instead of monosaccharide graphs
+                          ) -> torch.utils.data.DataLoader:  # dataloader for training
     "wrapper function to convert glycans and labels to a torch_geometric DataLoader"
     if libr is None:
         libr = lib
+    if hetero:
+        # GIFFLAR convolves over atoms, bonds, and monosaccharides, so it needs the molecular heterograph and its own collator rather than the monosaccharide graph
+        data = []
+        for glycan, label in zip(glycan_list, labels):
+            point = iupac2mol(glycan)
+            if point is None:
+                continue  # an ambiguous linkage or a floating bit has no defined molecular graph
+            point["y"] = torch.tensor([label],
+                                      dtype = label_type)  # kept one-dimensional, since the collator spots empty fields via len() and a 0-dim tensor has none
+            data.append(point)
+        if not data:
+            raise ValueError(
+                "None of the glycans could be converted into a molecular graph; GIFFLAR needs fully specified sequences, without '{', '?', or '/'.")
+        if len(data) < len(glycan_list):
+            warnings.warn(
+                f"{len(glycan_list) - len(data)} of {len(glycan_list)} glycans have no defined molecular graph and were dropped from this dataloader")
+        return torch.utils.data.DataLoader(HeteroDataset(data), batch_size = batch_size, shuffle = shuffle,
+                                           drop_last = drop_last, collate_fn = hetero_collate)
     # Converting glycans and labels to PyTorch Geometric Data objects
     glycan_graphs = dataset_to_graphs(glycan_list, labels, libr = libr, label_type = label_type)
     # Adding (optional) extra feature to the Data objects
@@ -115,9 +139,11 @@ def split_data_to_train(glycan_list_train: list[str], # training glycans
                         extra_feature_train: list[float] | None = None, # additional training features
                         extra_feature_val: list[float] | None = None, # additional validation features
                         label_type: torch.dtype = torch.long, # tensor type for label
-                        augment_prob: float = 0., # probability of data augmentation
-                        generalization_prob: float = 0.2 # probability of wildcarding
-                        ) -> dict[str, torch.utils.data.DataLoader]: # dictionary of train/val dataloaders
+                        augment_prob: float = 0.,  # probability of data augmentation
+                        generalization_prob: float = 0.2,  # probability of wildcarding
+                        hetero: bool = False
+                        # build atom-level molecular heterographs for GIFFLAR instead of monosaccharide graphs
+                        ) -> dict[str, torch.utils.data.DataLoader]:  # dictionary of train/val dataloaders
     "wrapper function to convert split training/test data into dictionary of dataloaders"
     if libr is None:
         libr = lib
@@ -125,11 +151,14 @@ def split_data_to_train(glycan_list_train: list[str], # training glycans
     train_loader = dataset_to_dataloader(glycan_list_train, labels_train, libr = libr,
                                          batch_size = batch_size, shuffle = True,
                                          drop_last = drop_last, extra_feature = extra_feature_train,
-                                         label_type = label_type, augment_prob = augment_prob, generalization_prob = generalization_prob)
+                                         label_type = label_type, augment_prob = augment_prob,
+                                         generalization_prob = generalization_prob,
+                                         hetero = hetero)
     val_loader = dataset_to_dataloader(glycan_list_val, labels_val, libr = libr,
                                        batch_size = batch_size, shuffle = False,
                                        drop_last = drop_last, extra_feature = extra_feature_val,
-                                       label_type = label_type, augment_prob = 0., generalization_prob = 0.)
+                                       label_type = label_type, augment_prob = 0., generalization_prob = 0.,
+                                       hetero = hetero)
     return {'train': train_loader, 'val': val_loader}
 
 
@@ -171,7 +200,7 @@ def hetero_collate(data: list[list[HeteroData]] | list[HeteroData] | None,  # li
         data = data[0]
     # Extract all valid node types and edge types
     node_types = ["atoms", "bonds", "monosacchs"]
-    edge_types = [("atoms", "coboundary", "atoms"), ("atoms", "to", "bonds"), ("bonds", "to", "monosacchs"), ("bonds", "boundary", "bonds"), ("monosacchs", "boundary", "monosacchs")]
+    edge_types = GIFFLAR_EDGE_TYPES
     # Setup empty fields for the most important attributes of the resulting batch
     x_dict, batch_dict, edge_index_dict, edge_attr_dict = {}, {}, {}, {}
     # Store the node counts to offset edge indices when collating

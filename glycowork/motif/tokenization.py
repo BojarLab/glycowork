@@ -9,7 +9,7 @@ from functools import reduce
 
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import lib, unwrap, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace
-from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions
+from glycowork.motif.processing import min_process_glycans, rescue_glycans, rescue_compositions, parse_floating_bit, FLOATY_ALT
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string
 
 chars = {'A':1, 'B':2, 'C':3, 'D':4, 'E':5, 'F':6, 'G':7, 'H':8, 'I':9, 'J':10, 'K':11,
@@ -431,7 +431,17 @@ def structure_to_basic(glycan: str # Glycan in IUPAC-condensed format
         return map_to_basic(glycan)
     ggraph = glycan_to_nxGraph(glycan).copy()
     node_dict = dict(ggraph.nodes(data = True))
-    nx.set_node_attributes(ggraph, {k: map_to_basic(node_dict[k]['string_labels']) for k in ggraph.nodes}, 'string_labels')
+    nx.set_node_attributes(ggraph, {k: map_to_basic(node_dict[k]['string_labels']) for k in ggraph.nodes},
+                           'string_labels')
+    for _, d in ggraph.nodes(data = True):
+        if 'anchors' in d:  # an anchor that still names specific monosaccharides can no longer resolve against the mapped backbone
+            for link, anchor in list(d['anchors'].items()):
+                ag = glycan_to_nxGraph(anchor.replace('^', '')).copy()
+                nx.set_node_attributes(ag, {k2: map_to_basic(v['string_labels']) for k2, v in ag.nodes(data = True)},
+                                       'string_labels')
+                ag.nodes[next(i for i, x in enumerate(min_process_glycans([anchor])[0]) if x.endswith('^'))][
+                    'string_labels'] += '^'
+                d['anchors'][link] = graph_to_string(ag)
     return graph_to_string(ggraph)
 
 
@@ -442,7 +452,10 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
     """Map glycan to its composition"""
     if stem_libr is None:
         stem_libr = stem_lib
-    glycan = glycan.replace('{', '').replace('}', '') if '{' in glycan else glycan
+    if '{' in glycan:
+        if '^' in glycan:
+            glycan = FLOATY_ALT.sub(lambda m: '{' + parse_floating_bit(m.group(1))[0] + '}', glycan)
+        glycan = glycan.replace('{', '').replace('}', '')
     diff_moieties = Counter()
     for mod, info in _SPECIAL_MODS.items():
         while mod in glycan:

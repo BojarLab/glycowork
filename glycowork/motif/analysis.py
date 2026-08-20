@@ -84,12 +84,15 @@ def preprocess_data(
             "No groups given: pass group1 (and group2 for a two-group comparison) as lists of column names or column indices; groups are only inferred automatically from a GlycoDataFrame that carries contrasts.")
     if paired is None:
         paired = df.paired if isinstance(df, GlycoDataFrame) else False
+    prov = (getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {}))
     if not isinstance(group1[0], str) and experiment == "diff":
         columns_list = df.columns.tolist()
         group1 = [columns_list[k] for k in group1]
         group2 = [columns_list[k] for k in group2]
-    df = df.iloc[:, :len(group1) + 1].fillna(0) if experiment == "anova" else df.loc[
-        :, [df.columns[0]] + group1 + group2].fillna(0)
+    gcol = GlycoDataFrame(df)._glycan_col or df.columns[0]
+    df = df[[gcol] + [c for c in df.columns if c != gcol]].iloc[:, :len(group1) + 1].fillna(
+        0) if experiment == "anova" else df.loc[
+        :, [gcol] + group1 + group2].fillna(0)
     # Drop rows with all zero, followed by outlier removal and imputation & normalization
     df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)].reset_index(drop = True)
     df = replace_outliers_winsorization(df)
@@ -119,7 +122,8 @@ def preprocess_data(
         if monte_carlo and not motifs:
             df = GlycoDataFrame(pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
                                                                                       gamma = gamma,
-                                                                                      custom_scale = custom_scale)],
+                                                                                      custom_scale = custom_scale,
+                                                                                      random_state = random_state)],
                                           axis = 1),
                                 contrasts = getattr(df, '_contrasts', {}), paired = paired,
                                 name = getattr(df, '_glyco_name', ''))
@@ -156,6 +160,7 @@ def preprocess_data(
         if glycoproteomics:
             # Component-wise composition containment forces the same abundance inequality as substructure containment, so glycoforms admit the same balances and residuals as motifs
             df_org.attrs['motif_dag'] = get_composition_dag(df_org.index.tolist(), abundances = df_org)
+    df_org.attrs['dataset'], df_org.attrs['provenance'] = prov
     return df, df_org, group1, group2
 
 
@@ -214,7 +219,8 @@ def get_pvals_motifs(
     na, nb = A.shape[1], B.shape[1]
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(na + nb)
-    dag = get_motif_dag(motif_names, abundances = pd.DataFrame(X.T, index = motif_names))
+    dag = get_motif_dag(motif_names, abundances = pd.DataFrame(X.T,
+                                                               index = motif_names)) if grouped_BH or moderate_variance else None
     # Test statistical enrichment for motifs in above vs below
     live = (A.var(axis = 1, ddof = 1) > 1e-12) | (B.var(axis = 1, ddof = 1) > 1e-12)
     Al, Bl = A[live], B[live]
@@ -248,13 +254,47 @@ def get_pvals_motifs(
         significance = [significance_dict[m] for m in motif_names]
     else:
         ttests_corr, significance = correct_multiple_testing(ttests, alpha)
+    rows = {}
+    if dag is not None:
+        # A parent's count in a glycan is its children's counts plus whatever sits in a context no child covers, so the decomposition the differential functions report is available here too
+        F, pos_i, neg_i = X.T, np.where(pos)[0], np.where(neg)[0]
+        idx, eff = {m: i for i, m in enumerate(motif_names)}, dict(zip(motif_names, effect_sizes))
+        for p in [m for m in motif_names if m in dag and dag.out_degree(m)]:
+            kids = [c for c in dag.successors(p) if c in idx]
+            kv = F[[idx[c] for c in kids]]
+            resid = F[idx[p]] - kv.sum(axis = 0)
+            parts = np.vstack([kv, np.clip(resid, 0, None)])
+            parts = parts[(parts > 1e-6).any(
+                axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
+            # Children and residual sum to the parent, so subtracting one part gives the additive logratio of a genuine sub-composition
+            bal = np.log2(parts + 0.0000001)
+            bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
+            bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9]
+            bal_p = hotellings_t2(bal[:, neg_i].T, bal[:, pos_i].T)[1] if 0 < len(bal) < min(len(pos_i),
+                                                                                             len(neg_i)) else np.nan
+            explained = ', '.join(f'{c} ({eff[c] - eff[p]:+.2f})' for c in kids)
+            if (resid <= 1e-6).all():
+                rows[p] = (explained, 1.0, 0.0,
+                           bal_p)  # parent occurs only inside its children: no context of its own left to test
+                continue
+            r = np.log2(np.clip(resid, 0.0000001, None))
+            rows[p] = (explained, ttest_ind(r[pos_i], r[neg_i], equal_var = False)[1], cohen_d(r[pos_i], r[neg_i])[0],
+                       bal_p)
+    # Residuals and balances answer different questions than the marginals, so each is corrected as its own, much smaller family
+    cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
+    bk = [m for m in rows if not np.isnan(rows[m][3])]
+    bp = dict(zip(bk, correct_multiple_testing([rows[m][3] for m in bk], alpha)[0])) if bk else {}
     out = GlycoDataFrame(pd.DataFrame({
         'motif': motif_names,
         'pval': ttests,
         'corr_pval': ttests_corr,
         'significant': significance,
         'effect_size': effect_sizes,
-        'equivalence_pval': equivalence_pvals
+        'equivalence_pval': equivalence_pvals,
+        'Explained by': [rows[m][0] if m in rows else '' for m in motif_names],
+        'Redistribution p-val': [bp.get(m, np.nan) for m in motif_names],
+        'Residual p-val': [cp.get(m, np.nan) for m in motif_names],
+        'Residual effect size': [rows[m][2] if m in rows else np.nan for m in motif_names]
     }), name = in_name)
     out['significant'] = out['significant'].astype('bool')
     if sorting:
@@ -726,7 +766,9 @@ def get_differential_expression(
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
     from statsmodels.stats.multitest import multipletests
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
-    in_contrasts, in_name = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', '')
+    in_contrasts, in_name, in_prov = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', ''), getattr(df,
+                                                                                                            '_provenance',
+                                                                                                            {})
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = "diff", motifs = motifs,
                                                  glycoproteomics = glycoproteomics, impute = impute,
@@ -768,7 +810,7 @@ def get_differential_expression(
                 effect_sizes.append(mahalanobis_distance(gp1, gp2, paired = paired))
                 equivalence_pvals.append(np.nan)
                 if effect_size_variance:
-                    variances.append(mahalanobis_variance(gp1, gp2, paired = paired))
+                    variances.append(mahalanobis_variance(gp1, gp2, paired = paired, random_state = random_state))
         mean_abundance = mean_abundance_c
     else:
         log2fc = (df_b.values - df_a.values).mean(axis = 1) if paired else (df_b.mean(axis = 1) - df_a.mean(axis = 1))
@@ -832,7 +874,7 @@ def get_differential_expression(
         columns = ['Glycan', 'Mean abundance', 'Log2FC', 'p-val', 'corr p-val',
                    'significant', 'corr Levene p-val', 'Effect size',
                    'Equivalence p-val']),
-        contrasts = in_contrasts, paired = paired, name = in_name)
+        contrasts = in_contrasts, paired = paired, name = in_name, provenance = in_prov)
     if not monte_carlo:
         prison_rows = pd.DataFrame({
             'Glycan': df_prison.index,
@@ -849,7 +891,7 @@ def get_differential_expression(
         if len(prison_rows) > 0:
             df_out = GlycoDataFrame(
                 prison_rows if df_out.empty else pd.concat([df_out, prison_rows], ignore_index = True),
-                contrasts = in_contrasts, paired = paired, name = in_name)
+                contrasts = in_contrasts, paired = paired, name = in_name, provenance = in_prov)
     df_out['significant'] = df_out['significant'].astype('bool')
     if effect_size_variance:
         df_out['Effect size variance'] = list(variances) + [0] * len(df_prison)
@@ -895,7 +937,7 @@ def get_differential_expression(
         df_out['Residual effect size'] = [rows[m][2] if m in rows else np.nan for m in df_out['Glycan']]
     df_out.attrs.update(
         {'alpha': alpha, 'n': len(group1) + len(group2), 'test': "Welch's t-test" if not paired else "paired t-test",
-         'transform': transform, 'paired': paired})
+         'transform': transform, 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
     if glycoproteomics:
         df_site = get_glycoform_diff(df_out, alpha = alpha, level = level)
         df_site.attrs[
@@ -927,7 +969,7 @@ def get_pval_distribution(
 def get_ma(
         df_res: pd.DataFrame | str | Path,  # Output DataFrame from get_differential_expression
         log2fc_thresh: int = 1,  # Log2FC threshold for highlighting
-        sig_thresh: float = 0.05,  # Significance threshold for highlighting
+        sig_thresh: float | None = None,  # Significance threshold for highlighting; defaults to the sample-size-adjusted alpha stored on the results
         filepath: str | Path = ''  # Path to save plot
 ) -> None:
     "Generates MA plot (mean abundance vs log2 fold change) from differential expression results"
@@ -935,6 +977,8 @@ def get_ma(
         df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res,
                                                                                                sep = "\t") if Path(
             df_res).suffix.lower() == ".tsv" else pd.read_excel(df_res)
+    if sig_thresh is None:
+        sig_thresh = df_res.attrs.get('alpha', 0.05)
     # Create masks for significant and non-significant points
     sig_mask = (abs(df_res['Log2FC']) > log2fc_thresh) & (df_res['corr p-val'] < sig_thresh)
     ax = sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res[~sig_mask],
@@ -944,7 +988,7 @@ def get_ma(
     sns.scatterplot(x = 'Mean abundance', y = 'Log2FC', data = df_res[sig_mask & (df_res['Log2FC'] <= 0)],
                     color = '#2D6A9F', alpha = 0.9, s = 30, linewidth = 0, ax = ax)
     ax.axhline(0, color = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
-    ax.set(xlabel = 'Mean Abundance', ylabel = 'Log2FC', title = '')
+    ax.set(xlabel = 'Mean Abundance', ylabel = 'Log2FC', title = df_res.attrs.get('dataset', ''))
     sns.despine(left = True, bottom = True)
     # save to file
     if filepath:
@@ -989,7 +1033,7 @@ def get_volcano(
                          palette = {'up': '#C84B55', 'down': '#2D6A9F', 'ns': '#BBBBBB'},
                          alpha = 0.85, s = 25, linewidth = 0, legend = False, **kwargs)
     df_res.drop('_cat', axis = 1, inplace = True)
-    ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)', title = '')
+    ax.set(xlabel = x_metric, ylabel = '-log10(corr p-val)', title = df_res.attrs.get('dataset', ''))
     plt.axhline(y = -np.log10(y_thresh), c = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
     plt.axvline(x = x_thresh, c = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
     plt.axvline(x = -x_thresh, c = '#888888', ls = '--', lw = 0.8, alpha = 0.5)
@@ -1015,7 +1059,7 @@ def get_volcano(
 
 def get_glycanova(
         df: pd.DataFrame | str | Path,  # DataFrame with glycans in rows (col 1) and abundance values in columns
-        groups: list[Any],  # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3])
+        groups: list[Any] | None = None,  # Group labels for samples (e.g., [1,1,1,2,2,2,3,3,3]); inferred from a GlycoDataFrame's contrasts if omitted
         impute: bool = True,  # Replace zeros with Random Forest model
         motifs: bool = False,  # Analyze motifs instead of sequences
         feature_set: list[str] = ['exhaustive', 'known'],
@@ -1037,6 +1081,11 @@ def get_glycanova(
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
     from statsmodels.stats.multicomp import pairwise_tukeyhsd
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
+    if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
+        groups = list(df.groups)
+    if not groups:
+        raise ValueError(
+            "No groups given: pass groups as a list of per-sample labels; groups are only inferred automatically from a GlycoDataFrame that carries contrasts.")
     if len(set(groups)) < 3:
         raise ValueError(
             "You have fewer than three groups. We suggest get_differential_expression for those cases. ANOVA is for >= three groups.")
@@ -1783,9 +1832,11 @@ def get_roc(
 def get_lectin_array(
         df: pd.DataFrame | str | Path,
         # DataFrame with samples as rows and lectins as columns, first column containing sample IDs
-        group1: list[str | int],  # First group indices/names
-        group2: list[str | int],  # Second group indices/names
-        paired: bool = False,  # Whether samples are paired
+        group1: list[str | int] | None = None,
+        # First group indices/names; inferred from a GlycoDataFrame's contrasts if omitted
+        group2: list[str | int] | None = None,
+        # Second group indices/names; inferred from a GlycoDataFrame's contrasts if omitted
+        paired: bool | None = None,  # Whether samples are paired; inferred from a GlycoDataFrame if omitted
         transform: str = ''  # Optional log2 transformation
 ) -> pd.DataFrame:  # DataFrame with altered glycan motifs, supporting lectins, and effect sizes
     "Analyzes lectin microarray data by mapping lectin binding patterns to glycan motifs, calculating Cohen's d effect sizes between groups and clustering results by significance"
@@ -1793,7 +1844,20 @@ def get_lectin_array(
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    in_name, in_prov, contrasts = getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {}), getattr(df,
+                                                                                                          '_contrasts',
+                                                                                                          {})
     df = df.set_index(df.columns[0])
+    if group1 is None and contrasts:
+        # A lectin array has its samples in the rows, so the contrasts are read off the index rather than off the columns
+        names = list(dict.fromkeys(contrasts.values()))
+        group1 = [s for s in df.index if contrasts.get(s) == names[0]]
+        group2 = [s for s in df.index if len(names) > 1 and contrasts.get(s) == names[1]]
+    if paired is None:
+        paired = getattr(df, '_paired', False)
+    if not group1:
+        raise ValueError(
+            "No groups given: pass group1 (and group2) as lists of sample names or indices; groups are only inferred automatically from a GlycoDataFrame that carries contrasts.")
     alpha = get_alphaN(df.shape[0])
     duplicated_cols = set(df.columns[df.columns.duplicated()])
     if duplicated_cols:

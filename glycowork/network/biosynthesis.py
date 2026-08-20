@@ -10,7 +10,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from glycowork.glycan_data.loader import unwrap, linkages, lib, GlycoList, GlycoDataFrame
-from glycowork.glycan_data.stats import cohen_d, get_alphaN, correct_multiple_testing, moderated_variance, dag_neighbors
+from glycowork.glycan_data.stats import cohen_d, get_alphaN, correct_multiple_testing, moderated_variance, dag_neighbors, TST_grouped_benjamini_hochberg
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, graph_to_string_int, subgraph_isomorphism, get_possible_topologies
 from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class, canonicalize_iupac, canonicalize_composition, is_composition
 from glycowork.motif.tokenization import get_stem_lib, glycan_to_composition, map_to_basic
@@ -977,6 +977,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     import statsmodels.api as sm
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
+    in_name, in_prov = getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {})
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     if longitudinal:
         assert id_column is not None, "id_column must be specified for longitudinal analysis"
@@ -1005,7 +1006,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         df_analysis = df[df['time_point'].isin(time_points)].copy()
     else:
         glycan_columns = all_groups
-        df_analysis = df.set_index(df.columns.tolist()[0])
+        df_analysis = df.set_index(GlycoDataFrame(df)._glycan_col or df.columns.tolist()[0])
     df_analysis = df_analysis.loc[:, glycan_columns].fillna(0)
     if longitudinal:
         df_analysis = (df_analysis / df_analysis.sum(axis = 1).values[:, None]) * 100
@@ -1146,6 +1147,13 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
             for i, f in enumerate(features):
                 by_node[f.rsplit(' -> ', 1)[0]].append(i)
             neighbors = [sorted(set(by_node[f.rsplit(' -> ', 1)[0]]) - {i}) for i, f in enumerate(features)]
+        elif shadow_set:
+            # A collapsed reaction is the mean of its own linkage variants, so that family is a sharper variance reference than the global prior
+            fam, where = {}, {f: i for i, f in enumerate(features)}
+            for shadow, variants in shadow_reactions.items():
+                for f in [shadow] + variants:
+                    fam.setdefault(f, set()).update([shadow] + variants)
+            neighbors = [sorted(where[o] for o in fam.get(f, set()) - {f} if o in where) for f in features]
         else:
             neighbors = None
         if paired:
@@ -1159,18 +1167,22 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
                                                                                               ddof = 1)) / dfree
         s2_mod, df_post = moderated_variance(s2, dfree, neighbors)
         pvals = np.maximum(2 * tdist.sf(np.abs(eff / np.sqrt(s2_mod * scale)), df_post), np.finfo(float).tiny)
-        # Shadow reactions are averages of their own variants, so testing both in one family nearly doubles it with redundant hypotheses
+        # Shadow reactions are averages of their own variants, so testing both in one family nearly doubles it with redundant hypotheses; two-stage grouped BH gives each family its own pi0 instead of correcting them as unrelated runs
         alpha = get_alphaN(len(all_groups))
-        corrpvals, significance = np.ones(len(pvals)), np.zeros(len(pvals), dtype = bool)
         fam = np.isin(features, list(shadow_set))
-        for m in (~fam, fam):
-            if m.any():
-                corrpvals[m], significance[m] = correct_multiple_testing(pvals[m], alpha)
-        pvals, corrpvals, significance = list(pvals), list(corrpvals), list(significance)
+        grouped_f = {k: [f for f, m in zip(features, mask) if m] for k, mask in (('collapsed', fam), ('variant', ~fam))
+                     if mask.any()}
+        grouped_p = {k: [p for p, m in zip(pvals, mask) if m] for k, mask in (('collapsed', fam), ('variant', ~fam)) if
+                     mask.any()}
+        cp, sd = TST_grouped_benjamini_hochberg(grouped_f, grouped_p, alpha)
+        corrpvals, significance = [cp[f] for f in features], [sd[f] for f in features]
+        pvals = list(pvals)
         effect_sizes, _ = cohen_d(df_b.values, df_a.values, paired = paired)
         out = pd.DataFrame({'Glycan': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
                             'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
     out = out.set_index('Glycan')
+    out.attrs.update({'alpha': get_alphaN(len(all_groups)), 'n': len(all_groups), 'test': 'moderated t-test',
+                      'transform': None, 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
     return out.dropna().sort_values(by = 'p-val')
 
 
@@ -1239,7 +1251,7 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
         glycs = list(network.nodes())
     else:
         from glycowork.glycan_data.loader import df_species
-        glycs = df_species[df_species.Class == "Mammalia"].glycan.drop_duplicates()
+        glycs = df_species.meta_filter(Class = "Mammalia").glycan.drop_duplicates()
         glycs = glycs[glycs.apply(get_class) == classy].tolist()
     mammal_disac = set(unwrap(get_k_saccharides(glycs, just_motifs = True)))
     reactions = {r for r in nx.get_edge_attributes(network, "diffs").values() if all(x not in r for x in ('?', 'Hex', 'O', '/'))}

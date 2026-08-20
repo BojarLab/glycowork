@@ -55,16 +55,19 @@ def mahalanobis_distance(x: np.ndarray | pd.DataFrame, # comparison group contai
 
 def mahalanobis_variance(x: np.ndarray | pd.DataFrame, # comparison group containing numerical data
                          y: np.ndarray | pd.DataFrame, # comparison group containing numerical data
-                         paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                         ) -> float: # variance of Mahalanobis distance
+                         paired: bool = False,  # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
+                         random_state: int | np.random.Generator | None = None
+                         # optional random state for reproducibility
+                         ) -> float:  # variance of Mahalanobis distance
     "Estimates variance of Mahalanobis distance via bootstrapping"
+    local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     # Combine gp1 and gp2 into a single matrix
     data = np.concatenate((x.T, y.T), axis = 0)
     # Perform bootstrap resampling
     n_iterations = 1000
     size_x = x.shape[1]
     # Generate all bootstrap indices at once
-    boot_indices = rng.choice(data.shape[0], size = (n_iterations, data.shape[0]), replace = True)
+    boot_indices = local_rng.choice(data.shape[0], size = (n_iterations, data.shape[0]), replace = True)
     bootstrap_samples = np.array([mahalanobis_distance(data[idx[:size_x]].T, data[idx[size_x:]].T, paired = paired)
                                   for idx in boot_indices])
     # Estimate the variance of the Mahalanobis distance
@@ -431,36 +434,6 @@ def compare_inter_vs_intra_group(cohort_b: pd.DataFrame, # dataframe of glycans 
     return (var_between_families / total_var, var_glycans_within_group / total_var) if total_var else (0.0, 0.0)
 
 
-def replace_outliers_with_IQR_bounds(full_row: pd.Series, # row from dataframe, with all but possibly first value numerical
-                                     cap_side: str = 'both' # which side(s) to cap outliers on: 'both', 'lower', or 'upper'
-                                     ) -> pd.Series: # row with replaced outliers
-    "caps outlier values at the IQR fences"
-    if cap_side not in ('both', 'lower', 'upper'):
-        raise ValueError(f"cap_side has to be 'both', 'lower', or 'upper', got '{cap_side}'.")
-    row = full_row.iloc[1:] if isinstance(full_row.iloc[0], str) else full_row
-    # Calculate Q1, Q3, and IQR for each row
-    Q1 = row.quantile(0.25)
-    Q3 = row.quantile(0.75)
-    IQR = Q3 - Q1
-    lower_bound = Q1 - 1.5*IQR
-    upper_bound = Q3 + 1.5*IQR
-    def cap_value(x):
-        if cap_side in ['both', 'lower'] and x < lower_bound and x != 0:
-            return lower_bound
-        elif cap_side in ['both', 'upper'] and x > upper_bound and x != 0:
-            return upper_bound
-        else:
-            return x
-    # Define outliers as values outside of Q1 - 1.5*IQR and Q3 + 1.5*IQR
-    capped_values = row.apply(cap_value)
-    # Replace outliers with row median
-    if isinstance(full_row.iloc[0], str):
-        full_row.iloc[1:] = capped_values
-    else:
-        full_row = capped_values
-    return full_row
-
-
 def replace_outliers_winsorization(df: pd.DataFrame, # features as rows, all but possibly first column numerical
                                    cap_side: str = 'both' # which side(s) to cap outliers on: 'both', 'lower', or 'upper'
                                    ) -> pd.DataFrame: # dataframe with outliers replaced by Winsorization
@@ -650,30 +623,6 @@ def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
         stat_outputs = pd.DataFrame({'group': group_labels, 'diversity': df.squeeze()})
         grouped_diversity = stat_outputs.groupby('group')['diversity'].apply(list).tolist()
         return f_oneway(*grouped_diversity, equal_var = False)
-
-
-def calculate_permanova_stat(df: pd.DataFrame, # square distance matrix
-                             group_labels: list[str], # list of group membership for each sample
-                             D2: np.ndarray | None = None # precomputed elementwise square of df, to avoid recomputing it per permutation
-                             ) -> float: # F statistic - higher means effect more likely
-    "Performs multivariate analysis of variance"
-    if D2 is None:
-        D2 = np.square(np.asarray(df, dtype = float))
-    labels = np.asarray(group_labels)
-    unique_groups = np.unique(labels)
-    n = len(labels)
-    # Between-group and within-group sums of squares; the full matrix counts every pair twice, hence the factor 2
-    ss_total = D2.sum() / (2 * n)
-    ss_within = 0
-    for group in unique_groups:
-        group_mask = labels == group
-        ss_within += D2[np.ix_(group_mask, group_mask)].sum() / (2 * group_mask.sum())
-    ss_between = ss_total - ss_within
-    # Calculate the PERMANOVA test statistic: pseudo-F
-    ms_between = ss_between / max(len(unique_groups) - 1, 1e-10)
-    ms_within = ss_within / max(n - len(unique_groups), 1e-10)
-    f_stat = ms_between / ms_within
-    return f_stat
 
 
 @lru_cache(maxsize = 16)
@@ -892,7 +841,12 @@ def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_d
     grouped = df_res['p-val'].groupby(labels).agg(lambda p: combine_pvalues(p)[1])  # Fisher’s Combined Probability Test
     mean_effect_size = df_res['Effect size'].groupby(labels).mean()
     pvals, sig = correct_multiple_testing(grouped, alpha)
-    df_out = pd.DataFrame({'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})
+    df_out = type(df_res)(
+        {'Glycosite': grouped.index, 'corr p-val': pvals, 'significant': sig, 'Effect size': mean_effect_size.values})
+    for attr in ('_contrasts', '_paired', '_glyco_name', '_provenance'):
+        if hasattr(df_res, attr):
+            object.__setattr__(df_out, attr, getattr(df_res, attr))
+    df_out.attrs.update({**df_res.attrs, 'alpha': alpha, 'test': "Fisher's combined probability test", 'level': level})
     return df_out.sort_values(by = 'corr p-val')
 
 
@@ -970,14 +924,17 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
                                 group2: list[str | int], # column indices/names for second group of samples
                                 num_instances: int = 128, # number of Monte Carlo instances to sample
                                 gamma: float = 0.1, # uncertainty parameter for CLR transformation scale
-                                custom_scale: float | dict = 0 # ratio total signal group2/group1 for scale model
-                                ) -> pd.DataFrame: # transformed df (features, samples*num_instances) with CLR-transformed Monte Carlo instances
+                                custom_scale: float | dict = 0,  # ratio total signal group2/group1 for scale model
+                                random_state: int | np.random.Generator | None = None
+                                # optional random state for reproducibility
+                                ) -> pd.DataFrame:  # transformed df (features, samples*num_instances) with CLR-transformed Monte Carlo instances
     "Monte Carlo sampling from Dirichlet distribution with relative abundances as concentration, followed by CLR transformation"
-    df = df.apply(lambda col: (col / col.sum())*5000, axis = 0)
+    local_rng = np.random.default_rng(random_state) if random_state is not None else rng
+    df = df.apply(lambda col: (col / col.sum()) * 5000, axis = 0)
     features, samples = df.shape
     transformed_data = np.zeros((features, samples, num_instances))
     for j in range(samples):
-        dirichlet_samples = dirichlet.rvs(alpha = df.iloc[:, j], random_state = rng, size = num_instances).T
+        dirichlet_samples = dirichlet.rvs(alpha = df.iloc[:, j], random_state = local_rng, size = num_instances).T
         if isinstance(custom_scale, dict) or custom_scale:
             for n in range(num_instances):
                 sample_instance = pd.DataFrame(dirichlet_samples[:, n])
@@ -987,7 +944,8 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
             # CLR on a single column is just log2(x) minus the log2 geometric mean, plus the gamma uncertainty term
             log_samples = np.log2(np.where(dirichlet_samples > 0, dirichlet_samples, np.nan))
             log_gmean = np.nanmean(log_samples, axis = 0)
-            transformed_data[:, j, :] = log_samples + norm.rvs(loc = -log_gmean, scale = gamma, random_state = rng,
+            transformed_data[:, j, :] = log_samples + norm.rvs(loc = -log_gmean, scale = gamma,
+                                                               random_state = local_rng,
                                                                size = (features, num_instances))
     columns = [col for col in df.columns for _ in range(num_instances)]
     transformed_data_2d = transformed_data.reshape((features, samples* num_instances))

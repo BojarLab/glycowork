@@ -25,7 +25,8 @@ def _load_net_dic() -> dict[str, nx.Graph]: # Species:biosynthetic network mappi
 
 def __getattr__(name):
     if name == "net_dic":
-        return _load_net_dic()
+        return dict(
+            _load_net_dic())  # hand out a copy, or a caller adding a species edits the cached bundle for the rest of the process
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -86,11 +87,12 @@ def jaccard(list1: list | nx.Graph, # First list/network to compare
     "Calculate Jaccard distance between two lists/networks"
     intersection = len(set(list1).intersection(list2))
     union = (len(list1) + len(list2)) - intersection
-    return 1 - float(intersection) / union
+    return 0.0 if not union else 1 - float(intersection) / union  # two empty networks are identical, not undefined
 
 
 def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and taxonomic info (columns)
-                         networks: list[nx.Graph], # List of networkx networks
+                         networks: list[nx.Graph] | dict[str, nx.Graph],
+                         # Networks, ideally as {rank value: network} so they cannot be mispaired
                          metric: str = "Jaccard", # Distance metric to use
                          cut_off: int = 10, # Minimum glycans per rank to be included; default:10
                          rank: str = "Species" # Taxonomic rank for grouping; default:Species
@@ -102,11 +104,13 @@ def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and t
     if dist_func is None:
         raise ValueError("Not a defined metric. At the moment, only 'Jaccard' is available as a metric.")
     # Get all objects to calculate distance between
-    value_counts = df[rank].value_counts()
-    valid_ranks = value_counts.index[value_counts >= cut_off]
-    valid_networks = [net for spec, net in zip(value_counts.index, networks) if spec in valid_ranks]
+    counts = df[rank].value_counts()
+    if not isinstance(networks, dict):
+        # A bare list can only be paired positionally, and value_counts is frequency-ordered, so pair against the frame's own order of appearance instead
+        networks = dict(zip(dict.fromkeys(df[rank]), networks))
+    valid = [(k, v) for k, v in networks.items() if counts.get(k, 0) >= cut_off]
     # Get distance matrix
-    return calculate_distance_matrix(valid_networks, dist_func, label_list = valid_ranks.tolist())
+    return calculate_distance_matrix([v for _, v in valid], dist_func, label_list = [k for k, _ in valid])
 
 
 def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.g., from distance_from_embeddings)

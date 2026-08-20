@@ -114,6 +114,10 @@ class GlycoDataFrame(pd.DataFrame):
     def name(self):
         return self._glyco_name
 
+    @property
+    def provenance(self):
+        return self._provenance
+
     def __init__(self, *args, **kwargs):
         contrasts = kwargs.pop('contrasts', None)
         paired = kwargs.pop('paired', None)
@@ -304,8 +308,10 @@ class LazyLoader:
                     dataset_key = f"{self.prefix}{name}"
                     contrasts = self._contrasts_map.get(dataset_key, {})
                     paired = self._paired_map.get(dataset_key, False)
+                    # contrasts.csv keys datasets with the loader prefix, datasets_metadata.csv without it, so accept either spelling
                     self._datasets[name] = GlycoDataFrame(_df, contrasts = contrasts, paired = paired, name = name,
-                                                          provenance = self._provenance_map.get(name, {}))
+                                                          provenance = self._provenance_map.get(
+                                                              dataset_key) or self._provenance_map.get(name, {}))
             except FileNotFoundError:
                 raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
         return self._datasets[name]

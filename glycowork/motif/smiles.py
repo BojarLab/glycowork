@@ -15,7 +15,7 @@ skeleton's own heteroatom, 'O' for a hydroxyl and 'N' for an amine.
 import re
 from typing import NamedTuple
 import networkx as nx
-from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
+from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string, glycan_graph_memoize
 
 CERAMIDE = 'OC[C@@H](NC(=O)CCCCCCCCCCCCCCC)[C@H](O)/C=C/CCCCCCCCCCCCC'  # d18:1/16:0, the placeholder used whenever a sequence just says 'Cer'
 UNKNOWN_POSITION = 'lowest'  # where a modification without a position number goes; 'lowest' free slot reproduces what GlyLES did
@@ -323,6 +323,7 @@ def _ring_digit(n: int # Ring-closure index
     return str(n) if n < 10 else '%%%d' % n
 
 
+@glycan_graph_memoize(maxsize = 4096)
 def graph_to_smiles(graph: nx.DiGraph, # Glycan graph, as produced by glycan_to_nxGraph
                     mapping: bool = False, # Also return, for every atom of the SMILES, the graph node it came from
                     strict: bool = False # Raise on an unknown linkage or modification position instead of taking the lowest free one

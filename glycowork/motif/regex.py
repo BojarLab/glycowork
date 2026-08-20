@@ -31,6 +31,9 @@ def preprocess_pattern(pattern: str # Glyco-regular expression like "Hex-HexNAc-
         edges = body.split(',')
         if len(edges) == 2 and edges[0] and edges[1] and int(edges[0]) > int(edges[1]):
             raise ValueError(f"Minimum occurrence exceeds maximum in '{{{body}}}' of glyco-regular expression '{pattern}'")
+    if re.search(r'(?<![\]\)])(?:\{[^}]*\}|\*|\+)', LOOKAROUND.sub('', pattern)):
+        raise ValueError(
+            f"A quantifier in glyco-regular expression '{pattern}' is not attached to a bracketed group; write it as, e.g., '[Hex]{{1,2}}' rather than 'Hex{{1,2}}'")
     for body in ALTERNATIVES.findall(pattern):
         if not body or any(not alt for alt in body.split('|')):
             raise ValueError(f"'[{body}]' has an empty alternative in glyco-regular expression '{pattern}'")
@@ -100,7 +103,9 @@ def convert_pattern_component(pattern_component: str # Chunk of glyco-regular ex
         part = pattern if pattern else pattern_component
         pattern = [replace_patterns(part)] if isinstance(part, str) else list(part)
     if pattern is None:
-        pattern = replace_patterns(pattern_component)
+        # A quantifier or an optional marker can also sit on a bare motif, which still names exactly one motif; without the list the string below would be iterated character by character
+        core = QUANTIFIER.sub('', pattern_component).rstrip('*+?')
+        pattern = [replace_patterns(core + '-' if core and (core[-1].isdigit() or core[-1] == '?') else core)]
     if occurrence is None:
         occurrence = [1, 1]
     return {specify_linkages(p): occurrence for p in pattern}
@@ -139,7 +144,8 @@ def filter_matches_by_location(matches: list[list[int]], # List of node index li
         return matches
     if isinstance(match_location, str):
         match_location = {match_location}
-    root = max(ggraph.nodes()) if len(ggraph) else -1
+    # glycan_to_nxGraph numbers the main chain first and every floating bit above it, so the reducing end is the top of the component holding node 0, not the highest node id
+    root = max(min(nx.weakly_connected_components(ggraph), key = min)) if len(ggraph) else -1
     if 'start' in match_location:
         matches = [m for m in matches if m and ggraph.out_degree[m[0]] == 0]
     if 'end' in match_location:

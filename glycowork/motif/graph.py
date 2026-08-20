@@ -659,7 +659,28 @@ def graph_to_string(graph: nx.DiGraph, # Glycan graph (assumes root node is the 
         # glycan_to_nxGraph numbers the main part first and each floating bit after it, so the parts are emitted in that same order and each is put back on its own 0-based range
         parts = [graph.subgraph(sorted(c)) for c in components[1:] + components[:1]]
         parts = [nx.relabel_nodes(p.copy(), {pn: pn - min(p.nodes()) for pn in p.nodes()}) for p in parts]
-        parts = '}'.join(['{' + graph_to_string_int(p, canonicalize = canonicalize, order_by = order_by) for p in parts])
+        out = []
+        for p in parts:
+            anchors = p.nodes[max(p.nodes())].get('anchors')
+            if not anchors:
+                out.append('{' + graph_to_string_int(p, canonicalize = canonicalize, order_by = order_by))
+                continue
+            # An anchored bit is written back by hanging its fragment off each recorded acceptor in turn, so the alternatives survive the round trip instead of collapsing into the merged linkage
+            link, alts = max(p.nodes()), []
+            frag = nx.relabel_nodes(p.subgraph(set(p.nodes()) - {link}).copy(),
+                                    {n: i for i, n in enumerate(sorted(set(p.nodes()) - {link}))})
+            nf = len(frag)
+            for linkage, anchor in anchors.items():
+                ga = glycan_to_nxGraph_int(anchor.replace('^', ''))
+                alt = nx.compose(nx.relabel_nodes(ga, {n: n + nf + 1 for n in ga.nodes()}), frag)
+                alt.add_node(nf, string_labels = linkage)
+                alt.add_edge(
+                    next(i for i, x in enumerate(min_process_glycans([anchor])[0]) if x.endswith('^')) + nf + 1, nf)
+                alt.add_edge(nf, nf - 1)
+                alt.nodes[nf - 1]['string_labels'] += '^'
+                alts.append(graph_to_string_int(alt, canonicalize = False, order_by = order_by))
+            out.append('{' + '|'.join(alts))
+        parts = '}'.join(out)
         return parts[:parts.rfind('{')] + parts[parts.rfind('{') + 1:]
     else:
         return graph_to_string_int(graph, canonicalize = canonicalize, order_by = order_by)

@@ -9,12 +9,13 @@ from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import linkages, motif_list, unwrap, Hex, dHex, HexNAc, HexA, Pen, Sia
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, get_possible_topologies, compare_glycans, graph_to_string_int, expand_termini_list, build_wildcard_cache, _sl, _has_o
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition
-from glycowork.motif.regex import get_match, get_match_batch, compile_pattern
+from glycowork.motif.regex import get_match, get_match_batch, compile_pattern, compile_component
 
 
 LINKAGE_NODE_PATTERN = re.compile(r'^[ab?]?[0-9?/]+-[0-9?/]+$')
 _WILDCARD_RE = re.compile(r'(?<![A-Za-z0-9])(?:Monosaccharide|HexNAcOS|HexNAcOP|HexNAc|HexAOS|HexOS|HexOP|HexNS|HexN|HexA|dHex|Hex|Sia|Pen)(?![A-Za-z0-9])')
 _STRUCTURAL_ALDITOL = re.compile(r'(?:Thre|Ery|Rib|Gro|Ara)[A-Za-z0-9]*-ol$')
+_REGEX_LOOKAROUND = re.compile(r'\(\?<?[=!][^()]*\)')
 _MOTIF_SEQ = dict(zip(motif_list.motif_name, motif_list.motif))
 _MOTIF_SPEC = {n: eval(t) for n, t in zip(motif_list.motif_name, motif_list.termini_spec)}
 
@@ -33,9 +34,12 @@ def _motif_sequence(
 def _motif_ambiguity(
         label: str # Motif label as produced by annotate_dataset/quantify_motifs
 ) -> tuple[int, bool, int, int]: # Sort key; lower is more specific
-    "Ranks a motif label by information content, since wildcards, ambiguous linkages and unpinned termini convey less than the concrete forms they abstract and can be longer than them"
+    "Ranks a motif label by information content, since wildcards, ambiguous linkages, and unpinned termini convey less than the concrete forms they abstract and can be longer than them"
     s, sp = _motif_sequence(label)
-    return (len(_WILDCARD_RE.findall(s)) + s.count('?') + s.count('/'), label not in _MOTIF_SEQ, -sum(t != 'flexible' for t in sp), -len(s))
+    # A glyco-regex spells its own syntax with '?' and '/', neither of which is the linkage ambiguity this rank is about
+    s = _REGEX_LOOKAROUND.sub('', s[1:]) if s.startswith('r') else s
+    return (len(_WILDCARD_RE.findall(s)) + s.count('?') + s.count('/'), label not in _MOTIF_SEQ,
+            -sum(t != 'flexible' for t in sp), -len(s))
 
 
 def annotate_glycan(
@@ -121,15 +125,59 @@ def annotate_glycan_topology_uncertainty(
 def get_molecular_properties(
         glycan_list: list[str], # List of IUPAC-condensed glycan sequences
         verbose: bool = False, # Print SMILES not found on PubChem
-        placeholder: bool = False # Return dummy values instead of dropping failed requests
-) -> pd.DataFrame: # DataFrame with molecular parameters from PubChem
-    "Retrieves molecular properties from PubChem for a list of glycans using their SMILES representations"
+        placeholder: bool = False, # Return dummy values instead of dropping failed requests
+        pubchem: bool = False # Additionally fetch xlogp and complexity, the only two descriptors that cannot be computed from the structure
+) -> pd.DataFrame: # DataFrame with molecular parameters
+    "Computes molecular properties of glycans from their own SMILES, optionally enriched with the two empirical descriptors only PubChem has"
+    from glycowork.motif.smiles import glycan_to_molecule, GlycanSMILESError
+    from glycowork.motif.tokenization import calculate_adduct_mass
+    VALENCE = {'C': 4, 'N': 3, 'O': 2, 'S': 2, 'P': 3, 'F': 1, 'Cl': 1, 'Br': 1, 'I': 1}
+    local, keep = {}, []
+    for g in glycan_list:
+        try:
+            mol = glycan_to_molecule(g)
+        except (GlycanSMILESError, ValueError, KeyError):
+            continue
+        graph, order, nb = nx.Graph(), defaultdict(int), defaultdict(list)
+        graph.add_nodes_from(range(len(mol.atoms)))
+        for i, j, o in mol.bonds:
+            order[i] += o
+            order[j] += o
+            nb[i].append((j, o))
+            nb[j].append((i, o))
+            graph.add_edge(i, j, order = o)
+        # Every atom is written without its hydrogens except the bracketed stereocentres, so the count follows from the standard valence
+        hs = {k: max(VALENCE.get(el, 0) - order[k] + ch, 0) for k, (el, ch, _) in enumerate(mol.atoms)}
+        elements = Counter(a[0] for a in mol.atoms)
+        elements['H'] = sum(hs.values())
+        formula = ''.join(f'{e}{elements[e] if elements[e] > 1 else ""}' for e in ('C', 'H', 'N', 'O', 'P', 'S') if elements[e])
+        carbonyl = {i for i, (el, _, _) in enumerate(mol.atoms) if el == 'C' and any(mol.atoms[j][0] == 'O' and o == 2 for j, o in nb[i])}
+        amide = {i for i, (el, _, _) in enumerate(mol.atoms) if el == 'N' and any(j in carbonyl for j, _ in nb[i])}
+        # A rotatable bond is an acyclic single bond between two non-terminal heavy atoms, which is exactly a bridge of the molecular graph, minus the amide bond
+        rotatable = sum(1 for i, j in nx.bridges(graph) if graph[i][j]['order'] == 1 and graph.degree(i) > 1 and graph.degree(j) > 1
+                        and not ({i, j} <= (amide | carbonyl) and (i in amide) != (j in amide)))
+        tpsa = sum((23.06 if ch < 0 else 17.07 if any(o == 2 for _, o in nb[i]) else 20.23 if hs[i] else 9.23) if el == 'O'
+                   else {0: 3.24, 1: 12.03, 2: 26.02}.get(hs[i], 3.24) if el == 'N' else 0.0
+                   for i, (el, ch, _) in enumerate(mol.atoms))  # Ertl's topological polar surface area, over the O and N environments a glycan can present
+        # Only the tagged centres are knowable without CIP perception, so the undefined ones an unspecified anomer leaves behind are not reported at all rather than reported as zero
+        local[g] = {'molecular_formula': formula, 'molecular_weight': calculate_adduct_mass(formula, mass_value = 'average'),
+                    'exact_mass': calculate_adduct_mass(formula), 'monoisotopic_mass': calculate_adduct_mass(formula),
+                    'tpsa': round(tpsa, 2), 'h_bond_donor_count': sum(hs[i] for i, (el, _, _) in enumerate(mol.atoms) if el in 'NO'),
+                    'h_bond_acceptor_count': sum(1 for i, (el, _, _) in enumerate(mol.atoms) if el == 'O' or (el == 'N' and i not in amide)),
+                    'rotatable_bond_count': rotatable, 'charge': sum(a[1] for a in mol.atoms), 'heavy_atom_count': len(mol.atoms),
+                    'ring_count': len(mol.rings), 'covalent_unit_count': 1, 'isotope_atom_count': 0,
+                    'defined_atom_stereo_count': sum(bool(a[2]) for a in mol.atoms)}
+        keep.append(g)
+    df_local = pd.DataFrame([local[g] for g in keep], index = keep)
+    if not pubchem:
+        return df_local if not placeholder else df_local.reindex(glycan_list).fillna(df_local.median(numeric_only = True))
     try:
         import pubchempy as pcp
     except ImportError:
-        raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
+        raise ImportError("Fetching xlogp and complexity needs pubchempy ('pip install pubchempy'); every other property is already computed locally with pubchem = False.")
     if placeholder:
         dummy = IUPAC_to_SMILES(['Glc'])[0]
+        dummy_compound = None
     compounds_list, succeeded_requests, failed_requests = [], [], []
     for s, g in zip(IUPAC_to_SMILES(glycan_list), glycan_list):
         try:
@@ -141,26 +189,25 @@ def get_molecular_properties(
         except Exception:
             failed_requests.append(s)
             if placeholder:  # the placeholder row belongs to this glycan, otherwise the index silently stops matching the input
-                compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0])
+                if dummy_compound is None:
+                    dummy_compound = pcp.get_compounds(dummy, 'smiles')[0]
+                compounds_list.append(dummy_compound)
                 succeeded_requests.append(g)
     if verbose and len(failed_requests) >= 1:
         print('The following SMILES were not found on PubChem:\n')
         print(failed_requests)
     try:
-        df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight', 'xlogp',
-                                                                  'charge', 'exact_mass', 'monoisotopic_mass', 'tpsa', 'complexity',
-                                                                  'h_bond_donor_count', 'h_bond_acceptor_count',
-                                                                  'rotatable_bond_count', 'heavy_atom_count', 'isotope_atom_count', 'atom_stereo_count',
-                                                                  'defined_atom_stereo_count', 'undefined_atom_stereo_count',
-                                                                  'bond_stereo_count', 'defined_bond_stereo_count',
-                                                                  'undefined_bond_stereo_count', 'covalent_unit_count'])
+        df = pcp.compounds_to_frame(compounds_list, properties = ['xlogp', 'complexity'])
         df = df.reset_index(drop = True)
         df.index = succeeded_requests
     except (KeyError, ValueError) as e:
         if verbose:
             print(f'PubChem API returned incomplete data: {e}')
         df = pd.DataFrame(index = succeeded_requests)
-    return df
+    # The locally derived columns are exact, so they win wherever both sources have an opinion, and they also carry the rows PubChem lost
+    df = df.drop(columns = [c for c in df.columns if c in df_local.columns], errors = 'ignore')
+    return df_local.join(df, how = 'outer' if placeholder else 'left').reindex(
+        [g for g in glycan_list if g in df_local.index or g in df.index])
 
 
 def get_size_branching_features(
@@ -266,7 +313,7 @@ def annotate_dataset(
         temp.index = glycans
         shopping_cart.append(temp)
     if 'chemical' in feature_set:
-        shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
+        shopping_cart.append(get_molecular_properties(glycans, placeholder = True).select_dtypes('number'))
     if any(t in feature_set for t in ('terminal', 'terminal1', 'terminal2', 'terminal3')):
         bag1, bag2, bag3 = [], [], []
         if 'terminal' in feature_set or 'terminal1' in feature_set:
@@ -304,9 +351,18 @@ def get_motif_dag(
         abundances: pd.DataFrame | None = None # Motifs x samples abundances, used as an exact prefilter for containment
 ) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is a substructure of child
     "Builds the containment DAG of a motif set, in which a parent motif is a substructure of each of its children"
-    pat, tgt, spec, amb = {}, {}, {}, {}
+    pat, tgt, spec, amb, regexy = {}, {}, {}, {}, set()
     for m in motifs:
         s, sp = _motif_sequence(m)
+        if s.startswith('r'):
+            # A glyco-regex has no motif graph, but every match must contain its mandatory single-alternative chunks, so the largest of those stands in for it
+            cands = [c['motifs'][0] for c in map(compile_component, compile_pattern(s)) if
+                     c['min'] and not c['absent'] and len(c['motifs']) == 1]
+            if not cands:
+                continue
+            s = max(cands, key = lambda x: x.count('('))
+            sp = ['flexible'] * (1 + s.count('(') - (1 if s.endswith(')') else 0))
+            regexy.add(m)
         try:
             pat[m] = glycan_to_nxGraph(s, termini = 'provided', termini_list = sp)
         except Exception:
@@ -322,12 +378,14 @@ def get_motif_dag(
     dag.add_nodes_from(cols)
     A = abundances.loc[cols].values if abundances is not None else None
     for i, p in enumerate(cols):
+        if p in regexy:
+            continue  # a glyco-regex only stands for the backbone every match must contain, which proves what contains it but never what it contains
         # p contains c implies count(p) >= count(c) in every glycan, hence abundance dominance is a necessary condition and an exact prefilter
         dom = (A <= A[i] + 1e-9).all(axis = 1) if A is not None else np.ones(len(cols), dtype = bool)
         for j, c in enumerate(cols):
             if i == j or not dom[j] or len(pat[p]) > len(tgt[c]) or not subgraph_isomorphism(tgt[c], pat[p], termini_list = spec[p]):
                 continue
-            if len(pat[p]) == len(tgt[c]) and (amb[p], i) < (amb[c], j) and subgraph_isomorphism(tgt[p], pat[c],
+            if len(pat[p]) == len(tgt[c]) and c not in regexy and (amb[p], i) < (amb[c], j) and subgraph_isomorphism(tgt[p], pat[c],
                                                                                                  termini_list = spec[
                                                                                                      c]):
                 continue  # mutually isomorphic labels: the wildcard form matches strictly more structures and so is the ancestor, leaving the specific form as the descendant; the positional fallback makes the order total and the DAG acyclic

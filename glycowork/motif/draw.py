@@ -4,6 +4,7 @@ from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit
+import warnings
 from io import BytesIO
 from typing import Any
 import networkx as nx
@@ -1422,11 +1423,16 @@ def GlycoDraw(
         highlight_hit = resolve_motif_name(highlight_motif)
         if highlight_hit:
             highlight_motif = highlight_hit[0]
-            if not highlight_termini_list:
+            if not highlight_motif.startswith('r') and not highlight_termini_list:
                 highlight_termini_list = highlight_hit[1]
-        elif highlight_motif.startswith('r'):
+        if highlight_motif and highlight_motif.startswith('r'):
             temp = get_match(highlight_motif[1:], draw_this)
-            highlight_motif = temp[0] if temp else None
+            if not temp:
+                from glycowork.motif.regex import explain_match
+                ex = explain_match(highlight_motif[1:], draw_this)
+                warnings.warn(
+                    f"'{highlight_motif[1:]}' does not match {draw_this}; chunks without a hit: {ex.loc[ex.hits_in_glycan == 0, 'chunk'].tolist()}")
+            highlight_motif, highlight_termini_list = (temp[0], []) if temp else (None, highlight_termini_list)
     # toggle SNFG vs 2D/3D chem
     if draw_method:
         if draw_method == 'chem2d':

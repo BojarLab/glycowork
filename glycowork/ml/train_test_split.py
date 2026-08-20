@@ -65,7 +65,11 @@ def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and ta
         val_x = [all_x[k] for k in j]
         val_y = [all_y[k] for k in j]
         if wildcard_seed:
-            val_x, val_y = seed_wildcard_hierarchy(val_x, val_y, wildcard_list = wildcard_list, wildcard_name = wildcard_name, r = r)
+            val_x, val_y = seed_wildcard_hierarchy(val_x, val_y, wildcard_list = wildcard_list,
+                                                   wildcard_name = wildcard_name, r = r)
+            # Wildcarding maps distinct sequences onto the same string, so a seeded validation glycan can come out identical to a training one
+            keep = [k for k, g in enumerate(val_x) if g not in set(train_x)]
+            val_x, val_y = [val_x[k] for k in keep], [val_y[k] for k in keep]
         id_val = list(range(len(val_x)))
         len_val_x = [len(k) for k in val_x]
         id_val = [[id_val[k]] * len_val_x[k] for k in range(len(len_val_x))]
