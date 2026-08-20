@@ -106,12 +106,20 @@ def get_multi_pred(prot: str,  # protein amino acid sequence
     # Applying background correction of predictions
     if background_correction:
         correction_df = pd.Series(correction_df.pred.values, index = correction_df.motif).to_dict()
+        # GlycoList compares by structure, so a background stored under a differently written but isomorphic sequence is still found
         correction_keys = GlycoList(list(correction_df))
-        bg_res = [correction_df[j] if j in correction_df else (
-            correction_df[correction_keys[correction_keys.index(j)]] if j in correction_keys else 0) for j in glycans]
-        if 0 in bg_res:
-            print(
-                "Warning: not all glycans are in the correction_df; consider adding their background to correction_df")
+        bg_res, missing = [], []
+        for j in glycans:
+            if j in correction_df:
+                bg_res.append(correction_df[j])
+            elif j in correction_keys:
+                bg_res.append(correction_df[correction_keys[correction_keys.index(j)]])
+            else:
+                bg_res.append(0)
+                missing.append(j)
+        if missing:  # a background that happens to be exactly 0 is not a miss, so the glycans themselves have to be tracked
+            warnings.warn(
+                f"{len(missing)} of {len(glycans)} glycans are not in correction_df and stay uncorrected, which puts them on a different scale from the rest: {missing[:5]}{'...' if len(missing) > 5 else ''}")
         res = [a_i - b_i for a_i, b_i in zip(res, bg_res)]
     return res
 
@@ -137,15 +145,10 @@ def get_lectin_preds(prot: str,  # protein amino acid sequence
     if prot_dic is None and not flex:
         raise ValueError(
             "It seems you did not provide a dictionary of protein:ESMC representations. This is necessary.")
-    preds = unwrap(get_multi_pred(prot, glycans, model, prot_dic,
-                                  batch_size = batch_size, libr = libr, flex = flex))
+    # Correcting inside get_multi_pred keeps one implementation, and that one matches the correction table by structure rather than by spelling
+    preds = unwrap(get_multi_pred(prot, glycans, model, prot_dic, background_correction = background_correction,
+                                  correction_df = correction_df, batch_size = batch_size, libr = libr, flex = flex))
     df_pred = pd.DataFrame({'motif': glycans, 'pred': preds})
-    if background_correction:
-        correction_dict = {motif: pred for motif, pred in zip(correction_df['motif'], correction_df['pred'])}
-        for idx, row in df_pred.iterrows():
-            motif = row['motif']
-            if motif in correction_dict:
-                df_pred.at[idx, 'pred'] -= correction_dict[motif]
     if sort:
         df_pred.sort_values('pred', ascending = False, inplace = True)
     return df_pred

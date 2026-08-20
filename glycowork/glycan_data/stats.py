@@ -807,6 +807,39 @@ def dag_neighbors(index: list[str], # feature labels in the order they are teste
             for g in index]
 
 
+def meta_analysis(effect_sizes: np.ndarray | list[float], # per-study effect sizes
+                  variances: np.ndarray | list[float], # variance of each effect size
+                  model: str = 'random', # 'fixed' or 'random' effects
+                  leave_one_out: bool = False # also pool with each study dropped in turn
+                  ) -> dict: # pooled effect, CI, p-value, tau2/Q/I2, per-study weights, optional leave-one-out
+    "Fixed/random-effects pooling (DerSimonian-Laird) with heterogeneity statistics and optional leave-one-out sensitivity"
+    if model not in ('fixed', 'random'):
+        raise ValueError(f"meta_analysis got model='{model}'; must be 'fixed' or 'random'.")
+    eff, var = np.asarray(effect_sizes, dtype = float), np.asarray(variances, dtype = float)
+    if len(eff) != len(var):
+        raise ValueError(f"meta_analysis got {len(eff)} effect sizes for {len(var)} variances; exactly one variance per effect size is required.")
+    var = np.maximum(var, 1e-12)
+    w = 1 / var
+    fixed = float(np.dot(w, eff) / w.sum())
+    # Cochran's Q is defined under fixed-effect weights, which is what the DerSimonian-Laird moment estimator of tau2 assumes
+    q, dfree = float(np.dot(w, (eff - fixed) ** 2)), len(eff) - 1
+    c = w.sum() - np.sum(w ** 2) / w.sum()
+    tau2 = max((q - dfree) / c, 0.0) if dfree > 0 and c > 0 else 0.0
+    if model == 'random':
+        w = 1 / (var + tau2)
+    pooled = float(np.dot(w, eff) / w.sum())
+    se = float(np.sqrt(1 / w.sum()))
+    z = pooled / se if se > 0 else 0.0
+    out = {'effect': pooled, 'se': se, 'ci_low': pooled - 1.96 * se, 'ci_high': pooled + 1.96 * se, 'z': float(z),
+           'p_val': float(2 * norm.sf(abs(z))), 'tau2': tau2, 'Q': q, 'Q_df': dfree,
+           'Q_p_val': float(chi2.sf(q, dfree)) if dfree > 0 else np.nan,
+           'I2': float(max(0.0, (q - dfree) / q) * 100) if q > 0 and dfree > 0 else 0.0,
+           'weights': (w / w.sum()).tolist(), 'model': model, 'k': len(eff)}
+    if leave_one_out and len(eff) > 2:
+        out['leave_one_out'] = [meta_analysis(np.delete(eff, i), np.delete(var, i), model = model) for i in range(len(eff))]
+    return out
+
+
 def omega_squared(row: pd.Series | np.ndarray | pd.DataFrame, # values for one feature, or a whole feature x sample frame
                   groups: list[str] # list indicating group membership with indices per column
                   ) -> float | pd.Series: # effect size as omega squared, per feature
@@ -861,7 +894,8 @@ def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a g
         return ("No variables retained", [])
     base_formula = 'Abundance ~ '
     formula_parts = ['Condition']
-    formula_parts += [f'{col} + {col}_Condition' for col in retained_vars] # Main and interaction effects
+    formula_parts += [f'{col} + {col}_Condition' for col in retained_vars]  # Main and interaction effects
+    group = group.copy()  # the interaction columns below are scratch for the fit and must not widen the caller's frame
     for col in retained_vars:
         group[f'{col}_Condition'] = group[col] * group['Condition']
     formula = base_formula + ' + '.join(formula_parts)

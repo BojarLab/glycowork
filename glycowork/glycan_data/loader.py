@@ -318,8 +318,28 @@ class LazyLoader:
 
     def __dir__(self):
         files = resources.files(f"{self.package}.{self.directory}").iterdir()
-        dataset_names = [file.name[len(self.prefix):-4] for file in files if file.name.startswith(self.prefix) and file.suffix.lower() == '.csv']
+        dataset_names = [file.name[len(self.prefix):-4] for file in files if
+                         file.name.startswith(self.prefix) and file.suffix.lower() == '.csv']
         return dataset_names
+
+    def filter(self, **criteria
+               # column = value, list of values (OR), or callable; multiple columns are combined with AND
+               ) -> list[str]:  # names of datasets whose metadata matches all criteria
+        "Select datasets by their metadata, e.g., glycomics_data_loader.filter(glycan_class = 'O', source_type = ['primary tissue', 'body fluid'])"
+        self._load_contrasts()
+        norm = lambda v: v.strip().lower().replace(' ', '_') if isinstance(v, str) else v
+        available, tests = set(self.__dir__()), {}
+        for col, want in criteria.items():
+            if not any(col in prov for prov in self._provenance_map.values()):
+                raise KeyError(
+                    f"'{col}' is not a metadata column of {self.directory}; available columns are {sorted({c for prov in self._provenance_map.values() for c in prov})}")
+            tests[col] = want if callable(want) else (
+                lambda v, w = {norm(x) for x in (want if isinstance(want, (list, tuple, set)) else [want])}: norm(
+                    v) in w)
+        # datasets_metadata.csv keys datasets without the loader prefix, contrasts.csv with it, so accept either spelling
+        out = [n[len(self.prefix):] if n.startswith(self.prefix) else n for n in self._provenance_map]
+        return sorted(n for n, prov in zip(out, self._provenance_map.values()) if
+                      n in available and all(test(prov.get(col)) for col, test in tests.items()))
 
 
 glycomics_data_loader = LazyLoader("glycowork", "glycan_data.datasets")

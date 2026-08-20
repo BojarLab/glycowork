@@ -9,7 +9,7 @@
 - Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw` (4894d1b)
 - `glycoworkGUI` is updated, making it more robust (628ee17)
 - Added more informative error messages throughout the package (105f416)
-- `glyles` and `pubchempy` are no longer dependencies of the `glycowork[chem]` optional install, while `rdkit>=2021.9.2` still is (now explicitly) (2caae7a, 3f4d7c5, )
+- `glyles` and `pubchempy` are no longer dependencies of the `glycowork[chem]` optional install, while `rdkit>=2021.9.2` still is (now explicitly) (2caae7a, 3f4d7c5, 5bdfcb1)
 - Most operations in `glycowork` are now more performant (2caae7a)
 - Package start-up times have been greatly improved (2caae7a)
 - The new `glycowork.motif.smiles` module has been added, to convert glycan sequences to canonical SMILES strings (100x as fast as before and with 30% more coverage over `df_glycan`) (3f4d7c5)
@@ -20,6 +20,7 @@
 - Added the `meta_filter` method to `GlycoDataFrame`, to filter datasets by metadata, such as `df_glycan.meta_filter(Order = 'Perissodactyla')`, which can be chained like any `pandas` attribute, such as `df_glycan.meta_filter(Order = 'Perissodactyla').glyco_filter('Sia(a2-3)Gal')` (c11b4d0)
 - Added newly curated comparative glycomics datasets to `glycomics_data_loader`: `human_serum_parkinson_GSL_PMID40379659`, `mouse_brain_tango2ko_GSL_10_1002pgr2_70042`, `mouse_brain_tango2ko_N_10_1002pgr2_70042`, `mouse_brain_tango2ko_O_10_1002pgr2_70042`, `fish_gill_infection_O_PMID41435595`, `fish_intestine_infection_O_10_2139ssrn_7005880`, `human_colorectal_butyrate_O_PMID36669592`, `human_celllines_N_PMID38022636`, `human_serum_gangliosidosis_GSL_PMID39190143` (dfbc225)
 - Added the `provenance` attribute to `GlycoDataFrame` that stores metadata about the `glycowork`-internal datasets (d41806a, 7c89d24)
+- Added the `filter` method to `LazyLoader` to allow attribute-based filtering of stored curated datasets, such as `glycomics_data_loader.filter(glycan_class = 'O', source_type = ['primary tissue', 'body fluid'])` ()
 
 ##### Changed 🔄
 - Changed the `GlycoDataFrame` attribute `_name` to `_glyco_name` to avoid shadowing the `pandas` attribute (9afa2b3)
@@ -33,6 +34,7 @@
 - `MissForest` now runs left-censored draws where missingness is intensity-dependent (MNAR) and Random Forest for the rest (MAR), where intensity-dependence is estimated via logistic regression (7849b15)
 - `get_alphaN` now has a new `verbose` keyword argument to suppress its print (which is now default `False`, since its output will now be stored as dataframe attributes) (5483f3c)
 - `impute_and_normalize` and `MissForest` now have the new `random_state` keyword argument to make imputation fully reproducible (9630cd0)
+- Added the `meta_analysis` function that basically ports the statistical behavior of `get_meta_analysis` into its own function that can be called independently ()
 
 ##### Changed 🔄
 - `hotellings_t2` is now more robust to tiny groups (a918a2e)
@@ -45,7 +47,7 @@
 - `hsic` is now correctly symmetrical (7bf463b)
 
 ##### Deprecated ⚠️
-- Deprecated `calculate_permanova_stat` (handled in-line in `permanova_with_permutation`) and `replace_outliers_with_IQR_bounds` (everything uses Winsorization now) ()
+- Deprecated `calculate_permanova_stat` (handled in-line in `permanova_with_permutation`) and `replace_outliers_with_IQR_bounds` (everything uses Winsorization now) (5bdfcb1)
 
 ### motif
 #### tokenization
@@ -79,6 +81,7 @@
 - `get_glycanova`, `get_time_series`, and `get_jtk` now have the new optional keyword argument `glycoproteomics`, to facilitate ANOVA-type, time series, and circadian glycoform analysis of glycoproteomics data (c11b4d0, f3ee7e0)
 - Added the new optional keyword argument `random_state` to `get_time_series`, `get_jtk`, and `get_SparCC` to make them fully reproducible (9630cd0)
 - Added the new optional keyword argument `moderate_variance` to `get_differential_expression` and `get_glycanova` to support Empirical-Bayes variance moderation (afa0634)
+- Added the `full_output` keyword argument to `get_meta_analysis` that also returns heterogeneity statistics (tau2, Q, I2) and leave-one-out pooling if set to `True` ()
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
@@ -152,7 +155,7 @@
 #### annotate
 ##### Added ✨
 - Added `get_motif_dag` and `get_composition_dag` to build a containment DAG of connected motifs/compositions, for comparative glycomics/glycoproteomics analyses in `analysis` (a918a2e, c11b4d0)
-- Added the `pubchem` keyword argument to `get_molecular_properties` (default=False), to support the only two PubChem-stored properties that cannot be calculated from pure atomic structural attributes that we can calculate offline with the new SMILES machinery ()
+- Added the `pubchem` keyword argument to `get_molecular_properties` (default=False), to support the only two PubChem-stored properties that cannot be calculated from pure atomic structural attributes that we can calculate offline with the new SMILES machinery (5bdfcb1)
 
 ##### Changed 🔄
 - Refined counting of `Terminal_` motifs in `annotate_dataset` (a918a2e)
@@ -160,7 +163,7 @@
 - `annotate_dataset` will no longer split signal between pairs such as `Gal(b1-4)GlcNAc` and `Gal(b1-4)GlcNAc-ol` in free oligosaccharides (3737633)
 - `group_glycans_N_glycan_type` now uses glyco-regex patterns to better detect complex/hybrid N-glycans (6cb8de8)
 - The motifs `high_mannose`, `Nglycan_complex`, and `Nglycan_hybrid` now use glyco-regex expressions to better capture these motifs (6cb8de8)
-- `get_molecular_properties` now almost exclusively works with internal functions, meaning it no longer requires `glycowork[chem]` and works fully offline ()
+- `get_molecular_properties` now almost exclusively works with internal functions, meaning it no longer requires `glycowork[chem]` and works fully offline (5bdfcb1)
 
 ##### Fixed 🐛
 - Fixed a row dropping bug if `deduplicate_motifs` was run on non-imputed data (8f799c3)
@@ -188,6 +191,8 @@
 - `get_differential_biosynthesis` has the new `edge_type` keyword argument, to run the analysis at the level of monosaccharides or glycoenzymes instead of monolinks (7cfb5ea)
 - `get_differential_biosynthesis` and `get_edge_weight_by_abundance` have the new `virtual_damping` keyword argument, to control how much flux may run through unobserved intermediates (7cfb5ea)
 - `get_biosynthetic_coherence` now reports which precursor changed for each rewired glycan, via the new `top_changed_precursor` and `precursor_coef_change` columns (7cfb5ea)
+- Added the `prioritize` keyword argument to `extend_network` to optionally rank candidates by the maximum flow reaching them ()
+- `trace_diamonds` now also returns `'out_degree', 'onward_capacity', 'n_descendants'` in its output to tell a preferred intermediate from a dead-end one ()
 
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)

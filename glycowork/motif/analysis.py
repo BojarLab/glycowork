@@ -29,7 +29,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation,
-                                         correct_multiple_testing,
+                                         correct_multiple_testing, meta_analysis,
                                          omega_squared, moderated_variance, dag_neighbors,
                                          get_glycoform_diff, process_glm_results, partial_corr,
                                          estimate_technical_variance,
@@ -68,7 +68,8 @@ def preprocess_data(
         circadian_timepoints: int | list | np.ndarray | None = None,  # number of timepoints or explicit time values (only relevant if circadian)
         circadian_periods: list[int] | None = None,  # cycle lengths to encode (only relevant if circadian)
         circadian_interval: int = 1,  # time units between timepoints (only relevant if circadian)
-        circadian_replicates: int = 1  # replicates per timepoint (only relevant if circadian)
+        circadian_replicates: int = 1,  # replicates per timepoint (only relevant if circadian)
+        motif_dag: bool = True # Build the containment DAG; only worth its n^2 isomorphism sweep for callers that read it
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str | int], list[
     str | int]]:  # (transformed df, untransformed df, group1 labels, group2 labels)
     "Preprocesses glycomics data by handling missing values with Random Forest imputation, applying CLR/ALR transformations to escape compositional bias, and optionally quantifying glycan motifs"
@@ -140,7 +141,8 @@ def preprocess_data(
         df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs)
         # Re-normalization
         df_org = df_org.apply(lambda col: col / col.sum() * 100, axis = 0)
-        df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist(), abundances = df_org)
+        if motif_dag:
+            df_org.attrs['motif_dag'] = get_motif_dag(df_org.index.tolist(), abundances = df_org)
         df = df_org + 0.0000001
         if transform == "CLR":
             df = clr_transformation(df, (
@@ -159,7 +161,8 @@ def preprocess_data(
         df_org = df_org.groupby(df_org.index).mean()
         if glycoproteomics:
             # Component-wise composition containment forces the same abundance inequality as substructure containment, so glycoforms admit the same balances and residuals as motifs
-            df_org.attrs['motif_dag'] = get_composition_dag(df_org.index.tolist(), abundances = df_org)
+            if motif_dag:
+                df_org.attrs['motif_dag'] = get_composition_dag(df_org.index.tolist(), abundances = df_org)
     df_org.attrs['dataset'], df_org.attrs['provenance'] = prov
     return df, df_org, group1, group2
 
@@ -320,15 +323,17 @@ def get_representative_substructures(
     max_log_pval = np.max(log_pvals) or 1
     weights = log_pvals / max_log_pval
     motifs = filtered_df.motif.values.tolist()
-    # Pair glycoletters & disaccharides with their pvalue-based weight
-    mono_pairs = [(motifs[k], weights[k]) for k in range(len(motifs)) if '(' not in motifs[k]]
-    di_pairs = [(motifs[k], weights[k]) for k in range(len(motifs)) if '(' in motifs[k]]
-    mono, mono_weights = list(zip(*mono_pairs)) if mono_pairs else ((), ())
-    di, di_weights = list(zip(*di_pairs)) if di_pairs else ((), ())
-    mono_scores = [sum([mono_weights[j] for j in range(len(mono)) if mono[j] in k]) for k in glycans]
-    di_scores = [sum([di_weights[j] for j in range(len(di)) if subgraph_isomorphism(k, di[j])]) for k in glycans]
-    # For each glycan, get their glycoletter & disaccharide scores, normalized by glycan length
-    motif_scores = np.add(mono_scores, di_scores)
+    weight_of = dict(zip(motifs, weights))
+    # A parent motif is present in every glycan its children are, so scoring both counts one piece of evidence twice
+    dag = get_motif_dag(motifs)
+    descendants = {m: nx.descendants(dag, m) for m in dag}
+    mono = [m for m in motifs if '(' not in m]
+    di = [m for m in motifs if '(' in m]
+    motif_scores = []
+    for k in glycans:
+        hit = {m for m in mono if m in k} | {m for m in di if subgraph_isomorphism(k, m)}
+        motif_scores.append(sum(weight_of[m] for m in hit if not (descendants.get(m, set()) & hit)))
+    # For each glycan, get their motif score, normalized by glycan length
     length_scores = [len(g) for g in glycans]
     combined_scores = np.divide(motif_scores, length_scores)
     df_score = pd.DataFrame({'glycan': glycans, 'motif_score': motif_scores, 'length_score': length_scores,
@@ -1189,31 +1194,14 @@ def get_meta_analysis(
         variances: np.ndarray | list[float],  # Associated variance estimates
         model: str = 'fixed',  # 'fixed' or 'random' effects model
         filepath: str = '',  # Path to save Forest plot
-        study_names: list[str] = []  # Names corresponding to each effect size
-) -> tuple[float, float]:  # (combined effect size, two-tailed p-value)
+        study_names: list[str] = [],  # Names corresponding to each effect size
+        full_output: bool = False  # Return heterogeneity statistics (tau2, Q, I2) and leave-one-out pooling instead of just (effect, p-value)
+) -> tuple[
+         float, float] | dict:  # (combined effect size, two-tailed p-value), or the full result dict when full_output=True
     "Performs fixed/random effects meta-analysis using DerSimonian-Laird method for between-study variance estimation, with optional Forest plot visualization"
-    if model not in ['fixed', 'random']:
-        raise ValueError("Model must be 'fixed' or 'random'")
+    res = meta_analysis(effect_sizes, variances, model = model, leave_one_out = full_output)
     effect_sizes, variances = np.array(effect_sizes), np.array(variances)
-    weights = 1 / variances
-    total_weight = np.sum(weights)
-    combined_effect_size = np.dot(weights, effect_sizes) / total_weight
-    if model == 'random':
-        # Estimate between-study variance (tau squared) using DerSimonian-Laird method
-        q = np.dot(weights, (effect_sizes - combined_effect_size) ** 2)
-        df = len(effect_sizes) - 1
-        c = total_weight - np.sum(weights ** 2) / total_weight
-        tau_squared = max((q - df) / (c + 1e-8), 0)
-        # Update weights for tau_squared
-        weights = 1 / (variances + tau_squared)
-        total_weight = np.sum(weights)
-        # Recalculate combined effect size
-        combined_effect_size = np.dot(weights, effect_sizes) / (total_weight + 1e-8)
-    # Calculate standard error and z-score
-    se = np.sqrt(1 / (total_weight + 1e-8))
-    z = combined_effect_size / (se + 1e-8)
-    # Two-tailed p-value
-    p_value = 2 * (1 - norm.cdf(abs(z)))
+    combined_effect_size, p_value = res['effect'], res['p_val']
     # Check whether Forest plot should be constructed and saved
     if filepath:
         df_temp = pd.DataFrame({'Study': study_names, 'EffectSize': effect_sizes, 'EffectSizeVariance': variances})
@@ -1239,7 +1227,7 @@ def get_meta_analysis(
         ax.tick_params(left = False)
         plt.tight_layout()
         plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    return combined_effect_size, p_value
+    return res if full_output else (combined_effect_size, p_value)
 
 
 def get_glycan_change_over_time(
@@ -1483,11 +1471,10 @@ def get_biodiversity(
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     experiment = "diff" if group2 else "anova"
     df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = experiment, motifs = motifs,
-                                                 impute = False,
-                                                 transform = transform, feature_set = feature_set, paired = paired,
-                                                 gamma = gamma,
-                                                 custom_scale = custom_scale, custom_motifs = custom_motifs,
-                                                 random_state = random_state)
+                                                 impute = False, transform = transform, feature_set = feature_set, paired = paired,
+                                                 gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,
+                                                 random_state = random_state,
+                                                 motif_dag = False)  # rows are diversity metrics, not motifs, so a containment DAG has nothing to group here
     shopping_cart = []
     distance_matrix = pd.DataFrame()
     group_sizes = group1 if not group2 else len(group1) * [1] + len(group2) * [2]
@@ -1670,7 +1657,25 @@ def get_SparCC(
         corrs, pvals = np.broadcast_to(corrs, (n, n)), np.broadcast_to(pvals, (n, n))
         correlation_matrix, p_value_matrix = corrs[:df1.shape[1], df1.shape[1]:], pvals[
             :df1.shape[1], df1.shape[1]:]
-    p_value_matrix = multipletests(p_value_matrix.flatten(), method = 'fdr_tsbh')[1].reshape(p_value_matrix.shape)
+    if motifs:
+        # Each motif's correlations are one family, grouped by rarest ancestral motif family so that branches with different null proportions each get their own pi0
+        dag = get_motif_dag(df1.columns.tolist())
+        desc = {r: nx.descendants(dag, r) for r in dag if not dag.in_degree(r)}
+        breadth = {r: len(d) for r, d in desc.items()}
+        anc_roots = {}
+        for r, d in desc.items():
+            for g in d:
+                anc_roots.setdefault(g, []).append(r)
+        grouped_cells, grouped_pvals = {}, {}
+        for i, m in enumerate(df1.columns):
+            anc = anc_roots.get(m, []) + ([m] if m in breadth else [])
+            grp = min(anc, key = lambda a: (breadth[a], a)) if anc else "rest"
+            grouped_cells.setdefault(grp, []).extend((i, j) for j in range(df2.shape[1]))
+            grouped_pvals.setdefault(grp, []).extend(p_value_matrix[i, :].tolist())
+        corrected, _ = TST_grouped_benjamini_hochberg(grouped_cells, grouped_pvals, alpha)
+        p_value_matrix = np.array([[corrected[(i, j)] for j in range(df2.shape[1])] for i in range(df1.shape[1])])
+    else:
+        p_value_matrix = np.reshape(correct_multiple_testing(p_value_matrix.flatten(), alpha)[0], p_value_matrix.shape)
     correlation_df = pd.DataFrame(correlation_matrix, index = df1.columns, columns = df2.columns)
     p_value_df = pd.DataFrame(p_value_matrix, index = df1.columns, columns = df2.columns)
     correlation_df.attrs.update(
@@ -1684,7 +1689,8 @@ def multi_feature_scoring(
         group1: list[str | int],  # First group indices/names
         group2: list[str | int],  # Second group indices/names
         filepath: str = '',  # Path to save ROC plot
-        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+        random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+        dag: nx.DiGraph | None = None  # Motif containment DAG; collapses collinear parent/child motifs before selection
 ) -> tuple['LogisticRegression', float, list[str]]:  # (L1-regularized logistic regression model, ROC AUC score, selected features)
     "Identifies minimal glycan feature set for group classification using L1-regularized logistic regression"
     from sklearn.feature_selection import SelectFromModel
@@ -1699,6 +1705,11 @@ def multi_feature_scoring(
     else:
         y = group1
     X = df.T
+    if dag is not None:
+        # A parent motif and a child it always travels with are one signal; L1 would break that tie arbitrarily, so the more specific form is kept
+        redundant = {p for p, c in dag.edges() if p in X.columns and c in X.columns
+                     and abs(np.corrcoef(X[p].values, X[c].values)[0, 1]) > 0.99}
+        X = X.drop(columns = list(redundant))
     model = LogisticRegression(**_LR_L1, solver = 'liblinear', random_state = random_state)
     model.fit(X.values, y)
     model = SelectFromModel(model, prefit = True)
@@ -1753,14 +1764,13 @@ def get_roc(
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     experiment = "diff" if group2 else "anova"
-    df, _, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = experiment, motifs = motifs,
-                                            impute = impute,
-                                            transform = transform, feature_set = feature_set, paired = paired,
-                                            gamma = gamma,
-                                            custom_scale = custom_scale, custom_motifs = custom_motifs,
-                                            random_state = random_state)
+    df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = experiment,
+                                                 motifs = motifs, impute = impute,
+                                                 transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
+                                                 custom_scale = custom_scale, custom_motifs = custom_motifs, random_state = random_state)
     if multi_score:
-        return multi_feature_scoring(df, group1, group2, filepath = filepath, random_state = random_state)
+        return multi_feature_scoring(df, group1, group2, filepath = filepath, random_state = random_state,
+                                     dag = df_org.attrs.get('motif_dag'))
     auc_scores = {}
     if group2:  # binary comparison
         for feature, values in df.iterrows():

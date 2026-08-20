@@ -640,7 +640,9 @@ def glycoctxml_to_iupac(glycan_xml: str # GlycoCT XML format string
             if parent_match and child_match:
                 parent_id = int(parent_match.group(1))
                 child_id = int(child_match.group(1))
-                for j in range(i+1, min(i+10, len(lines))):
+                # Each scan below may find nothing, so start from an unknown state instead of inheriting the previous connection's
+                child_type, parent_pos, child_pos = '', '?', '?'
+                for j in range(i + 1, min(i + 10, len(lines))):
                     if 'childType=' in lines[j]:
                         child_type_match = re.search(r'childType="([^"]+)"', lines[j])
                         if child_type_match:

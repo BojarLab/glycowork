@@ -760,6 +760,16 @@ def trace_diamonds(network: nx.DiGraph, # Biosynthetic network
                          threshold = threshold, nb_intermediates = nb_intermediates) for d in matchings_list]
     df_out = pd.DataFrame(paths).T.mean(axis = 1).reset_index()
     df_out.columns = ['glycan', 'probability']
+    # An intermediate can dominate because its path is preferred or because nothing downstream consumes it, so the onward context travels with the preference
+    caps, ctx = nx.get_edge_attributes(network, 'capacity'), []
+    for g in df_out['glycan']:
+        out_edges = list(network.out_edges(g)) if g in network else []
+        ctx.append((len(out_edges), sum(caps.get(e, np.nan) for e in out_edges) if out_edges and caps else np.nan,
+                    len(nx.descendants(network, g)) if g in network else 0))
+    df_out[['out_degree', 'onward_capacity', 'n_descendants']] = pd.DataFrame(ctx, index = df_out.index,
+                                                                              columns = ['out_degree',
+                                                                                         'onward_capacity',
+                                                                                         'n_descendants'])
     return df_out
 
 
@@ -1241,8 +1251,9 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
                    steps: int = 1, # Number of extension steps; default:1 (becomes max_steps when auto_steps is True)
                    to_extend: str | dict[str, int] | list[str] = "all", # Nodes to extend (all, specific leaf node, target composition)
                    strict_context: bool = False, # Whether to use network only to derive allowed reaction products; default:False
-                   auto_steps: bool = False # Infer minimum steps to reach target composition; converts steps into max_steps when to_extend is a composition
-                   ) -> tuple[nx.DiGraph, set[str]]: # (Extended network, New glycans), optionally minimum number of steps from auto_steps
+                   auto_steps: bool = False, # Infer minimum steps to reach target composition; converts steps into max_steps when to_extend is a composition
+                   prioritize: bool = False # Rank candidates by the maximum flow reaching them; only informative if the input network carries 'abundance' node attributes
+                   ) -> tuple[nx.DiGraph, set[str] | dict[str, float]]: # (Extended network, New glycans; a candidate:flow mapping sorted by descending flow when prioritize=True), optionally minimum number of steps from auto_steps
     "Extend biosynthetic network physiologically"
     graphs = {}
     new_glycans = set()
@@ -1286,6 +1297,16 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
         network = update_network(network, new_edges, edge_labels = new_edge_labels, node_labels = {k: 1 for k in new_leaf_glycans})
         leaf_glycans = new_leaf_glycans
         new_glycans.update(leaf_glycans)
+    if prioritize and new_glycans:
+        # candidates differ in how much of the observed glycome can physiologically reach them, which is the same flow criterion used to pick between isomers of one composition
+        roots = sorted(r for r in infer_roots(frozenset(network.nodes())) if r in network)
+        if not roots:
+            raise ValueError(
+                f"No biosynthetic root of this glycan class is present in the network (e.g., from '{next(iter(network.nodes()))}'), so candidates cannot be ranked by flow.")
+        root = min(roots, key = len) if '-ol' in roots[0] else max(roots, key = len)
+        flows = get_maximum_flow(get_edge_weight_by_abundance(network, root = root), source = root,
+                                 sinks = sorted(new_glycans))
+        new_glycans = dict(sorted(((g, v['flow_value']) for g, v in flows.items()), key = lambda kv: -kv[1]))
     return (network, new_glycans) if not auto_steps else (network, new_glycans, steps)
 
 

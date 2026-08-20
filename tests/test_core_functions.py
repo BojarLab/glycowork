@@ -39,8 +39,8 @@ from glycowork.motif.tokenization import (
 from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages, looks_like_linearcode,
     get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac, looks_like_oxford,
-    glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
-    glycoworkbench_to_iupac,
+    glycoct_to_iupac, glycoctxml_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan,
+    canonicalize_composition, parse_glycoform, glycoworkbench_to_iupac,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
@@ -51,7 +51,7 @@ from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOME
                                     parse_smiles, _split_token, _anomeric_position)
 from glycowork.glycan_data.loader import (
     unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
-    reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
+    reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines, lectin_array_data_loader,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan,
     GlycoList, GlycoDataFrame, NamedGroup, NamedGroups, glycoproteomics_data_loader, download_model, LazyLoader
 )
@@ -59,7 +59,7 @@ from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
     simpson_diversity_index, get_equivalence_test, sequence_richness,
     hotellings_t2, omega_squared, anosim, alpha_biodiversity_stats, permanova_with_permutation,
-    clr_transformation, alr_transformation, get_procrustes_scores,
+    clr_transformation, alr_transformation, get_procrustes_scores, meta_analysis,
     get_additive_logratio_transformation, get_BF, get_alphaN, mahalanobis_variance,
     pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
     correct_multiple_testing, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
@@ -1703,6 +1703,28 @@ LIN
     result = glycoct_to_iupac(glycoct)
     assert "Man" in result
     assert "GlcNAc" in result
+    # A connection whose linkage block sits further than the lookahead reaches must not inherit the previous connection's positions
+    xml = '''<sugar version="1.0">
+      <residues>
+        <basetype id="1" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+          <stemtype id="1" type="dglc" />
+        </basetype>
+        <basetype id="2" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dgal-HEX-1:5">
+          <stemtype id="1" type="dgal" />
+        </basetype>
+      </residues>
+      <linkages>
+        <connection id="1" parent="1" child="2">
+          <linkage id="1" parentType="o" childType="d">
+            <parent pos="4" />
+            <child pos="1" />
+          </linkage>
+        </connection>
+      </linkages>
+    </sugar>'''
+    assert glycoctxml_to_iupac(xml) == "Gal(b1-4)Glcb"
+    far = xml.replace('<linkage id="1"', '\n'.join(['      <!-- annotation -->'] * 12) + '\n      <linkage id="1"')
+    assert glycoctxml_to_iupac(far) == "Gal(b?-?)Glcb"
 
 
 def test_wurcs_to_iupac():
@@ -2160,6 +2182,17 @@ def test_glycomics_data_loader():
     # contrasts.csv keys datasets with the loader prefix, datasets_metadata.csv without it
     d = glycomics_data_loader.human_gastric_O_PMC5762837
     assert d.name == 'human_gastric_O_PMC5762837' and d.provenance['doi'] and d._contrasts
+    # filter() only ever returns datasets that are actually loadable, whatever datasets_metadata.csv lists
+    o_glycans = glycomics_data_loader.filter(glycan_class = 'O')
+    assert o_glycans and set(o_glycans).issubset(dir(glycomics_data_loader))
+    assert 'human_gastric_O_PMC5762837' in o_glycans and len(getattr(glycomics_data_loader, o_glycans[0])) > 0
+    assert set(o_glycans).issubset(glycomics_data_loader.filter(glycan_class = ['O', 'N']))  # a list of values is an OR
+    assert glycomics_data_loader.filter(glycan_class = 'O', source_type = 'cell line') == sorted(set(o_glycans) & set(glycomics_data_loader.filter(source_type = 'cell line')))  # several columns are an AND
+    assert glycomics_data_loader.filter(source_type = ' Primary Tissue ') == glycomics_data_loader.filter(source_type = 'primary tissue')  # case/whitespace-insensitive
+    assert glycomics_data_loader.filter(species = lambda v: isinstance(v, str) and v.startswith('Mus'))  # callables see the raw value
+    assert not set(lectin_array_data_loader.filter(glycan_class = 'O')) & set(o_glycans)  # a loader never returns another prefix's datasets
+    with pytest.raises(KeyError):
+        glycomics_data_loader.filter(not_a_column = 'x')
 
 
 def test_count_nested_brackets():
@@ -2646,7 +2679,9 @@ def test_get_glm():
         'H': [1, 2, 1, 2, 1, 2, 1, 2] * 2,
         'N': [2, 3, 2, 3, 2, 3, 2, 3] * 2
     })
+    before = list(data.columns)
     model, variables = get_glm(data)
+    assert list(data.columns) == before  # the interaction columns are scratch for the fit
     if not isinstance(model, str):  # If model fitting succeeded
         assert hasattr(model, 'params')
         assert hasattr(model, 'pvalues')
@@ -4324,8 +4359,12 @@ def test_preprocess_data():
     shifted.insert(0, 'run_id', range(len(shifted)))
     _, df_org_shifted, _, _ = preprocess_data(shifted, group1, group2, impute = False)
     assert set(df_org_shifted.index) == set(df['glycan'])
+    # The containment DAG costs an n^2 isomorphism sweep, so callers that never read it can skip it
+    _, no_dag, _, _ = preprocess_data(df, group1, group2, motifs = True, motif_dag = False)
+    assert 'motif_dag' not in no_dag.attrs
     # Test with motifs
     df_trans, df_org, g1, g2 = preprocess_data(df, group1, group2, motifs = True)
+    assert 'motif_dag' in df_org.attrs
     assert 'Terminal_LacNAc_type2' in df_trans.index
     assert 'Man' in df_trans.index
     try:
@@ -4871,6 +4910,11 @@ def test_get_SparCC():
     ]:
         assert isinstance(corr, pd.DataFrame)
         assert isinstance(pvals, pd.DataFrame)
+        assert ((pvals.values >= 0) & (pvals.values <= 1)).all()
+        # Motif mode corrects each motif family on its own instead of treating the whole matrix as one, so the two disagree
+    _, grouped = get_SparCC(df1, df2, motifs = True)
+    _, flat = get_SparCC(df1, df2, motifs = False)
+    assert grouped.shape != flat.shape or not np.allclose(grouped.values, flat.values)
 
 
 def test_get_SparCC_uncertain_topology():
@@ -4945,7 +4989,10 @@ def test_get_roc():
     group1 = [k for k in df.columns if 'control' in k]
     group2 = [k for k in df.columns if 'tumor' in k]
     results = get_roc(df, group1, group2)
-    results = get_roc(df, group1, group2, multi_score=True)
+    results = get_roc(df, group1, group2, multi_score = True)
+    # In motif mode the containment DAG preprocess_data already built is used to collapse collinear parent/child pairs
+    _, _, selected = get_roc(df, group1, group2, multi_score = True, motifs = True)
+    assert not any(p in selected and c in selected for p, c in get_motif_dag(selected).edges())
     df['sample7'] = [1000, 200, 400, 300, 100]
     df['sample8'] = [1100, 250, 410, 380, 150]
     df['sample9'] = [1050, 180, 380, 290, 120]
@@ -4972,6 +5019,15 @@ def test_get_representative_substructures():
     assert isinstance(results, list)
     assert all(isinstance(x, str) for x in results)
     assert len(results) <= 10  # Function should return up to 10 structures
+    # A parent motif is present in every glycan its children are, so its weight must not stack on top of theirs
+    nested = ['Gal(b1-4)GlcNAc', 'Gal(b1-4)[Fuc(a1-3)]GlcNAc']
+    dag = get_motif_dag(nested)
+    hit = {m for m in nested if subgraph_isomorphism('Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-3)Gal', m)}
+    assert len(hit) == 2 and sum(1 for m in hit if not (nx.descendants(dag, m) & hit)) == 1
+    nested_df = pd.DataFrame(
+        {'motif': nested, 'pval': [0.01, 0.01], 'corr_pval': [0.02, 0.02], 'effect_size': [2.0, 2.0]})
+    out = get_representative_substructures(nested_df)
+    assert out and not any(a != b and subgraph_isomorphism(b, a) for a in out for b in out)
 
 
 def test_get_lectin_array():
@@ -5180,6 +5236,9 @@ def test_get_meta_analysis_fixed():
     assert isinstance(combined_effect, float)
     assert isinstance(p_value, float)
     assert 0 <= p_value <= 1
+    # ignoring between-study variance can only make the pooled estimate look more certain than the random-effects one
+    heterogeneous = ([-2.0, 0.0, 2.0], [0.01, 0.01, 0.01])
+    assert meta_analysis(*heterogeneous, model = 'fixed')['se'] < meta_analysis(*heterogeneous, model = 'random')['se']
 
 
 def test_get_meta_analysis_random():
@@ -5190,6 +5249,15 @@ def test_get_meta_analysis_random():
     assert isinstance(combined_effect, float)
     assert isinstance(p_value, float)
     assert 0 <= p_value <= 1
+    full = get_meta_analysis(effect_sizes, variances, model = 'random', full_output = True)
+    assert np.isclose(full['effect'], combined_effect) and np.isclose(full['p_val'], p_value)
+    assert full['k'] == 3 and full['Q_df'] == 2 and full['tau2'] >= 0 and 0 <= full['I2'] <= 100
+    assert full['ci_low'] < full['effect'] < full['ci_high'] and np.isclose(sum(full['weights']), 1)
+    assert len(full['leave_one_out']) == 3 and all(loo['k'] == 2 for loo in full['leave_one_out'])
+    homogeneous = meta_analysis([0.5, 0.5, 0.5], [0.1, 0.1, 0.1], model = 'random')
+    assert homogeneous['tau2'] == 0 and homogeneous['I2'] == 0 and np.isclose(homogeneous['effect'], 0.5)
+    heterogeneous = meta_analysis([-2.0, 0.0, 2.0], [0.01, 0.01, 0.01], model = 'random')
+    assert heterogeneous['tau2'] > 0 and heterogeneous['I2'] > 75 and heterogeneous['Q_p_val'] < 0.05
 
 
 def test_get_meta_analysis_with_study_names():
@@ -5212,6 +5280,8 @@ def test_get_meta_analysis_invalid_model():
     variances = [0.1, 0.15, 0.08]
     with pytest.raises(ValueError):
         get_meta_analysis(effect_sizes, variances, model='invalid')
+    with pytest.raises(ValueError):
+        meta_analysis(effect_sizes, variances, model = 'invalid')
 
 
 def test_get_meta_analysis_mismatched_lengths():
@@ -5220,6 +5290,8 @@ def test_get_meta_analysis_mismatched_lengths():
     variances = [0.1, 0.15]
     with pytest.raises(ValueError):
         get_meta_analysis(effect_sizes, variances)
+    with pytest.raises(ValueError, match = "3 effect sizes for 2 variances"):
+        meta_analysis(effect_sizes, variances)
 
 
 def test_plot_embeddings_basic():
@@ -5876,6 +5948,17 @@ def test_trace_diamonds(simple_glycans):
     assert isinstance(results, pd.DataFrame)
     assert "probability" in results.columns
     assert len(results) > 0
+    # an intermediate can dominate because its path is preferred or because nothing consumes it downstream
+    assert {'out_degree', 'onward_capacity', 'n_descendants'} <= set(results.columns)
+    assert (results.out_degree >= 0).all() and (results.n_descendants >= results.out_degree).all()
+    assert results.onward_capacity.isna().all()  # no capacities on this network, so nothing to report
+    weighted = get_edge_weight_by_abundance(net, root = "Gal(b1-4)Glc-ol")
+    results = trace_diamonds(weighted, species_list, {"species1": weighted})
+    assert np.isfinite(results.loc[results.out_degree > 0, 'onward_capacity']).all()
+    assert results.loc[results.out_degree == 0, 'onward_capacity'].isna().all()
+    empty = construct_network(['Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol'])  # no diamonds at all
+    results = trace_diamonds(empty, species_list, {"species1": empty})
+    assert results.empty and {'out_degree', 'onward_capacity', 'n_descendants'} <= set(results.columns)
 
 
 def test_get_maximum_flow(sample_network):
@@ -6316,6 +6399,15 @@ def test_extend_network_basic(extension_test_network):
         to_extend="all",
         strict_context=True
     )
+    # prioritizing ranks the same candidates by the flow reaching them, without changing which candidates are produced
+    _, plain = extend_network(extension_test_network, steps = 1, to_extend = "all")
+    _, ranked = extend_network(extension_test_network, steps = 1, to_extend = "all", prioritize = True)
+    assert isinstance(ranked, dict) and set(ranked) == set(plain)
+    assert list(ranked.values()) == sorted(ranked.values(), reverse = True) and all(v > 0 for v in ranked.values())
+    abundant = extension_test_network.copy()
+    nx.set_node_attributes(abundant, {'Gal(b1-4)Glc-ol': 100.0, 'GlcNAc(b1-3)Gal(b1-4)Glc-ol': 50.0, 'Fuc(a1-2)Gal(b1-4)Glc-ol': 0.5}, 'abundance')
+    _, ranked_ab = extend_network(abundant, steps = 1, to_extend = "all", prioritize = True)
+    assert set(ranked_ab) == set(ranked) and max(ranked_ab.values()) > max(ranked.values())  # abundances feed the ranking
 
 
 def test_extend_network_specific_target(extension_test_network):
@@ -7882,18 +7974,26 @@ def test_get_multi_pred(sample_data, mock_models):
         correction_df=correction_df,
         flex=True
     )
+    zeroed = pd.DataFrame({'motif': sample_data['glycans'], 'pred': pd.Series([0.0, 0.0], dtype=np.float64)})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # a background of exactly 0 is a real value, not a miss
+        get_multi_pred(prot=sample_data['protein'], glycans=sample_data['glycans'], model=model,
+                       prot_dic=sample_data['prot_dict'], background_correction=True, correction_df=zeroed)
     correction_df = pd.DataFrame({
         'motif': sample_data['glycans'][:-1],
         'pred': pd.Series([0.1], dtype=np.float64)
     })
-    results_corrected = get_multi_pred(
-        prot=sample_data['protein'],
-        glycans=sample_data['glycans'],
-        model=model,
-        prot_dic=sample_data['prot_dict'],
-        background_correction=True,
-        correction_df=correction_df
-    )
+    # A glycan with no entry stays uncorrected, which has to be reported per glycan rather than inferred from a background of exactly 0
+    with pytest.warns(UserWarning):
+        results_corrected = get_multi_pred(
+            prot=sample_data['protein'],
+            glycans=sample_data['glycans'],
+            model=model,
+            prot_dic=sample_data['prot_dict'],
+            background_correction=True,
+            correction_df=correction_df
+        )
+    assert len(results_corrected) == len(sample_data['glycans'])
 
 
 def test_get_lectin_preds(sample_data, mock_models):
