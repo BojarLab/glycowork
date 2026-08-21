@@ -62,7 +62,7 @@ from glycowork.glycan_data.stats import (
     clr_transformation, alr_transformation, get_procrustes_scores, meta_analysis,
     get_additive_logratio_transformation, get_BF, get_alphaN, mahalanobis_variance,
     pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
-    correct_multiple_testing, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
+    correct_multiple_testing, bh_adjust, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
     variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results,
     replace_outliers_winsorization, perform_tests_monte_carlo, hsic
 )
@@ -98,7 +98,7 @@ from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_
                      get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings, get_pval_distribution,
                      characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site
 )
-from glycowork.network.biosynthesis import (safe_compare, safe_index, create_neighbors,
+from glycowork.network.biosynthesis import (safe_compare, safe_index, create_neighbors, apply_constraints, _load_constraints,
                          find_diff, construct_network, prune_network, network_alignment, export_network,
                          extend_glycans, highlight_network, infer_roots, get_edge_weight_by_abundance,
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
@@ -2574,6 +2574,14 @@ def test_correct_multiple_testing():
     assert all(isinstance(s, bool) for s in significance)
     corrected_pvals, significance = correct_multiple_testing([], 0.05)
     assert len(corrected_pvals) == 0
+    # two-stage adjusted p-values are calibrated to alpha and must track it; one-stage must not
+    p_mixed = [0.001, 0.008, 0.02, 0.04, 0.2, 0.3, 0.5, 0.6, 0.8, 0.9]
+    tight = correct_multiple_testing(p_mixed, 0.05)[0]
+    loose = correct_multiple_testing(p_mixed, 0.2)[0]
+    assert np.allclose(tight[:4], [0.008, 0.032, 0.053333, 0.08])
+    assert np.allclose(loose[:4], [0.006, 0.024, 0.04, 0.06])
+    assert np.allclose(correct_multiple_testing(p_mixed, 0.05, correction_method = "one-stage")[0],
+                       correct_multiple_testing(p_mixed, 0.2, correction_method = "one-stage")[0])
 
 
 def test_partial_corr():
@@ -2683,8 +2691,10 @@ def test_get_glm():
     model, variables = get_glm(data)
     assert list(data.columns) == before  # the interaction columns are scratch for the fit
     if not isinstance(model, str):  # If model fitting succeeded
-        assert hasattr(model, 'params')
-        assert hasattr(model, 'pvalues')
+        params, pvalues = model
+        assert list(params.index) == list(pvalues.index) == ['Intercept', 'Condition', 'H', 'H_Condition', 'N',
+                                                             'N_Condition']
+        assert params.notna().all() and ((pvalues >= 0) & (pvalues <= 1)).all()
         assert len(variables) > 0
     # all retained features have max == 0 → early return
     data_empty = pd.DataFrame({'H': [0, 0, 0, 0], 'N': [0, 0, 0, 0],
@@ -2693,7 +2703,7 @@ def test_get_glm():
     assert result == "No variables retained"
     assert vars_ == []
     # GLM fit raises → returns failure message
-    with patch('statsmodels.formula.api.glm', side_effect = ValueError("forced")):
+    with patch('numpy.linalg.lstsq', side_effect = ValueError("forced")):
         result, vars_ = get_glm(data)
         assert "GLM fitting failed" in result
 
@@ -2741,6 +2751,9 @@ def test_perform_tests_monte_carlo():
     assert len(raw_p) == len(adj_p) == len(effect) == 5
     assert all(0 <= p <= 1 for p in raw_p)
     assert all(0 <= p <= 1 for p in adj_p)
+    # the within-instance correction is calibrated to alpha, so a looser alpha cannot yield larger adjusted p-values
+    loose = perform_tests_monte_carlo(group_a, group_b, num_instances = 10, alpha = 0.2)[1]
+    assert all(l <= a + 1e-12 for l, a in zip(loose, adj_p))
 
 
 def test_hsic():
@@ -5778,6 +5791,29 @@ def test_construct_network(simple_glycans):
     assert all("diffs" in data for _, _, data in network.edges(data=True))
     network = construct_network(simple_glycans, edge_type="enzyme")
     network = construct_network(simple_glycans, edge_type="monosaccharide")
+    # established biochemistry constrains the order, not the structure: FUT8 after MGAT3 is forbidden, MGAT3 after FUT8 is not
+    bisected = ['GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                'GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                'GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']
+    plain, constrained = construct_network(bisected, constraints = False), construct_network(bisected)
+    assert len(constrained.edges()) < len(plain.edges())
+    assert all(canonicalize_iupac(g) in constrained for g in bisected)  # no observed structure is lost
+    fucosylated = canonicalize_iupac(bisected[-1])
+    assert constrained.in_degree(fucosylated) > 0 and all(subgraph_isomorphism(u, 'GlcNAc(b1-4)Man(b1-4)GlcNAc') is False for u in constrained.predecessors(fucosylated) if 'Fuc' not in u)
+    flagged = nx.get_edge_attributes(apply_constraints(plain.copy(), prune = False), 'constraint')
+    n_enzymes = {r['enzyme'] for r in _load_constraints()
+                 if not isinstance(r['glycan_class'], str) or 'N' in str(r['glycan_class']).split('/')}
+    assert flagged and {c.split(':')[0] for c in flagged.values()} <= n_enzymes
+    assert {'FUT8', 'MGAT3'} <= {c.split(':')[0] for c in
+                                 flagged.values()}  # the bisecting-core order rules this fixture exists to exercise
+    sialyl_tn = construct_network(['GalNAc', 'Neu5Ac(a2-6)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc'])
+    assert not sialyl_tn.has_edge('Neu5Ac(a2-6)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc')  # core 1 is not built on sialyl-Tn
+    assert sialyl_tn.has_edge('Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc')  # the physiological order survives
+    orphan = nx.DiGraph([('Neu5Ac(a2-6)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc')])
+    nx.set_edge_attributes(orphan, {('Neu5Ac(a2-6)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc'): 'Gal(b1-3)'}, 'diffs')
+    nx.set_node_attributes(orphan, {n: 0 for n in orphan}, 'virtual')
+    kept = apply_constraints(orphan)  # the only route to an observed structure is kept, but flagged
+    assert len(kept.edges()) == 1 and 'C1GALT1' in list(nx.get_edge_attributes(kept, 'constraint').values())[0]
 
 
 def test_prune_network(simple_glycans):

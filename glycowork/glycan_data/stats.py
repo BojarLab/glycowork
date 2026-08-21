@@ -753,17 +753,16 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
                              correction_method: str = "two-stage" # "two-stage" or "one-stage" Benjamini-Hochberg
                              ) -> tuple[list[float], list[bool]]: # (corrected p-values, significance True/False)
     "Corrects p-values for multiple testing, by default with the two-stage Benjamini-Hochberg procedure"
-    from statsmodels.stats.multitest import multipletests
     pvals = list(pvals)
     if not pvals:
         return [], []
-    corrpvals = multipletests(pvals, method = 'fdr_tsbh' if correction_method == "two-stage" else 'fdr_bh')[1]
+    corrpvals = bh_adjust(pvals, alpha, two_stage = correction_method == "two-stage")
     corrpvals = [p if p >= pvals[i] else pvals[i] for i, p in enumerate(corrpvals)]
     significance = [bool(p < alpha) for p in corrpvals]
-    if len(significance) >= 10 and sum(significance) > 0.9*len(significance):
+    if len(significance) >= 10 and sum(significance) > 0.9 * len(significance):
         print("Significance inflation detected. The CLR/ALR transformation possibly cannot handle this dataset. Consider running again with a higher gamma value.\
              Proceed with caution; for now switching to Bonferroni correction to be conservative about this.")
-        corrpvals = multipletests(pvals, method = 'bonferroni')[1]
+        corrpvals = np.minimum(np.asarray(pvals) * len(pvals), 1)
         significance = [bool(p < alpha) for p in corrpvals]
     return corrpvals, significance
 
@@ -887,22 +886,25 @@ def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a g
             glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'] # extracted glycan features to consider as variables
             ) -> tuple[str | str, list[str]]: # (fitted GLM or failure message, list of variables)
     "given glycoform data from a glycosite, constructs & fits a GLM formula for main+interaction effects"
-    import statsmodels.api as sm
-    import statsmodels.formula.api as smf
     retained_vars = [c for c in glycan_features if c in group.columns and max(group[c]) > 0]
     if not retained_vars:
         return ("No variables retained", [])
-    base_formula = 'Abundance ~ '
-    formula_parts = ['Condition']
-    formula_parts += [f'{col} + {col}_Condition' for col in retained_vars]  # Main and interaction effects
+    terms = ['Condition']
+    for col in retained_vars:  # Main and interaction effects
+        terms += [col, f'{col}_Condition']
     group = group.copy()  # the interaction columns below are scratch for the fit and must not widen the caller's frame
     for col in retained_vars:
         group[f'{col}_Condition'] = group[col] * group['Condition']
-    formula = base_formula + ' + '.join(formula_parts)
     try:
-        with np.errstate(divide = 'ignore'):
-            model = smf.glm(formula = formula, data = group, family = sm.families.Gaussian()).fit()
-        return model, retained_vars
+        X = np.column_stack([np.ones(len(group))] + [group[c].values.astype(float) for c in terms])
+        y = group['Abundance'].values.astype(float)
+        beta, *_ = np.linalg.lstsq(X, y, rcond = None)
+        dof = X.shape[0] - np.linalg.matrix_rank(X)
+        if dof < 1:
+            return ("GLM fitting failed: insufficient residual degrees of freedom", [])
+        se = np.sqrt(np.diag(np.linalg.pinv(X.T @ X)) * (((y - X @ beta) ** 2).sum() / dof))
+        names = ['Intercept'] + terms
+        return (pd.Series(beta, index = names), pd.Series(2 * norm.sf(np.abs(beta / se)), index = names)), retained_vars
     except Exception as e:
         return (f"GLM fitting failed: {str(e)}", [])
 
@@ -917,8 +919,10 @@ def process_glm_results(df: pd.DataFrame, # CLR-transformed glycoproteomics data
     for _, retained_vars in results:
         all_retained_vars.update(retained_vars)
     int_terms = ['Condition'] + [f'{v}_Condition' for v in sorted(all_retained_vars)]
-    out = {idx: [v.pvalues.get(term, 1.0) for term in int_terms] if not isinstance(v, str) else [1.0] * len(int_terms) for idx, (v, _) in results.items()}
-    out2 = {idx: [v.params.get(term, 0.0) for term in int_terms] if not isinstance(v, str) else [0.0] * len(int_terms) for idx, (v, _) in results.items()}
+    out = {idx: [v[1].get(term, 1.0) for term in int_terms] if not isinstance(v, str) else [1.0] * len(int_terms) for
+           idx, (v, _) in results.items()}
+    out2 = {idx: [v[0].get(term, 0.0) for term in int_terms] if not isinstance(v, str) else [0.0] * len(int_terms) for
+            idx, (v, _) in results.items()}
     df_pvals = pd.DataFrame(out).T
     df_coefs = pd.DataFrame(out2).T
     df_pvals.columns = int_terms
@@ -989,11 +993,12 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
 
 def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns as sample instances from one condition
                               group_b: pd.DataFrame, # rows as features, columns as sample instances from one condition
-                              num_instances: int = 128, # number of Monte Carlo instances to sample
-                              paired: bool = False # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
-                              ) -> tuple[list[float], list[float], list[float]]: # (uncorrected p-vals, corrected p-vals, effect sizes)
+                              num_instances: int = 128,  # number of Monte Carlo instances to sample
+                              paired: bool = False,  # whether samples are paired (e.g. tumor & tumor-adjacent tissue)
+                              alpha: float = 0.05  # error rate the within-instance FDR correction is calibrated to
+                              ) -> tuple[
+    list[float], list[float], list[float]]:  # (uncorrected p-vals, corrected p-vals, effect sizes)
     "Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, calculate effect sizes"
-    from statsmodels.stats.multitest import multipletests
     num_features, _ = group_a.shape
     avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes = np.zeros(num_features), np.zeros(num_features), np.zeros(num_features)
     n_samples = group_a.shape[1] // num_instances
@@ -1010,7 +1015,7 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
                         2 * n_samples - 2))
         # Apply Benjamini-Hochberg correction for multiple testing within the instance
         avg_uncorrected_p_values += instance_p_values
-        avg_corrected_p_values += multipletests(instance_p_values, method = 'fdr_tsbh')[1]
+        avg_corrected_p_values += bh_adjust(instance_p_values, alpha)
         avg_effect_sizes += instance_effect_sizes
     avg_uncorrected_p_values /= num_instances
     avg_corrected_p_values /= num_instances
@@ -1044,3 +1049,31 @@ def hsic(x: np.ndarray, # first variable; 1-D or (n_samples, n_features)
     mean_T, var_T = w.sum(), 2 * (w ** 2).sum()
     return stat, (float(
         gamma_dist.sf(stat * (n - 1) ** 2 / n, mean_T ** 2 / var_T, scale = var_T / mean_T)) if var_T > 0 else 1.0)
+
+
+def _bh(p_sorted, alpha):
+    n = len(p_sorted)
+    ecdf = np.arange(1, n + 1)/n
+    corr = np.minimum.accumulate((p_sorted/ecdf)[::-1])[::-1].clip(max = 1)
+    rej = p_sorted <= ecdf*alpha
+    if rej.any():
+        rej[:np.nonzero(rej)[0].max()] = True
+    return rej, corr
+
+
+def bh_adjust(pvals: list[float] | np.ndarray, # raw p-values
+              alpha: float, # error rate the correction is calibrated to; two-stage output is only valid at this alpha
+              two_stage: bool = True # add the Benjamini-Krieger-Yekutieli pi0 estimation step
+              ) -> np.ndarray: # Benjamini-Hochberg adjusted p-values
+    "Benjamini-Hochberg adjusted p-values, optionally with two-stage pi0 estimation"
+    p = np.asarray(pvals, dtype = float)
+    order = np.argsort(p)
+    ps, n = p[order], len(p)
+    rej, corr = _bh(ps, alpha)
+    if two_stage and 0 < (r1 := int(rej.sum())) < n:
+        n0 = float(n - r1)
+        _, corr = _bh(ps, alpha * n / n0)
+        corr = (corr * (n0 / n)).clip(max = 1)
+    out = np.empty_like(corr)
+    out[order] = corr
+    return out

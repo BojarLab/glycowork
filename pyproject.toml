@@ -27,11 +27,9 @@ dependencies = [
     "matplotlib",
     "scikit-learn",
     "networkx>=3.0",
-    "statsmodels",
     "scipy>=1.16",
     "seaborn",
     "bokeh",
-    "IPython",
     "pandas>=2.1",
     "drawSvg~=2.0",
     "openpyxl",
@@ -46,7 +44,7 @@ Issues = "https://github.com/BojarLab/glycowork/issues"
 
 [project.optional-dependencies]
 ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0"]
-chem = ["rdkit>=2021.9.2", "pubchempy", "requests", "py3Dmol"]
+chem = ["rdkit>=2021.9.2", "py3Dmol"]
 all = ["glycowork[ml,chem]"]
 dev = ["glycowork[all]", "nbdev", "pytest", "glycontact>=0.3.3"]
 

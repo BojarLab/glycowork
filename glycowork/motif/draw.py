@@ -1232,7 +1232,6 @@ def draw_chem2d(
         from rdkit.Chem import MolFromSmiles
         from rdkit.Chem.Draw import PrepareMolForDrawing
         from rdkit.Chem.Draw.rdMolDraw2D import MolDraw2DSVG
-        from IPython.display import SVG
     except ImportError:
         raise ImportError(
             "You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
@@ -1257,7 +1256,10 @@ def draw_chem2d(
         elif filepath.suffix.lower() == '.pdf':
             convert_svg_to_pdf, _ = _get_glycorender()
             convert_svg_to_pdf(svg_data, str(filepath), chem = True)
-    return SVG(svg_data) if is_jupyter() else display_svg_with_matplotlib(svg_data, chem = True)
+    if not is_jupyter():
+        return display_svg_with_matplotlib(svg_data, chem = True)
+    from IPython.display import SVG
+    return SVG(svg_data)
 
 
 def draw_chem3d(

@@ -306,7 +306,9 @@ def construct_network(glycans: list[str], # List of glycans
                       allowed_ptms: frozenset[str] = allowed_ptms, # Set of allowed PTMs
                       edge_type: str = 'monolink', # Edge label type: monolink/monosaccharide/enzyme
                       permitted_roots: frozenset[str] | None = None, # Allowed root nodes
-                      abundances: list[float] = [] # Glycan abundances in the same order as glycans; default:empty
+                      abundances: list[float] = [], # Glycan abundances in the same order as glycans; default:empty
+                      constraints: bool | list[dict] | pd.DataFrame = True
+                      # Apply established biochemical constraints on reaction order; False to disable, or pass custom rules
                       ) -> nx.DiGraph: # Biosynthetic network
     "Construct glycan biosynthetic network"
     # Canonicalize all input strings upfront so string equality == graph isomorphism throughout
@@ -410,6 +412,8 @@ def construct_network(glycans: list[str], # List of glycans
                         elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme, glycan_class = net_class)
     # Make network directed
     network = prune_directed_edges(network.to_directed())
+    if constraints is not False:
+        network = apply_constraints(network, None if constraints is True else constraints)
     for node in sorted(network.nodes(), key = len):
         if (network.in_degree[node] < 1) and (network.nodes[node]['virtual'] == 1) and (node not in permitted_roots):
             network.remove_node(node)
@@ -421,6 +425,46 @@ def construct_network(glycans: list[str], # List of glycans
     if abundances:
         nx.set_node_attributes(network, {g: {'abundance': abundance_mapping.get(g, 0.0)} for g in network.nodes()})
     return filter_disregard(network)
+
+
+@lru_cache(maxsize = None)
+def _load_constraints() -> tuple: # Rule records from the shipped constraint table
+    "Read the shipped table of established biochemical constraints on reaction order"
+    with resources.files("glycowork.network").joinpath("biosynthetic_constraints.csv").open(encoding = 'utf-8-sig') as f:
+        df = pd.read_csv(f)
+    return tuple(df.to_dict('records'))
+
+
+def apply_constraints(network: nx.DiGraph, # Biosynthetic network with 'diffs' edge labels
+                      constraints: list[dict] | pd.DataFrame | None = None, # Rules of product/context/kind/glycan_class; default: the shipped table
+                      prune: bool = True # Whether to remove violating edges instead of only labeling them
+                      ) -> nx.DiGraph: # Network with a 'constraint' edge attribute on violating edges
+    "Flag or remove reactions that established biochemistry forbids in their precursor context"
+    rules = tuple(constraints.to_dict('records')) if isinstance(constraints, pd.DataFrame) else tuple(constraints) if constraints is not None else _load_constraints()
+    net_class = get_class(max((n for n, v in network.nodes(data = 'virtual') if v == 0), key = len, default = ''))
+    rules = [r for r in rules if not isinstance(r.get('glycan_class'), str) or net_class in str(r['glycan_class']).split('/')]
+    if not rules:
+        return network
+    motifs = {m for r in rules for m in [r['product']] + str(r['context']).split('|')}
+    # one subgraph search per (node, motif) instead of per edge, since every node takes part in several edges
+    has = {m: {n: subgraph_isomorphism(n, m) for n in network.nodes() if all(x.split('(')[0] in n for x in m.split(')')[:-1])} for m in motifs}
+    violations = {}
+    for u, v in network.edges():
+        for r in rules:
+            # the rule only speaks to the edge that installs its product, not to every edge downstream of it
+            if not has[r['product']].get(v, False) or has[r['product']].get(u, False):
+                continue
+            if any(has[c].get(u, False) for c in str(r['context']).split('|')) == (r['kind'] == 'forbids'):
+                violations[(u, v)] = f"{r['enzyme']}: {r['rationale']}"
+    nx.set_edge_attributes(network, violations, 'constraint')
+    if prune and violations:
+        network = network.copy()
+        network.remove_edges_from(violations)
+        # an observed structure exists whatever the rule says, so its last route into the network is kept and stays flagged
+        for node in sorted((n for n, v in network.nodes(data = 'virtual') if v == 0 and network.in_degree(n) == 0), key = len):
+            if restore := [e for e in violations if e[1] == node]:
+                network.add_edges_from((u, v, {'constraint': violations[(u, v)], 'diffs': find_diff(u, v)}) for u, v in restore)
+    return network
 
 
 def plot_network(network: nx.DiGraph, # Biosynthetic network
@@ -983,8 +1027,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
                                   ) -> pd.DataFrame: # Differential analysis results (differential flow features and statistics OR reaction changes over time
     "Compare biosynthetic patterns between conditions/timepoints"
     from scipy.stats import t as tdist
-    from statsmodels.formula.api import ols
-    import statsmodels.api as sm
+    from scipy.stats import f as f_dist
     if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     in_name, in_prov = getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {})
@@ -1131,10 +1174,16 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
             slopes = reaction_data.groupby('participant').apply(lambda x: np.polyfit(x['time_numeric'], x[reaction], 1)[0], include_groups = False)
             average_slope = slopes.mean()
             direction = "Increase" if average_slope > 0 else "Decrease"
-            model = ols('Q("{0}") ~ C(time_point) + C(participant)'.format(reaction), data = reaction_data).fit()
-            anova_table = sm.stats.anova_lm(model, typ = 2)
-            f_value = anova_table.loc['C(time_point)', 'F']
-            p_value = anova_table.loc['C(time_point)', 'PR(>F)']
+            y = reaction_data[reaction].values.astype(float)
+            a = pd.get_dummies(reaction_data['time_point'], drop_first = True).values.astype(float)
+            b = pd.get_dummies(reaction_data['participant'], drop_first = True).values.astype(float)
+            X_full, X_red = np.column_stack([np.ones(len(y)), a, b]), np.column_stack([np.ones(len(y)), b])
+            ss_full = ((y - X_full @ np.linalg.lstsq(X_full, y, rcond = None)[0]) ** 2).sum()
+            ss_red = ((y - X_red @ np.linalg.lstsq(X_red, y, rcond = None)[0]) ** 2).sum()
+            rk_full, rk_red = np.linalg.matrix_rank(X_full), np.linalg.matrix_rank(X_red)
+            df_num, df_den = rk_full - rk_red, len(y) - rk_full
+            f_value = ((ss_red - ss_full) / df_num) / (ss_full / df_den)
+            p_value = f_dist.sf(f_value, df_num, df_den)
             results.append({
                 'Glycan': reaction,
                 'F-statistic': f_value,

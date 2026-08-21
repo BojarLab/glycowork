@@ -29,7 +29,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
                                          sequence_richness, shannon_diversity_index, simpson_diversity_index,
                                          get_equivalence_test, clr_transformation, anosim, permanova_with_permutation,
                                          alpha_biodiversity_stats, get_additive_logratio_transformation,
-                                         correct_multiple_testing, meta_analysis,
+                                         correct_multiple_testing, meta_analysis, bh_adjust,
                                          omega_squared, moderated_variance, dag_neighbors,
                                          get_glycoform_diff, process_glm_results, partial_corr,
                                          estimate_technical_variance,
@@ -769,7 +769,6 @@ def get_differential_expression(
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
-    from statsmodels.stats.multitest import multipletests
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
     in_contrasts, in_name, in_prov = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', ''), getattr(df,
                                                                                                             '_provenance',
@@ -822,7 +821,7 @@ def get_differential_expression(
         if paired:
             assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
         if monte_carlo:
-            pvals, corrpvals, effect_sizes = perform_tests_monte_carlo(df_a, df_b, paired = paired)
+            pvals, corrpvals, effect_sizes = perform_tests_monte_carlo(df_a, df_b, paired = paired, alpha = alpha)
             significance = [cp < alpha for cp in corrpvals]
             equivalence_pvals = [1.0] * len(pvals)
             levene_pvals = [1.0] * len(pvals)
@@ -847,7 +846,7 @@ def get_differential_expression(
             if todo.any():
                 equivalence_pvals[todo] = get_equivalence_test(A[todo], B[todo], paired = paired)
             valid_equivalence_pvals = equivalence_pvals[~np.isnan(equivalence_pvals)]
-            corrected_equivalence_pvals = multipletests(valid_equivalence_pvals, method = 'fdr_tsbh')[1] if len(
+            corrected_equivalence_pvals = bh_adjust(valid_equivalence_pvals, alpha) if len(
                 valid_equivalence_pvals) else []
             equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
             equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
@@ -868,7 +867,7 @@ def get_differential_expression(
             significance = [significance_dict[g] for g in glycans]
         else:
             corrpvals, significance = correct_multiple_testing(pvals, alpha)
-        levene_pvals = multipletests(levene_pvals, method = 'fdr_tsbh')[1]
+        levene_pvals = bh_adjust(levene_pvals, alpha)
     elif monte_carlo:
         pass
     else:
@@ -1084,7 +1083,7 @@ def get_glycanova(
 ) -> tuple[GlycoDataFrame, dict[
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
-    from statsmodels.stats.multicomp import pairwise_tukeyhsd
+    from scipy.stats import tukey_hsd
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
@@ -1121,9 +1120,14 @@ def get_glycanova(
     if posthoc:
         for i, glycan in enumerate(df.index):
             if p_values[i] < alpha:
-                posthoc_res = pairwise_tukeyhsd(endog = X[i], groups = garr, alpha = alpha)
-                posthoc_results[glycan] = pd.DataFrame(data = posthoc_res._results_table.data[1:],
-                                                       columns = posthoc_res._results_table.data[0])
+                ug_ph = np.unique(garr)
+                res_ph = tukey_hsd(*[X[i][garr == g] for g in ug_ph])
+                ci_ph = res_ph.confidence_interval(1 - alpha)
+                posthoc_results[glycan] = pd.DataFrame(
+                    [{'group1': ug_ph[a], 'group2': ug_ph[b], 'meandiff': -res_ph.statistic[a, b],
+                      'p-adj': res_ph.pvalue[a, b], 'lower': -ci_ph.high[a, b], 'upper': -ci_ph.low[a, b],
+                      'reject': res_ph.pvalue[a, b] < alpha}
+                     for a in range(len(ug_ph)) for b in range(a + 1, len(ug_ph))])
     df_out = GlycoDataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
     dag = df_org.attrs.get('motif_dag') if motifs or glycoproteomics else None
     if grouped_BH and dag is not None:
@@ -1235,16 +1239,12 @@ def get_glycan_change_over_time(
         degree: int = 1  # Polynomial degree for regression
 ) -> tuple[float | np.ndarray, float]:  # (regression coefficients, t-test/F-test p-value)
     "Fits polynomial regression (default: linear) to glycan abundance time series data using OLS, testing significance of temporal changes"
-    import statsmodels.api as sm
+    from scipy.stats import linregress
     # Extract arrays for time and glycan abundance from the 2D input array
     time, glycan_abundance = data[:, 0], data[:, 1]
     if degree == 1:
-        # Add a constant (for the intercept term)
-        time_with_intercept = sm.add_constant(time)
-        # Fit the OLS model
-        results = sm.OLS(glycan_abundance, time_with_intercept).fit()
-        # Get the slope & the p-value for the slope from the model summary
-        coefficients, p_value = results.params[1], results.pvalues[1]
+        results = linregress(time, glycan_abundance)
+        coefficients, p_value = results.slope, results.pvalue
     else:
         # Polynomial Regression
         coefficients = np.polyfit(time, glycan_abundance, degree)
@@ -1583,7 +1583,6 @@ def get_SparCC(
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> tuple[pd.DataFrame, pd.DataFrame]:  # (Spearman correlation matrix, FDR-corrected p-value matrix)
     "Calculates SparCC (Sparse Correlations for Compositional Data) between two matching datasets (e.g., glycomics)"
-    from statsmodels.stats.multitest import multipletests
     if isinstance(df1, (str, Path)):
         df1 = pd.read_csv(df1) if Path(df1).suffix.lower() == ".csv" else pd.read_csv(df1, sep = "\t") if Path(
             df1).suffix.lower() == ".tsv" else pd.read_excel(df1)
