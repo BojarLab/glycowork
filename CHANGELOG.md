@@ -99,7 +99,7 @@
 - `get_representative_substructures` no longer crashes if only run on motif outputs of `feature_set=["known"]` (78fe195)
 - Fixed `get_pvals_motifs` calculating effect sizes from padded arrays, which gave motifs that do not occur in the data a large spurious Cohen's d and, given the default sorting, placed them at the top of the output (42edfc9)
 - Fixed `get_pvals_motifs` assuming the glycan column is the first column when z-scoring and renaming, rather than the detected glycan column (42edfc9)
-- `get_heatmap` with motifs now uses the correct ordering of *first* motif quantification, *then* CLR/ALR
+- `get_heatmap` with motifs now uses the correct ordering of *first* motif quantification, *then* CLR/ALR (c4e1037)
 
 #### processing
 ##### Changed 🔄
