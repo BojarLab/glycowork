@@ -13,7 +13,7 @@ from typing import Any
 
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
     motif_list = pd.read_csv(f)
-
+_MOTIF_IDX, _MOTIF_NORM_IDX = {}, {}
 # Get the directory and filename of the current script
 this_dir = Path(__file__).parent
 this_filename = Path(__file__).name
@@ -137,11 +137,14 @@ class GlycoDataFrame(pd.DataFrame):
         elif not hasattr(self, '_glyco_name'):
             self._glyco_name = ''
 
-    def glyco_filter(self, motif: str | nx.DiGraph, # Glycan motif sequence or graph
-                     termini_list: list = [], # List of monosaccharide positions from terminal/internal/flexible
-                     min_count: int | None = 1 # Minimum number of times motif needs to be present to pass
+    def glyco_filter(self, motif: str | nx.DiGraph,
+                     # Motif sequence, motif name (e.g., 'Internal_LewisX'), glyco-regular expression, or graph
+                     termini_list: list = [],  # List of monosaccharide positions from terminal/internal/flexible
+                     min_count: int | None = 1  # Minimum number of times motif needs to be present to pass
                      ) -> 'GlycoDataFrame':
         from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
+        if isinstance(motif, str) and (hit := resolve_motif_name(motif)) is not None:
+            motif, termini_list = hit[0], termini_list or hit[1]
         indices = [i for i, g in enumerate(self.glycans) if
                    isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list = termini_list, count = True) >= (
                        1 if min_count is None else min_count)]
@@ -363,6 +366,31 @@ Pen = {'Ara', 'Xyl', 'Rib', 'Lyx', 'Pen'}
 Sia = {'Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia'}
 modification_map = {'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'},
                     'OS': {'GlcNAc', 'Gal', 'GalNAc'}}
+
+
+def resolve_motif_name(name: str # candidate motif_list name, e.g., 'Internal_LewisX', 'lewis x', or 'high_mannose'
+                       ) -> tuple[str, list] | None: # (motif sequence, termini spec), or None if name is not a known motif
+    "Maps a motif_list name to its sequence and termini spec, tolerating case/underscore/space/hyphen differences"
+    if not _MOTIF_IDX:  # built on first use, so importing the package does not pay for it
+        names = motif_list.motif_name.values.tolist()
+        _MOTIF_IDX.update({n: i for i, n in enumerate(names)})
+        for i, n in enumerate(names):
+            _MOTIF_NORM_IDX.setdefault(re.sub(r'[\s_-]', '', n.lower()), []).append(i)
+    idx = _MOTIF_IDX.get(name)
+    if idx is None:
+        key = re.sub(r'[\s_-]', '', name.lower())
+        hits = _MOTIF_NORM_IDX.get(key, [])
+        if len(hits) > 1:
+            raise ValueError(f"Motif name '{name}' is ambiguous between {[motif_list.motif_name.values[i] for i in hits]}; please use exact capitalization.")
+        if not hits:
+            generic = sorted(_MOTIF_NORM_IDX.get(f'terminal{key}', []) + _MOTIF_NORM_IDX.get(f'internal{key}', []))
+            if not generic:
+                return None
+            # A position-less name (e.g., 'LewisX') means the motif wherever it sits, so take the variant without positional negations and relax its termini
+            idx = min(generic, key = lambda i: motif_list.motif.values[i].count('!'))
+            return motif_list.motif.values[idx], ['flexible'] * len(ast.literal_eval(motif_list.termini_spec.values[idx]))
+        idx = hits[0]
+    return motif_list.motif.values[idx], ast.literal_eval(motif_list.termini_spec.values[idx])
 
 
 def unwrap(nested_list: list[Any] # list to be flattened

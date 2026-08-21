@@ -1,5 +1,5 @@
 from pathlib import Path
-from glycowork.glycan_data.loader import unwrap, motif_list, lib
+from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification
@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import struct
 import re
-import ast
 from math import sin, cos, radians, sqrt, atan, degrees
 
 
@@ -126,39 +125,11 @@ _TRANSFORM_PATTERN = re.compile(r'transform\s*=\s*"([^"]*)"')
 _CONF_DISPLAY = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
 _SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
 _SVG_NUMBER = re.compile(r'-?\d+(?:\.\d+)?(?:e-?\d+)?')
-_MOTIF_NAMES = motif_list.motif_name.values.tolist()
-_MOTIF_NAME_IDX = {n: i for i, n in enumerate(_MOTIF_NAMES)}
-_MOTIF_NORM_IDX = {}
-for _i, _n in enumerate(_MOTIF_NAMES):
-    _MOTIF_NORM_IDX.setdefault(re.sub(r'[\s_-]', '', _n.lower()), []).append(_i)
 
 
 def _get_glycorender():
     from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
     return convert_svg_to_pdf, convert_svg_to_png
-
-
-def resolve_motif_name(
-        name: str, # candidate motif_list name
-) -> tuple[str, list] | None: # (motif sequence, termini spec), or None if name is not a known motif
-    "Maps a motif_list name to its sequence and termini spec, tolerating case/underscore/space/hyphen differences"
-    idx = _MOTIF_NAME_IDX.get(name)
-    if idx is None:
-        key = re.sub(r'[\s_-]', '', name.lower())
-        hits = _MOTIF_NORM_IDX.get(key, [])
-        if len(hits) > 1:
-            raise ValueError(
-                f"Motif name '{name}' is ambiguous between {[_MOTIF_NAMES[i] for i in hits]}; please use exact capitalization.")
-        if not hits:
-            generic = sorted(_MOTIF_NORM_IDX.get(f'terminal{key}', []) + _MOTIF_NORM_IDX.get(f'internal{key}', []))
-            if not generic:
-                return None
-            # A position-less name (e.g., 'LewisX') means the motif wherever it sits, so take the variant without positional negations and relax its termini
-            idx = min(generic, key = lambda i: motif_list.motif.values[i].count('!'))
-            return motif_list.motif.values[idx], ['flexible'] * len(
-                ast.literal_eval(motif_list.termini_spec.values[idx]))
-        idx = hits[0]
-    return motif_list.motif.values[idx], ast.literal_eval(motif_list.termini_spec.values[idx])
 
 
 def _drawn_extent(
@@ -1827,9 +1798,9 @@ def annotate_figure(
         edit_svg = False
     canvas = re.search(r'<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', svg_tmp)
     canvas = (float(canvas.group(1)), float(canvas.group(2))) if canvas else (1000.0, 1000.0)
-    for (_x, _y, gw, gh, ax, ay, data), (nx, ny) in zip(drawn, _spread_glycans([d[:6] for d in drawn], canvas)):
-        svg_tmp += '\n' + _leader_line((ax, ay), (nx, ny, gw, gh))
-        svg_tmp += '\n<g transform="translate(%.2f %.2f) scale(%s %s)">\n%s\n</g>' % (nx, ny, glyc_scale,
+    for (_x, _y, gw, gh, ax, ay, data), (gx, gy) in zip(drawn, _spread_glycans([d[:6] for d in drawn], canvas)):
+        svg_tmp += '\n' + _leader_line((ax, ay), (gx, gy, gw, gh))
+        svg_tmp += '\n<g transform="translate(%.2f %.2f) scale(%s %s)">\n%s\n</g>' % (gx, gy, glyc_scale,
                                                                                       glyc_scale, data)
     svg_tmp += '</svg>'
     if filepath:

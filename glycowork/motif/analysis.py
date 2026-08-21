@@ -2,7 +2,6 @@ from pathlib import Path
 import pickle
 import pandas as pd
 import numpy as np
-import seaborn as sns
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -17,7 +16,7 @@ plt.rcParams.update({
 })
 from collections import Counter
 from typing import Any
-from scipy.stats import ttest_ind, ttest_rel, norm, levene, f, f_oneway, spearmanr, t as t_dist
+from scipy.stats import ttest_ind, ttest_rel, levene, f, f_oneway, spearmanr, t as t_dist
 from scipy.spatial.distance import squareform, pdist
 
 from glycowork.glycan_data import loader
@@ -37,7 +36,7 @@ from glycowork.glycan_data.stats import (cohen_d, mahalanobis_distance, mahalano
 from glycowork.motif.processing import enforce_class, process_for_glycoshift
 from glycowork.motif.annotate import (annotate_dataset, quantify_motifs, create_correlation_network,
                                       group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
-                                      load_lectin_lib, get_motif_dag, get_composition_dag,
+                                      load_lectin_lib, get_motif_dag, get_composition_dag, _motif_sequence,
                                       create_lectin_and_motif_mappings, lectin_motif_scoring, deduplicate_motifs)
 from glycowork.motif.graph import subgraph_isomorphism, glycan_to_nxGraph
 
@@ -327,11 +326,21 @@ def get_representative_substructures(
     # A parent motif is present in every glycan its children are, so scoring both counts one piece of evidence twice
     dag = get_motif_dag(motifs)
     descendants = {m: nx.descendants(dag, m) for m in dag}
-    mono = [m for m in motifs if '(' not in m]
-    di = [m for m in motifs if '(' in m]
+    # Rows carry motif labels, not sequences, so they need the same resolution get_motif_dag applies to them above
+    gmotifs = {}
+    for m in motifs:
+        s, sp = _motif_sequence(m)
+        if s.startswith('r'):
+            gmotifs[m] = (s, [])  # subgraph_isomorphism routes a glyco-regex to the regex engine itself
+            continue
+        try:
+            gmotifs[m] = (glycan_to_nxGraph(s, termini = 'provided', termini_list = sp), sp)
+        except Exception:
+            continue  # non-structural features (graph/chemical/size_branch) cannot be searched for in a sequence
     motif_scores = []
     for k in glycans:
-        hit = {m for m in mono if m in k} | {m for m in di if subgraph_isomorphism(k, m)}
+        ggraph = glycan_to_nxGraph(k, termini = 'calc')
+        hit = {m for m, (p, sp) in gmotifs.items() if subgraph_isomorphism(ggraph, p, termini_list = sp)}
         motif_scores.append(sum(weight_of[m] for m in hit if not (descendants.get(m, set()) & hit)))
     # For each glycan, get their motif score, normalized by glycan length
     length_scores = [len(g) for g in glycans]
@@ -363,6 +372,7 @@ def get_heatmap(
 ) -> tuple[Any, list[
     str], pd.DataFrame] | None:  # None or (plot object, column names, transformed dataframe) if return_plot=True
     "Creates hierarchically clustered heatmap visualization of glycan/motif abundances"
+    import seaborn as sns
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
@@ -375,15 +385,9 @@ def get_heatmap(
             isinstance(df.index[0], str) and ('(' not in df.index[0] or '-' not in df.index[0])):
         df = df.T
     df = df.fillna(0)
-    if transform == "CLR":
+    if transform:
         df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(
             1e-6)
-        df = clr_transformation(df, [], [], gamma = 0)
-    elif transform == "ALR":
-        df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(
-            1e-6)
-        df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False, gamma = 0)
-        df = df.set_index(df.columns[0])
     if motifs:
         if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
             raise ValueError("A heatmap needs to have at least two motifs.")
@@ -399,6 +403,12 @@ def get_heatmap(
             df = df_motif.T.fillna(0) @ df
             df = df.apply(lambda col: col / col.sum()).T
             df = deduplicate_motifs(df.T)
+    # Quantify on raw abundances and transform the motif composition, as get_pca/preprocess_data do
+    if transform == "CLR":
+        df = clr_transformation(df + 1e-7, [], [], gamma = 0)
+    elif transform == "ALR":
+        df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False, gamma = 0)
+        df = df.set_index(df.columns[0])
     df = df.dropna(axis = 1)
     if not (df < 0).any().any():
         df /= df.sum()
@@ -436,6 +446,7 @@ def plot_embeddings(
         **kwargs: Any  # Keyword args passed to seaborn scatterplot
 ) -> None:
     "Visualizes learned glycan embeddings using t-SNE dimensionality reduction with optional group coloring"
+    import seaborn as sns
     from sklearn.manifold import TSNE
     idx = [i for i, g in enumerate(glycans) if '{' not in g]
     glycans = [glycans[i] for i in idx]
@@ -482,6 +493,7 @@ def characterize_monosaccharide(
         thresh: int = 10  # Minimum count threshold for inclusion
 ) -> None:
     "Analyzes connectivity and modification patterns of specified monosaccharides/linkages in glycan sequences"
+    import seaborn as sns
     if mode not in ('sugar', 'bond', 'sugarbond'):
         raise ValueError(f"mode has to be 'sugar', 'bond', or 'sugarbond', got '{mode}'.")
     if modifications and mode == 'bond':
@@ -587,6 +599,7 @@ def get_coverage(
         filepath: str = ''  # Path to save plot
 ) -> None:
     "Visualizes glycan detection frequency across samples with intensity-based ordering"
+    import seaborn as sns
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
@@ -622,11 +635,14 @@ def get_pca(
         rarity_filter: float = 0.05  # Min proportion for non-zero values
 ) -> None:
     "Performs PCA on glycan/motif abundance data with group-based visualization"
+    import seaborn as sns
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
     if isinstance(df, (str, Path)):
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
+        groups = list(df.groups)
     if transform and not motifs:
         df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(
             1e-6)
@@ -956,6 +972,7 @@ def get_pval_distribution(
         filepath: str | Path = ''  # Path to save plot
 ) -> None:
     "Creates histogram of p-values from differential expression analysis"
+    import seaborn as sns
     if isinstance(df_res, (str, Path)):
         df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res,
                                                                                                sep = "\t") if Path(
@@ -977,6 +994,7 @@ def get_ma(
         filepath: str | Path = ''  # Path to save plot
 ) -> None:
     "Generates MA plot (mean abundance vs log2 fold change) from differential expression results"
+    import seaborn as sns
     if isinstance(df_res, (str, Path)):
         df_res = pd.read_csv(df_res) if Path(df_res).suffix.lower() == ".csv" else pd.read_csv(df_res,
                                                                                                sep = "\t") if Path(
@@ -1013,6 +1031,7 @@ def get_volcano(
         **kwargs: Any  # Keyword args passed to seaborn scatterplot
 ) -> None:  # Displays volcano plot
     "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
+    import seaborn as sns
     if annotate_volcano and not filepath:
         raise ValueError("annotate_volcano = True draws the SNFG annotations into a saved figure and therefore needs a filepath, e.g., filepath = 'volcano.svg'.")
     if isinstance(df_res, (str, Path)):
@@ -1189,7 +1208,8 @@ def get_glycanova(
         df_out['Redistribution p-val'] = [bp.get(m, np.nan) for m in df_out['Glycan']]
         df_out['Residual p-val'] = [cp.get(m, np.nan) for m in df_out['Glycan']]
         df_out['Residual effect size'] = [rows[m][2] if m in rows else np.nan for m in df_out['Glycan']]
-    df_out.attrs.update({'alpha': alpha, 'n': len(groups), 'test': 'ANOVA', 'transform': transform, 'paired': False})
+    df_out.attrs.update({'alpha': alpha, 'n': len(groups), 'test': 'ANOVA', 'transform': transform, 'paired': False,
+                         'dataset': df_org.attrs.get('dataset', ''), 'provenance': df_org.attrs.get('provenance', {})})
     return df_out.sort_values(by = 'corr p-val'), posthoc_results
 
 
@@ -1553,11 +1573,13 @@ def get_biodiversity(
         elif all(count > 1 for count in group_counts.values()):
             beta_df_out = pd.DataFrame(distance_matrix, index = range(len(df.columns)),
                                        columns = range(len(df.columns)))
-            r, p = anosim(beta_df_out, group_labels_in = group_sizes, permutations = permutations)
+            r, p = anosim(beta_df_out, group_labels_in = group_sizes, permutations = permutations,
+                          random_state = random_state)
             b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (ANOSIM)', 'p-val': p, 'Effect size': r},
                                         index = [0])
             shopping_cart.append(b_test_stats)
-            f, p = permanova_with_permutation(beta_df_out, group_labels = group_sizes, permutations = permutations)
+            f, p = permanova_with_permutation(beta_df_out, group_labels = group_sizes, permutations = permutations,
+                                              random_state = random_state)
             b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (PERMANOVA)', 'p-val': p, 'Effect size': f},
                                         index = [0])
             shopping_cart.append(b_test_stats)
@@ -1712,8 +1734,12 @@ def multi_feature_scoring(
     model = LogisticRegression(**_LR_L1, solver = 'liblinear', random_state = random_state)
     model.fit(X.values, y)
     model = SelectFromModel(model, prefit = True)
-    X_selected = model.transform(X.values)
     selected_features = X.columns[model.get_support()].tolist()
+    if dag is not None:
+        # A parent is present wherever a selected child is, so keeping both puts one signal in the model twice
+        picked = set(selected_features)
+        selected_features = [m for m in selected_features if not (m in dag and nx.descendants(dag, m) & picked)]
+    X_selected = X[selected_features].values
     model = LogisticRegression(**_LR_L2, solver = 'liblinear', random_state = random_state)
     model.fit(X_selected, y)
     # Evaluate ROC AUC on the selected features
@@ -1803,9 +1829,12 @@ def get_roc(
         y = label_binarize(df['group'], classes = classes)
         n_classes = y.shape[1]
         sorted_auc_scores, best_fpr, best_tpr = {}, {}, {}
+        # sklearn takes a seed rather than a Generator, so one is drawn from it, as MissForest does
+        seed = 42 if random_state is None else random_state if isinstance(random_state, (int, np.integer)) else int(
+            np.random.default_rng(random_state).integers(2 ** 32))
         for feature in df.columns[:-1]:  # exclude the 'group' label column
             X = df[feature].values.reshape(-1, 1)  # Feature matrix needs to be column-wise
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3, random_state = 42)
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3, random_state = seed)
             classifier = OneVsRestClassifier(LogisticRegression(solver = 'lbfgs'))
             classifier.fit(X_train, y_train)
             for i in range(n_classes):
@@ -1914,8 +1943,9 @@ def get_lectin_array(
     if not group2:
         df_out["change"] = ["different"] * len(df_out)
     df_out.attrs.update(
-        {'alpha': alpha, 'n': len(group1) + (len(group2) if group2 else 0), 'test': "Cohen's d" if group2 else 'omega squared',
-         'transform': None, 'paired': paired})
+        {'alpha': alpha, 'n': len(group1) + (len(group2) if group2 else 0),
+         'test': "Cohen's d" if group2 else 'omega squared',
+         'transform': None, 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
     return df_out
 
 

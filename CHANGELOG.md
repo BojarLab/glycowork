@@ -4,7 +4,7 @@
 
 - Bumped required `glycorender` version from `0.2.5` to `0.4.0`, which drops the `reportlab` and `pymupdf` dependencies (ec7a54c, 4894d1b, 9741f72)
 - Moved `huggingface_hub` dependencies from the base install to the `ml` optional install (088c711)
-- `Pillow`, `statsmodels`, and `IPython` are no longer core dependencies of `glycowork` (088c711, )
+- `Pillow`, `statsmodels`, and `IPython` are no longer core dependencies of `glycowork` (088c711, e431bd7)
 - Moved several dependencies to lazy-load, to improve initial package start-up times (088c711)
 - Floating bits with uncertain attachment points, such as `{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc` can now be optionally further specified as `{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc`, which is supported by all graph operations, motif annotation, `get_possible_topologies`, and `GlycoDraw` (4894d1b)
 - `glycoworkGUI` is updated, making it more robust (628ee17)
@@ -99,6 +99,7 @@
 - `get_representative_substructures` no longer crashes if only run on motif outputs of `feature_set=["known"]` (78fe195)
 - Fixed `get_pvals_motifs` calculating effect sizes from padded arrays, which gave motifs that do not occur in the data a large spurious Cohen's d and, given the default sorting, placed them at the top of the output (42edfc9)
 - Fixed `get_pvals_motifs` assuming the glycan column is the first column when z-scoring and renaming, rather than the detected glycan column (42edfc9)
+- `get_heatmap` with motifs now uses the correct ordering of *first* motif quantification, *then* CLR/ALR
 
 #### processing
 ##### Changed 🔄
@@ -193,7 +194,7 @@
 - `get_biosynthetic_coherence` now reports which precursor changed for each rewired glycan, via the new `top_changed_precursor` and `precursor_coef_change` columns (7cfb5ea)
 - Added the `prioritize` keyword argument to `extend_network` to optionally rank candidates by the maximum flow reaching them (7e03cd2)
 - `trace_diamonds` now also returns `'out_degree', 'onward_capacity', 'n_descendants'` in its output to tell a preferred intermediate from a dead-end one (7e03cd2)
-- `construct_network` now has the new `constrained` keyword argument, to opt into disallowing reactions known to not be physiological (e.g., C1GALT1 not extending sialyl-Tn in O-glycans) ()
+- `construct_network` now has the new `constrained` keyword argument, to opt into disallowing reactions known to not be physiological (e.g., C1GALT1 not extending sialyl-Tn in O-glycans) (e431bd7)
 
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)

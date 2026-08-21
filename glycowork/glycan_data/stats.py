@@ -578,9 +578,11 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
 
 def anosim(df: pd.DataFrame, # square distance matrix
            group_labels_in: list[str], # list of group membership for each sample
-           permutations: int = 999 # number of permutations to perform in ANOSIM test
-           ) -> tuple[float, float]: # (ANOSIM R statistic [-1 to 1], p-value)
+           permutations: int = 999,  # number of permutations to perform in ANOSIM test
+           random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+           ) -> tuple[float, float]:  # (ANOSIM R statistic [-1 to 1], p-value)
     "Performs analysis of similarity (ANOSIM) statistical test"
+    local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     group_labels = list(group_labels_in)
     n = df.shape[0]
     if len(group_labels) != n:
@@ -603,7 +605,7 @@ def anosim(df: pd.DataFrame, # square distance matrix
     # Permutation test
     permuted_Rs = np.zeros(permutations)
     for i in range(permutations):
-        np.random.shuffle(group_labels)
+        local_rng.shuffle(group_labels)
         permuted_group_matrix = np.equal.outer(group_labels, group_labels)
         permuted_within_group_indices = permuted_group_matrix[np.tril_indices(n, k = -1)]
         perm_mean_rank_within = np.mean(ranks[permuted_within_group_indices])
@@ -627,7 +629,8 @@ def alpha_biodiversity_stats(df: pd.DataFrame, # square distance matrix
 
 @lru_cache(maxsize = 16)
 def _permutation_labels(codes: tuple, # integer group code per sample
-                        permutations: int # number of random draws requested
+                        permutations: int, # number of random draws requested
+                        seed: int | None = None # optional seed, so that the draws can be reproduced
                         ) -> np.ndarray: # label matrix whose first row is the observed labelling
     "Builds the label matrix of a permutation test once per design, enumerated exactly where the design has fewer distinct labellings than requested draws"
     n = len(codes)
@@ -635,19 +638,22 @@ def _permutation_labels(codes: tuple, # integer group code per sample
     if n <= 8 and distinct <= permutations + 1:
         # A small design has very few distinct labellings, so enumerating them is both cheaper than sampling and free of Monte Carlo error
         return np.array([list(codes)] + [list(r) for r in sorted(set(iter_permutations(codes)) - {codes})])
-    return np.vstack([np.asarray(codes), rng.permuted(np.tile(np.asarray(codes), (permutations, 1)), axis = 1)])
+    return np.vstack([np.asarray(codes), (np.random.default_rng(seed) if seed is not None else rng).permuted(np.tile(np.asarray(codes), (permutations, 1)), axis = 1)])
 
 
 def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
                                group_labels: list[str], # list of group membership for each sample
-                               permutations: int = 999 # number of permutations for test
+                               permutations: int = 999, # number of permutations for test
+                               random_state: int | np.random.Generator | None = None # optional random state for reproducibility
                                ) -> tuple[float, float]: # (F statistic, p-value)
     "Performs permutational multivariate analysis of variance (PERMANOVA)"
+    # The label matrix is cached, so the key has to be hashable and a Generator is drawn from once, as MissForest does
+    seed = random_state if random_state is None or isinstance(random_state, (int, np.integer)) else int(np.random.default_rng(random_state).integers(2 ** 32))
     D2 = np.square(np.asarray(df, dtype = float))
     codes, ug = pd.factorize(np.asarray(group_labels))
     n = len(codes)
     # The labelling depends only on the design, so it is built once and reused by every feature tested against it; the observed labelling rides along as row 0 so that a draw reproducing it stays a bitwise tie
-    P = _permutation_labels(tuple(codes.tolist()), permutations)
+    P = _permutation_labels(tuple(codes.tolist()), permutations, seed)
     ss_within = np.zeros(len(P))
     for g in range(len(ug)):
         M = (P == g).astype(float)
@@ -977,7 +983,8 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
             for n in range(num_instances):
                 sample_instance = pd.DataFrame(dirichlet_samples[:, n])
                 transformed_data[:, j, n] = clr_transformation(sample_instance, sample_instance.columns.tolist(), [],
-                                                               gamma = gamma, custom_scale = custom_scale).squeeze()
+                                                               gamma = gamma, custom_scale = custom_scale,
+                                                               random_state = local_rng).squeeze()
         else:
             # CLR on a single column is just log2(x) minus the log2 geometric mean, plus the gamma uncertainty term
             log_samples = np.log2(np.where(dirichlet_samples > 0, dirichlet_samples, np.nan))

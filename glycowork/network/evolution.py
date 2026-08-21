@@ -5,7 +5,7 @@ import pandas as pd
 import networkx as nx
 from typing import Callable
 from functools import lru_cache
-from glycowork.glycan_data.loader import GlycoList
+from glycowork.glycan_data.loader import GlycoList, resolve_motif_name
 from glycowork.motif.graph import subgraph_isomorphism
 
 # Get the directory and filename of the current script
@@ -171,10 +171,11 @@ def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
         if not rank_nodes:
             continue
         if motif:
-            if glycan[-1] == ')':
-                conserved[r] = sum(glycan in "".join(nodes) for nodes in rank_nodes) / len(rank_nodes)
-            else:
-                conserved[r] =  sum(any(subgraph_isomorphism(node, glycan) for node in nodes) for nodes in rank_nodes) / len(rank_nodes)
+            seq, termini = resolve_motif_name(glycan) or (glycan, [])
+            conserved[r] = sum(
+                any(subgraph_isomorphism(node, seq, termini_list = termini) for node in nodes) for nodes in
+                rank_nodes) / len(
+                rank_nodes)
         else:
             conserved[r] = sum(glycan in GlycoList(nodes) for nodes in rank_nodes) / len(rank_nodes)
     return conserved

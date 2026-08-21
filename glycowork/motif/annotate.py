@@ -6,7 +6,7 @@ from collections import Counter, deque, defaultdict
 from functools import partial
 
 from glycowork.glycan_data import loader
-from glycowork.glycan_data.loader import linkages, motif_list, unwrap, Hex, dHex, HexNAc, HexA, Pen, Sia
+from glycowork.glycan_data.loader import linkages, motif_list, unwrap, Hex, dHex, HexNAc, HexA, Pen, Sia, resolve_motif_name
 from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, get_possible_topologies, compare_glycans, graph_to_string_int, expand_termini_list, build_wildcard_cache, _sl, _has_o
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition
 from glycowork.motif.regex import get_match, get_match_batch, compile_pattern, compile_component
@@ -17,15 +17,14 @@ _WILDCARD_RE = re.compile(r'(?<![A-Za-z0-9])(?:Monosaccharide|HexNAcOS|HexNAcOP|
 _STRUCTURAL_ALDITOL = re.compile(r'(?:Thre|Ery|Rib|Gro|Ara)[A-Za-z0-9]*-ol$')
 _REGEX_LOOKAROUND = re.compile(r'\(\?<?[=!][^()]*\)')
 _MOTIF_SEQ = dict(zip(motif_list.motif_name, motif_list.motif))
-_MOTIF_SPEC = {n: eval(t) for n, t in zip(motif_list.motif_name, motif_list.termini_spec)}
 
 
 def _motif_sequence(
         label: str # Motif label as produced by annotate_dataset/quantify_motifs
 ) -> tuple[str, list[str]]: # (IUPAC-condensed sequence, monosaccharide termini spec)
     "Resolves a motif label to the sequence and termini spec it was counted with"
-    if label in _MOTIF_SEQ:
-        return _MOTIF_SEQ[label], _MOTIF_SPEC[label]
+    if (hit := resolve_motif_name(label)) is not None:
+        return hit
     s = label[9:] if label.startswith('Terminal_') else label
     # Terminal_ columns were counted with a pinned non-reducing end, exhaustive ones position-agnostically
     return s, (['terminal'] if label.startswith('Terminal_') else ['flexible']) + ['flexible'] * (s.count('(') - (1 if s.endswith(')') else 0))
@@ -38,7 +37,7 @@ def _motif_ambiguity(
     s, sp = _motif_sequence(label)
     # A glyco-regex spells its own syntax with '?' and '/', neither of which is the linkage ambiguity this rank is about
     s = _REGEX_LOOKAROUND.sub('', s[1:]) if s.startswith('r') else s
-    return (len(_WILDCARD_RE.findall(s)) + s.count('?') + s.count('/'), label not in _MOTIF_SEQ,
+    return (len(_WILDCARD_RE.findall(s)) + s.count('?') + s.count('/'), resolve_motif_name(label) is None,
             -sum(t != 'flexible' for t in sp), -len(s))
 
 
@@ -294,6 +293,8 @@ def annotate_dataset(
             return partial_annotate_topology_uncertainty(glycan) if glycan.count('{') == 1 else partial_annotate(glycan)
         shopping_cart.append(pd.concat(list(map(annotate_switchboard, glycans)), axis = 0))
     if 'custom' in feature_set:
+        # A motif name is as valid an input here as it is in GlycoDraw or glyco_filter, and resolving it also routes named glyco-regexes into the branch below
+        custom_motifs = [(resolve_motif_name(m) or (m,))[0] for m in custom_motifs]
         normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
         if normal_motifs:
             gmotifs = list(map(glycan_to_nxGraph, normal_motifs))

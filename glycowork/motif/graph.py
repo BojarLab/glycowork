@@ -323,8 +323,17 @@ def expand_termini_list(motif: str | nx.DiGraph, # Glycan motif sequence or grap
 def handle_negation(original_func: Callable # Function to wrap
                     ) -> Callable: # Wrapped function handling negation
     "Decorator for handling negation patterns in glycan matching functions"
+
     @wraps(original_func)
     def wrapper(glycan, motif, *args, **kwargs):
+        if isinstance(motif, str) and motif.startswith('r'):
+            from glycowork.motif.regex import get_match  # lazy, since regex.py is built on this module
+            opts = dict(zip(('termini_list', 'count', 'return_matches'), args)) | kwargs
+            if opts.get('return_matches'):
+                raise ValueError(
+                    f"Matches of the glyco-regular expression '{motif}' are sequences rather than node lists; use get_match for those")
+            hits = get_match(motif, glycan)
+            return len(hits) if opts.get('count') else bool(hits)
         if isinstance(motif, str) and '!' in motif:
             return subgraph_isomorphism_with_negation(glycan, motif, *args, **kwargs)
         elif hasattr(motif, 'nodes'):

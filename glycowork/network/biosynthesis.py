@@ -1,6 +1,4 @@
-import pickle
 import re
-from pathlib import Path
 from copy import deepcopy
 from itertools import chain
 from functools import lru_cache
@@ -14,17 +12,12 @@ from glycowork.glycan_data.stats import cohen_d, get_alphaN, correct_multiple_te
 from glycowork.motif.graph import compare_glycans, glycan_to_nxGraph, graph_to_string, graph_to_string_int, subgraph_isomorphism, get_possible_topologies
 from glycowork.motif.processing import get_lib, rescue_glycans, in_lib, get_class, canonicalize_iupac, canonicalize_composition, is_composition
 from glycowork.motif.tokenization import get_stem_lib, glycan_to_composition, map_to_basic
-from glycowork.motif.regex import get_match
 from glycowork.motif.annotate import get_k_saccharides
-
-# Get the directory and filename of the current script and construct the data path
-this_dir = Path(__file__).parent
-this_filename = Path(__file__).name
-data_path = this_dir / 'milk_networks_exhaustive.pkl'
 
 def __getattr__(name):
     if name == "net_dic":
-        net_dic = pickle.load(open(data_path, 'rb'))
+        from glycowork.network.evolution import _load_net_dic
+        net_dic = dict(_load_net_dic())  # hand out a copy of the one cached unpickle, as evolution does
         globals()[name] = net_dic  # Cache it to avoid reloading
         return net_dic
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -213,19 +206,13 @@ def deorphanize_edge_labels(network: nx.DiGraph, # Biosynthetic network
 def infer_roots(glycans: frozenset[str] # Set of glycans
                 ) -> frozenset[str]: # Set of permitted roots
     "Infer correct permitted roots for glycan class"
-    # Free
-    if any(k.endswith('-ol') for k in glycans):
-        return frozenset({'Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol'})
-    # O-linked
-    elif any(k.endswith('GalNAc') for k in glycans):
-        return frozenset({'GalNAc', 'Fuc', 'Man'})
-    # N-linked
-    elif any(k.endswith('GlcNAc') for k in glycans):
-        return frozenset({'Man(b1-4)GlcNAc(b1-4)GlcNAc'})
-    # Glycolipid
-    elif any(k.endswith('1Cer') or k.endswith('Ins') for k in glycans):
-        return frozenset({'Glc1Cer', 'Gal1Cer', 'Ins'})
-    elif any(k.endswith('Glc') for k in glycans):
+    classes = {get_class(k) for k in glycans}
+    # get_class knows that an N-glycan core is more than a trailing GlcNAc, and that O-glycans also sit on Man/Fuc/Gal
+    for net_class, roots in (('free', {'Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol'}), ('lipid', {'Glc1Cer', 'Gal1Cer', 'Ins'}),
+                             ('N', {'Man(b1-4)GlcNAc(b1-4)GlcNAc'}), ('O', {'GalNAc', 'Fuc', 'Man'})):
+        if net_class in classes:
+            return frozenset(roots)
+    if 'lipid/free' in classes or any(k.endswith('Glc') for k in glycans):
         print("Are you working with free oligosaccharides or glycolipids? Append '-ol' or '1Cer' to your glycans, respectively. We'll pretend it's milk glycans for now")
         return frozenset({'Gal(b1-4)Glc', 'Gal(b1-4)GlcNAc'})
     print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or 1Cer")
@@ -847,7 +834,8 @@ def evoprune_network(network: nx.DiGraph, # Biosynthetic network
                      ) -> nx.DiGraph: # Evolutionarily pruned network (with virtual node probability as a new node attribute)
     "Prune network using evolutionary path preferences"
     if network_dic is None:
-        network_dic = pickle.load(open(data_path, 'rb'))
+        from glycowork.network.evolution import _load_net_dic
+        network_dic = _load_net_dic()  # one cached unpickle of the bundle for the whole package, instead of one per call site
     if species_list is None:
         species_list = list(network_dic.keys())
     # Calculate path probabilities of diamonds
@@ -874,8 +862,8 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
     if highlight not in ['motif', 'species', 'abundance', 'conservation']:
         raise ValueError(f"Invalid highlight argument: {highlight}")
     if network_dic is None and highlight in {'species', 'conservation'}:
-        with open(data_path, 'rb') as f:
-            network_dic = pickle.load(f)
+        from glycowork.network.evolution import _load_net_dic
+        network_dic = _load_net_dic()
     if highlight == 'motif' and motif is None:
         raise ValueError("You have to provide a glycan motif to highlight")
     elif highlight == 'species' and species is None:
@@ -887,12 +875,10 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
     network_out = deepcopy(network)
     # Color nodes as to whether they contain the motif (green) or not (violet)
     if highlight == 'motif':
-        if motif[0] == 'r':
-            motif_presence = {k: ('limegreen' if get_match(motif[1:], k) else 'darkviolet') for k in network_out.nodes()}
-        elif motif[-1] == ')':
-            motif_presence = {k: ('limegreen' if motif in k else 'darkviolet') for k in network_out.nodes()}
-        else:
-            motif_presence = {k: ('limegreen' if subgraph_isomorphism(k, motif) else 'darkviolet') for k in network_out.nodes()}
+        from glycowork.glycan_data.loader import resolve_motif_name
+        motif, termini = resolve_motif_name(motif) or (motif, [])
+        motif_presence = {k: ('limegreen' if subgraph_isomorphism(k, motif, termini_list = termini) else 'darkviolet')
+                          for k in network_out.nodes()}
         nx.set_node_attributes(network_out, motif_presence, name = 'origin')
     # Color nodes as to whether they are from a species (green) or not (violet)
     elif highlight == 'species':
