@@ -90,6 +90,7 @@
 - The p-value in the polynomial case in `get_glycan_change_over_time` now has a better relationship with the trend line (rather than a mean shift) (f5ba41f)
 - `get_pvals_motifs` has been brought in line with the other analysis functions: enrichment is now tested with an Empirical-Bayes moderated t-test using the containment DAG as variance prior (new `moderate_variance` keyword argument), corrected by two-stage Benjamini-Hochberg within DAG-grouped motif families (new `grouped_BH` keyword argument) against a sample-size-adjusted alpha, on a motif set deduplicated via `deduplicate_motifs`, and additionally reports `significant` and `equivalence_pval` columns (42edfc9)
 - `get_representative_substructures` now uses the sample-size-adjusted significance from `get_pvals_motifs`, instead of a hardcoded corrected p-value threshold of 0.05 (42edfc9)
+- `preprocess_data` will now perform site-specific CoDA when `glycoproteomics=True` (glycomics: one global simplex; glycoproteomics: one simplex per site) ()
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)

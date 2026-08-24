@@ -84,6 +84,8 @@ def preprocess_data(
             "No groups given: pass group1 (and group2 for a two-group comparison) as lists of column names or column indices; groups are only inferred automatically from a GlycoDataFrame that carries contrasts.")
     if paired is None:
         paired = df.paired if isinstance(df, GlycoDataFrame) else False
+    if glycoproteomics and gamma == 0.1:
+        gamma = 0.25  # a glycosite subcomposition has few parts, so the CLR-is-a-valid-reference assumption is much weaker than for a whole glycome; only raised when the caller left the glycomics default
     prov = (getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {}))
     if not isinstance(group1[0], str) and experiment == "diff":
         columns_list = df.columns.tolist()
@@ -95,25 +97,37 @@ def preprocess_data(
         :, [gcol] + group1 + group2].fillna(0)
     # Drop rows with all zero, followed by outlier removal and imputation & normalization
     df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)].reset_index(drop = True)
+    protect = None
+    if glycoproteomics:
+        sites = pd.Series(['_'.join(str(k).split('_')[:2]) for k in df.iloc[:, 0]])
+        seen = (df.iloc[:, 1:] > 0).groupby(
+            sites.values).max()  # a site counts as measured in a sample if any of its glycoforms was seen there
+        if min_samples:
+            df = df[sites.map(seen.mean(axis = 1) >= min_samples).values].reset_index(drop = True)
+            sites = pd.Series(['_'.join(str(k).split('_')[:2]) for k in df.iloc[:, 0]])
+        protect = pd.DataFrame(~seen.loc[sites.values].to_numpy(), index = df.index, columns = df.columns[
+            1:])  # every glycoform of a site that was never identified in a sample is structurally missing, not below detection
     df = replace_outliers_winsorization(df)
     if experiment == "diff":
-        df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples,
+        df = impute_and_normalize(df, [group1, group2], impute = impute, min_samples = min_samples, protect = protect,
                                   circadian = circadian, timepoints = circadian_timepoints, periods = circadian_periods,
-                                  interval = circadian_interval, replicates = circadian_replicates, random_state = random_state)
+                                  interval = circadian_interval, replicates = circadian_replicates,
+                                  random_state = random_state)
     elif experiment == "anova":
         groups_unq = sorted(set(group1))
         df = impute_and_normalize(df, [[df.columns[i + 1] for i, x in enumerate(group1) if x == g] for g in groups_unq],
-                                  impute = impute, min_samples = min_samples,
+                                  impute = impute, min_samples = min_samples, protect = protect,
                                   circadian = circadian, timepoints = circadian_timepoints, periods = circadian_periods,
-                                  interval = circadian_interval, replicates = circadian_replicates, random_state = random_state)
+                                  interval = circadian_interval, replicates = circadian_replicates,
+                                  random_state = random_state)
     df_org = df.copy(deep = True)
     if transform is None:
-        transform = "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(df.iloc[0, 0], "N")) and len(
-            df) > 50 else "CLR"
+        transform = "CLR" if glycoproteomics else "ALR" if (isinstance(df.iloc[0, 0], str) and enforce_class(
+            df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"
     if transform not in ("ALR", "CLR", "Nothing"):
         raise ValueError("Only ALR and CLR are valid transforms for now.")
-    if motifs:
-        pass  # subsequent lines overwrite df with the motif-level transform, so running the sequence-level one here only pays for ALR's O(features) Procrustes search and prints a reference component that is never used
+    if motifs or glycoproteomics:
+        pass  # both cases overwrite df below with their own transform, so running the run-wide one here only pays for ALR's O(features) Procrustes search and, for glycoproteomics, would close over a simplex that does not exist
     elif transform == "ALR":
         df = get_additive_logratio_transformation(df, df.columns[1:].tolist() if experiment == "anova" else group1,
                                                   group2, paired = paired, gamma = gamma, custom_scale = custom_scale,
@@ -155,11 +169,40 @@ def preprocess_data(
             df = df.set_index(df.columns[0])
     else:
         df = df.set_index(df.columns[0])
-        df = df.groupby(df.index).mean()
+        df = df.groupby(df.index).sum() if glycoproteomics else df.groupby(
+            df.index).mean()  # duplicate glycoproteomics rows are charge states/repeat identifications of one part, so they amalgamate by summation before closure
         df_org = df_org.set_index(df_org.columns[0])
-        df_org = df_org.groupby(df_org.index).mean()
+        df_org = df_org.groupby(df_org.index).sum() if glycoproteomics else df_org.groupby(df_org.index).mean()
         if glycoproteomics:
             # Component-wise composition containment forces the same abundance inequality as substructure containment, so glycoforms admit the same balances and residuals as motifs
+            sites = pd.Series(['_'.join(str(k).split('_')[:2]) for k in df_org.index], index = df_org.index)
+            keep = sites.groupby(sites).transform(
+                'size') > 1  # a one-part subcomposition carries no log-ratio and would CLR to an all-zero row
+            df_org, sites = df_org[keep], sites[keep]
+            df_org = df_org.div(df_org.groupby(sites).transform(
+                'sum')) * 100  # close within the glycosite: glycoforms compete for one site, glycoforms on different proteins do not
+            gsets = [group1, group2] if experiment == "diff" and group2 else (
+                [[c for c, x in zip(df_org.columns, group1) if x == g] for g in
+                 sorted(set(group1))] if experiment == "anova" else [df_org.columns.tolist()])
+            ok = pd.concat([df_org[g].notna().sum(axis = 1) >= 2 for g in gsets], axis = 1).all(axis = 1)
+            if paired and group2:
+                ok &= (df_org[group1].notna().values & df_org[group2].notna().values).sum(
+                    axis = 1) >= 2  # a paired test needs complete pairs, which both groups being observed twice does not guarantee
+            df_org, sites = df_org[ok], sites[
+                ok]  # a group needs two measured samples before it has a variance; the closure above already ran over the observed cells only, so dropping here changes no site total
+            if transform == "Nothing":
+                df = df.loc[df_org.index]
+            else:
+                cols = df_org.columns.tolist() if experiment == "anova" else ((group1 + group2) if paired else group1)
+                grp2 = [] if (paired or experiment == "anova") else group2
+                parts = []
+                for _, g in df_org.groupby(sites):
+                    ref = [g.mean(axis = 1).idxmax()] if len(
+                        g) < 4 else None  # with 2-3 parts the geometric mean is dominated by the very feature being tested, so we pin the denominator to the site's dominant glycoform instead
+                    parts.append(clr_transformation(g + 0.0000001, cols, grp2, gamma = gamma,
+                                                    custom_scale = 0 if paired else custom_scale,
+                                                    random_state = random_state, reference = ref))
+                df = pd.concat(parts).loc[df_org.index]
             if motif_dag:
                 df_org.attrs['motif_dag'] = get_composition_dag(df_org.index.tolist(), abundances = df_org)
     df_org.attrs['dataset'], df_org.attrs['provenance'] = prov
@@ -786,6 +829,9 @@ def get_differential_expression(
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
+    if glycoproteomics and monte_carlo:
+        raise ValueError(
+            "monte_carlo is not available for glycoproteomics: the per-glycosite closure replaces the run-wide CLR that estimate_technical_variance simulates over, so no Monte Carlo frame is ever built.")
     in_contrasts, in_name, in_prov = getattr(df, '_contrasts', {}), getattr(df, '_glyco_name', ''), getattr(df,
                                                                                                             '_provenance',
                                                                                                             {})
@@ -833,7 +879,8 @@ def get_differential_expression(
                     variances.append(mahalanobis_variance(gp1, gp2, paired = paired, random_state = random_state))
         mean_abundance = mean_abundance_c
     else:
-        log2fc = (df_b.values - df_a.values).mean(axis = 1) if paired else (df_b.mean(axis = 1) - df_a.mean(axis = 1))
+        log2fc = np.nanmean(df_b.values - df_a.values, axis = 1) if paired else (
+                    df_b.mean(axis = 1) - df_a.mean(axis = 1))
         if paired:
             assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
         if monte_carlo:
@@ -846,17 +893,23 @@ def get_differential_expression(
             if moderate_variance and len(A) > 1:
                 # Shrinking each feature's variance toward its containment neighborhood stabilizes the small samples typical of glycomics, without touching the reported effect sizes
                 D = B - A if paired else None
-                resid = (D.var(axis = 1, ddof = 1) if paired else
-                         ((A.shape[1] - 1) * A.var(axis = 1, ddof = 1) + (B.shape[1] - 1) * B.var(axis = 1,
-                                                                                                  ddof = 1)) / (
-                                     A.shape[1] + B.shape[1] - 2))
-                dfr = (A.shape[1] - 1) if paired else (A.shape[1] + B.shape[1] - 2)
-                s2, dfp = moderated_variance(resid, df_resid = dfr, neighbors = dag_neighbors(glycans, df_org.attrs.get('motif_dag')))
-                se = np.sqrt(s2 / A.shape[1]) if paired else np.sqrt(s2 * (1 / A.shape[1] + 1 / B.shape[1]))
-                delta = D.mean(axis = 1) if paired else (B.mean(axis = 1) - A.mean(axis = 1))
+                na, nb = np.isfinite(A).sum(axis = 1), np.isfinite(B).sum(
+                    axis = 1)  # per-feature counts, because glycoproteomics leaves structurally unmeasured cells as NaN; on dense input these are constant and everything below reduces to the old expressions
+                nd = np.isfinite(D).sum(axis = 1) if paired else None
+                resid = (np.nanvar(D, axis = 1, ddof = 1) if paired else
+                         ((na - 1) * np.nanvar(A, axis = 1, ddof = 1) + (nb - 1) * np.nanvar(B, axis = 1, ddof = 1)) / (
+                                     na + nb - 2))
+                dfr = (nd - 1) if paired else (na + nb - 2)
+                s2, dfp = moderated_variance(resid, df_resid = dfr,
+                                             neighbors = dag_neighbors(glycans, df_org.attrs.get('motif_dag')))
+                se = np.sqrt(s2 / nd) if paired else np.sqrt(s2 * (1 / na + 1 / nb))
+                delta = np.nanmean(D, axis = 1) if paired else (np.nanmean(B, axis = 1) - np.nanmean(A, axis = 1))
                 pvals = list(2 * t_dist.sf(np.abs(delta / se), dfp))
             else:
-                pvals = list((ttest_rel(B, A, axis = 1) if paired else ttest_ind(B, A, axis = 1, equal_var = False))[1])
+                pvals = list((ttest_rel(B, A, axis = 1, nan_policy = 'omit') if paired else ttest_ind(B, A, axis = 1,
+                                                                                                      equal_var = False,
+                                                                                                      nan_policy = 'omit'))[
+                                 1])
             equivalence_pvals = np.full(len(A), np.nan)
             todo = np.array(pvals) > alpha
             if todo.any():
@@ -867,9 +920,20 @@ def get_differential_expression(
             equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
             equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
             # Levene with the default median center is a one-way ANOVA on absolute deviations from the group medians, which reduces along the sample axis in one call
-            levene_pvals = f_oneway(np.abs(B - np.median(B, axis = 1, keepdims = True)),
-                                    np.abs(A - np.median(A, axis = 1, keepdims = True)), axis = 1)[1] if (
-                    df_a.shape[1] > 2 and df_b.shape[1] > 2) else [1.0] * len(df_a)
+            U, V = np.abs(B - np.nanmedian(B, axis = 1, keepdims = True)), np.abs(
+                A - np.nanmedian(A, axis = 1, keepdims = True))
+            hiU, loU = np.where(np.isfinite(U), U, -np.inf).max(axis = 1), np.where(np.isfinite(U), U, np.inf).min(
+                axis = 1)
+            hiV, loV = np.where(np.isfinite(V), V, -np.inf).max(axis = 1), np.where(np.isfinite(V), V, np.inf).min(
+                axis = 1)
+            tol = 1e-9 * np.maximum(np.maximum(np.where(np.isfinite(B), np.abs(B), 0.0).max(axis = 1),
+                                               np.where(np.isfinite(A), np.abs(A), 0.0).max(axis = 1)), 1.0)
+            vary = ~(((hiU - loU) <= tol) & ((hiV - loV) <= tol)) & (np.isfinite(U).sum(axis = 1) > 1) & (
+                        np.isfinite(V).sum(
+                            axis = 1) > 1)  # deviations that are flat, or differ only by floating-point noise, make F infinite and p exactly 0: a spurious variance difference, and what scipy warns about
+            levene_pvals = np.ones(len(df_a))
+            if vary.any() and df_a.shape[1] > 2 and df_b.shape[1] > 2:
+                levene_pvals[vary] = f_oneway(U[vary], V[vary], axis = 1, nan_policy = 'omit')[1]
             effect_sizes, variances = cohen_d(B, A, paired = paired) if len(A) else ([0] * len(glycans),
                                                                                      [0] * len(glycans))
     # Multiple testing correction
@@ -919,7 +983,7 @@ def get_differential_expression(
             'motif_dag') is not None and not df.empty:
         dag, full = df_org.attrs['motif_dag'], pd.concat([df_org, df_org_prison])
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
-        ref = np.median(np.log2(df_org.values + 0.0000001) - df.values, axis = 0)
+        ref = np.nanmedian(np.log2(df_org.values + 0.0000001) - df.values, axis = 0)
         fc, rows = dict(zip(df_out['Glycan'], df_out['Log2FC'])), {}
         pos, F = {m: i for i, m in enumerate(full.index)}, full.values
         g1i = [full.columns.get_loc(c) for c in group1]
@@ -945,7 +1009,8 @@ def get_differential_expression(
                 continue
             r = np.log2(np.clip(resid, 0.0000001, None)) - ref
             r_a, r_b = r[g1i], r[g2i]
-            rows[p] = (explained, ttest_rel(r_b, r_a)[1] if paired else ttest_ind(r_b, r_a, equal_var = False)[1],
+            rows[p] = (explained, ttest_rel(r_b, r_a, nan_policy = 'omit')[1] if paired else
+            ttest_ind(r_b, r_a, equal_var = False, nan_policy = 'omit')[1],
                        cohen_d(r_b, r_a, paired = paired)[0], bal_p)
         # Residuals and balances answer different questions than the marginals, so each is corrected as its own, much smaller family
         cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
@@ -1125,14 +1190,20 @@ def get_glycanova(
     df, df_prison = variance_based_filtering(df)
     garr, X = np.asarray(groups), df.values
     # One-way ANOVA on a fixed design is the same F for every feature, so all features go through one vectorized call instead of one formula parse and OLS fit each
-    f_values, p_values = f_oneway(*[X[:, garr == g] for g in np.unique(garr)], axis = 1)
+    f_values, p_values = f_oneway(*[X[:, garr == g] for g in np.unique(garr)], axis = 1, nan_policy = 'omit')
     if moderate_variance and len(X) > 1:
         # Shrinking each feature's residual variance toward its containment neighborhood stabilizes the F test without touching the reported effect sizes
         ug = np.unique(garr)
-        gm, dfr = X.mean(axis = 1, keepdims = True), X.shape[1] - len(ug)
-        ssb = sum(((X[:, garr == g].mean(axis = 1, keepdims = True) - gm) ** 2).ravel() * (garr == g).sum() for g in ug)
-        ssw = sum(((X[:, garr == g] - X[:, garr == g].mean(axis = 1, keepdims = True)) ** 2).sum(axis = 1) for g in ug)
-        s2, dfp = moderated_variance(ssw / dfr, df_resid = dfr, neighbors = dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag')))
+        ng = np.stack([np.isfinite(X[:, garr == g]).sum(axis = 1) for g in ug],
+                      axis = 1)  # per-feature group sizes, because glycoproteomics leaves structurally unmeasured cells as NaN; on dense input these are constant and everything below reduces to the old expressions
+        gm, dfr = (np.nansum(X, axis = 1) / ng.sum(axis = 1))[:, None], ng.sum(axis = 1) - len(ug)
+        ssb = sum(((np.nanmean(X[:, garr == g], axis = 1, keepdims = True) - gm) ** 2).ravel() * ng[:, i] for i, g in
+                  enumerate(ug))
+        ssw = sum(
+            np.nansum((X[:, garr == g] - np.nanmean(X[:, garr == g], axis = 1, keepdims = True)) ** 2, axis = 1) for g
+            in ug)
+        s2, dfp = moderated_variance(ssw / dfr, df_resid = dfr,
+                                     neighbors = dag_neighbors(df.index.tolist(), df_org.attrs.get('motif_dag')))
         f_values = (ssb / (len(ug) - 1)) / s2
         p_values = f.sf(f_values, len(ug) - 1, dfp)
     results = list(zip(df.index, f_values, p_values))

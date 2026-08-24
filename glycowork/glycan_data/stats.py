@@ -5,7 +5,7 @@ from functools import lru_cache
 from itertools import permutations as iter_permutations
 from math import factorial
 from collections import Counter
-from scipy.stats import rankdata, norm, chi2, t, f, entropy, gmean, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
+from scipy.stats import rankdata, norm, chi2, t, f, entropy, f_oneway, combine_pvalues, dirichlet, spearmanr, ttest_rel, ttest_ind, gamma as gamma_dist
 from scipy.spatial import procrustes
 from scipy.special import digamma, polygamma
 import scipy.integrate as integrate
@@ -19,21 +19,31 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
             ) -> tuple[float, float]: # (Cohen's d, variance) where d: 0.2 small; 0.5 medium; 0.8 large effect size
     "calculates effect size between two groups, for one feature or for a whole feature x sample frame"
     X, Y = np.atleast_2d(np.asarray(x, dtype = float)), np.atleast_2d(np.asarray(y, dtype = float))
+    d, var_d = np.full(X.shape[0], np.nan), np.full(X.shape[0],
+                                                    np.nan)  # a feature without two usable observations per group has no standardized effect; leaving it NaN is what the dense code produced anyway, minus the empty-slice warnings
     if paired:
         assert X.shape == Y.shape, "For paired samples, the size of x and y should be the same"
         diff = X - Y
-        n, mean_diff = diff.shape[1], diff.mean(axis = 1)
-        diff_std = np.std(diff, axis = 1, ddof = 1)
-        # A degenerate difference has an unbounded standardized effect and no sampling variance left to report
-        degenerate = diff_std == 0
-        d = np.where(degenerate, np.where(mean_diff == 0, 0.0, np.where(mean_diff > 0, np.inf, -np.inf)),
-                     mean_diff / np.where(degenerate, 1, diff_std))
-        var_d = np.where(degenerate, 0.0, 1 / n + np.where(degenerate, 0, d) ** 2 / (2 * n))
+        n = np.isfinite(diff).sum(axis = 1)
+        ok = n > 1
+        if ok.any():
+            n, mean_diff = n[ok], np.nanmean(diff[ok], axis = 1)
+            diff_std = np.nanstd(diff[ok], axis = 1, ddof = 1)
+            # A degenerate difference has an unbounded standardized effect and no sampling variance left to report
+            degenerate = diff_std == 0
+            d[ok] = np.where(degenerate, np.where(mean_diff == 0, 0.0, np.where(mean_diff > 0, np.inf, -np.inf)),
+                             mean_diff / np.where(degenerate, 1, diff_std))
+            var_d[ok] = np.where(degenerate, 0.0, 1 / n + np.where(degenerate, 0, d[ok]) ** 2 / (2 * n))
     else:
-        nx, ny = X.shape[1], Y.shape[1]
-        sx, sy = np.maximum(np.std(X, axis = 1, ddof = 1), 1e-6), np.maximum(np.std(Y, axis = 1, ddof = 1), 1e-6)
-        d = (X.mean(axis = 1) - Y.mean(axis = 1)) / np.sqrt(((nx - 1) * sx ** 2 + (ny - 1) * sy ** 2) / (nx + ny - 2))
-        var_d = (nx + ny) / (nx * ny) + d**2 / (2 * (nx + ny))
+        nx, ny = np.isfinite(X).sum(axis = 1), np.isfinite(Y).sum(axis = 1)
+        ok = (nx > 1) & (ny > 1)
+        if ok.any():
+            nx, ny = nx[ok], ny[ok]
+            sx, sy = np.maximum(np.nanstd(X[ok], axis = 1, ddof = 1), 1e-6), np.maximum(
+                np.nanstd(Y[ok], axis = 1, ddof = 1), 1e-6)
+            d[ok] = (np.nanmean(X[ok], axis = 1) - np.nanmean(Y[ok], axis = 1)) / np.sqrt(
+                ((nx - 1) * sx ** 2 + (ny - 1) * sy ** 2) / (nx + ny - 2))
+            var_d[ok] = (nx + ny) / (nx * ny) + d[ok] ** 2 / (2 * (nx + ny))
     return (d, var_d) if np.ndim(x) > 1 else (d[0], var_d[0])
 
 
@@ -208,8 +218,9 @@ class MissForest:
 def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences in first col and abundances in subsequent cols
                          groups: list[list[str]], # nested list of column name lists, one list per group
                          impute: bool = True, # replaces zeroes with predictions from MissForest
-                         min_samples: float = 0.1, # percent of samples that need non-zero values for glycan to be kept
-                         circadian: bool = False, # inject sin/cos time features into MissForest
+                         min_samples: float = 0.1,  # percent of samples that need non-zero values for glycan to be kept
+                         protect: pd.DataFrame | None = None,  # boolean frame in the shape/order of the abundance block, marking cells that were never measured and must stay NaN
+                         circadian: bool = False,  # inject sin/cos time features into MissForest
                          timepoints: int | list | np.ndarray | None = None, # number of timepoints, or explicit time values per column (only relevant if circadian)
                          periods: list[int] | None = None, # cycle lengths to encode (e.g., [12, 24]) (only relevant if circadian)
                          interval: int = 1, # time units between experimental timepoints (only relevant if circadian)
@@ -222,15 +233,23 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
         min_count = max(np.floor((df.shape[1] - 1) * min_samples), 1)
         mask = (df.iloc[:, 1:] != 0).sum(axis = 1) >= min_count
         df = df[mask].reset_index(drop = True)
+        if protect is not None:
+            protect = protect[mask.values].reset_index(drop = True)
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
     df = df.astype(float)
+    if protect is not None:
+        protect = protect.set_axis(df.index).set_axis(df.columns, axis = 1).astype(bool)
+        df = df.mask(
+            protect)  # a cell that was never measured is not a zero; NaN keeps it out of floors, imputation targets, column totals, and geometric means
     floor = 1e-7 if len(groups) == 2 else 1e-5
     for group in groups:
         group_data = df[group]
-        all_zero_mask = (group_data == 0).all(axis = 1)
-        df.loc[all_zero_mask, group] = floor
+        all_zero_mask = (group_data.fillna(0) == 0).all(axis = 1) & group_data.notna().any(
+            axis = 1)  # only a group that was measured as all-zero earns a floor, not one that was never measured
+        df.loc[all_zero_mask, group] = df.loc[
+                                           all_zero_mask, group] + floor  # observed cells here are exactly 0 so this is the old assignment, but NaN + floor stays NaN
     old_cols = df.columns if isinstance(colname, int) else []
     if len(old_cols):
         df.columns = df.columns.astype(str)
@@ -239,7 +258,11 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
                         interval = interval, replicates = replicates, random_state = random_state)
         df = df.replace(0, np.nan)
         df = mf.fit_transform(df)
-    df = (df / df.sum(axis = 0)) * 100
+        if protect is not None:
+            df = df.mask(
+                protect)  # re-blank afterwards; these cells still steer the iterative fit, which is the residual approximation of this approach
+    df = (df / df.sum(
+        axis = 0)) * 100  # pandas sums skip NaN, so an unmeasured cell no longer inflates its sample's total
     if len(old_cols) > 0:
         df.columns = old_cols
     df.insert(loc = 0, column = colname, value = glycans)
@@ -528,15 +551,19 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
                          ) -> float: # p-value for equivalence test
     "performs equivalence test (two one-sided t-tests) to test whether differences between group means are considered practically equivalent, for one feature or for a whole feature x sample frame"
     A, B = np.atleast_2d(np.asarray(row_a, dtype = float)), np.atleast_2d(np.asarray(row_b, dtype = float))
-    na, nb = A.shape[1], B.shape[1]
-    pooled_std = np.sqrt(((na - 1) * np.var(A, axis = 1, ddof = 1) + (nb - 1) * np.var(B, axis = 1, ddof = 1)) / (na + nb - 2))
+    na, nb = np.isfinite(A).sum(axis = 1), np.isfinite(B).sum(
+        axis = 1)  # per-feature counts, so a structurally unmeasured sample drops out instead of turning the whole row into NaN
+    pooled_std = np.sqrt(
+        ((na - 1) * np.nanvar(A, axis = 1, ddof = 1) + (nb - 1) * np.nanvar(B, axis = 1, ddof = 1)) / (na + nb - 2))
     delta = 0.2 * pooled_std
     if paired:
-        assert na == nb, "For paired samples, the size of row_a and row_b should be the same"
+        assert A.shape[1] == B.shape[1], "For paired samples, the size of row_a and row_b should be the same"
         diff = A - B
-        mdiff, se, dof = diff.mean(axis = 1), np.std(diff, axis = 1, ddof = 1) / np.sqrt(na), na - 1
+        nd = np.isfinite(diff).sum(axis = 1)
+        mdiff, se, dof = np.nanmean(diff, axis = 1), np.nanstd(diff, axis = 1, ddof = 1) / np.sqrt(nd), nd - 1
     else:
-        mdiff, se, dof = A.mean(axis = 1) - B.mean(axis = 1), pooled_std * np.sqrt(1 / na + 1 / nb), na + nb - 2
+        mdiff, se, dof = np.nanmean(A, axis = 1) - np.nanmean(B, axis = 1), pooled_std * np.sqrt(
+            1 / na + 1 / nb), na + nb - 2
     # TOST: the equivalence p-value is the larger of the two one-sided t-tests against the -delta and +delta bounds
     se = np.maximum(se, 1e-300)
     p = np.maximum(t.sf((mdiff + delta) / se, dof), t.cdf((mdiff - delta) / se, dof))
@@ -553,7 +580,13 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
                        ) -> pd.DataFrame: # CLR-transformed dataframe
     "performs the Center Log-Ratio (CLR) Transformation with scale model adjustment"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
-    geometric_mean = gmean((df if reference is None else df.loc[reference]).replace(0, np.nan), axis = 0, nan_policy = 'omit')
+    ref = (df if reference is None else df.loc[reference]).to_numpy(dtype = float)
+    logs = np.log(np.where(ref > 0, ref,
+                           np.nan))  # a column whose reference rows are all missing has no geometric mean; computing it by hand keeps that case silent instead of warning, since nansum of an all-NaN column is 0 with a count of 0
+    cnt = np.isfinite(logs).sum(axis = 0)
+    geometric_mean = np.where((cnt > 0) & ~(ref < 0).any(axis = 0),
+                              np.exp(np.nansum(logs, axis = 0) / np.maximum(cnt, 1)),
+                              np.nan)  # a negative abundance has no log, so the column stays undefined exactly as gmean left it
     clr_adjusted = np.zeros(df.shape, dtype = float)
     if gamma and not isinstance(custom_scale, dict):
         group1i = [df.columns.get_loc(c) for c in group1]
@@ -774,17 +807,22 @@ def correct_multiple_testing(pvals: list[float] | np.ndarray, # list of raw p-va
 
 
 def moderated_variance(residual_var: np.ndarray, # per-feature within-group variance
-                       df_resid: int, # residual degrees of freedom of the design
-                       neighbors: list[list[int]] | None = None # per-feature indices of containment neighbors, for a local prior
-                       ) -> tuple[np.ndarray, float]: # (posterior variance per feature, posterior degrees of freedom)
+                       df_resid: float | np.ndarray,
+                       # residual degrees of freedom of the design; per-feature when missingness makes it vary
+                       neighbors: list[list[int]] | None = None
+                       # per-feature indices of containment neighbors, for a local prior
+                       ) -> tuple[
+    np.ndarray, np.ndarray]:  # (posterior variance per feature, posterior degrees of freedom per feature)
     "Empirical-Bayes moderation of feature variances; the prior is the geometric mean over each feature's containment neighborhood, or over all features when no graph is given"
     s2 = np.maximum(np.asarray(residual_var, dtype = float), 1e-12)
+    d = np.maximum(np.broadcast_to(np.asarray(df_resid, dtype = float), s2.shape),
+                   1e-6)  # a feature measured in fewer samples carries less information and must shrink harder, so the design df is kept per feature
     ls2 = np.log(s2)
     # Smyth's moment estimator for the prior degrees of freedom, so the amount of shrinkage is set by the data rather than chosen
-    z = ls2 - digamma(df_resid / 2) + np.log(df_resid / 2)
-    v = (np.var(z, ddof = 1) if len(z) > 1 else 0.0) - polygamma(1, df_resid / 2)
+    z = ls2 - digamma(d / 2) + np.log(d / 2)
+    v = (np.var(z, ddof = 1) if len(z) > 1 else 0.0) - np.mean(polygamma(1, d / 2))
     if v <= 0 or not np.isfinite(v):
-        d0 = float(df_resid)  # variances look homogeneous, so shrink as hard as the cap allows
+        d0 = float(np.median(d))  # variances look homogeneous, so shrink as hard as the cap allows
     else:
         x = 0.5 / v + 0.5
         for _ in range(50):  # Newton inversion of the trigamma function
@@ -793,12 +831,12 @@ def moderated_variance(residual_var: np.ndarray, # per-feature within-group vari
             x += dx
             if abs(dx / x) < 1e-8:
                 break
-        # the prior may contribute at most as much information as the data, which stops a chance-homogeneous variance set from producing absurdly small p-values in tiny cohorts
-        d0 = float(np.clip(2 * x, 0.1, df_resid))
+        # the prior may contribute at most as much information as the typical feature's data, which stops a chance-homogeneous variance set from producing absurdly small p-values in tiny cohorts
+        d0 = float(np.clip(2 * x, 0.1, np.median(d)))
     # Motifs that contain one another are measured on overlapping structures and so share measurement noise, which makes them a better variance reference than unrelated motifs
     prior = np.array([np.exp(np.mean(ls2[nb + [i]])) if neighbors and nb else np.exp(np.mean(ls2))
                       for i, nb in enumerate(neighbors if neighbors else [[]] * len(s2))])
-    return (d0 * prior + df_resid * s2) / (d0 + df_resid), df_resid + d0
+    return (d0 * prior + d * s2) / (d0 + d), d + d0
 
 
 def dag_neighbors(index: list[str], # feature labels in the order they are tested
@@ -858,12 +896,14 @@ def omega_squared(row: pd.Series | np.ndarray | pd.DataFrame, # values for one f
     if X.shape[1] <= len(ug):
         raise ValueError(
             f"omega_squared needs more samples than groups, got {X.shape[1]} samples for {len(ug)} groups; with one sample per group there is no within-group variance and the effect size is undefined.")
-    ns = np.array([(g == u).sum() for u in ug])
-    group_means = np.stack([X[:, g == u].mean(1) for u in ug], 1)
-    grand_mean = X.mean(1)
+    ns = np.stack([np.isfinite(X[:, g == u]).sum(axis = 1) for u in ug],
+                  axis = 1)  # per-feature group sizes, so an unmeasured sample drops out instead of turning the whole row into NaN
+    group_means = np.stack([np.nanmean(X[:, g == u], 1) for u in ug], 1)
+    n_tot = ns.sum(axis = 1)
+    grand_mean = np.nansum(X, axis = 1) / n_tot
     ss_between = (((group_means - grand_mean[:, None]) ** 2) * ns).sum(1)
-    ss_total = ((X - grand_mean[:, None]) ** 2).sum(1)
-    mse_resid = (ss_total - ss_between) / (X.shape[1] - len(ug))
+    ss_total = np.nansum((X - grand_mean[:, None]) ** 2, axis = 1)
+    mse_resid = (ss_total - ss_between) / (n_tot - len(ug))
     out = (ss_between - (len(ug) - 1) * mse_resid) / (ss_total + mse_resid)
     return pd.Series(out, index = row.index) if isinstance(row, pd.DataFrame) else out[0]
 

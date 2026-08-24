@@ -4676,6 +4676,12 @@ def test_get_differential_expression():
     assert 'Effect size' in results.columns
     assert 'corr p-val' in results.columns
     assert 'significant' in results.columns
+    # A NaN anywhere in these columns means a statistic silently failed to compute, which is how a missingness bug hides; an exact 0 means an infinite statistic from a constant slice, not evidence
+    assert results[
+        ['Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'corr Levene p-val', 'Effect size']].notna().all().all()
+    assert ((results['p-val'] > 0) & (results['p-val'] <= 1)).all() and (
+                (results['corr Levene p-val'] > 0) & (results['corr Levene p-val'] <= 1)).all()
+    assert np.isfinite(results['Effect size']).all()
     group1_int = [df.columns.tolist().index(k) for k in group1]
     group2_int = [df.columns.tolist().index(k) for k in group2]
     results = get_differential_expression(df, group1_int, group2_int, impute=False)
@@ -8421,21 +8427,43 @@ def test_redistribution_is_invariant_to_renormalization():
 
 def test_glycoproteomics_decomposition_is_reachable():
     df = glycoproteomics_data_loader.human_milk_N_PMID34087070
-    out = get_differential_expression(df, group1 = ['Colostrum1', 'Colostrum2', 'Colostrum3'],
-                                      group2 = ['Mature1', 'Mature2', 'Mature3'], glycoproteomics = True,
-                                      random_state = 42)
+    with warnings.catch_warnings(record = True) as caught:
+        warnings.simplefilter("always")
+        out = get_differential_expression(df, group1 = ['Colostrum1', 'Colostrum2', 'Colostrum3'],
+                                          group2 = ['Mature1', 'Mature2', 'Mature3'], glycoproteomics = True,
+                                          random_state = 42)
+    # Structurally missing glycoforms must not reach a dense reduction: numpy and scipy signal that with a RuntimeWarning (SmallSampleWarning and ConstantInputWarning are subclasses) rather than an error, and the statistic silently comes back NaN
+    assert not [w for w in caught if issubclass(w.category, RuntimeWarning)], [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
     assert 'Glycosite' in out.columns
+    assert out[['corr p-val', 'Effect size']].notna().all().all()
     glycoforms = out.attrs['glycoforms']
     assert 'Redistribution p-val' in glycoforms.columns
     assert glycoforms['Redistribution p-val'].notna().any()
+    assert glycoforms[['Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'corr Levene p-val', 'Effect size']].notna().all().all()
+    # The decomposition is the point of the glycoproteomics path, so a wholesale NaN in either residual column is a regression even though every assert above still passes
+    assert glycoforms['Residual p-val'].notna().sum() > 0.2 * len(glycoforms)
+    assert glycoforms['Residual p-val'].notna().sum() == glycoforms['Residual effect size'].notna().sum()
+    for col in ('p-val', 'corr p-val', 'corr Levene p-val', 'Equivalence p-val', 'Redistribution p-val', 'Residual p-val'):
+        vals = glycoforms[col].dropna()
+        assert ((vals > 0) & (vals <= 1)).all(), (col, vals.min(), vals.max())
+    assert np.isfinite(glycoforms[['Effect size', 'Residual effect size']].dropna().to_numpy()).all()
 
 
 def test_glycanova_glycoproteomics_decomposition():
     df = glycoproteomics_data_loader.human_milk_N_PMID34087070
-    out, _ = get_glycanova(df, groups = ['A', 'A', 'B', 'B', 'C', 'C'], glycoproteomics = True, posthoc = False,
-                           random_state = 42)
+    with warnings.catch_warnings(record = True) as caught:
+        warnings.simplefilter("always")
+        out, _ = get_glycanova(df, groups = ['A', 'A', 'B', 'B', 'C', 'C'], glycoproteomics = True, posthoc = False,
+                               random_state = 42)
+    assert not [w for w in caught if issubclass(w.category, RuntimeWarning)], [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
     assert 'Redistribution p-val' in out.columns
     assert out['Redistribution p-val'].notna().any()
+    # The ANOVA path meets the same missingness as the two-group one, so its columns have to survive it too
+    assert out[['F statistic', 'p-val', 'corr p-val', 'Effect size']].notna().all().all()
+    assert out['Residual p-val'].notna().sum() == out['Residual effect size'].notna().sum() > 0
+    for col in ('p-val', 'corr p-val', 'Redistribution p-val', 'Residual p-val'):
+        vals = out[col].dropna()
+        assert ((vals > 0) & (vals <= 1)).all(), (col, vals.min(), vals.max())
 
 
 def test_sequence_analysis_gets_no_decomposition_columns():
@@ -8626,7 +8654,11 @@ def test_biosynthesis_contrast_and_extension_branches(tmp_path):
     raw = pd.DataFrame({'glycan': ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"],
                         'sample1': [10.0, 5.0, 7.0], 'sample2': [8.0, 6.0, 8.0], 'sample3': [9.0, 4.0, 6.0], 'sample4': [11.0, 7.0, 9.0]})
     contrasts = {'sample1': 'ctrl', 'sample2': 'ctrl', 'sample3': 'tumor', 'sample4': 'tumor'}
-    assert not get_differential_biosynthesis(GlycoDataFrame(raw, contrasts = contrasts), analysis = "reaction").empty
+    reaction = get_differential_biosynthesis(GlycoDataFrame(raw, contrasts = contrasts), analysis = "reaction")
+    assert not reaction.empty
+    # An all-NaN column here still leaves the frame non-empty, so emptiness alone does not tell us the statistics ran
+    assert reaction.select_dtypes('number').notna().all().all()
+    assert np.isfinite(reaction.select_dtypes('number').to_numpy(dtype = float)).all()
     path = tmp_path / "ab.csv"
     raw.to_csv(path, index = False)
     assert not get_differential_biosynthesis(str(path), group1 = ['sample1', 'sample2'], group2 = ['sample3', 'sample4'],
