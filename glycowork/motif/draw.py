@@ -125,11 +125,33 @@ _TRANSFORM_PATTERN = re.compile(r'transform\s*=\s*"([^"]*)"')
 _CONF_DISPLAY = {'L-': 'L', 'D-': 'D', '1,7lactone': 'on'}
 _SEGMENT_PREFIXES = {'04', '15', '02', '13', '24', '35', '25', '03', '14'}
 _SVG_NUMBER = re.compile(r'-?\d+(?:\.\d+)?(?:e-?\d+)?')
+_SVG_LINE_PATH = re.compile(r'<path d="M(-?[\d.eE+-]+),(-?[\d.eE+-]+) L(-?[\d.eE+-]+),(-?[\d.eE+-]+)"[^>]*?id="([^"]+)"')
+_SVG_TEXT_PATH = re.compile(r'<text([^>]*)><textPath xlink:href="#([^"]+)" startOffset="([^"]+)">\s*(?:<tspan dy="([^"]+)">(.*?)</tspan>)?\s*</textPath></text>', re.S)
 
 
 def _get_glycorender():
     from glycorender.render import convert_svg_to_pdf, convert_svg_to_png
     return convert_svg_to_pdf, convert_svg_to_png
+
+
+def _flatten_text_paths(
+        data: str # SVG code as emitted by drawsvg
+) -> str: # SVG code with every label as plainly positioned text
+    "Rewrites text-on-a-path as absolutely positioned, rotated text, since vector editors such as Affinity Designer silently drop <textPath>"
+    lines = {m[4]: [float(k) for k in m[:4]] for m in _SVG_LINE_PATH.findall(data)}
+
+    def _place(m):
+        attrs, ref, offset, dy, label = m.group(1), m.group(2), m.group(3), m.group(4) or '0em', m.group(5) or ''
+        if ref not in lines:
+            return m.group(0)
+        x0, y0, x1, y1 = lines[ref]
+        length = np.hypot(x1 - x0, y1 - y0)
+        frac = float(offset[:-1]) / 100 if offset.endswith('%') else (float(offset) / length if length else 0)
+        size = float(re.search(r'font-size="([\d.eE+-]+)"', attrs).group(1))
+        return '<text%s transform="translate(%.4f,%.4f) rotate(%.4f)" x="0" y="%.4f">%s</text>' % (attrs, x0 + frac * (x1 - x0), y0 + frac * (y1 - y0), np.degrees(np.arctan2(y1 - y0, x1 - x0)), float(dy[:-2]) * size, label)
+
+    return _SVG_TEXT_PATH.sub(_place, data).replace('<text ',
+                                                    "<text font-family=\"'Century Gothic', Comfortaa, sans-serif\" ")
 
 
 def _drawn_extent(
@@ -1334,7 +1356,8 @@ class GlycanDrawing:
     def as_svg(self):
         return self.drawing_obj.as_svg()
     def save_svg(self, filepath):
-        return self.drawing_obj.save_svg(filepath)
+        with open(filepath, 'w', encoding = "utf-8") as f:
+            f.write(_flatten_text_paths(self.drawing_obj.as_svg()))
     def _repr_png_(self):
         _, convert_svg_to_png = _get_glycorender()
         return convert_svg_to_png(self.as_svg(), None, return_bytes = True, shadow = self.shadow,
@@ -1639,7 +1662,7 @@ def GlycoDraw(
         data = data.replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
         if suffix == '.svg':
             with open(filepath, 'w', encoding = "utf-8") as f:
-                f.write(data)
+                f.write(_flatten_text_paths(data))
         elif suffix == '.pdf':
             convert_svg_to_pdf, _ = _get_glycorender()
             convert_svg_to_pdf(data, str(filepath), shadow = shadow)
