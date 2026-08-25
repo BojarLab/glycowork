@@ -435,7 +435,7 @@ def apply_constraints(network: nx.DiGraph, # Biosynthetic network with 'diffs' e
         return network
     motifs = {m for r in rules for m in [r['product']] + str(r['context']).split('|')}
     # one subgraph search per (node, motif) instead of per edge, since every node takes part in several edges
-    has = {m: {n: subgraph_isomorphism(n, m) for n in network.nodes() if all(x.split('(')[0] in n for x in m.split(')')[:-1])} for m in motifs}
+    has = {m: {n: subgraph_isomorphism(n, m) for n in network.nodes()} for m in motifs}
     violations = {}
     for u, v in network.edges():
         for r in rules:
@@ -443,15 +443,18 @@ def apply_constraints(network: nx.DiGraph, # Biosynthetic network with 'diffs' e
             if not has[r['product']].get(v, False) or has[r['product']].get(u, False):
                 continue
             if any(has[c].get(u, False) for c in str(r['context']).split('|')) == (r['kind'] == 'forbids'):
-                violations[(u, v)] = f"{r['enzyme']}: {r['rationale']}"
+                violations[(u, v)] = ': '.join(r[k] for k in ('enzyme', 'rationale') if isinstance(r.get(k),
+                                                                                                   str)) or f"{r['product']} {r['kind']} {r['context']}"
+    network = network.copy()
     nx.set_edge_attributes(network, violations, 'constraint')
     if prune and violations:
-        network = network.copy()
+        flagged = {e: dict(network.edges[e]) for e in violations}
         network.remove_edges_from(violations)
         # an observed structure exists whatever the rule says, so its last route into the network is kept and stays flagged
-        for node in sorted((n for n, v in network.nodes(data = 'virtual') if v == 0 and network.in_degree(n) == 0), key = len):
+        for node in sorted((n for n, v in network.nodes(data = 'virtual') if v == 0 and network.in_degree(n) == 0),
+                           key = len):
             if restore := [e for e in violations if e[1] == node]:
-                network.add_edges_from((u, v, {'constraint': violations[(u, v)], 'diffs': find_diff(u, v)}) for u, v in restore)
+                network.add_edges_from((u, v, flagged[(u, v)]) for u, v in restore)
     return network
 
 
@@ -460,8 +463,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                  edge_label_draw: bool = True, # Whether to draw edge labels
                  lfc_dict: dict[str, float] | None = None,  # Enzyme:log2FC mapping for edge width
                  draw_glycans: bool = False,  # Replace node labels with SNFG drawings, in a static figure
-                 filepath: str | Path = '',
-                 # Path to save the static figure (.svg/.pdf/.png); required for draw_glycans
+                 filepath: str | Path = '',  # Path to save the static figure (.svg/.pdf/.png) instead of showing the interactive plot; required for draw_glycans
                  compact: bool = False,  # Use compact SNFG style
                  glycan_size: str = 'small'  # Glycan size preset ('small', 'medium', 'large')
                  ) -> None:  # Displays plot
@@ -553,14 +555,15 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         edge_data['label'].append(attr)
         edge_data['color'].append(edge_color)
         edge_data['width'].append(width)
-    if draw_glycans:
+    if filepath:
         # Static rendering, so that annotate_figure can swap the node labels for SNFG drawings in the saved SVG
         import os
         import matplotlib.pyplot as plt
         from glycowork.motif.draw import annotate_figure
         # the SNFGs have a fixed size on the canvas, so the canvas has to grow with the layout instead of the other way around
         rows = Counter(round(y, 6) for y in node_data['y'])
-        f = {'small': 1, 'medium': 2, 'large': 3}[glycan_size]
+        if (f := {'small': 1, 'medium': 2, 'large': 3}.get(glycan_size) if draw_glycans else 1) is None:
+            raise ValueError(f"glycan_size has to be 'small', 'medium', or 'large' (got '{glycan_size}').")
         w, h = (1.5 * f * max(rows.values()), 1.8 * f * len(rows)) if max(rows.values()) > 1 else (1.5 * f * len(
             network) ** 0.5,) * 2
         fig, ax = plt.subplots(figsize = (min(60, max(12, w)), min(60, max(9, h))))
@@ -580,11 +583,18 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                 ax.text((x0 + x1) / 2, (y0 + y1) / 2, label, fontsize = 8, ha = 'center', va = 'center')
         ax.margins(0.12)
         ax.axis('off')
+        Path(filepath).parent.mkdir(parents = True, exist_ok = True)
+        if not draw_glycans:
+            plt.savefig(filepath, bbox_inches = 'tight')
+            plt.close(fig)
+            return
         svg_temp = str(Path(filepath).with_suffix('')) + '_temp.svg'
         plt.savefig(svg_temp, format = 'svg', bbox_inches = 'tight')
         plt.close(fig)
-        annotate_figure(svg_temp, filepath = filepath, compact = compact, glycan_size = glycan_size)
-        os.remove(svg_temp)
+        try:
+            annotate_figure(svg_temp, filepath = filepath, compact = compact, glycan_size = glycan_size)
+        finally:
+            os.remove(svg_temp)
         return
     from bokeh.plotting import figure, show
     from bokeh.io import output_notebook

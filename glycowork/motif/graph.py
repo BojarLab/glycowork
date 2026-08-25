@@ -11,7 +11,7 @@ from collections import Counter, OrderedDict
 from functools import lru_cache, wraps
 
 
-PTM_REGEX = re.compile(r"(?<=[A-Za-z])(?<!Neu)(\d+/\d+|\d+)(?=\D)(?![^()]*\))")
+PTM_REGEX = re.compile(r"(?<=[A-Za-z{])(?<!Neu)(\d+/\d+|\d+)(?=\D)(?![^()]*\))")
 NEGATION_REGEX = re.compile(r'(?<!\()(!\w+(?:\([^)]+\))?)')
 MONO_PATTERN = re.compile(r"^(Hex|HexOS|HexNAc|HexNAcOS|dHex|Sia|HexA|Pen|Monosaccharide)$")
 LINKAGE_PATTERN = re.compile(r'[ab\?][12]-(\d+|\?)')
@@ -435,6 +435,10 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
             ')') else 'Monosaccharide'
         motif_stub = motif.replace(negated_part, to_replace).replace('[]', '')
         negated_part_clean = glycan_to_nxGraph(negated_part.replace('!', ''))
+        if termini_list and not to_replace:
+            # The spec describes the full motif, so drop the entry of the residue the stub no longer has
+            monos = [t for t in min_process_glycans([motif])[0] if not IS_LINKAGE(t)]
+            termini_list = [t for i, t in enumerate(termini_list) if not monos[i].startswith('!')]
     else:
         motif_copy = deepcopy(motif)
         motif_stub = motif_copy.copy()

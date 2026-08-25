@@ -359,6 +359,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Manα-Manβ-Glc") == "Man(a1-?)Man(b1-?)Glc"
     assert canonicalize_iupac("Gal((b1-4))Glc") == "Gal(b1-4)Glc"
     assert canonicalize_iupac("Galb1-Glcb1-4Man") == "Gal(b1-?)Glc(b1-4)Man"
+    assert canonicalize_iupac('Rha(a1-2)Quia') == "Rha(a1-2)Qui"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -1006,6 +1007,7 @@ def test_atom_mapping_covers_every_atom():
     smiles, atoms = glycan_to_smiles('Neu5Ac(a2-3)Gal(b1-4)Glc', mapping = True)
     assert len(atoms) == Chem.MolFromSmiles(smiles).GetNumAtoms()
     assert sorted(Counter(atoms).values()) == [11, 11, 21]  # Glc, Gal, Neu5Ac
+    assert smiles_to_iupac(glycan_to_smiles('ManNAcA(b1-4)GlcNAc')) == 'ManNAcA(b1-4)GlcNAc'
 
 
 def test_token_splitting():
@@ -2794,6 +2796,7 @@ def test_compare_glycans():
     res, mappy = compare_glycans('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc', graph_to_string(glycan_to_nxGraph('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc'), order_by='linkage'), return_matches=True)
     # Test narrow monosaccharide wildcards
     assert compare_glycans("GlcNAc/GalNAc(?1-3/4)Gal(b1-3)GalNAc", "GlcNAc(a1-4)Gal(b1-3)GalNAc")
+    assert compare_glycans('{6S}Gal(b1-3)GalNAc', '{OS}Gal(b1-3)GalNAc')
 
 
 def test_subgraph_isomorphism():
@@ -3872,6 +3875,8 @@ def test_glycodraw():
     result = GlycoDraw("Fuc/Rha(a1-2)Gal(b1-3)GalNAc", suppress = True)
     assert result is not None
     result = GlycoDraw("Neu5Ac/Neu5Gc(a2-3)Gal(b1-3)GalNAc", suppress = True)
+    assert result is not None
+    result = GlycoDraw('HexNAc(b1-4)Hex', per_residue = [0.2, 0.8], suppress = True)
     assert result is not None
     # Test file saving
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.svg")

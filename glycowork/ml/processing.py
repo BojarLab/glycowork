@@ -101,6 +101,9 @@ def dataset_to_dataloader(glycan_list: list[str], # list of IUPAC-condensed glyc
     if libr is None:
         libr = lib
     if hetero:
+        if extra_feature is not None or augment_prob:
+            warnings.warn(
+                "extra_feature and augment_prob are ignored when hetero=True; GIFFLAR's molecular heterographs have no extra feature slot and AugmentedGlycanDataset wildcards monosaccharide nodes, which the atom-level graph does not carry")
         # GIFFLAR convolves over atoms, bonds, and monosaccharides, so it needs the molecular heterograph and its own collator rather than the monosaccharide graph
         data = []
         for glycan, label in zip(glycan_list, labels):

@@ -18,7 +18,7 @@
 #### loader
 ##### Added ✨
 - Added the `meta_filter` method to `GlycoDataFrame`, to filter datasets by metadata, such as `df_glycan.meta_filter(Order = 'Perissodactyla')`, which can be chained like any `pandas` attribute, such as `df_glycan.meta_filter(Order = 'Perissodactyla').glyco_filter('Sia(a2-3)Gal')` (c11b4d0)
-- Added newly curated comparative glycomics datasets to `glycomics_data_loader`: `human_serum_parkinson_GSL_PMID40379659`, `mouse_brain_tango2ko_GSL_10_1002pgr2_70042`, `mouse_brain_tango2ko_N_10_1002pgr2_70042`, `mouse_brain_tango2ko_O_10_1002pgr2_70042`, `fish_gill_infection_O_PMID41435595`, `fish_intestine_infection_O_10_2139ssrn_7005880`, `human_colorectal_butyrate_O_PMID36669592`, `human_celllines_N_PMID38022636`, `human_serum_gangliosidosis_GSL_PMID39190143` (dfbc225)
+- Added newly curated comparative glycomics datasets to `glycomics_data_loader`: `human_serum_parkinson_GSL_PMID40379659`, `mouse_brain_tango2ko_GSL_10_1002pgr2_70042`, `mouse_brain_tango2ko_N_10_1002pgr2_70042`, `mouse_brain_tango2ko_O_10_1002pgr2_70042`, `fish_gill_infection_O_PMID41435595`, `fish_intestine_infection_O_10_2139ssrn_7005880`, `human_colorectal_butyrate_O_PMID36669592`, `human_celllines_N_PMID38022636`, `human_serum_gangliosidosis_GSL_PMID39190143`, `human_keratinocyte_st3galko_N_PMID42275133`, `human_keratinocyte_st3galko_O_PMID42275133`, `human_keratinocyte_st3galko_GSL_PMID42275133` (dfbc225, )
 - Added the `provenance` attribute to `GlycoDataFrame` that stores metadata about the `glycowork`-internal datasets (d41806a, 7c89d24)
 - Added the `filter` method to `LazyLoader` to allow attribute-based filtering of stored curated datasets, such as `glycomics_data_loader.filter(glycan_class = 'O', source_type = ['primary tissue', 'body fluid'])` (7e03cd2)
 
@@ -101,6 +101,7 @@
 - Fixed `get_pvals_motifs` calculating effect sizes from padded arrays, which gave motifs that do not occur in the data a large spurious Cohen's d and, given the default sorting, placed them at the top of the output (42edfc9)
 - Fixed `get_pvals_motifs` assuming the glycan column is the first column when z-scoring and renaming, rather than the detected glycan column (42edfc9)
 - `get_heatmap` with motifs now uses the correct ordering of *first* motif quantification, *then* CLR/ALR (c4e1037)
+- Fixed handling of unequal group sizes in `monte_carlo=True` in `get_differential_expression` ()
 
 #### processing
 ##### Changed 🔄
@@ -197,7 +198,7 @@
 - Added the `prioritize` keyword argument to `extend_network` to optionally rank candidates by the maximum flow reaching them (7e03cd2)
 - `trace_diamonds` now also returns `'out_degree', 'onward_capacity', 'n_descendants'` in its output to tell a preferred intermediate from a dead-end one (7e03cd2)
 - `construct_network` now has the new `constrained` keyword argument, to opt into disallowing reactions known to not be physiological (e.g., C1GALT1 not extending sialyl-Tn in O-glycans) (e431bd7)
-- Added the new `draw_glycans` keyword argument to `plot_network` to support `GlycoDraw`-based annotation of biosynthetic networks with vector graphic SNFG drawings of glycans ()
+- Added the new `draw_glycans` and `filepath` keyword arguments to `plot_network` to support `GlycoDraw`-based annotation of biosynthetic networks with vector graphic SNFG drawings of glycans (1a4715e)
 
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)
@@ -233,7 +234,7 @@
 
 #### processing
 ##### Added ✨
-- Added the `hetero` keyword argument to `dataset_to_dataloader` and `split_data_to_train` to support `GIFFLAR` training
+- Added the `hetero` keyword argument to `dataset_to_dataloader` and `split_data_to_train` to support `GIFFLAR` training (3f4d7c5)
 
 ##### Deprecated ⚠️
 - Deprecated `nx2mol` and `clean_tree`; will all be handled by `iupac2mol` now (3f4d7c5)

@@ -1048,18 +1048,15 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
     "Perform tests on each Monte Carlo instance, apply Benjamini-Hochberg correction, calculate effect sizes"
     num_features, _ = group_a.shape
     avg_uncorrected_p_values, avg_corrected_p_values, avg_effect_sizes = np.zeros(num_features), np.zeros(num_features), np.zeros(num_features)
-    n_samples = group_a.shape[1] // num_instances
-    arr_a = group_a.values.reshape(num_features, n_samples, num_instances)
-    arr_b = group_b.values.reshape(num_features, n_samples, num_instances)
+    n_a, n_b = group_a.shape[1] // num_instances, group_b.shape[1] // num_instances
+    arr_a = group_a.values.reshape(num_features, n_a, num_instances)
+    arr_b = group_b.values.reshape(num_features, n_b, num_instances)
     for instance in range(num_instances):
         sample_a, sample_b = arr_a[:, :, instance], arr_b[:, :, instance]
         instance_p_values = (
             ttest_rel(sample_b, sample_a, axis = 1) if paired else ttest_ind(sample_b, sample_a, equal_var = False,
                                                                              axis = 1))[1]
-        var_a, var_b = sample_a.var(axis = 1, ddof = 1), sample_b.var(axis = 1, ddof = 1)
-        instance_effect_sizes = (sample_b.mean(1) - sample_a.mean(1)) / np.sqrt(
-            ((n_samples - 1) * np.maximum(var_b, 1e-12) + (n_samples - 1) * np.maximum(var_a, 1e-12)) / (
-                        2 * n_samples - 2))
+        instance_effect_sizes = cohen_d(sample_b, sample_a, paired = paired)[0]
         # Apply Benjamini-Hochberg correction for multiple testing within the instance
         avg_uncorrected_p_values += instance_p_values
         avg_corrected_p_values += bh_adjust(instance_p_values, alpha)

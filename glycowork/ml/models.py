@@ -267,10 +267,10 @@ class GIFFLAR(torch.nn.Module):
         self.atom_embedding = torch.nn.Embedding(len(atom_map) + 1, feat_dim)
         self.bond_embedding = torch.nn.Embedding(len(bond_map) + 1, feat_dim)
         self.mono_embedding = torch.nn.Embedding(len(lib) + 1, feat_dim)
+        from glycowork.ml.processing import GIFFLAR_EDGE_TYPES
         dims = [feat_dim] + [embed_dim] * num_layers
         self.convs = torch.nn.ModuleList()
         for i in range(num_layers):
-            from glycowork.ml.processing import GIFFLAR_EDGE_TYPES
             self.convs.append(HeteroConv({key: get_gin_layer(dims[i], dims[i + 1]) for key in GIFFLAR_EDGE_TYPES}))
         self.head = torch.nn.Sequential(
             torch.nn.Linear(embed_dim, embed_dim // 2),

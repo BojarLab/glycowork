@@ -244,16 +244,20 @@ def match_composition_relaxed(composition: dict[str, int], # Dictionary indicati
     """Map coarse-grained composition to matching glycans"""
     if df_use is None:
         key = (glycan_class, kingdom)
-        df_use = loader.df_glycan[(loader.df_glycan.glycan_type == glycan_class) & (loader.df_glycan.Kingdom.apply(lambda x: kingdom in x))]
+        source = loader.df_glycan
+        df_use = source[(source.glycan_type == glycan_class) & (source.Kingdom.apply(lambda x: kingdom in x))]
     else:
         key = id(df_use)
-        # Index the database by composition once; the reference to df_use keeps its id from being recycled
-    if key not in _COMPOSITION_INDEX:
+        source = df_use
+    # Index the database by composition once; re-index whenever the source frame has been swapped out
+    entry = _COMPOSITION_INDEX.get(key)
+    if entry is None or entry[0] is not source:
         index = defaultdict(list)
         for glycan in df_use.glycan.values.tolist():
             index[frozenset(glycan_to_composition(glycan).items())].append(glycan)
-        _COMPOSITION_INDEX[key] = (df_use, index)
-    return list(_COMPOSITION_INDEX[key][1].get(frozenset(composition.items()), []))
+        entry = (source, index)
+        _COMPOSITION_INDEX[key] = entry
+    return list(entry[1].get(frozenset(composition.items()), []))
 
 
 def condense_composition_matching(matched_composition: list[str] # List of matching glycans

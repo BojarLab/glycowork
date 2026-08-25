@@ -37,7 +37,7 @@ def preprocess_pattern(pattern: str # Glyco-regular expression like "Hex-HexNAc-
     for body in ALTERNATIVES.findall(pattern):
         if not body or any(not alt for alt in body.split('|')):
             raise ValueError(f"'[{body}]' has an empty alternative in glyco-regular expression '{pattern}'")
-    if '(?' in pattern and not LOOKAROUND.search(pattern):
+    if re.search(r'\(\?(?!\d)', pattern) and not LOOKAROUND.search(pattern):
         raise ValueError(f"Malformed lookahead/lookbehind in glyco-regular expression '{pattern}'")
     if any(not look.group(2).strip('-').strip() for look in LOOKAROUND.finditer(pattern)):
         raise ValueError(f"Empty lookahead/lookbehind in glyco-regular expression '{pattern}'")

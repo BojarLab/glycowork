@@ -1395,7 +1395,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     # Canonicalize reducing end
     if bool(re.search(r'[a-z]ol', glycan)):
         glycan = glycan[:-2] if 'Glcol' not in glycan else f'{glycan[:-2]}-ol'
-    if len(glycan) > 1 and glycan[-1] in 'ab' and not re.search(r'(?:[hirH]|Al|hp)[ab]$', glycan):
+    tail = glycan[max(glycan.rfind(')'), glycan.rfind(']')) + 1:]
+    if len(glycan) > 1 and glycan[-1] in 'ab' and not any(tail[i:] in lib for i in range(len(tail) - 1)):
         glycan = glycan[:-1]
     # Remove anomeric and steric indicators at reducing end
     if '(' in glycan and bool(re.search(r'[\)\]]([abx\?][DLX\?][A-Z][A-Za-z5]*)', glycan)):
@@ -1497,11 +1498,10 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     # Canonicalize branch ordering
     if '[' in glycan and not glycan.startswith('[') and ']' in glycan and not repeat:
         from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
-        cut = glycan.rfind('}') + 1
-        if cut and '[' in glycan[cut:]:
-            glycan = glycan[:cut] + graph_to_string(glycan_to_nxGraph.__wrapped__(glycan[cut:]))
-        elif not cut:
+        if '^' not in glycan:
             glycan = graph_to_string(glycan_to_nxGraph.__wrapped__(glycan))
+        elif (cut := glycan.rfind('}') + 1) and '[' in glycan[cut:]:
+            glycan = glycan[:cut] + graph_to_string(glycan_to_nxGraph.__wrapped__(glycan[cut:]))
     if '{' in glycan:
         if '^' in glycan:
             from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string
@@ -1588,7 +1588,7 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
                            ) -> tuple[pd.DataFrame, list[str]]: # (Modified dataset with new columns for protein_site, composition, and composition counts, glycan features)
     "Extract and format compositions in glycoproteomics dataset"
     df = df.copy()
-    df['Glycosite'] = [k.split('_')[0] + '_' + k.split('_')[1] for k in df.index]
+    df['Glycosite'] = ['_'.join(k.split('_')[:-1]) for k in df.index]
     if '[' in df.index[0]:
         comps = ['['+k.split('[')[1] for k in df.index]
         comps = [list(map(int, re.findall(r'\d+', s))) for s in comps]

@@ -11,7 +11,8 @@ try:
         device = "cuda:0"
 except ImportError:
     raise ImportError("<torch missing; did you do 'pip install glycowork[ml]'?>")
-from glycowork.glycan_data.loader import lib, unwrap, GlycoList
+from glycowork.glycan_data.loader import lib, unwrap
+from glycowork.motif.graph import compare_glycans
 from glycowork.motif.tokenization import prot_to_coded
 from glycowork.ml.processing import dataset_to_dataloader
 
@@ -106,14 +107,17 @@ def get_multi_pred(prot: str,  # protein amino acid sequence
     # Applying background correction of predictions
     if background_correction:
         correction_df = pd.Series(correction_df.pred.values, index = correction_df.motif).to_dict()
-        # GlycoList compares by structure, so a background stored under a differently written but isomorphic sequence is still found
-        correction_keys = GlycoList(list(correction_df))
+        # a background stored under a differently written but isomorphic sequence is still found, but compare_glycans rejects a different residue or branch count outright, so only those keys have to be scanned
+        buckets = {}
+        for k in correction_df:
+            buckets.setdefault((k.count('('), k.count('[')), []).append(k)
         bg_res, missing = [], []
         for j in glycans:
             if j in correction_df:
                 bg_res.append(correction_df[j])
-            elif j in correction_keys:
-                bg_res.append(correction_df[correction_keys[correction_keys.index(j)]])
+            elif (hit := next((k for k in buckets.get((j.count('('), j.count('[')), ()) if compare_glycans(k, j)),
+                              None)) is not None:
+                bg_res.append(correction_df[hit])
             else:
                 bg_res.append(0)
                 missing.append(j)

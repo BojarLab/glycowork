@@ -21,6 +21,9 @@ human_gastric_O_PMC5762837,PMC5762837,10.1038/s41598-017-18299-6,UniCarb-DB,344,
 human_gastric_O_PMC7226152,PMC7226152,10.3390/cancers12040861,,,Homo sapiens,gastric,cell line,gastric carcinoma,O,positive,CORA+permethylated,RP-LC
 human_gastric_O_PMID28461410,PMID:28461410,10.1074/mcp.M117.067983,,,Homo sapiens,gastric,primary tissue,gastric carcinoma,O,negative,reduced,PGC-LC
 human_interstitialfluid_N_GPST000651,,10.1038/s41598-026-51768-5,GlycoPOST,GPST000651,Homo sapiens,interstitialfluid,body fluid,,N,negative,2-AB,HILIC-LC
+human_keratinocyte_st3galko_N_PMID42275133,PMID:42275133,10.1093/glycob/cwag044,,,Homo sapiens,skin,cell line,,N,negative,reduced,PGC-LC
+human_keratinocyte_st3galko_O_PMID42275133,PMID:42275133,10.1093/glycob/cwag044,,,Homo sapiens,skin,cell line,,O,negative,reduced,PGC-LC
+human_keratinocyte_st3galko_GSL_PMID42275133,PMID:42275133,10.1093/glycob/cwag044,,,Homo sapiens,skin,cell line,,lipid,negative,reduced,PGC-LC
 human_leukemia_GSL_PMID36788594,PMID:36788594,10.1186/s13578-023-00981-0,GlycoPOST,GPST000238,Homo sapiens,leukemia,cell line,acute myeloid leukemia,lipid,negative,reduced,PGC-LC
 human_leukemia_N_PMID34646384,PMID:34646384,10.7150/thno.65398,GlycoPOST,,Homo sapiens,bone marrow,primary cells,B-cell precursor acute lymphoblastic leukemia,N,negative,reduced,PGC-LC
 human_leukemia_N_PMID36788594,PMID:36788594,10.1186/s13578-023-00981-0,GlycoPOST,GPST000214,Homo sapiens,leukemia,cell line,acute myeloid leukemia,N,negative,reduced,PGC-LC
@@ -58,9 +61,9 @@ mouse_taysachs_O_PMID41460292,PMID:41460292,10.1007/s10719-025-10203-z,,,Mus mus
 time_series_HMO_PMID22649065,PMID:22649065,10.1152/ajpendo.00175.2012,,,Homo sapiens,milk,body fluid,,free,,2-AB,
 time_series_N_PMID32149347,PMID:32149347,10.1093/glycob/cwaa020,,,Homo sapiens,macrophages,primary cells,,N,negative,reduced,PGC-LC
 time_series_O_PMID32149347,PMID:32149347,10.1093/glycob/cwaa020,,,Homo sapiens,macrophages,primary cells,,O,negative,reduced,PGC-LC
-keratinocytes_N_PMID37956981,PMID:37956981,10.1021/acs.analchem.3c03626,,,Homo sapiens,skin,cell line,,N,positive,none,RP-LC
-lipoproteins_PMC9218963,PMC9218963,10.1039/d2ra02294j,,,Homo sapiens,plasma,body fluid,,N/O,positive,none,RP-LC
-milk_N_PMID34087070,PMID:34087070,10.1021/acs.jafc.0c07998,,,Homo sapiens,milk,body fluid,,N,positive,none,RP-LC
+human_keratinocytes_N_PMID37956981,PMID:37956981,10.1021/acs.analchem.3c03626,,,Homo sapiens,skin,cell line,,N,positive,none,RP-LC
+human_lipoproteins_PMC9218963,PMC9218963,10.1039/d2ra02294j,,,Homo sapiens,plasma,body fluid,,N/O,positive,none,RP-LC
+human_milk_N_PMID34087070,PMID:34087070,10.1021/acs.jafc.0c07998,,,Homo sapiens,milk,body fluid,,N,positive,none,RP-LC
 sorghum_N_PMID39137587,PMID:39137587,10.1016/j.bbrc.2024.150509,,,Sorghum bicolor,,plant tissue,,N,positive,none,RP-LC
 A549_influenza_PMID33046650,PMID:33046650,10.1073/pnas.2008203117,Synapse,syn21975628,Homo sapiens,lung,cell line,lung adenocarcinoma,,,,
 HEK_XBP1_PMID30305426,PMID:30305426,10.1073/pnas.1805425115,,,Homo sapiens,kidney,cell line,,,,,

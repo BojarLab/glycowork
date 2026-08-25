@@ -170,7 +170,8 @@ def _drawn_extent(
         if a.get('x') is None:
             # Modification, conformation and linkage labels ride an invisible carrier path, anchored by startOffset along it and displaced by a dy in em
             carrier = element.children[0]
-            pts = [float(k) for k in _SVG_NUMBER.findall(re.sub(r'[A-Za-z]', ' ', carrier.args['xlink:href'].args['d']))]
+            pts = [float(k) for k in
+                   _SVG_NUMBER.findall(re.sub(r'[A-DF-Za-df-z]', ' ', carrier.args['xlink:href'].args['d']))]
             frac = {'50%': 0.5, '100%': 1.0}.get(carrier.args.get('startOffset'), 0.0)
             x, y = pts[0] + frac * (pts[-2] - pts[0]), pts[1] + frac * (pts[-1] - pts[1])
             for tspan in carrier.children or []:
@@ -182,7 +183,7 @@ def _drawn_extent(
         acc.append((x, y + shift - size, x + text_width, y + shift + 0.3 * size))
     elif 'd' in a and (a.get('stroke-width') or a.get('fill', 'none') not in (None, 'none')):
         # An invisible carrier path is not ink and must not enlarge the crop; its text is measured above instead
-        pts = [float(k) for k in _SVG_NUMBER.findall(re.sub(r'[A-Za-z]', ' ', a['d']))]
+        pts = [float(k) for k in _SVG_NUMBER.findall(re.sub(r'[A-DF-Za-df-z]', ' ', a['d']))]
         acc.append((min(pts[0::2]), min(pts[1::2]), max(pts[0::2]), max(pts[1::2])))
     if not isinstance(element, draw.Text):
         for child in getattr(element, 'children', []) or []:
@@ -1077,8 +1078,7 @@ def process_per_residue(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> tuple[list[float], list[list[float]], list[list[float]]]: # (main chain values, side chain values, branched side chain values)
     "Maps per-residue scalar values to main chain, side chains, and branched side chains"
-    temp = re.sub(r'\([^)]*\)', 'x', draw_this) + 'x'
-    temp = re.sub(r'[^x\[\]]', '', temp)
+    temp = re.sub(r'\([^)]*\)', 'x', re.sub(r'[^\[\]()]', '', draw_this)) + 'x'
     if temp.count('x') != len(per_residue):
         raise ValueError(
             f"per_residue has {len(per_residue)} values but {glycan} has {temp.count('x')} monosaccharides to color")
@@ -1121,8 +1121,7 @@ def process_per_linkage(
         g2 = glycan_to_nxGraph(draw_this)
         _, mappy = compare_glycans(g2, g1, return_matches = True)
         per_linkage = [per_linkage[mappy[i*2]//2] for i in range(len(per_linkage))]
-    temp = re.sub(r'\([^)]*\)', 'x', draw_this) + 'x'
-    temp = re.sub(r'[^x\[\]]', '', temp)
+    temp = re.sub(r'\([^)]*\)', 'x', re.sub(r'[^\[\]()]', '', draw_this)) + 'x'
     main_chain_indices, l1_indices = [], []
     l2_indices, l1_stack = [], []
     idx = 0

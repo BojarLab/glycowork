@@ -99,12 +99,12 @@ def preprocess_data(
     df = df.loc[~(df.iloc[:, 1:] == 0).all(axis = 1)].reset_index(drop = True)
     protect = None
     if glycoproteomics:
-        sites = pd.Series(['_'.join(str(k).split('_')[:2]) for k in df.iloc[:, 0]])
+        sites = pd.Series(['_'.join(str(k).split('_')[:-1]) for k in df.iloc[:, 0]])
         seen = (df.iloc[:, 1:] > 0).groupby(
             sites.values).max()  # a site counts as measured in a sample if any of its glycoforms was seen there
         if min_samples:
             df = df[sites.map(seen.mean(axis = 1) >= min_samples).values].reset_index(drop = True)
-            sites = pd.Series(['_'.join(str(k).split('_')[:2]) for k in df.iloc[:, 0]])
+            sites = pd.Series(['_'.join(str(k).split('_')[:-1]) for k in df.iloc[:, 0]])
         protect = pd.DataFrame(~seen.loc[sites.values].to_numpy(), index = df.index, columns = df.columns[
             1:])  # every glycoform of a site that was never identified in a sample is structurally missing, not below detection
     df = replace_outliers_winsorization(df)
@@ -133,7 +133,7 @@ def preprocess_data(
                                                   group2, paired = paired, gamma = gamma, custom_scale = custom_scale,
                                                   random_state = random_state)
     elif transform == "CLR":
-        if monte_carlo and not motifs:
+        if monte_carlo:
             df = GlycoDataFrame(pd.concat([df.iloc[:, 0], estimate_technical_variance(df.iloc[:, 1:], group1, group2,
                                                                                       gamma = gamma,
                                                                                       custom_scale = custom_scale,
@@ -175,7 +175,7 @@ def preprocess_data(
         df_org = df_org.groupby(df_org.index).sum() if glycoproteomics else df_org.groupby(df_org.index).mean()
         if glycoproteomics:
             # Component-wise composition containment forces the same abundance inequality as substructure containment, so glycoforms admit the same balances and residuals as motifs
-            sites = pd.Series(['_'.join(str(k).split('_')[:2]) for k in df_org.index], index = df_org.index)
+            sites = pd.Series(['_'.join(str(k).split('_')[:-1]) for k in df_org.index], index = df_org.index)
             keep = sites.groupby(sites).transform(
                 'size') > 1  # a one-part subcomposition carries no log-ratio and would CLR to an all-zero row
             df_org, sites = df_org[keep], sites[keep]
@@ -790,7 +790,7 @@ def select_grouping(
     desc = list(out.keys())[np.argmax([v[0][0] - v[0][1] for k, v in out.items()])]
     intra, inter = out[desc][0]
     grouped_glycans, grouped_p_values = out[desc][1]
-    if intra > 3 * inter or intra > inter:
+    if intra > inter:
         print("Chosen grouping: " + desc)
         print("ICC of grouping: " + str(intra))
         print("Inter-group correlation of grouping: " + str(inter))
@@ -1247,7 +1247,7 @@ def get_glycanova(
     if (motifs or glycoproteomics) and df_org.attrs.get('motif_dag') is not None and not df.empty:
         dag, full = df_org.attrs['motif_dag'], df_org
         # Recover the per-sample logratio offset from the transform itself, so residual features land in the frame everything else was tested in
-        ref = np.median(np.log2(full.loc[df.index].values + 0.0000001) - df.values, axis = 0)
+        ref = np.nanmedian(np.log2(full.loc[df.index].values + 0.0000001) - df.values, axis = 0)
         levels, garr = sorted(set(groups)), np.asarray(groups)
         eff, rows = dict(zip(df_out['Glycan'], df_out['Effect size'])), {}
         pos, F = {m: i for i, m in enumerate(full.index)}, full.values
@@ -1618,7 +1618,8 @@ def get_biodiversity(
     if 'beta' in metrics:
         if not isinstance(df.index[0], str):
             df = df.set_index(df.columns[0])
-        distance_matrix = squareform(pdist(df.values.T, metric = 'braycurtis' if transform is None else 'euclidean'))
+        distance_matrix = squareform(
+            pdist(df.values.T, metric = 'braycurtis' if transform == "Nothing" else 'euclidean'))
         if circadian:
             n = distance_matrix.shape[0]
             tvec = np.repeat(np.arange(timepoints) * interval, n // timepoints)[:n].astype(float)
@@ -1703,7 +1704,7 @@ def get_SparCC(
                     enforce_class(df2.iloc[0, 0], "N") and len(df2) > 50) else "CLR"
     if transform not in ("ALR", "CLR", "Nothing"):
         raise ValueError("Only ALR and CLR are valid transforms for now.")
-        # Quantify on raw abundances, then transform the motif composition, as preprocess_data/get_pca/get_time_series do; transforming glycans first centers motifs by the glycan geometric mean instead of the motif one
+    # Quantify on raw abundances, then transform the motif composition, as preprocess_data/get_pca/get_time_series do; transforming glycans first centers motifs by the glycan geometric mean instead of the motif one
     if motifs:
         df1 = quantify_motifs(df1, feature_set = feature_set, custom_motifs = custom_motifs)
         df2 = quantify_motifs(df2, feature_set = feature_set, custom_motifs = custom_motifs) if '(' in df2.iloc[
@@ -1713,9 +1714,11 @@ def get_SparCC(
         df2 = df2.set_index(df2.columns.tolist()[0])
     if transform == "ALR":
         df1 = get_additive_logratio_transformation(df1.reset_index(), df1.columns.tolist(), [], paired = False,
-                                                   gamma = gamma, random_state = random_state).set_index('glycan')
+                                                   gamma = gamma, random_state = random_state)
+        df1 = df1.set_index(df1.columns[0])
         df2 = get_additive_logratio_transformation(df2.reset_index(), df2.columns.tolist(), [], paired = False,
-                                                   gamma = gamma, random_state = random_state).set_index('glycan')
+                                                   gamma = gamma, random_state = random_state)
+        df2 = df2.set_index(df2.columns[0])
     elif transform == "CLR":
         df1 = clr_transformation(df1 + 0.0000001, df1.columns.tolist(), [], gamma = gamma, random_state = random_state)
         df2 = clr_transformation(df2 + 0.0000001, df2.columns.tolist(), [], gamma = gamma, random_state = random_state)
@@ -1771,7 +1774,7 @@ def get_SparCC(
     correlation_df = pd.DataFrame(correlation_matrix, index = df1.columns, columns = df2.columns)
     p_value_df = pd.DataFrame(p_value_matrix, index = df1.columns, columns = df2.columns)
     correlation_df.attrs.update(
-        {'alpha': alpha, 'n': df1.shape[1] - 1, 'test': 'partial Spearman' if partial_correlations else 'Spearman',
+        {'alpha': alpha, 'n': df1.shape[0], 'test': 'partial Spearman' if partial_correlations else 'Spearman',
          'transform': transform, 'paired': False})
     return correlation_df, p_value_df
 
@@ -1849,7 +1852,7 @@ def get_roc(
         multi_score: bool = False,  # Find best multi-glycan score
         random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
 ) -> list[tuple[str, float]] | dict[Any, tuple[str, float]] | tuple[
-    'LogisticRegression', float]:  # (Feature scores with ROC AUC values)
+    'LogisticRegression', float, list[str]]:  # (Feature scores with ROC AUC values)
     "Calculates ROC curves and AUC scores for glycans/motifs or multi-glycan classifiers"
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import auc, roc_auc_score, roc_curve

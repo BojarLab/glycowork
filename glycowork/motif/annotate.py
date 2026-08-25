@@ -16,7 +16,6 @@ LINKAGE_NODE_PATTERN = re.compile(r'^[ab?]?[0-9?/]+-[0-9?/]+$')
 _WILDCARD_RE = re.compile(r'(?<![A-Za-z0-9])(?:Monosaccharide|HexNAcOS|HexNAcOP|HexNAc|HexAOS|HexOS|HexOP|HexNS|HexN|HexA|dHex|Hex|Sia|Pen)(?![A-Za-z0-9])')
 _STRUCTURAL_ALDITOL = re.compile(r'(?:Thre|Ery|Rib|Gro|Ara)[A-Za-z0-9]*-ol$')
 _REGEX_LOOKAROUND = re.compile(r'\(\?<?[=!][^()]*\)')
-_MOTIF_SEQ = dict(zip(motif_list.motif_name, motif_list.motif))
 
 
 def _motif_sequence(
@@ -294,11 +293,18 @@ def annotate_dataset(
         shopping_cart.append(pd.concat(list(map(annotate_switchboard, glycans)), axis = 0))
     if 'custom' in feature_set:
         # A motif name is as valid an input here as it is in GlycoDraw or glyco_filter, and resolving it also routes named glyco-regexes into the branch below
-        custom_motifs = [(resolve_motif_name(m) or (m,))[0] for m in custom_motifs]
-        normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
-        if normal_motifs:
-            gmotifs = list(map(glycan_to_nxGraph, normal_motifs))
-            partial_annotate = partial(annotate_glycan, motifs = normal_motifs, gmotifs = gmotifs)
+        resolved = [resolve_motif_name(m) or (m, []) for m in custom_motifs]
+        custom_motifs = [m for m, _ in resolved]
+        normal = [(m, spec) for m, spec in resolved if not m.startswith('r')]
+        if normal:
+            # A named motif's termini spec is half of what the name means, so it has to be counted with it; unnamed motifs stay position-agnostic
+            normal_motifs = [m for m, _ in normal]
+            custom_termini = [list(spec) if spec else ['flexible'] * (1 + m.count('(') - m.endswith(')')) for m, spec in
+                              normal]
+            gmotifs = [glycan_to_nxGraph(m, termini = 'provided', termini_list = t) for m, t in
+                       zip(normal_motifs, custom_termini)]
+            partial_annotate = partial(annotate_glycan, motifs = normal_motifs, termini_list = custom_termini,
+                                       gmotifs = gmotifs)
             shopping_cart.append(pd.concat(list(map(partial_annotate, glycans)), axis = 0))
         regex_motifs = [m[1:] for m in custom_motifs if m.startswith('r')]
         if regex_motifs:

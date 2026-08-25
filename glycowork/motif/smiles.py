@@ -199,6 +199,8 @@ def _anomeric_position(token: str # Monosaccharide token
     skeleton, _, _, reduced = _split_token(token)
     if reduced or skeleton == 'Ins':
         return None
+    if skeleton not in SKELETONS:
+        raise GlycanSMILESError(f"'{skeleton}' only exists as an alditol; write it as '{skeleton}-ol'")
     return 2 if '[C@{a}]' in SKELETONS[skeleton][0] else 1
 
 
@@ -244,6 +246,9 @@ def _residue(token: str, # Monosaccharide token
         template = template.replace(anomeric, '\x01').replace('@@', '\x00').replace('@', '@@').replace('\x00', '@').replace('\x01', anomeric)
         alpha = '@' if alpha == '' else ''
     pyruvates = sorted(p for p, mod in mods if mod == 'Pyr' and p)
+    carboxyl = next((n for n, (p, mod) in enumerate(mods) if mod == 'A'), len(mods))
+    mods = [(p, 'Am') if p is None and mod == 'N' and n > carboxyl else (p, mod) for n, (p, mod) in enumerate(
+        mods)]  # the trailing 'N' of a uronamide, as in GalNAcAN, sits on the carboxyl and not on a ring carbon
     for position, mod in sorted(mods, key = lambda m: not (m[0] is None and m[1][0] == 'N')):  # an N-acyl claims its position before anything can sit on it
         if mod not in SUBSTITUENTS and mod != 'A' and mod.startswith('O'):
             mod, position = mod[1:], None
@@ -600,7 +605,7 @@ def _slot_kind(carbon: int, # Numbered carbon of a residue
     "What a carbon carries besides the skeleton: a hydroxyl, an amine, a carboxyl, or nothing"
     elements = [element for element, charge, chirality in atoms]
     if any(elements[other] == 'O' and len(adjacency[other]) == 1 and other != root_oxygen
-           for other in adjacency[carbon]) and sum(elements[other] == 'O' for other in adjacency[carbon]) > 1:
+           for other in adjacency[carbon]) and sum(elements[other] in 'ON' for other in adjacency[carbon]) > 1:
         return 'acid', None
     exocyclic = [other for other in adjacency[carbon]
                  if elements[other] in 'ON' and other not in ring and other != root_oxygen]
@@ -836,7 +841,10 @@ def _residue_graph(residues: list, # Perceived residues
             other, built = residues[child], build(child)  # children first, so that indices grow towards the reducing end
             edges.append((add(f"{other['anomer']}{other['anomeric']}-{other['parent'][1]}"), built))
         token = residue['skeleton'] + ''.join(('' if position is None else str(position)) + name
-                                              for position, name in sorted(residue['mods'], key = lambda mod: (mod[0] is not None, mod[0] or 0)) if name)
+                                              for position, name in sorted(residue['mods'],
+                                                                           key = lambda mod: (mod[0] is not None,
+                                                                                              mod[0] or 0,
+                                                                                              mod[1] == 'A')) if name)
         here = add(token)
         for linkage, child in edges:
             graph.add_edge(here, linkage)

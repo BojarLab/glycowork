@@ -158,8 +158,8 @@ def mirror(smiles):
     return Chem.CanonSmiles(smiles.replace('@@', '\x00').replace('@', '@@').replace('\x00', '@'))
 
 
-def edit(smiles, invert = (), deoxy = (), amino = ()):
-    """Invert, deoxygenate or aminate the given carbon positions of a monosaccharide."""
+def edit(smiles, invert = (), deoxy = ()):
+    """Invert or deoxygenate the given carbon positions of a monosaccharide."""
     mol = Chem.MolFromSmiles(smiles)
     position, ring, ring_oxygen, anomeric = number_atoms(mol)
     index = {number: carbon for carbon, number in position.items()}
@@ -168,8 +168,6 @@ def edit(smiles, invert = (), deoxy = (), amino = ()):
                             if n.GetAtomicNum() == 8 and n.GetIdx() not in ring)
     for p in invert:
         editable.GetAtomWithIdx(index[p]).InvertChirality()
-    for p in amino:
-        editable.GetAtomWithIdx(oxygen(p)).SetAtomicNum(7)
     for atom in sorted((oxygen(p) for p in deoxy), reverse = True):
         editable.RemoveAtom(atom)
     return Chem.MolToSmiles(editable.GetMol())
