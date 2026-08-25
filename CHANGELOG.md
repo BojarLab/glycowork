@@ -136,7 +136,7 @@
 ##### Fixed 🐛
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)
 - `annotate_figure` is now much more robust to detect glycan strings in figures and draw them (9741f72)
-- Fixed `GlycoDraw` `.svg` outputs losing their text when imported into Affinity Designer (which does not support `textPath` on SVGs) ()
+- Fixed `GlycoDraw` `.svg` outputs losing their text when imported into Affinity Designer (which does not support `textPath` on SVGs) (3a7895e)
 
 ##### Deprecated ⚠️
 - Removed the `show_linkage` keyword argument in `get_coordinates_and_labels` (it was dead and handled within `GlycoDraw`) (f5ba41f)
@@ -197,6 +197,7 @@
 - Added the `prioritize` keyword argument to `extend_network` to optionally rank candidates by the maximum flow reaching them (7e03cd2)
 - `trace_diamonds` now also returns `'out_degree', 'onward_capacity', 'n_descendants'` in its output to tell a preferred intermediate from a dead-end one (7e03cd2)
 - `construct_network` now has the new `constrained` keyword argument, to opt into disallowing reactions known to not be physiological (e.g., C1GALT1 not extending sialyl-Tn in O-glycans) (e431bd7)
+- Added the new `draw_glycans` keyword argument to `plot_network` to support `GlycoDraw`-based annotation of biosynthetic networks with vector graphic SNFG drawings of glycans ()
 
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)

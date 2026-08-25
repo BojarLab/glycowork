@@ -1819,7 +1819,7 @@ def annotate_figure(
             gw, gh = (float(size.group(1)) * glyc_scale, float(size.group(2)) * glyc_scale) if size else (0.0, 0.0)
             drawn.append((anchor[0], anchor[1] + glyc_offset * glyc_scale, gw, gh, anchor[0], anchor[1], data))
         edit_svg = False
-    canvas = re.search(r'<svg[^>]*?width="([\d.]+)"[^>]*?height="([\d.]+)"', svg_tmp)
+    canvas = re.search(r'<svg[^>]*?width="([\d.]+)[a-z]*"[^>]*?height="([\d.]+)[a-z]*"', svg_tmp)
     canvas = (float(canvas.group(1)), float(canvas.group(2))) if canvas else (1000.0, 1000.0)
     for (_x, _y, gw, gh, ax, ay, data), (gx, gy) in zip(drawn, _spread_glycans([d[:6] for d in drawn], canvas)):
         svg_tmp += '\n' + _leader_line((ax, ay), (gx, gy, gw, gh))

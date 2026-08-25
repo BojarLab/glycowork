@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 from copy import deepcopy
 from itertools import chain
 from functools import lru_cache
@@ -457,16 +458,17 @@ def apply_constraints(network: nx.DiGraph, # Biosynthetic network with 'diffs' e
 def plot_network(network: nx.DiGraph, # Biosynthetic network
                  plot_format: str = 'hierarchical', # Layout type: hierarchical/pydot2/kamada_kawai/spring
                  edge_label_draw: bool = True, # Whether to draw edge labels
-                 lfc_dict: dict[str, float] | None = None # Enzyme:log2FC mapping for edge width
-                 ) -> None: # Displays plot
+                 lfc_dict: dict[str, float] | None = None,  # Enzyme:log2FC mapping for edge width
+                 draw_glycans: bool = False,  # Replace node labels with SNFG drawings, in a static figure
+                 filepath: str | Path = '',
+                 # Path to save the static figure (.svg/.pdf/.png); required for draw_glycans
+                 compact: bool = False,  # Use compact SNFG style
+                 glycan_size: str = 'small'  # Glycan size preset ('small', 'medium', 'large')
+                 ) -> None:  # Displays plot
     "Visualize biosynthetic network"
-    from bokeh.plotting import figure, show
-    from bokeh.io import output_notebook
-    from bokeh.models import HoverTool, Arrow, NormalHead, LabelSet, ColumnDataSource
-    try:
-        output_notebook()
-    except (ImportError, RuntimeError, Exception):
-        pass
+    if draw_glycans and not filepath:
+        raise ValueError(
+            "draw_glycans = True draws the SNFG structures into a saved figure and therefore needs a filepath, e.g., filepath = 'network.svg'.")
     if plot_format == 'hierarchical':
         roots = [n for n in network.nodes() if network.in_degree(n) == 0]
         levels = {}
@@ -514,14 +516,6 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
             else:
                 node_data['color'].append('seagreen')
         node_data['alpha'].append(0.2 if virtual_attrs.get(node, 0) == 1 else 1)
-    node_source = ColumnDataSource(data = node_data)
-    # Create figure
-    p = figure(width = 900, height = 900, x_range = (-1.2, 1.2), y_range = (-1.2, 1.2),
-               tools = "pan,wheel_zoom,box_zoom,reset,save", toolbar_location = "above",
-               x_axis_type = None, y_axis_type = None, background_fill_color = "white")
-    # Draw nodes with hover
-    node_renderer = p.scatter('x', 'y', size = 'size', color = 'color', alpha = 'alpha', line_color = "#888", line_width = 1, source = node_source)
-    p.add_tools(HoverTool(renderers = [node_renderer], tooltips = [("Node", "@name")]))
     # Draw edges and labels
     edge_data = {'xs': [], 'ys': [], 'label': [], 'color': [], 'width': []}
     for edge in network.edges():
@@ -559,10 +553,57 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         edge_data['label'].append(attr)
         edge_data['color'].append(edge_color)
         edge_data['width'].append(width)
-        # Add arrowhead
-        arrow = Arrow(end = NormalHead(size = 8, fill_color = edge_color),
-                      x_start = x0, y_start = y0, x_end = x1, y_end = y1, line_width = width, line_color = edge_color)
-        p.add_layout(arrow)
+    if draw_glycans:
+        # Static rendering, so that annotate_figure can swap the node labels for SNFG drawings in the saved SVG
+        import os
+        import matplotlib.pyplot as plt
+        from glycowork.motif.draw import annotate_figure
+        # the SNFGs have a fixed size on the canvas, so the canvas has to grow with the layout instead of the other way around
+        rows = Counter(round(y, 6) for y in node_data['y'])
+        f = {'small': 1, 'medium': 2, 'large': 3}[glycan_size]
+        w, h = (1.5 * f * max(rows.values()), 1.8 * f * len(rows)) if max(rows.values()) > 1 else (1.5 * f * len(
+            network) ** 0.5,) * 2
+        fig, ax = plt.subplots(figsize = (min(60, max(12, w)), min(60, max(9, h))))
+        for (x0, x1), (y0, y1), color, width in zip(edge_data['xs'], edge_data['ys'], edge_data['color'],
+                                                    edge_data['width']):
+            ax.annotate('', xy = (x1, y1), xytext = (x0, y0),
+                        arrowprops = dict(arrowstyle = '-|>', color = color, linewidth = width, shrinkA = 0,
+                                          shrinkB = 0))
+        ax.scatter(node_data['x'], node_data['y'], s = [s ** 2 for s in node_data['size']], c = node_data['color'],
+                   alpha = node_data['alpha'], edgecolors = '#888888', linewidths = 1)
+        for x, y, name, s in zip(node_data['x'], node_data['y'], node_data['name'], node_data['size']):
+            # anchored just right of the node, since annotate_figure grows the SNFG from the label's own origin
+            ax.annotate(name, (x, y), textcoords = 'offset points', xytext = (s / 2 + 4, 0), fontsize = 8, ha = 'left',
+                        va = 'center')
+        if edge_label_draw:
+            for (x0, x1), (y0, y1), label in zip(edge_data['xs'], edge_data['ys'], edge_data['label']):
+                ax.text((x0 + x1) / 2, (y0 + y1) / 2, label, fontsize = 8, ha = 'center', va = 'center')
+        ax.margins(0.12)
+        ax.axis('off')
+        svg_temp = str(Path(filepath).with_suffix('')) + '_temp.svg'
+        plt.savefig(svg_temp, format = 'svg', bbox_inches = 'tight')
+        plt.close(fig)
+        annotate_figure(svg_temp, filepath = filepath, compact = compact, glycan_size = glycan_size)
+        os.remove(svg_temp)
+        return
+    from bokeh.plotting import figure, show
+    from bokeh.io import output_notebook
+    from bokeh.models import HoverTool, Arrow, NormalHead, LabelSet, ColumnDataSource
+    try:
+        output_notebook()
+    except (ImportError, RuntimeError, Exception):
+        pass
+    p = figure(width = 900, height = 900, x_range = (-1.2, 1.2), y_range = (-1.2, 1.2),
+               tools = "pan,wheel_zoom,box_zoom,reset,save", toolbar_location = "above",
+               x_axis_type = None, y_axis_type = None, background_fill_color = "white")
+    # Draw nodes with hover
+    node_renderer = p.scatter('x', 'y', size = 'size', color = 'color', alpha = 'alpha', line_color = "#888",
+                              line_width = 1, source = ColumnDataSource(data = node_data))
+    p.add_tools(HoverTool(renderers = [node_renderer], tooltips = [("Node", "@name")]))
+    for edge, color, width in zip(network.edges(), edge_data['color'], edge_data['width']):
+        p.add_layout(
+            Arrow(end = NormalHead(size = 8, fill_color = color), x_start = pos[edge[0]][0], y_start = pos[edge[0]][1],
+                  x_end = pos[edge[1]][0], y_end = pos[edge[1]][1], line_width = width, line_color = color))
     # Draw visible edges as segments; multi_line renderer (invisible) enables hover tooltips
     edge_source = ColumnDataSource(data = edge_data)
     edge_renderer = p.multi_line('xs', 'ys', color = 'color', line_width = 'width', source = edge_source, line_alpha = 0)
