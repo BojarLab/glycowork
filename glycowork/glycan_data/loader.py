@@ -184,7 +184,6 @@ class GlycoDataFrame(pd.DataFrame):
                 masks[col] = mask
             if not ok:
                 continue
-            keep.append(i)
             sub = {}
             for group in groups:
                 hits = [c for c in group if c in masks and isinstance(data[c][i], list)]
@@ -192,10 +191,17 @@ class GlycoDataFrame(pd.DataFrame):
                     continue
                 n = len(data[hits[0]][i])
                 idxs = [j for j in range(n) if all(masks[c][j] for c in hits)]
+                if not idxs:
+                    # criteria on one aligned group matched different records, so no single record satisfies all of them
+                    ok = False
+                    break
                 if len(idxs) < n:
                     for c in group:
                         if isinstance(data[c][i], list) and len(data[c][i]) == n:
                             sub[c] = [data[c][i][j] for j in idxs]
+            if not ok:
+                continue
+            keep.append(i)
             narrowed.append(sub)
         out = self.iloc[keep, :].reset_index(drop = True)
         for col in {c for sub in narrowed for c in sub}:

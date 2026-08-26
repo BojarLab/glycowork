@@ -11,5 +11,6 @@ from .motif.graph import *  # noqa
 from .motif.processing import *  # noqa
 from .motif.regex import *  # noqa
 from .motif.query import *  # noqa
+from .motif.smiles import *  # noqa
 from .motif.tokenization import *  # noqa
 from .glycan_data.loader import df_species, glycomics_data_loader, lectin_array_data_loader, glycoproteomics_data_loader  # noqa

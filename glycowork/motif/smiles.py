@@ -411,7 +411,7 @@ _BRACKET_RE = re.compile(r'^\[(\d*)([A-Z][a-z]?|\*)(@{0,2})(?:H(\d*))?([+-]\d*)?
 
 def parse_smiles(smiles: str # SMILES string
                  ) -> tuple: # Atoms as (element, charge, chirality), bonds as (first, second, order), rings as tuples of bond indices, and each atom's neighbors in the order the string writes them
-    "Read a SMILES into atoms, bonds, rings and written neighbor order, which is what the chirality tags refer to"
+    "Read a SMILES into atoms, bonds, rings, and written neighbor order, which is what the chirality tags refer to"
     atoms, bonds, rings, parent, branches, pending_rings, neighbors = [], [], [], [], [], {}, []
     previous, order = None, 1
     tokens = _TOKEN_RE.findall(smiles)

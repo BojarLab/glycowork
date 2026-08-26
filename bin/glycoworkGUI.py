@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import time
+import queue
 import base64
 import warnings
 import threading
@@ -392,7 +393,7 @@ class DataOverviewDialog(BaseDialog):
 
     def apply(self):
         a, b = self.selected(self.group_a), self.selected(self.group_b)
-        groups = [1 if i in a else 2 for i in range(1, self.group_a.size() + 1)] if a and b else None
+        groups = [1 if i in a else 2 if i in b else 3 for i in range(1, self.group_a.size() + 1)] if a and b else None
         self.result = (self.file_var.get(), groups, self.output_dir_var.get())
 
 
@@ -778,12 +779,17 @@ https://bojarlab.github.io/glycowork/"""
         if not (res := DifferentialExpressionDialog(self.app).result):
             return
         csv_path, treatment, control, motifs, plots, out_folder = res
+
         def analyze():
             df_out = get_differential_expression(df = csv_path, group1 = control, group2 = treatment, motifs = motifs)
-            plot_glycans_excel(df_out, out_folder)
+            try:
+                plot_glycans_excel(df_out, out_folder)
+            except Exception:
+                df_out.to_excel(os.path.join(out_folder, "output.xlsx"), index = False)
             if plots:
                 get_volcano(df_out, annotate_volcano = not motifs, filepath = os.path.join(out_folder, "volcano.png"))
                 get_ma(df_out, filepath = os.path.join(out_folder, "ma_plot.png"))
+
         self.run_task("Differential Expression Analysis", "Analyzing data...", analyze,
                       f"Analysis complete. Results saved to {out_folder}", out_folder)
 

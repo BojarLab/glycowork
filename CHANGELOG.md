@@ -195,11 +195,11 @@
 - `get_differential_biosynthesis` has the new `edge_type` keyword argument, to run the analysis at the level of monosaccharides or glycoenzymes instead of monolinks (7cfb5ea)
 - `get_differential_biosynthesis` and `get_edge_weight_by_abundance` have the new `virtual_damping` keyword argument, to control how much flux may run through unobserved intermediates (7cfb5ea)
 - `get_biosynthetic_coherence` now reports which precursor changed for each rewired glycan, via the new `top_changed_precursor` and `precursor_coef_change` columns (7cfb5ea)
-- Added the `prioritize` and `leaves` keyword arguments to `extend_network` to (i) optionally rank candidates by the maximum flow reaching them and (ii) opt to extend all structures, not only leaves (7e03cd2, )
+- Added the `prioritize` and `leaves` keyword arguments to `extend_network` to (i) optionally rank candidates by the maximum flow reaching them and (ii) opt to extend all structures, not only leaves (7e03cd2, e2a7182)
 - `trace_diamonds` now also returns `'out_degree', 'onward_capacity', 'n_descendants'` in its output to tell a preferred intermediate from a dead-end one (7e03cd2)
-- `construct_network` now has the new `constrained` keyword argument, to opt into disallowing reactions known to not be physiological (e.g., C1GALT1 not extending sialyl-Tn in O-glycans) (e431bd7)
+- `construct_network` now has the new `constraints` keyword argument, to opt into disallowing reactions known to not be physiological (e.g., C1GALT1 not extending sialyl-Tn in O-glycans) (e431bd7)
 - Added the new `draw_glycans` and `filepath` keyword arguments to `plot_network` to support `GlycoDraw`-based annotation of biosynthetic networks with vector graphic SNFG drawings of glycans (1a4715e)
-- `monolink_to_glycoenzyme` now has the new `product` keyword argument that allows for a better match of isozyme with reaction by utilizing sequence context of the substrate ()
+- `monolink_to_glycoenzyme` now has the new `product` keyword argument that allows for a better match of isozyme with reaction by utilizing sequence context of the substrate (e2a7182)
 
 ##### Changed 🔄
 - In `construct_network`, `edge_type=enzyme` will now assign glycan class-specific enzymes, if possible (e.g., only ST3GAL4 for N-glycans instead of all ST3GALs) (cb262b3)
@@ -211,7 +211,7 @@
 - Unobserved intermediates now carry less flux than observed structures, so paths that were never measured no longer compete with the ones that were (7cfb5ea)
 - `get_biosynthetic_coherence` now reports many more rewired glycans, as strongly decoupled glycans no longer saturate at the same value as mildly decoupled ones (7cfb5ea)
 - Significance in `get_differential_biosynthesis` and `get_biosynthetic_coherence` is now judged against a sample-size-adjusted alpha, in line with the `.motif.analysis` functions (7cfb5ea)
-- `infer_roots` will now infer the root(s) of the biosynthetic network via the majority class rather than the class of the first glycan in the dataset ()
+- `infer_roots` will now infer the root(s) of the biosynthetic network via the majority class rather than the class of the first glycan in the dataset (e2a7182)
 
 ##### Deprecated ⚠️
 - Deprecated `estimate_weights`, which will be handled by `get_edge_weight_by_abundance` instead (7cfb5ea)
