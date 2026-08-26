@@ -5,6 +5,7 @@ from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compa
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit
 import warnings
+import hashlib
 from io import BytesIO
 from typing import Any
 import networkx as nx
@@ -1578,6 +1579,8 @@ def GlycoDraw(
         bracket_y = (min_y, max_y) if not compact else ((min_y * 0.5) * 1.2, (max_y * 0.5) * 1.2)
         draw_bracket(bracket_x, bracket_y, d, direction = 'right', dim = dim, highlight = highlight)
     if anchored_bits:
+        # Dashed connectors point at symbols that are already on the canvas, so collect them separately and splice them in underneath, instead of letting them paint over the monosaccharides
+        anchor_layer = draw.Group()
         node_positions = data[4]
         lanes = [(main_sugar_x_pos, main_sugar_y_pos), (l1_x_pos, l1_y_pos), (l2_x_pos, l2_y_pos), (l3_x_pos, l3_y_pos)]
         occupied = {(round(x), round(y)) for x, y in zip(main_sugar_x_pos, main_sugar_y_pos)}
@@ -1604,9 +1607,10 @@ def GlycoDraw(
                     [add_sugar(a_sugar[k], d, x_pos = target_x + a_x_pos[k], y_pos = ghost_y, modification = a_modification[k],
                                conf = a_conf[k],
                                compact = compact, dim = dim, highlight = highlight) for k in range(1, len(a_sugar))]
-                    add_bond(target_x + a_x_pos[1], target_x, ghost_y, target_y, d,
+                    add_bond(target_x + a_x_pos[1], target_x, ghost_y, target_y, anchor_layer,
                              label = process_bonds([linkage])[0] if show_linkage else '-', dim = dim, compact = compact,
                              highlight = highlight, dashed = True)
+        d.children.insert(0, anchor_layer)
     # add brackets around repeating unit
     if repeat:
         # process annotation
@@ -1649,7 +1653,12 @@ def GlycoDraw(
         d.args['transform'] = f'rotate(90 {c_x} {c_y})'
         x0, y0, x1, y1 = c_x - (y1 - y0) / 2, c_y - (x1 - x0) / 2, c_x + (y1 - y0) / 2, c_y + (x1 - x0) / 2
     margin = dim * 0.2
-    d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin))
+    # Namespace the element IDs per drawing, so that several GlycoDraw SVGs inlined into one HTML document do not resolve each other's <use> references
+    tag = hashlib.blake2s(repr(
+        (in_glycan, highlight_motif, highlight_termini_list, compact, vertical, dim, per_residue, repeat,
+         reducing_end_label)).encode(), digest_size = 4).hexdigest()
+    d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin),
+                      id_prefix = f'g{tag}_')
     d2.append(d)
     if filepath:
         filepath = Path(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))

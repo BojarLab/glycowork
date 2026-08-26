@@ -412,6 +412,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Ac(1-2)aLFucpN(1-3)[Ac(1-2)]bDGlcpN(1-1)Subst // Subst = 2-(4-(hydroxymethyl)-1,3-dioxolan-2-yl)propane-1,3-diol = SMILES O{1}CC(C1OCC(CO)O1)CO") == "FucNAc(a1-3)GlcNAc1Substituent"
     assert canonicalize_iupac("aDMan(1-2)bDGlcp(1-1)Me") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("aDGlcp(1-2)bDFruf") == "Glc(a1-2)Fruf"
+    assert canonicalize_iupac("a-L-Fucp-(1->2)-b-D-Galp-(1->4)-b-D-GlcpNAc") == "Fuc(a1-2)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("-1)bDFruf(2-3)bDFruf(2-") == "Fruf(b2-3)Fruf(b2-1)Fruf"
     assert canonicalize_iupac("-1)[Ac(1-3)]bDFruf(2-3)bDFruf(2-") == "Fruf3Ac(b2-3)Fruf(b2-1)Fruf3Ac"
     assert canonicalize_iupac("-2)[aDGalp(1-3)]aDRhap(1-3)bDRhap(1-4)bDGlcp(1-") == "[Gal(a1-3)]D-Rha(a1-3)D-Rha(b1-4)Glc(b1-2)D-Rha"
