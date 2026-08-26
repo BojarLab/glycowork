@@ -1354,6 +1354,15 @@ def choose_leaves_to_extend(leaf_glycans: set[str], # Terminal glycans in a netw
     return {glycan for glycan, score in scored_glycans if score == min_score}
 
 
+@lru_cache(maxsize = 8)
+def _reference_disaccharides(glycan_class: str # Glycan class the network belongs to
+                            ) -> frozenset: # Disaccharides observed in mammalian glycans of that class
+    "Reference disaccharides for physiological extension; cached because they depend only on the class"
+    from glycowork.glycan_data.loader import df_species
+    glycs = df_species.meta_filter(Class = "Mammalia").glycan.drop_duplicates()
+    return frozenset(unwrap(get_k_saccharides(glycs[glycs.apply(get_class) == glycan_class].tolist(), just_motifs = True)))
+
+
 def extend_network(network: nx.DiGraph, # Biosynthetic network
                    steps: int = 1, # Number of extension steps; default:1 (becomes max_steps when auto_steps is True)
                    to_extend: str | dict[str, int] | list[str] = "all", # Nodes to extend (all, specific leaf node, target composition)
@@ -1366,13 +1375,8 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
     graphs = {}
     new_glycans = set()
     classy = get_class(next(iter(network.nodes())))
-    if strict_context:
-        glycs = list(network.nodes())
-    else:
-        from glycowork.glycan_data.loader import df_species
-        glycs = df_species.meta_filter(Class = "Mammalia").glycan.drop_duplicates()
-        glycs = glycs[glycs.apply(get_class) == classy].tolist()
-    mammal_disac = set(unwrap(get_k_saccharides(glycs, just_motifs = True)))
+    mammal_disac = set(unwrap(get_k_saccharides(list(network.nodes()), just_motifs = True))) if strict_context else set(
+        _reference_disaccharides(classy))
     reactions = {r for r in nx.get_edge_attributes(network, "diffs").values() if all(x not in r for x in ('?', 'Hex', 'O', '/'))}
     # in a densely observed network a large glycan's precursors usually carry other observed children too, so restricting growth to leaves makes those targets unreachable rather than merely unlikely
     leaf_glycans = {x for x in network.nodes() if
@@ -1419,8 +1423,14 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
             raise ValueError(
                 f"No biosynthetic root of this glycan class is present in the network (e.g., from '{next(iter(network.nodes()))}'), so candidates cannot be ranked by flow.")
         root = min(roots, key = len) if '-ol' in roots[0] else max(roots, key = len)
-        flows = get_maximum_flow(get_edge_weight_by_abundance(network, root = root), source = root,
-                                 sinks = sorted(new_glycans))
+        weighted = get_edge_weight_by_abundance(network, root = root)
+        caps = nx.get_edge_attributes(weighted, 'capacity')
+        # a candidate reached through a single edge can carry no more than that edge or the flow arriving at its parent, so the solve is per parent, not per candidate
+        simple = {g: next(iter(weighted.predecessors(g))) for g in new_glycans if weighted.in_degree(g) == 1}
+        parent_flows = get_maximum_flow(weighted, source = root, sinks = sorted(set(simple.values())))
+        flows = {g: {'flow_value': min(parent_flows[p]['flow_value'], caps.get((p, g), 0.0))} for g, p in simple.items()
+                 if p in parent_flows}
+        flows.update(get_maximum_flow(weighted, source = root, sinks = sorted(set(new_glycans) - set(simple))))
         new_glycans = dict(sorted(((g, v['flow_value']) for g, v in flows.items()), key = lambda kv: -kv[1]))
     return (network, new_glycans) if not auto_steps else (network, new_glycans, steps)
 
