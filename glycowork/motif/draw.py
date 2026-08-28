@@ -688,9 +688,12 @@ def get_branches_from_graph(graph: nx.DiGraph, main_chain: list, main_chain_suga
             for succ in sorted(graph.successors(node)):
                 if succ not in all_nodes:
                     add_branch(first_level, succ, (0, main_chain_sugars.index(node)))
-    second_level = process_level(first_level)
-    third_level = process_level(second_level)
-    return first_level, second_level, third_level
+    levels = [first_level]
+    while levels[-1]:
+        levels.append(process_level(levels[-1]))
+    if not levels[-1]:
+        levels.pop()
+    return levels + [[]] * max(0, 3 - len(levels))
 
 
 def get_coordinates_and_labels(
@@ -737,7 +740,7 @@ def get_coordinates_and_labels(
     main_sugar_highlight = [highlight_values[node] for node in main_chain if node % 2 == 0][::-1]
     main_bond_highlight = [highlight_values[node] for node in main_chain if node % 2 == 1][::-1]
     main_sugar_x_pos = list(range(len(main_sugar)))
-    branch_level1, branch_level2, branch_level3 = get_branches_from_graph(graph, main_chain, main_label_sugar)
+    branch_levels = get_branches_from_graph(graph, main_chain, main_label_sugar)
 
     def process_branch_data(branches: list):
         sugar, sugar_mod, bond, connection, sugar_label, bond_label = [], [], [], [], [], []
@@ -755,14 +758,11 @@ def get_coordinates_and_labels(
         return sugar, sugar_mod, bond, connection, sugar_label, bond_label
 
     # Get branch data for all levels
-    l1_sugar, l1_sugar_modification, l1_bond, l1_connection, l1_sugar_label, l1_bond_label = process_branch_data(branch_level1)
-    l2_sugar, l2_sugar_modification, l2_bond, l2_connection, l2_sugar_label, l2_bond_label = process_branch_data(branch_level2)
-    l3_sugar, l3_sugar_modification, l3_bond, l3_connection, l3_sugar_label, l3_bond_label = process_branch_data(branch_level3)
+    lv_sugar, lv_sugar_modification, lv_bond, lv_connection, lv_sugar_label, lv_bond_label = map(list, zip(*[
+        process_branch_data(b) for b in branch_levels]))
     # Process linkages
     main_bond = process_bonds(main_bond)
-    l1_bond = process_bonds(l1_bond)
-    l2_bond = process_bonds(l2_bond)
-    l3_bond = process_bonds(l3_bond)
+    lv_bond = [process_bonds(b) for b in lv_bond]
     # Main chain x
     tucked_end = (main_sugar[-1] == 'Fuc' and draw_this.count('(') > 1) or (
                 main_sugar[-1] == 'Xyl' and len(main_bond) > 1 and main_bond[-1] == 'β 2')
@@ -785,43 +785,38 @@ def get_coordinates_and_labels(
         return x_positions
 
     # Calculate x positions for all branch levels
-    l1_x_pos = calculate_x_positions(l1_sugar, l1_connection, main_sugar_x_pos)
-    l2_x_pos = calculate_x_positions(l2_sugar, l2_connection, l1_x_pos, level = 2)
-    l3_x_pos = calculate_x_positions(l3_sugar, l3_connection, l2_x_pos, level = 3)
-    # Initialize y positions - ALL START AT Y=0 (except Fuc)
+    lv_x_pos = [calculate_x_positions(lv_sugar[0], lv_connection[0], main_sugar_x_pos)]
+    for i in range(1, len(lv_sugar)):
+        lv_x_pos.append(calculate_x_positions(lv_sugar[i], lv_connection[i], lv_x_pos[i - 1], level = i + 1))
+    # Initialize y positions; ALL START AT Y=0 (except Fuc)
     main_sugar_y_pos = [2 if tucked_end and i == len(main_sugar) - 1 else 0 for i in range(len(main_sugar))]
-    l1_y_pos = [[2 if s == "Fuc" or (s == "Xyl" and i == len(sugars) - 1) else 0 for i, s in enumerate(sugars)] for
-                sugars in l1_sugar]
-    l2_y_pos = [[2 if s == "Fuc" or (s == "Xyl" and i == len(sugars) - 1) else 0 for i, s in enumerate(sugars)] for
-                sugars in l2_sugar]
-    l3_y_pos = [[2 if s == "Fuc" or (s == "Xyl" and i == len(sugars) - 1) else 0 for i, s in enumerate(sugars)] for
-                sugars in l3_sugar]
+    lv_y_pos = [[[2 if s == "Fuc" or (s == "Xyl" and i == len(sugars) - 1) else 0 for i, s in enumerate(sugars)] for
+                 sugars in level] for level in lv_sugar]
     SPACING = 1
     # Main chain goes down, branches go up
-    branch_points = {conn[1] for conn in l1_connection}
+    branch_points = {conn[1] for conn in lv_connection[0]}
     # For each branch point, main chain beyond it goes down
     for parent_idx in sorted(branch_points):
         # Core fucose special case (don't push down main chain)
-        branch_indices = [j for j, conn in enumerate(l1_connection) if conn[1] == parent_idx]
-        core_branches = [l1_sugar[j] for j in branch_indices]
+        branch_indices = [j for j, conn in enumerate(lv_connection[0]) if conn[1] == parent_idx]
+        core_branches = [lv_sugar[0][j] for j in branch_indices]
         is_core_fuc = all(j in [['Fuc'], ['Xyl']] for j in core_branches)
         is_fuc_partner = main_sugar[parent_idx + 1] == 'Fuc' or (tucked_end and parent_idx + 2 == len(main_sugar))
         if not is_core_fuc and not is_fuc_partner:
             branch_sugar = max(core_branches, key = len)
-            l2_connected_indices = [k for k, conn in enumerate(l2_connection) if conn[0] in branch_indices]
-            l2_connected_branches = [l2_sugar[k] for k in l2_connected_indices]
-            l3_connected_branches = [l3_sugar[k] for k, conn in enumerate(l3_connection) if conn[0] in l2_connected_indices]
-            l1_main_chain_indices = [k for k, conn in enumerate(l1_connection) if
-                                     conn[1] > parent_idx and l1_sugar[k] not in [['Fuc'], ['Gal']]]
-            l1_main_chain_branches = [l1_sugar[k] for k in l1_main_chain_indices]
-            l2_main_chain_indices = [k for k, conn in enumerate(l2_connection) if conn[0] in l1_main_chain_indices]
-            l2_main_chain_branches = [l2_sugar[k] for k in l2_main_chain_indices]
-            l3_main_chain_branches = [l3_sugar[k] for k, conn in enumerate(l3_connection) if
-                                      conn[0] in l2_main_chain_indices]
-            has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(l2_connected_branches)) or (
-                    'Fuc' in unwrap(l3_connected_branches))
-            has_own_fuc = 'Fuc' in unwrap(l1_main_chain_branches) or 'Fuc' in unwrap(
-                l2_main_chain_branches) or 'Fuc' in unwrap(l3_main_chain_branches)
+            connected, deeper_connected = branch_indices, []
+            l1_main_chain_indices = [k for k, conn in enumerate(lv_connection[0]) if
+                                     conn[1] > parent_idx and lv_sugar[0][k] not in [['Fuc'], ['Gal']]]
+            l1_main_chain_branches = [lv_sugar[0][k] for k in l1_main_chain_indices]
+            main_chain_indices, deeper_main_chain = l1_main_chain_indices, []
+            for lvl in range(1, len(lv_sugar)):
+                connected = [k for k, conn in enumerate(lv_connection[lvl]) if conn[0] in connected]
+                deeper_connected.append([lv_sugar[lvl][k] for k in connected])
+                main_chain_indices = [k for k, conn in enumerate(lv_connection[lvl]) if conn[0] in main_chain_indices]
+                deeper_main_chain.append([lv_sugar[lvl][k] for k in main_chain_indices])
+            l2_connected_branches = deeper_connected[0] if deeper_connected else []
+            has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(unwrap(deeper_connected)))
+            has_own_fuc = 'Fuc' in unwrap(l1_main_chain_branches) or 'Fuc' in unwrap(unwrap(deeper_main_chain))
             has_bisecting = any('GlcNAc' in b[0] for b in core_branches) and main_sugar[parent_idx] == 'Man' and main_bond[
                 parent_idx - 1] == 'β 4'
             has_triple_branch = len(branch_indices) == 2 and not 'Xyl' in unwrap(core_branches)
@@ -839,39 +834,42 @@ def get_coordinates_and_labels(
             for i in range(parent_idx + 1, len(main_sugar)):
                 main_sugar_y_pos[i] += spacing_spec
     # All branches go up
-    for j, conn in enumerate(l1_connection):
+    for j, conn in enumerate(lv_connection[0]):
         parent_idx = conn[1]
-        branch_sugar = l1_sugar[j]
+        branch_sugar = lv_sugar[0][j]
         # Special case for core fucose
-        if parent_idx == 0 and branch_sugar == ['Fuc'] and l1_bond[j] == ['α 6']:
+        if parent_idx == 0 and branch_sugar == ['Fuc'] and lv_bond[0][j] == ['α 6']:
             # Core fucose goes up
-            l1_y_pos[j] = [-2 * SPACING] * len(branch_sugar)
+            lv_y_pos[0][j] = [-2 * SPACING] * len(branch_sugar)
         else:
-            is_bisecting = branch_sugar[0] in ['GlcNAc'] and main_sugar[parent_idx] == 'Man' and main_bond[parent_idx-1] == 'β 4'
+            is_bisecting = branch_sugar[0] in ['GlcNAc'] and main_sugar[parent_idx] == 'Man' and main_bond[
+                parent_idx - 1] == 'β 4'
             is_leading_xyl = main_sugar[-1] == 'Xyl'
             is_fuc_partner = main_sugar[parent_idx + 1] == 'Fuc' or (tucked_end and parent_idx + 2 == len(main_sugar))
-            parent_branches = [(k, c) for k, c in enumerate(l1_connection) if c[1] == parent_idx]  # + 1 from main chain
+            parent_branches = [(k, c) for k, c in enumerate(lv_connection[0]) if
+                               c[1] == parent_idx]  # + 1 from main chain
             is_triple_branch = len(parent_branches) == 2 and j == parent_branches[0][0]
             # All other branches go up by spacing amount
             if len(branch_sugar) == 1 and branch_sugar[0] in ['Fuc', 'Xyl']:
-                l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] + 2 * SPACING
+                lv_y_pos[0][j][0] = main_sugar_y_pos[parent_idx] + 2 * SPACING
             elif is_leading_xyl and j == 0:
-                l1_y_pos[j] = [p + main_sugar_y_pos[parent_idx] + SPACING - l1_y_pos[j][0] for p in l1_y_pos[j]]
+                lv_y_pos[0][j] = [p + main_sugar_y_pos[parent_idx] + SPACING - lv_y_pos[0][j][0] for p in
+                                  lv_y_pos[0][j]]
             elif len(branch_sugar) == 1 and (is_bisecting or is_fuc_partner or is_triple_branch):
-                l1_y_pos[j][0] = main_sugar_y_pos[parent_idx]
+                lv_y_pos[0][j][0] = main_sugar_y_pos[parent_idx]
             elif len(branch_sugar) == 1:
-                l1_y_pos[j][0] = main_sugar_y_pos[parent_idx] - SPACING
+                lv_y_pos[0][j][0] = main_sugar_y_pos[parent_idx] - SPACING
             else:
                 offset = main_sugar_y_pos[parent_idx + 1] - main_sugar_y_pos[parent_idx]
                 shift_amount = main_sugar_y_pos[parent_idx] - offset
-                l1_y_pos[j] = [p + shift_amount for p in l1_y_pos[j]]
+                lv_y_pos[0][j] = [p + shift_amount for p in lv_y_pos[0][j]]
     for parent_idx in branch_points:
-        sibs = [j for j, conn in enumerate(l1_connection) if conn[1] == parent_idx and len(l1_sugar[j]) == 1]
-        order = sorted(sibs, key = lambda j: -l1_y_pos[j][0])
+        sibs = [j for j, conn in enumerate(lv_connection[0]) if conn[1] == parent_idx and len(lv_sugar[0][j]) == 1]
+        order = sorted(sibs, key = lambda j: -lv_y_pos[0][j][0])
         for k in range(1, len(order)):
-            room = l1_y_pos[order[k - 1]][0] - 2 * SPACING
-            if l1_y_pos[order[k]][0] > room:
-                l1_y_pos[order[k]][0] = room
+            room = lv_y_pos[0][order[k - 1]][0] - 2 * SPACING
+            if lv_y_pos[0][order[k]][0] > room:
+                lv_y_pos[0][order[k]][0] = room
 
     def process_branch_level(level_sugar, level_y_pos, level_connection, next_level_sugar, next_level_connection,
                              parent_level_y_pos, parent_level_sugar):
@@ -905,16 +903,17 @@ def get_coordinates_and_labels(
                 level_y_pos[j] = [p + shift_amount for p in level_y_pos[j]]
         return level_y_pos
 
-    l2_y_pos = process_branch_level(l2_sugar, l2_y_pos, l2_connection, l3_sugar, l3_connection, l1_y_pos, l1_sugar)
-    l3_y_pos = process_branch_level(l3_sugar, l3_y_pos, l3_connection, [], [], l2_y_pos, l2_sugar)
-
+    for i in range(1, len(lv_sugar)):
+        next_sugar, next_connection = (lv_sugar[i + 1], lv_connection[i + 1]) if i + 1 < len(lv_sugar) else ([], [])
+        lv_y_pos[i] = process_branch_level(lv_sugar[i], lv_y_pos[i], lv_connection[i], next_sugar, next_connection,
+                                           lv_y_pos[i - 1], lv_sugar[i - 1])
     # The rules above fix the arrangement; this pass fixes the spacing, by pushing whole subtrees apart (or together) until every column has exactly the clearance its symbols need
-    lanes_x = [[main_sugar_x_pos], l1_x_pos, l2_x_pos, l3_x_pos]
-    lanes_y = [[main_sugar_y_pos], l1_y_pos, l2_y_pos, l3_y_pos]
+    lanes_x = [[main_sugar_x_pos]] + lv_x_pos
+    lanes_y = [[main_sugar_y_pos]] + lv_y_pos
     parent, children = {}, {}
     for i in range(1, len(main_sugar_y_pos)):
         parent[(0, 0, i)] = (0, 0, i - 1)
-    for lane, conns in ((1, l1_connection), (2, l2_connection), (3, l3_connection)):
+    for lane, conns in enumerate(lv_connection, start = 1):
         for b, conn in enumerate(conns):
             for i in range(len(lanes_y[lane][b])):
                 parent[(lane, b, i)] = (lane, b, i - 1) if i else (
@@ -995,24 +994,16 @@ def get_coordinates_and_labels(
                 [re.sub(_CONF_PATTERN, '', k) for k in sugar_modifications]
 
     main_conf, main_sugar_modification = extract_conformation(main_sugar_modification)
-    l1_conf, l1_sugar_modification = extract_conformation(l1_sugar_modification)
-    l2_conf, l2_sugar_modification = extract_conformation(l2_sugar_modification)
-    l3_conf, l3_sugar_modification = extract_conformation(l3_sugar_modification)
+    lv_conf, lv_sugar_modification = map(list, zip(*[extract_conformation(m) for m in lv_sugar_modification]))
     node_positions = {n: (0, 0, i) for i, n in enumerate(main_label_sugar[::-1])}
-    for lane, branches in enumerate((branch_level1, branch_level2, branch_level3), start = 1):
+    for lane, branches in enumerate(branch_levels, start = 1):
         for b, branch in enumerate(branches):
             node_positions.update({n: (lane, b, i) for i, n in enumerate(branch['sugar_nodes'])})
-    data_combined = [
-        [main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf,
-         main_sugar_highlight, main_bond_highlight],
-        [l1_sugar, l1_x_pos, l1_y_pos, l1_sugar_modification, l1_bond, l1_connection, l1_conf, l1_sugar_label,
-         l1_bond_label],
-        [l2_sugar, l2_x_pos, l2_y_pos, l2_sugar_modification, l2_bond, l2_connection, l2_conf, l2_sugar_label,
-         l2_bond_label],
-        [l3_sugar, l3_x_pos, l3_y_pos, l3_sugar_modification, l3_bond, l3_connection, l3_conf, l3_sugar_label,
-         l3_bond_label],
-        node_positions
-    ]
+    data_combined = [[main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf,
+                      main_sugar_highlight, main_bond_highlight]] + [
+                        [lv_sugar[i], lv_x_pos[i], lv_y_pos[i], lv_sugar_modification[i], lv_bond[i], lv_connection[i],
+                         lv_conf[i],
+                         lv_sugar_label[i], lv_bond_label[i]] for i in range(len(lv_sugar))] + [node_positions]
     return data_combined
 
 
@@ -1077,8 +1068,8 @@ def process_per_residue(
         draw_this: str, # reordered IUPAC-condensed glycan sequence
         per_residue: list[float], # Scalar values per residue
         glycan: str, # original IUPAC-condensed glycan sequence
-) -> tuple[list[float], list[list[float]], list[list[float]]]: # (main chain values, side chain values, branched side chain values)
-    "Maps per-residue scalar values to main chain, side chains, and branched side chains"
+) -> tuple:  # (main chain values, then one list of branch values per branch level, at least two)
+    "Maps per-residue scalar values to the main chain and to the branches of every level"
     temp = re.sub(r'\([^)]*\)', 'x', re.sub(r'[^\[\]()]', '', draw_this)) + 'x'
     if temp.count('x') != len(per_residue):
         raise ValueError(
@@ -1088,34 +1079,31 @@ def process_per_residue(
         g2 = glycan_to_nxGraph(draw_this)
         _, mappy = compare_glycans(g2, g1, return_matches = True)
         per_residue = [per_residue[mappy[i * 2] // 2] for i in range(len(per_residue))]
-    main_chain_indices, l1_indices = [], []
-    l2_indices, l1_stack = [], []
+    main_chain_indices, lv_indices, stack = [], [], []
     idx = 0
     for char in temp:
         if char == '[':
-            l1_stack.append([])
+            stack.append([])
         elif char == ']':
-            if len(l1_stack) == 1:
-                l1_indices.append(l1_stack.pop())
-            else:
-                l2_indices.append(l1_stack.pop())
+            while len(lv_indices) < len(stack):
+                lv_indices.append([])
+            lv_indices[len(stack) - 1].append(stack.pop())
         elif char == 'x':
-            if l1_stack:
-                l1_stack[-1].append(per_residue[idx])
+            if stack:
+                stack[-1].append(per_residue[idx])
             else:
                 main_chain_indices.append(per_residue[idx])
             idx += 1
-    l1_indices = [k[::-1] for k in l1_indices if k]
-    l2_indices = [k[::-1] for k in l2_indices if k]
-    return main_chain_indices[::-1], l1_indices, l2_indices
+    lv_indices = [[k[::-1] for k in level if k] for level in lv_indices]
+    return (main_chain_indices[::-1], *lv_indices, *[[]] * max(0, 2 - len(lv_indices)))
 
 
 def process_per_linkage(
         draw_this: str, # reordered IUPAC-condensed glycan sequence
         highlight_linkages: list[int], # Which linkages to highlight
         glycan: str, # original IUPAC-condensed glycan sequence
-) -> tuple[list[bool], list[list[bool]], list[list[bool]]]: # (main chain values, side chain values, branched side chain values)
-    "Maps which linkages to highlight to main chain, side chains, and branched side chains"
+) -> tuple:  # (main chain values, then one list of branch values per branch level, at least two)
+    "Maps which linkages to highlight to the main chain and to the branches of every level"
     per_linkage = [i in highlight_linkages for i in range(glycan.count('('))]
     if glycan != draw_this:
         g1 = glycan_to_nxGraph(glycan)
@@ -1123,26 +1111,23 @@ def process_per_linkage(
         _, mappy = compare_glycans(g2, g1, return_matches = True)
         per_linkage = [per_linkage[mappy[i*2]//2] for i in range(len(per_linkage))]
     temp = re.sub(r'\([^)]*\)', 'x', re.sub(r'[^\[\]()]', '', draw_this)) + 'x'
-    main_chain_indices, l1_indices = [], []
-    l2_indices, l1_stack = [], []
+    main_chain_indices, lv_indices, stack = [], [], []
     idx = 0
     for char in temp[:-1]:
         if char == '[':
-            l1_stack.append([])
+            stack.append([])
         elif char == ']':
-            if len(l1_stack) == 1:
-                l1_indices.append(l1_stack.pop())
-            else:
-                l2_indices.append(l1_stack.pop())
+            while len(lv_indices) < len(stack):
+                lv_indices.append([])
+            lv_indices[len(stack) - 1].append(stack.pop())
         elif char == 'x':
-            if l1_stack:
-                l1_stack[-1].append(per_linkage[idx])
+            if stack:
+                stack[-1].append(per_linkage[idx])
             else:
                 main_chain_indices.append(per_linkage[idx])
             idx += 1
-    l1_indices = [k[::-1] for k in l1_indices if k]
-    l2_indices = [k[::-1] for k in l2_indices if k]
-    return main_chain_indices[::-1], l1_indices, l2_indices
+    lv_indices = [[k[::-1] for k in level if k] for level in lv_indices]
+    return (main_chain_indices[::-1], *lv_indices, *[[]] * max(0, 2 - len(lv_indices)))
 
 
 mono_list = ['Glc', 'GlcNAc', 'GlcA', 'Man', 'ManNAc', 'Gal', 'GalNAc', 'Gul', 'GulNAc',
@@ -1410,9 +1395,9 @@ def GlycoDraw(
         graph_to_string(glycan_to_nxGraph(glycan[cut:]), order_by = "linkage") if not glycan[cut:].startswith(
             '[') else glycan[cut:])
     if per_residue:
-        main_per_residue, side_per_residue, branched_side_per_residue = process_per_residue(draw_this, per_residue, glycan)
+        main_per_residue, *lv_per_residue = process_per_residue(draw_this, per_residue, glycan)
     if highlight_linkages:
-        main_per_linkage, side_per_linkage, branched_side_per_linkage = process_per_linkage(draw_this, highlight_linkages, glycan)
+        main_per_linkage, *lv_per_linkage = process_per_linkage(draw_this, highlight_linkages, glycan)
     if compact:
         show_linkage = False
     if isinstance(highlight_motif, str):
@@ -1461,14 +1446,11 @@ def GlycoDraw(
             raise Exception('Did you enter a real glycan or motif?')
     data = get_coordinates_and_labels(draw_this, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
     main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label = data[0]
-    l1_sugar, l1_x_pos, l1_y_pos, l1_sugar_modification, l1_bond, l1_connection, l1_conf, l1_sugar_label, l1_bond_label = data[1]
-    l2_sugar, l2_x_pos, l2_y_pos, l2_sugar_modification, l2_bond, l2_connection, l2_conf, l2_sugar_label, l2_bond_label = data[2]
-    l3_sugar, l3_x_pos, l3_y_pos, l3_sugar_modification, l3_bond, l3_connection, l3_conf, l3_sugar_label, l3_bond_label = data[3]
+    lv_sugar, lv_x_pos, lv_y_pos, lv_sugar_modification, lv_bond, lv_connection, lv_conf, lv_sugar_label, lv_bond_label = map(
+        list, zip(*data[1:-1]))
     if not show_linkage:
         main_bond = ['-'] * len(main_bond)
-        l1_bond = [['-' for _ in y] for y in l1_bond]
-        l2_bond = [['-' for _ in y] for y in l2_bond]
-        l3_bond = [['-' for _ in y] for y in l3_bond]
+        lv_bond = [[['-' for _ in y] for y in level] for level in lv_bond]
 
     # Calculate angles for main chain Y, Z fragments
     def calculate_degree(y1, y2, x1, x2):
@@ -1476,27 +1458,23 @@ def GlycoDraw(
 
     main_deg = [calculate_degree(main_sugar_y_pos[k], main_sugar_y_pos[k - 1], main_sugar_x_pos[k], main_sugar_x_pos[k - 1])
         if sugar in {'Z', 'Y'} and k > 0 else 0 for k, sugar in enumerate(main_sugar)]
-    # Calculate angles for branch Y, Z fragments
-    l1_deg = []
-    for k, sugars in enumerate(l1_sugar):
-        l1_deg.append([
-            calculate_degree(l1_y_pos[k][j], main_sugar_y_pos[l1_connection[k][1]], l1_x_pos[k][j], main_sugar_x_pos[l1_connection[k][1]])
+    # Calculate angles for branch Y, Z fragments, at every branch level
+    lv_deg = []
+    for lvl, level_sugar in enumerate(lv_sugar):
+        parent_x = [main_sugar_x_pos] if not lvl else lv_x_pos[lvl - 1]
+        parent_y = [main_sugar_y_pos] if not lvl else lv_y_pos[lvl - 1]
+        lv_deg.append([[
+            calculate_degree(lv_y_pos[lvl][k][j],
+                             parent_y[0 if not lvl else lv_connection[lvl][k][0]][lv_connection[lvl][k][1]],
+                             lv_x_pos[lvl][k][j],
+                             parent_x[0 if not lvl else lv_connection[lvl][k][0]][lv_connection[lvl][k][1]])
             if sugar in {'Z', 'Y'} and len(sugars) == 1 else
-            calculate_degree(l1_y_pos[k][j], l1_y_pos[k][j-1], l1_x_pos[k][j], l1_x_pos[k][j-1])
+            calculate_degree(lv_y_pos[lvl][k][j], lv_y_pos[lvl][k][j - 1], lv_x_pos[lvl][k][j], lv_x_pos[lvl][k][j - 1])
             if sugar in {'Z', 'Y'} else 0 for j, sugar in enumerate(sugars)
-        ])
-    # Calculate angles for branch_branch Y, Z fragments
-    l2_deg = []
-    for k, sugars in enumerate(l2_sugar):
-        l2_deg.append([
-            calculate_degree(l2_y_pos[k][j], l1_y_pos[l2_connection[k][0]][l2_connection[k][1]], l2_x_pos[k][j], l1_x_pos[l2_connection[k][0]][l2_connection[k][1]])
-            if sugar in {'Z', 'Y'} and len(sugars) == 1 else
-            calculate_degree(l2_y_pos[k][j], l2_y_pos[k][j-1], l2_x_pos[k][j], l2_x_pos[k][j-1])
-            if sugar in {'Z', 'Y'} else 0 for j, sugar in enumerate(sugars)
-        ])
+        ] for k, sugars in enumerate(level_sugar)])
     # Adjust drawing dimensions
-    all_y = unwrap(l3_y_pos) + unwrap(l2_y_pos) + unwrap(l1_y_pos) + main_sugar_y_pos
-    all_x = unwrap(l3_x_pos) + unwrap(l2_x_pos) + unwrap(l1_x_pos) + main_sugar_x_pos
+    all_y = unwrap(unwrap(lv_y_pos)) + main_sugar_y_pos
+    all_x = unwrap(unwrap(lv_x_pos)) + main_sugar_x_pos
     max_y, min_y = max(all_y), min(all_y)
     max_x = max(all_x)
     y_span = max_y - min_y
@@ -1528,26 +1506,40 @@ def GlycoDraw(
         d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
     # Bond main chain
     [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, label = main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = main_per_linkage[k] if highlight_linkages else False) for k in range(len(main_sugar)-1)]
-    # Bond branch
-    [add_bond(l1_x_pos[b_idx][s_idx+1], l1_x_pos[b_idx][s_idx], l1_y_pos[b_idx][s_idx+1], l1_y_pos[b_idx][s_idx], d, label = l1_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l1_bond_label[b_idx][s_idx+1], color_highlight = side_per_linkage[b_idx][s_idx+1] if highlight_linkages else False) for b_idx in range(len(l1_sugar)) for s_idx in range(len(l1_sugar[b_idx])-1) if len(l1_sugar[b_idx]) > 1]
-    # Bond branch to main chain
-    [add_bond(l1_x_pos[k][0], main_sugar_x_pos[l1_connection[k][1]], l1_y_pos[k][0], main_sugar_y_pos[l1_connection[k][1]], d, label = l1_bond[k][0], dim = dim, compact = compact, highlight = l1_bond_label[k][0], color_highlight = side_per_linkage[k][0] if highlight_linkages else False) for k in range(len(l1_sugar))]
-    # Bond branch branch
-    [add_bond(l2_x_pos[b_idx][s_idx+1], l2_x_pos[b_idx][s_idx], l2_y_pos[b_idx][s_idx+1], l2_y_pos[b_idx][s_idx], d, label = l2_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l2_bond_label[b_idx][s_idx+1], color_highlight = branched_side_per_linkage[b_idx][s_idx+1] if highlight_linkages else False) for b_idx in range(len(l2_sugar)) for s_idx in range(len(l2_sugar[b_idx])-1) if len(l2_sugar[b_idx]) > 1]
-    # Bond branch branch branch
-    [add_bond(l3_x_pos[b_idx][s_idx+1], l3_x_pos[b_idx][s_idx], l3_y_pos[b_idx][s_idx+1], l3_y_pos[b_idx][s_idx], d, label = l3_bond[b_idx][s_idx+1], dim = dim, compact = compact, highlight = l3_bond_label[b_idx][s_idx+1]) for b_idx in range(len(l3_sugar)) for s_idx in range(len(l3_sugar[b_idx])-1) if len(l3_sugar[b_idx]) > 1]
-    # Bond branch_branch to branch
-    [add_bond(l2_x_pos[k][0], l1_x_pos[l2_connection[k][0]][l2_connection[k][1]], l2_y_pos[k][0], l1_y_pos[l2_connection[k][0]][l2_connection[k][1]], d, label = l2_bond[k][0], dim = dim, compact = compact, highlight = l2_bond_label[k][0], color_highlight = branched_side_per_linkage[k][0] if highlight_linkages else False) for k in range(len(l2_sugar))]
-    # Bond branch_branch_branch to branch_branch
-    [add_bond(l3_x_pos[k][0], l2_x_pos[l3_connection[k][0]][l3_connection[k][1]], l3_y_pos[k][0], l2_y_pos[l3_connection[k][0]][l3_connection[k][1]], d, label = l3_bond[k][0], dim = dim, compact = compact, highlight = l3_bond_label[k][0]) for k in range(len(l3_sugar))]
+    # Bond within each branch, at every branch level; level 1 also connects to the main chain
+    for lvl in range(len(lv_sugar)):
+        [add_bond(lv_x_pos[lvl][b_idx][s_idx + 1], lv_x_pos[lvl][b_idx][s_idx], lv_y_pos[lvl][b_idx][s_idx + 1],
+                  lv_y_pos[lvl][b_idx][s_idx], d, label = lv_bond[lvl][b_idx][s_idx + 1], dim = dim, compact = compact,
+                  highlight = lv_bond_label[lvl][b_idx][s_idx + 1],
+                  color_highlight = lv_per_linkage[lvl][b_idx][s_idx + 1] if highlight_linkages and lvl < len(
+                      lv_per_linkage) else False) for b_idx in range(len(lv_sugar[lvl])) for s_idx in
+         range(len(lv_sugar[lvl][b_idx]) - 1)]
+        if not lvl:
+            [add_bond(lv_x_pos[0][k][0], main_sugar_x_pos[lv_connection[0][k][1]], lv_y_pos[0][k][0],
+                      main_sugar_y_pos[lv_connection[0][k][1]], d, label = lv_bond[0][k][0], dim = dim,
+                      compact = compact, highlight = lv_bond_label[0][k][0],
+                      color_highlight = lv_per_linkage[0][k][0] if highlight_linkages and lv_per_linkage else False) for
+             k in range(len(lv_sugar[0]))]
+    # Bond each deeper branch to the branch it sits on
+    for lvl in range(1, len(lv_sugar)):
+        [add_bond(lv_x_pos[lvl][k][0], lv_x_pos[lvl - 1][lv_connection[lvl][k][0]][lv_connection[lvl][k][1]],
+                  lv_y_pos[lvl][k][0], lv_y_pos[lvl - 1][lv_connection[lvl][k][0]][lv_connection[lvl][k][1]], d,
+                  label = lv_bond[lvl][k][0], dim = dim, compact = compact, highlight = lv_bond_label[lvl][k][0],
+                  color_highlight = lv_per_linkage[lvl][k][0] if highlight_linkages and lvl < len(
+                      lv_per_linkage) else False) for k in range(len(lv_sugar[lvl]))]
     # Sugar main chain
-    [add_sugar(main_sugar[k], d, x_pos = main_sugar_x_pos[k], y_pos = main_sugar_y_pos[k], modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim, deg = main_deg[k], highlight = main_sugar_label[k], scalar = main_per_residue[k] if per_residue else 0) for k in range(len(main_sugar))]
-    # Sugar branch
-    [add_sugar(l1_sugar[b_idx][s_idx], d, x_pos = l1_x_pos[b_idx][s_idx], y_pos = l1_y_pos[b_idx][s_idx], modification = l1_sugar_modification[b_idx][s_idx], conf = l1_conf[b_idx][s_idx], compact = compact, dim = dim, deg = l1_deg[b_idx][s_idx], highlight = l1_sugar_label[b_idx][s_idx], scalar = side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(l1_sugar)) for s_idx in range(len(l1_sugar[b_idx]))]
-    # Sugar branch_branch
-    [add_sugar(l2_sugar[b_idx][s_idx], d, x_pos = l2_x_pos[b_idx][s_idx], y_pos = l2_y_pos[b_idx][s_idx], modification = l2_sugar_modification[b_idx][s_idx], conf = l2_conf[b_idx][s_idx], compact = compact, dim = dim, deg = l2_deg[b_idx][s_idx], highlight = l2_sugar_label[b_idx][s_idx], scalar = branched_side_per_residue[b_idx][s_idx] if per_residue else 0) for b_idx in range(len(l2_sugar)) for s_idx in range(len(l2_sugar[b_idx]))]
-    # Sugar branch branch branch
-    [add_sugar(l3_sugar[b_idx][s_idx], d, x_pos = l3_x_pos[b_idx][s_idx], y_pos = l3_y_pos[b_idx][s_idx], modification = l3_sugar_modification[b_idx][s_idx], conf = l3_conf[b_idx][s_idx], compact = compact, dim = dim, highlight = l3_sugar_label[b_idx][s_idx]) for b_idx in range(len(l3_sugar)) for s_idx in range(len(l3_sugar[b_idx]))]
+    [add_sugar(main_sugar[k], d, x_pos = main_sugar_x_pos[k], y_pos = main_sugar_y_pos[k],
+               modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim,
+               deg = main_deg[k], highlight = main_sugar_label[k], scalar = main_per_residue[k] if per_residue else 0)
+     for k in range(len(main_sugar))]
+    # Sugar of every branch level
+    for lvl in range(len(lv_sugar)):
+        [add_sugar(lv_sugar[lvl][b_idx][s_idx], d, x_pos = lv_x_pos[lvl][b_idx][s_idx],
+                   y_pos = lv_y_pos[lvl][b_idx][s_idx], modification = lv_sugar_modification[lvl][b_idx][s_idx],
+                   conf = lv_conf[lvl][b_idx][s_idx], compact = compact, dim = dim, deg = lv_deg[lvl][b_idx][s_idx],
+                   highlight = lv_sugar_label[lvl][b_idx][s_idx],
+                   scalar = lv_per_residue[lvl][b_idx][s_idx] if per_residue and lvl < len(lv_per_residue) else 0) for
+         b_idx in range(len(lv_sugar[lvl])) for s_idx in range(len(lv_sugar[lvl][b_idx]))]
     highlight = 'show' if highlight_motif == None else 'hide'
     if floaty_bits != []:
         fb_count = {i: floaty_bits.count(i) for i in floaty_bits}
@@ -1581,11 +1573,11 @@ def GlycoDraw(
     if anchored_bits:
         # Dashed connectors point at symbols that are already on the canvas, so collect them separately and splice them in underneath, instead of letting them paint over the monosaccharides
         anchor_layer = draw.Group()
-        node_positions = data[4]
-        lanes = [(main_sugar_x_pos, main_sugar_y_pos), (l1_x_pos, l1_y_pos), (l2_x_pos, l2_y_pos), (l3_x_pos, l3_y_pos)]
+        node_positions = data[-1]
+        lanes = [(main_sugar_x_pos, main_sugar_y_pos)] + list(zip(lv_x_pos, lv_y_pos))
         occupied = {(round(x), round(y)) for x, y in zip(main_sugar_x_pos, main_sugar_y_pos)}
         occupied |= {(round(x), round(y)) for xs, ys in
-                     zip(l1_x_pos + l2_x_pos + l3_x_pos, l1_y_pos + l2_y_pos + l3_y_pos) for x, y in zip(xs, ys)}
+                     zip(unwrap(lv_x_pos), unwrap(lv_y_pos)) for x, y in zip(xs, ys)}
         for bit, bit_anchors in anchored_bits:
             a_sugar, a_x_pos, _, a_modification, a_bond, a_conf, _, _ = \
                 get_coordinates_and_labels(bit, highlight_motif = None)[0]
