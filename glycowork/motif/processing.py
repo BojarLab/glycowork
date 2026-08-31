@@ -98,6 +98,19 @@ _LINEARCODE_MAPPING = {'G': 'Glc', 'ME': 'me', 'M': 'Man', 'A': 'Gal', 'NN': 'Ne
                        'GalN': 'GalNAc', 'AN': 'GalNAc', 'F': 'Fuc', 'K': 'Kdn', 'W': 'Kdo', 'L': 'GalA', 'I': 'IdoA', 'PYR': 'Pyr', 'R': 'Araf', 'H': 'Rha',
                        'X': 'Xyl', 'B': 'Rib', 'U': 'GlcA', 'O': 'All', 'E': 'Fruf', '[': '', ']': '', 'me': 'Me', 'PC': 'PCho', 'T': 'Ac'}
 _GLYSEEKER_MAPPING = {')': '[', '(': ']', 'G': 'Glc(a', 'A': 'Gal(b', 'Y': 'GlcNAc(b', 'M': 'Man(a', 'X': 'Xyl(b', 'F': 'Fuc(a', 'L': 'GlcA(b'}
+_PGLYCO_TREE = re.compile(r'\([HNAGF()]+\)')
+_PGLYCO_MONO = {'H': 'Hex', 'N': 'HexNAc', 'A': 'Neu5Ac', 'G': 'Neu5Gc', 'F': 'Fuc'}  # fallback for tokens in biosynthetically impossible positions
+_PGLYCO_RULES = {('core0', 'N'): ('GlcNAc', 'b1-4', 'core1'), ('core0', 'F'): ('Fuc', 'a1-6', 'end'),
+                 ('core1', 'H'): ('Man', 'b1-4', 'bman'), ('core1', 'F'): ('Fuc', 'a1-3', 'end'),
+                 ('bman', 'H'): ('Man', 'a1-3/6', 'arm'), ('bman', 'N'): ('GlcNAc', 'b1-4', 'end'),
+                 ('arm', 'H'): ('Man', 'a1-2/3/6', 'arm'), ('arm', 'N'): ('GlcNAc', 'b1-2', 'ant'),
+                 ('ant', 'H'): ('Gal', 'b1-3/4', 'gal'), ('ant', 'F'): ('Fuc', 'a1-3/4', 'end'),
+                 ('ant', 'N'): ('GalNAc', 'b1-4', 'gal'), ('ant', 'A'): ('Neu5Ac', 'a2-6', 'sia'),
+                 ('ant', 'G'): ('Neu5Gc', 'a2-6', 'sia'), ('gal', 'H'): ('Gal', 'a1-3', 'gal'),
+                 ('gal', 'N'): ('GlcNAc', 'b1-3', 'ant'), ('gal', 'F'): ('Fuc', 'a1-2', 'end'),
+                 ('gal', 'A'): ('Neu5Ac', 'a2-3/6', 'sia'), ('gal', 'G'): ('Neu5Gc', 'a2-3/6', 'sia'),
+                 ('sia', 'A'): ('Neu5Ac', 'a2-8', 'sia'), ('sia', 'G'): ('Neu5Gc', 'a2-8', 'sia')}
+_PGLYCO_REPEAT = {('core0', 'F'): 'a1-3', ('arm', 'N'): 'b1-4/6'}  # linkage for the second occurrence of a token in the same position
 _CSDB_AC_12 = re.compile(r'^Ac\(\??1-2\)')
 _CSDB_N_TO_NAC = re.compile(r'N(?=[^A-Za-z]|$)')
 FLOATY_ALT = re.compile(r'\{([^{}]*)\}')
@@ -1047,6 +1060,29 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
     return floating + body + ('-ol' if ',o' in roots[0][0] else '')
 
 
+def pglyco_to_iupac(glycan: str # Glycan in pGlyco nested-tree nomenclature
+                    ) -> str: # Basic IUPAC-condensed format
+    "Convert glycan from pGlyco/pGlycoQuant nested-tree nomenclature, such as (N(F)(N(H(H(N(H)))(H(N(H(A))))))), to barebones IUPAC-condensed format, inferring monosaccharides and linkages from their position in the N-glycan"
+    idx = [0]
+    def parse():  # each node is written as (X child1 child2 ...), starting from the reducing end
+        token, kids, idx[0] = glycan[idx[0]+1], [], idx[0]+2
+        while glycan[idx[0]] == '(':
+            kids.append(parse())
+        idx[0] += 1
+        return token, kids
+    def render(node, mono, ctx):  # identity and linkage of a node are decided by its parent's position in the glycan
+        branches, seen = [], []
+        for kid in sorted(node[1], key = lambda k: (-len(k[1]), k[0])):
+            kid_mono, link, kid_ctx = _PGLYCO_RULES.get((ctx, kid[0]), (_PGLYCO_MONO[kid[0]], f"?{'2' if kid[0] in 'AG' else '1'}-?", 'end'))
+            link = _PGLYCO_REPEAT.get((ctx, kid[0]), link) if kid[0] in seen else link
+            seen.append(kid[0])
+            branches.append(f"{render(kid, kid_mono, kid_ctx)}({link})")
+        branches.sort(key = lambda b: (-b.count('('), b))
+        return (branches[0] if branches else '') + ''.join(f"[{b}]" for b in branches[1:]) + mono
+    root = parse()
+    return render(root, 'GlcNAc' if root[0] == 'N' else _PGLYCO_MONO[root[0]], 'core0' if root[0] == 'N' else 'end')
+
+
 def glytoucan_to_glycan(ids: list[str], # List of GlyTouCan IDs or glycans
                         revert: bool = False, # Whether to map glycans to IDs; default:False
                         verbose: bool = True # Whether to print missing entries; default:True
@@ -1255,7 +1291,7 @@ def _sort_mono_mods(m):
 @lru_cache(maxsize = None)
 def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
                        ) -> str: # Standardized IUPAC-condensed format
-    "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, CSDB-linear, KCF, SMILES, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
+    "Convert glycan from IUPAC-extended, LinearCode, GlycoCT, WURCS, Oxford, GLYCAM, GlycoWorkBench, pGlyco, CSDB-linear, KCF, SMILES, GlyConnect IDs, and GlyTouCanIDs to standardized IUPAC-condensed format"
     if isinstance(glycan, int):
         glycan = str(glycan)
         glycan = GLYCONNECT_TO_GLYTOUCAN.get(glycan, glycan)
@@ -1302,6 +1338,8 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = GAG_disaccharide_to_iupac(glycan)
     elif "(Man)3(GlcNAc)2" in glycan:
         glycan = nglycan_stub_to_iupac(glycan)
+    elif _PGLYCO_TREE.fullmatch(glycan):
+        glycan = pglyco_to_iupac(glycan)
     elif looks_like_linearcode(glycan):
         glycan = linearcode_to_iupac(glycan)
     elif looks_like_oxford(glycan):

@@ -41,7 +41,7 @@ from glycowork.motif.processing import (
     min_process_glycans, get_lib, expand_lib, get_possible_linkages, looks_like_linearcode,
     get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac, looks_like_oxford,
     glycoct_to_iupac, glycoctxml_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan,
-    canonicalize_composition, parse_glycoform, glycoworkbench_to_iupac,
+    canonicalize_composition, parse_glycoform, glycoworkbench_to_iupac, pglyco_to_iupac,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
@@ -878,6 +878,19 @@ EDGE        7
 LIN
 1:1o(8+2)2d
 2:2o(8+2)3d""") == "Kdo(a2-8)Kdo(a2-8)Kdo"
+    assert canonicalize_iupac(
+        "(N(N(H(H(N(H)))(H(N(H(A)))))))") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "(N(F)(N(H(H(N(H(A))))(H(N(H(F)))))))") == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac(
+        "(N(N(H(H(N(H(G))))(H(N(H(A)))))))") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Gc(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "(N(F)(N(H(H(N(H)))(H(N(H(A))))(N))))") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac(
+        "(N(N(H(H(H(H)))(H(H)(H(H))))))") == "Man(a1-2/3/6)Man(a1-2/3/6)Man(a1-3/6)[Man(a1-2/3/6)Man(a1-2/3/6)[Man(a1-2/3/6)]Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "(N(F)(F)(N(H(H(N(H(A(A)))))(H(N(H))))))") == "Neu5Ac(a2-8)Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc"
+    assert pglyco_to_iupac("(N(N(H)))") == "Man(b1-4)GlcNAc(b1-4)GlcNAc"
     # Test SMILES, written by other toolkits so that atom order, ring digits and branch order differ from our own writer
     assert canonicalize_iupac(
         "O1[C@H](CO)[C@@H](O)[C@H](O)[C@@H](O)[C@H]1O[C@@]2(O[C@@H]([C@@H](O)[C@@H]2O)CO)CO") == "Glc(a1-2)Fruf"  # sucrose

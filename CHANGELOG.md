@@ -104,13 +104,16 @@
 - Fixed handling of unequal group sizes in `monte_carlo=True` in `get_differential_expression` (c431576)
 
 #### processing
+##### Added ✨
+- Universal Input/`canonicalize_iupac` now also supports pGlyco nomenclature, via the new `pglyco_to_iupac` parser ()
+- Universal Input/`canonicalize_iupac` now supports conversion of SMILES into IUPAC-condensed (3819f4e)
+
 ##### Changed 🔄
 - `de_wildcard_glycoletter` now also supports narrow monosaccharide wildcards like `Gal/Glc` (5483f3c)
 - `canonicalize_iupac` is again made more robust in terms of what inputs it can handle (8f799c3)
 - `UND` tokens in `GlycoCT` inputs are now better supported in `canonicalize_iupac` (4894d1b)
 - `canonicalize_iupac` can now correctly process composition-like `GlycoCT` and `WURCS` entries (i.e., no topology) (d132d2f)
 - Improved conversion handling of `GlycoCT`, `WURCS`, and `GlycoWorkbench` via `canonicalize_iupac` (d41806a, d7f31a5, 7cfb5ea)
-- `canonicalize_iupac` now supports conversion of SMILES into IUPAC-condensed (3819f4e)
 
 ##### Fixed 🐛
 - Fixed `canonicalize_iupac` messing up narrow modification wildcards (e.g., `Gal3/6S`) in side branches (3a02eff)
