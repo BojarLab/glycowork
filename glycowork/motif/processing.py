@@ -956,7 +956,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
                 else:
                     if "GalNAc(b1-4)Glc" not in iupac:
                         raise ValueError(
-                            f"'{glycan}' was routed to Oxford nomenclature but has no N-glycan core; if this is a composition (e.g., 'H4N4F1S1'), use canonicalize_composition instead.")
+                            f"'{oxford}' was routed to Oxford nomenclature but has no N-glycan core; if this is a composition (e.g., 'H4N4F1S1'), use canonicalize_composition instead.")
                     split = iupac.index("GalNAc(b1-4)Glc")
                     iupac = iupac[:split + len("GalNAc(b1-4)")] + "[" + _OXFORD_MAPPING[k] + "]" + iupac[split + len("GalNAc(b1-4)"):]
                 v -= 1

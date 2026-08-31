@@ -3850,6 +3850,8 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc", suppress=True)
     assert result is not None
+    result = GlycoDraw("Gal(b1-4)", show_linkage=True, per_residue=[0.9], suppress=True)
+    assert result is not None
     # Test with repeat unit
     result = GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat=True, suppress=True)
     assert result is not None

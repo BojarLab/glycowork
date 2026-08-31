@@ -1388,8 +1388,12 @@ def GlycoDraw(
         _backbone = re.findall(r'.*\((?!.*\()', glycan)[0]
         _conn = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', glycan))
         glycan = f'blank(?1-{_conn[-1]}){_backbone}{_conn[:2]}-?)'
+        if per_residue:
+            per_residue = [0] + list(per_residue)
     if glycan.endswith(')'):
         glycan += 'blank'
+        if per_residue:
+            per_residue = list(per_residue) + [0]
     cut = glycan.rfind('}') + 1 if '^' in glycan else 0
     draw_this = glycan[:cut] + (
         graph_to_string(glycan_to_nxGraph(glycan[cut:]), order_by = "linkage") if not glycan[cut:].startswith(

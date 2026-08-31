@@ -131,13 +131,14 @@
 - `GlycoDraw` drawings with gradients now have a 2x smaller filesize and smoother gradients (9741f72)
 - Saved `.png` outputs from `GlycoDraw` now have a transparent background (9741f72)
 - Glycan drawings in `annotate_figure` are now positioned much better to reduce overlap (9741f72)
-- Improved overlaps/positioning in `GlycoDraw` (14c7f0c)
+- Improved overlaps/positioning in `GlycoDraw` (14c7f0c, fe854f6)
 - `GlycoDraw` will now automatically reduce the font size of overly long narrow wildcard linkages (e.g., `b1-2/4/6`) to let them fit on linkages (14c7f0c)
 
 ##### Fixed 🐛
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)
 - `annotate_figure` is now much more robust to detect glycan strings in figures and draw them (9741f72)
 - Fixed `GlycoDraw` `.svg` outputs losing their text when imported into Affinity Designer (which does not support `textPath` on SVGs) (3a7895e)
+- Fixed `per_residue` handling of glycans ending in linkages in `GlycoDraw` ()
 
 ##### Deprecated ⚠️
 - Removed the `show_linkage` keyword argument in `get_coordinates_and_labels` (it was dead and handled within `GlycoDraw`) (f5ba41f)

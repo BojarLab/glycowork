@@ -749,9 +749,7 @@ def monolink_to_glycoenzyme(edge_label: str, # Monolink edge label
     if mode == 'condensed':
         enzyme_column = 'glycoclass'
     hits = df[df[monolink_column] == edge_label]
-    if product is not None and 'acceptor' in df.columns and not hits.empty:
-        from glycowork.motif.graph import \
-            subgraph_isomorphism  # isozymes of one family differ by acceptor, not by linkage
+    if product is not None and 'acceptor' in df.columns and not hits.empty: # isozymes of one family differ by acceptor, not by linkage
         keep = hits['acceptor'].apply(
             lambda a: not isinstance(a, str) or any(subgraph_isomorphism(product, m) for m in a.split('|')))
         hits = hits[keep] if keep.any() else hits
