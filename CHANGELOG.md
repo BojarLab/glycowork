@@ -138,7 +138,7 @@
 - Fixed `GlycoDraw` being unusable if `Jupyter` was not installed (28769f5)
 - `annotate_figure` is now much more robust to detect glycan strings in figures and draw them (9741f72)
 - Fixed `GlycoDraw` `.svg` outputs losing their text when imported into Affinity Designer (which does not support `textPath` on SVGs) (3a7895e)
-- Fixed `per_residue` handling of glycans ending in linkages in `GlycoDraw` ()
+- Fixed `per_residue` handling of glycans ending in linkages in `GlycoDraw` (6bd6d43)
 
 ##### Deprecated ⚠️
 - Removed the `show_linkage` keyword argument in `get_coordinates_and_labels` (it was dead and handled within `GlycoDraw`) (f5ba41f)
