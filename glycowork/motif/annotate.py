@@ -401,23 +401,26 @@ def get_motif_dag(
 
 
 def get_composition_dag(
-        compositions: list[str], # Composition labels, optionally prefixed as protein_site_composition
-        abundances: pd.DataFrame | None = None # Compositions x samples abundances, used as an exact prefilter for containment
-) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is component-wise contained in child
-    "Builds the containment DAG of a composition set, in which a parent composition is component-wise dominated by each of its children"
-    comp, site = {}, {}
+        compositions: list[str], # Composition or IUPAC-condensed labels, optionally prefixed as protein_site_composition
+        abundances: pd.DataFrame | None = None # Glycoforms x samples abundances, used as an exact prefilter for containment
+) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is contained in child
+    "Builds the containment DAG of a glycoform set, ordering parts by substructure containment where sequences are given and by component-wise composition dominance otherwise"
+    comp, site, struct = {}, {}, {}
     for c in compositions:
-        try:
-            comp[c], site[c] = canonicalize_composition(c), ''
-        except Exception:
+        pre, _, tail = str(c).rpartition('_')  # glycoproteomics indices carry a protein_site prefix
+        if is_composition(tail):
             try:
-                comp[c], site[c] = canonicalize_composition(str(c).rsplit('_', 1)[-1]), str(c).rsplit('_', 1)[
-                    0]  # glycoproteomics indices carry a protein_site prefix
+                comp[c], site[c] = canonicalize_composition(tail), pre
             except Exception:
                 continue  # labels that do not parse as a composition have no place in the DAG
-    cols = list(comp)
+        else:
+            try:
+                struct[c], site[c] = glycan_to_nxGraph(tail), pre  # canonicalize_composition does not raise on a sequence, it returns a nonsense residue vector, so sequences have to be routed here before it is ever called on them
+            except Exception:
+                continue
+    cols = list(site)
     residues = sorted({r for d in comp.values() for r in d})
-    V = np.array([[comp[c].get(r, 0) for r in residues] for c in cols])
+    V = np.array([[comp.get(c, {}).get(r, 0) for r in residues] for c in cols])
     A = abundances.loc[cols].values if abundances is not None else None
     dag = nx.DiGraph()
     dag.add_nodes_from(cols)
@@ -427,12 +430,16 @@ def get_composition_dag(
     for members in blocks.values():
         # glycoforms of different glycosites are separate compositional systems and never contain one another, so containment is decided one site block at a time and never across the full n^2
         m = np.array(members)
-        le = (V[m][:, None, :] <= V[m][None, :, :]).all(2)
-        # equal compositions are ordered by position, which makes the order total and the DAG acyclic
+        # composition dominance is only a necessary condition for containment, so where sequences are known the real relation is used: it keeps Man5 out of the ancestry of complex glycoforms, whose alpha1-2 mannoses are trimmed rather than extended
+        le = np.array([[subgraph_isomorphism(struct[cols[b]], struct[cols[a]]) for b in m] for a in m]) if all(cols[k] in struct for k in m) else (V[m][:, None, :] <= V[m][None, :, :]).all(2)
+        # equal parts are ordered by position, which makes the order total and the DAG acyclic
         M = le & (~le.T | (m[:, None] < m[None, :]))
         if A is not None:
             # p contained in c implies every glycoform counted toward c is counted toward p, hence abundance dominance is a necessary condition and an exact prefilter
-            M &= (A[m][None, :, :] <= A[m][:, None, :] + 1e-9).all(2)
+            a = A[m]
+            seen_both = ~np.isnan(a)[None, :, :] & ~np.isnan(a)[:, None, :]
+            M &= np.where(seen_both, a[None, :, :] <= a[:, None, :] + 1e-9, True).all(
+                2)  # a sample in which a part was never measured is no evidence against dominance; comparing against NaN silently deletes every edge at any glycosite that is not observed everywhere
         np.fill_diagonal(M, False)
         dag.add_edges_from((cols[m[i]], cols[m[j]]) for i, j in zip(*np.nonzero(M)))
     return nx.transitive_reduction(dag)

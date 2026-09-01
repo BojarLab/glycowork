@@ -105,7 +105,7 @@
 
 #### processing
 ##### Added ✨
-- Universal Input/`canonicalize_iupac` now also supports pGlyco nomenclature, via the new `pglyco_to_iupac` parser ()
+- Universal Input/`canonicalize_iupac` now also supports pGlyco nomenclature, via the new `pglyco_to_iupac` parser (6210565)
 - Universal Input/`canonicalize_iupac` now supports conversion of SMILES into IUPAC-condensed (3819f4e)
 
 ##### Changed 🔄

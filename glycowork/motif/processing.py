@@ -1625,12 +1625,19 @@ def parse_glycoform(glycoform: str | dict[str, int], # Composition in H5N4F1A2 f
     return components | infer_features_from_composition(components)
 
 
-def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composition index
+def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composition or protein_site_glycan index
                            ) -> tuple[pd.DataFrame, list[str]]: # (Modified dataset with new columns for protein_site, composition, and composition counts, glycan features)
-    "Extract and format compositions in glycoproteomics dataset"
+    "Extract and format compositions in glycoproteomics dataset, deriving glycan features from the structure wherever one is given"
+    from glycowork.motif.graph import subgraph_isomorphism
+    from glycowork.motif.tokenization import glycan_to_composition
     df = df.copy()
     df['Glycosite'] = ['_'.join(k.split('_')[:-1]) for k in df.index]
-    if '[' in df.index[0]:
+    seqs = None
+    if '(' in str(df.index[0]) and not is_composition(str(df.index[0]).rpartition('_')[-1]):  # has to be tested before the bracket branch, since any branched IUPAC string contains '['
+        seqs = [str(k).rpartition('_')[-1] for k in df.index]
+        df['Glycoform'] = [glycan_to_composition(s) for s in seqs]
+        glycan_features = sorted(set(unwrap([list(c.keys()) for c in df.Glycoform])))
+    elif '[' in df.index[0]:
         comps = ['['+k.split('[')[1] for k in df.index]
         comps = [list(map(int, re.findall(r'\d+', s))) for s in comps]
         df['Glycoform'] = [f'H{c[0]}N{c[1]}F{c[3]}A{c[2]}' for c in comps]
@@ -1640,12 +1647,24 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
         glycan_features = sorted(set(unwrap([list(c.keys()) for c in df.Glycoform])))
     org_cols = df.columns.tolist()
     df = df.join(df['Glycoform'].apply(parse_glycoform, glycan_features = glycan_features).apply(pd.Series))
+    if seqs is not None:
+        # the composition heuristics are only a stand-in for these, and core versus antennary fucose has no composition-level expression at all
+        ant = [subgraph_isomorphism(s, 'GlcNAc(b1-2)Man') for s in seqs]
+        arm = [subgraph_isomorphism(s, 'Man(a1-?)Man(a1-?)Man') for s in seqs]
+        core_f = [subgraph_isomorphism(s, 'Fuc(a1-6)GlcNAc') for s in seqs]
+        df['high_Man'] = [int(not a) for a in ant]
+        df['hybrid'] = [int(a and m) for a, m in zip(ant, arm)]
+        df['complex'] = [int(a and not m) for a, m in zip(ant, arm)]
+        df['core_Fuc'] = [int(c) for c in core_f]
+        df['antennary_Fuc'] = [max(0, c.get('dHex', 0) - int(f)) for c, f in zip(df.Glycoform, core_f)]
+        df['bisecting'] = [int(subgraph_isomorphism(s, 'GlcNAc(b1-4)Man(b1-4)')) for s in seqs]
     return df, [c for c in df.columns if c not in org_cols]
 
 
 def is_composition(s: str # Either glycan or composition string
                    ) -> bool: # Whether the input is a composition
-    return bool(s and s.isalnum() and s[-1].isdigit())
+    s = str(s).strip()
+    return bool(s and s.replace(' ', '').isalnum() and s[-1].isdigit())
 
 
 def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature

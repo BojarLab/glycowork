@@ -126,6 +126,9 @@ def preprocess_data(
             df.iloc[0, 0], "N")) and len(df) > 50 else "CLR"
     if transform not in ("ALR", "CLR", "Nothing"):
         raise ValueError("Only ALR and CLR are valid transforms for now.")
+    if motifs and glycoproteomics:
+        raise ValueError(
+            "motifs and glycoproteomics cannot be combined: the motif path replaces df with run-wide motif abundances and never applies the per-glycosite closure, so glycoproteomics would be silently ignored. For now, quantify motifs per glycosite yourself and pass the result with glycoproteomics = True instead.")
     if motifs or glycoproteomics:
         pass  # both cases overwrite df below with their own transform, so running the run-wide one here only pays for ALR's O(features) Procrustes search and, for glycoproteomics, would close over a simplex that does not exist
     elif transform == "ALR":
@@ -996,12 +999,17 @@ def get_differential_expression(
             parts = np.vstack([kv, np.clip(resid, 0, None)])
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
+            # A balance is only defined in a sample where every part was measured; a structurally missing cell is not a zero, and leaving it in makes the whole row's std NaN, fails the variance filter, and empties bal
+            obs = ~np.isnan(parts).any(axis = 0)
+            cols_b = [c for k in range(len(g1i)) if obs[g1i[k]] and obs[g2i[k]] for c in
+                      (g1i[k], g2i[k])] if paired else [c for c in g1i + g2i if obs[c]]
+            b1, b2 = [k for k, c in enumerate(cols_b) if c in g1i], [k for k, c in enumerate(cols_b) if c in g2i]
             # Children and residual sum to the parent, so they are a genuine sub-composition; subtracting one part gives its additive logratio, which is the isometric test in disguise (Hotelling's T2 is affine-invariant) and drops the evenness direction that dividing by the parent leaves behind
-            bal = np.log2(parts + 0.0000001)
+            bal = np.log2(parts[:, cols_b] + 0.0000001)
             bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
-            bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9]
-            bal_p = hotellings_t2(bal[:, g1i].T, bal[:, g2i].T, paired = paired)[1] if 0 < len(bal) < min(len(group1),
-                                                                                                          len(group2)) else np.nan
+            bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
+            bal_p = hotellings_t2(bal[:, b1].T, bal[:, b2].T, paired = paired)[1] if 0 < len(bal) < min(len(b1),
+                                                                                                        len(b2)) else np.nan
             explained = ', '.join((f'{c} ({fc[c] - fc[p]:+.2f})' if p in fc else c) for c in kids if c in fc)
             if (resid <= 1e-6).all():
                 rows[p] = (explained, 1.0, 0.0,
@@ -1259,11 +1267,15 @@ def get_glycanova(
             parts = np.vstack([kv, np.clip(resid, 0, None)])
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
-            bal = np.log2(parts + 0.0000001)
+            # A balance is only defined in a sample where every part was measured; a structurally missing cell is not a zero, and leaving it in makes the whole row's std NaN, fails the variance filter, and empties bal
+            obs = ~np.isnan(parts).any(axis = 0)
+            grp_b = garr[obs].tolist()
+            bal = np.log2(parts[:, obs] + 0.0000001)
             bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
-            bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9]
-            bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), group_labels = groups, permutations = 999)[1] if len(
-                bal) else np.nan
+            bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and obs.sum() > 1 else bal[:0]
+            bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), group_labels = grp_b,
+                                               permutations = 999)[1] if len(
+                bal) and len(set(grp_b)) > 1 else np.nan
             explained = ', '.join((f'{c} ({eff[c] - eff[p]:+.2f})' if p in eff else c) for c in kids if c in eff)
             if (resid <= 1e-6).all():
                 rows[p] = (explained, 1.0, 0.0,
