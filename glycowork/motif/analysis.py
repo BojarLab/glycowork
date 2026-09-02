@@ -311,7 +311,8 @@ def get_pvals_motifs(
             kids = [c for c in dag.successors(p) if c in idx]
             kv = F[[idx[c] for c in kids]]
             resid = F[idx[p]] - kv.sum(axis = 0)
-            parts = np.vstack([kv, np.clip(resid, 0, None)])
+            usable = resid > 1e-6  # siblings can double-count a glycan that carries both, so the sum is not bounded by the parent
+            parts = np.vstack([kv, np.where(usable, resid, np.nan)])
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
             # Children and residual sum to the parent, so subtracting one part gives the additive logratio of a genuine sub-composition
@@ -321,13 +322,14 @@ def get_pvals_motifs(
             bal_p = hotellings_t2(bal[:, neg_i].T, bal[:, pos_i].T)[1] if 0 < len(bal) < min(len(pos_i),
                                                                                              len(neg_i)) else np.nan
             explained = ', '.join(f'{c} ({eff[c] - eff[p]:+.2f})' for c in kids)
-            if (resid <= 1e-6).all():
+            okp, okn = usable[pos_i], usable[neg_i]
+            if okp.sum() < 2 or okn.sum() < 2:
                 rows[p] = (explained, 1.0, 0.0,
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
-            r = np.log2(np.clip(resid, 0.0000001, None))
-            rows[p] = (explained, ttest_ind(r[pos_i], r[neg_i], equal_var = False)[1], cohen_d(r[pos_i], r[neg_i])[0],
-                       bal_p)
+            r = np.log2(np.maximum(resid, 0.0000001))
+            rows[p] = (explained, ttest_ind(r[pos_i][okp], r[neg_i][okn], equal_var = False)[1],
+                       cohen_d(r[pos_i][okp], r[neg_i][okn])[0], bal_p)
     # Residuals and balances answer different questions than the marginals, so each is corrected as its own, much smaller family
     cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
     bk = [m for m in rows if not np.isnan(rows[m][3])]
@@ -995,8 +997,10 @@ def get_differential_expression(
             kids = [c for c in dag.successors(p) if c in pos]
             kv = F[[pos[c] for c in kids]]
             resid = F[pos[p]] - kv.sum(axis = 0)
+            # Pairwise dominance does not bound the sum, so a parent with several children can be over-explained; that sample has no residual part at all, and a clipped zero is a fabricated -23 in log space rather than a measurement
+            usable = resid > 1e-6
             # A per-sample scalar cancels from a parent/child logratio, so these balances carry no reference frame and no scale model; alone among the outputs they are pure data
-            parts = np.vstack([kv, np.clip(resid, 0, None)])
+            parts = np.vstack([kv, np.where(usable, resid, np.nan)])
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
             # A balance is only defined in a sample where every part was measured; a structurally missing cell is not a zero, and leaving it in makes the whole row's std NaN, fails the variance filter, and empties bal
@@ -1011,12 +1015,14 @@ def get_differential_expression(
             bal_p = hotellings_t2(bal[:, b1].T, bal[:, b2].T, paired = paired)[1] if 0 < len(bal) < min(len(b1),
                                                                                                         len(b2)) else np.nan
             explained = ', '.join((f'{c} ({fc[c] - fc[p]:+.2f})' if p in fc else c) for c in kids if c in fc)
-            if (resid <= 1e-6).all():
+            ok1, ok2 = usable[g1i], usable[g2i]
+            pair_ok = ok1 & ok2 if paired else None
+            if (pair_ok.sum() < 2) if paired else (ok1.sum() < 2 or ok2.sum() < 2):
                 rows[p] = (explained, 1.0, 0.0,
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
-            r = np.log2(np.clip(resid, 0.0000001, None)) - ref
-            r_a, r_b = r[g1i], r[g2i]
+            r = np.log2(np.maximum(resid, 0.0000001)) - ref
+            r_a, r_b = (r[g1i][pair_ok], r[g2i][pair_ok]) if paired else (r[g1i][ok1], r[g2i][ok2])
             rows[p] = (explained, ttest_rel(r_b, r_a, nan_policy = 'omit')[1] if paired else
             ttest_ind(r_b, r_a, equal_var = False, nan_policy = 'omit')[1],
                        cohen_d(r_b, r_a, paired = paired)[0], bal_p)
@@ -1263,8 +1269,10 @@ def get_glycanova(
             kids = [c for c in dag.successors(p) if c in pos]
             kv = F[[pos[c] for c in kids]]
             resid = F[pos[p]] - kv.sum(axis = 0)
+            # Pairwise dominance does not bound the sum, so a parent with several children can be over-explained; that sample has no residual part at all, and a clipped zero is a fabricated -23 in log space rather than a measurement
+            usable = resid > 1e-6
             # Children and residual sum to the parent, so subtracting one part's log gives the additive logratios of a genuine sub-composition; a one-way PERMANOVA on those balances asks whether the parent redistributes across contexts, free of any reference frame or scale model
-            parts = np.vstack([kv, np.clip(resid, 0, None)])
+            parts = np.vstack([kv, np.where(usable, resid, np.nan)])
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
             # A balance is only defined in a sample where every part was measured; a structurally missing cell is not a zero, and leaving it in makes the whole row's std NaN, fails the variance filter, and empties bal
@@ -1277,12 +1285,13 @@ def get_glycanova(
                                                permutations = 999)[1] if len(
                 bal) and len(set(grp_b)) > 1 else np.nan
             explained = ', '.join((f'{c} ({eff[c] - eff[p]:+.2f})' if p in eff else c) for c in kids if c in eff)
-            if (resid <= 1e-6).all():
+            if min((usable & (garr == g)).sum() for g in levels) < 2:
                 rows[p] = (explained, 1.0, 0.0,
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
-            r = np.log2(np.clip(resid, 0.0000001, None)) - ref
-            rows[p] = (explained, f_oneway(*[r[garr == g] for g in levels])[1], omega_squared(r, groups), bal_p)
+            r = np.log2(np.maximum(resid, 0.0000001)) - ref
+            rows[p] = (explained, f_oneway(*[r[usable & (garr == g)] for g in levels])[1],
+                       omega_squared(r[usable], garr[usable].tolist()), bal_p)
         # Residuals and balances answer different questions than the marginals, so each is corrected as its own, much smaller family
         cp = dict(zip(rows, correct_multiple_testing([v[1] for v in rows.values()], alpha)[0])) if rows else {}
         bk = [m for m in rows if not np.isnan(rows[m][3])]
