@@ -1063,13 +1063,17 @@ def glycoworkbench_to_iupac(glycan: str # Glycan in GlycoWorkBench nomenclature
 def pglyco_to_iupac(glycan: str # Glycan in pGlyco nested-tree nomenclature
                     ) -> str: # Basic IUPAC-condensed format
     "Convert glycan from pGlyco/pGlycoQuant nested-tree nomenclature, such as (N(F)(N(H(H(N(H)))(H(N(H(A))))))), to barebones IUPAC-condensed format, inferring monosaccharides and linkages from their position in the N-glycan"
+    if not _PGLYCO_TREE.fullmatch(glycan) or glycan.count('(') != glycan.count(')') or re.search(r'\((?=[^HNAGF])', glycan):
+        raise ValueError(f"'{glycan}' is not a well-formed pGlyco tree; expected one balanced expression over the tokens H, N, A, G, and F, such as '(N(N(H)))'")
     idx = [0]
+
     def parse():  # each node is written as (X child1 child2 ...), starting from the reducing end
         token, kids, idx[0] = glycan[idx[0]+1], [], idx[0]+2
         while glycan[idx[0]] == '(':
             kids.append(parse())
         idx[0] += 1
         return token, kids
+
     def render(node, mono, ctx):  # identity and linkage of a node are decided by its parent's position in the glycan
         branches, seen = [], []
         for kid in sorted(node[1], key = lambda k: (-len(k[1]), k[0])):
@@ -1079,7 +1083,10 @@ def pglyco_to_iupac(glycan: str # Glycan in pGlyco nested-tree nomenclature
             branches.append(f"{render(kid, kid_mono, kid_ctx)}({link})")
         branches.sort(key = lambda b: (-b.count('('), b))
         return (branches[0] if branches else '') + ''.join(f"[{b}]" for b in branches[1:]) + mono
+
     root = parse()
+    if idx[0] != len(glycan):
+        raise ValueError(f"'{glycan}' holds more than one pGlyco tree; only the leading '{glycan[:idx[0]]}' would be read, so the rest is silently lost")
     return render(root, 'GlcNAc' if root[0] == 'N' else _PGLYCO_MONO[root[0]], 'core0' if root[0] == 'N' else 'end')
 
 
@@ -1348,6 +1355,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
         glycan = glycoctxml_to_iupac(glycan)
     elif looks_like_smiles(glycan):  # SMILES hook
         glycan = smiles_to_iupac(glycan)
+    glycan = re.sub(r'^(?!-)(.*\((?:[abx?]?[12]))-?$', r'\1-?)', glycan)  # a sequence ending in an unterminated linkage keeps it as an open linkage; left alone, the dash is dropped further down and the dangling '(b1' later reads as an extra residue that shifts every main-chain linkage label in GlycoDraw. A repeat unit is exempt: its trailing linkage is closed by the leading one, not open
     # Canonicalize usage of monosaccharides and linkages
     # Anomeric indicator placed before parentheses
     if len(re.findall(r'\(', glycan)) == len(re.findall(r'[βα]\(', glycan)):
@@ -1633,8 +1641,11 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
     df = df.copy()
     df['Glycosite'] = ['_'.join(k.split('_')[:-1]) for k in df.index]
     seqs = None
-    if '(' in str(df.index[0]) and not is_composition(str(df.index[0]).rpartition('_')[-1]):  # has to be tested before the bracket branch, since any branched IUPAC string contains '['
-        seqs = [str(k).rpartition('_')[-1] for k in df.index]
+    tails, seqs = [str(k).rpartition('_')[-1] for k in df.index], None
+    if '(' in tails[0] and not is_composition(tails[0]):  # has to be tested before the bracket branch, since any branched IUPAC string contains '['
+        if bad := [t for t in tails if '(' not in t]:
+            raise ValueError(f"Index mixes sequences with non-sequences ({bad[:3]}); the branch is chosen once for the whole frame, so split it by index type or reduce every row to its composition first.")
+        seqs = tails
         df['Glycoform'] = [glycan_to_composition(s) for s in seqs]
         glycan_features = sorted(set(unwrap([list(c.keys()) for c in df.Glycoform])))
     elif '[' in df.index[0]:

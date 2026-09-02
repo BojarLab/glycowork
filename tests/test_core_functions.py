@@ -4171,23 +4171,28 @@ def test_annotate_figure(mock_svg_file):
 def test_process_per_residue():
     # Test linear glycan
     values = [1, 2, 3]
-    main, side, branched = process_per_residue("Gal(b1-4)GlcNAc(b1-2)Man", values, "Gal(b1-4)GlcNAc(b1-2)Man")
-    assert len(main) == 3
-    assert len(side) == 0
-    assert len(branched) == 0
+    assert process_per_residue("Gal(b1-4)GlcNAc(b1-2)Man", values, "Gal(b1-4)GlcNAc(b1-2)Man") == {0: 1, 2: 2, 4: 3}
     # Test branched glycan
     values = [1, 2, 3, 4]
-    main, side, branched = process_per_residue("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man", values, "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man")
-    assert len(main) > 0
-    assert len(side) > 0
-    assert isinstance(side[0], list)
-    # Test branch-branched glycan
+    assert process_per_residue("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man", values, "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man") == {0: 1, 2: 2, 4: 3, 6: 4}
+    # Test branch-branched glycan; drawing reorders the sequence, so every value has to follow its own residue
     values = [1, 2, 3, 4, 5, 6]
-    main, side, branched = process_per_residue("Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man", values,
-                                               "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)[Gal(b1-4)GlcNAc(b1-2)]Man")
+    assert process_per_residue("Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man", values,
+                               "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)[Gal(b1-4)GlcNAc(b1-2)]Man") == {0: 4, 2: 5, 4: 1, 6: 2, 8: 3, 10: 6}
     # One value per monosaccharide, no more and no less
     with pytest.raises(ValueError):
         process_per_residue("Gal(b1-4)GlcNAc", [0.1], "Gal(b1-4)GlcNAc")
+
+
+def test_glycodraw_per_residue_and_linkage_placement():
+    # Branch levels are ordered by graph traversal, so values placed by position within a level land on the wrong residue or run off the end of a shorter branch
+    deep = "Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-4/6)]Man(a1-3/6)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert GlycoDraw(deep, per_residue = list(range(1, deep.count('(') + 2)), suppress = True).as_svg()
+    # Every linkage of the sequence reaches exactly the bond it belongs to, the ones inside a branch included
+    branched = "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    for k in range(branched.count('(')):
+        svg = GlycoDraw(branched, highlight_linkages = [k], suppress = True).as_svg()
+        assert len([p for p in re.findall(r'<path[^>]*>', svg) if 'snfg-linkage' in p and '#C23537' in p]) == 1
 
 
 try:

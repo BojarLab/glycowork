@@ -405,6 +405,7 @@ def get_composition_dag(
         abundances: pd.DataFrame | None = None # Glycoforms x samples abundances, used as an exact prefilter for containment
 ) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is contained in child
     "Builds the containment DAG of a glycoform set, ordering parts by substructure containment where sequences are given and by component-wise composition dominance otherwise"
+    from glycowork.motif.tokenization import glycan_to_composition
     comp, site, struct = {}, {}, {}
     for c in compositions:
         pre, _, tail = str(c).rpartition('_')  # glycoproteomics indices carry a protein_site prefix
@@ -415,7 +416,7 @@ def get_composition_dag(
                 continue  # labels that do not parse as a composition have no place in the DAG
         else:
             try:
-                struct[c], site[c] = glycan_to_nxGraph(tail), pre  # canonicalize_composition does not raise on a sequence, it returns a nonsense residue vector, so sequences have to be routed here before it is ever called on them
+                comp[c], struct[c], site[c] = glycan_to_composition(tail), glycan_to_nxGraph(tail), pre  # canonicalize_composition does not raise on a sequence, it returns a nonsense residue vector, so sequences have to be routed here before it is ever called on them; they still need a composition vector, since a sequence without one is an all-zero row that every composition dominates and so would become the ancestor of everything in a mixed block
             except Exception:
                 continue
     cols = list(site)
@@ -431,7 +432,11 @@ def get_composition_dag(
         # glycoforms of different glycosites are separate compositional systems and never contain one another, so containment is decided one site block at a time and never across the full n^2
         m = np.array(members)
         # composition dominance is only a necessary condition for containment, so where sequences are known the real relation is used: it keeps Man5 out of the ancestry of complex glycoforms, whose alpha1-2 mannoses are trimmed rather than extended
-        le = np.array([[subgraph_isomorphism(struct[cols[b]], struct[cols[a]]) for b in m] for a in m]) if all(cols[k] in struct for k in m) else (V[m][:, None, :] <= V[m][None, :, :]).all(2)
+        le = (V[m][:, None, :] <= V[m][None, :, :]).all(2)
+        if all(cols[k] in struct for k in m):
+            for i, j in zip(*np.nonzero(le)):
+                if i != j:
+                    le[i, j] = subgraph_isomorphism(struct[cols[m[j]]], struct[cols[m[i]]])
         # equal parts are ordered by position, which makes the order total and the DAG acyclic
         M = le & (~le.T | (m[:, None] < m[None, :]))
         if A is not None:

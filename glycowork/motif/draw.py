@@ -1068,8 +1068,8 @@ def process_per_residue(
         draw_this: str, # reordered IUPAC-condensed glycan sequence
         per_residue: list[float], # Scalar values per residue
         glycan: str, # original IUPAC-condensed glycan sequence
-) -> tuple:  # (main chain values, then one list of branch values per branch level, at least two)
-    "Maps per-residue scalar values to the main chain and to the branches of every level"
+) -> dict[int, float]: # Value per sugar node of the drawn sequence
+    "Maps per-residue scalar values onto the sugar nodes of the drawn sequence"
     temp = re.sub(r'\([^)]*\)', 'x', re.sub(r'[^\[\]()]', '', draw_this)) + 'x'
     if temp.count('x') != len(per_residue):
         raise ValueError(
@@ -1079,55 +1079,22 @@ def process_per_residue(
         g2 = glycan_to_nxGraph(draw_this)
         _, mappy = compare_glycans(g2, g1, return_matches = True)
         per_residue = [per_residue[mappy[i * 2] // 2] for i in range(len(per_residue))]
-    main_chain_indices, lv_indices, stack = [], [], []
-    idx = 0
-    for char in temp:
-        if char == '[':
-            stack.append([])
-        elif char == ']':
-            while len(lv_indices) < len(stack):
-                lv_indices.append([])
-            lv_indices[len(stack) - 1].append(stack.pop())
-        elif char == 'x':
-            if stack:
-                stack[-1].append(per_residue[idx])
-            else:
-                main_chain_indices.append(per_residue[idx])
-            idx += 1
-    lv_indices = [[k[::-1] for k in level if k] for level in lv_indices]
-    return (main_chain_indices[::-1], *lv_indices, *[[]] * max(0, 2 - len(lv_indices)))
+    return {i * 2: v for i, v in enumerate(per_residue)}
 
 
 def process_per_linkage(
         draw_this: str, # reordered IUPAC-condensed glycan sequence
         highlight_linkages: list[int], # Which linkages to highlight
         glycan: str, # original IUPAC-condensed glycan sequence
-) -> tuple:  # (main chain values, then one list of branch values per branch level, at least two)
-    "Maps which linkages to highlight to the main chain and to the branches of every level"
+) -> dict[int, bool]: # Flag per linkage node of the drawn sequence
+    "Maps which linkages to highlight onto the linkage nodes of the drawn sequence"
     per_linkage = [i in highlight_linkages for i in range(glycan.count('('))]
     if glycan != draw_this:
         g1 = glycan_to_nxGraph(glycan)
         g2 = glycan_to_nxGraph(draw_this)
         _, mappy = compare_glycans(g2, g1, return_matches = True)
-        per_linkage = [per_linkage[mappy[i*2]//2] for i in range(len(per_linkage))]
-    temp = re.sub(r'\([^)]*\)', 'x', re.sub(r'[^\[\]()]', '', draw_this)) + 'x'
-    main_chain_indices, lv_indices, stack = [], [], []
-    idx = 0
-    for char in temp[:-1]:
-        if char == '[':
-            stack.append([])
-        elif char == ']':
-            while len(lv_indices) < len(stack):
-                lv_indices.append([])
-            lv_indices[len(stack) - 1].append(stack.pop())
-        elif char == 'x':
-            if stack:
-                stack[-1].append(per_linkage[idx])
-            else:
-                main_chain_indices.append(per_linkage[idx])
-            idx += 1
-    lv_indices = [[k[::-1] for k in level if k] for level in lv_indices]
-    return (main_chain_indices[::-1], *lv_indices, *[[]] * max(0, 2 - len(lv_indices)))
+        per_linkage = [per_linkage[mappy[i * 2] // 2] for i in range(len(per_linkage))]
+    return {i * 2 + 1: v for i, v in enumerate(per_linkage)}
 
 
 mono_list = ['Glc', 'GlcNAc', 'GlcA', 'Man', 'ManNAc', 'Gal', 'GalNAc', 'Gul', 'GulNAc',
@@ -1399,9 +1366,9 @@ def GlycoDraw(
         graph_to_string(glycan_to_nxGraph(glycan[cut:]), order_by = "linkage") if not glycan[cut:].startswith(
             '[') else glycan[cut:])
     if per_residue:
-        main_per_residue, *lv_per_residue = process_per_residue(draw_this, per_residue, glycan)
+        per_residue_by_node = process_per_residue(draw_this, per_residue, glycan)
     if highlight_linkages:
-        main_per_linkage, *lv_per_linkage = process_per_linkage(draw_this, highlight_linkages, glycan)
+        per_linkage_by_node = process_per_linkage(draw_this, highlight_linkages, glycan)
     if compact:
         show_linkage = False
     if isinstance(highlight_motif, str):
@@ -1427,9 +1394,10 @@ def GlycoDraw(
         else:
             raise ValueError('Method not supported. Please choose between "chem2d" and "chem3d".')
     # Handle floaty bits if present
-    floaty_bits, anchored_bits = [], []
+    floaty_bits, anchored_bits, node_shift = [], [], 0
     for openpos, closepos, _ in get_matching_indices(draw_this, opendelim = '{', closedelim = '}'):
         bit = draw_this[openpos:closepos]
+        node_shift += 2 * bit.count('(')  # the values were indexed against the string that still carried these bits, so the nodes they contributed have to be added back when reading them
         if '^' in bit:
             fragment, bit_anchors = parse_floating_bit(bit)
             anchored_bits.append((f"{fragment}blank", bit_anchors))
@@ -1450,6 +1418,9 @@ def GlycoDraw(
             raise Exception('Did you enter a real glycan or motif?')
     data = get_coordinates_and_labels(draw_this, highlight_motif = highlight_motif, termini_list = highlight_termini_list, reverse_highlight  = reverse_highlight)
     main_sugar, main_sugar_x_pos, main_sugar_y_pos, main_sugar_modification, main_bond, main_conf, main_sugar_label, main_bond_label = data[0]
+    # Branch levels are ordered by graph traversal but per-residue/per-linkage values arrive in sequence order, so they are placed by node rather than by position in a level
+    node_positions = data[-1]
+    node_at = {v: k + node_shift for k, v in node_positions.items()}
     lv_sugar, lv_x_pos, lv_y_pos, lv_sugar_modification, lv_bond, lv_connection, lv_conf, lv_sugar_label, lv_bond_label = map(
         list, zip(*data[1:-1]))
     if not show_linkage:
@@ -1509,32 +1480,35 @@ def GlycoDraw(
         y_base = label_y * dim * (0.6 if compact else 1) + 5
         d.append(draw.Text(reducing_end_label, dim * 0.35, x_base, y_base, text_anchor = 'end', fill = col_dict['black'], dominant_baseline = 'middle'))
     # Bond main chain
-    [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k+1], main_sugar_y_pos[k], d, label = main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = main_per_linkage[k] if highlight_linkages else False) for k in range(len(main_sugar)-1)]
+    [add_bond(main_sugar_x_pos[k+1], main_sugar_x_pos[k], main_sugar_y_pos[k + 1], main_sugar_y_pos[k], d, label = main_bond[k], dim = dim, compact = compact, highlight = main_bond_label[k], color_highlight = per_linkage_by_node.get(node_at[(0, 0, k + 1)] + 1, False) if highlight_linkages else False) for k in range(len(main_sugar) - 1)]
     # Bond within each branch, at every branch level; level 1 also connects to the main chain
     for lvl in range(len(lv_sugar)):
         [add_bond(lv_x_pos[lvl][b_idx][s_idx + 1], lv_x_pos[lvl][b_idx][s_idx], lv_y_pos[lvl][b_idx][s_idx + 1],
                   lv_y_pos[lvl][b_idx][s_idx], d, label = lv_bond[lvl][b_idx][s_idx + 1], dim = dim, compact = compact,
                   highlight = lv_bond_label[lvl][b_idx][s_idx + 1],
-                  color_highlight = lv_per_linkage[lvl][b_idx][s_idx + 1] if highlight_linkages and lvl < len(
-                      lv_per_linkage) else False) for b_idx in range(len(lv_sugar[lvl])) for s_idx in
-         range(len(lv_sugar[lvl][b_idx]) - 1)]
+                  color_highlight = per_linkage_by_node.get(node_at[(lvl + 1, b_idx, s_idx + 1)] + 1,
+                                                            False) if highlight_linkages else False) for b_idx in
+         range(len(lv_sugar[lvl])) for s_idx in range(len(lv_sugar[lvl][b_idx]) - 1)]
         if not lvl:
             [add_bond(lv_x_pos[0][k][0], main_sugar_x_pos[lv_connection[0][k][1]], lv_y_pos[0][k][0],
                       main_sugar_y_pos[lv_connection[0][k][1]], d, label = lv_bond[0][k][0], dim = dim,
                       compact = compact, highlight = lv_bond_label[0][k][0],
-                      color_highlight = lv_per_linkage[0][k][0] if highlight_linkages and lv_per_linkage else False) for
+                      color_highlight = per_linkage_by_node.get(node_at[(1, k, 0)] + 1,
+                                                                False) if highlight_linkages else False) for
              k in range(len(lv_sugar[0]))]
     # Bond each deeper branch to the branch it sits on
     for lvl in range(1, len(lv_sugar)):
         [add_bond(lv_x_pos[lvl][k][0], lv_x_pos[lvl - 1][lv_connection[lvl][k][0]][lv_connection[lvl][k][1]],
                   lv_y_pos[lvl][k][0], lv_y_pos[lvl - 1][lv_connection[lvl][k][0]][lv_connection[lvl][k][1]], d,
                   label = lv_bond[lvl][k][0], dim = dim, compact = compact, highlight = lv_bond_label[lvl][k][0],
-                  color_highlight = lv_per_linkage[lvl][k][0] if highlight_linkages and lvl < len(
-                      lv_per_linkage) else False) for k in range(len(lv_sugar[lvl]))]
+                  color_highlight = per_linkage_by_node.get(node_at[(lvl + 1, k, 0)] + 1,
+                                                            False) if highlight_linkages else False) for k in
+         range(len(lv_sugar[lvl]))]
     # Sugar main chain
     [add_sugar(main_sugar[k], d, x_pos = main_sugar_x_pos[k], y_pos = main_sugar_y_pos[k],
                modification = main_sugar_modification[k], conf = main_conf[k], compact = compact, dim = dim,
-               deg = main_deg[k], highlight = main_sugar_label[k], scalar = main_per_residue[k] if per_residue else 0)
+               deg = main_deg[k], highlight = main_sugar_label[k],
+               scalar = per_residue_by_node.get(node_at[(0, 0, k)], 0) if per_residue else 0)
      for k in range(len(main_sugar))]
     # Sugar of every branch level
     for lvl in range(len(lv_sugar)):
@@ -1542,7 +1516,7 @@ def GlycoDraw(
                    y_pos = lv_y_pos[lvl][b_idx][s_idx], modification = lv_sugar_modification[lvl][b_idx][s_idx],
                    conf = lv_conf[lvl][b_idx][s_idx], compact = compact, dim = dim, deg = lv_deg[lvl][b_idx][s_idx],
                    highlight = lv_sugar_label[lvl][b_idx][s_idx],
-                   scalar = lv_per_residue[lvl][b_idx][s_idx] if per_residue and lvl < len(lv_per_residue) else 0) for
+                   scalar = per_residue_by_node.get(node_at[(lvl + 1, b_idx, s_idx)], 0) if per_residue else 0) for
          b_idx in range(len(lv_sugar[lvl])) for s_idx in range(len(lv_sugar[lvl][b_idx]))]
     highlight = 'show' if highlight_motif == None else 'hide'
     if floaty_bits != []:
@@ -1577,7 +1551,6 @@ def GlycoDraw(
     if anchored_bits:
         # Dashed connectors point at symbols that are already on the canvas, so collect them separately and splice them in underneath, instead of letting them paint over the monosaccharides
         anchor_layer = draw.Group()
-        node_positions = data[-1]
         lanes = [(main_sugar_x_pos, main_sugar_y_pos)] + list(zip(lv_x_pos, lv_y_pos))
         occupied = {(round(x), round(y)) for x, y in zip(main_sugar_x_pos, main_sugar_y_pos)}
         occupied |= {(round(x), round(y)) for xs, ys in
