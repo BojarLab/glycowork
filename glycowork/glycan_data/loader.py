@@ -64,6 +64,10 @@ class GlycoDataFrame(pd.DataFrame):
             return GlycoList(list(self[col]))
         if self.index.dtype != float and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
             return GlycoList(list(self.index))
+        first = [v for v in self.iloc[:, 0] if isinstance(v, str)]
+        cols = [c for c in self.columns if isinstance(c, str) and '(' in c]
+        if len(cols) > sum(1 for v in first if '(' in v):
+            return GlycoList(cols)
         return GlycoList(list(self.iloc[:, 0]))
 
     @property
