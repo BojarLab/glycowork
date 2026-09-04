@@ -1831,6 +1831,18 @@ def test_canonicalize_composition():
     result = canonicalize_composition("H2N2S1Sul1")
     assert result["S"] == 1
     assert result["Neu5Ac"] == 1
+    # Test canonical string output, in fixed residue order regardless of input order/format
+    assert canonicalize_composition("H5N4F1A2", as_string = True) == "H5N4F1A2"
+    assert canonicalize_composition("Hex5HexNAc4Fuc1Neu5Ac2", as_string = True) == "H5N4F1A2"
+    assert canonicalize_composition("N2H1F3A1", as_string = True) == "H1N2F3A1"
+    assert canonicalize_composition("9_2_0_0", as_string = True) == "H9N2"
+    assert canonicalize_composition("9 2 0 1 0", as_string = True) == "H9N2G1"
+    # Sulfate stays S, sialic acid becomes A, and residues without a single-letter code keep their name
+    assert canonicalize_composition("H2N2S1Sulf1", as_string = True) == "H2N2A1S1"
+    assert canonicalize_composition("Hex3HexNAc2Pent1", as_string = True) == "H3N2Pen1"
+    # Zero counts are dropped and the string parses back to the same dictionary
+    assert canonicalize_composition("Hex5HexNAc4Fuc0", as_string = True) == "H5N4"
+    assert canonicalize_composition(canonicalize_composition("Hex5HexNAc4Fuc1Neu5Ac2", as_string = True)) == canonicalize_composition("Hex5HexNAc4Fuc1Neu5Ac2")
 
 
 def test_parse_glycoform():

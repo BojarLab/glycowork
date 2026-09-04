@@ -45,6 +45,8 @@ _CODE_TO_NAME = {'H': 'Hex', 'N': 'HexNAc', 'F': 'dHex', 'A': 'Neu5Ac', 'G': 'Ne
                  'Neu5Ac': 'Neu5Ac', 'NeuAc': 'Neu5Ac', 'NeuNAc': 'Neu5Ac', 'HexNac': 'HexNAc', 'HexNc': 'HexNAc', 'hex': 'Hex',
                  'Su': 'S', 's': 'S', 'Sul': 'S', 'p': 'P', 'Pent': 'Pen', 'Xyl': 'Pen', 'Man': 'Hex', 'GlcNAc': 'HexNAc', 'Deoxyhexose': 'dHex'}
 _SULFATE_CODES = frozenset({'Su', 's', 'Sul'})
+_NAME_TO_CODE = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G', 'HexA': 'HexA', 'Pen': 'Pen', 'S': 'S', 'P': 'P'}
+_COMP_ORDER = {k: i for i, k in enumerate(_NAME_TO_CODE)}
 _CLASS_POOLS = {
     'O': 'GalNAc|GalNAcOS|GalNAc[46]S|Man|Fuc|Gal|GlcNAc|GlcNAcOS|GlcNAc6S',
     'N': 'GlcNAc',
@@ -331,56 +333,60 @@ def get_class(glycan: str # Glycan in IUPAC-condensed nomenclature
     return ''
 
 
-def canonicalize_composition(comp: str # Composition in Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2 format
-                             ) -> dict[str, int]: # Dictionary of monosaccharide:count
-    "Converts composition from any common format to standardized dictionary"
+def canonicalize_composition(comp: str, # Composition in Hex5HexNAc4Fuc1Neu5Ac2 or H5N4F1A2 format
+                             as_string: bool = False # Whether to return canonical shorthand string (e.g., "H5N4F1A2") instead of dictionary
+                             ) -> dict[str, int] | str: # Dictionary of monosaccharide:count, or canonical shorthand string if as_string
+    "Converts composition from any common format to standardized dictionary or canonical shorthand string"
     if '_' in comp:
         values = comp.split('_')
         temp = {"Hex": int(values[0]), "HexNAc": int(values[1]), "Neu5Ac": int(values[2]), "dHex": int(values[3])}
-        return {k: v for k, v in temp.items() if v}
+        comp_dict = {k: v for k, v in temp.items() if v}
     elif comp.isdigit():
         temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
-        return {k: v for k, v in temp.items() if v}
+        comp_dict = {k: v for k, v in temp.items() if v}
     elif comp[0].isdigit():
         comp = comp.replace(' ', '')
         if len(comp) < 5:
             temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
         else:
             temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "Neu5Gc": int(comp[3]), "dHex": int(comp[4])}
-        return {k: v for k, v in temp.items() if v}
-    comp_dict = {}
-    i = 0
-    comp = multireplace(comp, {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", '(': '', ')': '', ' ': '', '+': ''})
-    n = len(comp)
-    explicit_sulfate = 0
-    while i < n:
-        # Code initialization
-        code = ''
-        # Read until you hit a number or the end of the string
-        while i < n and not comp[i].isdigit():
-            code += comp[i]
-            i += 1
-        # Initialize a variable to hold the number of occurrences
-        num = 0
-        # Parse the number following the code
-        while i < n and comp[i].isdigit():
-            num = num * 10 + int(comp[i])
-            i += 1
-        # Map code to full name and store in dictionary
-        name = _CODE_TO_NAME.get(code, code)
-        if name in comp_dict:
-            comp_dict[name] += num
-        else:
-            comp_dict[name] = num
-        if code in _SULFATE_CODES:
-            explicit_sulfate += num
-    sulfate_from_sulf = comp_dict.pop('Sulf', 0)
-    total_sulfate = explicit_sulfate + sulfate_from_sulf
-    if total_sulfate:
-        sialic = comp_dict.get('S', 0) - explicit_sulfate
-        if sialic > 0:
-            comp_dict['Neu5Ac'] = sialic + comp_dict.get('Neu5Ac', 0)
-        comp_dict['S'] = total_sulfate
+        comp_dict = {k: v for k, v in temp.items() if v}
+    else:
+        comp_dict = {}
+        i = 0
+        comp = multireplace(comp, {"Neu5Ac": "NeuAc", "Neu5Gc": "NeuGc", '(': '', ')': '', ' ': '', '+': ''})
+        n = len(comp)
+        explicit_sulfate = 0
+        while i < n:
+            # Code initialization
+            code = ''
+            # Read until you hit a number or the end of the string
+            while i < n and not comp[i].isdigit():
+                code += comp[i]
+                i += 1
+            # Initialize a variable to hold the number of occurrences
+            num = 0
+            # Parse the number following the code
+            while i < n and comp[i].isdigit():
+                num = num * 10 + int(comp[i])
+                i += 1
+            # Map code to full name and store in dictionary
+            name = _CODE_TO_NAME.get(code, code)
+            if name in comp_dict:
+                comp_dict[name] += num
+            else:
+                comp_dict[name] = num
+            if code in _SULFATE_CODES:
+                explicit_sulfate += num
+        sulfate_from_sulf = comp_dict.pop('Sulf', 0)
+        total_sulfate = explicit_sulfate + sulfate_from_sulf
+        if total_sulfate:
+            sialic = comp_dict.get('S', 0) - explicit_sulfate
+            if sialic > 0:
+                comp_dict['Neu5Ac'] = sialic + comp_dict.get('Neu5Ac', 0)
+            comp_dict['S'] = total_sulfate
+    if as_string:
+        return ''.join(f"{_NAME_TO_CODE.get(k, k)}{v}" for k, v in sorted(comp_dict.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])) if v)
     return comp_dict
 
 

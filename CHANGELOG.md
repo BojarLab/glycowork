@@ -42,7 +42,7 @@
 - `replace_outliers_winsorization` now takes in the entire `df` as input, instead of only one `row` (5483f3c)
 - `replace_outliers_winsorization`, `omega_squared`, and `permanova_with_permutation` are now much faster (5483f3c, 0b0085c)
 - `mahalanobis_distance` can now properly account for paired data as well (f5ba41f)
-- `clr_transformation` now tolerates being called with the glycan column still present in the input dataframe ()
+- `clr_transformation` now tolerates being called with the glycan column still present in the input dataframe (2dc567e)
 
 ##### Fixed 🐛
 - `hsic` is now correctly symmetrical (7bf463b)
@@ -108,6 +108,7 @@
 ##### Added ✨
 - Universal Input/`canonicalize_iupac` now also supports pGlyco nomenclature, via the new `pglyco_to_iupac` parser (6210565)
 - Universal Input/`canonicalize_iupac` now supports conversion of SMILES into IUPAC-condensed (3819f4e)
+- `canonicalize_composition` now has the new `as_string` keyword argument, which outputs canonicalized compositions of the type `H5N4F1A2` instead of dictionaries ()
 
 ##### Changed 🔄
 - `de_wildcard_glycoletter` now also supports narrow monosaccharide wildcards like `Gal/Glc` (5483f3c)
