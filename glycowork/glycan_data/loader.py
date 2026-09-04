@@ -77,6 +77,9 @@ class GlycoDataFrame(pd.DataFrame):
             return self.drop(columns = col)
         if self.index.dtype != float and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
             return self
+        cols = [c for c in self.columns if isinstance(c, str) and '(' in c]
+        if len(cols) > sum(1 for v in self.iloc[:, 0] if isinstance(v, str) and '(' in v):
+            return self[cols].T  # the transposed layout .glycans now recognizes; every other branch hands back glycans as rows
         return self.iloc[:, 1:]
 
     @property
@@ -149,9 +152,12 @@ class GlycoDataFrame(pd.DataFrame):
         from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
         if isinstance(motif, str) and (hit := resolve_motif_name(motif)) is not None:
             motif, termini_list = hit[0], termini_list or hit[1]
-        indices = [i for i, g in enumerate(self.glycans) if
+        glycans = list(self.glycans)
+        indices = [i for i, g in enumerate(glycans) if
                    isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list = termini_list, count = True) >= (
                        1 if min_count is None else min_count)]
+        if not self._glycan_col and glycans == [c for c in self.columns if isinstance(c, str) and '(' in c]:
+            return self[[glycans[i] for i in indices]]  # a transposed frame keeps its glycans in the columns, so .glycans enumerates that axis and slicing rows would return unrelated samples
         return self.iloc[indices, :].reset_index(drop = True)
 
     def meta_filter(self, narrow: bool = True,

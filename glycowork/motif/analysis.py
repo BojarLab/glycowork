@@ -316,11 +316,14 @@ def get_pvals_motifs(
             parts = parts[(parts > 1e-6).any(
                 axis = 1)]  # a part that never occurs is not in the sub-composition and cannot redistribute
             # Children and residual sum to the parent, so subtracting one part gives the additive logratio of a genuine sub-composition
-            bal = np.log2(parts + 0.0000001)
+            # A balance is only defined in a glycan where every part was measured; leaving the NaN in makes that row's std NaN, so the residual direction silently drops out of the very test it belongs to
+            obs = ~np.isnan(parts).any(axis = 0)
+            cols_b = np.where(obs)[0]
+            bal = np.log2(parts[:, cols_b] + 0.0000001)
             bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
-            bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9]
-            bal_p = hotellings_t2(bal[:, neg_i].T, bal[:, pos_i].T)[1] if 0 < len(bal) < min(len(pos_i),
-                                                                                             len(neg_i)) else np.nan
+            bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
+            bp_i, bn_i = np.where(pos[cols_b])[0], np.where(neg[cols_b])[0]
+            bal_p = hotellings_t2(bal[:, bn_i].T, bal[:, bp_i].T)[1] if 0 < len(bal) < min(len(bp_i), len(bn_i)) else np.nan
             explained = ', '.join(f'{c} ({eff[c] - eff[p]:+.2f})' for c in kids)
             okp, okn = usable[pos_i], usable[neg_i]
             if okp.sum() < 2 or okn.sum() < 2:
@@ -366,7 +369,7 @@ def get_representative_substructures(
                    enrichment_df[enrichment_df.corr_pval < 0.05]).reset_index(drop = True)
     if filtered_df.empty:
         return []
-    log_pvals = -np.log10(filtered_df.pval.values)
+    log_pvals = -np.log10(np.maximum(filtered_df.pval.values.astype(float), 1e-300))  # an underflowed p-value of exactly 0 makes max_log_pval infinite and every weight inf/inf, i.e. nan
     max_log_pval = np.max(log_pvals) or 1
     weights = log_pvals / max_log_pval
     motifs = filtered_df.motif.values.tolist()
@@ -434,8 +437,8 @@ def get_heatmap(
         df = df.T
     df = df.fillna(0)
     if transform:
-        df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(
-            1e-6)
+        df = df[(df > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * df.shape[1]), 1])]
+        df = df.replace(0, 1e-6)
     if motifs:
         if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
             raise ValueError("A heatmap needs to have at least two motifs.")
@@ -582,6 +585,8 @@ def characterize_monosaccharide(
     cou = Counter(pool).most_common()
     filtered_items = [(item, count) for item, count in cou if count > thresh]
     cou_k, cou_v = zip(*filtered_items) if filtered_items else ((), ())
+    if not pool:
+        raise ValueError(f"'{sugar}' never occurs in mode = '{mode}' in this dataset; check the spelling (e.g., 'Neu5Ac' not 'NeuAc', 'a2-3' not 'alpha2-3') and that mode matches what you passed ('bond' expects a linkage, 'sugar'/'sugarbond' a monosaccharide).")
     cou_v = [v / len(pool) for v in cou_v]
     # Start plotting
     fig, (a0, a1) = plt.subplots(1, 2, figsize = (8, 4), gridspec_kw = {'width_ratios': [1, 1]})
@@ -620,7 +625,7 @@ def characterize_monosaccharide(
     sns.despine(left = True, bottom = True)
     a1.set_xlabel('')
     a1.set_title(f'{sugar} and variants are connected to')
-    plt.setp(a0.get_xticklabels(), rotation = 'vertical')
+    plt.setp((a0 if modifications else a1).get_xticklabels(), rotation = 'vertical')
     # Confusingly, this second plot block refers to the *first* plot, depicting the input monosaccharide + its modifications
     if modifications:
         if len(cou_k2) > 1:
@@ -692,17 +697,18 @@ def get_pca(
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
     if transform and not motifs:
-        df = df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(
-            1e-6)
+        df = df[(df.iloc[:, 1:] > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * (df.shape[1] - 1)), 1])].reset_index(drop = True)
+        df.iloc[:, 1:] = df.iloc[:, 1:].replace(0, 1e-6)
         if transform == "ALR":
             df = get_additive_logratio_transformation(df, df.columns.tolist()[1:], [], paired = False, gamma = 0)
         elif transform == "CLR":
             df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:], [], [], gamma = 0)
     if motifs:
         # Motif extraction and quantification
-        df_motif = (
-            df.replace(0, np.nan).dropna(thresh = np.max([np.round(rarity_filter * df.shape[0]), 1]), axis = 1).fillna(
-                1e-6) if transform else df)
+        df_motif = df
+        if transform:
+            df_motif = df[(df.iloc[:, 1:] > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * (df.shape[1] - 1)), 1])].reset_index(drop = True)
+            df_motif.iloc[:, 1:] = df_motif.iloc[:, 1:].replace(0, 1e-6)
         raw = quantify_motifs(df_motif, feature_set = feature_set, custom_motifs = custom_motifs)
         if transform == "CLR":
             raw = clr_transformation(raw + 1e-7, raw.columns.tolist(), [], gamma = 0)
@@ -919,10 +925,8 @@ def get_differential_expression(
             todo = np.array(pvals) > alpha
             if todo.any():
                 equivalence_pvals[todo] = get_equivalence_test(A[todo], B[todo], paired = paired)
-            valid_equivalence_pvals = equivalence_pvals[~np.isnan(equivalence_pvals)]
-            corrected_equivalence_pvals = bh_adjust(valid_equivalence_pvals, alpha) if len(
-                valid_equivalence_pvals) else []
-            equivalence_pvals[~np.isnan(equivalence_pvals)] = corrected_equivalence_pvals
+            valid = ~np.isnan(equivalence_pvals)
+            equivalence_pvals[valid] = correct_multiple_testing(equivalence_pvals[valid], alpha)[0] if valid.any() else []
             equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
             # Levene with the default median center is a one-way ANOVA on absolute deviations from the group medians, which reduces along the sample axis in one call
             U, V = np.abs(B - np.nanmedian(B, axis = 1, keepdims = True)), np.abs(
@@ -968,7 +972,7 @@ def get_differential_expression(
         prison_rows = pd.DataFrame({
             'Glycan': df_prison.index,
             'Mean abundance': df_org_prison.mean(axis = 1),
-            'Log2FC': (df_prison[group2].values - df_prison[group1].values).mean(axis = 1) if paired else (
+            'Log2FC': np.nanmean(df_prison[group2].values - df_prison[group1].values, axis = 1) if paired else (
                         df_prison[group2].mean(axis = 1) - df_prison[group1].mean(axis = 1)),
             'p-val': [1.0] * len(df_prison),
             'corr p-val': [1.0] * len(df_prison),
@@ -1017,7 +1021,7 @@ def get_differential_expression(
             explained = ', '.join((f'{c} ({fc[c] - fc[p]:+.2f})' if p in fc else c) for c in kids if c in fc)
             ok1, ok2 = usable[g1i], usable[g2i]
             pair_ok = ok1 & ok2 if paired else None
-            if (pair_ok.sum() < 2) if paired else (ok1.sum() < 2 or ok2.sum() < 2):
+            if (pair_ok.sum() if paired else min(ok1.sum(), ok2.sum())) < 2:
                 rows[p] = (explained, 1.0, 0.0,
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
                 continue
@@ -1106,7 +1110,7 @@ def get_volcano(
         label_changed: bool = True,  # Add text labels to significant points
         x_metric: str = 'Log2FC',  # x-axis metric: 'Log2FC' or 'Effect size'
         annotate_volcano: bool = False,  # Annotate dots with SNFG images
-        filepath: str = '',  # Path to save plot
+        filepath: str | Path = '',  # Path to save plot
         **kwargs: Any  # Keyword args passed to seaborn scatterplot
 ) -> None:  # Displays volcano plot
     "Creates volcano plot showing -log10(FDR-corrected p-values) vs Log2FC or effect size"
@@ -1150,7 +1154,7 @@ def get_volcano(
         plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
         if annotate_volcano:
             from glycowork.motif.draw import annotate_figure
-            svg_temp = filepath.rsplit('.', 1)[0] + '_temp.svg'
+            svg_temp = str(Path(filepath).with_suffix('')) + '_temp.svg'
             plt.savefig(svg_temp, format = 'svg', bbox_inches = 'tight')
             annotate_figure(svg_temp, filepath = filepath, scale_by_DE_res = df_res, y_thresh = y_thresh,
                             x_thresh = x_thresh, x_metric = x_metric)
@@ -1172,7 +1176,7 @@ def get_glycanova(
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
-        custom_scale: float = 0,
+        custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
         moderate_variance: bool = True,
         # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
@@ -1222,10 +1226,13 @@ def get_glycanova(
         p_values = f.sf(f_values, len(ug) - 1, dfp)
     results = list(zip(df.index, f_values, p_values))
     if posthoc:
+        ug_ph = np.unique(garr)
         for i, glycan in enumerate(df.index):
             if p_values[i] < alpha:
-                ug_ph = np.unique(garr)
-                res_ph = tukey_hsd(*[X[i][garr == g] for g in ug_ph])
+                cols_ph = [X[i][(garr == g) & np.isfinite(X[i])] for g in ug_ph]
+                if min(len(c) for c in cols_ph) < 2:
+                    continue  # tukey_hsd has no nan_policy, so an unmeasured cell would turn every pairwise p-value into NaN
+                res_ph = tukey_hsd(*cols_ph)
                 ci_ph = res_ph.confidence_interval(1 - alpha)
                 posthoc_results[glycan] = pd.DataFrame(
                     [{'group1': ug_ph[a], 'group2': ug_ph[b], 'meandiff': -res_ph.statistic[a, b],
@@ -1234,7 +1241,7 @@ def get_glycanova(
                      for a in range(len(ug_ph)) for b in range(a + 1, len(ug_ph))])
     df_out = GlycoDataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
     dag = df_org.attrs.get('motif_dag') if motifs or glycoproteomics else None
-    if grouped_BH and dag is not None:
+    if grouped_BH:
         grouped_glycans, grouped_pvals = select_grouping(df, df, df_out['Glycan'].tolist(), df_out['p-val'].tolist(),
                                                          grouped_BH = grouped_BH, dag = dag)
         corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_glycans, grouped_pvals, alpha)
@@ -1282,7 +1289,7 @@ def get_glycanova(
             bal = bal[1:] - bal[0] if len(bal) > 1 else bal[:0]
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and obs.sum() > 1 else bal[:0]
             bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), group_labels = grp_b,
-                                               permutations = 999)[1] if len(
+                                               permutations = 999, random_state = random_state)[1] if len(
                 bal) and len(set(grp_b)) > 1 else np.nan
             explained = ', '.join((f'{c} ({eff[c] - eff[p]:+.2f})' if p in eff else c) for c in kids if c in eff)
             if min((usable & (garr == g)).sum() for g in levels) < 2:
@@ -1550,7 +1557,7 @@ def get_jtk(
                                                            correction_method = correction_method)
     df_out['Adjusted_P_value'] = corrpvals
     df_out['significant'] = significance
-    df_out.attrs.update({'alpha': alpha, 'n': df.shape[1] - 1, 'test': 'JTK_CYCLE', 'transform': None, 'paired': False})
+    df_out.attrs.update({'alpha': alpha, 'n': df.shape[1] - 1, 'test': 'JTK_CYCLE', 'transform': transform, 'paired': False})
     return df_out.sort_values("Adjusted_P_value").reset_index(drop = True)
 
 
@@ -1582,6 +1589,8 @@ def get_biodiversity(
         group1, group2 = list(df.group1), list(df.group2)
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     experiment = "diff" if group2 else "anova"
+    if circadian and not timepoints:
+        raise ValueError("circadian = True needs timepoints: pass the number of timepoints your columns are ordered by (e.g., timepoints = 6 for 6 timepoints x replicates), so that replicates per timepoint can be derived.")
     df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = experiment, motifs = motifs,
                                                  impute = False, transform = transform, feature_set = feature_set, paired = paired,
                                                  gamma = gamma, custom_scale = custom_scale, custom_motifs = custom_motifs,

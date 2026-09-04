@@ -273,10 +273,8 @@ def variance_based_filtering(df: pd.DataFrame, # dataframe with glycans as index
                              min_feature_variance: float = 0.02 # minimum variance to include a feature
                              ) -> tuple[pd.DataFrame, pd.DataFrame]: # (filtered df with variance > min, discarded df with variance <= min)
     "Variance-based filtering of features"
-    variances = df.var(axis = 1)
-    filtered_df = df.loc[variances > min_feature_variance]
-    discarded_df = df.loc[variances <= min_feature_variance]
-    return filtered_df, discarded_df
+    keep = df.var(axis = 1) > min_feature_variance  # a NaN variance is False in both directions, so the two frames have to partition on one mask or the feature disappears from the output altogether
+    return df.loc[keep], df.loc[~keep]
 
 
 class JTKTest:
@@ -878,8 +876,9 @@ def meta_analysis(effect_sizes: np.ndarray | list[float], # per-study effect siz
            'Q_p_val': float(chi2.sf(q, dfree)) if dfree > 0 else np.nan,
            'I2': float(max(0.0, (q - dfree) / q) * 100) if q > 0 and dfree > 0 else 0.0,
            'weights': (w / w.sum()).tolist(), 'model': model, 'k': len(eff)}
-    if leave_one_out and len(eff) > 2:
-        out['leave_one_out'] = [meta_analysis(np.delete(eff, i), np.delete(var, i), model = model) for i in range(len(eff))]
+    if leave_one_out:
+        out['leave_one_out'] = [meta_analysis(np.delete(eff, i), np.delete(var, i), model = model) for i in
+                                range(len(eff))] if len(eff) > 2 else []  # dropping one of two studies leaves a single-study pool, which is the input effect back again and carries no sensitivity information
     return out
 
 

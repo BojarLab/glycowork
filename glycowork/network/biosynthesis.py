@@ -702,8 +702,8 @@ def infer_network(network: nx.DiGraph, # Network to infer
             continue
         temp_network = network_dic[k]
         # Get virtual nodes observed in species k
-        infer_network, _ = infer_virtual_nodes(network, temp_network)
-        inferences.update(infer_network[0])
+        inferred, _ = infer_virtual_nodes(network, temp_network)
+        inferences.update(inferred[0])
     # Output a new network with formerly virtual nodes updated to a new node status --> inferred
     network2 = network.copy()
     nx.set_node_attributes(network2, {j: 2 for j in inferences}, 'virtual')
@@ -982,10 +982,10 @@ def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
         abundance_dict[root] = root_default
     detected = [a for a in abundance_dict.values() if a > 0.0]
     floor = min(detected) if detected else 0.1
-    missing = {n for n, v in network.nodes(data = 'virtual') if v == 1 or abundance_dict.get(n, 0.0) <= 0.0} - {root}
+    missing = sorted({n for n, v in network.nodes(data = 'virtual') if v == 1 or abundance_dict.get(n, 0.0) <= 0.0} - {root})
     for _ in range(len(missing)):
         updated = False
-        for n in missing:
+        for n in missing:  # a fixed list, since each estimate reads the neighbours updated before it and set order is not stable across processes
             known = [a for a in
                      (abundance_dict.get(m, 0.0) for m in chain(network.predecessors(n), network.successors(n))) if
                      a > 0.0]

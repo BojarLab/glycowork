@@ -1640,7 +1640,6 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
     from glycowork.motif.tokenization import glycan_to_composition
     df = df.copy()
     df['Glycosite'] = ['_'.join(k.split('_')[:-1]) for k in df.index]
-    seqs = None
     tails, seqs = [str(k).rpartition('_')[-1] for k in df.index], None
     if '(' in tails[0] and not is_composition(tails[0]):  # has to be tested before the bracket branch, since any branched IUPAC string contains '['
         if bad := [t for t in tails if '(' not in t]:
@@ -1648,8 +1647,8 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
         seqs = tails
         df['Glycoform'] = [glycan_to_composition(s) for s in seqs]
         glycan_features = sorted(set(unwrap([list(c.keys()) for c in df.Glycoform])))
-    elif '[' in df.index[0]:
-        comps = ['['+k.split('[')[1] for k in df.index]
+    elif '[' in tails[0]:
+        comps = ['[' + t.split('[')[1] for t in tails]
         comps = [list(map(int, re.findall(r'\d+', s))) for s in comps]
         df['Glycoform'] = [f'H{c[0]}N{c[1]}F{c[3]}A{c[2]}' for c in comps]
         glycan_features = ['H', 'N', 'A', 'F', 'G']

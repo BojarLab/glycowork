@@ -1467,7 +1467,7 @@ def GlycoDraw(
         if highlight_motif:
             alt_text += f" The motif {highlight_motif} is highlighted."
         if repeat:
-            alt_text += f" Contains repeat unit (n={repeat if isinstance(repeat, (str, int)) and repeat != True else ''})."
+            alt_text += f" Contains repeat unit (n={repeat if isinstance(repeat, (str, int)) and repeat is not True else ''})."
     # Draw
     d = draw.Group()
     if reducing_end_label:
@@ -1583,7 +1583,7 @@ def GlycoDraw(
     # add brackets around repeating unit
     if repeat:
         # process annotation
-        repeat_annot = 'n' + (' = ' + str(repeat) if isinstance(repeat, (str, int)) and repeat != True else '')
+        repeat_annot = 'n' + (' = ' + str(repeat) if isinstance(repeat, (str, int)) and repeat is not True else '')
         # repeat range code block
         if repeat_range:
             bracket_open = (main_sugar_x_pos[repeat_range[1]] * 2) + 1 if not compact else (main_sugar_x_pos[repeat_range[1]] * 1.2) + 0.6

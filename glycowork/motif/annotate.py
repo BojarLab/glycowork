@@ -231,19 +231,16 @@ def get_size_branching_features(
     # Create bins for size and branching
     size_edges, size_labels = create_bins(sizes, n_bins)
     branch_edges, branch_labels = create_bins(branchings, n_bins)
-    # Create DataFrames for size and branching distributions
-    size_dist = pd.DataFrame(0, index = glycans, columns = [f"Size_{label}" for label in size_labels])
-    branch_dist = pd.DataFrame(0, index = glycans, columns = [f"Branch_{label}" for label in branch_labels])
     # Assign values to bins
-    size_bins = np.digitize(sizes, size_edges) - 1
-    branch_bins = np.digitize(branchings, branch_edges) - 1
-    for i in range(len(glycans)):
-        if size_bins[i] < len(size_labels):
-            size_dist.iloc[i, size_bins[i]] = 1
-        if branch_bins[i] < len(branch_labels):
-            branch_dist.iloc[i, branch_bins[i]] = 1
+    size_bins, branch_bins = np.digitize(sizes, size_edges) - 1, np.digitize(branchings, branch_edges) - 1
+    rows = np.arange(len(glycans))
+    size_arr, branch_arr = np.zeros((len(glycans), len(size_labels)), dtype = int), np.zeros((len(glycans), len(branch_labels)), dtype = int)
+    ok_s, ok_b = size_bins < len(size_labels), branch_bins < len(branch_labels)
+    size_arr[rows[ok_s], size_bins[ok_s]] = 1
+    branch_arr[rows[ok_b], branch_bins[ok_b]] = 1
     # Combine size and branching features
-    return pd.concat([size_dist, branch_dist], axis = 1)
+    return pd.concat([pd.DataFrame(size_arr, index = glycans, columns = [f"Size_{label}" for label in size_labels]),
+                      pd.DataFrame(branch_arr, index = glycans, columns = [f"Branch_{label}" for label in branch_labels])], axis = 1)
 
 
 @rescue_glycans
@@ -416,7 +413,10 @@ def get_composition_dag(
                 continue  # labels that do not parse as a composition have no place in the DAG
         else:
             try:
-                comp[c], struct[c], site[c] = glycan_to_composition(tail), glycan_to_nxGraph(tail), pre  # canonicalize_composition does not raise on a sequence, it returns a nonsense residue vector, so sequences have to be routed here before it is ever called on them; they still need a composition vector, since a sequence without one is an all-zero row that every composition dominates and so would become the ancestor of everything in a mixed block
+                cc = glycan_to_composition(tail)  # canonicalize_composition does not raise on a sequence, it returns a nonsense residue vector, so sequences have to be routed here before it is ever called on them
+                if not cc:
+                    continue  # an unmappable glycoletter comes back as {}, not as an exception, and an all-zero row is dominated by every composition and would become the ancestor of the whole block
+                comp[c], struct[c], site[c] = cc, glycan_to_nxGraph(tail), pre
             except Exception:
                 continue
     cols = list(site)
@@ -433,10 +433,10 @@ def get_composition_dag(
         m = np.array(members)
         # composition dominance is only a necessary condition for containment, so where sequences are known the real relation is used: it keeps Man5 out of the ancestry of complex glycoforms, whose alpha1-2 mannoses are trimmed rather than extended
         le = (V[m][:, None, :] <= V[m][None, :, :]).all(2)
-        if all(cols[k] in struct for k in m):
-            for i, j in zip(*np.nonzero(le)):
-                if i != j:
-                    le[i, j] = subgraph_isomorphism(struct[cols[m[j]]], struct[cols[m[i]]])
+        for i, j in zip(*np.nonzero(le)):
+            # decided per pair rather than per block, so one composition-only label no longer costs every sequence at its glycosite the real containment relation
+            if i != j and cols[m[i]] in struct and cols[m[j]] in struct:
+                le[i, j] = subgraph_isomorphism(struct[cols[m[j]]], struct[cols[m[i]]])
         # equal parts are ordered by position, which makes the order total and the DAG acyclic
         M = le & (~le.T | (m[:, None] < m[None, :]))
         if A is not None:
