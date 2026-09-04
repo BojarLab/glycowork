@@ -74,7 +74,7 @@ def dataset_to_graphs(glycan_list: list[str], # list of IUPAC-condensed glycan s
         if glycan not in glycan_cache:
             nx_graph = glycan_to_nxGraph(glycan, libr = libr)
             pyg_data = from_networkx(nx_graph)
-            glycan_cache[glycan] = pyg_data
+            glycan_cache[glycan], pyg_data = pyg_data, pyg_data.clone()
         else:
             # Reuse cached data for duplicate glycan
             pyg_data = glycan_cache[glycan].clone()

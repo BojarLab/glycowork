@@ -42,6 +42,7 @@
 - `replace_outliers_winsorization` now takes in the entire `df` as input, instead of only one `row` (5483f3c)
 - `replace_outliers_winsorization`, `omega_squared`, and `permanova_with_permutation` are now much faster (5483f3c, 0b0085c)
 - `mahalanobis_distance` can now properly account for paired data as well (f5ba41f)
+- `clr_transformation` now tolerates being called with the glycan column still present in the input dataframe ()
 
 ##### Fixed 🐛
 - `hsic` is now correctly symmetrical (7bf463b)

@@ -465,7 +465,7 @@ def replace_outliers_winsorization(df: pd.DataFrame, # features as rows, all but
     V = num.to_numpy(float)
     n = V.shape[1]
     nan_mask = np.isnan(V)
-    # NaNs sort to the front, so the k-th slot is the (k - #NaN)-th real order statistic; the rank has to be taken per row against the observed count, not against n
+    # NaNs are pushed to +inf so they sort to the back, which leaves the k-th slot as the k-th real order statistic; the upper rank still has to be counted from the observed count per row, not from n
     obs = n - nan_mask.sum(axis = 1)
     V = np.where(nan_mask, np.inf, V)
     # Limits set to match typical IQR outlier detection
@@ -577,6 +577,11 @@ def clr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
                        reference: list | None = None # subset of feature rows defining the log-ratio reference; defaults to all rows
                        ) -> pd.DataFrame: # CLR-transformed dataframe
     "performs the Center Log-Ratio (CLR) Transformation with scale model adjustment"
+    if df.shape[1] and not pd.api.types.is_numeric_dtype(df.iloc[:, 0]):  # tolerate being handed the frame with its glycan/feature column still in front
+        id_col = df.columns[0]
+        out = clr_transformation(df.drop(columns = id_col), [c for c in (group1 or []) if c != id_col], [c for c in (group2 or []) if c != id_col], gamma = gamma, custom_scale = custom_scale, random_state = random_state, reference = reference)
+        out.insert(0, id_col, df[id_col])
+        return out
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
     ref = (df if reference is None else df.loc[reference]).to_numpy(dtype = float)
     logs = np.log(np.where(ref > 0, ref,
@@ -1017,7 +1022,7 @@ def estimate_technical_variance(df: pd.DataFrame, # dataframe with abundances in
     features, samples = df.shape
     transformed_data = np.zeros((features, samples, num_instances))
     for j in range(samples):
-        dirichlet_samples = dirichlet.rvs(alpha = df.iloc[:, j], random_state = local_rng, size = num_instances).T
+        dirichlet_samples = dirichlet.rvs(alpha = np.maximum(df.iloc[:, j].to_numpy(float), 1e-6), random_state = local_rng, size = num_instances).T
         if isinstance(custom_scale, dict) or custom_scale:
             for n in range(num_instances):
                 sample_instance = pd.DataFrame(dirichlet_samples[:, n])
@@ -1052,9 +1057,9 @@ def perform_tests_monte_carlo(group_a: pd.DataFrame, # rows as features, columns
     arr_b = group_b.values.reshape(num_features, n_b, num_instances)
     for instance in range(num_instances):
         sample_a, sample_b = arr_a[:, :, instance], arr_b[:, :, instance]
-        instance_p_values = (
+        instance_p_values = np.nan_to_num((
             ttest_rel(sample_b, sample_a, axis = 1) if paired else ttest_ind(sample_b, sample_a, equal_var = False,
-                                                                             axis = 1))[1]
+                                                                             axis = 1))[1], nan = 1.0)
         instance_effect_sizes = cohen_d(sample_b, sample_a, paired = paired)[0]
         # Apply Benjamini-Hochberg correction for multiple testing within the instance
         avg_uncorrected_p_values += instance_p_values

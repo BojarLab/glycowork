@@ -1526,14 +1526,13 @@ def get_biosynthetic_coherence(
     own_scores = np.divide(np.nansum(O.values * w, axis = 0), own_den, out = np.full(n, np.nan), where = own_den > 0)
     shared_scores = np.nansum(S.values * w, axis = 0) / np.nansum(~np.isnan(S.values) * w, axis = 0)
     o1, o2, s1, s2 = own_scores[:n1], own_scores[n1:], shared_scores[:n1], shared_scores[n1:]
-    stat_o, p_o = ttest_rel(o2, o1) if paired else ttest_ind(o2, o1, equal_var = False)
+    stat_o, p_o = ttest_rel(o2, o1, nan_policy = 'omit') if paired else ttest_ind(o2, o1, equal_var = False, nan_policy = 'omit')
     _, p_s = ttest_rel(s2, s1) if paired else ttest_ind(s2, s1, equal_var = False)
     effect, _ = cohen_d(o2, o1, paired = paired)
     rng = np.random.default_rng(random_state)
-    obs, null = float(s2.mean() - s1.mean()), []
+    obs, null, diffs = float(s2.mean() - s1.mean()), [], s2 - s1
     for _ in range(n_permutations):
         if paired:
-            diffs = s2 - s1
             null.append(float(np.where(rng.random(len(diffs)) < 0.5, -diffs, diffs).mean()))
         else:
             perm = rng.permutation(shared_scores)

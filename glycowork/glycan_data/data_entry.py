@@ -23,7 +23,7 @@ def check_presence(glycan: str, # IUPAC-condensed glycan sequence
         name = name.replace(" ", "_")
         df = df[df[rank] == name]
         if len(df) == 0:
-            print("This is the best: %s is not in dataset" % name)
+            print(f"This is the best: {name} is not in dataset")
     ggraph = glycan_to_nxGraph(glycan) if fast else glycan
     check_all = [compare_glycans(ggraph, k) for k in df[lookup_col]]
     if any(check_all):

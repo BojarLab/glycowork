@@ -74,8 +74,7 @@ def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) a
     embeddings_filtered = embeddings.loc[df_filtered.index]
     grouped = df_filtered.groupby(rank)
     avg_embeddings = grouped.apply(lambda g: embeddings_filtered.loc[g.index].agg(averaging), include_groups = False).reset_index()
-    if isinstance(avg_embeddings.iloc[0, 0], str):
-        avg_embeddings = avg_embeddings.set_index(avg_embeddings.columns[0])
+    avg_embeddings = avg_embeddings.set_index(avg_embeddings.columns[0])  # reset_index always puts the group key in column 0, whatever its dtype; leaving it in place feeds the label itself to the distance metric
     avg_values = np.vstack(avg_embeddings.values)
     # Get the distance matrix
     return calculate_distance_matrix(avg_values, cosine, label_list = avg_embeddings.index.tolist())
@@ -85,9 +84,9 @@ def jaccard(list1: list | nx.Graph, # First list/network to compare
             list2: list | nx.Graph # Second list/network to compare
             ) -> float: # Jaccard distance
     "Calculate Jaccard distance between two lists/networks"
-    intersection = len(set(list1).intersection(list2))
-    union = (len(list1) + len(list2)) - intersection
-    return 0.0 if not union else 1 - float(intersection) / union  # two empty networks are identical, not undefined
+    s1, s2 = set(list1), set(list2)
+    union = len(s1 | s2)  # taken on the sets, so a repeated glycan in a list input no longer inflates the denominator
+    return 0.0 if not union else 1 - len(s1 & s2) / union  # two empty networks are identical, not undefined
 
 
 def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and taxonomic info (columns)

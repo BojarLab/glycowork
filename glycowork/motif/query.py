@@ -24,25 +24,26 @@ def get_insight(glycan: str, # Glycan in IUPAC-condensed format
                 f"\nWe don't have {glycan} in our database yet. Please double-check the sequence or try a related structure.")
             return
         idx = hits[0]
-    species = loader.df_glycan.Species.values.tolist()[idx]
+    row = loader.df_glycan.iloc[idx]
+    species = row.Species
     if len(species) > 0:
         print("\nThis glycan occurs in the following species: " + str(sorted(species)))
     if len(species) > 5:
-        phyla = sorted(set(loader.df_glycan.Phylum.values.tolist()[idx]))
+        phyla = sorted(set(row.Phylum))
         print("\nPuh, that's quite a lot! Here are the phyla of those species: " + str(phyla))
     found_motifs = annotate_glycan(glycan, motifs = motifs)
     found_motifs = found_motifs.loc[:, (found_motifs != 0).any(axis = 0)].columns.values.tolist()
     if len(found_motifs) > 0:
         print("\nThis glycan contains the following motifs: " + str(found_motifs))
-    if isinstance(loader.df_glycan.glytoucan_id.values.tolist()[idx], str):
-        print("\nThis is the GlyTouCan ID for this glycan: " + str(loader.df_glycan.glytoucan_id.values.tolist()[idx]))
-    if len(loader.df_glycan.tissue_sample.values.tolist()[idx]) > 0:
-        tissue = loader.df_glycan.tissue_sample.values.tolist()[idx]
+    if isinstance(row.glytoucan_id, str):
+        print("\nThis is the GlyTouCan ID for this glycan: " + str(row.glytoucan_id))
+    if len(row.tissue_sample) > 0:
+        tissue = row.tissue_sample
         print("\nThis glycan has been reported to be expressed in: " + str(sorted(tissue)))
-    if len(loader.df_glycan.disease_association.values.tolist()[idx]) > 0:
-        disease = loader.df_glycan.disease_association.values.tolist()[idx]
-        direction = loader.df_glycan.disease_direction.values.tolist()[idx]
-        disease_sample = loader.df_glycan.disease_sample.values.tolist()[idx]
+    if len(row.disease_association) > 0:
+        disease = row.disease_association
+        direction = row.disease_direction
+        disease_sample = row.disease_sample
         print(
             "\nThis glycan has been reported to be dysregulated in (disease, direction, sample): "
             + str([(disease[k],

@@ -2526,6 +2526,17 @@ def test_clr_transformation():
     # Test with scale model
     result_scaled = clr_transformation(data, group1, group2, custom_scale=2.0)
     assert result_scaled.shape == data.shape
+    # Test robustness to the glycan column still being present
+    data_with_glycans = data.copy()
+    data_with_glycans.insert(0, 'glycan', ['Gal(b1-4)Glc', 'Gal(b1-4)GlcNAc', 'Man(a1-3)Man'])
+    result_kept = clr_transformation(data_with_glycans, group1, group2, gamma=0)
+    assert list(result_kept.columns) == list(data_with_glycans.columns)
+    assert result_kept['glycan'].tolist() == data_with_glycans['glycan'].tolist()
+    pd.testing.assert_frame_equal(result_kept.iloc[:, 1:], clr_transformation(data, group1, group2, gamma=0))
+    # Glycan column in the group lists is ignored rather than transformed
+    result_grouped = clr_transformation(data_with_glycans, ['glycan'] + group1, group2, random_state=42)
+    assert result_grouped['glycan'].tolist() == data_with_glycans['glycan'].tolist()
+    assert result_grouped.iloc[:, 1:].to_numpy().dtype.kind == 'f'
 
 
 def test_alr_transformation():
