@@ -1,6 +1,7 @@
 import pandas as pd
 import json
 import re
+import warnings
 from random import choice
 from functools import wraps, lru_cache
 from collections import defaultdict
@@ -295,9 +296,10 @@ def get_matching_indices(
         elif c == closedelim and stack:
             yield (stack.pop() + 1, pos, len(stack))
         elif c == closedelim:
-            print(f"Encountered extraneous closing quote at pos {pos}: '{line[pos:]}'")
+            warnings.warn(f"Encountered an extraneous closing '{closedelim}' at pos {pos}: '{line[pos:]}'",
+                          stacklevel = 2)
     if stack:
-        print(f"Unmatched opening delimiters at positions: {[p for p in stack]}")
+        warnings.warn(f"Unmatched opening '{opendelim}' at positions {stack}", stacklevel = 2)
 
 
 def enforce_class(glycan: str, # Glycan in IUPAC-condensed nomenclature
@@ -342,9 +344,12 @@ def canonicalize_composition(comp: str, # Composition in Hex5HexNAc4Fuc1Neu5Ac2 
         temp = {"Hex": int(values[0]), "HexNAc": int(values[1]), "Neu5Ac": int(values[2]), "dHex": int(values[3])}
         comp_dict = {k: v for k, v in temp.items() if v}
     elif comp.isdigit():
+        if len(comp) != 4:
+            raise ValueError(
+                f"'{comp}' is an all-digit composition, read positionally as Hex/HexNAc/Neu5Ac/dHex, so it needs exactly four digits; spell it out (e.g., 'Hex5HexNAc4Neu5Ac2Fuc1') when a count reaches 10.")
         temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
-        comp_dict = {k: v for k, v in temp.items() if v}
-    elif comp[0].isdigit():
+        return {k: v for k, v in temp.items() if v}
+    elif comp and comp[0].isdigit():
         comp = comp.replace(' ', '')
         if len(comp) < 5:
             temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}

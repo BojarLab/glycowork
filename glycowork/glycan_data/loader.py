@@ -149,6 +149,7 @@ class GlycoDataFrame(pd.DataFrame):
                      termini_list: list = [],  # List of monosaccharide positions from terminal/internal/flexible
                      min_count: int | None = 1  # Minimum number of times motif needs to be present to pass
                      ) -> 'GlycoDataFrame':
+        "Keeps only the records whose glycans contain the motif, by subgraph isomorphism rather than string matching"
         from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
         if isinstance(motif, str) and (hit := resolve_motif_name(motif)) is not None:
             motif, termini_list = hit[0], termini_list or hit[1]
@@ -166,6 +167,7 @@ class GlycoDataFrame(pd.DataFrame):
                     **criteria
                     # column = value, list of values (OR), or callable; multiple columns are combined with AND
                     ) -> 'GlycoDataFrame':
+        "Keeps only the records matching all metadata criteria, e.g., df_species.meta_filter(Order = 'Fabales', Kingdom = 'Plantae')"
         norm = lambda v: v.strip().lower().replace(' ', '_') if isinstance(v, str) else v
         specs = {}
         for col, want in criteria.items():

@@ -1,4 +1,5 @@
 import re
+import warnings
 from pathlib import Path
 from copy import deepcopy
 from itertools import chain
@@ -119,7 +120,7 @@ def stemify_glycan_fast(ggraph_in: nx.DiGraph, # Input glycan graph
                         stem_lib: dict[str, str] # Modified-to-core monosaccharide mapping
                         ) -> tuple[str, nx.DiGraph]: # (Stemified glycan, Stemified graph)
     "Stemify glycan graph quickly using precomputed mapping"
-    ggraph = deepcopy(ggraph_in)
+    ggraph = ggraph_in.copy()  # copy() already makes independent node attribute dicts, and the only write below replaces a string wholesale
     nx.set_node_attributes(ggraph, {k: {"string_labels": stem_lib[v]} for k, v in ggraph.nodes(data = "string_labels")})
     return graph_to_string(ggraph), ggraph
 
@@ -476,12 +477,10 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                  draw_glycans: bool = False,  # Replace node labels with SNFG drawings, in a static figure
                  filepath: str | Path = '',  # Path to save the static figure (.svg/.pdf/.png) instead of showing the interactive plot; required for draw_glycans
                  compact: bool = False,  # Use compact SNFG style
-                 glycan_size: str = 'small'  # Glycan size preset ('small', 'medium', 'large')
-                 ) -> None:  # Displays plot
+                 glycan_size: str = 'small',  # Glycan size preset ('small', 'medium', 'large')
+                 title: str | None = None  # Plot title; None for none, as before
+                 ) -> None:  # Displays plot, or returns it as a Jupyter-renderable SVG when draw_glycans without a filepath
     "Visualize biosynthetic network"
-    if draw_glycans and not filepath:
-        raise ValueError(
-            "draw_glycans = True draws the SNFG structures into a saved figure and therefore needs a filepath, e.g., filepath = 'network.svg'.")
     if plot_format == 'hierarchical':
         roots = [n for n in network.nodes() if network.in_degree(n) == 0]
         levels = {}
@@ -566,9 +565,8 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         edge_data['label'].append(attr)
         edge_data['color'].append(edge_color)
         edge_data['width'].append(width)
-    if filepath:
+    if filepath or draw_glycans:
         # Static rendering, so that annotate_figure can swap the node labels for SNFG drawings in the saved SVG
-        import os
         import matplotlib.pyplot as plt
         from glycowork.motif.draw import annotate_figure
         # the SNFGs have a fixed size on the canvas, so the canvas has to grow with the layout instead of the other way around
@@ -594,18 +592,26 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                 ax.text((x0 + x1) / 2, (y0 + y1) / 2, label, fontsize = 8, ha = 'center', va = 'center')
         ax.margins(0.12)
         ax.axis('off')
-        Path(filepath).parent.mkdir(parents = True, exist_ok = True)
+        if title is not None:
+            ax.set_title(title)
+        if filepath:
+            Path(filepath).parent.mkdir(parents = True, exist_ok = True)
         if not draw_glycans:
             plt.savefig(filepath, bbox_inches = 'tight')
             plt.close(fig)
             return
-        svg_temp = str(Path(filepath).with_suffix('')) + '_temp.svg'
-        plt.savefig(svg_temp, format = 'svg', bbox_inches = 'tight')
-        plt.close(fig)
-        try:
-            annotate_figure(svg_temp, filepath = filepath, compact = compact, glycan_size = glycan_size)
-        finally:
-            os.remove(svg_temp)
+        import tempfile
+        from glycowork.motif.draw import is_jupyter
+        with tempfile.TemporaryDirectory() as tmp:
+            svg_temp = str(Path(tmp) / 'network_temp.svg')
+            plt.savefig(svg_temp, format = 'svg', bbox_inches = 'tight')
+            plt.close(fig)
+            svg = annotate_figure(svg_temp, filepath = filepath, compact = compact, glycan_size = glycan_size)
+        if svg is None and filepath and Path(filepath).suffix.lower() == '.svg':
+            svg = Path(filepath).read_text(encoding = 'utf-8')
+        if svg and is_jupyter():
+            from IPython.display import SVG
+            return SVG(svg)
         return
     from bokeh.plotting import figure, show
     from bokeh.io import output_notebook
@@ -616,7 +622,8 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         pass
     p = figure(width = 900, height = 900, x_range = (-1.2, 1.2), y_range = (-1.2, 1.2),
                tools = "pan,wheel_zoom,box_zoom,reset,save", toolbar_location = "above",
-               x_axis_type = None, y_axis_type = None, background_fill_color = "white")
+               x_axis_type = None, y_axis_type = None, background_fill_color = "white",
+               title = title if title is not None else None)
     # Draw nodes with hover
     node_renderer = p.scatter('x', 'y', size = 'size', color = 'color', alpha = 'alpha', line_color = "#888",
                               line_width = 1, source = ColumnDataSource(data = node_data))
@@ -788,7 +795,8 @@ def choose_path(diamond: dict[int, str], # Diamond node positions mapping to gly
                     alts[alt].append(np.mean([lookup_dic.get(node, 0) for node in alt]))
                 else:
                     alts[alt].append(1 if mode == 'presence' else 0)
-    alts = {k: 1 - np.mean(v) if mode == 'presence' else np.mean(v) for k, v in alts.items()}
+    alts = {k: ((1 - np.mean(v)) if mode == 'presence' else np.mean(v)) if v else 0.0 for k, v in
+            alts.items()}  # no species had both endpoints, which is no support rather than an undefined mean
     # If both alternatives aren't observed, add minimum value (because one of the paths *has* to be taken)
     if sum(alts.values()) == 0:
         alts = {k: v + 0.01 + threshold for k, v in alts.items()}
@@ -1029,7 +1037,7 @@ def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
         except (nx.NetworkXError, nx.NetworkXNoPath):
             unreachable.append(sink)
     if unreachable:
-        print(f"{len(unreachable)} of {len(sinks)} sinks could not be reached from {source}, e.g., {unreachable[0]}")
+        warnings.warn(f"{len(unreachable)} of {len(sinks)} sinks could not be reached from {source}, e.g., {unreachable[0]}", stacklevel = 2)
     return flow_results
 
 
@@ -1043,10 +1051,10 @@ def get_max_flow_path(network: nx.DiGraph, # Biosynthetic network
     current_node = source
     abundance_dict = nx.get_node_attributes(network, 'abundance')
     while current_node != sink:
-        next_node = max(network.neighbors(current_node),
+        next_node = max((n for n in network.neighbors(current_node) if flow_dict[current_node].get(n, 0) > 0),
                         key = lambda neighbor: flow_dict[current_node][neighbor] * max(abundance_dict.get(neighbor, 0), 0.1), default = None)
         if next_node is None:
-            raise ValueError("No path found")
+            raise ValueError(f"The walk from {source} reached {current_node} with no outgoing flow left, so it cannot continue to {sink}; check that flow_dict is the entry for this sink.")
         path.append((current_node, next_node))
         current_node = next_node
     return path
@@ -1526,7 +1534,10 @@ def get_biosynthetic_coherence(
     own_scores = np.divide(np.nansum(O.values * w, axis = 0), own_den, out = np.full(n, np.nan), where = own_den > 0)
     shared_scores = np.nansum(S.values * w, axis = 0) / np.nansum(~np.isnan(S.values) * w, axis = 0)
     o1, o2, s1, s2 = own_scores[:n1], own_scores[n1:], shared_scores[:n1], shared_scores[n1:]
-    stat_o, p_o = ttest_rel(o2, o1, nan_policy = 'omit') if paired else ttest_ind(o2, o1, equal_var = False, nan_policy = 'omit')
+    # own_scores is NaN wherever a group was too small to leave a sample out and still fit, so check that anything
+    # is left to compare instead of letting scipy discover it and hand back NaN with a SmallSampleWarning
+    enough = (np.isfinite(o1) & np.isfinite(o2)).sum() > 1 if paired else (np.isfinite(o1).sum() > 1 and np.isfinite(o2).sum() > 1)
+    stat_o, p_o = (ttest_rel(o2, o1, nan_policy = 'omit') if paired else ttest_ind(o2, o1, equal_var = False, nan_policy = 'omit')) if enough else (np.nan, np.nan)
     _, p_s = ttest_rel(s2, s1) if paired else ttest_ind(s2, s1, equal_var = False)
     effect, _ = cohen_d(o2, o1, paired = paired)
     rng = np.random.default_rng(random_state)

@@ -1948,12 +1948,16 @@ def test_get_matching_indices2():
     assert len(result) == 3
     assert result[0] == (1, 2, 0)
     # Test unmatched brackets
-    assert len(list(get_matching_indices("[a[b", '[', ']'))) == 0
+    with pytest.warns(UserWarning, match = "Unmatched opening"):
+        assert len(list(get_matching_indices("[a[b", '[', ']'))) == 0
     # Test escaped delimiters
     assert len(list(get_matching_indices(r"[a\[b]", '[', ']'))) == 1
     assert list(get_matching_indices(r"[a\[b]", '[', ']'))[0] == (1, 5, 0)
     # Test extraneous closing delimiter
-    assert len(list(get_matching_indices("]abc[", '[', ']'))) == 0
+    with pytest.warns(UserWarning) as rec:  # both an extraneous ']' and an unmatched '['
+        assert len(list(get_matching_indices("]abc[", '[', ']'))) == 0
+    assert any("extraneous closing" in str(w.message) for w in rec)
+    assert any("Unmatched opening" in str(w.message) for w in rec)
     # Test escaped closing delimiter
     assert len(list(get_matching_indices(r"[a\]b]", '[', ']'))) == 1
     assert list(get_matching_indices(r"[a\]b]", '[', ']'))[0] == (1, 5, 0)
@@ -5431,8 +5435,12 @@ def test_get_volcano_basic(sample_diff_expr_results):
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
         get_volcano(sample_diff_expr_results, n = 6)
         mock_savefig.assert_not_called()
-    with pytest.raises(ValueError):  # the SNFG annotations are drawn into a saved figure
-        get_volcano(sample_diff_expr_results, annotate_volcano = True)
+    # without a filepath the annotated figure is built in a temp dir and handed back for Jupyter to render
+    with patch('glycowork.motif.draw.is_jupyter', return_value = True):
+        out = get_volcano(sample_diff_expr_results, annotate_volcano = True)
+    assert out is not None and '<svg' in out.data
+    assert not list(Path('.').glob('*_temp.svg'))
+    plt.close('all')
 
 
 def test_get_volcano_with_filepath(sample_diff_expr_results):
@@ -6339,9 +6347,10 @@ def test_get_maximum_flow_with_no_path(sample_network):
     # Add isolated node with no path from source
     sample_network.add_node("IsolatedGlycan", virtual=0, abundance=1.0)
     sample_network = get_edge_weight_by_abundance(sample_network, root = "Gal(b1-4)Glc-ol")
-    flow_results = get_maximum_flow(sample_network,
-                                  source="Gal(b1-4)Glc-ol",
-                                  sinks=["IsolatedGlycan"])
+    with pytest.warns(UserWarning, match = "could not be reached"):
+        flow_results = get_maximum_flow(sample_network,
+                                        source="Gal(b1-4)Glc-ol",
+                                        sinks=["IsolatedGlycan"])
     assert isinstance(flow_results, dict)
     assert len(flow_results) == 0  # Should return empty dict for unreachable sink
 
@@ -6511,7 +6520,7 @@ def test_get_max_flow_path_no_path(flow_network):
         'D': {'E': 0.0}
     }
     flow_network.remove_edge('B', 'D')
-    with pytest.raises(ValueError, match="No path found"):
+    with pytest.raises(ValueError, match="no outgoing flow left"):
         get_max_flow_path(flow_network, flow_dict, sink='E', source='A')
 
 
@@ -6820,8 +6829,11 @@ def test_plot_network_static_figure(tmp_path, evo_test_networks):
     with pytest.raises(ValueError):
         plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'x.svg', draw_glycans=True,
                      glycan_size='huge')
-    with pytest.raises(ValueError):  # the SNFG structures are drawn into a saved figure
-        plot_network(main_net, plot_format='kamada_kawai', draw_glycans=True)
+    # without a filepath the SNFG figure is built in a temp dir and handed back for Jupyter to render
+    with patch('glycowork.motif.draw.is_jupyter', return_value = True):
+        out = plot_network(main_net, plot_format='kamada_kawai', draw_glycans=True)
+    assert out is not None and '<svg' in out.data
+    assert not list(tmp_path.glob('*_temp.svg'))
     plt.close('all')
 
 

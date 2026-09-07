@@ -1108,7 +1108,7 @@ chem_cols = ['#CDE7EF', '#CDE7EF', '#CDE7EF',     # blue
              '#F1E6ED', '#F1E6ED', '#F1E6ED',     # purple
              '#EEF8FB', '#EEF8FB', '#EEF8FB',     # light blue
              '#F1E9E5', '#F1E9E5', '#F1E9E5',     # brown
-             '#F7E0E0', '#F7E0E0']                # red
+             '#F7E0E0']                           # red
 
 chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
                    '#058F60', '#058F60',                # green
@@ -1778,7 +1778,10 @@ def annotate_figure(
                 edit_svg = False
                 continue
             anchor = [float(v) for v in re.split(r'[,\s]+', translate_part.group(1).strip())[:2]]
-            svg_tmp = svg_tmp.replace(match, '')
+            # matplotlib defines each glyph once, inside the first text block that uses it, so dropping the
+            # block wholesale would break every later <use> of those glyphs (silently blanking characters
+            # in the title and axis labels); keep the definitions and delete only the drawn text
+            svg_tmp = svg_tmp.replace(match, ''.join(re.findall(r'<defs>[\s\S]*?</defs>', match)))
             if glycan_scale == '' or current_label not in glycan_scale[
                 1]:  # a label the DE table does not rank still gets drawn, just unscaled
                 d = GlycoDraw(current_label, compact = compact, suppress = True, restrict_vocab = True)
