@@ -27,8 +27,10 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
         n = np.isfinite(diff).sum(axis = 1)
         ok = n > 1
         if ok.any():
-            n, mean_diff = n[ok], np.nanmean(diff[ok], axis = 1)
-            diff_std = np.nanstd(diff[ok], axis = 1, ddof = 1)
+            dok = diff if ok.all() else diff[ok]
+            n = n[ok]
+            dmean, dstd = (np.mean, np.std) if n.min() == dok.shape[1] else (np.nanmean, np.nanstd)
+            mean_diff, diff_std = dmean(dok, axis = 1), dstd(dok, axis = 1, ddof = 1)
             # A degenerate difference has an unbounded standardized effect and no sampling variance left to report
             degenerate = diff_std == 0
             d[ok] = np.where(degenerate, np.where(mean_diff == 0, 0.0, np.where(mean_diff > 0, np.inf, -np.inf)),
@@ -38,10 +40,13 @@ def cohen_d(x: np.ndarray | list[float], # comparison group containing numerical
         nx, ny = np.isfinite(X).sum(axis = 1), np.isfinite(Y).sum(axis = 1)
         ok = (nx > 1) & (ny > 1)
         if ok.any():
+            Xok, Yok = (X if ok.all() else X[ok]), (Y if ok.all() else Y[ok])
             nx, ny = nx[ok], ny[ok]
-            sx, sy = np.maximum(np.nanstd(X[ok], axis = 1, ddof = 1), 1e-6), np.maximum(
-                np.nanstd(Y[ok], axis = 1, ddof = 1), 1e-6)
-            d[ok] = (np.nanmean(X[ok], axis = 1) - np.nanmean(Y[ok], axis = 1)) / np.sqrt(
+            # np.nanstd/np.nanmean copy their entire input via numpy's _replace_nan even when nothing is missing, so the plain versions, which are exact then, are used instead
+            xmean, xstd = (np.mean, np.std) if nx.min() == Xok.shape[1] else (np.nanmean, np.nanstd)
+            ymean, ystd = (np.mean, np.std) if ny.min() == Yok.shape[1] else (np.nanmean, np.nanstd)
+            sx, sy = np.maximum(xstd(Xok, axis = 1, ddof = 1), 1e-6), np.maximum(ystd(Yok, axis = 1, ddof = 1), 1e-6)
+            d[ok] = (xmean(Xok, axis = 1) - ymean(Yok, axis = 1)) / np.sqrt(
                 ((nx - 1) * sx ** 2 + (ny - 1) * sy ** 2) / (nx + ny - 2))
             var_d[ok] = (nx + ny) / (nx * ny) + d[ok] ** 2 / (2 * (nx + ny))
     return (d, var_d) if np.ndim(x) > 1 else (d[0], var_d[0])
@@ -551,8 +556,11 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
     A, B = np.atleast_2d(np.asarray(row_a, dtype = float)), np.atleast_2d(np.asarray(row_b, dtype = float))
     na, nb = np.isfinite(A).sum(axis = 1), np.isfinite(B).sum(
         axis = 1)  # per-feature counts, so a structurally unmeasured sample drops out instead of turning the whole row into NaN
+    # np.nanvar/np.nanmean copy their entire input via numpy's _replace_nan even when nothing is missing, so the plain versions, which are exact then, are used instead
+    amean, avar = (np.mean, np.var) if na.min() == A.shape[1] else (np.nanmean, np.nanvar)
+    bmean, bvar = (np.mean, np.var) if nb.min() == B.shape[1] else (np.nanmean, np.nanvar)
     pooled_std = np.sqrt(
-        ((na - 1) * np.nanvar(A, axis = 1, ddof = 1) + (nb - 1) * np.nanvar(B, axis = 1, ddof = 1)) / (na + nb - 2))
+        ((na - 1) * avar(A, axis = 1, ddof = 1) + (nb - 1) * bvar(B, axis = 1, ddof = 1)) / (na + nb - 2))
     delta = 0.2 * pooled_std
     if paired:
         assert A.shape[1] == B.shape[1], "For paired samples, the size of row_a and row_b should be the same"
@@ -560,7 +568,7 @@ def get_equivalence_test(row_a: np.ndarray, # array of control samples for one g
         nd = np.isfinite(diff).sum(axis = 1)
         mdiff, se, dof = np.nanmean(diff, axis = 1), np.nanstd(diff, axis = 1, ddof = 1) / np.sqrt(nd), nd - 1
     else:
-        mdiff, se, dof = np.nanmean(A, axis = 1) - np.nanmean(B, axis = 1), pooled_std * np.sqrt(
+        mdiff, se, dof = amean(A, axis = 1) - bmean(B, axis = 1), pooled_std * np.sqrt(
             1 / na + 1 / nb), na + nb - 2
     # TOST: the equivalence p-value is the larger of the two one-sided t-tests against the -delta and +delta bounds
     se = np.maximum(se, 1e-300)

@@ -203,7 +203,7 @@ def get_esmc_representations(prots: list[str],  # list of protein sequences to c
         # Only raise the error if we're not in a testing context
         if not hasattr(model, 'encode') or not hasattr(model, 'logits'):
             raise ImportError(
-                "<To use this function, you will need to install fair-esm, which is not a dependency of glycowork>")
+                "<To use this function, you will need to install esm (pip install esm), which is not a dependency of glycowork>")
 
     def prot_to_ESMC(seq: str):
         if use_esm_api:

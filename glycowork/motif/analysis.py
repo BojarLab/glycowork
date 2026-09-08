@@ -212,6 +212,20 @@ def preprocess_data(
     return df, df_org, group1, group2
 
 
+def _explained_by(parent: str,  # Parent motif whose signal is being decomposed
+                  kids: list[str],  # Its children in the containment DAG
+                  eff: dict[str, float],  # Motif to effect size
+                  top: int | None = 5  # How many children to name, ordered by how far they move the effect size; None names every child
+                  ) -> str:  # Comma-separated children with their effect-size shift, plus a count of any not named
+    "Names the children that move the parent's effect size furthest, since an exhaustive feature set gives broad parents hundreds of them"
+    shown = [c for c in kids if c in eff]
+    if parent in eff:
+        shown = sorted(shown, key = lambda c: -abs(eff[c] - eff[parent]))
+    n = len(shown) if top is None else top
+    labels = [f'{c} ({eff[c] - eff[parent]:+.2f})' for c in shown[:n]] if parent in eff else shown[:n]
+    return ', '.join(labels) + (f', +{len(shown) - n} more' if len(shown) > n else '')
+
+
 def get_pvals_motifs(
         df: pd.DataFrame | str,  # Input dataframe or filepath (.csv/.xlsx)
         label_col_name: str = 'target',  # Column name for labels
@@ -224,8 +238,9 @@ def get_pvals_motifs(
         motifs: pd.DataFrame | None = None,  # Modified motif_list
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         grouped_BH: bool = True,  # Two-stage adaptive Benjamini-Hochberg within DAG-grouped motif families
-        moderate_variance: bool = True
+        moderate_variance: bool = True,
         # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
+        top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
 ) -> GlycoDataFrame:  # DataFrame with p-values, FDR-corrected p-values, significance, Cohen's d effect sizes, and equivalence p-values for glycan motifs
     "Identifies significantly enriched glycan motifs using a moderated t-test with DAG-grouped FDR correction and Cohen's d effect size calculation, comparing samples above/below threshold"
     if isinstance(df, (str, Path)):
@@ -249,26 +264,23 @@ def get_pvals_motifs(
                                 custom_motifs = custom_motifs)
     # Motifs with identical presence across all glycans are one hypothesis, not several, and would otherwise inflate their own family during correction
     df_motif = deduplicate_motifs(df_motif.T).T
-    # Broadcast the dataframe to the correct size given the number of samples
+    # Every observed glycan-sample pair is a row, but its motif counts are always one of the glycan rows, so the observation matrix indexes into the motif matrix instead of materializing a copy of that matrix per sample
+    motif_names = df_motif.columns.tolist()
+    M = df_motif.values.astype(np.float32)  # motif counts are small integers and exact in float32, and this matrix dominates memory on wide datasets
     if multiple_samples:
-        df = df.set_index(glycan_col_name)
-        df_motif = pd.concat([pd.concat([df.iloc[:, k], df_motif], axis = 1).dropna() for k in range(len(df.columns))],
-                             axis = 0)
-        cols = df_motif.columns.tolist()[1:] + [df_motif.columns.tolist()[0]]
-        df_motif = df_motif[cols]
+        vals = df.set_index(glycan_col_name).values.astype(np.float32)
+        rows, samples = np.nonzero(~np.isnan(vals))
+        labels, X = vals[rows, samples].astype(float), M[rows]
     else:
-        df_motif[label_col_name] = df[label_col_name].values.tolist()
-    motif_names = df_motif.columns.tolist()[:-1]
-    labels = df_motif.iloc[:, -1].values.astype(float)
-    X = df_motif.iloc[:, :-1].values.astype(float)
+        labels, X = df[label_col_name].values.astype(float), M
     # Divide into motifs with expression above threshold & below, weighting each motif count by the binding strength it was observed at
     pos, neg = labels > thresh, labels <= thresh
     B, A = (X[pos] * labels[pos, None]).T, (X[neg] * labels[neg, None]).T
     na, nb = A.shape[1], B.shape[1]
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(na + nb)
-    dag = get_motif_dag(motif_names, abundances = pd.DataFrame(X.T,
-                                                               index = motif_names)) if grouped_BH or moderate_variance else None
+    dag = get_motif_dag(motif_names, abundances = pd.DataFrame(M.T,
+                                                               index = motif_names)) if grouped_BH or moderate_variance else None  # duplicated columns add no constraint to the dominance prefilter, so the glycan-level matrix gives the same DAG without the per-sample broadcast
     # Test statistical enrichment for motifs in above vs below
     live = (A.var(axis = 1, ddof = 1) > 1e-12) | (B.var(axis = 1, ddof = 1) > 1e-12)
     Al, Bl = A[live], B[live]
@@ -294,9 +306,8 @@ def get_pvals_motifs(
     equivalence_pvals[np.isnan(equivalence_pvals)] = 1.0
     # Multiple testing correction
     if grouped_BH:
-        grouped_motifs, grouped_pvals = select_grouping(pd.DataFrame(B, index = motif_names),
-                                                        pd.DataFrame(A, index = motif_names), motif_names, ttests,
-                                                        grouped_BH = True, dag = dag)
+        cohorts = (pd.DataFrame(B, index = motif_names), pd.DataFrame(A, index = motif_names)) if dag is None else (pd.DataFrame(index = motif_names),) * 2  # the DAG branch of select_grouping reads only names and p-values, so materializing the cohorts there doubled peak memory for nothing
+        grouped_motifs, grouped_pvals = select_grouping(*cohorts, motif_names, ttests, grouped_BH = True, dag = dag)
         corrpvals, significance_dict = TST_grouped_benjamini_hochberg(grouped_motifs, grouped_pvals, alpha)
         ttests_corr = [max(corrpvals[m], ttests[i]) for i, m in enumerate(motif_names)]
         significance = [significance_dict[m] for m in motif_names]
@@ -309,7 +320,7 @@ def get_pvals_motifs(
         idx, eff = {m: i for i, m in enumerate(motif_names)}, dict(zip(motif_names, effect_sizes))
         for p in [m for m in motif_names if m in dag and dag.out_degree(m)]:
             kids = [c for c in dag.successors(p) if c in idx]
-            kv = F[[idx[c] for c in kids]]
+            kv = F[[idx[c] for c in kids]].astype(np.float64)  # promotes resid, parts, and bal below back to double, since F only stores counts
             resid = F[idx[p]] - kv.sum(axis = 0)
             usable = resid > 1e-6  # siblings can double-count a glycan that carries both, so the sum is not bounded by the parent
             parts = np.vstack([kv, np.where(usable, resid, np.nan)])
@@ -324,7 +335,7 @@ def get_pvals_motifs(
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
             bp_i, bn_i = np.where(pos[cols_b])[0], np.where(neg[cols_b])[0]
             bal_p = hotellings_t2(bal[:, bn_i].T, bal[:, bp_i].T)[1] if 0 < len(bal) < min(len(bp_i), len(bn_i)) else np.nan
-            explained = ', '.join(f'{c} ({eff[c] - eff[p]:+.2f})' for c in kids)
+            explained = _explained_by(p, kids, eff, top_explained)
             okp, okn = usable[pos_i], usable[neg_i]
             if okp.sum() < 2 or okn.sum() < 2:
                 rows[p] = (explained, 1.0, 0.0,
@@ -847,7 +858,8 @@ def get_differential_expression(
         glycoproteomics: bool = False,  # Whether data is from glycoproteomics
         level: str = 'peptide',  # Analysis level for glycoproteomics
         monte_carlo: bool = False,  # Use Monte Carlo for technical variation
-        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+        random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+        top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
 ) -> GlycoDataFrame:  # DataFrame with log2FC, p-values, FDR-corrected p-values, and Cohen's d/Mahalanobis distance effect sizes
     "Performs differential expression analysis using Welch's t-test (or Hotelling's T2 for sets) with multiple testing correction on glycomics abundance data"
     grouped_BH = ((motifs or glycoproteomics) and not sets) if grouped_BH is None else grouped_BH
@@ -1029,7 +1041,7 @@ def get_differential_expression(
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
             bal_p = hotellings_t2(bal[:, b1].T, bal[:, b2].T, paired = paired)[1] if 0 < len(bal) < min(len(b1),
                                                                                                         len(b2)) else np.nan
-            explained = ', '.join((f'{c} ({fc[c] - fc[p]:+.2f})' if p in fc else c) for c in kids if c in fc)
+            explained = _explained_by(p, kids, fc, top_explained)
             ok1, ok2 = usable[g1i], usable[g2i]
             pair_ok = ok1 & ok2 if paired else None
             if (pair_ok.sum() if paired else min(ok1.sum(), ok2.sum())) < 2:
@@ -1204,7 +1216,8 @@ def get_glycanova(
         moderate_variance: bool = True,
         # Empirical-Bayes variance moderation, with the containment DAG as the prior neighborhood
         glycoproteomics: bool = False,  # Whether rows are glycoforms from glycoproteomics instead of glycans
-        random_state: int | np.random.Generator | None = None  # optional random state for reproducibility
+        random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+        top_explained: int | None = 5  # How many child motifs to name in 'Explained by'; None names all of them
 ) -> tuple[GlycoDataFrame, dict[
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
@@ -1314,7 +1327,7 @@ def get_glycanova(
             bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), group_labels = grp_b,
                                                permutations = 999, random_state = random_state)[1] if len(
                 bal) and len(set(grp_b)) > 1 else np.nan
-            explained = ', '.join((f'{c} ({eff[c] - eff[p]:+.2f})' if p in eff else c) for c in kids if c in eff)
+            explained = _explained_by(p, kids, eff, top_explained)
             if min((usable & (garr == g)).sum() for g in levels) < 2:
                 rows[p] = (explained, 1.0, 0.0,
                            bal_p)  # parent occurs only inside its children: no context of its own left to test

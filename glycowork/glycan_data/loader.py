@@ -50,6 +50,15 @@ class GlycoDataFrame(pd.DataFrame):
     def _constructor(self):
         return GlycoDataFrame
 
+    def __finalize__(self, other, method = None, **kwargs):
+        super().__finalize__(other, method = method, **kwargs)
+        if method == "concat":  # pandas hands __finalize__ a _Concatenator here, not an NDFrame, so its _metadata branch never runs and the result would silently lose its contrasts
+            src = next((o for o in getattr(other, 'objs', ()) if isinstance(o, GlycoDataFrame)), None)
+            if src is not None:
+                for name in self._metadata:
+                    object.__setattr__(self, name, getattr(src, name, None))
+        return self
+
     @property
     def _glycan_col(self):
         for name in ('glycan', 'Glycan', 'glycans', 'Glycans'):

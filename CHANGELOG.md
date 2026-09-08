@@ -83,7 +83,7 @@
 - Added the new optional keyword argument `random_state` to `get_time_series`, `get_jtk`, and `get_SparCC` to make them fully reproducible (9630cd0)
 - Added the new optional keyword argument `moderate_variance` to `get_differential_expression` and `get_glycanova` to support Empirical-Bayes variance moderation (afa0634)
 - Added the `full_output` keyword argument to `get_meta_analysis` that also returns heterogeneity statistics (tau2, Q, I2) and leave-one-out pooling if set to `True` (7e03cd2)
-- Added the `title` keyword argument to `get_volcano` and all other plotting functions, to provide a title for the plot (defaults to dataset-stored name, if available) ()
+- Added the `title` keyword argument to `get_volcano` and all other plotting functions, to provide a title for the plot (defaults to dataset-stored name, if available) (fff6326)
 
 ##### Changed 🔄
 - `get_pca` now correctly filters out redundant motifs for the PCA analysis (a918a2e)
@@ -93,7 +93,7 @@
 - `get_pvals_motifs` has been brought in line with the other analysis functions: enrichment is now tested with an Empirical-Bayes moderated t-test using the containment DAG as variance prior (new `moderate_variance` keyword argument), corrected by two-stage Benjamini-Hochberg within DAG-grouped motif families (new `grouped_BH` keyword argument) against a sample-size-adjusted alpha, on a motif set deduplicated via `deduplicate_motifs`, and additionally reports `significant` and `equivalence_pval` columns (42edfc9)
 - `get_representative_substructures` now uses the sample-size-adjusted significance from `get_pvals_motifs`, instead of a hardcoded corrected p-value threshold of 0.05 (42edfc9)
 - `preprocess_data` will now perform site-specific CoDA when `glycoproteomics=True` (glycomics: one global simplex; glycoproteomics: one simplex per site) (1e5f9e4)
-- `get_volcano` with `draw_glycans=True` now no longer needs a specified `filepath` argument ()
+- `get_volcano` with `draw_glycans=True` now no longer needs a specified `filepath` argument (fff6326)
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
