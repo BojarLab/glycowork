@@ -744,6 +744,7 @@ def get_pca(
     pca = PCA()
     X_pca = pca.fit_transform(X_std)
     percent_var = np.round(pca.explained_variance_ratio_ * 100)
+    percent_var_labels = ['PC' + str(x) for x in range(1, len(percent_var) + 1)]
     df_pca = pd.DataFrame(X_pca)
     # merge with metadata
     if isinstance(groups, pd.DataFrame):
@@ -753,11 +754,17 @@ def get_pca(
     if isinstance(groups, list):
         color = groups
     # make plot
-    ax = sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size)
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    ax1.bar(x=range(1, len(percent_var) + 1), height = percent_var, tick_label = percent_var_labels, edgecolor = "black", linewidth = 1)
+    ax1.set(ylabel = 'Explained Variance (%)', 
+            xlabel ='Principal Component')
+    ax1.tick_params(axis = "x", labelrotation = 45)
+    ax1.grid(visible = False)
+    ax2 = sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size)
     if color or shape or size:
         plt.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
-    ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
-           ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
+    ax2.set(xlabel = f'PC{pc_x} ({percent_var[pc_x - 1]}%)',
+           ylabel = f'PC{pc_y} ({percent_var[pc_y - 1]}%)')
     if title is not None:
         ax.set_title(title)
     sns.despine()
