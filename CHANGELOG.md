@@ -94,6 +94,7 @@
 - `get_representative_substructures` now uses the sample-size-adjusted significance from `get_pvals_motifs`, instead of a hardcoded corrected p-value threshold of 0.05 (42edfc9)
 - `preprocess_data` will now perform site-specific CoDA when `glycoproteomics=True` (glycomics: one global simplex; glycoproteomics: one simplex per site) (1e5f9e4)
 - `get_volcano` with `draw_glycans=True` now no longer needs a specified `filepath` argument (fff6326)
+- `get_pca` include a scree plot (a20ea9d)
 
 ##### Fixed 🐛
 - `get_time_series` and `get_jtk` now correctly do motif quantification followed by CLR/ALR (instead of the other way around) in case of motif-analysis (a918a2e)
