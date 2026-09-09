@@ -152,13 +152,15 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
         libr = HashableDict(libr)
     if any(k in glycan for k in [';', 'β', 'α', 'RES', '=']):
         raise Exception
-    termini_list = expand_termini_list(glycan, termini_list) if termini_list else None
     if '{' in glycan:
         chunks = [k for k in glycan.replace('}', '{').split('{') if k]
         chunks, anchor_specs = zip(
             *[(k, {}) if i == len(chunks) - 1 else parse_floating_bit(k) for i, k in enumerate(chunks)])
+        # the string writes floating bits first but the graph numbers them last, and an anchored bit spells out more linkages than it keeps, so expand over the parsed chunks and slice per chunk
+        sizes = [len(min_process_glycans([k])[0]) for k in chunks]
+        termini_list = expand_termini_list(''.join(chunks), termini_list) if termini_list else None
         parts = [glycan_to_nxGraph_int(k, libr = libr, termini = termini,
-                                       termini_list = termini_list) for k in chunks]
+                                       termini_list = None if termini_list is None else termini_list[sum(sizes[:i]):sum(sizes[:i + 1])]) for i, k in enumerate(chunks)]
         len_org = len(parts[-1])
         for i, p in enumerate(parts[:-1]):
             parts[i] = nx.relabel_nodes(p, {pn: pn + len_org for pn in p.nodes()})
@@ -168,7 +170,7 @@ def glycan_to_nxGraph(glycan: str, # Glycan in IUPAC-condensed format
         g1 = nx.compose_all(parts)
     else:
         g1 = glycan_to_nxGraph_int(glycan, libr = libr, termini = termini,
-                                   termini_list = termini_list)
+                                   termini_list = expand_termini_list(glycan, termini_list) if termini_list else None)
     return g1
 
 
@@ -196,7 +198,7 @@ def categorical_node_match_wildcard(attr: str | tuple[str, ...], # Attribute or 
         if (data1_labels == "Monosaccharide" or data2_labels == "Monosaccharide") and not IS_LINKAGE(
                 data1_labels) and not IS_LINKAGE(data2_labels):
             return True
-        if data1_labels == "?1-?" or data2_labels == "?1-?":
+        if data1_labels in ("?1-?", "?2-?") or data2_labels in ("?1-?", "?2-?"):
             if IS_LINKAGE(data1_labels) and IS_LINKAGE(data2_labels):
                 return True
         if data2_labels.startswith('!'):
@@ -234,7 +236,7 @@ def _prefilter_labels(g1_labels: list, # G1 node labels
             if (l1 == l2
                     or ((l1 == 'Monosaccharide' or l2 == 'Monosaccharide') and not IS_LINKAGE(l1) and not IS_LINKAGE(
                         l2))
-                    or ((l1 == '?1-?' or l2 == '?1-?') and IS_LINKAGE(l1) and IS_LINKAGE(l2))
+                    or ((l1 in ('?1-?', '?2-?') or l2 in ('?1-?', '?2-?')) and IS_LINKAGE(l1) and IS_LINKAGE(l2))
                     or (l2.startswith('!') and l1 != l2[1:] and not IS_LINKAGE(l1))
                     or (l1.startswith('!') and l2 != l1[1:] and not IS_LINKAGE(l2))
                     or l2 in narrow_wildcard_list.get(l1, frozenset())
@@ -264,7 +266,7 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
             any(compare_glycans(ta, tb) for tb in topos[1]) for ta in topos[0])
         return (same, None) if return_matches else same
     if isinstance(glycan_a, str) and isinstance(glycan_b, str):
-        if glycan_a.count('(') != glycan_b.count('(') or glycan_a.count("[") != glycan_b.count("["):
+        if glycan_a.count('(') != glycan_b.count('('):
             return (False, None) if return_matches else False
         proc = set(unwrap(min_process_glycans([glycan_a, glycan_b])))
         if 'O' in glycan_a or 'O' in glycan_b:
@@ -372,6 +374,10 @@ def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
         g1 = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else 'ignore')
         g2 = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else 'ignore', termini_list = termini_list)
     else:
+        glycan = glycan_to_nxGraph(glycan, termini = 'calc' if termini_list else 'ignore') if isinstance(glycan,
+                                                                                                         str) else glycan
+        motif = glycan_to_nxGraph(motif, termini = 'provided' if termini_list else 'ignore',
+                                  termini_list = termini_list) if isinstance(motif, str) else motif
         if len(glycan.nodes) < len(motif.nodes):
             return (0, []) if return_matches else 0 if count else False
         if termini_list and not nx.get_node_attributes(motif, 'termini'):
@@ -443,6 +449,12 @@ def subgraph_isomorphism_with_negation(glycan: str | nx.DiGraph, # Glycan sequen
         motif_copy = deepcopy(motif)
         motif_stub = motif_copy.copy()
         negated_nodes = {n for n, data in motif.nodes(data = True) if '!' in data.get('string_labels', '')}
+        for n in sorted(negated_nodes):  # only a leaf can be dropped; removing an internal or root residue would disconnect the stub, so wildcard it instead, exactly as the string path does
+            if motif.out_degree(n):
+                motif_stub.nodes[n]['string_labels'] = 'Monosaccharide'
+                if n + 1 in motif_stub:
+                    motif_stub.nodes[n + 1]['string_labels'] = '?1-?'
+                negated_nodes.discard(n)
         negated_nodes.update({node + 1 for node in negated_nodes if node + 1 in motif_stub})
         motif_stub.remove_nodes_from(negated_nodes)
         negated_part_clean = motif_copy.subgraph(negated_nodes).copy()

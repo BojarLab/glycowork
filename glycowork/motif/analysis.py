@@ -643,7 +643,7 @@ def characterize_monosaccharide(
     sns.despine(left = True, bottom = True)
     a1.set_xlabel('')
     a1.set_title(f'{sugar} and variants are connected to')
-    plt.setp((a0 if modifications else a1).get_xticklabels(), rotation = 'vertical')
+    plt.setp(a1.get_xticklabels(), rotation = 'vertical')
     # Confusingly, this second plot block refers to the *first* plot, depicting the input monosaccharide + its modifications
     if modifications:
         if len(cou_k2) > 1:
@@ -657,7 +657,7 @@ def characterize_monosaccharide(
         a0.set_ylabel('Relative Proportion')
         a0.set_xlabel('')
         a0.set_title(f'Observed Modifications of {sugar}')
-        plt.setp(a1.get_xticklabels(), rotation = 'vertical')
+        plt.setp(a0.get_xticklabels(), rotation = 'vertical')
     fig.suptitle(f'Characterizing {sugar}' if title is None else title)
     fig.tight_layout()
     if filepath:
@@ -705,7 +705,7 @@ def get_pca(
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
         rarity_filter: float = 0.05,  # Min proportion for non-zero values
-        eigenvalues: bool = False, # Plot the explained variance
+        eigenvalues: bool = False, # Plot the explained variance as a separate subplot
         title: str | None = None  # Plot title; None for none, as before
 ) -> None:
     "Performs PCA on glycan/motif abundance data with group-based visualization"
@@ -745,7 +745,7 @@ def get_pca(
     pca = PCA()
     X_pca = pca.fit_transform(X_std)
     percent_var = np.round(pca.explained_variance_ratio_ * 100)
-    percent_var_labels = ['PC' + str(x) for x in range(1, len(percent_var) + 1)]
+    percent_var_labels = [f'PC{x}' for x in range(1, len(percent_var) + 1)]
     df_pca = pd.DataFrame(X_pca)
     # merge with metadata
     if isinstance(groups, pd.DataFrame):
@@ -756,16 +756,16 @@ def get_pca(
         color = groups
     # make plot
     if eigenvalues:
-        fig, (ax1, ax2) = plt.subplots(1, 2)
+        _, (ax1, ax2) = plt.subplots(1, 2)
         sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size, ax = ax1)
-        ax1.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance', 
+        ax1.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
                 ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
         if title is not None:
             ax1.set_title(title)
         if color or shape or size:
             ax1.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
         ax2.bar(x = range(1, len(percent_var) + 1), height = percent_var, tick_label = percent_var_labels, edgecolor = "black", linewidth = 1)
-        ax2.set(ylabel = 'Explained Variance (%)', 
+        ax2.set(ylabel = 'Explained Variance (%)',
                 xlabel = 'Principal Component')
         ax2.tick_params(axis = "x", labelrotation = 45)
         ax2.grid(visible = False)
@@ -781,7 +781,7 @@ def get_pca(
         ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
                ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
         if color or shape or size:
-            ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)  
+            ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
         if title is not None:
             ax.set_title(title)
         sns.despine()
@@ -1689,12 +1689,12 @@ def get_biodiversity(
             pvals = []
             effect_sizes = []
             for row_a, row_b in zip(df_a.values, df_b.values):
-                if np.allclose(row_a, row_b, rtol = 1e-5, atol = 1e-8):
+                if row_a.shape == row_b.shape and np.allclose(row_a, row_b, rtol = 1e-5, atol = 1e-8):
                     pvals.append(1.0)
                     effect_sizes.append(0.0)
                 else:
                     pval = ttest_rel(row_b, row_a)[1] if paired else ttest_ind(row_b, row_a, equal_var = False)[1]
-                    pvals.append(pval if (pval > 0 and pval < 1) else 1.0)
+                    pvals.append(float(np.clip(pval, np.nextafter(0, 1), 1.0)) if np.isfinite(pval) else 1.0)
                     effect, _ = cohen_d(row_b, row_a, paired = paired)
                     effect_sizes.append(effect)
             a_df_stats = pd.DataFrame(list(zip(a_df.index.tolist(), mean_a, mean_b, pvals, effect_sizes)),
@@ -1960,7 +1960,7 @@ def get_roc(
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
     experiment = "diff" if group2 else "anova"
     df, df_org, group1, group2 = preprocess_data(df, group1 = group1, group2 = group2, experiment = experiment,
-                                                 motifs = motifs, impute = impute,
+                                                 motifs = motifs, impute = impute, min_samples = min_samples,
                                                  transform = transform, feature_set = feature_set, paired = paired, gamma = gamma,
                                                  custom_scale = custom_scale, custom_motifs = custom_motifs, random_state = random_state)
     if multi_score:
@@ -2031,7 +2031,7 @@ def get_roc(
             plt.legend(loc = "lower right")
             if filepath:
                 filepath = Path(filepath)
-                plt.savefig(f"{filepath.stem}_{classy}{filepath.suffix}", format = filepath.suffix[1:], dpi = 300,
+                plt.savefig(filepath.with_name(f"{filepath.stem}_{classy}{filepath.suffix}"), format = filepath.suffix[1:], dpi = 300,
                             bbox_inches = 'tight')
     plt.show()
     return sorted_auc_scores
@@ -2074,8 +2074,8 @@ def get_lectin_array(
     lectin_list = df.columns.tolist()
     df = np.log2(df) if transform == "log2" else df
     df = df.T
-    if not isinstance(group1[0], str):
-        if group1[0] == 1 or (group2 and group2[0] == 1):
+    if group2 and not isinstance(group1[0], str):
+        if group1[0] == 1 or group2[0] == 1:
             group1 = [k - 1 for k in group1]
             group2 = [k - 1 for k in group2]
         columns_list = df.columns.tolist()

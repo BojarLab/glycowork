@@ -87,10 +87,11 @@ def get_multi_pred(prot: str,  # protein amino acid sequence
         prot = prot_to_coded([prot])
         feature = prot * len(glycans)
     else:
-        if prot not in prot_dic:
+        key = next((k for k in (prot, prot.strip().upper()[:1000]) if k in prot_dic), prot)  # get_esmc_representations stores the cleaned, truncated sequence, not whatever the caller passed in
+        if key not in prot_dic:
             raise KeyError(
                 f"No stored embedding for the protein sequence of length {len(prot)} starting with '{prot[:20]}'; compute it with get_esmc_representations and add it to prot_dic, or use a LectinOracle_flex model with flex = True.")
-        feature = [prot_dic[prot]] * len(glycans)
+        feature = [prot_dic[key]] * len(glycans)
     train_loader = dataset_to_dataloader(glycans, [0.99] * len(glycans), libr = libr, batch_size = batch_size,
                                          label_type = torch.float, shuffle = False, extra_feature = feature)
     model = model.eval()

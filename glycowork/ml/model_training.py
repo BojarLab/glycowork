@@ -130,7 +130,8 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                     x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
                 x = x.to(device)
                 if mode == 'multilabel':
-                    y = y.view(int(batch.max()) + 1, -1).to(device)
+                    # hetero_collate already stacks the per-sample label rows, so only the flat PyG y has to be folded back into [B, C]
+                    y = (y if batch is None else y.view(int(batch.max()) + 1, -1)).to(device)
                 elif mode == "regression":
                     y = y.view(-1, 1).to(device)
                 else:
@@ -150,6 +151,9 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                     # First forward pass
                     enable_running_stats(model)
                     pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
+                    # SweetNet and GIFFLAR squeeze their single output away, LectinOracle does not, so the target is matched to whatever the model returned rather than assumed to be a column
+                    if mode == 'regression':
+                        y = y.view_as(pred)
                     loss = criterion(pred, y)
                     if phase == 'train':
                         loss.backward()
@@ -370,7 +374,8 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
         self.num_classes = num_classes
         self.epsilon = epsilon
         self.reduction = reduction
-        self.weight = weight
+        # Registered rather than assigned, so that .to(device) carries the class weights along with the module
+        self.register_buffer("weight", weight)
         return
 
     def forward(self, logits: torch.Tensor,  # predicted class probabilities [N, num_classes]
@@ -404,11 +409,15 @@ class WarmupScheduler:
         self.warmup_epochs = warmup_epochs
         self.current_epoch = 0
         self.base_lr = self.optimizer.param_groups[0]['lr']
+        # step() only runs after an epoch has been trained, so the factor for the very first epoch has to be in place before training starts
+        if warmup_epochs > 0:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = self.base_lr / warmup_epochs
 
     def step(self, metrics = None):
         self.current_epoch += 1
         if self.current_epoch <= self.warmup_epochs:
-            warmup_factor = self.current_epoch / self.warmup_epochs
+            warmup_factor = min(1.0, (self.current_epoch + 1) / self.warmup_epochs)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.base_lr * warmup_factor
         else:

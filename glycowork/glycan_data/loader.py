@@ -168,6 +168,8 @@ class GlycoDataFrame(pd.DataFrame):
                        1 if min_count is None else min_count)]
         if not self._glycan_col and glycans == [c for c in self.columns if isinstance(c, str) and '(' in c]:
             return self[[glycans[i] for i in indices]]  # a transposed frame keeps its glycans in the columns, so .glycans enumerates that axis and slicing rows would return unrelated samples
+        if not self._glycan_col and self.index.dtype != float and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
+            return self.iloc[indices, :]  # the glycans live in the index here, so resetting it would discard the very labels that were filtered on
         return self.iloc[indices, :].reset_index(drop = True)
 
     def meta_filter(self, narrow: bool = True,
@@ -326,6 +328,8 @@ class LazyLoader:
         return
 
     def __getattr__(self, name):
+        if name.startswith('_'):  # a private lookup on a not-yet-populated instance (unpickling, copy) must not re-enter this method through self._datasets
+            raise AttributeError(name)
         if name not in self._datasets:
             filename = f"{self.prefix}{name}.csv"
             try:

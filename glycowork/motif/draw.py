@@ -817,7 +817,7 @@ def get_coordinates_and_labels(
             l2_connected_branches = deeper_connected[0] if deeper_connected else []
             has_fuc = ('Fuc' in branch_sugar) or ('Fuc' in unwrap(unwrap(deeper_connected)))
             has_own_fuc = 'Fuc' in unwrap(l1_main_chain_branches) or 'Fuc' in unwrap(unwrap(deeper_main_chain))
-            has_bisecting = any('GlcNAc' in b[0] for b in core_branches) and main_sugar[parent_idx] == 'Man' and main_bond[
+            has_bisecting = parent_idx > 0 and any('GlcNAc' in b[0] for b in core_branches) and main_sugar[parent_idx] == 'Man' and main_bond[
                 parent_idx - 1] == 'β 4'
             has_triple_branch = len(branch_indices) == 2 and not 'Xyl' in unwrap(core_branches)
             is_highly_branched = len(l2_connected_branches) > 1
@@ -842,7 +842,7 @@ def get_coordinates_and_labels(
             # Core fucose goes up
             lv_y_pos[0][j] = [-2 * SPACING] * len(branch_sugar)
         else:
-            is_bisecting = branch_sugar[0] in ['GlcNAc'] and main_sugar[parent_idx] == 'Man' and main_bond[
+            is_bisecting = parent_idx > 0 and branch_sugar[0] in ['GlcNAc'] and main_sugar[parent_idx] == 'Man' and main_bond[
                 parent_idx - 1] == 'β 4'
             is_leading_xyl = main_sugar[-1] == 'Xyl'
             is_fuc_partner = main_sugar[parent_idx + 1] == 'Fuc' or (tucked_end and parent_idx + 2 == len(main_sugar))
@@ -1023,7 +1023,7 @@ def draw_bracket(
     y_max = y_min_max[1] * dim + 0.75 * dim
     # Vertical
     offset = 0.25 * dim * (1 if direction == 'right' else -1)
-    g = draw.Group(transform = f'rotate({deg} {x_common} {(y_min_max[0]+y_min_max[1])/2})')
+    g = draw.Group(transform = f'rotate({deg} {x_common} {(y_min + y_max)/2})')
     p = draw.Path(stroke_width = 0.04 * dim, stroke = col_dict['black'])
     p.M(x_common, y_max).L(x_common, y_min)
     p.M(x_common - offset / 12.5, y_min).L(x_common + offset, y_min)
@@ -1357,6 +1357,8 @@ def GlycoDraw(
         glycan = f'blank(?1-{_conn[-1]}){_backbone}{_conn[:2]}-?)'
         if per_residue:
             per_residue = [0] + list(per_residue)
+        if highlight_linkages:
+            highlight_linkages = [k + 1 for k in highlight_linkages]
     if glycan.endswith(')'):
         glycan += 'blank'
         if per_residue:

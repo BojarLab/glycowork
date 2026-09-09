@@ -917,7 +917,7 @@ def omega_squared(row: pd.Series | np.ndarray | pd.DataFrame, # values for one f
     ss_total = np.nansum((X - grand_mean[:, None]) ** 2, axis = 1)
     mse_resid = (ss_total - ss_between) / (n_tot - len(ug))
     out = (ss_between - (len(ug) - 1) * mse_resid) / (ss_total + mse_resid)
-    return pd.Series(out, index = row.index) if isinstance(row, pd.DataFrame) else out[0]
+    return pd.Series(out, index = row.index) if isinstance(row, pd.DataFrame) else (out if np.ndim(row) > 1 else out[0])
 
 
 def get_glycoform_diff(df_res: pd.DataFrame, # result from .motif.analysis.get_differential_expression
@@ -962,7 +962,7 @@ def get_glm(group: pd.DataFrame, # longform data of glycoform abundances for a g
             return ("GLM fitting failed: insufficient residual degrees of freedom", [])
         se = np.sqrt(np.diag(np.linalg.pinv(X.T @ X)) * (((y - X @ beta) ** 2).sum() / dof))
         names = ['Intercept'] + terms
-        return (pd.Series(beta, index = names), pd.Series(2 * norm.sf(np.abs(beta / se)), index = names)), retained_vars
+        return (pd.Series(beta, index = names), pd.Series(2 * t.sf(np.abs(beta / se), dof), index = names)), retained_vars
     except Exception as e:
         return (f"GLM fitting failed: {str(e)}", [])
 

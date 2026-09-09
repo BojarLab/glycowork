@@ -378,7 +378,7 @@ def mask_rare_glycoletters(glycans: list[str], # List of IUPAC-condensed glycans
     thresholds = [thresh_monosaccharides, thresh_linkages]
     # Establish which ones are considered to be rare
     rare_dict = [
-        {x: 'Monosaccharide' if i == 0 else '?1-?' if x[1] == '1' else '?2-?'
+        {x: 'Monosaccharide' if i == 0 else '?1-?' if x.lstrip('ab?')[0] == '1' else '?2-?'
          for x, count in Counter(rare_elements[i]).items() if count <= thresholds[i]}
         for i in range(2)
     ]
@@ -393,7 +393,7 @@ def mask_rare_glycoletters(glycans: list[str], # List of IUPAC-condensed glycans
                     glycan = glycan[:-len(k)] + v
         # Replace rare linkages
         for k, v in rare_dict[1].items():
-            glycan = glycan.replace(k, v)
+            glycan = glycan.replace(f'({k})', f'({v})')
         out.append(glycan)
     return out
 
@@ -476,9 +476,9 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
     for mod in ('Me', 'PCho', 'PEtN'):
         if mod in glycan:
             composition[mod] = glycan.count(mod)
-    if n_p := len(re.findall(r'P(?!en|yr|Cho|EtN)', glycan)):
+    if n_p := len(re.findall(r'P(?!en|yr|Cho|EtN|am|ro)', glycan)):
         composition['P'] = n_p
-    if n_s := len(re.findall(r'S(?!ia|or|ed)', glycan)):
+    if n_s := len(re.findall(r'S(?!ia|or|ed|er|te|uc)', glycan)):
         composition['S'] = n_s
     ac_mods = ('OAc', '2Ac', '3Ac', '4Ac', '6Ac', '7Ac', '9Ac')
     if any(mod in glycan for mod in ac_mods):
@@ -524,6 +524,8 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
             dict_comp[new_key] = dict_comp.pop(old_key)
     # O-acetylation adds acetyl minus H (net +C2H2O = 42.0106 monoisotopic), not full acetate (59 Da)
     ac_count = dict_comp.pop('Ac', 0)
+    if missing := [k for k in dict_comp if pd.isna(mass_dict_in.get(k, 0))]:
+        raise ValueError(f"{missing} have no {mass_key} mass in mz_to_composition.csv, so no mass can be calculated for this composition.")
     total_mass = sum(v * (mass_dict_in.get(k) or calculate_adduct_mass(k, mass_value = mass_value, enforce_sign = True))
                      for k, v in dict_comp.items()) + mass_dict_in['red_end'] + ac_count * calculate_adduct_mass(
         'C2H2O', mass_value = mass_value)

@@ -348,7 +348,7 @@ def canonicalize_composition(comp: str, # Composition in Hex5HexNAc4Fuc1Neu5Ac2 
             raise ValueError(
                 f"'{comp}' is an all-digit composition, read positionally as Hex/HexNAc/Neu5Ac/dHex, so it needs exactly four digits; spell it out (e.g., 'Hex5HexNAc4Neu5Ac2Fuc1') when a count reaches 10.")
         temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
-        return {k: v for k, v in temp.items() if v}
+        comp_dict = {k: v for k, v in temp.items() if v}
     elif comp and comp[0].isdigit():
         comp = comp.replace(' ', '')
         if len(comp) < 5:
@@ -895,7 +895,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
         return _OXFORD_HARDCODED[oxford]
     oxford = oxford.replace("[SO4-2]", "Sulf")
     if "Sulf" in oxford:
-        sulf = oxford[oxford.index("Sulf") + 4]
+        sulf = oxford[oxford.index("Sulf") + 4:oxford.index("Sulf") + 5]
         sulf = int(sulf) if sulf.isdigit() else 1
         oxford = oxford.replace("Sulf", '')
     else:
@@ -912,7 +912,8 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
         iupac = iupac[:split + 1] + fuc + iupac[split + 1:]
     if 'F' in oxford[1:]:
         nth = oxford.count('F')
-        antennae["F"] = int(oxford[find_nth(oxford, "F", nth)+1])
+        rest = oxford[find_nth(oxford, "F", nth) + 1:]
+        antennae["F"] = int(rest[0]) if rest[:1].isdigit() else 1
     floaty = ''
     is_hybrid = False
     if 'M' in oxford:
@@ -986,13 +987,15 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
                 v -= 1
     iupac = iupac.replace("GlcNAc(b1-?)[Neu5Ac(a2-3/6)]Man", "[Neu5Ac(a2-3/6)]GlcNAc(b1-?)Man")
     while "Neu5Ac(a2-8)G" in iupac:
-        iupac = iupac.replace("Neu5Ac(a2-8)G", "G", 1)
-        idx = [m.start() for m in re.finditer(r'(?<!8\))Neu5Ac\(a2-[3|6|\?]\)', iupac)][0]
-        iupac = iupac[:idx] + "Neu5Ac(a2-8)" + iupac[idx:]
+        candidate = iupac.replace("Neu5Ac(a2-8)G", "G", 1)
+        if not (hit := re.search(r'(?<!8\))Neu5Ac\(a2-[36?](?:/[36?])*\)', candidate)):
+            break
+        iupac = candidate[:hit.start()] + "Neu5Ac(a2-8)" + candidate[hit.start():]
     while "[Neu5Ac(a2-8)]" in iupac:
-        iupac = iupac.replace("[Neu5Ac(a2-8)]", "", 1)
-        idx = [m.start() for m in re.finditer(r'(?<!8\))Neu5Ac\(a2-[3|6|\?]\)', iupac)][0]
-        iupac = iupac[:idx] + "Neu5Ac(a2-8)" + iupac[idx:]
+        candidate = iupac.replace("[Neu5Ac(a2-8)]", "", 1)
+        if not (hit := re.search(r'(?<!8\))Neu5Ac\(a2-[36?](?:/[36?])*\)', candidate)):
+            break
+        iupac = candidate[:hit.start()] + "Neu5Ac(a2-8)" + candidate[hit.start():]
     while sulf > 0:
         iupac = iupac.replace("Gal(", "GalOS(", 1)
         sulf -= 1
@@ -1134,7 +1137,7 @@ def nglycan_stub_to_iupac(nglycan_stub: str # Glycan in a N-glycan stub format
                           ) -> str: # Basic IUPAC-condensed format
     "Convert glycan from N-glycan stub to barebones IUPAC-condensed format"
     nglycan_stub = nglycan_stub.replace("(Man)3(GlcNAc)2", "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc").replace("Deoxyhexose", "Fuc")
-    parts_dict, nglycan_stub = nglycan_stub.split('+')
+    parts_dict, _, nglycan_stub = nglycan_stub.rpartition('+')
     parts_dict = {x.split(')')[0].replace('(', ''): int(x.split(')')[1]) for x in re.findall(r'\([^)]+\)\d+', parts_dict)}
     parts = ''.join([f"{{{p}(?1-?)}}" * v for p, v in parts_dict.items()])
     return f"{parts}{nglycan_stub}"
@@ -1225,7 +1228,7 @@ def sanitize_iupac(glycan: str # Glycan string to check
                    ) -> str: # Sanitized glycan string
     """Sanitize IUPAC glycan sequence by identifying and correcting chemical impossibilities."""
     # Handle NAc special case (any sugar with NAc can't have linkage at position 2)
-    glycan = re.sub(r'([A-Za-z]+\^?)\(([ab?][1-2])-2\)([A-Za-z]+NAc\^?)', r'\1(\2-?)\3', glycan)
+    glycan = re.sub(r'([A-Za-z]+\^?)\(([ab?][1-2])-2\)(?=[A-Za-z]+NAc\^?)', r'\1(\2-?)', glycan)
     # Handle modifications (can't have a linkage to a position that's modified)
     glycan = re.sub(r'\(([ab?][1-2])-(\d)\)([A-Za-z]+\2[A-Z]\^?)', r'(\1-?)\3', glycan)
     # Handle branched cases with same linkage position
@@ -1294,6 +1297,8 @@ def looks_like_oxford(glycan: str) -> bool:
 
 
 def _sort_mono_mods(m):
+    if m.group() in lib:
+        return m.group()
     match = re.match(r'(Neu5Ac|Neu5Gc|[A-Z][a-z]{2,})(.*)', m.group())
     if not match or not match.group(2):
         return m.group()
@@ -1413,7 +1418,7 @@ def canonicalize_iupac(glycan: str # Glycan sequence in any supported format
     # Anomeric indicator placed behind monosaccharide (e.g., "Galb14GlcNAc")
     glycan = re.sub(r'([A-Z][A-Za-z5]*)([ab])([1-2])(\d)', r'\1\2\3-\4', glycan)
     # Canonicalize usage of brackets and parentheses
-    if bool(re.search(r'\([A-Zd3-9]', glycan)) and not bool(re.search(r'\([ab?]', glycan)):
+    if bool(re.search(r'\([A-Zd3-9]', glycan)) and not bool(re.search(r'\([ab?]|\(\d+-', glycan)):
         glycan = glycan.replace('(', '[').replace(')', ']')
     # Canonicalize linkage uncertainty
     # Open linkages with anomeric config specified (e.g., "Mana-")

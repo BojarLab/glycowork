@@ -48,30 +48,34 @@ def safe_index(glycan: str, # Glycan in IUPAC-condensed format
     return graph_dic[glycan]
 
 
+def terminal_pairs_for_precursors(ggraph: nx.DiGraph, # Glycan graph
+                                  min_size: int = 1 # Minimum root size; default:1
+                                  ) -> list[tuple[int, int]]: # (terminal monosaccharide, linkage) node pairs
+    "Node pairs whose removal yields a biosynthetic precursor, in the order create_neighbors returns those precursors"
+    # Check whether glycan large enough to allow for precursors
+    if len(ggraph) <= min_size:
+        return []
+    pairs = [(k, next(ggraph.predecessors(k))) for k in ggraph.nodes() if
+             ggraph.out_degree(k) == 0 and ggraph.in_degree(k) > 0]
+    comps = sorted(nx.weakly_connected_components(ggraph), key = min)
+    if len(comps) > 1:
+        # a floating bit has no fixed attachment point, so it cannot be ordered against a backbone addition; deferring it until the backbone is minimal stops the node count growing as 2^floaters x backbone precursors
+        backbone = [p for p in pairs if set(p) <= comps[0]]
+        pairs = backbone or pairs
+    return pairs
+
+
 @lru_cache(maxsize = 1024)
 def create_neighbors(ggraph: nx.DiGraph, # Glycan graph
                      min_size: int = 1 # Minimum root size; default:1
                      ) -> list[nx.Graph]: # List of precursor graphs
     "Create biosynthetic precursor glycans"
-    num_nodes = len(ggraph)
-    # Check whether glycan large enough to allow for precursors
-    if num_nodes <= min_size:
-        return []
-    if num_nodes == 3:
-        return [nx.relabel_nodes(ggraph.subgraph([2]), {2: 0})]
     # Generate all precursors by iteratively cleaving off the non-reducing-end monosaccharides
-    terminal_pairs = [frozenset({k, next(ggraph.predecessors(k))}) for k in ggraph.nodes() if
-                      ggraph.out_degree(k) == 0 and ggraph.in_degree(k) > 0]
-    comps = sorted(nx.weakly_connected_components(ggraph), key = min)
-    if len(comps) > 1:
-        # a floating bit has no fixed attachment point, so it cannot be ordered against a backbone addition; deferring it until the backbone is minimal stops the node count growing as 2^floaters x backbone precursors
-        backbone = [p for p in terminal_pairs if p <= comps[0]]
-        terminal_pairs = backbone or terminal_pairs
     nodes = frozenset(ggraph)
     # Cleaving off messes with the node labeling, so they have to be re-labeled
     return [
-        nx.relabel_nodes(ggraph.subgraph(nodes - pair), {m: i for i, m in enumerate(nodes - pair)})
-        for pair in terminal_pairs
+        nx.relabel_nodes(ggraph.subgraph(nodes - set(pair)), {m: i for i, m in enumerate(sorted(nodes - set(pair)))})
+        for pair in terminal_pairs_for_precursors(ggraph, min_size)
     ]
 
 
@@ -220,11 +224,10 @@ def infer_roots(glycans: frozenset[str] # Set of glycans
     if len([c for c in counts if c]) > 1:
         print(
             f"More than one glycan class detected ({dict(counts)}); the network will be rooted in the majority class, so check that the input is not mixed.")
-    for net_class, roots in (('free', {'Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol'}),
-                             ('lipid', {'Glc1Cer', 'Gal1Cer', 'Ins'}),
-                             ('N', {'Man(b1-4)GlcNAc(b1-4)GlcNAc'}), ('O', {'GalNAc', 'Fuc', 'Man'})):
-        if net_class in classes:
-            return frozenset(roots)
+    root_sets = {'free': {'Gal(b1-4)Glc-ol', 'Gal(b1-4)GlcNAc-ol'}, 'lipid': {'Glc1Cer', 'Gal1Cer', 'Ins'},
+                 'N': {'Man(b1-4)GlcNAc(b1-4)GlcNAc'}, 'O': {'GalNAc', 'Fuc', 'Man'}}
+    if candidates := sorted((c for c in classes if c in root_sets), key = lambda c: (-counts[c], list(root_sets).index(c))):
+        return frozenset(root_sets[candidates[0]])
     if 'lipid/free' in classes or any(k.endswith('Glc') for k in glycans):
         print("Are you working with free oligosaccharides or glycolipids? Append '-ol' or '1Cer' to your glycans, respectively. We'll pretend it's milk glycans for now")
         return frozenset({'Gal(b1-4)Glc', 'Gal(b1-4)GlcNAc'})
@@ -276,9 +279,8 @@ def build_network_from_glycans(glycans: list[str], # Observed glycans
     while queue:
         glycan = queue.pop()
         ggraph = safe_index(glycan, graph_dic)
-        terminal_pairs = [(k, next(ggraph.predecessors(k))) for k in ggraph.nodes()
-                          if ggraph.out_degree(k) == 0 and ggraph.in_degree(k) > 0]
-        for prec_graph, (term_node, link_node) in zip(create_neighbors(ggraph, min_size = min_size), terminal_pairs):
+        for prec_graph, (term_node, link_node) in zip(create_neighbors(ggraph, min_size = min_size),
+                                                      terminal_pairs_for_precursors(ggraph, min_size)):
             prec_str = graph_to_string(prec_graph)
             if prec_str.startswith('('):
                 continue
@@ -312,14 +314,15 @@ def construct_network(glycans: list[str], # List of glycans
                       ) -> nx.DiGraph: # Biosynthetic network
     "Construct glycan biosynthetic network"
     # Canonicalize all input strings upfront so string equality == graph isomorphism throughout
-    glycans = sorted(set(canonicalize_iupac(g) for g in glycans))
+    glycans = [canonicalize_iupac(g) for g in glycans]
+    abundance_mapping = dict(zip(glycans, abundances)) if abundances else {}  # zipped in the caller's order, before sorting and deduplication
+    glycans = sorted(set(glycans))
     stem_lib = get_stem_lib(get_lib(glycans))
     if permitted_roots is None:
         permitted_roots = infer_roots(frozenset(glycans))
         if not permitted_roots:
             raise ValueError(
                 f"Could not detect the glycan class (e.g., from '{glycans[0] if glycans else ''}'), so no biosynthetic roots can be inferred; glycans should end in '-ol' (free), 'GalNAc' (O-linked), 'GlcNAc' (N-linked), or '1Cer'/'Ins' (glycolipid), or pass permitted_roots explicitly.")
-    abundance_mapping = dict(zip(glycans, abundances)) if abundances else {}
     # Generating graph from adjacency of observed glycans
     min_size = min(k.count('(') for k in permitted_roots) + 1
     add_to_virtuals = [r for r in permitted_roots if r not in glycans and any(g.endswith(r) for g in glycans)]
@@ -1133,6 +1136,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     else:
         df_analysis = df_analysis.T
     # Network analysis
+    df_analysis = df_analysis.set_axis([canonicalize_iupac(g) for g in df_analysis.index])  # construct_network canonicalizes its node names, so the abundance keys have to be canonical too
     root = sorted(infer_roots(frozenset(df_analysis.index.tolist())))
     if not root:
         raise ValueError(
@@ -1419,9 +1423,10 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
         if not new_leaf_glycans:
             break
         new_edges, new_edge_labels = edges_for_extension(leaf_glycans, new_leaf_glycans, graphs)
-        network = update_network(network, new_edges, edge_labels = new_edge_labels, node_labels = {k: 1 for k in new_leaf_glycans})
+        added = new_leaf_glycans - set(network)  # a regenerated structure that is already observed keeps virtual = 0 and is not a new candidate
+        network = update_network(network, new_edges, edge_labels = new_edge_labels, node_labels = {k: 1 for k in added})
         leaf_glycans = new_leaf_glycans
-        new_glycans.update(leaf_glycans)
+        new_glycans.update(added)
     if prioritize and new_glycans:
         # candidates differ in how much of the observed glycome can physiologically reach them, which is the same flow criterion used to pick between isomers of one composition
         roots = sorted(r for r in infer_roots(frozenset(network.nodes())) if r in network)
@@ -1541,7 +1546,7 @@ def get_biosynthetic_coherence(
     _, p_s = ttest_rel(s2, s1) if paired else ttest_ind(s2, s1, equal_var = False)
     effect, _ = cohen_d(o2, o1, paired = paired)
     rng = np.random.default_rng(random_state)
-    obs, null, diffs = float(s2.mean() - s1.mean()), [], s2 - s1
+    obs, null, diffs = float(s2.mean() - s1.mean()), [], (s2 - s1) if paired else None
     for _ in range(n_permutations):
         if paired:
             null.append(float(np.where(rng.random(len(diffs)) < 0.5, -diffs, diffs).mean()))

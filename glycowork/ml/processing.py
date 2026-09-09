@@ -120,7 +120,8 @@ def dataset_to_dataloader(glycan_list: list[str], # list of IUPAC-condensed glyc
             warnings.warn(
                 f"{len(glycan_list) - len(data)} of {len(glycan_list)} glycans have no defined molecular graph and were dropped from this dataloader")
         return torch.utils.data.DataLoader(HeteroDataset(data), batch_size = batch_size, shuffle = shuffle,
-                                           drop_last = drop_last, collate_fn = hetero_collate)
+                                           drop_last = drop_last or (shuffle and len(HeteroDataset(data)) % batch_size == 1),
+                                           collate_fn = hetero_collate)
     # Converting glycans and labels to PyTorch Geometric Data objects
     glycan_graphs = dataset_to_graphs(glycan_list, labels, libr = libr, label_type = label_type)
     # Adding (optional) extra feature to the Data objects
@@ -128,8 +129,9 @@ def dataset_to_dataloader(glycan_list: list[str], # list of IUPAC-condensed glyc
         for graph, feature in zip(glycan_graphs, extra_feature):
             graph.train_idx = torch.tensor(feature, dtype = torch.float)
     augmented_dataset = AugmentedGlycanDataset(glycan_graphs, libr, augment_prob = augment_prob, generalization_prob = generalization_prob)
-    # Generating the dataloader from the data objects
-    return DataLoader(augmented_dataset, batch_size = batch_size, shuffle = shuffle, drop_last = drop_last)
+    # Generating the dataloader from the data objects; a trailing batch of one sample makes every BatchNorm1d in the models raise while training, so it can never be kept when shuffling
+    return DataLoader(augmented_dataset, batch_size = batch_size, shuffle = shuffle,
+                      drop_last = drop_last or (shuffle and len(augmented_dataset) % batch_size == 1))
 
 
 def split_data_to_train(glycan_list_train: list[str], # training glycans
