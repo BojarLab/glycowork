@@ -1,1 +1,1 @@
-Sitemap: /sitemap.xml
+Sitemap: https://bojarlab.github.io/glycowork/sitemap.xml

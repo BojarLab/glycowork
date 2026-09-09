@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.9.38">
+<meta name="generator" content="quarto-1.10.18">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -12,10 +12,13 @@
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
 */
-code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
-div.columns{display: flex; gap: min(4vw, 1.5em);}
-div.column{flex: auto; overflow-x: auto;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
 div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
 ul.task-list{list-style: none;}
 ul.task-list li input[type="checkbox"] {
@@ -74,10 +77,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-3d242d70d41cd9edc5ebe4da1d712dc5.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-5ff355f32169432f12e3b54c979a24ba.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -110,15 +113,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link rel="stylesheet" href="styles.css">
 <meta property="og:title" content="ml – glycowork">
 <meta property="og:description" content="Package for processing and analyzing glycans">
-<meta property="og:image" content="/02_ml_files/figure-html/cell-8-output-1.png">
+<meta property="og:image" content="https://bojarlab.github.io/glycowork/02_ml_files/figure-html/cell-8-output-1.png">
 <meta property="og:site_name" content="glycowork">
 <meta property="og:image:height" content="470">
-<meta property="og:image:width" content="630">
+<meta property="og:image:width" content="616">
 <meta name="twitter:title" content="ml – glycowork">
 <meta name="twitter:description" content="Package for processing and analyzing glycans">
-<meta name="twitter:image" content="/02_ml_files/figure-html/cell-8-output-1.png">
+<meta name="twitter:image" content="https://bojarlab.github.io/glycowork/02_ml_files/figure-html/cell-8-output-1.png">
 <meta name="twitter:image-height" content="470">
-<meta name="twitter:image-width" content="630">
+<meta name="twitter:image-width" content="616">
 <meta name="twitter:card" content="summary_large_image">
 </head>
 
@@ -207,43 +210,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#model_training" id="toc-model_training" class="nav-link active" data-scroll-target="#model_training">model_training</a>
-  <ul class="collapse">
-  <li><a href="#earlystopping" id="toc-earlystopping" class="nav-link" data-scroll-target="#earlystopping">EarlyStopping</a></li>
-  <li><a href="#train_model" id="toc-train_model" class="nav-link" data-scroll-target="#train_model">train_model</a></li>
-  <li><a href="#training_setup" id="toc-training_setup" class="nav-link" data-scroll-target="#training_setup">training_setup</a></li>
-  <li><a href="#train_ml_model" id="toc-train_ml_model" class="nav-link" data-scroll-target="#train_ml_model">train_ml_model</a></li>
-  <li><a href="#analyze_ml_model" id="toc-analyze_ml_model" class="nav-link" data-scroll-target="#analyze_ml_model">analyze_ml_model</a></li>
-  <li><a href="#get_mismatch" id="toc-get_mismatch" class="nav-link" data-scroll-target="#get_mismatch">get_mismatch</a></li>
-  </ul></li>
-  <li><a href="#models" id="toc-models" class="nav-link" data-scroll-target="#models">models</a>
-  <ul class="collapse">
-  <li><a href="#sweetnet" id="toc-sweetnet" class="nav-link" data-scroll-target="#sweetnet">SweetNet</a></li>
-  <li><a href="#lectinoracle" id="toc-lectinoracle" class="nav-link" data-scroll-target="#lectinoracle">LectinOracle</a></li>
-  <li><a href="#lectinoracle_flex" id="toc-lectinoracle_flex" class="nav-link" data-scroll-target="#lectinoracle_flex">LectinOracle_flex</a></li>
-  <li><a href="#nsequonpred" id="toc-nsequonpred" class="nav-link" data-scroll-target="#nsequonpred">NSequonPred</a></li>
-  <li><a href="#init_weights" id="toc-init_weights" class="nav-link" data-scroll-target="#init_weights">init_weights</a></li>
-  <li><a href="#prep_model" id="toc-prep_model" class="nav-link" data-scroll-target="#prep_model">prep_model</a></li>
-  </ul></li>
-  <li><a href="#processing" id="toc-processing" class="nav-link" data-scroll-target="#processing">processing</a>
-  <ul class="collapse">
-  <li><a href="#dataset_to_graphs" id="toc-dataset_to_graphs" class="nav-link" data-scroll-target="#dataset_to_graphs">dataset_to_graphs</a></li>
-  <li><a href="#dataset_to_dataloader" id="toc-dataset_to_dataloader" class="nav-link" data-scroll-target="#dataset_to_dataloader">dataset_to_dataloader</a></li>
-  <li><a href="#split_data_to_train" id="toc-split_data_to_train" class="nav-link" data-scroll-target="#split_data_to_train">split_data_to_train</a></li>
-  </ul></li>
-  <li><a href="#inference" id="toc-inference" class="nav-link" data-scroll-target="#inference">inference</a>
-  <ul class="collapse">
-  <li><a href="#glycans_to_emb" id="toc-glycans_to_emb" class="nav-link" data-scroll-target="#glycans_to_emb">glycans_to_emb</a></li>
-  <li><a href="#get_lectin_preds" id="toc-get_lectin_preds" class="nav-link" data-scroll-target="#get_lectin_preds">get_lectin_preds</a></li>
-  <li><a href="#get_nsequon_preds" id="toc-get_nsequon_preds" class="nav-link" data-scroll-target="#get_nsequon_preds">get_Nsequon_preds</a></li>
-  <li><a href="#get_esmc_representations" id="toc-get_esmc_representations" class="nav-link" data-scroll-target="#get_esmc_representations">get_esmc_representations</a></li>
-  </ul></li>
-  <li><a href="#train_test_split" id="toc-train_test_split" class="nav-link" data-scroll-target="#train_test_split">train_test_split</a>
-  <ul class="collapse">
-  <li><a href="#hierarchy_filter" id="toc-hierarchy_filter" class="nav-link" data-scroll-target="#hierarchy_filter">hierarchy_filter</a></li>
-  <li><a href="#general_split" id="toc-general_split" class="nav-link" data-scroll-target="#general_split">general_split</a></li>
-  <li><a href="#prepare_multilabel" id="toc-prepare_multilabel" class="nav-link" data-scroll-target="#prepare_multilabel">prepare_multilabel</a></li>
-  </ul></li>
+  <li><a href="#model_training" id="toc-model_training" class="nav-link active" data-scroll-target="#model_training">model_training</a></li>
+  <li><a href="#models" id="toc-models" class="nav-link" data-scroll-target="#models">models</a></li>
+  <li><a href="#processing" id="toc-processing" class="nav-link" data-scroll-target="#processing">processing</a></li>
+  <li><a href="#inference" id="toc-inference" class="nav-link" data-scroll-target="#inference">inference</a></li>
+  <li><a href="#train_test_split" id="toc-train_test_split" class="nav-link" data-scroll-target="#train_test_split">train_test_split</a></li>
   </ul>
 </nav>
     </div>
@@ -283,72 +254,73 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <blockquote class="blockquote">
 <p>contains functions for training machine learning models</p>
 </blockquote>
+<div id="indie-confirmation" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.354324+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.415159+00:00&quot;,&quot;total&quot;:0.060842489000009436}}" data-execution_count="3">
 <hr>
 <section id="earlystopping" class="level3">
 <h3 class="anchored" data-anchor-id="earlystopping">EarlyStopping</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> EarlyStopping(</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    patience:<span class="bu">int</span><span class="op">=</span><span class="dv">7</span>, <span class="co"># epochs to wait after last improvement</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    verbose:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to print messages</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> EarlyStopping(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    patience:<span class="bu">int</span><span class="op">=</span><span class="dv">7</span>, <span class="co"># epochs to wait after last improvement</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    verbose:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to print messages</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Early stops the training if validation loss doesn’t improve after a given patience</em></p>
-<hr>
 </section>
+</div>
+<div id="southeast-brighton" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.415313+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.428319+00:00&quot;,&quot;total&quot;:0.013010407999985318}}" data-execution_count="4">
+<hr>
 <section id="train_model" class="level3">
 <h3 class="anchored" data-anchor-id="train_model">train_model</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> train_model(</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    model:Module, <span class="co"># graph neural network for analyzing glycans</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    dataloaders:<span class="bu">dict</span>, <span class="co"># dict with 'train' and 'val' loaders</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    criterion:Module, <span class="co"># PyTorch loss function</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    optimizer:Optimizer, <span class="co"># PyTorch optimizer, has to be SAM if mode != "regression"</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    scheduler:LRScheduler, <span class="co"># PyTorch learning rate decay</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    num_epochs:<span class="bu">int</span><span class="op">=</span><span class="dv">25</span>, <span class="co"># number of epochs for training</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    patience:<span class="bu">int</span><span class="op">=</span><span class="dv">50</span>, <span class="co"># epochs without improvement until early stop</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'classification'</span>, <span class="co"># 'classification', 'multilabel', or 'regression'</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    mode2:<span class="bu">str</span><span class="op">=</span><span class="st">'multi'</span>, <span class="co"># 'multi' or 'binary' classification</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    return_metrics:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to return metrics</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>torch.nn.modules.module.Module <span class="op">|</span> <span class="bu">tuple</span>[torch.nn.modules.module.Module, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">float</span>]]]]:</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> train_model(</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    model:torch.nn.modules.module.Module, <span class="co"># graph neural network for analyzing glycans</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    dataloaders:<span class="bu">dict</span>[<span class="bu">str</span>, torch.utils.data.dataloader.DataLoader], <span class="co"># dict with 'train' and 'val' loaders</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    criterion:torch.nn.modules.module.Module, <span class="co"># PyTorch loss function</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    optimizer:torch.optim.optimizer.Optimizer, <span class="co"># PyTorch optimizer, has to be SAM if mode != "regression"</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    scheduler:torch.optim.lr_scheduler.LRScheduler, <span class="co"># PyTorch learning rate decay</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    num_epochs:<span class="bu">int</span><span class="op">=</span><span class="dv">25</span>, <span class="co"># number of epochs for training</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    patience:<span class="bu">int</span><span class="op">=</span><span class="dv">50</span>, <span class="co"># epochs without improvement until early stop</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'classification'</span>, <span class="co"># 'classification', 'multilabel', or 'regression'</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    mode2:<span class="bu">str</span><span class="op">=</span><span class="st">'multi'</span>, <span class="co"># 'multi' or 'binary' classification</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    return_metrics:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to return metrics</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>torch.nn.modules.module.Module <span class="op">|</span> <span class="bu">tuple</span>[torch.nn.modules.module.Module, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">float</span>]]]]:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>trains a deep learning model on predicting glycan properties</em></p>
-<hr>
 </section>
+</div>
+<div id="generic-taxation" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.428444+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.433180+00:00&quot;,&quot;total&quot;:0.004739311999998108}}" data-execution_count="5">
+<hr>
 <section id="training_setup" class="level3">
 <h3 class="anchored" data-anchor-id="training_setup">training_setup</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> training_setup(</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    model:Module, <span class="co"># graph neural network for analyzing glycans</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    lr:<span class="bu">float</span>, <span class="co"># learning rate</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    lr_patience:<span class="bu">int</span><span class="op">=</span><span class="dv">4</span>, <span class="co"># epochs before reducing learning rate</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    factor:<span class="bu">float</span><span class="op">=</span><span class="fl">0.2</span>, <span class="co"># factor to multiply lr on reduction</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    weight_decay:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0001</span>, <span class="co"># regularization parameter</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'multiclass'</span>, <span class="co"># type of prediction task</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span><span class="op">=</span><span class="dv">2</span>, <span class="co"># number of classes for classification</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    gsam_alpha:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0</span>, <span class="co"># if &gt;0, uses GSAM instead of SAM optimizer</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    warmup_epochs:<span class="bu">int</span><span class="op">=</span><span class="dv">5</span>, <span class="co"># if &gt;0, uses a learning rate warm-up schedule for training stability</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>:</span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> training_setup(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    model:torch.nn.modules.module.Module, <span class="co"># graph neural network for analyzing glycans</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    lr:<span class="bu">float</span>, <span class="co"># learning rate</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    lr_patience:<span class="bu">int</span><span class="op">=</span><span class="dv">4</span>, <span class="co"># epochs before reducing learning rate</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    factor:<span class="bu">float</span><span class="op">=</span><span class="fl">0.2</span>, <span class="co"># factor to multiply lr on reduction</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    weight_decay:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0001</span>, <span class="co"># regularization parameter</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'multiclass'</span>, <span class="co"># type of prediction task</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span><span class="op">=</span><span class="dv">2</span>, <span class="co"># number of classes for classification</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    gsam_alpha:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0</span>, <span class="co"># if &gt;0, uses GSAM instead of SAM optimizer</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    warmup_epochs:<span class="bu">int</span><span class="op">=</span><span class="dv">5</span>, <span class="co"># if &gt;0, uses a learning rate warm-up schedule for training stability</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>[torch.optim.optimizer.Optimizer, torch.optim.lr_scheduler._LRScheduler, torch.nn.modules.module.Module]:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>prepares optimizer, learning rate scheduler, and loss criterion for model training</em></p>
-<hr>
 </section>
+</div>
+<div id="bored-quality" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.433281+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.438698+00:00&quot;,&quot;total&quot;:0.005420052999994596}}" data-execution_count="6">
+<hr>
 <section id="train_ml_model" class="level3">
 <h3 class="anchored" data-anchor-id="train_ml_model">train_ml_model</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> train_ml_model(</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    X_train:pandas.DataFrame <span class="op">|</span> <span class="bu">list</span>, <span class="co"># training data/glycans</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    X_test:pandas.DataFrame <span class="op">|</span> <span class="bu">list</span>, <span class="co"># test data/glycans</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    y_train:<span class="bu">list</span>, <span class="co"># training labels</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    y_test:<span class="bu">list</span>, <span class="co"># test labels</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'classification'</span>, <span class="co"># 'classification' or 'regression'</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    feature_calc:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># calculate motifs from glycans</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    return_features:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># return calculated features</span></span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    feature_set:<span class="bu">list</span><span class="op">=</span>[<span class="st">'known'</span>, <span class="st">'exhaustive'</span>], <span class="co"># feature set for annotations</span></span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    additional_features_train:pandas.DataFrame <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional training features</span></span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    additional_features_test:pandas.DataFrame <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional test features</span></span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>xgboost.sklearn.XGBModel <span class="op">|</span> <span class="bu">tuple</span>[xgboost.sklearn.XGBModel, pandas.DataFrame, pandas.DataFrame]:</span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> train_ml_model(</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    X_train:pandas.DataFrame <span class="op">|</span> <span class="bu">list</span>, <span class="co"># training data/glycans</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    X_test:pandas.DataFrame <span class="op">|</span> <span class="bu">list</span>, <span class="co"># test data/glycans</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    y_train:<span class="bu">list</span>, <span class="co"># training labels</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    y_test:<span class="bu">list</span>, <span class="co"># test labels</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'classification'</span>, <span class="co"># 'classification' or 'regression'</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    feature_calc:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># calculate motifs from glycans</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    return_features:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># return calculated features</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    feature_set:<span class="bu">list</span>[<span class="bu">str</span>]<span class="op">=</span>[<span class="st">'known'</span>, <span class="st">'exhaustive'</span>], <span class="co"># feature set for annotations</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    additional_features_train:pandas.DataFrame <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional training features</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    additional_features_test:pandas.DataFrame <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional test features</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>xgboost.sklearn.XGBModel <span class="op">|</span> <span class="bu">tuple</span>[xgboost.sklearn.XGBModel, pandas.DataFrame, pandas.DataFrame]:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>wrapper function to train standard machine learning models on glycans</em></p>
+</section>
+</div>
 <div id="separate-knock" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>human <span class="op">=</span> [<span class="dv">1</span> <span class="cf">if</span> k <span class="op">==</span> <span class="st">'Homo_sapiens'</span> <span class="cf">else</span> <span class="dv">0</span> <span class="cf">for</span> k <span class="kw">in</span> df_species[df_species.Order<span class="op">==</span><span class="st">'Primates'</span>].Species.values.tolist()]</span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>X_train, X_test, y_train, y_test <span class="op">=</span> general_split(df_species[df_species.Order<span class="op">==</span><span class="st">'Primates'</span>].glycan.values.tolist(), human)</span>
@@ -361,19 +333,19 @@ Calculating Glycan Features...
 Training model...
 
 Evaluating model...
-Accuracy of trained model on separate validation set: 0.8578856152512998</code></pre>
+Accuracy of trained model on separate validation set: 0.8604852686308492</code></pre>
 </div>
 </div>
+<div id="federal-lover" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.439040+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.442540+00:00&quot;,&quot;total&quot;:0.0035032109999804106}}" data-execution_count="7">
 <hr>
-</section>
 <section id="analyze_ml_model" class="level3">
 <h3 class="anchored" data-anchor-id="analyze_ml_model">analyze_ml_model</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> analyze_ml_model(</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    model:XGBModel, <span class="co"># trained ML model from train_ml_model</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> analyze_ml_model(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    model:xgboost.sklearn.XGBModel, <span class="co"># trained ML model from train_ml_model</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>plots relevant features for model prediction</em></p>
+</section>
+</div>
 <div id="herbal-holmes" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>analyze_ml_model(model_ft)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
@@ -384,62 +356,61 @@ Accuracy of trained model on separate validation set: 0.8578856152512998</code><
 </div>
 </div>
 </div>
+<div id="moved-greene" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.442675+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.446215+00:00&quot;,&quot;total&quot;:0.003544929000014463}}" data-execution_count="8">
 <hr>
-</section>
 <section id="get_mismatch" class="level3">
 <h3 class="anchored" data-anchor-id="get_mismatch">get_mismatch</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_mismatch(</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    model:XGBModel, <span class="co"># trained ML model from train_ml_model</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    X_test:DataFrame, <span class="co"># motif dataframe for validation</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    y_test:<span class="bu">list</span>, <span class="co"># test labels</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    n:<span class="bu">int</span><span class="op">=</span><span class="dv">10</span>, <span class="co"># number of returned misclassifications</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">list</span>: <span class="co"># misclassifications and predicted probabilities</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_mismatch(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    model:xgboost.sklearn.XGBModel, <span class="co"># trained ML model from train_ml_model</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    X_test:pandas.DataFrame, <span class="co"># motif dataframe for validation</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    y_test:<span class="bu">list</span>, <span class="co"># test labels</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    n:<span class="bu">int</span><span class="op">=</span><span class="dv">10</span>, <span class="co"># number of returned misclassifications</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">list</span>[<span class="bu">tuple</span>[typing.Any, <span class="bu">float</span>]]: <span class="co"># misclassifications and predicted probabilities</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>analyzes misclassifications of trained machine learning model</em></p>
+</section>
+</div>
 <div id="incredible-basket" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>get_mismatch(model_ft, X_test, y_test)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-display">
-<pre><code>[('Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.666021466255188),
+<pre><code>[('Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.7145445942878723),
  ('Gal(b1-4)GlcNAc(b1-2)Man(a1-6)[GlcNAc(b1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-  0.8374393582344055),
- ('Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.8031653165817261),
+  0.7493613362312317),
+ ('GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
+  0.31766071915626526),
+ ('Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.8473755717277527),
  ('Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-  0.9337360262870789),
- ('Gal(b1-3)[Neu5Ac(a2-6)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.7572895884513855),
+  0.8396848440170288),
+ ('Gal(b1-3)[Neu5Ac(a2-6)]GlcNAc(b1-3)Gal(b1-4)Glc-ol', 0.7336083650588989),
  ('Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-  0.7792727947235107),
+  0.6133107542991638),
  ('Gal(b1-3/4)GlcNAc(b1-2/4)[GlcNAc(b1-2/4)]Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-  0.8451094627380371),
- ('{Gal(b1-3/4)GlcNAc(b1-3)}{Gal(b1-3/4)GlcNAc(b1-3)}{Gal(b1-3/4)GlcNAc(b1-3)}{Gal(b1-3/4)GlcNAc(b1-3)}{Fuc(a1-2/3/4)}Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc',
-  0.3473208248615265),
- ('Gal(b1-4)Glc-ol', 0.6590997576713562),
+  0.6319893598556519),
+ ('Gal(b1-4)Glc-ol', 0.7145445942878723),
  ('Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
-  0.7680991291999817)]</code></pre>
+  0.76183021068573)]</code></pre>
 </div>
 </div>
-</section>
 </section>
 <section id="models" class="level2">
 <h2 class="anchored" data-anchor-id="models">models</h2>
 <blockquote class="blockquote">
 <p>describes some examples for machine learning architectures applicable to glycans. The main portal is prep_models which allows users to setup (trained) models by their string names</p>
 </blockquote>
+<div id="clean-personality" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.446384+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.450435+00:00&quot;,&quot;total&quot;:0.004053791999979239}}" data-execution_count="9">
 <hr>
 <section id="sweetnet" class="level3">
 <h3 class="anchored" data-anchor-id="sweetnet">SweetNet</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> SweetNet(</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    lib_size:<span class="bu">int</span>, <span class="co"># number of unique tokens for graph nodes</span></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span><span class="op">=</span><span class="dv">1</span>, <span class="co"># number of output classes (&gt;1 for multilabel)</span></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    hidden_dim:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># dimension of hidden layers</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> SweetNet(</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    lib_size:<span class="bu">int</span>, <span class="co"># number of unique tokens for graph nodes</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span><span class="op">=</span><span class="dv">1</span>, <span class="co"># number of output classes (&gt;1 for multilabel)</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    hidden_dim:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># dimension of hidden layers</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Base class for all neural network modules.</em></p>
 <p>Your models should also subclass this class.</p>
 <p>Modules can also contain other Modules, allowing them to be nested in a tree structure. You can assign the submodules as regular attributes::</p>
 <pre><code>import torch.nn as nn
 import torch.nn.functional as F
+
 
 class Model(nn.Module):
     def __init__(self) -&gt; None:
@@ -453,25 +424,26 @@ class Model(nn.Module):
 <p>Submodules assigned in this way will be registered, and will also have their parameters converted when you call :meth:<code>to</code>, etc.</p>
 <p>.. note:: As per the example above, an <code>__init__()</code> call to the parent class must be made before assignment on the child.</p>
 <p>:ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool</p>
-<hr>
 </section>
+</div>
+<div id="christian-arnold" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.450568+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.455506+00:00&quot;,&quot;total&quot;:0.004941586999990477}}" data-execution_count="10">
+<hr>
 <section id="lectinoracle" class="level3">
 <h3 class="anchored" data-anchor-id="lectinoracle">LectinOracle</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> LectinOracle(</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    input_size_glyco:<span class="bu">int</span>, <span class="co"># number of unique tokens for graph nodes</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    hidden_size:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># layer size for graph convolutions</span></span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span><span class="op">=</span><span class="dv">1</span>, <span class="co"># number of output classes (&gt;1 for multilabel)</span></span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    data_min:<span class="bu">float</span><span class="op">=-</span><span class="fl">11.355</span>, <span class="co"># minimum observed value in training data</span></span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    data_max:<span class="bu">float</span><span class="op">=</span><span class="fl">23.892</span>, <span class="co"># maximum observed value in training data</span></span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    input_size_prot:<span class="bu">int</span><span class="op">=</span><span class="dv">960</span>, <span class="co"># dimensionality of protein representations</span></span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> LectinOracle(</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    input_size_glyco:<span class="bu">int</span>, <span class="co"># number of unique tokens for graph nodes</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    hidden_size:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># layer size for graph convolutions</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span><span class="op">=</span><span class="dv">1</span>, <span class="co"># number of output classes (&gt;1 for multilabel)</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    data_min:<span class="bu">float</span><span class="op">=-</span><span class="fl">11.355</span>, <span class="co"># minimum observed value in training data</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    data_max:<span class="bu">float</span><span class="op">=</span><span class="fl">23.892</span>, <span class="co"># maximum observed value in training data</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    input_size_prot:<span class="bu">int</span><span class="op">=</span><span class="dv">960</span>, <span class="co"># dimensionality of protein representations</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Base class for all neural network modules.</em></p>
 <p>Your models should also subclass this class.</p>
 <p>Modules can also contain other Modules, allowing them to be nested in a tree structure. You can assign the submodules as regular attributes::</p>
 <pre><code>import torch.nn as nn
 import torch.nn.functional as F
+
 
 class Model(nn.Module):
     def __init__(self) -&gt; None:
@@ -485,25 +457,26 @@ class Model(nn.Module):
 <p>Submodules assigned in this way will be registered, and will also have their parameters converted when you call :meth:<code>to</code>, etc.</p>
 <p>.. note:: As per the example above, an <code>__init__()</code> call to the parent class must be made before assignment on the child.</p>
 <p>:ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool</p>
-<hr>
 </section>
+</div>
+<div id="robust-passion" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.455627+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.461052+00:00&quot;,&quot;total&quot;:0.005427897999993547}}" data-execution_count="11">
+<hr>
 <section id="lectinoracle_flex" class="level3">
 <h3 class="anchored" data-anchor-id="lectinoracle_flex">LectinOracle_flex</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> LectinOracle_flex(</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    input_size_glyco:<span class="bu">int</span>, <span class="co"># number of unique tokens for graph nodes</span></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    hidden_size:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># layer size for graph convolutions</span></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span><span class="op">=</span><span class="dv">1</span>, <span class="co"># number of output classes (&gt;1 for multilabel)</span></span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    data_min:<span class="bu">float</span><span class="op">=-</span><span class="fl">11.355</span>, <span class="co"># minimum observed value in training data</span></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    data_max:<span class="bu">float</span><span class="op">=</span><span class="fl">23.892</span>, <span class="co"># maximum observed value in training data</span></span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    input_size_prot:<span class="bu">int</span><span class="op">=</span><span class="dv">1000</span>, <span class="co"># maximum protein sequence length for padding/cutting</span></span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> LectinOracle_flex(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    input_size_glyco:<span class="bu">int</span>, <span class="co"># number of unique tokens for graph nodes</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    hidden_size:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># layer size for graph convolutions</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span><span class="op">=</span><span class="dv">1</span>, <span class="co"># number of output classes (&gt;1 for multilabel)</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    data_min:<span class="bu">float</span><span class="op">=-</span><span class="fl">11.355</span>, <span class="co"># minimum observed value in training data</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    data_max:<span class="bu">float</span><span class="op">=</span><span class="fl">23.892</span>, <span class="co"># maximum observed value in training data</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    input_size_prot:<span class="bu">int</span><span class="op">=</span><span class="dv">1000</span>, <span class="co"># maximum protein sequence length for padding/cutting</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Base class for all neural network modules.</em></p>
 <p>Your models should also subclass this class.</p>
 <p>Modules can also contain other Modules, allowing them to be nested in a tree structure. You can assign the submodules as regular attributes::</p>
 <pre><code>import torch.nn as nn
 import torch.nn.functional as F
+
 
 class Model(nn.Module):
     def __init__(self) -&gt; None:
@@ -517,20 +490,19 @@ class Model(nn.Module):
 <p>Submodules assigned in this way will be registered, and will also have their parameters converted when you call :meth:<code>to</code>, etc.</p>
 <p>.. note:: As per the example above, an <code>__init__()</code> call to the parent class must be made before assignment on the child.</p>
 <p>:ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool</p>
-<hr>
 </section>
+</div>
+<div id="likely-grove" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.461164+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.464712+00:00&quot;,&quot;total&quot;:0.0035516810000046917}}" data-execution_count="12">
+<hr>
 <section id="nsequonpred" class="level3">
 <h3 class="anchored" data-anchor-id="nsequonpred">NSequonPred</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> NSequonPred(</span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> NSequonPred()<span class="op">-&gt;</span><span class="va">None</span>:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Base class for all neural network modules.</em></p>
 <p>Your models should also subclass this class.</p>
 <p>Modules can also contain other Modules, allowing them to be nested in a tree structure. You can assign the submodules as regular attributes::</p>
 <pre><code>import torch.nn as nn
 import torch.nn.functional as F
+
 
 class Model(nn.Module):
     def __init__(self) -&gt; None:
@@ -544,51 +516,53 @@ class Model(nn.Module):
 <p>Submodules assigned in this way will be registered, and will also have their parameters converted when you call :meth:<code>to</code>, etc.</p>
 <p>.. note:: As per the example above, an <code>__init__()</code> call to the parent class must be made before assignment on the child.</p>
 <p>:ivar training: Boolean represents whether this module is in training or evaluation mode. :vartype training: bool</p>
-<hr>
 </section>
+</div>
+<div id="frank-command" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.464826+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.468181+00:00&quot;,&quot;total&quot;:0.0033579119999842533}}" data-execution_count="13">
+<hr>
 <section id="init_weights" class="level3">
 <h3 class="anchored" data-anchor-id="init_weights">init_weights</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> init_weights(</span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    model:Module, <span class="co"># neural network for analyzing glycans</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'sparse'</span>, <span class="co"># initialization algorithm: 'sparse', 'kaiming', 'xavier'</span></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>    sparsity:<span class="bu">float</span><span class="op">=</span><span class="fl">0.1</span>, <span class="co"># proportion of sparsity after initialization</span></span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> init_weights(</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    model:torch.nn.modules.module.Module, <span class="co"># neural network for analyzing glycans</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    mode:<span class="bu">str</span><span class="op">=</span><span class="st">'sparse'</span>, <span class="co"># initialization algorithm: 'sparse', 'kaiming', 'xavier'</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>    sparsity:<span class="bu">float</span><span class="op">=</span><span class="fl">0.1</span>, <span class="co"># proportion of sparsity after initialization</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>initializes linear layers of PyTorch model with a weight initialization</em></p>
-<hr>
 </section>
+</div>
+<div id="collective-cooler" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.468282+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.473628+00:00&quot;,&quot;total&quot;:0.005349211999998715}}" data-execution_count="14">
+<hr>
 <section id="prep_model" class="level3">
 <h3 class="anchored" data-anchor-id="prep_model">prep_model</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> prep_model(</span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    model_type:Literal, <span class="co"># type of model to create</span></span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span>, <span class="co"># number of unique classes for classification</span></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of form glycoletter:index</span></span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    trained:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to use pretrained model</span></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>    hidden_dim:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># hidden dimension for the model (SweetNet only)</span></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>Module: <span class="co"># initialized PyTorch model</span></span>
-<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> prep_model(</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>    model_type:Literal[<span class="st">'SweetNet'</span>, <span class="st">'GIFFLAR'</span>, <span class="st">'LectinOracle'</span>, <span class="st">'LectinOracle_flex'</span>, <span class="st">'NSequonPred'</span>], <span class="co"># type of model to create</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    num_classes:<span class="bu">int</span>, <span class="co"># number of unique classes for classification</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of form glycoletter:index</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    trained:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to use pretrained model</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    hidden_dim:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># hidden dimension for the model (SweetNet only)</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>torch.nn.modules.module.Module: <span class="co"># initialized PyTorch model</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>wrapper to instantiate model, initialize it, and put it on the GPU</em></p>
 </section>
+</div>
 </section>
 <section id="processing" class="level2">
 <h2 class="anchored" data-anchor-id="processing">processing</h2>
 <blockquote class="blockquote">
 <p>contains helper functions to prepare glycan data for model training</p>
 </blockquote>
+<div id="lesbian-closer" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.473745+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.477626+00:00&quot;,&quot;total&quot;:0.0038844279999921127}}" data-execution_count="15">
 <hr>
 <section id="dataset_to_graphs" class="level3">
 <h3 class="anchored" data-anchor-id="dataset_to_graphs">dataset_to_graphs</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> dataset_to_graphs(</span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    glycan_list:<span class="bu">list</span>, <span class="co"># list of IUPAC-condensed glycan sequences</span></span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    labels:<span class="bu">list</span>, <span class="co"># list of labels</span></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of glycoletter:index</span></span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    label_type:dtype<span class="op">=</span>torch.int64, <span class="co"># tensor type for label</span></span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">list</span>: <span class="co"># list of node/edge/label data tuples</span></span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> dataset_to_graphs(</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    glycan_list:<span class="bu">list</span>[<span class="bu">str</span>], <span class="co"># list of IUPAC-condensed glycan sequences</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    labels:<span class="bu">list</span>[<span class="bu">float</span> <span class="op">|</span> <span class="bu">int</span>], <span class="co"># list of labels</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of glycoletter:index</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    label_type:torch.dtype<span class="op">=</span>torch.int64, <span class="co"># tensor type for label</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">list</span>[torch.utils.data.dataset.Dataset]: <span class="co"># list of node/edge/label data tuples</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>wrapper function to convert a whole list of glycans into a graph dataset</em></p>
+</section>
+</div>
 <div id="quiet-butter" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>dataset_to_graphs([<span class="st">"Neu5Ac(a2-3)Gal(b1-4)Glc"</span>,</span>
 <span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>                  <span class="st">"Fuc(a1-2)Gal(b1-3)GalNAc"</span>], [<span class="dv">1</span>, <span class="dv">0</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -597,25 +571,26 @@ class Model(nn.Module):
  Data(edge_index=[2, 4], labels=[5], string_labels=[5], num_nodes=5, y=0)]</code></pre>
 </div>
 </div>
+<div id="broadband-tours" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.477813+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.483079+00:00&quot;,&quot;total&quot;:0.005269503999983272}}" data-execution_count="16">
 <hr>
-</section>
 <section id="dataset_to_dataloader" class="level3">
 <h3 class="anchored" data-anchor-id="dataset_to_dataloader">dataset_to_dataloader</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> dataset_to_dataloader(</span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    glycan_list:<span class="bu">list</span>, <span class="co"># list of IUPAC-condensed glycans</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    labels:<span class="bu">list</span>, <span class="co"># list of labels</span></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of glycoletter:index</span></span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    batch_size:<span class="bu">int</span><span class="op">=</span><span class="dv">32</span>, <span class="co"># samples per batch</span></span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    shuffle:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># shuffle samples in dataloader</span></span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    drop_last:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># drop last batch</span></span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    extra_feature:<span class="bu">list</span>[<span class="bu">float</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional input features</span></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    label_type:dtype<span class="op">=</span>torch.int64, <span class="co"># tensor type for label</span></span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>    augment_prob:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0</span>, <span class="co"># probability of data augmentation</span></span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>    generalization_prob:<span class="bu">float</span><span class="op">=</span><span class="fl">0.2</span>, <span class="co"># probability of wildcarding</span></span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>DataLoader: <span class="co"># dataloader for training</span></span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> dataset_to_dataloader(</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    glycan_list:<span class="bu">list</span>[<span class="bu">str</span>], <span class="co"># list of IUPAC-condensed glycans</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    labels:<span class="bu">list</span>[<span class="bu">float</span> <span class="op">|</span> <span class="bu">int</span>], <span class="co"># list of labels</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of glycoletter:index</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    batch_size:<span class="bu">int</span><span class="op">=</span><span class="dv">32</span>, <span class="co"># samples per batch</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    shuffle:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># shuffle samples in dataloader</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    drop_last:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># drop last batch</span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    extra_feature:<span class="bu">list</span>[<span class="bu">float</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional input features</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    label_type:torch.dtype<span class="op">=</span>torch.int64, <span class="co"># tensor type for label</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    augment_prob:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0</span>, <span class="co"># probability of data augmentation</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>    generalization_prob:<span class="bu">float</span><span class="op">=</span><span class="fl">0.2</span>, <span class="co"># probability of wildcarding</span></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>    hetero:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span></span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>torch.utils.data.dataloader.DataLoader: <span class="co"># dataloader for training</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>wrapper function to convert glycans and labels to a torch_geometric DataLoader</em></p>
+</section>
+</div>
 <div id="filled-glass" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="bu">next</span>(<span class="bu">iter</span>(dataset_to_dataloader([<span class="st">"Neu5Ac(a2-3)Gal(b1-4)Glc"</span>,</span>
 <span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>                                 <span class="st">"Fuc(a1-2)Gal(b1-3)GalNAc"</span>], [<span class="dv">1</span>, <span class="dv">0</span>])))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
@@ -623,27 +598,28 @@ class Model(nn.Module):
 <pre><code>DataBatch(edge_index=[2, 8], labels=[10], string_labels=[2], num_nodes=10, y=[2], batch=[10], ptr=[3])</code></pre>
 </div>
 </div>
+<div id="heated-georgia" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.483283+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.487766+00:00&quot;,&quot;total&quot;:0.004486652999986518}}" data-execution_count="17">
 <hr>
-</section>
 <section id="split_data_to_train" class="level3">
 <h3 class="anchored" data-anchor-id="split_data_to_train">split_data_to_train</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> split_data_to_train(</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    glycan_list_train:<span class="bu">list</span>, <span class="co"># training glycans</span></span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>    glycan_list_val:<span class="bu">list</span>, <span class="co"># validation glycans</span></span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    labels_train:<span class="bu">list</span>, <span class="co"># training labels</span></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    labels_val:<span class="bu">list</span>, <span class="co"># validation labels</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of glycoletter:index</span></span>
-<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    batch_size:<span class="bu">int</span><span class="op">=</span><span class="dv">32</span>, <span class="co"># samples per batch</span></span>
-<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    drop_last:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># drop last batch</span></span>
-<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>    extra_feature_train:<span class="bu">list</span>[<span class="bu">float</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional training features</span></span>
-<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>    extra_feature_val:<span class="bu">list</span>[<span class="bu">float</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional validation features</span></span>
-<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>    label_type:dtype<span class="op">=</span>torch.int64, <span class="co"># tensor type for label</span></span>
-<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>    augment_prob:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0</span>, <span class="co"># probability of data augmentation</span></span>
-<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>    generalization_prob:<span class="bu">float</span><span class="op">=</span><span class="fl">0.2</span>, <span class="co"># probability of wildcarding</span></span>
-<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">dict</span>: <span class="co"># dictionary of train/val dataloaders</span></span>
-<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> split_data_to_train(</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    glycan_list_train:<span class="bu">list</span>[<span class="bu">str</span>], <span class="co"># training glycans</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    glycan_list_val:<span class="bu">list</span>[<span class="bu">str</span>], <span class="co"># validation glycans</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>    labels_train:<span class="bu">list</span>[<span class="bu">float</span> <span class="op">|</span> <span class="bu">int</span>], <span class="co"># training labels</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    labels_val:<span class="bu">list</span>[<span class="bu">float</span> <span class="op">|</span> <span class="bu">int</span>], <span class="co"># validation labels</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of glycoletter:index</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    batch_size:<span class="bu">int</span><span class="op">=</span><span class="dv">32</span>, <span class="co"># samples per batch</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    drop_last:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># drop last batch</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    extra_feature_train:<span class="bu">list</span>[<span class="bu">float</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional training features</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>    extra_feature_val:<span class="bu">list</span>[<span class="bu">float</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># additional validation features</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>    label_type:torch.dtype<span class="op">=</span>torch.int64, <span class="co"># tensor type for label</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>    augment_prob:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0</span>, <span class="co"># probability of data augmentation</span></span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>    generalization_prob:<span class="bu">float</span><span class="op">=</span><span class="fl">0.2</span>, <span class="co"># probability of wildcarding</span></span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>    hetero:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span></span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">dict</span>[<span class="bu">str</span>, torch.utils.data.dataloader.DataLoader]: <span class="co"># dictionary of train/val dataloaders</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>wrapper function to convert split training/test data into dictionary of dataloaders</em></p>
+</section>
+</div>
 <div id="reduced-female" class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>split_data_to_train([<span class="st">"Neu5Ac(a2-3)Gal(b1-4)Glc"</span>, <span class="st">"Fuc(a1-2)Gal(b1-3)GalNAc"</span>],</span>
 <span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>                    [<span class="st">"Neu5Ac(a2-6)Gal(b1-4)Glc"</span>, <span class="st">"Fuc(a1-2)Gal(a1-3)GalNAc"</span>],</span>
@@ -654,144 +630,145 @@ class Model(nn.Module):
 </div>
 </div>
 </section>
-</section>
 <section id="inference" class="level2">
 <h2 class="anchored" data-anchor-id="inference">inference</h2>
 <p><a class="anchor" id="inference"></a> &gt;can be used to analyze trained models, make predictions, or obtain glycan representations</p>
+<div id="continued-tokyo" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.487979+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.492407+00:00&quot;,&quot;total&quot;:0.004431291000003057}}" data-execution_count="18">
 <hr>
 <section id="glycans_to_emb" class="level3">
 <h3 class="anchored" data-anchor-id="glycans_to_emb">glycans_to_emb</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> glycans_to_emb(</span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>    glycans:<span class="bu">list</span>, <span class="co"># list of glycans in IUPAC-condensed</span></span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    model:Module, <span class="co"># trained graph neural network for analyzing glycans</span></span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of form glycoletter:index</span></span>
-<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>    batch_size:<span class="bu">int</span><span class="op">=</span><span class="dv">32</span>, <span class="co"># batch size used during training</span></span>
-<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>    rep:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># True returns representations, False returns predicted labels</span></span>
-<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>    class_list:<span class="bu">list</span>[<span class="bu">str</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># list of unique classes to map predictions</span></span>
-<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>    multilabel:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to output predictions for a multilabel-task</span></span>
-<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>pandas.DataFrame <span class="op">|</span> <span class="bu">list</span>[<span class="bu">str</span>]: <span class="co"># dataframe of representations or list of predictions</span></span>
-<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> glycans_to_emb(</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    glycans:<span class="bu">list</span>[<span class="bu">str</span>], <span class="co"># list of glycans in IUPAC-condensed</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>    model:torch.nn.modules.module.Module, <span class="co"># trained graph neural network for analyzing glycans</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dictionary of form glycoletter:index</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    batch_size:<span class="bu">int</span><span class="op">=</span><span class="dv">32</span>, <span class="co"># batch size used during training</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>    rep:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># True returns representations, False returns predicted labels</span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>    class_list:<span class="bu">list</span>[<span class="bu">str</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># list of unique classes to map predictions</span></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>    multilabel:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to output predictions for a multilabel-task</span></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>pandas.DataFrame <span class="op">|</span> <span class="bu">list</span>[<span class="bu">str</span>]: <span class="co"># dataframe of representations or list of predictions</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Returns a dataframe of learned representations for a list of glycans</em></p>
-<hr>
 </section>
+</div>
+<div id="collective-strike" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.492527+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.496988+00:00&quot;,&quot;total&quot;:0.004465603999989298}}" data-execution_count="19">
+<hr>
 <section id="get_lectin_preds" class="level3">
 <h3 class="anchored" data-anchor-id="get_lectin_preds">get_lectin_preds</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_lectin_preds(</span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>    prot:<span class="bu">str</span>, <span class="co"># protein amino acid sequence</span></span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>    glycans:<span class="bu">list</span>, <span class="co"># list of glycans in IUPAC-condensed</span></span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>    model:Module, <span class="co"># trained LectinOracle-type model</span></span>
-<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>    prot_dic:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">float</span>]] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dict of protein sequence:ESMC representation</span></span>
-<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>    background_correction:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to correct predictions for background</span></span>
-<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>    correction_df:pandas.DataFrame <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># background prediction for glycans</span></span>
-<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>    batch_size:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># batch size used during training</span></span>
-<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dict of glycoletter:index</span></span>
-<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>    sort:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># whether to sort prediction results descendingly</span></span>
-<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>    flex:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># LectinOracle (False) or LectinOracle_flex (True)</span></span>
-<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>DataFrame: <span class="co"># glycan sequences and predicted binding</span></span>
-<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_lectin_preds(</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    prot:<span class="bu">str</span>, <span class="co"># protein amino acid sequence</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>    glycans:<span class="bu">list</span>[<span class="bu">str</span>], <span class="co"># list of glycans in IUPAC-condensed</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>    model:torch.nn.modules.module.Module, <span class="co"># trained LectinOracle-type model</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>    prot_dic:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">float</span>]] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dict of protein sequence:ESMC representation</span></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>    background_correction:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># whether to correct predictions for background</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>    correction_df:pandas.DataFrame <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># background prediction for glycans</span></span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>    batch_size:<span class="bu">int</span><span class="op">=</span><span class="dv">128</span>, <span class="co"># batch size used during training</span></span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>    libr:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># dict of glycoletter:index</span></span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>    sort:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># whether to sort prediction results descendingly</span></span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>    flex:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># LectinOracle (False) or LectinOracle_flex (True)</span></span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>pandas.DataFrame: <span class="co"># glycan sequences and predicted binding</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Wrapper that uses LectinOracle-type model for predicting binding of protein to glycans</em></p>
-<hr>
 </section>
+</div>
+<div id="therapeutic-alias" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.497105+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.500964+00:00&quot;,&quot;total&quot;:0.0038636589999896387}}" data-execution_count="20">
+<hr>
 <section id="get_nsequon_preds" class="level3">
 <h3 class="anchored" data-anchor-id="get_nsequon_preds">get_Nsequon_preds</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_Nsequon_preds(</span>
-<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>    prots:<span class="bu">list</span>, <span class="co"># 20 AA + N + 20 AA sequences; replace missing with 'z'</span></span>
-<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>    model:Module, <span class="co"># trained NSequonPred-type model</span></span>
-<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>    prot_dic:<span class="bu">dict</span>, <span class="co"># dict of protein sequence:ESM1b representation</span></span>
-<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>DataFrame: <span class="co"># protein sequences and predicted likelihood</span></span>
-<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_Nsequon_preds(</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>    prots:<span class="bu">list</span>[<span class="bu">str</span>], <span class="co"># 20 AA + N + 20 AA sequences; replace missing with 'z'</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>    model:torch.nn.modules.module.Module, <span class="co"># trained NSequonPred-type model</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>    prot_dic:<span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">float</span>]], <span class="co"># dict of protein sequence:ESM1b representation</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span>pandas.DataFrame: <span class="co"># protein sequences and predicted likelihood</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Predicts whether an N-sequon will be glycosylated</em></p>
-<hr>
 </section>
+</div>
+<div id="cognitive-diploma" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.501071+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.504913+00:00&quot;,&quot;total&quot;:0.0038454259999980422}}" data-execution_count="21">
+<hr>
 <section id="get_esmc_representations" class="level3">
 <h3 class="anchored" data-anchor-id="get_esmc_representations">get_esmc_representations</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_esmc_representations(</span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>    prots:<span class="bu">list</span>, <span class="co"># list of protein sequences to convert</span></span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>    model:Module, <span class="co"># trained ESMC model</span></span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">dict</span>: <span class="co"># dict of protein sequence:ESMC-300M representation</span></span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_esmc_representations(</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>    prots:<span class="bu">list</span>[<span class="bu">str</span>], <span class="co"># list of protein sequences to convert</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>    model:torch.nn.modules.module.Module, <span class="co"># trained ESMC model</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">list</span>[<span class="bu">float</span>]]: <span class="co"># dict of protein sequence:ESMC-300M representation</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>Retrieves ESMC-300M representations of protein for using them as input for LectinOracle</em></p>
-<p>In order to run <code>get_esmc_representations</code>, you first have to run this snippet:</p>
-<p><code>!pip install fair-esm</code> <code>from esm.models.esmc import ESMC</code> <code>model = ESMC.from_pretrained("esmc_300m").to(device)</code></p>
 </section>
+</div>
+<p>In order to run <code>get_esmc_representations</code>, you first have to run this snippet:</p>
+<pre><code>!pip install esm
+from esm.models.esmc import ESMC
+model = ESMC.from_pretrained("esmc_300m")</code></pre>
 </section>
 <section id="train_test_split" class="level2">
 <h2 class="anchored" data-anchor-id="train_test_split">train_test_split</h2>
 <blockquote class="blockquote">
 <p>contains various data split functions to get appropriate training and test sets</p>
 </blockquote>
+<div id="checked-effect" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.505034+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.511534+00:00&quot;,&quot;total&quot;:0.006505533999984436}}" data-execution_count="22">
 <hr>
 <section id="hierarchy_filter" class="level3">
 <h3 class="anchored" data-anchor-id="hierarchy_filter">hierarchy_filter</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hierarchy_filter(</span>
-<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>    df_in:DataFrame, <span class="co"># dataframe of glycan sequences and taxonomic labels</span></span>
-<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>    rank:<span class="bu">str</span><span class="op">=</span><span class="st">'Domain'</span>, <span class="co"># taxonomic rank to filter</span></span>
-<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>    min_seq:<span class="bu">int</span><span class="op">=</span><span class="dv">5</span>, <span class="co"># minimum glycans per class</span></span>
-<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>    wildcard_seed:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># seed wildcard glycoletters</span></span>
-<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>    wildcard_list:<span class="bu">list</span>[<span class="bu">str</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># glycoletters for wildcard</span></span>
-<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>    wildcard_name:<span class="bu">str</span> <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># wildcard name in IUPAC</span></span>
-<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>    r:<span class="bu">float</span><span class="op">=</span><span class="fl">0.1</span>, <span class="co"># replacement rate</span></span>
-<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>    col:<span class="bu">str</span><span class="op">=</span><span class="st">'glycan'</span>, <span class="co"># column name for glycans</span></span>
-<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>: <span class="co"># train/val splits and mappings</span></span>
-<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hierarchy_filter(</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>    df_in:pandas.DataFrame, <span class="co"># dataframe of glycan sequences and taxonomic labels</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>    rank:<span class="bu">str</span><span class="op">=</span><span class="st">'Domain'</span>, <span class="co"># taxonomic rank to filter</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>    min_seq:<span class="bu">int</span><span class="op">=</span><span class="dv">5</span>, <span class="co"># minimum glycans per class</span></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>    wildcard_seed:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># seed wildcard glycoletters</span></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>    wildcard_list:<span class="bu">list</span>[<span class="bu">str</span>] <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># glycoletters for wildcard</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>    wildcard_name:<span class="bu">str</span> <span class="op">|</span> <span class="va">None</span><span class="op">=</span><span class="va">None</span>, <span class="co"># wildcard name in IUPAC</span></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>    r:<span class="bu">float</span><span class="op">=</span><span class="fl">0.1</span>, <span class="co"># replacement rate</span></span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>    col:<span class="bu">str</span><span class="op">=</span><span class="st">'glycan'</span>, <span class="co"># column name for glycans</span></span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>[<span class="bu">list</span>[<span class="bu">str</span>], <span class="bu">list</span>[<span class="bu">str</span>], <span class="bu">list</span>[<span class="bu">int</span>], <span class="bu">list</span>[<span class="bu">int</span>], <span class="bu">list</span>[<span class="bu">int</span>], <span class="bu">list</span>[<span class="bu">str</span>], <span class="bu">dict</span>[<span class="bu">str</span>, <span class="bu">int</span>]]: <span class="co"># train/val splits and mappings</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes</em></p>
-<div id="latin-gross" class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>train_x, val_x, train_y, val_y, id_val, class_list, class_converter <span class="op">=</span> hierarchy_filter(df_species,</span>
-<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>                                                                                       rank <span class="op">=</span> <span class="st">'Kingdom'</span>)</span>
-<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(train_x[:<span class="dv">10</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>['D-Ara(b1-2)Gal(b1-3)GalOP(b1-4)Man', '{Fuc(a1-?)}{Hex(?1-?)}Man(a1-3)Man(a1-6)Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Fuc(a1-3)GalNAc(b1-3)Gal(b1-4)Gal(b1-3)[Neu5Gc(a2-6)]GalNAc', 'Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-3/6)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', '{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'GalNAcA4Ac(a1-3)QuiNAc4NAc(b1-3)GalNAcA4Ac', 'Kdo(a2-4)Kdo(a2-6)GlcNAcOP(b1-6)GlcNAcOP', 'Hex(?1-?)[HexA(?1-?)]GalNAc', 'Fuc(a1-2)[Gal(a1-3)]Gal(b1-3)GalNAc', 'Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc']</code></pre>
-</div>
-</div>
-<hr>
 </section>
+</div>
+<div id="latin-gross" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>train_x, val_x, train_y, val_y, id_val, class_list, class_converter <span class="op">=</span> hierarchy_filter(df_species,</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>                                                                                       rank <span class="op">=</span> <span class="st">'Kingdom'</span>)</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(train_x[:<span class="dv">10</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>['Glc(b1-3)Glc(b1-3)[Man(b1-3)Man(b1-6)]Glc(b1-3)Glc(b1-3)[Man(b1-3)Man(b1-6)]Glc(b1-3)Glc(b1-3)Glc', 'Gal(b1-3)[Neu5Ac(a2-6)]GlcNAc(b1-4)[Gal(b1-4)GlcNAc(b1-2)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', '[Rha(a1-3)]Man(a1-3)Man(a1-3)GlcNAc(b1-4)Man', 'Fuc(a1-3)[HexNAc(b1-4)]Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Pen(?1-?)Hex(?1-?)Pen(?1-?)Pen', 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Xyl(b1-4)[Gal(a1-2)][D-Rha(a1-3)]Fuc(a1-3)[Xyl(b1-4)]Glc', 'GlcN6Me(b1-4)GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc', 'GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)[GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'Fuc(a1-2)[GalNAc(a1-3)]Gal']</code></pre>
+</div>
+</div>
+<div id="ordinary-balance" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.511781+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.515217+00:00&quot;,&quot;total&quot;:0.0034392720000084864}}" data-execution_count="23">
+<hr>
 <section id="general_split" class="level3">
 <h3 class="anchored" data-anchor-id="general_split">general_split</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> general_split(</span>
-<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>    glycans:<span class="bu">list</span>, <span class="co"># list of IUPAC-condensed glycans</span></span>
-<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>    labels:<span class="bu">list</span>, <span class="co"># list of prediction labels</span></span>
-<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>    test_size:<span class="bu">float</span><span class="op">=</span><span class="fl">0.2</span>, <span class="co"># size of test set</span></span>
-<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>: <span class="co"># train/test splits</span></span>
-<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> general_split(</span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>    glycans:<span class="bu">list</span>[<span class="bu">str</span>], <span class="co"># list of IUPAC-condensed glycans</span></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>    labels:<span class="bu">list</span>[<span class="bu">float</span> <span class="op">|</span> <span class="bu">int</span> <span class="op">|</span> <span class="bu">str</span>], <span class="co"># list of prediction labels</span></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>    test_size:<span class="bu">float</span><span class="op">=</span><span class="fl">0.2</span>, <span class="co"># size of test set</span></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>[<span class="bu">list</span>[<span class="bu">str</span>], <span class="bu">list</span>[<span class="bu">str</span>], <span class="bu">list</span>[<span class="bu">float</span> <span class="op">|</span> <span class="bu">int</span> <span class="op">|</span> <span class="bu">str</span>], <span class="bu">list</span>[<span class="bu">float</span> <span class="op">|</span> <span class="bu">int</span> <span class="op">|</span> <span class="bu">str</span>]]: <span class="co"># train/test splits</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>splits glycans and labels into train / test sets</em></p>
+</section>
+</div>
 <div id="statistical-harvest" class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>train_x, val_x, train_y, val_y <span class="op">=</span> general_split(df_species.glycan.values.tolist(),</span>
-<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>                                              df_species.Species.values.tolist())</span>
-<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(train_x[:<span class="dv">10</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>train_x, val_x, train_y, val_y <span class="op">=</span> general_split(df_species.glycan.values.tolist(),</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>                                              df_species.Species.values.tolist())</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(train_x[:<span class="dv">10</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>['Neu5Ac(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3/6)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', '[Man(a1-2)Man(a1-2)Man(a1-6)Man(a1-3)Man(a1-2)Man(a1-2)]Man(a1-6)Man(a1-6)[Man(a1-3)Man(a1-2)Man(a1-2)]Man(a1-3)[Man(a1-3)Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Gal(a1-3)Gal(b1-4)GlcNAc(b1-2)[Gal(a1-3)Gal(b1-4)GlcNAc(b1-4/6)]Man(a1-3/6)[Gal(a1-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Qui3NSerAc(b1-3)Ribf(b1-4)Gal(b1-3)GlcNAc(a1-4)Qui3NSerAc', 'Gal(a1-4)Neu5Ac(a2-6)Gal', 'GlcA(?1-?)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)GalNAc(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'LDManHep(a1-7)LDManHepOP(a1-3)[DDManHepOP(a1-2)DDManHep(a1-4)]LDManHep(a1-5)Kdo', 'Neu5Gc(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Gal(b1-3/4)GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)Gal(b1-4)]Gal(b1-4)Glc-ol']</code></pre>
 </div>
 </div>
+<div id="flush-joyce" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-09-09T06:46:22.515445+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-09-09T06:46:22.519260+00:00&quot;,&quot;total&quot;:0.0038182749999862153}}" data-execution_count="24">
 <hr>
-</section>
 <section id="prepare_multilabel" class="level3">
 <h3 class="anchored" data-anchor-id="prepare_multilabel">prepare_multilabel</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb41"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> prepare_multilabel(</span>
-<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>    df:DataFrame, <span class="co"># dataframe with one glycan-association per row</span></span>
-<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>    rank:<span class="bu">str</span><span class="op">=</span><span class="st">'Species'</span>, <span class="co"># label column to use</span></span>
-<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>    glycan_col:<span class="bu">str</span><span class="op">=</span><span class="st">'glycan'</span>, <span class="co"># column with glycan sequences</span></span>
-<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>: <span class="co"># unique glycans and their label vectors</span></span>
-<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> prepare_multilabel(</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>    df:pandas.DataFrame, <span class="co"># dataframe with one glycan-association per row</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>    rank:<span class="bu">str</span><span class="op">=</span><span class="st">'Species'</span>, <span class="co"># label column to use</span></span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>    glycan_col:<span class="bu">str</span><span class="op">=</span><span class="st">'glycan'</span>, <span class="co"># column with glycan sequences</span></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="bu">tuple</span>[<span class="bu">list</span>[<span class="bu">str</span>], <span class="bu">list</span>[<span class="bu">list</span>[<span class="bu">float</span>]]]: <span class="co"># unique glycans and their label vectors</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><em>converts a one row per glycan-species/tissue/disease association file to a format of one glycan - all associations</em></p>
-<div id="popular-bailey" class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>glycans, labels <span class="op">=</span> prepare_multilabel(df_species[df_species.Order <span class="op">==</span> <span class="st">'Carnivora'</span>])</span>
-<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(glycans[<span class="dv">50</span>])</span>
-<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(labels[<span class="dv">50</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)]Gal(b1-4)GlcNAc(b1-6)[Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)]Gal(b1-4)Glc-ol
-[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</code></pre>
-</div>
-</div>
-
-
 </section>
+</div>
+<div id="popular-bailey" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>glycans, labels <span class="op">=</span> prepare_multilabel(df_species[df_species.Order <span class="op">==</span> <span class="st">'Carnivora'</span>])</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(glycans[<span class="dv">50</span>])</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(labels[<span class="dv">50</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc
+[0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</code></pre>
+</div>
+</div>
+
+
 </section>
 
 </main> <!-- /main -->
@@ -868,7 +845,7 @@ class Model(nn.Module):
     }
       var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
       var mailtoRegex = new RegExp(/^mailto:/);
-        var filterRegex = new RegExp("\/");
+        var filterRegex = new RegExp("https:\/\/bojarlab\.github\.io\/glycowork");
       var isInternal = (href) => {
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }
