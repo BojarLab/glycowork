@@ -5731,6 +5731,12 @@ def test_get_pca_with_custom_components(sample_df):
         get_pca(sample_df, groups, pc_x=2, pc_y=3)
         mock_savefig.assert_not_called()
 
+def test_get_pca_with_subplots():
+    df = sample_comp_glycomics_data()
+    groups = [1]*6 + [2]*6
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_pca(df, groups, pc_x = 1, pc_y=2, eigenvalues=True)
+        mock_savefig.assert_not_called()
 
 @pytest.fixture
 def sample_jtk_df():

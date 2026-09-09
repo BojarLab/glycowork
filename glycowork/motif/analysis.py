@@ -705,6 +705,7 @@ def get_pca(
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
         rarity_filter: float = 0.05,  # Min proportion for non-zero values
+        eigenvalues: bool = False, # Plot the explained variance
         title: str | None = None  # Plot title; None for none, as before
 ) -> None:
     "Performs PCA on glycan/motif abundance data with group-based visualization"
@@ -744,6 +745,7 @@ def get_pca(
     pca = PCA()
     X_pca = pca.fit_transform(X_std)
     percent_var = np.round(pca.explained_variance_ratio_ * 100)
+    percent_var_labels = ['PC' + str(x) for x in range(1, len(percent_var) + 1)]
     df_pca = pd.DataFrame(X_pca)
     # merge with metadata
     if isinstance(groups, pd.DataFrame):
@@ -753,18 +755,41 @@ def get_pca(
     if isinstance(groups, list):
         color = groups
     # make plot
-    ax = sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size)
-    if color or shape or size:
-        plt.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
-    ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
-           ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
-    if title is not None:
-        ax.set_title(title)
-    sns.despine()
-    # save to file
-    if filepath:
-        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
-    plt.show()
+    if eigenvalues:
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size, ax = ax1)
+        ax1.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance', 
+                ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
+        if title is not None:
+            ax1.set_title(title)
+        if color or shape or size:
+            ax1.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
+        ax2.bar(x = range(1, len(percent_var) + 1), height = percent_var, tick_label = percent_var_labels, edgecolor = "black", linewidth = 1)
+        ax2.set(ylabel = 'Explained Variance (%)', 
+                xlabel = 'Principal Component')
+        ax2.tick_params(axis = "x", labelrotation = 45)
+        ax2.grid(visible = False)
+        sns.despine()
+        # save to file
+        if filepath:
+            plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
+        plt.show()
+        plt.close()
+    else:
+        fig, ax = plt.subplots()
+        ax = sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size)
+        ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
+               ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')
+        if color or shape or size:
+            ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)  
+        if title is not None:
+            ax.set_title(title)
+        sns.despine()
+        # save to file
+        if filepath:
+            plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
+        plt.show()
+        plt.close()
 
 
 def select_grouping(
