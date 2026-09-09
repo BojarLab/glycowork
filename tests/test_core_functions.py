@@ -4029,6 +4029,16 @@ def test_glycodraw():
     assert Path("test.pdf").exists()
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.png")
     assert Path("test.png").exists()
+    # Die-cut sticker: the cut border widens the canvas and reaches every backend
+    assert GlycoDraw("GlcNAc(b1-4)GlcA", sticker = True, suppress = True).drawing_obj.width > \
+           GlycoDraw("GlcNAc(b1-4)GlcA", suppress = True).drawing_obj.width
+    GlycoDraw("GlcNAc(b1-4)GlcA", filepath = "test.svg", sticker = True)
+    cut_svg = Path("test.svg").read_text(encoding = "utf-8")
+    assert 'feDropShadow' in cut_svg and 'aria-label=' in cut_svg  # glycorender route, alt text kept
+    GlycoDraw("GlcNAc(b1-4)GlcA", filepath = "test.pdf", sticker = True)
+    assert Path("test.pdf").exists()
+    GlycoDraw("GlcNAc(b1-4)GlcA", filepath = "test.png", sticker = {'edge': 1.5})
+    assert Path("test.png").exists()
     # Test invalid glycan
     with pytest.raises(Exception):
         GlycoDraw("InvalidGlycan", restrict_vocab = True)
@@ -4318,6 +4328,7 @@ def test_display_svg_with_matplotlib():
     old_plt = plt
     plt = MockPlt()
     display_svg_with_matplotlib(test_svg)
+    display_svg_with_matplotlib(test_svg, sticker = True)
     plt = old_plt
 
 
@@ -9070,6 +9081,10 @@ def test_GlycanDrawing_save_and_png(tmp_path):
     d.save_svg(str(tmp_path / "x.svg"))
     assert (tmp_path / "x.svg").exists()
     assert isinstance(d._repr_png_(), bytes)
+    s = GlycoDraw("Gal(b1-4)Glc", suppress = True, sticker = {'edge': 1.2})
+    s.save_svg(str(tmp_path / "cut.svg"))
+    assert 'feDropShadow' in (tmp_path / "cut.svg").read_text(encoding = "utf-8")  # cut layer drawn by glycorender
+    assert isinstance(s._repr_png_(), bytes)
 
 
 def test_spread_glycans_single_and_overlapping():

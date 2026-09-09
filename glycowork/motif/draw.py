@@ -1044,7 +1044,8 @@ def is_jupyter() -> bool:
 def display_svg_with_matplotlib(
         svg_data: Any, # SVG drawing object
         chem: bool = False, # Whether svg_data comes from RDKit chemical
-        shadow: bool = False # Draw a soft drop shadow under the monosaccharide symbols
+        shadow: bool = False,  # Draw a soft drop shadow under the monosaccharide symbols
+        sticker: bool = False  # Cut the whole structure out as a die-cut sticker
 ) -> None:
     "Renders SVG using matplotlib for non-Jupyter environments"
     _, convert_svg_to_png = _get_glycorender()
@@ -1054,7 +1055,7 @@ def display_svg_with_matplotlib(
     svg_data = svg_data if isinstance(svg_data, str) else svg_data.as_svg()
     # Convert to PNG with larger dimensions
     png_output = convert_svg_to_png(svg_data, output_width = width, background = (1.0, 1.0, 1.0), shadow = shadow,
-                                    output_height = height, scale = 2.0, return_bytes = True, chem = chem)
+                                    sticker = sticker, output_height = height, scale = 2.0, return_bytes = True, chem = chem)
     img = plt.imread(BytesIO(png_output), format = 'png')
     dpi = plt.rcParams['figure.dpi']
     fig = plt.figure(figsize = (img.shape[1] / dpi, img.shape[0] / dpi))
@@ -1302,18 +1303,23 @@ def draw_chem3d(
 
 
 class GlycanDrawing:
-    def __init__(self, drawing_obj, shadow = False):
+    def __init__(self, drawing_obj, shadow = False, sticker = False):
         self.drawing_obj = drawing_obj
         self.shadow = shadow
+        self.sticker = sticker
     def as_svg(self):
         return self.drawing_obj.as_svg()
     def save_svg(self, filepath):
+        data = self.drawing_obj.as_svg()
+        if self.shadow or self.sticker:
+            from glycorender.render import pdf_to_svg_bytes
+            data = pdf_to_svg_bytes(data, shadow = self.shadow, sticker = self.sticker)
         with open(filepath, 'w', encoding = "utf-8") as f:
-            f.write(_flatten_text_paths(self.drawing_obj.as_svg()))
+            f.write(_flatten_text_paths(data))
     def _repr_png_(self):
         _, convert_svg_to_png = _get_glycorender()
         return convert_svg_to_png(self.as_svg(), None, return_bytes = True, shadow = self.shadow,
-                                  background = (1.0, 1.0, 1.0))
+                                  sticker = self.sticker, background = (1.0, 1.0, 1.0))
 
 
 @rescue_glycans
@@ -1338,7 +1344,8 @@ def GlycoDraw(
         libr: dict | None = None,  # Can be modified for drawing too exotic monosaccharides
         reducing_end_label: str | None = None,  # Label to be drawn connected to the reducing end
         restrict_vocab: bool = False,  # Whether only tokens present in libr can be drawn
-        shadow: bool = False, # Draw a soft drop shadow under the monosaccharide symbols
+        shadow: bool = False,  # Draw a soft drop shadow under the monosaccharide symbols
+        sticker: bool = False,  # Cut the whole structure out as a die-cut sticker: flat border hugging the outline, with a drop shadow
 ) -> Any:  # Drawing object
     "Renders glycan structure using SNFG symbols or chemical structure representation"
     if any(k in glycan for k in (';', 'β', 'α', 'RES', '=')):
@@ -1623,7 +1630,7 @@ def GlycoDraw(
         c_x, c_y = (x0 + x1) / 2, (y0 + y1) / 2
         d.args['transform'] = f'rotate(90 {c_x} {c_y})'
         x0, y0, x1, y1 = c_x - (y1 - y0) / 2, c_y - (x1 - x0) / 2, c_x + (y1 - y0) / 2, c_y + (x1 - x0) / 2
-    margin = dim * 0.2
+    margin = dim * (0.45 if sticker else 0.2)
     # Namespace the element IDs per drawing, so that several GlycoDraw SVGs inlined into one HTML document do not resolve each other's <use> references
     tag = hashlib.blake2s(repr(
         (in_glycan, highlight_motif, highlight_termini_list, compact, vertical, dim, per_residue, repeat,
@@ -1640,15 +1647,20 @@ def GlycoDraw(
         data = d2.as_svg()
         data = data.replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
         if suffix == '.svg':
+            if shadow or sticker:  # drawsvg has no cut layer of its own, so route the SVG through glycorender as well
+                from glycorender.render import pdf_to_svg_bytes
+                data = pdf_to_svg_bytes(data, shadow = shadow, sticker = sticker).replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
             with open(filepath, 'w', encoding = "utf-8") as f:
                 f.write(_flatten_text_paths(data))
         elif suffix == '.pdf':
             convert_svg_to_pdf, _ = _get_glycorender()
-            convert_svg_to_pdf(data, str(filepath), shadow = shadow)
+            convert_svg_to_pdf(data, str(filepath), shadow = shadow, sticker = sticker)
         else:
             _, convert_svg_to_png = _get_glycorender()
-            convert_svg_to_png(data, str(filepath), shadow = shadow)
-    return GlycanDrawing(d2, shadow = shadow) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(d2, shadow = shadow)
+            convert_svg_to_png(data, str(filepath), shadow = shadow, sticker = sticker)
+    return GlycanDrawing(d2, shadow = shadow,
+                         sticker = sticker) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
+        d2, shadow = shadow, sticker = sticker)
 
 
 def _drawable(glycan: str, # Candidate label
