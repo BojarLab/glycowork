@@ -3,8 +3,6 @@ import time
 from typing import Any
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 try:
     import xgboost as xgb
@@ -20,11 +18,8 @@ except ImportError:
 try:
     from glycowork.ml.processing import HeteroDataBatch
 except ImportError:
-    raise ImportError(
-        "<torch or torch_geometric or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
-from sklearn.metrics import accuracy_score, matthews_corrcoef, mean_squared_error, \
-    label_ranking_average_precision_score, ndcg_score, roc_auc_score, mean_absolute_error, r2_score
-from glycowork.motif.annotate import annotate_dataset
+    raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
+from glycowork.motif.annotate import annotate_dataset, deduplicate_motifs
 
 
 class EarlyStopping:
@@ -103,6 +98,8 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 ) -> torch.nn.Module | tuple[torch.nn.Module, dict[
     str, dict[str, list[float]]]]:  # best model from training and the training and validation metrics
     "trains a deep learning model on predicting glycan properties"
+    from sklearn.metrics import accuracy_score, label_ranking_average_precision_score, matthews_corrcoef, mean_absolute_error, mean_squared_error, ndcg_score, r2_score, roc_auc_score
+    import matplotlib.pyplot as plt
     since = time.time()
     early_stopping = EarlyStopping(patience = patience, verbose = True)
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -133,7 +130,8 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                     x, y, edge_index, batch = data.labels, data.y, data.edge_index, data.batch
                 x = x.to(device)
                 if mode == 'multilabel':
-                    y = y.view(max(batch) + 1, -1).to(device)
+                    # hetero_collate already stacks the per-sample label rows, so only the flat PyG y has to be folded back into [B, C]
+                    y = (y if batch is None else y.view(int(batch.max()) + 1, -1)).to(device)
                 elif mode == "regression":
                     y = y.view(-1, 1).to(device)
                 else:
@@ -147,15 +145,15 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                     batch = batch.to(device)
                 prot = getattr(data, 'train_idx', None)
                 if prot is not None:
-                    prot = prot.view(max(batch) + 1, -1).to(device)
+                    prot = prot.view(int(batch.max()) + 1, -1).to(device)
                 optimizer.zero_grad()
                 with torch.set_grad_enabled(phase == 'train'):
                     # First forward pass
-                    if mode + mode2 == 'classificationmulti' or mode + mode2 == 'multilabelmulti':
-                        enable_running_stats(model)
+                    enable_running_stats(model)
                     pred = model(prot, x, edge_index, batch) if prot is not None else model(x, edge_index, batch)
-                    if mode2 == "multi" and mode != "multilabel" and mode != "regression":
-                        pred = pred.softmax(dim = -1)
+                    # SweetNet and GIFFLAR squeeze their single output away, LectinOracle does not, so the target is matched to whatever the model returned rather than assumed to be a column
+                    if mode == 'regression':
+                        y = y.view_as(pred)
                     loss = criterion(pred, y)
                     if phase == 'train':
                         loss.backward()
@@ -178,16 +176,19 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
                 pred_det = pred.cpu().detach().numpy()
                 if mode == 'classification':
                     if mode2 == 'multi':
-                        pred_proba = np.exp(pred_det) / np.sum(np.exp(pred_det), axis = 1,
-                                                               keepdims = True)  # numpy softmax
                         pred2 = np.argmax(pred_det, axis = 1)
                     else:
-                        pred_proba = sigmoid(pred_det)
+                        if pred_det.ndim > 1 and pred_det.shape[1] == 2:
+                            pred_proba = (np.exp(pred_det) / np.sum(np.exp(pred_det), axis = 1, keepdims = True))[:, 1]
+                        else:
+                            pred_proba = sigmoid(pred_det)
                         pred2 = (pred_proba >= 0.5).astype(int)
                     running_metrics["acc"].append(accuracy_score(y_det.astype(int), pred2))
                     running_metrics["mcc"].append(matthews_corrcoef(y_det, pred2))
+                    # A batch that happens to hold one class has no defined AUROC; sklearn already returns nan for it, just noisily
                     running_metrics["auroc"].append(
-                        roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' else np.nan)
+                        roc_auc_score(y_det.astype(int), pred_proba) if mode2 == 'binary' and len(
+                            np.unique(y_det)) > 1 else np.nan)
                 elif mode == 'multilabel':
                     pred_proba = sigmoid(pred_det)
                     pred2 = (pred_proba >= 0.5).astype(int)
@@ -203,7 +204,11 @@ def train_model(model: torch.nn.Module,  # graph neural network for analyzing gl
             for key in running_metrics:
                 if key == "weights":
                     continue
-                metrics[phase][key].append(np.average(running_metrics[key], weights = running_metrics["weights"]))
+                vals, wts = np.asarray(running_metrics[key], dtype = float), np.asarray(running_metrics["weights"],
+                                                                                        dtype = float)
+                ok = ~np.isnan(vals)
+                # A metric that is undefined for some batches (AUROC on a single-class batch) should drop those batches, not poison the epoch average
+                metrics[phase][key].append(np.average(vals[ok], weights = wts[ok]) if ok.any() else np.nan)
             if mode == 'classification':
                 print('{} Loss: {:.4f} Accuracy: {:.4f} MCC: {:.4f}'.format(phase, metrics[phase]["loss"][-1],
                                                                             metrics[phase]["acc"][-1],
@@ -369,7 +374,8 @@ class Poly1CrossEntropyLoss(torch.nn.Module):
         self.num_classes = num_classes
         self.epsilon = epsilon
         self.reduction = reduction
-        self.weight = weight
+        # Registered rather than assigned, so that .to(device) carries the class weights along with the module
+        self.register_buffer("weight", weight)
         return
 
     def forward(self, logits: torch.Tensor,  # predicted class probabilities [N, num_classes]
@@ -403,11 +409,15 @@ class WarmupScheduler:
         self.warmup_epochs = warmup_epochs
         self.current_epoch = 0
         self.base_lr = self.optimizer.param_groups[0]['lr']
+        # step() only runs after an epoch has been trained, so the factor for the very first epoch has to be in place before training starts
+        if warmup_epochs > 0:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = self.base_lr / warmup_epochs
 
     def step(self, metrics = None):
         self.current_epoch += 1
         if self.current_epoch <= self.warmup_epochs:
-            warmup_factor = self.current_epoch / self.warmup_epochs
+            warmup_factor = min(1.0, (self.current_epoch + 1) / self.warmup_epochs)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.base_lr * warmup_factor
         else:
@@ -472,11 +482,14 @@ def train_ml_model(X_train: pd.DataFrame | list,  # training data/glycans
                    ) -> xgb.XGBModel | tuple[
     xgb.XGBModel, pd.DataFrame, pd.DataFrame]:  # trained model and optionally features
     "wrapper function to train standard machine learning models on glycans"
+    from sklearn.metrics import accuracy_score, mean_squared_error
     # Choose model type
     if mode == 'classification':
         model = xgb.XGBClassifier(random_state = 42, n_estimators = 100, max_depth = 3)
     elif mode == 'regression':
         model = xgb.XGBRegressor(random_state = 42, n_estimators = 100, objective = 'reg:squarederror')
+    else:
+        raise ValueError(f"mode = '{mode}' is not supported; please use 'classification' or 'regression'.")
     # Get features
     if isinstance(X_train, list) and isinstance(X_train[0], str) and not feature_calc:
         feature_calc = True
@@ -486,19 +499,17 @@ def train_ml_model(X_train: pd.DataFrame | list,  # training data/glycans
         print("\nCalculating Glycan Features...")
         X_train = annotate_dataset(X_train, feature_set = feature_set, condense = True)
         X_test = annotate_dataset(X_test, feature_set = feature_set, condense = True)
-        # Get the difference between the columns
-        missing_in_X_train = set(X_test.columns) - set(X_train.columns)
-        missing_in_X_test = set(X_train.columns) - set(X_test.columns)
-        # Fill in the missing columns
-        for k in missing_in_X_train:
-            X_train[k] = 0
-        for k in missing_in_X_test:
+        # Motifs with identical presence across the training glycans are one feature, not several, and splitting a family's gain across its members only blurs the importances
+        X_train = deduplicate_motifs(X_train.T).T
+        # Fill in the missing columns; the test frame is then put in the training column order, since a tree model reads features positionally
+        for k in set(X_train.columns) - set(X_test.columns):
             X_test[k] = 0
+        X_test = X_test[X_train.columns]
         X_train = X_train.apply(pd.to_numeric)
         X_test = X_test.apply(pd.to_numeric)
-    if additional_features_train is not None:
-        additional_features_train.index = X_train.index
-        additional_features_test.index = X_test.index
+    if additional_features_train is not None and additional_features_test is not None:
+        additional_features_train = additional_features_train.set_axis(X_train.index)
+        additional_features_test = additional_features_test.set_axis(X_test.index)
         X_train = pd.concat([X_train, additional_features_train], axis = 1)
         X_test = pd.concat([X_test, additional_features_test], axis = 1)
     print("\nTraining model...")
@@ -521,6 +532,8 @@ def train_ml_model(X_train: pd.DataFrame | list,  # training data/glycans
 def analyze_ml_model(model: xgb.XGBModel  # trained ML model from train_ml_model
                      ) -> None:
     "plots relevant features for model prediction"
+    import matplotlib.pyplot as plt
+    import seaborn as sns
     # Get important features
     feat_imp = model.get_booster().get_score(importance_type = 'gain')
     feat_imp = pd.DataFrame(feat_imp, index = [0]).T

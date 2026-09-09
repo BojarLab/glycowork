@@ -6,15 +6,12 @@ try:
     import torch.nn.functional as F
     from torch_geometric.nn import GraphConv, HeteroConv, GINConv
     from torch_geometric.nn import global_mean_pool as gap
+    from glycowork.ml.processing import HeteroDataBatch, atom_map, bond_map
     device = "cpu"
     if torch.cuda.is_available():
         device = "cuda:0"
 except ImportError:
     raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
-try:
-    from glycowork.ml.processing import HeteroDataBatch, atom_map, bond_map
-except ImportError:
-    raise ImportError("<torch or torch_geometric or glyles missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
 from glycowork.glycan_data.loader import lib, download_model
 
 
@@ -30,7 +27,7 @@ class SweetNet(torch.nn.Module):
         self.conv2 = GraphConv(hidden_dim, hidden_dim)
         self.conv3 = GraphConv(hidden_dim, hidden_dim)
         # Node embedding
-        self.item_embedding = torch.nn.Embedding(num_embeddings=lib_size+1, embedding_dim=hidden_dim)
+        self.item_embedding = torch.nn.Embedding(num_embeddings = lib_size + 1, embedding_dim = hidden_dim)
         # Fully connected part
         self.lin1 = torch.nn.Linear(hidden_dim, 1024)
         self.lin2 = torch.nn.Linear(1024, 128)
@@ -155,15 +152,10 @@ class LectinOracle(torch.nn.Module):
         h_n = torch.cat((embedded_prot, x), 1)
         # Fully connected part
         h_n = self.act1(self.bn1(self.fc1(h_n)))
-        x1 = self.fc2(self.dp1(h_n))
-        x2 = self.fc2(self.dp1(h_n))
-        x3 = self.fc2(self.dp1(h_n))
-        x4 = self.fc2(self.dp1(h_n))
-        x5 = self.fc2(self.dp1(h_n))
-        x6 = self.fc2(self.dp1(h_n))
-        x7 = self.fc2(self.dp1(h_n))
-        x8 = self.fc2(self.dp1(h_n))
-        out = self.sigmoid(torch.mean(torch.stack([x1, x2, x3, x4, x5, x6, x7, x8]), dim = 0))
+        if self.training:
+            out = self.sigmoid(torch.mean(torch.stack([self.fc2(self.dp1(h_n)) for _ in range(8)]), dim = 0))
+        else:
+            out = self.sigmoid(self.fc2(h_n))
         if inference:
             return out, embedded_prot, x
         else:
@@ -212,7 +204,6 @@ class LectinOracle_flex(torch.nn.Module):
         self.act_prot1 = torch.nn.LeakyReLU()
         self.act_prot2 = torch.nn.LeakyReLU()
         # Combined fully connected part
-        self.dp1_n = torch.nn.Dropout(0.5)
         self.fc1_n = torch.nn.Linear(128+self.hidden_size, int(np.round(self.hidden_size/2)))
         self.fc2_n = torch.nn.Linear(int(np.round(self.hidden_size/2)), self.num_classes)
         self.bn1_n = torch.nn.BatchNorm1d(int(np.round(self.hidden_size/2)))
@@ -240,15 +231,10 @@ class LectinOracle_flex(torch.nn.Module):
         h_n = torch.cat((embedded_prot, x), 1)
         # Fully connected part
         h_n = self.act1_n(self.bn1_n(self.fc1_n(h_n)))
-        x1 = self.fc2_n(self.dp1(h_n))
-        x2 = self.fc2_n(self.dp1(h_n))
-        x3 = self.fc2_n(self.dp1(h_n))
-        x4 = self.fc2_n(self.dp1(h_n))
-        x5 = self.fc2_n(self.dp1(h_n))
-        x6 = self.fc2_n(self.dp1(h_n))
-        x7 = self.fc2_n(self.dp1(h_n))
-        x8 = self.fc2_n(self.dp1(h_n))
-        out = self.sigmoid(torch.mean(torch.stack([x1, x2, x3, x4, x5, x6, x7, x8]), dim = 0))
+        if self.training:
+            out = self.sigmoid(torch.mean(torch.stack([self.fc2_n(self.dp1(h_n)) for _ in range(8)]), dim = 0))
+        else:
+            out = self.sigmoid(self.fc2_n(h_n))
         if inference:
             return out, embedded_prot, x
         else:
@@ -281,10 +267,11 @@ class GIFFLAR(torch.nn.Module):
         self.atom_embedding = torch.nn.Embedding(len(atom_map) + 1, feat_dim)
         self.bond_embedding = torch.nn.Embedding(len(bond_map) + 1, feat_dim)
         self.mono_embedding = torch.nn.Embedding(len(lib) + 1, feat_dim)
+        from glycowork.ml.processing import GIFFLAR_EDGE_TYPES
         dims = [feat_dim] + [embed_dim] * num_layers
         self.convs = torch.nn.ModuleList()
         for i in range(num_layers):
-            self.convs.append(HeteroConv({key: get_gin_layer(dims[i], dims[i + 1]) for key in [("atoms", "coboundary", "atoms"), ("atoms", "to", "bonds"), ("bonds", "to", "monosacchs"), ("bonds", "boundary", "bonds"), ("monosacchs", "boundary", "monosacchs")]}))
+            self.convs.append(HeteroConv({key: get_gin_layer(dims[i], dims[i + 1]) for key in GIFFLAR_EDGE_TYPES}))
         self.head = torch.nn.Sequential(
             torch.nn.Linear(embed_dim, embed_dim // 2),
             torch.nn.PReLU(),
@@ -298,16 +285,16 @@ class GIFFLAR(torch.nn.Module):
                 *args, **kwargs
                 ) -> torch.Tensor | dict:  # node embeddings
         """Compute the node embeddings"""
-        batch.x_dict["atoms"] = self.atom_embedding.forward(batch.x_dict["atoms"])
-        batch.x_dict["bonds"] = self.bond_embedding.forward(batch.x_dict["bonds"])
-        batch.x_dict["monosacchs"] = self.mono_embedding.forward(batch.x_dict["monosacchs"])
+        x_dict = {"atoms": self.atom_embedding.forward(batch.x_dict["atoms"]),
+                  "bonds": self.bond_embedding.forward(batch.x_dict["bonds"]),
+                  "monosacchs": self.mono_embedding.forward(batch.x_dict["monosacchs"])}
         for conv in self.convs:
-            batch.x_dict = conv(batch.x_dict, batch.edge_index_dict)
-        graph_embed = self.pool(batch.x_dict, batch.batch_dict)
-        pred = self.head(graph_embed).squeeze()
+            x_dict = conv(x_dict, batch.edge_index_dict)
+        graph_embed = self.pool(x_dict, batch.batch_dict)
+        pred = self.head(graph_embed).squeeze(-1)
         if embeddings:
             return {
-                "node_embed": batch.x_dict,
+                "node_embed": x_dict,
                 "graph_embed": graph_embed,
                 "pred": pred
             }
@@ -385,5 +372,5 @@ def prep_model(model_type: Literal["SweetNet", "GIFFLAR", "LectinOracle", "Lecti
             model.load_state_dict(torch.load(model_path, map_location = device, weights_only = True))
         model = model.to(device)
     else:
-        print("Invalid Model Type")
+        raise ValueError(f"Invalid model type: {model_type}")
     return model

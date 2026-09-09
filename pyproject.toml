@@ -5,14 +5,20 @@ build-backend = "setuptools.build_meta"
 # Project metadata
 [project]
 name = "glycowork"
-version = "1.9.0"
+version = "1.10.0"
 description = "Package for processing and analyzing glycans"
 readme = "README.md"
 authors = [
     {name = "Daniel Bojar", email = "daniel.bojar@gu.se"}
 ]
+keywords = ["glycans", "glycomics", "glycobiology", "bioinformatics", "machine learning"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Operating System :: OS Independent"
 ]
 requires-python = ">=3.11"
@@ -21,55 +27,26 @@ dependencies = [
     "matplotlib",
     "scikit-learn",
     "networkx>=3.0",
-    "statsmodels",
     "scipy>=1.16",
     "seaborn",
     "bokeh",
-    "IPython",
     "pandas>=2.1",
-    "setuptools>=64.0",
-    "huggingface_hub>=0.16.0",
     "drawSvg~=2.0",
     "openpyxl",
-    "glycorender[png]~=0.2.5"
+    "glycorender~=0.4.0"
 ]
 
 [project.urls]
 Homepage = "https://github.com/BojarLab/glycowork"
+Documentation = "https://bojarlab.github.io/glycowork/"
+Changelog = "https://github.com/BojarLab/glycowork/blob/master/CHANGELOG.md"
+Issues = "https://github.com/BojarLab/glycowork/issues"
 
 [project.optional-dependencies]
-all = [
-    "torch_geometric",
-    "torch",
-    "xgboost",
-    "glyles~=1.2.3a0",
-    "pubchempy",
-    "requests",
-    "py3Dmol"
-]
-dev = [
-    "nbdev",
-    "torch_geometric",
-    "torch",
-    "xgboost",
-    "glyles~=1.2.3a0",
-    "pubchempy",
-    "requests",
-    "py3Dmol",
-    "pytest",
-    "glycontact>=0.3.3"
-]
-ml = [
-    "torch_geometric",
-    "torch",
-    "xgboost"
-]
-chem = [
-    "glyles~=1.2.3a0",
-    "pubchempy",
-    "requests",
-    "py3Dmol"
-]
+ml = ["torch_geometric", "torch", "xgboost", "huggingface_hub>=0.16.0"]
+chem = ["rdkit>=2021.9.2", "py3Dmol"]
+all = ["glycowork[ml,chem]"]
+dev = ["glycowork[all]", "nbdev", "pytest", "glycontact>=0.3.3"]
 
 [tool.setuptools]
 include-package-data = true

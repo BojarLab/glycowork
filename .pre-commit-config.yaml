@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: glycowork-style
+        name: glycowork coding standard
+        entry: python .github/scripts/check_style.py --diff HEAD glycowork tests bin
+        language: system
+        pass_filenames: false
+        types: [python]

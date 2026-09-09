@@ -1,14 +1,24 @@
 import os
+import re
 import sys
 import time
+import queue
+import base64
+import warnings
 import threading
+import subprocess
+import pandas as pd
 import tkinter as tk
 from tkinter import simpledialog, filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from pathlib import Path
 import matplotlib
-matplotlib.use('TkAgg')
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+warnings.filterwarnings('ignore', message = '.*non-interactive.*')
+from glycowork.glycan_data.loader import motif_list
 from glycowork.motif.draw import GlycoDraw, plot_glycans_excel
-from glycowork.motif.analysis import get_differential_expression, get_heatmap, get_lectin_array
+from glycowork.motif.analysis import get_differential_expression, get_heatmap, get_lectin_array, get_volcano, get_ma, get_coverage, get_pca
 from glycowork.motif.processing import canonicalize_iupac
 
 def create_tooltip(widget, text):
@@ -27,16 +37,13 @@ def create_tooltip(widget, text):
 
 
 class BaseDialog(simpledialog.Dialog):
-    def __init__(self, parent, title=None):
-        self.style = ttk.Style()
-        self.style.configure('Modern.TButton', padding=5)
-        self.style.configure('Modern.TEntry', padding=3)
-        self.style.configure('Modern.TCheckbutton', padding=3)
+    def __init__(self, parent, title = None):
         super().__init__(parent, title)
 
     def add_file_input(self, master, row, label_text, help_text=None, filetypes=None):
         if filetypes is None:
-            filetypes = [("CSV Files", "*.csv"), ("Excel Files", "*.xlsx")]
+            filetypes = [("Data Files", "*.csv *.tsv *.xlsx"), ("CSV Files", "*.csv"),
+                         ("TSV Files", "*.tsv"), ("Excel Files", "*.xlsx")]
         frame = ttk.Frame(master)
         frame.grid(row=row, column=0, columnspan=3, sticky='ew', pady=5)
         frame.grid_columnconfigure(1, weight=1)
@@ -91,82 +98,118 @@ class BaseDialog(simpledialog.Dialog):
         self.bind("<Escape>", self.cancel)
         box.pack(pady=5)
 
-    def add_group_indices_input(self, master, row, label_text, help_text=None):
+    def add_group_selector(self, master, row, label_text, help_text = None):
         frame = ttk.Frame(master)
-        frame.grid(row=row, column=0, columnspan=3, sticky='ew', pady=5)
-        frame.grid_columnconfigure(1, weight=1)
-        ttk.Label(frame, text=label_text).grid(row=0, column=0, sticky='w', padx=(0,5))
-        entry = ttk.Entry(frame)
-        entry.grid(row=0, column=1, sticky='ew', padx=5)
-        # Add validation
-        vcmd = (frame.register(self.validate_indices), '%P')
-        entry.configure(validate='key', validatecommand=vcmd)
-        if help_text:  # Add help button if help text provided
-            help_btn = ttk.Label(frame, text="?", cursor="question_arrow")
-            help_btn.grid(row=0, column=2, padx=(5,0))
-            create_tooltip(help_btn, help_text)
-        return entry
+        frame.grid(row = row, column = 0, columnspan = 3, sticky = 'ew', pady = 5)
+        frame.grid_columnconfigure(1, weight = 1)
+        ttk.Label(frame, text = label_text).grid(row = 0, column = 0, sticky = 'nw', padx = (0, 5))
+        box = tk.Listbox(frame, selectmode = tk.EXTENDED, height = 5, exportselection = False,
+                         relief = 'flat', highlightthickness = 1, activestyle = 'none')
+        box.grid(row = 0, column = 1, sticky = 'ew', padx = 5)
+        if help_text:
+            lbl = ttk.Label(frame, text = "?", cursor = "question_arrow")
+            lbl.grid(row = 0, column = 2, padx = (5, 0))
+            create_tooltip(lbl, help_text)
+        return box
 
-    def validate_indices(self, value):
-        if value == "": return True
-        if not all(c in "0123456789, " for c in value): return False
+    def populate_groups(self, path, by_rows, *boxes):
+        if not path:
+            return
         try:
-            # Check if we can parse the indices
-            self.parse_indices(value)
-            return True
-        except ValueError:
-            return False
+            suffix = Path(path).suffix.lower()
+            head = pd.read_csv(path, nrows = 500) if suffix == '.csv' else pd.read_csv(path, sep = '\t', nrows = 500) if suffix == '.tsv' else pd.read_excel(path, nrows = 500)
+            labels = head.iloc[:, 0].astype(str).tolist() if by_rows else head.columns[1:].tolist()
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not read {os.path.basename(path)}:\n{e}", parent = self)
+            return
+        for box in boxes:
+            box.delete(0, tk.END)
+            for i, name in enumerate(labels, start = 1):
+                box.insert(tk.END, f"{i:>3}  {name}")
 
-    def parse_indices(self, indices_str):
-        try:
-            return [int(index.strip()) for index in indices_str.split(',') if index.strip()]
-        except ValueError:
-            messagebox.showerror("Error", "Please enter valid comma-separated numerical indices.")
-            return []
+    def selected(self, box):
+        return [i + 1 for i in box.curselection()]
 
 
 class GlycoDrawDialog(BaseDialog):
+    _recent = []
     def body(self, master):
         self.title("Draw Glycan")
-        # Frame for sequence input
-        seq_frame = ttk.LabelFrame(master, text="Glycan Sequence", padding=10)
-        seq_frame.pack(fill=tk.X, padx=10, pady=5)
-        self.sequence_entry = ttk.Entry(seq_frame, width=40)
-        self.sequence_entry.pack(fill=tk.X, padx=5, pady=5)
-        # Frame for options
-        options_frame = ttk.LabelFrame(master, text="Options", padding=10)
-        options_frame.pack(fill=tk.X, padx=10, pady=5)
-        self.compact_var = tk.BooleanVar()
-        compact_check = ttk.Checkbutton(options_frame, text="Compact Display", variable=self.compact_var)
-        compact_check.pack(pady=5)
-        # Recent sequences dropdown
-        self.recent_sequences = self.load_recent_sequences()
-        if self.recent_sequences:
-            history_frame = ttk.LabelFrame(master, text="Recent Sequences", padding=10)
-            history_frame.pack(fill=tk.X, padx=10, pady=5)
-            history_dropdown = ttk.Combobox(history_frame, values=self.recent_sequences)
-            history_dropdown.pack(fill=tk.X, pady=5)
-            history_dropdown.bind('<<ComboboxSelected>>', lambda e: (self.sequence_entry.delete(0, tk.END),
-                                                                     self.sequence_entry.insert(0, history_dropdown.get())))
+        self._job, self._img = None, None
+        seq_frame = ttk.LabelFrame(master, text = "Glycan Sequence", padding = 10)
+        seq_frame.pack(fill = tk.X, padx = 10, pady = 5)
+        self.sequence_entry = ttk.Entry(seq_frame, width = 70)
+        self.sequence_entry.pack(fill = tk.X, padx = 5, pady = 5)
+        self.sequence_entry.bind('<KeyRelease>', lambda e: self.schedule_preview())
+        ttk.Label(seq_frame, style = 'Sub.TLabel',
+                  text = "IUPAC-condensed, WURCS, GlycoCT, Oxford, GLYCAM, LinearCode or a composition are all accepted").pack(anchor = 'w', padx = 5)
+        opt = ttk.LabelFrame(master, text = "Style", padding = 10)
+        opt.pack(fill = tk.X, padx = 10, pady = 5)
+        self.compact_var, self.vertical_var = tk.BooleanVar(), tk.BooleanVar()
+        self.linkage_var = tk.BooleanVar(value = True)
+        for text, var, tip in (("Compact", self.compact_var, "Drop linkage spacing so large structures stay readable"),
+                               ("Vertical", self.vertical_var, "Rotate the structure 90 degrees"),
+                               ("Show linkages", self.linkage_var, "Print linkage labels such as b1-4 on the bonds")):
+            cb = ttk.Checkbutton(opt, text = text, variable = var, command = self.render_preview)
+            cb.pack(side = tk.LEFT, padx = 6)
+            create_tooltip(cb, tip)
+        row = ttk.Frame(opt)
+        row.pack(fill = tk.X, pady = (8, 0))
+        ttk.Label(row, text = "Highlight motif:").pack(side = tk.LEFT)
+        self.highlight_var = tk.StringVar()
+        hl = ttk.Combobox(row, textvariable = self.highlight_var, width = 28,
+                          values = [''] + sorted(motif_list.motif_name.tolist()))
+        hl.pack(side = tk.LEFT, padx = 5)
+        hl.bind('<<ComboboxSelected>>', lambda e: self.render_preview())
+        ttk.Label(row, text = "Save as:").pack(side = tk.LEFT, padx = (12, 0))
+        self.format_var = tk.StringVar(value = 'pdf')
+        ttk.Combobox(row, textvariable = self.format_var, values = ['pdf', 'svg', 'png'], width = 5,
+                     state = 'readonly').pack(side = tk.LEFT, padx = 5)
+        self.preview = ttk.Label(master, anchor = 'center', background = '#FFFFFF', relief = 'solid',
+                                 borderwidth = 1, text = "Preview appears here as you type")
+        self.preview.pack(fill = tk.BOTH, expand = True, padx = 10, pady = 5)
+        if GlycoDrawDialog._recent:
+            hist = ttk.Combobox(master, values = GlycoDrawDialog._recent, state = 'readonly')
+            hist.pack(fill = tk.X, padx = 10, pady = (0, 5))
+            hist.bind('<<ComboboxSelected>>', lambda e: (self.sequence_entry.delete(0, tk.END),
+                                                         self.sequence_entry.insert(0, hist.get()), self.render_preview()))
         return self.sequence_entry
 
-    def load_recent_sequences(self):
-        if not hasattr(GlycoDrawDialog, '_recent_sequences'):
-            GlycoDrawDialog._recent_sequences = []
-        return GlycoDrawDialog._recent_sequences[-10:]
+    def schedule_preview(self):
+        if self._job:
+            self.after_cancel(self._job)
+        self._job = self.after(400, self.render_preview)
 
-    def save_sequence(self, sequence):
-        if not hasattr(GlycoDrawDialog, '_recent_sequences'):
-            GlycoDrawDialog._recent_sequences = []
-        if sequence and sequence not in GlycoDrawDialog._recent_sequences:
-            GlycoDrawDialog._recent_sequences.append(sequence)
-            # Keep only last 10 sequences
-            GlycoDrawDialog._recent_sequences = GlycoDrawDialog._recent_sequences[-10:]
+    def render_preview(self):
+        self._job = None
+        seq = self.sequence_entry.get().strip()
+        if not seq:
+            self.preview.configure(image = '', text = "Preview appears here as you type")
+            return
+        try:
+            png = GlycoDraw(seq, compact = self.compact_var.get(), vertical = self.vertical_var.get(),
+                            show_linkage = self.linkage_var.get(), suppress = True,
+                            highlight_motif = self.highlight_var.get() or None)._repr_png_()
+            img = tk.PhotoImage(data = base64.b64encode(png).decode())
+            shrink = max(1, -(-img.width() // 620), -(-img.height() // 300))
+            self._img = img.subsample(shrink) if shrink > 1 else img
+            self.preview.configure(image = self._img, text = '')
+        except Exception as e:
+            self._img = None
+            self.preview.configure(image = '', text = f"Cannot draw this sequence:\n{e}")
+
+    def validate(self):
+        if not self.sequence_entry.get().strip():
+            messagebox.showerror("Error", "Please enter a glycan sequence", parent = self)
+            return 0
+        return 1
 
     def apply(self):
-        sequence = self.sequence_entry.get()
-        self.save_sequence(sequence)
-        self.result = sequence, self.compact_var.get()
+        sequence = self.sequence_entry.get().strip()
+        if sequence not in GlycoDrawDialog._recent:
+            GlycoDrawDialog._recent = (GlycoDrawDialog._recent + [sequence])[-10:]
+        self.result = (sequence, self.compact_var.get(), self.vertical_var.get(), self.linkage_var.get(),
+                       self.highlight_var.get() or None, self.format_var.get())
 
 
 class GlycoDrawExcelDialog(BaseDialog):
@@ -188,16 +231,16 @@ class GlycoDrawExcelDialog(BaseDialog):
         ttk.Checkbutton(output_frame, text="Compact Display", variable=self.compact_var).grid(row=1, column=0, pady=5, sticky="w")
         return None
 
+    def validate(self):
+        for value, msg in ((self.csv_var.get(), "Please select an input file"),
+                           (self.folder_var.get(), "Please select an output folder")):
+            if not value:
+                messagebox.showerror("Error", msg, parent = self)
+                return 0
+        return 1
+
     def apply(self):
-        csv_path = self.csv_var.get()
-        folder_path = self.folder_var.get()
-        if not csv_path:
-            messagebox.showerror("Error", "Please select an input file")
-            return
-        if not folder_path:
-            messagebox.showerror("Error", "Please select an output folder")
-            return
-        self.result = (csv_path, folder_path, self.compact_var.get())
+        self.result = (self.csv_var.get(), self.folder_var.get(), self.compact_var.get())
 
 
 class ProgressDialog(tk.Toplevel):
@@ -206,6 +249,7 @@ class ProgressDialog(tk.Toplevel):
         self.title(title)
         self.geometry("400x150")
         self.transient(parent)
+        self.wait_visibility()
         self.grab_set()
         style = ttk.Style()
         style.configure("Modern.Horizontal.TProgressbar", thickness=20, troughcolor='#E0E0E0', background='#4CAF50')
@@ -235,36 +279,37 @@ class ProgressDialog(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.request_cancel)
 
     def update_time(self):
-        if not self.cancelled:
-            elapsed = int(time.time() - self.start_time)
-            minutes = elapsed // 60
-            seconds = elapsed % 60
-            self.time_var.set(f"Time elapsed: {minutes}:{seconds:02d}")
-            self.after(1000, self.update_time)
+        if self.cancelled or not self.winfo_exists():
+            return
+        elapsed = int(time.time() - self.start_time)
+        self.time_var.set(f"Time elapsed: {elapsed // 60}:{elapsed % 60:02d}")
+        self.after(1000, self.update_time)
 
     def request_cancel(self):
-        if messagebox.askyesno("Cancel Operation", "Are you sure you want to cancel the operation?"):
+        if messagebox.askyesno("Hide Progress", "The analysis cannot be interrupted once started.\nHide this window and let it finish in the background?", parent = self):
             self.cancelled = True
-            self.status_var.set("Cancelling...")
-            self.cancel_btn.configure(state='disabled')
-            self.end()
+            self.grab_release()
+            self.withdraw()
 
-    def update_status(self, message, progress_value=None):
+    def update_status(self, message, progress_value = None):
+        if not self.winfo_exists():
+            return
         self.status_var.set(message)
         if progress_value is not None and self.progress['mode'] == 'determinate':
             self.progress['value'] = progress_value
-        self.update()
 
     def end(self):
-        self.progress.stop()
-        self.destroy()
+        if self.winfo_exists():
+            self.progress.stop()
+            self.destroy()
 
-    def finish(self, message="Operation completed successfully"):
+    def finish(self, message = "Operation completed successfully"):
+        if not self.winfo_exists():
+            return
         self.progress.stop()
         self.status_var.set(message)
-        self.cancel_btn.configure(text="Close", command=self.destroy)
-        self.update()
-        self.after(2000, self.destroy)
+        self.cancel_btn.configure(text = "Close", command = self.end)
+        self.after(2000, self.end)
 
 
 class DifferentialExpressionDialog(BaseDialog):
@@ -281,38 +326,75 @@ class DifferentialExpressionDialog(BaseDialog):
         # Groups frame
         groups_frame = ttk.LabelFrame(master, text="Sample Groups", padding=10)
         groups_frame.pack(fill=tk.X, padx=10, pady=5)
-        groups_help = ("Specify column indices (1-based) for your groups.\n" "Example: 1,2,3 for first three columns")
-        self.treatment_entry = self.add_group_indices_input(groups_frame, 0, "Treatment Group Columns:", groups_help)
-        self.control_entry = self.add_group_indices_input(groups_frame, 1, "Control Group Columns:", groups_help)
+        groups_help = "Sample columns are listed once you pick a file. Ctrl-click or Shift-click to select several."
+        self.treatment_box = self.add_group_selector(groups_frame, 0, "Treatment Samples:", groups_help)
+        self.control_box = self.add_group_selector(groups_frame, 1, "Control Samples:", groups_help)
+        self.csv_var.trace_add('write', lambda *a: self.populate_groups(self.csv_var.get(), False, self.treatment_box,
+                                                                        self.control_box))
         # Analysis options
         options_frame = ttk.LabelFrame(master, text="Analysis Options", padding=10)
         options_frame.pack(fill=tk.X, padx=10, pady=5)
         self.motifs_var = tk.BooleanVar()
-        ttk.Checkbutton(options_frame, text="Perform Motif-based Analysis", variable=self.motifs_var).pack(pady=5)
+        motif_cb = ttk.Checkbutton(options_frame, text = "Perform Motif-based Analysis", variable = self.motifs_var)
+        motif_cb.pack(anchor = 'w', pady = 2)
+        create_tooltip(motif_cb,
+                       "Test known and exhaustive substructures instead of whole glycans. Requires IUPAC-condensed sequences.")
+        self.plots_var = tk.BooleanVar(value = True)
+        plots_cb = ttk.Checkbutton(options_frame, text = "Also save volcano and MA plots", variable = self.plots_var)
+        plots_cb.pack(anchor = 'w', pady = 2)
+        create_tooltip(plots_cb,
+                       "Volcano: effect size vs significance, with SNFG symbols on the labelled hits. MA: effect size vs mean abundance.")
         # Output frame
         output_frame = ttk.LabelFrame(master, text="Output", padding=10)
         output_frame.pack(fill=tk.X, padx=10, pady=5)
         self.output_folder_var = self.add_folder_input(output_frame, 0, "Save Results To:")
         return None
 
+    def validate(self):
+        for value, msg in ((self.csv_var.get(), "Please select an input file"),
+                           (self.selected(self.treatment_box), "Please select the treatment samples"),
+                           (self.selected(self.control_box), "Please select the control samples"),
+                           (self.output_folder_var.get(), "Please select an output folder")):
+            if not value:
+                messagebox.showerror("Error", msg, parent = self)
+                return 0
+        return 1
+
     def apply(self):
-        csv_path = self.csv_var.get()
-        treatment = self.parse_indices(self.treatment_entry.get())
-        control = self.parse_indices(self.control_entry.get())
-        output_path = self.output_folder_var.get()
-        if not csv_path:
-            messagebox.showerror("Error", "Please select an input file")
-            return
-        if not treatment:
-            messagebox.showerror("Error", "Please specify treatment group columns")
-            return
-        if not control:
-            messagebox.showerror("Error", "Please specify control group columns")
-            return
-        if not output_path:
-            messagebox.showerror("Error", "Please select an output folder")
-            return
-        self.result = (csv_path, treatment, control, self.motifs_var.get(), output_path)
+        self.result = (self.csv_var.get(), self.selected(self.treatment_box), self.selected(self.control_box),
+                       self.motifs_var.get(), self.plots_var.get(), self.output_folder_var.get())
+
+
+class DataOverviewDialog(BaseDialog):
+    def body(self, master):
+        self.title("Data Overview")
+        input_frame = ttk.LabelFrame(master, text = "Input Data", padding = 10)
+        input_frame.pack(fill = tk.X, padx = 10, pady = 5)
+        help_text = ("Glycans in the first column, one sample per remaining column.\n"
+                     "Group selection is optional and only colours the PCA.")
+        self.file_var = self.add_file_input(input_frame, 0, "CSV/Excel File:", help_text)
+        groups_frame = ttk.LabelFrame(master, text = "Sample Groups (optional)", padding = 10)
+        groups_frame.pack(fill = tk.X, padx = 10, pady = 5)
+        self.group_a = self.add_group_selector(groups_frame, 0, "Group A:")
+        self.group_b = self.add_group_selector(groups_frame, 1, "Group B:")
+        self.file_var.trace_add('write', lambda *a: self.populate_groups(self.file_var.get(), False, self.group_a, self.group_b))
+        output_frame = ttk.LabelFrame(master, text = "Output", padding = 10)
+        output_frame.pack(fill = tk.X, padx = 10, pady = 5)
+        self.output_dir_var = self.add_folder_input(output_frame, 0, "Save Plots To:")
+        return None
+
+    def validate(self):
+        for value, msg in ((self.file_var.get(), "Please select an input file"),
+                           (self.output_dir_var.get(), "Please select an output folder")):
+            if not value:
+                messagebox.showerror("Error", msg, parent = self)
+                return 0
+        return 1
+
+    def apply(self):
+        a, b = self.selected(self.group_a), self.selected(self.group_b)
+        groups = [1 if i in a else 2 if i in b else 3 for i in range(1, self.group_a.size() + 1)] if a and b else None
+        self.result = (self.file_var.get(), groups, self.output_dir_var.get())
 
 
 class GetHeatmapDialog(BaseDialog):
@@ -328,32 +410,34 @@ class GetHeatmapDialog(BaseDialog):
         # Analysis options frame
         options_frame = ttk.LabelFrame(master, text="Analysis Options", padding=10)
         options_frame.pack(fill=tk.X, padx=10, pady=5)
-        self.motif_analysis_var = tk.BooleanVar()
-        ttk.Checkbutton(options_frame, text="Motif Analysis", variable=self.motif_analysis_var).pack(padx=5, pady=2)
-        self.clr_transform_var = tk.BooleanVar()
-        ttk.Checkbutton(options_frame, text="CLR Transform", variable=self.clr_transform_var).pack(padx=5, pady=2)
-        self.show_all_var = tk.BooleanVar()
-        ttk.Checkbutton(options_frame, text="Show All Features", variable=self.show_all_var).pack(padx=5, pady=2)
+        self.motif_analysis_var, self.clr_transform_var, self.show_all_var = tk.BooleanVar(), tk.BooleanVar(), tk.BooleanVar()
+        for text, var, tip in (("Motif Analysis", self.motif_analysis_var,
+                                "Cluster on known and exhaustive substructures instead of whole glycans. Needs IUPAC-condensed sequences."),
+                               ("CLR Transform", self.clr_transform_var,
+                                "Centered log-ratio. Use this when your values are relative abundances that sum to a constant, which is the norm for MS glycomics."),
+                               ("Show All Features", self.show_all_var,
+                                "Print every row and column label. Readable up to roughly 50 features, unreadable beyond that.")):
+            cb = ttk.Checkbutton(options_frame, text = text, variable = var)
+            cb.pack(anchor = 'w', padx = 5, pady = 2)
+            create_tooltip(cb, tip)
         # Output frame
         output_frame = ttk.LabelFrame(master, text="Output", padding=10)
         output_frame.pack(fill=tk.X, padx=10, pady=5)
         self.output_file_var = self.add_folder_input(output_frame, 0, "Save Heatmap To:")
         return None
 
+    def validate(self):
+        for value, msg in ((self.input_file_var.get(), "Please select an input file"),
+                           (self.output_file_var.get(), "Please select an output location")):
+            if not value:
+                messagebox.showerror("Error", msg, parent = self)
+                return 0
+        return 1
+
     def apply(self):
-        input_path = self.input_file_var.get()
-        output_path = self.output_file_var.get()
-        if not input_path:
-            messagebox.showerror("Error", "Please select an input file")
-            return
-        if not output_path:
-            messagebox.showerror("Error", "Please select an output location")
-            return
-        self.result = (input_path,
-                      self.motif_analysis_var.get(),
-                      self.clr_transform_var.get(),
-                      self.show_all_var.get(),
-                      os.path.join(output_path, "heatmap.png"))
+        self.result = (self.input_file_var.get(), self.motif_analysis_var.get(),
+                       self.clr_transform_var.get(), self.show_all_var.get(),
+                       os.path.join(self.output_file_var.get(), f"heatmap_{time.strftime('%Y%m%d_%H%M%S')}.png"))
 
 
 class LectinArrayAnalysisDialog(BaseDialog):
@@ -370,38 +454,38 @@ class LectinArrayAnalysisDialog(BaseDialog):
         # Groups frame
         groups_frame = ttk.LabelFrame(master, text="Sample Groups", padding=10)
         groups_frame.pack(fill=tk.X, padx=10, pady=5)
-        groups_help = ("Specify row indices (1-based) for your groups.\n" "Example: 1,2,3 for first three rows")
-        self.treatment_entry = self.add_group_indices_input(groups_frame, 0, "Treatment Group Rows:", groups_help)
-        self.control_entry = self.add_group_indices_input(groups_frame, 1, "Control Group Rows:", groups_help)
+        groups_help = "Sample names are listed once you pick a file. Ctrl-click or Shift-click to select several."
+        self.treatment_box = self.add_group_selector(groups_frame, 0, "Treatment Samples:", groups_help)
+        self.control_box = self.add_group_selector(groups_frame, 1, "Control Samples:", groups_help)
+        self.file_var.trace_add('write', lambda *a: self.populate_groups(self.file_var.get(), True, self.treatment_box,
+                                                                         self.control_box))
         # Analysis options
         options_frame = ttk.LabelFrame(master, text="Analysis Options", padding=10)
         options_frame.pack(fill=tk.X, padx=10, pady=5)
         self.paired_var = tk.BooleanVar()
-        ttk.Checkbutton(options_frame, text="Paired Analysis", variable=self.paired_var).pack(pady=5)
+        paired_cb = ttk.Checkbutton(options_frame, text = "Paired Analysis", variable = self.paired_var)
+        paired_cb.pack(anchor = 'w', pady = 5)
+        create_tooltip(paired_cb,
+                       "Tick only if each treatment sample has a matching control from the same subject, in the same selection order.")
         # Output frame
         output_frame = ttk.LabelFrame(master, text="Output", padding=10)
         output_frame.pack(fill=tk.X, padx=10, pady=5)
         self.output_dir_var = self.add_folder_input(output_frame, 0, "Save Results To:")
         return None
 
+    def validate(self):
+        for value, msg in ((self.file_var.get(), "Please select an input file"),
+                           (self.selected(self.treatment_box), "Please select the treatment samples"),
+                           (self.selected(self.control_box), "Please select the control samples"),
+                           (self.output_dir_var.get(), "Please select an output directory")):
+            if not value:
+                messagebox.showerror("Error", msg, parent = self)
+                return 0
+        return 1
+
     def apply(self):
-        file_path = self.file_var.get()
-        treatment = self.parse_indices(self.treatment_entry.get())
-        control = self.parse_indices(self.control_entry.get())
-        output_path = self.output_dir_var.get()
-        if not file_path:
-            messagebox.showerror("Error", "Please select an input file")
-            return
-        if not treatment:
-            messagebox.showerror("Error", "Please specify treatment group rows")
-            return
-        if not control:
-            messagebox.showerror("Error", "Please specify control group rows")
-            return
-        if not output_path:
-            messagebox.showerror("Error", "Please select an output directory")
-            return
-        self.result = (file_path, treatment, control, self.paired_var.get(), output_path)
+        self.result = (self.file_var.get(), self.selected(self.treatment_box), self.selected(self.control_box),
+                       self.paired_var.get(), self.output_dir_var.get())
 
 
 class CanonicalizeIUPACDialog(BaseDialog):
@@ -418,7 +502,8 @@ class CanonicalizeIUPACDialog(BaseDialog):
     output_frame = ttk.LabelFrame(master, text="Canonicalized Sequences", padding=10)
     output_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
     # Text area for output with readonly state
-    self.output_text = ScrolledText(output_frame, height=10, width=50, font=('Courier', 10), state='disabled')
+    self.output_text = ScrolledText(output_frame, height = 10, width = 50, font = ('Courier', 10), state = 'disabled')
+    self.output_text.tag_configure('ERROR', foreground = 'red')
     self.output_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
     # Buttons frame
     button_frame = ttk.Frame(master)
@@ -498,6 +583,7 @@ class GlycoworkGUI:
         self.setup_icon()
         # Initialize logging
         self.setup_logging()
+        self.draw_folder, self.last_output = '', ''
 
     def setup_styles(self):
         style = ttk.Style()
@@ -538,18 +624,24 @@ class GlycoworkGUI:
         sidebar = ttk.Frame(self.content, style='Sidebar.TFrame')
         self.content.add(sidebar, weight=1)
         # Tool buttons
-        tools = [
-            ("GlycoDraw", "Draw individual glycans", self.open_glyco_draw),
-            ("Batch Draw", "Draw glycans from Excel/CSV", self.open_glyco_draw_excel),
-            ("Canonicalize IUPAC", "Standardize glycan sequences", self.open_canonicalize_iupac),
-            ("Differential Expression", "Analyze differential expression", self.open_differential_expression),
-            ("Heatmap", "Generate heatmap visualization", self.open_get_heatmap),
-            ("Lectin Array", "Perform lectin array analysis", self.open_lectin_array)
-        ]
-        for text, tooltip, command in tools:
-            btn = ttk.Button(sidebar, text=text, command=command, style='Tool.TButton', width=20)
-            btn.pack(pady=5, padx=10)
-            create_tooltip(btn, tooltip)
+        sections = [("Draw", [("GlycoDraw", "Draw one glycan, with live preview", self.open_glyco_draw),
+                              ("Batch Draw", "Draw every glycan in a spreadsheet", self.open_glyco_draw_excel)]),
+                    ("Convert",
+                     [("Canonicalize IUPAC", "Translate WURCS, GlycoCT, Oxford, GLYCAM, and more into IUPAC-condensed",
+                       self.open_canonicalize_iupac)]),
+                    ("Analyze",
+                     [("Data Overview", "Coverage and PCA, to sanity-check a dataset first", self.open_data_overview),
+                      ("Differential Expression", "Two-group test with volcano and MA plots",
+                       self.open_differential_expression),
+                      ("Heatmap", "Hierarchically clustered abundance heatmap", self.open_get_heatmap),
+                      ("Lectin Array", "Map lectin binding onto glycan motifs", self.open_lectin_array)])]
+        for section, items in sections:
+            ttk.Label(sidebar, text = section.upper(), style = 'Sub.TLabel',
+                      background = '#DDE4EE').pack(anchor = 'w', padx = 12, pady = (10, 2))
+            for text, tooltip, command in items:
+                btn = ttk.Button(sidebar, text = text, command = command, style = 'Tool.TButton', width = 22)
+                btn.pack(pady = 3, padx = 10)
+                create_tooltip(btn, tooltip)
         # Work area with log
         self.work_area = ttk.Frame(self.content)
         self.content.add(self.work_area, weight=3)
@@ -567,8 +659,21 @@ class GlycoworkGUI:
         self.log_view.tag_configure('ERROR', foreground='red')
         self.log_view.tag_configure('SUCCESS', foreground='green')
         # Add clear button below log
-        clear_btn = ttk.Button(log_frame, text="Clear Log", command=self.clear_log, style='Tool.TButton')
-        clear_btn.pack(pady=5)
+        btn_row = ttk.Frame(log_frame)
+        btn_row.pack(pady = 5)
+        ttk.Button(btn_row, text = "Open Output Folder", command = self.open_output, style = 'Tool.TButton').pack(
+            side = tk.LEFT, padx = 4)
+        ttk.Button(btn_row, text = "Clear Log", command = self.clear_log, style = 'Tool.TButton').pack(side = tk.LEFT,
+                                                                                                       padx = 4)
+
+    def open_output(self):
+        if not self.last_output or not os.path.isdir(self.last_output):
+            messagebox.showinfo("No output yet", "Run an analysis first.")
+            return
+        if sys.platform == 'win32':
+            os.startfile(self.last_output)
+        else:
+            subprocess.run(['open' if sys.platform == 'darwin' else 'xdg-open', self.last_output])
 
     def clear_log(self):
         self.log_view.delete(1.0, tk.END)
@@ -594,17 +699,14 @@ class GlycoworkGUI:
 
     @staticmethod
     def resource_path(relative_path):
-        try:
-            base_path = sys._MEIPASS
-        except Exception:
-            base_path = os.path.abspath(".")
-        return os.path.join(base_path, relative_path)
+        return os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__))), relative_path)
 
     def run(self):
         self.app.mainloop()
 
     def show_about_info(self):
-        about_message = """glycowork v1.8
+        from glycowork import __version__
+        about_message = f"""glycowork v{__version__}
 
 For more information and citation, please refer to:
 Thomès, L., et al. (2021). Glycowork: A Python package for glycan data science
@@ -615,117 +717,112 @@ https://bojarlab.github.io/glycowork/"""
         messagebox.showinfo("About glycowork", about_message)
 
     def open_glyco_draw(self):
-        folder_path = filedialog.askdirectory(title="Select Folder to Save Glycans")
-        if not folder_path:
-            return
-
         while True:
-            dialog_result = GlycoDrawDialog(self.app)
-            if dialog_result.result:
-                glycan_sequence, compact = dialog_result.result
-                file_path = os.path.join(folder_path, f"{glycan_sequence}.pdf")
-                try:
-                    GlycoDraw(glycan_sequence, filepath=file_path, compact=compact)
-                except Exception as e:
-                    messagebox.showerror("Error", f"An error occurred: {str(e)}")
-                if not messagebox.askyesno("Continue", "Do you want to draw another glycan?"):
-                    break
-            else:
+            res = GlycoDrawDialog(self.app).result
+            if not res:
+                break
+            sequence, compact, vertical, linkage, highlight, fmt = res
+            if not self.draw_folder:
+                self.draw_folder = filedialog.askdirectory(title = "Select Folder to Save Glycans")
+                if not self.draw_folder:
+                    continue
+            safe = re.sub(r'[<>:"/\\|?*]', '_', sequence)[:120]
+            file_path = os.path.join(self.draw_folder, f"{safe}.{fmt}")
+            try:
+                GlycoDraw(sequence, filepath = file_path, compact = compact, vertical = vertical,
+                          show_linkage = linkage, highlight_motif = highlight)
+                self.last_output = self.draw_folder
+                self.log(f"Drew {sequence} to {file_path}", 'SUCCESS')
+            except Exception as e:
+                self.log(f"Failed to draw {sequence}: {e}", 'ERROR')
+                messagebox.showerror("Error", f"An error occurred: {e}")
+            if not messagebox.askyesno("Continue", "Draw another glycan?"):
                 break
 
-    def open_glyco_draw_excel(self):
-        dialog_result = GlycoDrawExcelDialog(self.app)
-        if dialog_result.result:
-            csv_file_path, output_folder, compact = dialog_result.result
-            progress = ProgressDialog(self.app, "Batch Drawing Glycans")
+    def run_task(self, title, status, fn, success_msg, out_dir = ''):
+        self.last_output = out_dir
+        progress = ProgressDialog(self.app, title)
+        progress.update_status(status)
+        outcome = queue.Queue()
+        def worker():
             try:
-                progress.update_status("Processing glycans from file...")
-                plot_glycans_excel(csv_file_path, output_folder, compact=compact)
-                self.log(f"Successfully drew glycans from {csv_file_path} to {output_folder}", 'SUCCESS')
-                progress.finish("Batch drawing completed successfully")
+                fn()
+                outcome.put((success_msg, 'SUCCESS'))
             except Exception as e:
-                error_msg = f"Error during batch drawing: {str(e)}"
-                self.log(error_msg, 'ERROR')
-                messagebox.showerror("Error", error_msg)
+                outcome.put((f"{title} failed: {e}", 'ERROR'))
             finally:
-                if progress.winfo_exists():
-                    progress.destroy()
+                plt.close('all')
+        def poll():
+            try:
+                msg, level = outcome.get_nowait()
+            except queue.Empty:
+                self.app.after(100, poll)
+                return
+            self.log(msg, level)
+            if level == 'ERROR':
+                progress.end()
+                messagebox.showerror("Error", msg)
+            else:
+                progress.finish()
+        threading.Thread(target = worker, daemon = True).start()
+        self.app.after(100, poll)
+
+    def open_glyco_draw_excel(self):
+        if not (res := GlycoDrawExcelDialog(self.app).result):
+            return
+        csv_path, out_folder, compact = res
+        self.run_task("Batch Drawing Glycans", "Processing glycans from file...",
+                      lambda: plot_glycans_excel(csv_path, out_folder, compact = compact),
+                      f"Drew glycans from {csv_path} to {out_folder}", out_folder)
 
     def open_differential_expression(self):
-        dialog_result = DifferentialExpressionDialog(self.app)
-        if dialog_result.result:
-            csv_file_path, treatment_indices, control_indices, motifs, output_folder = dialog_result.result
-            progress_dialog = ProgressDialog(self.app, "Differential Expression Analysis")
-            threading.Thread(target=self.run_differential_expression,
-                           args=(csv_file_path, treatment_indices, control_indices,
-                                 motifs, output_folder, progress_dialog),
-                           daemon=True).start()
+        if not (res := DifferentialExpressionDialog(self.app).result):
+            return
+        csv_path, treatment, control, motifs, plots, out_folder = res
+
+        def analyze():
+            df_out = get_differential_expression(df = csv_path, group1 = control, group2 = treatment, motifs = motifs)
+            try:
+                plot_glycans_excel(df_out, out_folder)
+            except Exception:
+                df_out.to_excel(os.path.join(out_folder, "output.xlsx"), index = False)
+            if plots:
+                get_volcano(df_out, annotate_volcano = not motifs, filepath = os.path.join(out_folder, "volcano.png"))
+                get_ma(df_out, filepath = os.path.join(out_folder, "ma_plot.png"))
+
+        self.run_task("Differential Expression Analysis", "Analyzing data...", analyze,
+                      f"Analysis complete. Results saved to {out_folder}", out_folder)
+
+    def open_data_overview(self):
+        if not (res := DataOverviewDialog(self.app).result):
+            return
+        in_path, groups, out_dir = res
+        def explore():
+            get_coverage(in_path, filepath = os.path.join(out_dir, "coverage.png"))
+            get_pca(in_path, groups = groups, filepath = os.path.join(out_dir, "pca.png"))
+        self.run_task("Data Overview", "Profiling dataset...", explore,
+                      f"Coverage and PCA plots saved to {out_dir}", out_dir)
 
     def open_get_heatmap(self):
-        dialog_result = GetHeatmapDialog(self.app)
-        if dialog_result.result:
-            input_file_path, motif_analysis, clr_transform, show_all, output_file_path = dialog_result.result
-            progress = ProgressDialog(self.app, "Generating Heatmap")
-            try:
-                progress.update_status("Analyzing data...")
-                transform = "CLR" if clr_transform else ''
-                g = get_heatmap(df=input_file_path, motifs=motif_analysis,
-                             feature_set=["known", "exhaustive"], transform=transform,
-                             show_all=show_all, return_plot=True)
-                if progress.cancelled:
-                    return
-                progress.update_status("Saving heatmap...")
-                fig = g.fig
-                fig.savefig(output_file_path, format="png", dpi=300, bbox_inches='tight')
-                self.log(f"Heatmap saved to {output_file_path}", 'SUCCESS')
-            except Exception as e:
-                error_msg = f"Error generating heatmap: {str(e)}"
-                self.log(error_msg, 'ERROR')
-                messagebox.showerror("Error", error_msg)
-            finally:
-                progress.destroy()
+        if not (res := GetHeatmapDialog(self.app).result):
+            return
+        in_path, motifs, clr, show_all, out_path = res
+        self.run_task("Generating Heatmap", "Analyzing data...",
+                      lambda: get_heatmap(df = in_path, motifs = motifs, feature_set = ["known", "exhaustive"],
+                                          transform = "CLR" if clr else '', show_all = show_all, filepath = out_path),
+                      f"Heatmap saved to {out_path}", os.path.dirname(out_path))
 
     def open_lectin_array(self):
-        dialog_result = LectinArrayAnalysisDialog(self.app)
-        if dialog_result.result:
-            file_path, treatment_indices, control_indices, paired, output_directory = dialog_result.result
-            progress = ProgressDialog(self.app, "Lectin Array Analysis")
-            try:
-                progress.update_status("Analyzing data...")
-                df_out = get_lectin_array(df=file_path, group1=control_indices, group2=treatment_indices, paired=paired)
-                if progress.cancelled:
-                    return
-                progress.update_status("Saving results...")
-                plot_glycans_excel(df_out, output_directory)
-                self.log(f"Analysis complete. Results saved to {output_directory}", 'SUCCESS')
-            except Exception as e:
-                error_msg = f"Error during analysis: {str(e)}"
-                self.log(error_msg, 'ERROR')
-                messagebox.showerror("Error", error_msg)
-            finally:
-                progress.destroy()
+        if not (res := LectinArrayAnalysisDialog(self.app).result):
+            return
+        file_path, treatment, control, paired, out_dir = res
+        self.run_task("Lectin Array Analysis", "Analyzing data...",
+                      lambda: plot_glycans_excel(get_lectin_array(df = file_path, group1 = control,
+                                                                  group2 = treatment, paired = paired), out_dir),
+                      f"Analysis complete. Results saved to {out_dir}", out_dir)
 
     def open_canonicalize_iupac(self):
-        _ = CanonicalizeIUPACDialog(self.app)
-
-    def run_differential_expression(self, csv_file_path, treatment_indices, control_indices, motifs, output_folder, progress_dialog):
-        try:
-            progress_dialog.update_status("Reading input file...")
-            df_out = get_differential_expression(df=csv_file_path,
-                                   group1=control_indices,
-                                   group2=treatment_indices,
-                                   motifs=motifs)
-            progress_dialog.update_status("Saving results...")
-            plot_glycans_excel(df_out, output_folder)
-            self.log(f"Analysis complete. Results saved to {output_folder}", 'SUCCESS')
-            progress_dialog.finish("Analysis completed successfully")
-        except Exception as e:
-            error_msg = f"Error during analysis: {str(e)}"
-            self.log(error_msg, 'ERROR')
-            messagebox.showerror("Error", error_msg)
-        finally:
-            if progress_dialog.winfo_exists():
-                progress_dialog.destroy()
+        CanonicalizeIUPACDialog(self.app)
 
 
 if __name__ == "__main__":

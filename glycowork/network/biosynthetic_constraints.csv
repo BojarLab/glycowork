@@ -1,0 +1,16 @@
+﻿product,context,kind,glycan_class,enzyme,rationale,reference
+GlcNAc(b1-2)Man(a1-3),Man(a1-2)Man,forbids,N,MGAT1,MGAT1 acts on Man5GlcNAc2; alpha1-2-linked mannoses must be trimmed by MAN1 first,Schachter 1986 Biochem Cell Biol
+GlcNAc(b1-2)Man(a1-6),GlcNAc(b1-4)Man(b1-4)GlcNAc,forbids,N,MGAT2,bisecting GlcNAc blocks subsequent MGAT2 action,Schachter 1986 Biochem Cell Biol
+GlcNAc(b1-6)Man(a1-6),GlcNAc(b1-4)Man(b1-4)GlcNAc,forbids,N,MGAT5,bisecting GlcNAc blocks subsequent MGAT5 branching,Schachter 1986 Biochem Cell Biol
+Fuc(a1-6)GlcNAc,GlcNAc(b1-4)Man(b1-4)GlcNAc,forbids,N,FUT8,bisecting GlcNAc blocks subsequent core fucosylation; the reverse order is permitted and common,Taniguchi & Kizuka 2015 Adv Cancer Res
+Gal(b1-3)GalNAc,Neu5Ac(a2-6)GalNAc,forbids,O,C1GALT1,sialyl-Tn cannot be elongated to core 1,Brockhausen & Stanley 2022 Essentials of Glycobiology
+GlcNAc(b1-6)GalNAc,Neu5Ac(a2-3)Gal(b1-3)GalNAc,forbids,O,GCNT1,alpha2-3-sialylated core 1 cannot be converted to core 2,Brockhausen & Stanley 2022 Essentials of Glycobiology
+GalNAc(a1-3)Gal,Fuc(a1-2)Gal,requires,,ABO,blood group A transferase requires the H antigen as acceptor,Yamamoto 2004 Immunohematology
+GlcNAc(b1-2)Man(a1-6),GlcNAc(b1-2)Man(a1-3),requires,N,MGAT2,MGAT2 acts only on the MGAT1 product,Schachter 1986 Biochem Cell Biol
+GlcNAc(b1-2)Man(a1-6),Man(a1-3)Man(a1-6)|Man(a1-6)Man(a1-6),forbids,N,MGAT2,MGAT2 requires prior alpha-mannosidase II trimming of the alpha1-6 arm; this is why hybrid glycans stay hybrid,Schachter 1986 Biochem Cell Biol
+GlcNAc(b1-4)Man(a1-3),GlcNAc(b1-2)Man(a1-3),requires,N,MGAT4,MGAT4 adds the beta1-4 branch to a Man that already carries the MGAT1 beta1-2 GlcNAc,Schachter 1986 Biochem Cell Biol
+GlcNAc(b1-4)Man(a1-3),GlcNAc(b1-4)Man(b1-4)GlcNAc,forbids,N,MGAT4,bisecting GlcNAc blocks subsequent MGAT4 branching,Schachter 1986 Biochem Cell Biol
+GlcNAc(b1-6)Man(a1-6),GlcNAc(b1-2)Man(a1-6),requires,N,MGAT5,MGAT5 acts on the MGAT2 product,Schachter 1986 Biochem Cell Biol
+GlcNAc(b1-4)Man(b1-4)GlcNAc,GlcNAc(b1-2)Man(a1-3),requires,N,MGAT3,MGAT3 cannot bisect an oligomannose core; it requires the MGAT1 product,Schachter 1986 Biochem Cell Biol
+GlcNAc(b1-6)GalNAc,Gal(b1-3)GalNAc|GlcNAc(b1-3)GalNAc,requires,O,GCNT1/GCNT3,the beta1-6 branch of core 2 and core 4 is added to core 1 and core 3 respectively,Brockhausen & Stanley 2022 Essentials of Glycobiology
+GlcNAc(b1-3)GalNAc,Neu5Ac(a2-6)GalNAc,forbids,O,B3GNT6,sialyl-Tn cannot be elongated to core 3,Brockhausen & Stanley 2022 Essentials of Glycobiology

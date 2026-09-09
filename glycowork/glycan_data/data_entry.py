@@ -11,19 +11,21 @@ def check_presence(glycan: str, # IUPAC-condensed glycan sequence
                    fast: bool = False # True uses precomputed glycan graphs
                    ) -> None:
     "checks whether glycan (of that species) is already present in dataset"
-    if any([p in glycan for p in ['RES', '=']]) or not isinstance(glycan, str):
+    if not isinstance(glycan, str) or any(p in glycan for p in ['RES', '=']):
         check_nomenclature(glycan)
         return
+    lookup_col = 'graph' if fast else colname
+    if lookup_col not in df.columns:
+        raise KeyError(f"'{lookup_col}' is not a column of df; available columns are {df.columns.tolist()}")
     if name is not None:
+        if rank not in df.columns:
+            raise KeyError(f"'{rank}' is not a column of df; available columns are {df.columns.tolist()}")
         name = name.replace(" ", "_")
         df = df[df[rank] == name]
         if len(df) == 0:
-            print("This is the best: %s is not in dataset" % name)
-    if fast:
-        ggraph = glycan_to_nxGraph(glycan)
-        check_all = [compare_glycans(ggraph, k) for k in df.graph]
-    else:
-        check_all = [compare_glycans(glycan, k) for k in df[colname]]
+            print(f"This is the best: {name} is not in dataset")
+    ggraph = glycan_to_nxGraph(glycan) if fast else glycan
+    check_all = [compare_glycans(ggraph, k) for k in df[lookup_col]]
     if any(check_all):
         print("Glycan already in dataset.")
     else:

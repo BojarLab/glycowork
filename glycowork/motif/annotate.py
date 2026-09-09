@@ -4,15 +4,40 @@ import numpy as np
 import re
 from collections import Counter, deque, defaultdict
 from functools import partial
-from scipy.spatial.distance import cosine
 
-from glycowork.glycan_data.loader import linkages, motif_list, unwrap, df_species, Hex, dHex, HexNAc, HexA, Pen, Sia
-from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, possible_topology_check, graph_to_string_int
+from glycowork.glycan_data import loader
+from glycowork.glycan_data.loader import linkages, motif_list, unwrap, Hex, dHex, HexNAc, HexA, Pen, Sia, resolve_motif_name
+from glycowork.motif.graph import subgraph_isomorphism, generate_graph_features, glycan_to_nxGraph, graph_to_string, ensure_graph, get_possible_topologies, compare_glycans, graph_to_string_int, expand_termini_list, build_wildcard_cache, _sl, _has_o
 from glycowork.motif.processing import IUPAC_to_SMILES, get_lib, rescue_glycans, is_composition, canonicalize_composition
-from glycowork.motif.regex import get_match
+from glycowork.motif.regex import get_match, get_match_batch, compile_pattern, compile_component
 
 
-LINKAGE_NODE_PATTERN = re.compile(r'^[ab?][0-9?/]+-[0-9?/]+$')
+LINKAGE_NODE_PATTERN = re.compile(r'^[ab?]?[0-9?/]+-[0-9?/]+$')
+_WILDCARD_RE = re.compile(r'(?<![A-Za-z0-9])(?:Monosaccharide|HexNAcOS|HexNAcOP|HexNAc|HexAOS|HexOS|HexOP|HexNS|HexN|HexA|dHex|Hex|Sia|Pen)(?![A-Za-z0-9])')
+_STRUCTURAL_ALDITOL = re.compile(r'(?:Thre|Ery|Rib|Gro|Ara)[A-Za-z0-9]*-ol$')
+_REGEX_LOOKAROUND = re.compile(r'\(\?<?[=!][^()]*\)')
+
+
+def _motif_sequence(
+        label: str # Motif label as produced by annotate_dataset/quantify_motifs
+) -> tuple[str, list[str]]: # (IUPAC-condensed sequence, monosaccharide termini spec)
+    "Resolves a motif label to the sequence and termini spec it was counted with"
+    if (hit := resolve_motif_name(label)) is not None:
+        return hit
+    s = label[9:] if label.startswith('Terminal_') else label
+    # Terminal_ columns were counted with a pinned non-reducing end, exhaustive ones position-agnostically
+    return s, (['terminal'] if label.startswith('Terminal_') else ['flexible']) + ['flexible'] * (s.count('(') - (1 if s.endswith(')') else 0))
+
+
+def _motif_ambiguity(
+        label: str # Motif label as produced by annotate_dataset/quantify_motifs
+) -> tuple[int, bool, int, int]: # Sort key; lower is more specific
+    "Ranks a motif label by information content, since wildcards, ambiguous linkages, and unpinned termini convey less than the concrete forms they abstract and can be longer than them"
+    s, sp = _motif_sequence(label)
+    # A glyco-regex spells its own syntax with '?' and '/', neither of which is the linkage ambiguity this rank is about
+    s = _REGEX_LOOKAROUND.sub('', s[1:]) if s.startswith('r') else s
+    return (len(_WILDCARD_RE.findall(s)) + s.count('?') + s.count('/'), resolve_motif_name(label) is None,
+            -sum(t != 'flexible' for t in sp), -len(s))
 
 
 def annotate_glycan(
@@ -31,15 +56,18 @@ def annotate_glycan(
     if gmotifs is None:
         termini = 'provided' if termini_list else 'ignore'
         partial_glycan_to_nxGraph = partial(glycan_to_nxGraph, termini = termini)
-        gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
+        # r-prefixed rows are glyco-regular expressions, pre-compiled into chunk lists that the counting step tells apart from motif graphs
+        gmotifs = [compile_pattern(mo[1:]) if mo.startswith('r') else partial_glycan_to_nxGraph(mo, termini_list = termini_list[i])
+                   for i, mo in enumerate(motifs.motif)]
     # Count the number of times each motif occurs in a glycan
     ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
-    res = [subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
-                                count = True) for i, g in enumerate(gmotifs)]
-    out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
-    out.loc[0] = res
-    out.loc[0] = out.loc[0].astype('int')
-    out.index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)]
+    res = [len(get_match(g, ggraph)) if isinstance(g, list) else
+           subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
+                                count = True)
+           for i, g in enumerate(gmotifs)]
+    out = pd.DataFrame(np.array([res], dtype = int),
+                       columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs,
+                       index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)])
     return out if not condense else out.loc[:, (out != 0).any(axis = 0)]
 
 
@@ -54,82 +82,130 @@ def annotate_glycan_topology_uncertainty(
     if motifs is None:
         motifs = motif_list
     if feasibles is None:
-        feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
+        feasibles = set(loader.df_species[loader.df_species.Class == "Mammalia"].glycan.values.tolist())
     # Check whether termini are specified
     if not termini_list and isinstance(motifs, pd.DataFrame):
         termini_list = list(map(eval, motifs.termini_spec))
     if gmotifs is None:
         termini = 'provided' if termini_list else 'ignore'
         partial_glycan_to_nxGraph = partial(glycan_to_nxGraph, termini = termini)
-        gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
+        # r-prefixed rows are glyco-regular expressions, pre-compiled into chunk lists that the counting step tells apart from motif graphs
+        gmotifs = [compile_pattern(mo[1:]) if mo.startswith('r') else partial_glycan_to_nxGraph(mo, termini_list = termini_list[i])
+                   for i, mo in enumerate(motifs.motif)]
     # Count the number of times each motif occurs in a glycan
     ggraph = ensure_graph(glycan, termini = 'calc' if termini_list else 'ignore')
-    glycan_len = glycan.count('(')
-    feasibles = [glycan_to_nxGraph(g, termini = 'calc') for g in feasibles if g.count('(') == glycan_len]
-    possibles = possible_topology_check(ggraph, feasibles, exhaustive = True)
+    termini = 'calc' if termini_list else 'ignore'
+    # round-trip through strings so termini are recalculated with the floating bit attached
+    tgraphs = [glycan_to_nxGraph(t, termini = termini) for t in get_possible_topologies(ggraph, exhaustive = True)]
+    if any('anchors' in d for _, d in ggraph.nodes(data = True)):
+        # anchored bits already enumerate the complete, exact topology set; the feasibles database can only lose information here
+        possibles = tgraphs
+    else:
+        sizes = {len(t) for t in tgraphs}
+        possibles = [g for g in
+                     (glycan_to_nxGraph(k, termini = 'calc') for k in feasibles if 2 * k.count('(') + 1 in sizes) if
+                     any(compare_glycans(t, g) for t in tgraphs)]
     res = []
     for i, g in enumerate(gmotifs):
-        temp_res = subgraph_isomorphism(ggraph, g, termini_list = termini_list[i] if termini_list else termini_list,
-                                        count = True)
+        spec = termini_list[i] if termini_list else termini_list
+        count_in = (lambda gr: len(get_match(g, gr))) if isinstance(g, list) else (
+            lambda gr: subgraph_isomorphism(gr, g, termini_list = spec, count = True))
+        temp_res = count_in(ggraph)
         if temp_res:
-            res.append(temp_res)
+            res.append(float(temp_res))
             continue
-        temp_res = [subgraph_isomorphism(p, g, termini_list = termini_list[i] if termini_list else termini_list,
-                                         count = True) for p in possibles]
-        if temp_res and np.mean(temp_res) > 0.5:
-            res.append(1)
-        else:
-            res.append(0)
-    out = pd.DataFrame(columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs)
-    out.loc[0] = res
-    out.loc[0] = out.loc[0].astype('int')
-    out.index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)]
-    return out
+        hits = [count_in(p) for p in possibles]
+        res.append(float(np.mean(hits)) if hits else 0.0)
+    return pd.DataFrame([res], columns = motifs.motif_name if isinstance(motifs, pd.DataFrame) else motifs,
+                       index = [glycan] if isinstance(glycan, str) else [graph_to_string(glycan)], dtype = 'float')
 
 
 def get_molecular_properties(
         glycan_list: list[str], # List of IUPAC-condensed glycan sequences
         verbose: bool = False, # Print SMILES not found on PubChem
-        placeholder: bool = False # Return dummy values instead of dropping failed requests
-) -> pd.DataFrame: # DataFrame with molecular parameters from PubChem
-    "Retrieves molecular properties from PubChem for a list of glycans using their SMILES representations"
+        placeholder: bool = False, # Return dummy values instead of dropping failed requests
+        pubchem: bool = False # Additionally fetch xlogp and complexity, the only two descriptors that cannot be computed from the structure
+) -> pd.DataFrame: # DataFrame with molecular parameters
+    "Computes molecular properties of glycans from their own SMILES, optionally enriched with the two empirical descriptors only PubChem has"
+    from glycowork.motif.smiles import glycan_to_molecule, GlycanSMILESError
+    from glycowork.motif.tokenization import calculate_adduct_mass
+    VALENCE = {'C': 4, 'N': 3, 'O': 2, 'S': 2, 'P': 3, 'F': 1, 'Cl': 1, 'Br': 1, 'I': 1}
+    local, keep = {}, []
+    for g in glycan_list:
+        try:
+            mol = glycan_to_molecule(g)
+        except (GlycanSMILESError, ValueError, KeyError):
+            continue
+        graph, order, nb = nx.Graph(), defaultdict(int), defaultdict(list)
+        graph.add_nodes_from(range(len(mol.atoms)))
+        for i, j, o in mol.bonds:
+            order[i] += o
+            order[j] += o
+            nb[i].append((j, o))
+            nb[j].append((i, o))
+            graph.add_edge(i, j, order = o)
+        # Every atom is written without its hydrogens except the bracketed stereocentres, so the count follows from the standard valence
+        hs = {k: max(VALENCE.get(el, 0) - order[k] + ch, 0) for k, (el, ch, _) in enumerate(mol.atoms)}
+        elements = Counter(a[0] for a in mol.atoms)
+        elements['H'] = sum(hs.values())
+        formula = ''.join(f'{e}{elements[e] if elements[e] > 1 else ""}' for e in ('C', 'H', 'N', 'O', 'P', 'S') if elements[e])
+        carbonyl = {i for i, (el, _, _) in enumerate(mol.atoms) if el == 'C' and any(mol.atoms[j][0] == 'O' and o == 2 for j, o in nb[i])}
+        amide = {i for i, (el, _, _) in enumerate(mol.atoms) if el == 'N' and any(j in carbonyl for j, _ in nb[i])}
+        # A rotatable bond is an acyclic single bond between two non-terminal heavy atoms, which is exactly a bridge of the molecular graph, minus the amide bond
+        rotatable = sum(1 for i, j in nx.bridges(graph) if graph[i][j]['order'] == 1 and graph.degree(i) > 1 and graph.degree(j) > 1
+                        and not ({i, j} <= (amide | carbonyl) and (i in amide) != (j in amide)))
+        tpsa = sum((23.06 if ch < 0 else 17.07 if any(o == 2 for _, o in nb[i]) else 20.23 if hs[i] else 9.23) if el == 'O'
+                   else {0: 3.24, 1: 12.03, 2: 26.02}.get(hs[i], 3.24) if el == 'N' else 0.0
+                   for i, (el, ch, _) in enumerate(mol.atoms))  # Ertl's topological polar surface area, over the O and N environments a glycan can present
+        # Only the tagged centres are knowable without CIP perception, so the undefined ones an unspecified anomer leaves behind are not reported at all rather than reported as zero
+        local[g] = {'molecular_formula': formula, 'molecular_weight': calculate_adduct_mass(formula, mass_value = 'average'),
+                    'exact_mass': calculate_adduct_mass(formula), 'monoisotopic_mass': calculate_adduct_mass(formula),
+                    'tpsa': round(tpsa, 2), 'h_bond_donor_count': sum(hs[i] for i, (el, _, _) in enumerate(mol.atoms) if el in 'NO'),
+                    'h_bond_acceptor_count': sum(1 for i, (el, _, _) in enumerate(mol.atoms) if el == 'O' or (el == 'N' and i not in amide)),
+                    'rotatable_bond_count': rotatable, 'charge': sum(a[1] for a in mol.atoms), 'heavy_atom_count': len(mol.atoms),
+                    'ring_count': len(mol.rings), 'covalent_unit_count': 1, 'isotope_atom_count': 0,
+                    'defined_atom_stereo_count': sum(bool(a[2]) for a in mol.atoms)}
+        keep.append(g)
+    df_local = pd.DataFrame([local[g] for g in keep], index = keep)
+    if not pubchem:
+        return df_local if not placeholder else df_local.reindex(glycan_list).fillna(df_local.median(numeric_only = True))
     try:
         import pubchempy as pcp
     except ImportError:
-        raise ImportError("You must install the 'chem' dependencies to use this feature. Try 'pip install glycowork[chem]'.")
+        raise ImportError("Fetching xlogp and complexity needs pubchempy ('pip install pubchempy'); every other property is already computed locally with pubchem = False.")
     if placeholder:
         dummy = IUPAC_to_SMILES(['Glc'])[0]
+        dummy_compound = None
     compounds_list, succeeded_requests, failed_requests = [], [], []
     for s, g in zip(IUPAC_to_SMILES(glycan_list), glycan_list):
         try:
             c = pcp.get_compounds(s, 'smiles')[0]
             if c.cid is None:
-                compounds_list.append(pcp.get_compounds(dummy, 'smiles')[0]) if placeholder else failed_requests.append(s)
-                if placeholder:
-                    succeeded_requests.append(dummy)
-            else:
-                compounds_list.append(c)
-                succeeded_requests.append(g)
+                raise ValueError("no PubChem match")
+            compounds_list.append(c)
+            succeeded_requests.append(g)
         except Exception:
             failed_requests.append(s)
+            if placeholder:  # the placeholder row belongs to this glycan, otherwise the index silently stops matching the input
+                if dummy_compound is None:
+                    dummy_compound = pcp.get_compounds(dummy, 'smiles')[0]
+                compounds_list.append(dummy_compound)
+                succeeded_requests.append(g)
     if verbose and len(failed_requests) >= 1:
         print('The following SMILES were not found on PubChem:\n')
         print(failed_requests)
     try:
-        df = pcp.compounds_to_frame(compounds_list, properties = ['molecular_weight', 'xlogp',
-                                                                  'charge', 'exact_mass', 'monoisotopic_mass', 'tpsa', 'complexity',
-                                                                  'h_bond_donor_count', 'h_bond_acceptor_count',
-                                                                  'rotatable_bond_count', 'heavy_atom_count', 'isotope_atom_count', 'atom_stereo_count',
-                                                                  'defined_atom_stereo_count', 'undefined_atom_stereo_count',
-                                                                  'bond_stereo_count', 'defined_bond_stereo_count',
-                                                                  'undefined_bond_stereo_count', 'covalent_unit_count'])
+        df = pcp.compounds_to_frame(compounds_list, properties = ['xlogp', 'complexity'])
         df = df.reset_index(drop = True)
         df.index = succeeded_requests
     except (KeyError, ValueError) as e:
         if verbose:
             print(f'PubChem API returned incomplete data: {e}')
         df = pd.DataFrame(index = succeeded_requests)
-    return df
+    # The locally derived columns are exact, so they win wherever both sources have an opinion, and they also carry the rows PubChem lost
+    df = df.drop(columns = [c for c in df.columns if c in df_local.columns], errors = 'ignore')
+    return df_local.join(df, how = 'outer' if placeholder else 'left').reindex(
+        [g for g in glycan_list if g in df_local.index or g in df.index])
 
 
 def get_size_branching_features(
@@ -155,19 +231,16 @@ def get_size_branching_features(
     # Create bins for size and branching
     size_edges, size_labels = create_bins(sizes, n_bins)
     branch_edges, branch_labels = create_bins(branchings, n_bins)
-    # Create DataFrames for size and branching distributions
-    size_dist = pd.DataFrame(0, index = glycans, columns = [f"Size_{label}" for label in size_labels])
-    branch_dist = pd.DataFrame(0, index = glycans, columns = [f"Branch_{label}" for label in branch_labels])
     # Assign values to bins
-    size_bins = np.digitize(sizes, size_edges) - 1
-    branch_bins = np.digitize(branchings, branch_edges) - 1
-    for i in range(len(glycans)):
-        if size_bins[i] < len(size_labels):
-            size_dist.iloc[i, size_bins[i]] = 1
-        if branch_bins[i] < len(branch_labels):
-            branch_dist.iloc[i, branch_bins[i]] = 1
+    size_bins, branch_bins = np.digitize(sizes, size_edges) - 1, np.digitize(branchings, branch_edges) - 1
+    rows = np.arange(len(glycans))
+    size_arr, branch_arr = np.zeros((len(glycans), len(size_labels)), dtype = int), np.zeros((len(glycans), len(branch_labels)), dtype = int)
+    ok_s, ok_b = size_bins < len(size_labels), branch_bins < len(branch_labels)
+    size_arr[rows[ok_s], size_bins[ok_s]] = 1
+    branch_arr[rows[ok_b], branch_bins[ok_b]] = 1
     # Combine size and branching features
-    return pd.concat([size_dist, branch_dist], axis = 1)
+    return pd.concat([pd.DataFrame(size_arr, index = glycans, columns = [f"Size_{label}" for label in size_labels]),
+                      pd.DataFrame(branch_arr, index = glycans, columns = [f"Branch_{label}" for label in branch_labels])], axis = 1)
 
 
 @rescue_glycans
@@ -182,9 +255,16 @@ def annotate_dataset(
     "Comprehensive glycan annotation combining multiple feature types: structural motifs, graph properties, terminal sequences"
     if any(k in ''.join(glycans) for k in (';', 'β', 'α', 'RES', '=')):
         raise Exception
-    invalid_features = set(feature_set) - {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical', 'exhaustive', 'size_branch'}
-    if invalid_features:
-        print(f"Warning: {', '.join(invalid_features)} not recognized as features.")
+    # Reducing-end position is expressed through termini specs, not through the residue label
+    original_glycans = glycans
+    glycans = [g[:-3] if g.endswith('-ol') and not _STRUCTURAL_ALDITOL.search(g) else g for g in glycans]
+    if isinstance(feature_set, str):
+        feature_set = [feature_set]
+    valid_features = {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical',
+                      'exhaustive', 'size_branch'}
+    if invalid_features := set(feature_set) - valid_features:
+        raise ValueError(
+            f"Unrecognized feature(s) {', '.join(sorted(invalid_features))}; choose from {', '.join(sorted(valid_features))}.")
     if motifs is None:
         motifs = motif_list
     # Checks whether termini information is provided
@@ -195,11 +275,13 @@ def annotate_dataset(
         termini = 'provided' if termini_list else 'ignore'
         termini_list = termini_list if termini_list else ['ignore']*len(motifs)
         partial_glycan_to_nxGraph = partial(glycan_to_nxGraph, termini = termini)
-        gmotifs = list(map(lambda i_g: partial_glycan_to_nxGraph(i_g[1], termini_list = termini_list[i_g[0]]), enumerate(motifs.motif)))
+        # r-prefixed rows are glyco-regular expressions, pre-compiled into chunk lists that the counting step tells apart from motif graphs
+        gmotifs = [compile_pattern(mo[1:]) if mo.startswith('r') else partial_glycan_to_nxGraph(mo, termini_list = termini_list[i])
+                   for i, mo in enumerate(motifs.motif)]
         # Counts literature-annotated motifs in each glycan
         partial_annotate = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
         if '{' in ''.join(glycans):
-            feasibles = set(df_species[df_species.Class == "Mammalia"].glycan.values.tolist())
+            feasibles = set(loader.df_species[loader.df_species.Class == "Mammalia"].glycan.values.tolist())
             partial_annotate_topology_uncertainty = partial(annotate_glycan_topology_uncertainty, feasibles = feasibles, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
         else:
             partial_annotate_topology_uncertainty = partial(annotate_glycan, motifs = motifs, termini_list = termini_list, gmotifs = gmotifs)
@@ -207,12 +289,25 @@ def annotate_dataset(
             return partial_annotate_topology_uncertainty(glycan) if glycan.count('{') == 1 else partial_annotate(glycan)
         shopping_cart.append(pd.concat(list(map(annotate_switchboard, glycans)), axis = 0))
     if 'custom' in feature_set:
-        normal_motifs = [m for m in custom_motifs if not m.startswith('r')]
-        gmotifs = list(map(glycan_to_nxGraph, normal_motifs))
-        partial_annotate = partial(annotate_glycan, motifs = normal_motifs, gmotifs = gmotifs)
-        shopping_cart.append(pd.concat(list(map(partial_annotate, glycans)), axis = 0))
+        # A motif name is as valid an input here as it is in GlycoDraw or glyco_filter, and resolving it also routes named glyco-regexes into the branch below
+        resolved = [resolve_motif_name(m) or (m, []) for m in custom_motifs]
+        custom_motifs = [m for m, _ in resolved]
+        normal = [(m, spec) for m, spec in resolved if not m.startswith('r')]
+        if normal:
+            # A named motif's termini spec is half of what the name means, so it has to be counted with it; unnamed motifs stay position-agnostic
+            normal_motifs = [m for m, _ in normal]
+            custom_termini = [list(spec) if spec else ['flexible'] * (1 + m.count('(') - m.endswith(')')) for m, spec in
+                              normal]
+            gmotifs = [glycan_to_nxGraph(m, termini = 'provided', termini_list = t) for m, t in
+                       zip(normal_motifs, custom_termini)]
+            partial_annotate = partial(annotate_glycan, motifs = normal_motifs, termini_list = custom_termini,
+                                       gmotifs = gmotifs)
+            shopping_cart.append(pd.concat(list(map(partial_annotate, glycans)), axis = 0))
         regex_motifs = [m[1:] for m in custom_motifs if m.startswith('r')]
-        shopping_cart.append(pd.concat([pd.DataFrame([len(get_match(p, k)) for p in regex_motifs], columns = regex_motifs, index = [k]) for k in glycans], axis = 0))
+        if regex_motifs:
+            counts = [get_match_batch(compile_pattern(p), glycans) for p in regex_motifs]
+            shopping_cart.append(
+                pd.DataFrame({p: [len(h) for h in c] for p, c in zip(regex_motifs, counts)}, index = glycans))
     if 'graph' in feature_set:
         # Calculates graph features of each glycan
         shopping_cart.append(pd.concat(list(map(generate_graph_features, glycans)), axis = 0))
@@ -222,7 +317,7 @@ def annotate_dataset(
         temp.index = glycans
         shopping_cart.append(temp)
     if 'chemical' in feature_set:
-        shopping_cart.append(get_molecular_properties(glycans, placeholder = True))
+        shopping_cart.append(get_molecular_properties(glycans, placeholder = True).select_dtypes('number'))
     if any(t in feature_set for t in ('terminal', 'terminal1', 'terminal2', 'terminal3')):
         bag1, bag2, bag3 = [], [], []
         if 'terminal' in feature_set or 'terminal1' in feature_set:
@@ -234,46 +329,139 @@ def annotate_dataset(
         bags = [b for b in [bag1, bag2, bag3] if b]
         bag = [sum(items, []) for items in zip(*bags)] if bags else []
         potentials = get_minimal_ksaccharide_ambiguity(glycans, motifs = list(set(unwrap(bag))))
-        new_additions = set(list(potentials.keys()) + list(potentials.values()))
-        gmotifs_terminal = [glycan_to_nxGraph(m) for m in new_additions]
-        ggraphs = [glycan_to_nxGraph(g) for g in glycans]
-        counts_dict = {motif: [subgraph_isomorphism(g, m, count = True) for g in ggraphs] for motif, m in zip(new_additions, gmotifs_terminal)}
+        new_additions = sorted(set(list(potentials.keys()) + list(potentials.values())))
+        # These were seeded from non-reducing ends, so demand that position when counting; without it Terminal_ columns silently count internal occurrences too
+        specs = {m: ['terminal'] + ['flexible'] * (m.count('(') - (1 if m.endswith(')') else 0)) for m in new_additions}
+        gmotifs_terminal = [glycan_to_nxGraph(m, termini = 'provided', termini_list = specs[m]) for m in new_additions]
+        ggraphs = [glycan_to_nxGraph(g, termini = 'calc') for g in glycans]
+        counts_dict = {motif: [subgraph_isomorphism(g, m, count = True, termini_list = specs[motif]) for g in ggraphs]
+                       for motif, m in zip(new_additions, gmotifs_terminal)}
         sia_motifs = {k for k in counts_dict if 'Sia' in k and 'Neu5Ac' not in k and 'Neu5Gc' not in k}
-        specific_vals = [v for k, v in counts_dict.items() if k not in sia_motifs]
-        counts_dict = {k: v for k, v in counts_dict.items() if k not in sia_motifs or v not in specific_vals}
+        specific_vals = {tuple(v) for k, v in counts_dict.items() if k not in sia_motifs}
+        counts_dict = {k: v for k, v in counts_dict.items() if k not in sia_motifs or tuple(v) not in specific_vals}
         bag_out = pd.DataFrame(counts_dict).fillna(0).astype(int)
         bag_out.index = glycans
         bag_out.columns = ['Terminal_' + c for c in bag_out.columns]
         shopping_cart.append(bag_out)
     if 'size_branch' in feature_set:
         shopping_cart.append(get_size_branching_features(glycans))
-    if condense:
-        # Remove motifs that never occur
-        temp = pd.concat(shopping_cart, axis = 1)
-        return temp.loc[:, (temp != 0).any(axis = 0)]
-    else:
-        return pd.concat(shopping_cart, axis = 1)
+    temp = pd.concat(shopping_cart, axis = 1)
+    temp = temp.loc[:, ~temp.columns.duplicated()]
+    temp.index = original_glycans  # rows were built from the de-reduced sequences but must come back keyed on what the caller passed in, or downstream index alignment silently drops everything
+    return temp.loc[:, (temp != 0).any(axis = 0)] if condense else temp
+
+def get_motif_dag(
+        motifs: list[str], # Motif labels as produced by annotate_dataset/quantify_motifs
+        abundances: pd.DataFrame | None = None # Motifs x samples abundances, used as an exact prefilter for containment
+) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is a substructure of child
+    "Builds the containment DAG of a motif set, in which a parent motif is a substructure of each of its children"
+    pat, tgt, spec, amb, regexy = {}, {}, {}, {}, set()
+    for m in motifs:
+        s, sp = _motif_sequence(m)
+        if s.startswith('r'):
+            # A glyco-regex has no motif graph, but every match must contain its mandatory single-alternative chunks, so the largest of those stands in for it
+            cands = [c['motifs'][0] for c in map(compile_component, compile_pattern(s)) if
+                     c['min'] and not c['absent'] and len(c['motifs']) == 1]
+            if not cands:
+                continue
+            s = max(cands, key = lambda x: x.count('('))
+            sp = ['flexible'] * (1 + s.count('(') - (1 if s.endswith(')') else 0))
+            regexy.add(m)
+        try:
+            pat[m] = glycan_to_nxGraph(s, termini = 'provided', termini_list = sp)
+        except Exception:
+            continue  # non-structural features (graph/chemical/size_branch) have no place in the DAG
+        sp = expand_termini_list(s, sp)
+        t = glycan_to_nxGraph(s).copy()
+        # A host may attach anything at c's open ends, so only what c itself pins down is provable: a node carrying something above it inside c is internal, an open end is what c declares or else genuinely unknown
+        nx.set_node_attributes(t, {n: 'internal' if (t.out_degree(n) and t.in_degree(n)) else (sp[n] if sp[n] != 'flexible' else 'unknown') for n in t.nodes()}, 'termini')
+        tgt[m], spec[m] = t, sp
+        amb[m] = _motif_ambiguity(m)
+    cols = list(pat)
+    dag = nx.DiGraph()
+    dag.add_nodes_from(cols)
+    A = abundances.loc[cols].values if abundances is not None else None
+    for i, p in enumerate(cols):
+        if p in regexy:
+            continue  # a glyco-regex only stands for the backbone every match must contain, which proves what contains it but never what it contains
+        # p contains c implies count(p) >= count(c) in every glycan, hence abundance dominance is a necessary condition and an exact prefilter
+        dom = (A <= A[i] + 1e-9).all(axis = 1) if A is not None else np.ones(len(cols), dtype = bool)
+        for j, c in enumerate(cols):
+            if i == j or not dom[j] or len(pat[p]) > len(tgt[c]) or not subgraph_isomorphism(tgt[c], pat[p], termini_list = spec[p]):
+                continue
+            if len(pat[p]) == len(tgt[c]) and c not in regexy and (amb[p], i) < (amb[c], j) and subgraph_isomorphism(tgt[p], pat[c],
+                                                                                                 termini_list = spec[
+                                                                                                     c]):
+                continue  # mutually isomorphic labels: the wildcard form matches strictly more structures and so is the ancestor, leaving the specific form as the descendant; the positional fallback makes the order total and the DAG acyclic
+            dag.add_edge(p, c)
+    return nx.transitive_reduction(dag)
+
+
+def get_composition_dag(
+        compositions: list[str], # Composition or IUPAC-condensed labels, optionally prefixed as protein_site_composition
+        abundances: pd.DataFrame | None = None # Glycoforms x samples abundances, used as an exact prefilter for containment
+) -> nx.DiGraph: # Transitively reduced containment DAG; edge parent -> child means parent is contained in child
+    "Builds the containment DAG of a glycoform set, ordering parts by substructure containment where sequences are given and by component-wise composition dominance otherwise"
+    from glycowork.motif.tokenization import glycan_to_composition
+    comp, site, struct = {}, {}, {}
+    for c in compositions:
+        pre, _, tail = str(c).rpartition('_')  # glycoproteomics indices carry a protein_site prefix
+        if is_composition(tail):
+            try:
+                comp[c], site[c] = canonicalize_composition(tail), pre
+            except Exception:
+                continue  # labels that do not parse as a composition have no place in the DAG
+        else:
+            try:
+                cc = glycan_to_composition(tail)  # canonicalize_composition does not raise on a sequence, it returns a nonsense residue vector, so sequences have to be routed here before it is ever called on them
+                if not cc:
+                    continue  # an unmappable glycoletter comes back as {}, not as an exception, and an all-zero row is dominated by every composition and would become the ancestor of the whole block
+                comp[c], struct[c], site[c] = cc, glycan_to_nxGraph(tail), pre
+            except Exception:
+                continue
+    cols = list(site)
+    residues = sorted({r for d in comp.values() for r in d})
+    V = np.array([[comp.get(c, {}).get(r, 0) for r in residues] for c in cols])
+    A = abundances.loc[cols].values if abundances is not None else None
+    dag = nx.DiGraph()
+    dag.add_nodes_from(cols)
+    blocks = {}
+    for i, c in enumerate(cols):
+        blocks.setdefault(site[c], []).append(i)
+    for members in blocks.values():
+        # glycoforms of different glycosites are separate compositional systems and never contain one another, so containment is decided one site block at a time and never across the full n^2
+        m = np.array(members)
+        # composition dominance is only a necessary condition for containment, so where sequences are known the real relation is used: it keeps Man5 out of the ancestry of complex glycoforms, whose alpha1-2 mannoses are trimmed rather than extended
+        le = (V[m][:, None, :] <= V[m][None, :, :]).all(2)
+        for i, j in zip(*np.nonzero(le)):
+            # decided per pair rather than per block, so one composition-only label no longer costs every sequence at its glycosite the real containment relation
+            if i != j and cols[m[i]] in struct and cols[m[j]] in struct:
+                le[i, j] = subgraph_isomorphism(struct[cols[m[j]]], struct[cols[m[i]]])
+        # equal parts are ordered by position, which makes the order total and the DAG acyclic
+        M = le & (~le.T | (m[:, None] < m[None, :]))
+        if A is not None:
+            # p contained in c implies every glycoform counted toward c is counted toward p, hence abundance dominance is a necessary condition and an exact prefilter
+            a = A[m]
+            seen_both = ~np.isnan(a)[None, :, :] & ~np.isnan(a)[:, None, :]
+            M &= np.where(seen_both, a[None, :, :] <= a[:, None, :] + 1e-9, True).all(
+                2)  # a sample in which a part was never measured is no evidence against dominance; comparing against NaN silently deletes every edge at any glycosite that is not observed everywhere
+        np.fill_diagonal(M, False)
+        dag.add_edges_from((cols[m[i]], cols[m[j]]) for i, j in zip(*np.nonzero(M)))
+    return nx.transitive_reduction(dag)
 
 
 def deduplicate_motifs(
         df: pd.DataFrame # DataFrame with glycan motifs as rows, samples as columns
 ) -> pd.DataFrame: # DataFrame with redundant motifs removed
     "Removes redundant motif entries from glycan abundance data while preserving the most informative labels"
-    motif_dic = dict(zip(motif_list.motif_name, motif_list.motif))
-    original_index = df.index.copy()
-    df.index = df.index.to_series().apply(lambda x: motif_dic[x] + ' ' * 20 if x in motif_dic else x)
-    df['_original_position'] = range(len(df))
-    # Group the DataFrame by identical rows
-    grouped = df.groupby(list(df.columns[:-1]), sort = False)
-    # Find the integer indices of rows with the longest string index within each group
-    max_idx_positions = []
-    for _, group in grouped:
-        # Find the row with the longest string index
-        longest_idx = group.index.to_series().str.len().idxmax()
-        # Retrieve the original integer position of this row
-        max_idx_positions.append(group.loc[longest_idx, '_original_position'])
-    df.index = original_index
-    return df.iloc[max_idx_positions].drop_duplicates().drop(['_original_position'], axis = 1)
+    # Keep the least ambiguous label per group of identical rows; wildcards are longer than the specifics they abstract, so length only ever breaks ties between equally specific labels
+    ranks = [_motif_ambiguity(m) for m in df.index]
+    # Grouped on positional column labels, since a repeated label (e.g., an annotated glycan list with duplicates) makes a label-based grouper ambiguous
+    grouper = df.set_axis(range(df.shape[1]), axis = 1)
+    grouper['_original_position'] = range(len(df))
+    keep = [g['_original_position'].iloc[min(range(len(g)), key = lambda k: ranks[g['_original_position'].iloc[k]])]
+            for _, g in grouper.groupby(list(grouper.columns[:-1]), sort = False, dropna = False)]
+    return df.iloc[keep]
 
 
 def quantify_motifs(
@@ -281,11 +469,13 @@ def quantify_motifs(
         glycans: list[str] | None = None, # List of IUPAC-condensed glycan sequences; auto-detected from first column if None
         feature_set: list[str] = ['known', 'exhaustive'], # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
         custom_motifs: list = [], # Custom motifs when using 'custom' feature set
-        remove_redundant: bool = True # Remove redundant motifs via deduplicate_motifs
-) -> pd.DataFrame: # DataFrame with motif abundances (motifs as columns, samples as rows)
+        remove_redundant: bool = True  # Remove redundant motifs via deduplicate_motifs
+) -> pd.DataFrame:  # DataFrame with motif abundances (motifs as rows, samples as columns)
     "Extracts and quantifies motif abundances from glycan abundance data by weighting motif occurrences"
-    if isinstance(df, str):
-        df = pd.read_csv(df) if df.endswith(".csv") else pd.read_excel(df)
+    if not isinstance(df, pd.DataFrame):
+        df = str(df)
+        df = pd.read_csv(df) if df.lower().endswith(".csv") else pd.read_csv(df, sep = "\t") if df.lower().endswith(
+            ".tsv") else pd.read_excel(df)
     if glycans is None:
         if pd.api.types.is_string_dtype(df.iloc[:, 0]):
             glycans = df.iloc[:, 0].tolist()
@@ -300,7 +490,7 @@ def quantify_motifs(
     log2 = (df.select_dtypes(include = 'number') < 0).any().any()
     # Motif quantification
     for col in df_motif.columns:
-        indices = [i for i, x in enumerate(df_motif[col]) if x >= 1]
+        indices = [i for i, x in enumerate(df_motif[col]) if x > 0]
         temp = df.iloc[:, indices]
         temp.columns = range(temp.columns.size)
         weights = df_motif[col].iloc[indices].reset_index(drop = True)
@@ -309,8 +499,8 @@ def quantify_motifs(
             collect_dic[col] = np.log2((linear_values * weights).sum(axis = 1))
         else:
             collect_dic[col] = (temp * weights).sum(axis = 1)
-    df = pd.DataFrame(collect_dic)
-    return df if not remove_redundant else deduplicate_motifs(df.T)
+    df = pd.DataFrame(collect_dic).T
+    return df if not remove_redundant else deduplicate_motifs(df)
 
 
 def count_unique_subgraphs_of_size_k(
@@ -408,19 +598,21 @@ def get_k_saccharides(
         raise TypeError("The input has to be a list or set of glycans")
     if any(k in ''.join(glycans) for k in (';', 'β', 'α', 'RES', '=')):
         raise Exception
-    if not up_to and max(g.count('(') + 1 for g in glycans) < size:
+    if not glycans or (not up_to and max(g.count('(') + 1 for g in glycans) < size):
         return [] if just_motifs else pd.DataFrame()
     if up_to:
         wga_letter_data = []
         actual_glycans = [g for g in glycans if not is_composition(g)]
         lib = get_lib(actual_glycans)
         add_sia = {'Neu5Ac', 'Neu5Gc'}.issubset(lib)
+        mono_pats = {i: re.compile(rf'{re.escape(i)}(?=[\(}}]|$)') for i in lib if
+                     i not in linkages and not LINKAGE_NODE_PATTERN.match(i)}
         for g in glycans:
             if is_composition(g):
                 comp_dict = canonicalize_composition(g)
                 wga_letter_data.append(comp_dict)
             else:
-                d = {i: len(re.findall(rf'{re.escape(i)}(?=[\(}}]|$)', g)) for i in lib if i not in linkages and not LINKAGE_NODE_PATTERN.match(i)}
+                d = {i: len(p.findall(g)) for i, p in mono_pats.items()}
                 if add_sia:
                     d['Sia'] = d.get('Neu5Ac', 0) + d.get('Neu5Gc', 0)
                 wga_letter_data.append(d)
@@ -438,10 +630,18 @@ def get_k_saccharides(
     counts_dict = {}
     ggraphs = [glycan_to_nxGraph(g) for g in glycans]
     for s in range(2, size + 1):
-        potentials = get_minimal_ksaccharide_ambiguity(glycans, size = s)
-        new_additions = [(addy, glycan_to_nxGraph(addy)) for addy in set(list(potentials.keys()) + list(potentials.values()))]
-        for n, m in new_additions:
-            counts_dict[n] = [subgraph_isomorphism(g, m, count = True) for g in ggraphs]
+        frags = [count_unique_subgraphs_of_size_k(g, size = s, terminal = terminal) for g in ggraphs]
+        vocab = sorted({f for d in frags for f in d})
+        vgraphs = {f: glycan_to_nxGraph(f) for f in vocab}
+        fuzzy = [f for f in vocab if build_wildcard_cache(set(_sl(vgraphs[f]))) or _has_o(vgraphs[f])]
+        potentials = get_minimal_ksaccharide_ambiguity(glycans, size = s, motifs = vocab)
+        for n in sorted(set(potentials.keys()) | set(potentials.values())):
+            m = glycan_to_nxGraph(n)
+            hits = [f for f in vocab if subgraph_isomorphism(vgraphs[f], m, count = True)] if build_wildcard_cache(
+                set(_sl(m))) or _has_o(m) else ([n] if n in vgraphs else []) + [f for f in fuzzy if
+                                                                                f != n and subgraph_isomorphism(
+                                                                                    vgraphs[f], m, count = True)]
+            counts_dict[n] = [sum(d.get(f, 0) for f in hits) for d in frags]
     df_counts = pd.DataFrame(counts_dict)
     if up_to:
         combined_df = pd.concat([wga_letter, df_counts], axis = 1).fillna(0).astype(int)
@@ -455,25 +655,23 @@ def get_terminal_structures(
 ) -> list[str]: # List of terminal structures with linkages
     "Identifies terminal monosaccharide sequences from non-reducing ends of glycan structure"
     ggraph = ensure_graph(glycan)
-    node_dict = dict(ggraph.nodes(data = True))
+    labels = nx.get_node_attributes(ggraph, 'string_labels')
     result = []
-    for k in list(ggraph.nodes())[:-1]:
-        if ggraph.out_degree[k] == 0 and k + 1 in node_dict and node_dict[k]['string_labels'] not in linkages:
-            structure = node_dict[k]['string_labels'] + '(' + node_dict[k + 1]['string_labels'] + ')'
-            current_linkage = k + 1
-            for _ in range(size - 1):
-                preds = list(ggraph.predecessors(current_linkage))
-                if not preds:
-                    break
-                next_mono = preds[0]
-                structure += node_dict[next_mono]['string_labels']
-                if next_mono + 1 in node_dict:
-                    structure += '(' + node_dict[next_mono + 1]['string_labels'] + ')'
-                    current_linkage = next_mono + 1
-                else:
-                    break
-            if structure.replace('()', '').count('(') >= size - 1:
-                result.append(structure.replace('()', ''))
+    for k in sorted(ggraph.nodes()):
+        if ggraph.out_degree[k] or not ggraph.in_degree[k] or labels[k] in linkages:
+            continue
+        # Walk rootward through each residue's parent linkage instead of assuming it is the next node index, which breaks across the parts of a glycan with floating substituents
+        structure, node, monos = '', k, 0
+        while node is not None and monos < size:
+            structure += labels[node]
+            monos += 1
+            up = next(iter(ggraph.predecessors(node)), None)
+            if up is None:
+                break
+            structure += '(' + labels[up] + ')'
+            node = next(iter(ggraph.predecessors(up)), None)
+        if monos == size:
+            result.append(structure)
     return result
 
 
@@ -543,12 +741,13 @@ def group_glycans_N_glycan_type(
     "Groups N-glycans by type (complex, hybrid, high-mannose, other) for statistical analysis"
     temp = dict(zip(glycans, p_values))
     grouped_glycans, grouped_p_values = {}, {}
-    complex_patterns = ["GlcNAc(b1-2)Man(a1-6)", "GlcNAc(b1-2)Man(a1-?)[GlcNAc(b1-2)Man(a1-?)]Man"]
-    hybrid_patterns = ["GlcNAc(b1-2)Man(a1-3)[Man(a1-?)Man(a1-6)]Man"]
+    # An antenna is a HexNAc on either core arm, whatever its linkage; complex carries one on both arms, hybrid on only one
+    arms = [compile_pattern("HexNAc-Mana3-."), compile_pattern("HexNAc-Mana6-.")]
     for g in glycans:
-        if any(subgraph_isomorphism(g, pattern) for pattern in complex_patterns):
+        antennae = sum(bool(get_match(arm, g, return_matches = False)) for arm in arms)
+        if antennae == 2:
             group = "complex"
-        elif any(subgraph_isomorphism(g, pattern) for pattern in hybrid_patterns):
+        elif antennae == 1:
             group = "hybrid"
         elif g.count("Man") > 3:
             group = "high_man"
@@ -584,7 +783,7 @@ class Lectin():
 
     def get_all_binding_motifs(self) -> list[str]: # List of all binding motifs
         "Returns combined list of primary and secondary binding motifs"
-        return list(self.specificity["primary"].keys()) + list(self.specificity["secondary"].keys())
+        return list(self.specificity["primary"].keys()) + list(self.specificity["secondary"].keys() if self.specificity["secondary"] else [])
 
     def show_info(self) -> None:
         "Displays formatted lectin information including specificities"
@@ -600,12 +799,17 @@ class Lectin():
             glycan: str # IUPAC-condensed glycan sequence
     ) -> int: # Binding level (0:none, 1:primary, 2:secondary)
         "Evaluates glycan binding to lectin based on motif recognition"
-        for key in ["negative", "primary", "secondary"]:
-            motifs = self.specificity.get(key, [])
-            if motifs:
-                for motif, termini in motifs.items():
-                    if subgraph_isomorphism(glycan, motif, termini_list = termini):
-                        return 0 if key == "negative" else (1 if key == "primary" else 2)
+        # A negative motif only blocks the site it sits on, so a blocking feature on one antenna must not veto an intact epitope on another
+        blocked = {n for motif, termini in (self.specificity.get("negative") or {}).items()
+                   for hit in
+                   subgraph_isomorphism(glycan, motif, termini_list = termini, count = True, return_matches = True)[1]
+                   for n in hit}
+        for key, level in (("primary", 1), ("secondary", 2)):
+            for motif, termini in (self.specificity.get(key) or {}).items():
+                hits = subgraph_isomorphism(glycan, motif, termini_list = termini, count = True, return_matches = True)[
+                    1]
+                if any(not blocked.intersection(hit) for hit in hits):
+                    return level
         return 0
 
 
@@ -696,5 +900,6 @@ def get_glycan_similarity(
         feature_set: list = ['known', 'exhaustive', 'terminal'] # Feature types to analyze: known, graph, exhaustive, terminal(1-3), custom, chemical, size_branch
 ) -> float: # Cosine similarity between glycan1 and glycan2
     "Calculates cosine similarity between two glycans based on their motif count fingerprints"
+    from scipy.spatial.distance import cosine
     fp = annotate_dataset([glycan1, glycan2], motifs = motifs, feature_set = feature_set)
     return 1 - cosine(fp.iloc[0].values, fp.iloc[1].values)

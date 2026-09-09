@@ -1,5 +1,16 @@
 name: 'nbdev-ci'
-on:  [workflow_dispatch, pull_request, push]
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [master, dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:

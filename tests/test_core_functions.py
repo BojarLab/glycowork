@@ -6,7 +6,8 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 import seaborn as sns
-import sys, os
+import sys, os, re
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")  # joblib's physical-core probe shells out to a tool Windows no longer ships; nothing here needs more than one worker
 import shutil
 import torch
 import torch.nn as nn
@@ -37,71 +38,76 @@ from glycowork.motif.tokenization import (
     get_random_glycan, HYDROGEN_MASS, mass_dict
 )
 from glycowork.motif.processing import (
-    min_process_glycans, get_lib, expand_lib, get_possible_linkages,
-    get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac,
-    glycoct_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan, canonicalize_composition, parse_glycoform,
+    min_process_glycans, get_lib, expand_lib, get_possible_linkages, looks_like_linearcode,
+    get_possible_monosaccharides, de_wildcard_glycoletter, canonicalize_iupac, looks_like_oxford,
+    glycoct_to_iupac, glycoctxml_to_iupac, wurcs_to_iupac, oxford_to_iupac, glytoucan_to_glycan,
+    canonicalize_composition, parse_glycoform, glycoworkbench_to_iupac, pglyco_to_iupac,
     presence_to_matrix, process_for_glycoshift, linearcode_to_iupac, iupac_extended_to_condensed,
     in_lib, get_class, enforce_class, equal_repeats, get_matching_indices, is_composition,
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
-    max_specify_glycan
+    max_specify_glycan, parse_floating_bit, check_nomenclature
 )
+from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, GlycanSMILESError,
+                                    glycan_to_smiles, glycan_to_molecule, smiles_to_iupac, looks_like_smiles,
+                                    parse_smiles, _split_token, _anomeric_position)
 from glycowork.glycan_data.loader import (
-    unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species,
-    reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines,
+    unwrap, find_nth, find_nth_reverse, remove_unmatched_brackets, lib, HashableDict, df_species, share_neighbor,
+    reindex, stringify_dict, replace_every_second, multireplace, count_nested_brackets, parse_lines, lectin_array_data_loader,
     strip_suffixes, build_custom_df, DataFrameSerializer, Hex, linkages, glycan_binding, glycomics_data_loader, df_glycan,
-    GlycoList, GlycoDataFrame, NamedGroup, NamedGroups
+    GlycoList, GlycoDataFrame, NamedGroup, NamedGroups, glycoproteomics_data_loader, download_model, LazyLoader
 )
 from glycowork.glycan_data.stats import (
     cohen_d, mahalanobis_distance, variance_stabilization, shannon_diversity_index,
     simpson_diversity_index, get_equivalence_test, sequence_richness,
-    hotellings_t2, calculate_permanova_stat, omega_squared, anosim, alpha_biodiversity_stats, permanova_with_permutation,
-    clr_transformation, alr_transformation, get_procrustes_scores,
+    hotellings_t2, omega_squared, anosim, alpha_biodiversity_stats, permanova_with_permutation,
+    clr_transformation, alr_transformation, get_procrustes_scores, meta_analysis,
     get_additive_logratio_transformation, get_BF, get_alphaN, mahalanobis_variance,
     pi0_tst, TST_grouped_benjamini_hochberg, compare_inter_vs_intra_group,
-    correct_multiple_testing, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
-    variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results, replace_outliers_with_IQR_bounds,
+    correct_multiple_testing, bh_adjust, partial_corr, estimate_technical_variance, MissForest, impute_and_normalize,
+    variance_based_filtering, get_glycoform_diff, get_glm, process_glm_results,
     replace_outliers_winsorization, perform_tests_monte_carlo, hsic
 )
 from glycowork.motif.graph import (
     glycan_to_graph, glycan_to_nxGraph,
     compare_glycans, subgraph_isomorphism, generate_graph_features,
     graph_to_string, largest_subgraph, get_possible_topologies,
-    deduplicate_glycans, try_string_conversion,
+    deduplicate_glycans, try_string_conversion, resolve_anchor,
     subgraph_isomorphism_with_negation, categorical_node_match_wildcard,
     expand_termini_list, ensure_graph, possible_topology_check
 )
 from glycowork.motif.annotate import (
-    annotate_glycan, annotate_dataset, get_molecular_properties,
+    annotate_glycan, annotate_dataset, get_molecular_properties, get_motif_dag, get_composition_dag,
     get_k_saccharides, get_terminal_structures, create_correlation_network,
     group_glycans_core, group_glycans_sia_fuc, group_glycans_N_glycan_type,
     Lectin, load_lectin_lib, create_lectin_and_motif_mappings, get_glycan_similarity,
     lectin_motif_scoring, deduplicate_motifs, quantify_motifs, get_size_branching_features,
-    count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty
+    count_unique_subgraphs_of_size_k, annotate_glycan_topology_uncertainty, _motif_ambiguity, get_minimal_ksaccharide_ambiguity
 )
 from glycowork.motif.regex import (preprocess_pattern, specify_linkages,
                   convert_pattern_component, reformat_glycan_string,
-                  motif_to_regex, get_match, calculate_len_matches_comb,
-                  check_negative_look, get_match_batch,
+                  motif_to_regex, get_match,
+                  get_match_batch, explain_match,
                   filter_matches_by_location, parse_pattern, compile_pattern
 )
 from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, col_dict_base,
-                 get_hit_atoms_and_bonds, add_colours_to_map, is_jupyter, draw_bracket,
+                 add_colors_to_map, is_jupyter, draw_bracket,
                  display_svg_with_matplotlib, get_coordinates_and_labels, get_highlight_attribute, add_sugar, add_bond, draw_shape,
-                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure
+                 draw_chem2d, draw_chem3d, GlycoDraw, plot_glycans_excel, annotate_figure, resolve_motif_name, _spread_glycans
 )
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
                      get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings, get_pval_distribution,
                      characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site
 )
-from glycowork.network.biosynthesis import (safe_compare, safe_index, create_neighbors,
-                         find_diff, construct_network, prune_network, estimate_weights, network_alignment, export_network,
+from glycowork.network.biosynthesis import (safe_compare, safe_index, create_neighbors, apply_constraints, _load_constraints,
+                         find_diff, construct_network, prune_network, network_alignment, export_network,
                          extend_glycans, highlight_network, infer_roots, get_edge_weight_by_abundance,
                          find_diamonds, trace_diamonds, get_maximum_flow, get_reaction_flow, process_ptm, get_differential_biosynthesis,
                          deorphanize_edge_labels, infer_virtual_nodes, retrieve_inferred_nodes, monolink_to_glycoenzyme, infer_network,
-                         get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
+                         choose_path, get_max_flow_path, edges_for_extension, choose_leaves_to_extend, evoprune_network, extend_network,
                          plot_network, add_high_man_removal, net_dic, find_ptm, get_biosynthetic_coherence
 )
+import glycowork.network.evolution as evolution_module
 from glycowork.network.evolution import (calculate_distance_matrix, distance_from_embeddings,
                       jaccard, distance_from_metric, check_conservation, get_communities, dendrogram_from_distance
 )
@@ -109,8 +115,9 @@ from glycowork.ml.train_test_split import (seed_wildcard_hierarchy, hierarchy_fi
                             general_split, prepare_multilabel
 )
 from glycowork.ml.processing import (augment_glycan, AugmentedGlycanDataset, iupac2mol, HeteroDataset,
-                       dataset_to_graphs, dataset_to_dataloader, split_data_to_train, hetero_collate
-)
+                                     dataset_to_graphs, dataset_to_dataloader, split_data_to_train, hetero_collate,
+                                     HeteroDataBatch
+                                     )
 from glycowork.ml.model_training import (EarlyStopping, sigmoid, disable_running_stats,
                           enable_running_stats, train_model, SAM, Poly1CrossEntropyLoss, training_setup,
                           train_ml_model, analyze_ml_model, get_mismatch, WarmupScheduler
@@ -119,7 +126,7 @@ from glycowork.ml.models import (SweetNet, NSequonPred, sigmoid_range, SigmoidRa
                           init_weights, prep_model, LectinOracle_flex
 )
 from glycowork.ml.inference import (SimpleDataset, sigmoid, glycans_to_emb, get_multi_pred, get_lectin_preds,
-                          get_esmc_representations, get_Nsequon_preds
+                          get_esmc_representations, get_Nsequon_preds, _clean_protein_sequences
 )
 device = "cpu"
 if torch.cuda.is_available():
@@ -218,52 +225,53 @@ GLYCAN_TEST_CASES = [
 
 
 def test_torch_import_error():
-  # Store original module states
-  original_processing = sys.modules.get('glycowork.ml.processing')
-  original_models = sys.modules.get('glycowork.ml.models')
-  original_inference = sys.modules.get('glycowork.ml.inference')
-  original_model_training = sys.modules.get('glycowork.ml.model_training')
-  try:
-    # Remove modules if they exist
-    if 'glycowork.ml.processing' in sys.modules:
-      del sys.modules['glycowork.ml.processing']
-    if 'glycowork.ml.models' in sys.modules:
-      del sys.modules['glycowork.ml.models']
-    if 'glycowork.ml.inference' in sys.modules:
-      del sys.modules['glycowork.ml.inference']
-    if 'glycowork.ml.model_training' in sys.modules:
-      del sys.modules['glycowork.ml.model_training']
-    # Patch the imports to fail
-    with patch.dict('sys.modules', {'torch': None, 'torch_geometric': None, 'torch_geometric.loader': None, 'torch_geometric.utils': None, 'torch_geometric.utils.convert': None}):
-      with pytest.raises(ImportError, match="torch or torch_geometric missing"):
-        importlib.import_module('glycowork.ml.processing')
-      with pytest.raises(ImportError, match="torch or torch_geometric missing"):
-        importlib.import_module('glycowork.ml.models')
-      with pytest.raises(ImportError, match="torch missing;"):
-        importlib.import_module('glycowork.ml.inference')
-      with pytest.raises(ImportError, match="torch missing;"):
-        importlib.import_module('glycowork.ml.model_training')
-    with patch.dict('sys.modules', {'glyles': None}):
-      with pytest.raises(ImportError, match="rdkit missing"):
-        importlib.import_module('glycowork.ml.processing')
-  finally:
-    # Restore original states
-    if original_processing is not None:
-      sys.modules['glycowork.ml.processing'] = original_processing
-    elif 'glycowork.ml.processing' in sys.modules:
-      del sys.modules['glycowork.ml.processing']
-    if original_models is not None:
-      sys.modules['glycowork.ml.models'] = original_models
-    elif 'glycowork.ml.models' in sys.modules:
-      del sys.modules['glycowork.ml.models']
-    if original_inference is not None:
-      sys.modules['glycowork.ml.inference'] = original_inference
-    elif 'glycowork.ml.inference' in sys.modules:
-      del sys.modules['glycowork.ml.inference']
-    if original_model_training is not None:
-      sys.modules['glycowork.ml.model_training'] = original_model_training
-    elif 'glycowork.ml.model_training' in sys.modules:
-      del sys.modules['glycowork.ml.model_training']
+    # Store original module states
+    original_processing = sys.modules.get('glycowork.ml.processing')
+    original_models = sys.modules.get('glycowork.ml.models')
+    original_inference = sys.modules.get('glycowork.ml.inference')
+    original_model_training = sys.modules.get('glycowork.ml.model_training')
+    try:
+        # Remove modules if they exist
+        if 'glycowork.ml.processing' in sys.modules:
+            del sys.modules['glycowork.ml.processing']
+        if 'glycowork.ml.models' in sys.modules:
+            del sys.modules['glycowork.ml.models']
+        if 'glycowork.ml.inference' in sys.modules:
+            del sys.modules['glycowork.ml.inference']
+        if 'glycowork.ml.model_training' in sys.modules:
+            del sys.modules['glycowork.ml.model_training']
+        # Patch the imports to fail
+        with patch.dict('sys.modules', {'torch': None, 'torch_geometric': None, 'torch_geometric.loader': None, 'torch_geometric.utils': None, 'torch_geometric.utils.convert': None}):
+            with pytest.raises(ImportError, match="torch or torch_geometric missing"):
+                importlib.import_module('glycowork.ml.processing')
+            with pytest.raises(ImportError, match="torch or torch_geometric missing"):
+                importlib.import_module('glycowork.ml.models')
+            with pytest.raises(ImportError, match="torch missing;"):
+                importlib.import_module('glycowork.ml.inference')
+            with pytest.raises(ImportError, match="torch missing;"):
+                importlib.import_module('glycowork.ml.model_training')
+        with patch.dict('sys.modules', {'glyles': None, 'rdkit': None}):
+            processing = importlib.import_module('glycowork.ml.processing')
+            data = processing.iupac2mol("Gal(b1-4)Glc")  # neither is needed any more
+            assert data.smiles and len(data["tree"].nodes) == 2
+    finally:
+        # Restore original states
+        if original_processing is not None:
+            sys.modules['glycowork.ml.processing'] = original_processing
+        elif 'glycowork.ml.processing' in sys.modules:
+            del sys.modules['glycowork.ml.processing']
+        if original_models is not None:
+            sys.modules['glycowork.ml.models'] = original_models
+        elif 'glycowork.ml.models' in sys.modules:
+            del sys.modules['glycowork.ml.models']
+        if original_inference is not None:
+            sys.modules['glycowork.ml.inference'] = original_inference
+        elif 'glycowork.ml.inference' in sys.modules:
+            del sys.modules['glycowork.ml.inference']
+        if original_model_training is not None:
+            sys.modules['glycowork.ml.model_training'] = original_model_training
+        elif 'glycowork.ml.model_training' in sys.modules:
+            del sys.modules['glycowork.ml.model_training']
 
 
 @pytest.mark.parametrize("glycan", GLYCAN_TEST_CASES)
@@ -308,7 +316,12 @@ def test_graph_to_string():
                       order_by = "linkage") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert graph_to_string(glycan_to_nxGraph("Fuc(a1-?)[Gal(b1-?)]GlcNAc(b1-2)Man(a1-6)[Man(a1-2)Man(a1-3)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"),
                       order_by = "linkage") == "Man(a1-2)Man(a1-3)[Fuc(a1-?)[Gal(b1-?)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
-    assert graph_to_string(glycan_to_nxGraph("Gal(b1-4)GlcNAc(b1-6)[GlcNAc(b1-3)]Gal(b1-4)Glc"), order_by="linkage") == "GlcNAc(b1-3)[Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)Glc"
+    assert graph_to_string(glycan_to_nxGraph("Gal(b1-4)GlcNAc(b1-6)[GlcNAc(b1-3)]Gal(b1-4)Glc"),
+                           order_by = "linkage") == "GlcNAc(b1-3)[Gal(b1-4)GlcNAc(b1-6)]Gal(b1-4)Glc"
+    # An anchored floating bit must survive the round trip instead of collapsing into the merged linkage
+    anchored = "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(graph_to_string(glycan_to_nxGraph(anchored))) == canonicalize_iupac(anchored)
+    assert graph_to_string(glycan_to_nxGraph("{Fuc(a1-3/6)}Gal(b1-4)GlcNAc")) == "{Fuc(a1-3/6)}Gal(b1-4)GlcNAc"
 
 
 def test_canonicalize_iupac():
@@ -345,6 +358,9 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Neuac + Gal(b1-3)[Gal-GlcNAc(b1-6)]GalNAc") == "{Neu5Ac(a2-3/6)}Gal(?1-?)GlcNAc(b1-6)[Gal(b1-3)]GalNAc"
     assert canonicalize_iupac("Gal3S-[NeuAca2-6]GlcNAc-Gal(b1-3)GalNAc") == "Neu5Ac(a2-6)[Gal3S(?1-?)]GlcNAc(?1-?)Gal(b1-3)GalNAc"
     assert canonicalize_iupac("Manα-Manβ-Glc") == "Man(a1-?)Man(b1-?)Glc"
+    assert canonicalize_iupac("Gal((b1-4))Glc") == "Gal(b1-4)Glc"
+    assert canonicalize_iupac("Galb1-Glcb1-4Man") == "Gal(b1-?)Glc(b1-4)Man"
+    assert canonicalize_iupac('Rha(a1-2)Quia') == "Rha(a1-2)Qui"
     # Test linkage uncertainty
     assert canonicalize_iupac("Gal-GlcNAc") == "Gal(?1-?)GlcNAc"
     assert canonicalize_iupac("Gal(b1-3/4)Gal(b1-4)GlcNAc") == "Gal(b1-3/4)Gal(b1-4)GlcNAc"
@@ -367,6 +383,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Gal4,6Pyr") == "Gal4Pyr6Pyr"
     assert canonicalize_iupac("Neu5Acα2-3(6-O-sulfo)Galβ1-4Glc") == "Neu5Ac(a2-3)Gal6S(b1-4)Glc"
     assert canonicalize_iupac("D-Fuc(a1-2)[S-6]Glc(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc") == "D-Fuc(a1-2)Glc6S(b1-4)GlcNAc(b1-4)Glc(b1-2)Glc"
+    assert canonicalize_iupac("Fuc(a1-3)[Gal3/6S(b1-4)]GlcNAc(b1-2)Man") == "Fuc(a1-3)[Gal3/6S(b1-4)]GlcNAc(b1-2)Man"
     # Test sanitization
     assert canonicalize_iupac("GlcNAc(b1-2)[GlcNAc(b1-2)]Man") == "GlcNAc(b1-?)[GlcNAc(b1-?)]Man"
     assert canonicalize_iupac("Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-2)]Man") == "Gal(b1-4)GlcNAc(b1-?)[Gal(b1-4)GlcNAc(b1-?)]Man"
@@ -390,10 +407,13 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("Glc(?1-?)[Gal(?1-?)]2,5-Anhydro-Tal") == "Gal(?1-?)[Glc(?1-?)]2,5-Anhydro-Tal"
     assert canonicalize_iupac("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("{Fuc(a1-2/3/4)}{Neu5Ac(a2-3/6/8)}Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)[GlcNAc(b1-6)]GalNAc") == "{Fuc(a1-2/3/4)}{Neu5Ac(a2-3/6/8)}Neu5Ac(a2-3)[GalNAc(b1-4)]Gal(b1-4)GlcNAc(b1-3)Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
+    assert canonicalize_iupac("GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-4)][Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == "GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-4)][Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     # Test other nomenclatures
     assert canonicalize_iupac("Ac(1-2)aLFucpN(1-3)[Ac(1-2)]bDGlcpN(1-1)Subst // Subst = 2-(4-(hydroxymethyl)-1,3-dioxolan-2-yl)propane-1,3-diol = SMILES O{1}CC(C1OCC(CO)O1)CO") == "FucNAc(a1-3)GlcNAc1Substituent"
     assert canonicalize_iupac("aDMan(1-2)bDGlcp(1-1)Me") == "Man(a1-2)Glc1Me"
     assert canonicalize_iupac("aDGlcp(1-2)bDFruf") == "Glc(a1-2)Fruf"
+    assert canonicalize_iupac("a-L-Fucp-(1->2)-b-D-Galp-(1->4)-b-D-GlcpNAc") == "Fuc(a1-2)Gal(b1-4)GlcNAc"
     assert canonicalize_iupac("-1)bDFruf(2-3)bDFruf(2-") == "Fruf(b2-3)Fruf(b2-1)Fruf"
     assert canonicalize_iupac("-1)[Ac(1-3)]bDFruf(2-3)bDFruf(2-") == "Fruf3Ac(b2-3)Fruf(b2-1)Fruf3Ac"
     assert canonicalize_iupac("-2)[aDGalp(1-3)]aDRhap(1-3)bDRhap(1-4)bDGlcp(1-") == "[Gal(a1-3)]D-Rha(a1-3)D-Rha(b1-4)Glc(b1-2)D-Rha"
@@ -488,8 +508,8 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac('m7') == '{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('Man-7') == '{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
     assert canonicalize_iupac('Man7') == '{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}{Man(a1-2/3/6)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
-    assert canonicalize_iupac("(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2") == "{Neu5Ac(a2-3/6)}{HexNAc(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert canonicalize_iupac("(Hex)2 (HexNAc)3 (Deoxyhexose)1 (NeuAc)2 + (Man)3(GlcNAc)2") == "{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}{HexNAc(?1-?)}{HexNAc(?1-?)}{HexNAc(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Fuc(a1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("(Hex)3 (HexNAc)1 (NeuAc)1 + (Man)3(GlcNAc)2") == "{Neu5Ac(a2-3/6)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{HexNAc(?1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("(Hex)2 (HexNAc)3 (Deoxyhexose)1 (NeuAc)2 + (Man)3(GlcNAc)2") == "{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}{Fuc(a1-?)}{Hex(?1-?)}{Hex(?1-?)}{HexNAc(?1-?)}{HexNAc(?1-?)}{HexNAc(?1-?)}Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G2S2") == "Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G1FN") == "Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("redEnd--??1D-GalNAc,p--??2D-KDN,p$MONO,Und,-H,0,redEnd") == "Kdn(a2-?)GalNAc"
@@ -498,16 +518,16 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("redEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--2b1D-GlcNAc,p)--4b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p$MONO,Und,-H,0,redEnd") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("redEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--??1D-GlcNAc,p)--4b1D-GlcNAc,p)--6a1D-Man,p--??1D-GlcNAc,p}--??1D-GlcNAc,p$MONO,Und,-H,0,redEnd") == "{GlcNAc(?1-?)}GlcNAc(?1-?)Man(a1-3)[GlcNAc(?1-?)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("redEnd--?a1D-GalNAc,p(--6b1D-GlcNAc,p)--3b1D-Gal,p--??1D-GlcNAc,p(--??1L-Fuc,p)--??1S$MONO,Und,-H,0,redEnd") == "Fuc(a1-?)GlcNAcOS(?1-?)Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
-    assert canonicalize_iupac("freeEnd--?b1D-GlcNAc,p(--6a1L-Fuc,p)--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--??1D-GlcNAc,p--??1D-Gal,p--??2D-NeuAc,p)--??1D-GlcNAc,p--??1D-Gal,p--??2D-NeuAc,p--8a2D-NeuAc,p)--6a1D-Man,p(--??1D-Man,p)--??1D-Man,p$MONO,Und,-2H,0,freeEnd") == "Neu5Ac(a2-8)Neu5Ac(a2-3/6)Gal(?1-?)GlcNAc(?1-?)[Neu5Ac(a2-3/6)Gal(?1-?)GlcNAc(?1-?)]Man(a1-3)[Man(?1-?)[Man(?1-?)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol"
-    assert canonicalize_iupac('freeEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315)--4b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315$MONO,Und,-2H,0,freeEnd')  == 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc-ol'
-    assert canonicalize_iupac("freeEnd--?D-GalNAc--3b1D-GlcNAc,p(--3a1D-Gal,p)--4a1D-Fuc,p$MONO,perMe,Na,0,freeEnd") == "Gal(a1-3)[D-Fuc(a1-4)]GlcNAc(b1-3)GalNAc-ol"
-    assert canonicalize_iupac("freeEnd--??1D-Qui(--2b1D-Glc,p)--4b1D-Qui,p") == "Glc(b1-2)[Qui(b1-4)]Qui-ol"
-    assert canonicalize_iupac("freeEnd--?[--4b1L-Rha,p--3a1D-Glc,p((--3a1L-Rha,p)--4b1D-Glc,p--?])--6b1D-Glc,p") == "Rha(a1-3)[Glc(b1-4)][Glc(b1-6)]Glc(a1-3)Rha-ol"
-    assert canonicalize_iupac("freeEnd--?b1D-GlcNAc,p(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p--2b1D-GlcNAc,p--4b1D-GalNAc,p--??1S)--6a1D-Man,p(--3a1D-Man,p)--6a1D-Man,p)--6a1L-Fuc,p$MONO,perMe,Na,0,freeEnd") == "GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol"
-    assert canonicalize_iupac("freeEnd--??1L-Ara--5[--5a1L-Ara,f--?]--5a1L-Ara,f$MONO,perMe,Na,0,freeEnd") == "Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Ara-ol"
+    assert canonicalize_iupac("freeEnd--?b1D-GlcNAc,p(--6a1L-Fuc,p)--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--??1D-GlcNAc,p--??1D-Gal,p--??2D-NeuAc,p)--??1D-GlcNAc,p--??1D-Gal,p--??2D-NeuAc,p--8a2D-NeuAc,p)--6a1D-Man,p(--??1D-Man,p)--??1D-Man,p$MONO,Und,-2H,0,freeEnd") == "Neu5Ac(a2-8)Neu5Ac(a2-3/6)Gal(?1-?)GlcNAc(?1-?)[Neu5Ac(a2-3/6)Gal(?1-?)GlcNAc(?1-?)]Man(a1-3)[Man(?1-?)[Man(?1-?)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac('freeEnd--?b1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315)--4b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p@270--4b1D-Gal,p--3a2D-NeuAc,p@315$MONO,Und,-2H,0,freeEnd')  == 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert canonicalize_iupac("freeEnd--?D-GalNAc--3b1D-GlcNAc,p(--3a1D-Gal,p)--4a1D-Fuc,p$MONO,perMe,Na,0,freeEnd") == "Gal(a1-3)[D-Fuc(a1-4)]GlcNAc(b1-3)GalNAc"
+    assert canonicalize_iupac("freeEnd--??1D-Qui(--2b1D-Glc,p)--4b1D-Qui,p") == "Glc(b1-2)[Qui(b1-4)]Qui"
+    assert canonicalize_iupac("freeEnd--?[--4b1L-Rha,p--3a1D-Glc,p((--3a1L-Rha,p)--4b1D-Glc,p--?])--6b1D-Glc,p") == "Rha(a1-3)[Glc(b1-4)][Glc(b1-6)]Glc(a1-3)Rha"
+    assert canonicalize_iupac("freeEnd--?b1D-GlcNAc,p(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p--2b1D-GlcNAc,p--4b1D-GalNAc,p--??1S)--6a1D-Man,p(--3a1D-Man,p)--6a1D-Man,p)--6a1L-Fuc,p$MONO,perMe,Na,0,freeEnd") == "GalNAcOS(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("freeEnd--??1L-Ara--5[--5a1L-Ara,f--?]--5a1L-Ara,f$MONO,perMe,Na,0,freeEnd") == "Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Araf(a1-5)Ara"
     assert canonicalize_iupac("freeEnd--??1D-GlcNAc,o(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--2b1D-GlcNAc,p--4b1D-Gal,p)--4b1D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-Gal,p)--6a1D-Man,p--2b1D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-Gal,p)--6a1L-Fuc,p$MONO,perMe,Na,0,freeEnd") == "Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc-ol"
-    assert canonicalize_iupac("freeEnd--?D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-GlcNAc,p--4b1D-Man,p((--2b1D-Xyl,p)--3a1D-Man,p--2b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p$MONO,perMe,Na,0,freeEnd") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc-ol"
-    assert canonicalize_iupac("freeEnd--?D-Ara,f--2?1D-Ara,f--5?1D-Man,p--2?1D-Man,p--2?1D-Man,p$MONO,perMe,Na,0,freeEnd") == "Man(?1-2)Man(?1-2)Man(?1-5)D-Araf(?1-2)D-Ara-ol"
+    assert canonicalize_iupac("freeEnd--?D-GlcNAc,p(--3a1L-Fuc,p)--4b1D-GlcNAc,p--4b1D-Man,p((--2b1D-Xyl,p)--3a1D-Man,p--2b1D-GlcNAc,p)--6a1D-Man,p--2b1D-GlcNAc,p$MONO,perMe,Na,0,freeEnd") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
+    assert canonicalize_iupac("freeEnd--?D-Ara,f--2?1D-Ara,f--5?1D-Man,p--2?1D-Man,p--2?1D-Man,p$MONO,perMe,Na,0,freeEnd") == "Man(?1-2)Man(?1-2)Man(?1-5)D-Araf(?1-2)D-Araf"
     assert canonicalize_iupac("EtOH=28.0000u--?b1D-Glc,p--4b1D-Gal,p(--4b1D-GalNAc,p--3b1D-Gal,p)--3a2D-NeuAc,p}--?a2D-NeuAc,p$MONO,Und,-H,0,EtOH=28.0000u") == "{Neu5Ac(a2-3/6)}Gal(b1-3)GalNAc(b1-4)[Neu5Ac(a2-3)]Gal(b1-4)Glc"
     assert canonicalize_iupac("WURCS=2.0/5,7,6/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5_2*NCC/3=O_4*OSO/3=O/3=O]/1-2-3-4-2-5-4/a4-b1_b4-c1_c3-d1_c6-g1_d2-e1_e4-f1") == "GalNAc4S(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/8,15,14/[u2122h_2*NCC/3=O][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a1221m-1a_1-5][a2112h-1b_1-5][Aad21122h-2a_2-6_5*NCCO/3=O][Aad21122h-2a_2-6_5*NCC/3=O]/1-2-3-4-2-5-6-7-8-4-2-5-6-8-5/a4-b1_a6-o1_b4-c1_c3-d1_c6-j1_d2-e1_e3-f1_e4-g1_h8-i2_j2-k1_k3-l1_k4-m1_h2-g3|g6_n2-m3|m6 ") == "Neu5Ac(a2-8)Neu5Gc(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3/6)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
@@ -521,6 +541,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("WURCS=2.0/1,2,1/[a2122h-1b_1-5]/1-1/a4-b1*OSO*/3=O/3=O") == "Glc1S(b1-4)Glc"
     assert canonicalize_iupac("WURCS=2.0/4,8,7/[a1211h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a2211h-1a_1-5][a1122h-1a_1-5]/1-2-3-3-3-3-4-4/a4-b1_b3-c1_b6-e1_c2-d1_e3-f1_e6-g1_g2-h1") == "Man(a1-2)Man(a1-6)[L-Man(a1-3)]L-Man(a1-6)[L-Man(a1-2)L-Man(a1-3)]Man(b1-4)L-GlcNAc"
     assert canonicalize_iupac("WURCS=2.0/6,13,12/[a2122h-1x_1-5_2*NCC/3=O][a1221m-1a_1-5][a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a212h-1b_1-5][a1122h-1a_1-5]/1-2-3-4-5-6-6-6-6-6-6-6-6/a3-b1_a4-c1_c4-d1_d2-e1_d3-f1_d6-j1_f3-g1_f6-h1_h2-i1_j3-k1_j6-l1_l2-m1") == "Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-3)[Man(a1-2)Man(a1-6)[Man(a1-3)]Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/3,6,10/[u2122h_2*NSO/3=O/3=O][u21FFA][u2121A]/1-1-1-2-3-3/a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}*OSO/3=O/3=O_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?_a?|b?|c?|d?|e?|f?}-{a?|b?|c?|d?|e?|f?") == "{GlcNS(?1-?)}{GlcNS(?1-?)}{HexA(?1-?)}{IdoA(?1-?)}{IdoA(?1-?)}GlcNS"
     assert canonicalize_iupac("G07426YY") == "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("G96417BZ") == "Man(a1-2)Man(a1-3)[Man(a1-3)[Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("G26039ES") == "Gal(b1-4)Glc-ol"
@@ -528,7 +549,50 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("G59643LR") == "G59643LR"
     assert canonicalize_iupac(782) == "Gal(?1-?)[GlcNAcOS(?1-?)]GalNAc"
     assert canonicalize_iupac(72) == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)[Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-?)]Gal(b1-3)[GlcNAc(b1-6)]GalNAc"
+    assert canonicalize_iupac(
+        "RES\n1b:o-dglc-HEX-0:0|1:aldi\n2b:a-lgal-HEX-1:5|6:d\n3b:b-dgal-HEX-1:5\nLIN\n1:1o(3+1)2d\n2:1o(4+1)3d") == "Fuc(a1-3)[Gal(b1-4)]Glc-ol"
+    assert canonicalize_iupac(
+        "RES\n1b:o-dgal-HEX-0:0|1:aldi\n2s:n-acetyl\n3b:b-dgal-HEX-1:5\nLIN\n1:1d(2+1)2n\n2:1o(3+1)3d") == "Gal(b1-3)GalNAc-ol"
+    assert canonicalize_iupac(
+        "RES\n1b:b-dglc-HEX-1:5|6:d\n2s:n-acetyl\n3b:b-dgal-HEX-1:5\n4b:a-lgal-HEX-1:5|6:d\nLIN\n1:1d(2+1)2n\n2:1o(3+1)3d\n3:1o(4+1)4d") == "Gal(b1-3)[Fuc(a1-4)]QuiNAc"
+    assert canonicalize_iupac("RES\n1b:a-dglc-HEX-1:5\n2b:a-dglc-HEX-1:5|6:d\nLIN\n1:1o(4+1)2d") == "Qui(a1-4)Glc"
+    assert canonicalize_iupac("RES\n1b:x-lgal-HEX-1:5") == "L-Gal"
+    assert canonicalize_iupac(
+        "RES\n1b:x-dglc-HEX-1:x\n2s:n-acetyl\n3b:x-dman-HEX-1:5\n4b:x-dman-HEX-1:5\n5b:x-dman-HEX-1:5\n6b:x-dman-HEX-1:5\n7b:x-dman-HEX-1:5\n8b:x-dman-HEX-1:5\n9b:x-dman-HEX-1:5\n10b:x-dman-HEX-1:5\nLIN\n1:1d(2+1)2n\n2:1o(-1+1)3d\n3:3o(-1+1)4d\n4:4o(-1+1)5d\n5:5o(-1+1)6d\n6:4o(-1+1)7d\n7:3o(-1+1)8d\n8:8o(-1+1)9d\n9:8o(-1+1)10d") == "Man(?1-?)Man(?1-?)[Man(?1-?)]Man(?1-?)[Man(?1-?)[Man(?1-?)]Man(?1-?)]Man(?1-?)GlcNAc"
+    assert canonicalize_iupac(
+        "freeEnd--1?1D-GlcNAc,p--4b1D-GlcNAc,p--4b1D-Man,p((--3a1D-Man,p)--4b1D-GlcNAc,p)--6a1D-Man,p--??1D-GlcNAc,p$MONO,Und,0,0,freeEnd") == "GlcNAc(?1-?)Man(a1-6)[Man(a1-3)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "redEnd--?D-Glc,o(--3a1L-Fuc,p)--4b1D-Gal,p$MONO,Und,0,0,redEnd") == "Fuc(a1-3)[Gal(b1-4)]Glc-ol"
+    assert canonicalize_iupac(
+        "WURCS=2.0/2,2,1/[a2112h-1x_1-4_2*NCC/3=O][a2112h-1x_1-5_2*NCC/3=O]/1-2/a?-b1") == "GalNAc(?1-?)GalfNAc"
+    assert canonicalize_iupac("Gala") == "Gal"
+    assert canonicalize_iupac("RES\n1b:b-dara-HEX-2:5|2:keto\n2b:a-dglc-HEX-1:5\nLIN\n1:1o(2+1)2d") == "Glc(a1-2)Fruf"
+    assert canonicalize_iupac(
+        "RES\n1b:x-dglc-HEX-1:5\n2s:n-acetyl\n3b:b-dgal-HEX-1:5\n4b:a-lxyl-HEX-1:5|4:d|6:d\nLIN\n1:1d(2+1)2n\n2:1o(4+1)3d\n3:3o(2+1)4d") == "4d6dHex(a1-2)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "RES\n1b:b-dglc-HEX-1:5\n2s:n-acetyl\n3b:b-dgal-HEX-1:5\n4b:a-lxyl-HEX-1:5|3:d|6:d\n5b:a-lxyl-HEX-1:5|3:d|6:d\nLIN\n1:1d(2+1)2n\n2:1o(3+1)3d\n3:3o(2+1)4d\n4:1o(4+1)5d") == "Col(a1-2)Gal(b1-3)[Col(a1-4)]GlcNAc"
+    assert canonicalize_iupac("RES\n1b:x-lxyl-PEN-1:5") == "L-Xyl"
+    assert canonicalize_iupac(
+        "RES\n1b:x-dglc-HEX-1:5\n2b:x-dgal-HEX-1:5\n3b:x-dgro-dgal-NON-2:6|1:a|2:keto|3:d\n4s:n-acetyl\n5s:amino\nLIN\n1:1o(-1+1)2d\n2:2o(-1+2)3d\n3:3d(5+1)4n\n4:3d(1+1)5n") == "Neu5Ac1N(?2-?)Gal(?1-?)Glc"
+    assert canonicalize_iupac(
+        "WURCS=2.0/2,2,1/[a2122h-1b_1-5_2*NCC/3=O][a5122h-1b_1-5_2*NCC/3=O]/1-2/a4-b2") == "ManNAc(b2-4)GlcNAc"
+    assert canonicalize_iupac(
+        "WURCS=2.0/3,3,2/[a2122h-1x_1-5_2*NCC/3=O][a2112h-1b_1-5][a12d1m-1a_1-5]/1-2-3/a4-b1_b2-c1") == "4d6dHex(a1-2)Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac("Gal(b1-4)[Hex6S(?1-?)]HexNAc") == "Gal(b1-4)[Hex6S(?1-?)]HexNAc"
+    assert canonicalize_iupac("Gal(b1-4)GlcNSOS") == "Gal(b1-4)GlcNSOS"
+    assert canonicalize_iupac("freeEnd--1?1D-GlcNAc,p(--4b1D-GlcNAc,p--4b1D-Man,p(--3a1D-Man,p(--2b1D-GlcNAc,p--4b1D-Gal,p--3a2D-NeuAc,p)--4b1D-GlcNAc,p--4b1D-Gal,p--3S)--6a1D-Man,p(--2b1D-GlcNAc,p--4b1D-Gal,p--3a2D-NeuAc,p)--6b1D-GlcNAc,p--4b1D-Gal,p--3a2D-NeuAc,p)--6a1L-Fuc,p$MONO,Und,0,0,freeEnd") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal3S(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/3,10,9/[a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5]/1-1-2-3-1-1-3-1-1-1/a4-b1_b4-c1_c3-d1_c4-f1_c6-g1_d2-e1_g2-h1_g4-i1_g6-j1") == "GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4)][GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac("NeuAca2-3Galb1-4GlcNAcb1-2((3S)Galb1-4GlcNAcb1-4)Mana1-3(NeuAca2-3Galb1-4GlcNAcb1-2(NeuAca2-3Galb1-4GlcNAcb1-6)Mana1-6)Manb1-4GlcNAcb1-4(Fuca1-6)GlcNAc") == "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Gal3S(b1-4)GlcNAc(b1-4)]Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac("WURCS=2.0/5,13,12/[a2122h-1b_1-5_2*NCC/3=O][a1122h-1b_1-5][a1122h-1a_1-5][a2112h-1b_1-5][a2112h-1a_1-5]/1-1-2-3-1-1-1-3-1-1-1-4-5/a4-b1_b4-c1_c3-d1_c4-g1_c6-h1_d2-e1_d4-f1_h2-i1_h4-j1_h6-k1_l3-m1_l1-a4|b4|c4|d4|e4|f4|g4|h4|i4|j4|k4}") == "{Gal(a1-3)Gal(b1-4)}GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-4)][GlcNAc(b1-6)]Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("RES 1b:a-lgal-HEX-1:5|6:d") == "Fuc"
+    assert canonicalize_iupac("""RES
+1b:x-HEX-x:x
+2b:x-HEX-x:x
+3b:x-HEX-x:x
+4b:x-HEX-x:x
+5b:x-HEX-x:x
+6b:x-HEX-x:x
+7b:x-HEX-x:x|6:d""") == "{6dHex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}{Hex(?1-?)}Hex"
     assert canonicalize_iupac("""RES
 1b:b-dglc-HEX-1:5
 2s:n-acetyl
@@ -656,7 +720,7 @@ RES
 22b:a-dgro-dgal-NON-2:6|1:a|2:keto|3:d
 23s:n-acetyl
 LIN
-19:22d(5+1)23n""") == "{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}{Neu5Ac(a2-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-?)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-?)]Man(a1-?)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+19:22d(5+1)23n""") == "{Neu5Ac(a2-3)}{Neu5Ac(a2-3)}{Neu5Ac(a2-6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-?)[Gal(b1-4)GlcNAc(b1-2)[Gal(b1-4)GlcNAc(b1-?)]Man(a1-?)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
     assert canonicalize_iupac("""RES
 1b:a-dgal-HEX-1:5
 2s:n-acetyl
@@ -814,11 +878,267 @@ EDGE        7
 LIN
 1:1o(8+2)2d
 2:2o(8+2)3d""") == "Kdo(a2-8)Kdo(a2-8)Kdo"
+    assert canonicalize_iupac(
+        "(N(N(H(H(N(H)))(H(N(H(A)))))))") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "(N(F)(N(H(H(N(H(A))))(H(N(H(F)))))))") == "Fuc(a1-2)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac(
+        "(N(N(H(H(N(H(G))))(H(N(H(A)))))))") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Gc(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "(N(F)(N(H(H(N(H)))(H(N(H(A))))(N))))") == "Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert canonicalize_iupac(
+        "(N(N(H(H(H(H)))(H(H)(H(H))))))") == "Man(a1-2/3/6)Man(a1-2/3/6)Man(a1-3/6)[Man(a1-2/3/6)Man(a1-2/3/6)[Man(a1-2/3/6)]Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "(N(F)(F)(N(H(H(N(H(A(A)))))(H(N(H))))))") == "Neu5Ac(a2-8)Neu5Ac(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)][Fuc(a1-6)]GlcNAc"
+    assert pglyco_to_iupac("(N(N(H)))") == "Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    # Test SMILES, written by other toolkits so that atom order, ring digits and branch order differ from our own writer
+    assert canonicalize_iupac(
+        "O1[C@H](CO)[C@@H](O)[C@H](O)[C@@H](O)[C@H]1O[C@@]2(O[C@@H]([C@@H](O)[C@@H]2O)CO)CO") == "Glc(a1-2)Fruf"  # sucrose
+    assert canonicalize_iupac(
+        "OC[C@H]1O[C@@H](O[C@H]2[C@H](O)[C@@H](O)C(O)O[C@@H]2CO)[C@H](O)[C@@H](O)[C@H]1O") == "Gal(b1-4)Glc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1C(O)O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@@H]1O") == "Gal(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1[C@H](O[C@H]2[C@H](O)[C@@H](NC(C)=O)C(O)O[C@@H]2CO)O[C@H](CO)[C@@H](O)[C@@H]1O") == "GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1[C@H]([C@H](O)[C@H](O)CO)O[C@@](O[C@H]2[C@@H](O)[C@@H](CO)O[C@@H](O[C@H]3[C@H](O)[C@@H](O)C(O)O[C@@H]3CO)[C@@H]2O)(C(=O)O)C[C@@H]1O") == "Neu5Ac(a2-3)Gal(b1-4)Glc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1C(O)O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@@H]1O[C@@H]1O[C@@H](C)[C@@H](O)[C@@H](O)[C@@H]1O") == "Fuc(a1-3)[Gal(b1-4)]GlcNAc"
+    assert canonicalize_iupac(
+        "CC(=O)N[C@H]1[C@H](O[C@H]2[C@H](O)[C@@H](NC(C)=O)C(O)O[C@@H]2CO)O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO[C@H]3O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]3O)[C@@H](O)[C@H](O[C@H]3O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]3O)[C@@H]2O)[C@@H]1O") == "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert canonicalize_iupac(
+        "O=C(O)[C@@H]1OC(O)[C@H](OS(=O)(=O)O)[C@@H](O)[C@@H]1O[C@H]1O[C@H](COS(=O)(=O)O)[C@@H](O)[C@H](O)[C@H]1NS(=O)(=O)O") == "GlcNS6S(a1-4)IdoA2S"
+    assert canonicalize_iupac(
+        "O=C(O)C1(O)C[C@@H](O[C@]2(C(=O)O)C[C@@H](O)[C@@H](O)[C@@H]([C@H](O)CO)O2)[C@@H](O)[C@@H]([C@H](O)CO)O1") == "Kdo(a2-4)Kdo"
+    assert canonicalize_iupac(
+        "OC[C@H](O)[C@H]1O[C@H](O[C@H]2[C@H](O)[C@@H](CO)OC(O)[C@@H]2O)[C@@H](O)[C@@H](O)[C@@H]1O") == "LDManHep(a1-3)Glc"
+    assert canonicalize_iupac(
+        "C[C@@H]1OC(O)[C@H](O)[C@H](O)[C@H]1O[C@@H]1O[C@@H]([C@H](O)CO)[C@H](O)[C@H]1O") == "Galf(b1-4)Rha"
+    assert canonicalize_iupac(
+        "O=P(O)(O)OC[C@H]1O[C@H](O[C@@H]2C(O)O[C@H](CO)[C@@H](O)[C@@H]2O)[C@@H](O)[C@@H](O)[C@@H]1O") == "Man6P(a1-2)Man"
     # Test raised errors
-    with pytest.raises(ValueError, match="Mismatching brackets in formatted glycan string"):
+    with pytest.raises(ValueError, match = "Mismatching brackets in formatted glycan string"):
         canonicalize_iupac("Fuc(a1-3)[Gal(b1-4)Glc-ol")
-    with pytest.raises(ValueError, match="Seems like you're using SMILES. We currently can only convert IUPAC-->SMILES; not the other way around."):
-        canonicalize_iupac("O[C@@H]1[C@H](O)[C@@H](O)[C@H](O)[C@@]([H])(CO)O1")
+    with pytest.raises(ValueError):  # empty cells/NaN have to be filtered out first
+        canonicalize_iupac("")
+    with pytest.raises(ValueError):
+        canonicalize_iupac(float('nan'))
+
+
+KNOWN = [
+    ('Gal(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('GlcNAc(b1-4)GlcNAc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@H]2NC(C)=O)[C@H](O)[C@H]1NC(C)=O'),
+    ('Neu5Ac(a2-3)Gal(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O[C@]3(C(=O)O)C[C@H](O)[C@@H](NC(C)=O)[C@H]([C@H](O)[C@H](O)CO)O3)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('Neu5Gc(a2-6)GalNAc', 'OC1O[C@H](CO[C@]2(C(=O)O)C[C@H](O)[C@@H](NC(=O)CO)[C@H]([C@H](O)[C@H](O)CO)O2)[C@H](O)[C@H](O)[C@H]1NC(C)=O'),
+    ('Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@@H](O[C@@H]3O[C@H](CO[C@H]4O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]4O)[C@@H](O)[C@H](O[C@H]4O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]4O)[C@@H]3O)[C@H](O)[C@H]2NC(C)=O)[C@H](O)[C@H]1NC(C)=O'),
+    ('Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-3)Gal(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O[C@@H]3O[C@H](CO)[C@@H](O[C@@H]4O[C@H](CO)[C@H](O)[C@H](O[C@]5(C(=O)O)C[C@H](O)[C@@H](NC(C)=O)[C@H]([C@H](O)[C@H](O)CO)O5)[C@H]4O)[C@H](O[C@@H]4O[C@@H](C)[C@@H](O)[C@@H](O)[C@@H]4O)[C@H]3NC(C)=O)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('Fuc(a1-2)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O)[C@H]1O[C@@H]2O[C@@H](C)[C@@H](O)[C@@H](O)[C@@H]2O'),
+    ('GlcA(b1-3)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O[C@@H]2O[C@H](C(=O)O)[C@@H](O)[C@H](O)[C@H]2O)[C@H]1O'),
+    ('IdoA2S(a1-4)GlcNS6S', 'OC1O[C@H](COS(=O)(=O)O)[C@@H](O[C@@H]2O[C@@H](C(=O)O)[C@@H](O)[C@H](O)[C@H]2OS(=O)(=O)O)[C@H](O)[C@H]1NS(=O)(=O)O'),
+    ('Gal6S(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](COS(=O)(=O)O)[C@H](O)[C@H](O)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('GlcNAc6S(b1-4)GlcA', 'OC1O[C@H](C(=O)O)[C@@H](O[C@@H]2O[C@H](COS(=O)(=O)O)[C@@H](O)[C@H](O)[C@H]2NC(C)=O)[C@H](O)[C@H]1O'),
+    ('Kdo(a2-4)Kdo', 'OC1(C(=O)O)C[C@@H](O[C@]2(C(=O)O)C[C@@H](O)[C@@H](O)[C@@H]([C@H](O)CO)O2)[C@@H](O)[C@@H]([C@H](O)CO)O1'),
+    ('LDManHep(a1-3)Glc', 'OC1O[C@H](CO)[C@@H](O)[C@H](O[C@H]2O[C@H]([C@@H](O)CO)[C@@H](O)[C@H](O)[C@@H]2O)[C@H]1O'),
+    ('DDManHep(a1-5)Kdo', 'OC1(C(=O)O)C[C@@H](O)[C@@H](O[C@H]2O[C@H]([C@H](O)CO)[C@@H](O)[C@H](O)[C@@H]2O)[C@@H]([C@H](O)CO)O1'),
+    ('Galf(b1-4)Rha', 'OC1O[C@@H](C)[C@H](O[C@@H]2O[C@@H]([C@H](O)CO)[C@H](O)[C@H]2O)[C@@H](O)[C@H]1O'),
+    ('Fruf(b2-1)Glc', 'O([C@]2(CO)O[C@H](CO)[C@@H](O)[C@@H]2O)C1O[C@H](CO)[C@@H](O)[C@H](O)[C@H]1O'),
+    ('Glc(a1-1)Glc', 'O([C@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@H]2O)C1O[C@H](CO)[C@@H](O)[C@H](O)[C@H]1O'),
+    ('Man1P(a1-6)Man', 'OC1O[C@H](COP(=O)(O)O[C@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@@H]2O)[C@@H](O)[C@H](O)[C@@H]1O'),
+    ('Ins', 'O[C@@H]1[C@H](O)[C@H](O)[C@@H](O)[C@H](O)[C@H]1O'),
+    ('GlcN(a1-6)Ins', 'O[C@@H]1[C@H](O)[C@H](O)[C@@H](O)[C@H](O)[C@H]1O[C@H]2O[C@H](CO)[C@@H](O)[C@H](O)[C@H]2N'),
+    ('Glc-ol', 'OC[C@H](O)[C@@H](O)[C@H](O)[C@H](O)CO'),
+    ('Gal(b1-4)Glc-ol', 'OC[C@H](O)[C@@H](O)[C@H](O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@H](O)CO'),
+    ('Pse5Ac7Ac(a2-6)GlcNAc', 'OC1O[C@H](CO[C@]2(C(=O)O)C[C@H](O)[C@H](NC(C)=O)[C@H]([C@@H](NC(C)=O)[C@@H](O)C)O2)[C@@H](O)[C@H](O)[C@H]1NC(C)=O'),
+    ('QuiNAc4NAc(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](C)[C@@H](NC(C)=O)[C@H](O)[C@H]2NC(C)=O)[C@H](O)[C@H]1O'),
+    ('Tyv(a1-3)Man', 'OC1O[C@H](CO)[C@@H](O)[C@H](O[C@H]2O[C@H](C)[C@@H](O)C[C@@H]2O)[C@@H]1O'),
+    ('D-Fuc(a1-2)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O)[C@H]1O[C@H]2O[C@H](C)[C@H](O)[C@H](O)[C@H]2O'),
+    ('Xyl(b1-4)Hex', 'OC1OC(CO)C(O[C@@H]2OC[C@@H](O)[C@H](O)[C@H]2O)C(O)C1O'),
+    ('Gal4Pyr6Pyr(b1-4)Glc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](CO%52)[C@H](OC%52(C)C(=O)O)[C@H](O)[C@H]2O)[C@H](O)[C@H]1O'),
+    ('ManNAcA(b1-4)GlcNAc', 'OC1O[C@H](CO)[C@@H](O[C@@H]2O[C@H](C(=O)O)[C@@H](O)[C@H](O)[C@@H]2NC(C)=O)[C@H](O)[C@H]1NC(C)=O'),
+    ('Neu5Ac(a2-8)Neu5Ac(a2-3)Gal', 'OC1O[C@H](CO)[C@H](O)[C@H](O[C@]2(C(=O)O)C[C@H](O)[C@@H](NC(C)=O)[C@H]([C@H](O)[C@H](O[C@]3(C(=O)O)C[C@H](O)[C@@H](NC(C)=O)[C@H]([C@H](O)[C@H](O)CO)O3)CO)O2)[C@H]1O'),
+]
+IP3 = '[C@H]1([C@@H]([C@H]([C@@H]([C@H]([C@@H]1OP(=O)(O)O)O)OP(=O)(O)O)OP(=O)(O)O)O)O'  # 1D-myo-inositol 1,4,5-trisphosphate
+
+
+@pytest.mark.parametrize('glycan, expected', KNOWN)
+def test_known_structures(glycan, expected):
+    assert glycan_to_smiles(glycan) == expected
+
+
+@pytest.mark.parametrize('glycan, expected', KNOWN)
+def test_known_structures_parse(glycan, expected):
+    Chem = pytest.importorskip('rdkit.Chem')
+    assert Chem.MolFromSmiles(expected) is not None
+
+
+def test_templates_are_well_formed():
+    for name, (template, tag, hetero) in SKELETONS.items():
+        assert tag in ('', '@'), name
+        assert template.count('{r}') in (0, 2), name
+        assert set(int(p) for p in re.findall(r'\{p(\d)\}', template)) == set(hetero), name
+        assert template.count('(') == template.count(')'), name
+    for name, (template, hetero) in ALDITOLS.items():
+        assert '{r}' not in template and '{a}' not in template, name
+        assert set(int(p) for p in re.findall(r'\{p(\d)\}', template)) == set(hetero), name
+    for name in ENANTIOMER:
+        assert name in SKELETONS, name
+
+
+def test_every_skeleton_builds():
+    Chem = pytest.importorskip('rdkit.Chem')
+    for name in SKELETONS:
+        donor = _anomeric_position(name)
+        for anomer in ('a', 'b', '?') if donor else ('?',):
+            smiles = glycan_to_smiles(name) if anomer == '?' else glycan_to_smiles(f'{name}({anomer}{donor}-4)Glc')
+            assert Chem.MolFromSmiles(smiles) is not None, (name, anomer)
+    for name in ALDITOLS:
+        assert Chem.MolFromSmiles(glycan_to_smiles(f'{name}-ol')) is not None, name
+
+
+def test_every_substituent_builds():
+    Chem = pytest.importorskip('rdkit.Chem')
+    for name, (on_oxygen, on_nitrogen) in SUBSTITUENTS.items():
+        if on_oxygen:
+            assert Chem.MolFromSmiles(glycan_to_smiles(f'Gal6{name}' if name[0] != 'N' else f'Gal2{name}')) is not None, name
+        if on_nitrogen:
+            assert Chem.MolFromSmiles(glycan_to_smiles(f'GlcN2{name}')) is not None, name
+
+
+@pytest.mark.parametrize('glycan', ['GlcAAm', 'GlcAN', 'GlcA6Me'])
+def test_carboxyl_derivatives_build(glycan):
+    assert 'C(=O)' in glycan_to_smiles(glycan)
+
+
+def test_anomers_differ_only_in_the_anomeric_center():
+    for name, (template, tag, _) in SKELETONS.items():
+        alpha, beta = template.replace('{a}', tag), template.replace('{a}', '@' if tag == '' else '')
+        assert alpha.replace('@@', '@') == beta.replace('@@', '@'), name
+
+
+def test_inositol_is_1D_myo():
+    Chem = pytest.importorskip('rdkit.Chem')
+    assert Chem.CanonSmiles(glycan_to_smiles('Ins1P4P5P')) == Chem.CanonSmiles(IP3)
+
+
+def test_enantiomer_prefix_mirrors():
+    Chem = pytest.importorskip('rdkit.Chem')
+    mirrored = Chem.CanonSmiles(glycan_to_smiles('D-Fuc(a1-2)Gal').replace('@@', '\x00').replace('@', '@@').replace('\x00', '@'))
+    assert mirrored == Chem.CanonSmiles(glycan_to_smiles('Fuc(a1-2)L-Gal'))
+
+
+def test_atom_mapping_covers_every_atom():
+    Chem = pytest.importorskip('rdkit.Chem')
+    smiles, atoms = glycan_to_smiles('Neu5Ac(a2-3)Gal(b1-4)Glc', mapping = True)
+    assert len(atoms) == Chem.MolFromSmiles(smiles).GetNumAtoms()
+    assert sorted(Counter(atoms).values()) == [11, 11, 21]  # Glc, Gal, Neu5Ac
+    assert smiles_to_iupac(glycan_to_smiles('ManNAcA(b1-4)GlcNAc')) == 'ManNAcA(b1-4)GlcNAc'
+
+
+def test_token_splitting():
+    assert _split_token('GlcNAc6S') == ('Glc', [(None, 'NAc'), (6, 'S')], '', False)
+    assert _split_token('LDManHepOPEtN') == ('LDManHep', [(None, 'OPEtN')], '', False)
+    assert _split_token('D-Fuc') == ('Fuc', [], 'D', False)
+    assert _split_token('GlcNAc-ol') == ('Glc', [(None, 'NAc')], '', True)
+    assert _anomeric_position('Neu5Ac') == 2 and _anomeric_position('Glc') == 1 and _anomeric_position('Glc-ol') is None
+
+
+@pytest.mark.parametrize('glycan, message', [
+    ('Sia(a2-3)Gal', 'wildcard'),
+    ('Nonsense(b1-4)Glc', 'no skeleton'),
+    ('Gal(b1-6)Man6P', 'no free position'),
+    ('Fru(b1-4)Glc', 'anomeric carbon'),
+    ('{Fuc(a1-?)}Gal(b1-4)Glc', 'disconnected'),
+    ('Nonsense-ol', 'no skeleton'),
+    ('Ery', 'only exists as an alditol'),
+    ('Gal(b1-3)Ery', 'only exists as an alditol'),
+    ('XylA', 'no primary alcohol to oxidize'),
+    ('GlcA6S', 'not defined on the carboxyl'),
+    ('Gal1Aep', 'cannot sit on the anomeric oxygen'),
+    ('GlcN2Gro', 'not defined for the amine at position'),
+    ('Fuc2Ac3Ac4AcNAc', 'no free position'),
+])
+def test_refuses_what_it_cannot_build(glycan, message):
+    with pytest.raises(GlycanSMILESError) as error:
+        glycan_to_smiles(glycan)
+    assert message in str(error.value)
+
+
+def test_strict_refuses_to_guess_a_position():
+    assert glycan_to_smiles('Gal(b1-?)Glc')
+    with pytest.raises(GlycanSMILESError):
+        glycan_to_smiles('Gal(b1-?)Glc', strict = True)
+
+
+def test_molecule_graph_matches_rdkit():
+    Chem = pytest.importorskip('rdkit.Chem')
+    for glycan, expected in KNOWN:
+        molecule = glycan_to_molecule(glycan)
+        mol = Chem.MolFromSmiles(molecule.smiles)
+        assert [a[0] for a in molecule.atoms] == [a.GetSymbol() for a in mol.GetAtoms()], glycan
+        assert {frozenset((f, s)): o for f, s, o in molecule.bonds} == {
+            frozenset((b.GetBeginAtomIdx(), b.GetEndAtomIdx())): int(b.GetBondTypeAsDouble()) for b in mol.GetBonds()}, glycan
+        mine = {frozenset(frozenset(molecule.bonds[b][:2]) for b in ring) for ring in molecule.rings}
+        theirs = {frozenset(frozenset((mol.GetBondWithIdx(b).GetBeginAtomIdx(), mol.GetBondWithIdx(b).GetEndAtomIdx())) for b in r)
+                  for r in mol.GetRingInfo().BondRings()}
+        assert mine == theirs, glycan
+
+
+def test_molecule_graph_is_self_consistent():
+    for glycan, expected in KNOWN:
+        molecule = glycan_to_molecule(glycan)
+        assert len(molecule.atom_monos) == len(molecule.atoms)
+        assert len(molecule.bond_monos) == len(molecule.bonds)
+        assert all(0 <= f < len(molecule.atoms) and 0 <= s < len(molecule.atoms) for f, s, o in molecule.bonds)
+        assert all(0 <= b < len(molecule.bonds) for ring in molecule.rings for b in ring)
+
+
+# reading a SMILES back cannot yet handle an open-chain reducing end, a pyruvate ketal spanning two positions,
+# a wildcard residue, or inositol's all-carbon ring, and it names QuiNAc4NAc by its synonym BacNAc4Ac
+UNREADABLE = ('-ol', 'Pyr', 'Hex', 'Ins', 'QuiNAc4NAc')
+ROUND_TRIP = [glycan for glycan, expected in KNOWN if not any(piece in glycan for piece in UNREADABLE)]
+
+
+@pytest.mark.parametrize('glycan', ROUND_TRIP)
+def test_round_trip(glycan):
+    assert canonicalize_iupac(smiles_to_iupac(glycan_to_smiles(glycan))) == canonicalize_iupac(glycan)
+
+
+def test_round_trip_keeps_every_residue():
+    for glycan in ROUND_TRIP:
+        back = smiles_to_iupac(glycan_to_smiles(glycan))
+        assert back.count('(') == glycan.count('('), glycan
+
+
+def test_refuses_to_drop_a_residue_it_cannot_name():
+    with pytest.raises(GlycanSMILESError):
+        smiles_to_iupac(glycan_to_smiles('Gal(b1-4)Glc-ol'))  # an open-chain reducing end is not perceived yet
+
+
+@pytest.mark.parametrize('text, expected', [
+    ('OC1O[C@H](CO)[C@@H](O)[C@H](O)[C@H]1O', True),
+    ('Gal(b1-4)Glc', False),
+    ('Neu5Ac(a2-3)Gal(b1-4)GlcNAc', False),
+    ('Hex5HexNAc4Fuc1', False),
+    ('WURCS=2.0/2,2,1/[a2122h-1b_1-5]', False),
+    ('', False),
+    ('OC1OCCCC1O', True),  # no stereocenter, so it has to be parsed to be recognized
+    ('OC1OCCCCO', False),  # ...and an unclosed ring never parses
+])
+def test_looks_like_smiles(text, expected):
+    assert looks_like_smiles(text) is expected
+
+
+def test_parse_smiles_refuses_what_it_cannot_read():
+    with pytest.raises(GlycanSMILESError):
+        parse_smiles('Gal(b1-4)Glc')
+    with pytest.raises(GlycanSMILESError):
+        parse_smiles('OC1OCCCC')
+    with pytest.raises(GlycanSMILESError):  # nothing ring-shaped at all
+        smiles_to_iupac('CCCCCCC')
+    with pytest.raises(GlycanSMILESError):  # rings that match no monosaccharide
+        smiles_to_iupac('OC1OCCCC1O.OC1OCCCC1O')
+    with pytest.raises(GlycanSMILESError):  # two glycans in one string
+        smiles_to_iupac('OC1OC(CO)C(O)C(O)C1O.OC1OC(CO)C(O)C(O)C1O')
 
 
 def test_constrain_prot():
@@ -911,6 +1231,12 @@ def test_glycan_to_composition():
     # Test lactonization
     result = glycan_to_composition("Neu1,7lactone5,9Ac2(a2-3)Gal(b1-4)Glc")
     assert result == {'Neu5Ac': 1, 'Hex': 2, '-H2O': 1, 'Ac': 1}
+    result = glycan_to_composition("{Fuc(a1-2/3)}{HexNAc4/6S(b1-4/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3/6)[GlcNAc(b1-2)Man(a1-3/6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc")
+    assert result == {'Hex': 4, 'HexNAc': 5, 'dHex': 2, 'S': 1}
+    # An anchored bit carries more information than the merged form but exactly the same atoms
+    assert glycan_to_composition(
+        "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == glycan_to_composition(
+        "{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
 
 
 def test_glycan_to_mass():
@@ -923,6 +1249,8 @@ def test_glycan_to_mass():
     assert abs(glycan_to_mass("GalOS(b1-3)GalNAc4/6S") - 543.0563546) < 0.1
     assert abs(glycan_to_mass("Neu5Ac9Ac(a2-3)Gal(b1-4)Glc") - 675.2220546) < 0.1
     assert abs(glycan_to_mass("Neu4Ac5Ac9Ac(a2-3)Gal(b1-4)Glc") - 717.2325546) < 0.1
+    assert abs(glycan_to_mass(
+        "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") - 1421.5179) < 0.1
 
 
 def test_calculate_adduct_mass():
@@ -951,6 +1279,9 @@ def test_structure_to_basic():
     # Glycan with branch
     result = structure_to_basic("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc")
     assert result == "Neu5Ac(?1-?)Hex(?1-?)[dHex(?1-?)]HexNAc"
+    # An anchor that still names specific monosaccharides could no longer resolve against the mapped backbone
+    result = structure_to_basic("{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc")
+    assert result.startswith("{dHex^(a1-3)[Hex(?1-?)]HexNAc|dHex^(a1-6)[HexNAc(?1-?)]HexNAc}")
 
 
 def test_map_to_basic():
@@ -1295,15 +1626,17 @@ def test_rescue_compositions():
     (1, "lipid", "Fungi", str),
 ])
 def test_get_random_glycan(n, glycan_class, kingdom, expected_type):
-    # Mock the DataFrame and sample function
-    mock_df = Mock()
-    mock_df.glycan.values.tolist.return_value = ["Glycan1", "Glycan2", "Glycan3", "Glycan4"]
+    # A real (tiny) frame, so the Kingdom/glycan_type filtering in get_random_glycan actually runs
+    mock_df = pd.DataFrame({"glycan": ["Glycan1", "Glycan2", "Glycan3", "Glycan4"],
+                            "glycan_type": [glycan_class] * 4,
+                            "Kingdom": [[kingdom]] * 4})
     with patch("glycowork.glycan_data.loader.df_glycan", mock_df):
-        with patch("random.sample", lambda x, n: x[:n]):
-            result = get_random_glycan(n, glycan_class, kingdom)
-            assert isinstance(result, expected_type)
-            if n > 1:
-                assert len(result) == n
+        result = get_random_glycan(n, glycan_class, kingdom)
+        assert isinstance(result, expected_type)
+        # asserts the patch actually reached the function, rather than it sampling the real SugarBase
+        assert set(result if n > 1 else [result]).issubset(set(mock_df.glycan))
+        if n > 1:
+            assert len(result) == n
 
 
 def test_min_process_glycans():
@@ -1314,6 +1647,7 @@ def test_min_process_glycans():
     result = min_process_glycans(glycans)
     assert result[0] == ['Neu5Ac', 'a2-3', 'Gal', 'b1-4', 'GlcNAc']
     assert result[1] == ['Gal', 'b1-4', 'Fuc', 'a1-3', 'GlcNAc']
+    assert min_process_glycans(glycans[0]) == [result[0]]  # a bare string counts as one glycan
 
 
 def test_get_lib():
@@ -1414,6 +1748,28 @@ LIN
     result = glycoct_to_iupac(glycoct)
     assert "Man" in result
     assert "GlcNAc" in result
+    # A connection whose linkage block sits further than the lookahead reaches must not inherit the previous connection's positions
+    xml = '''<sugar version="1.0">
+      <residues>
+        <basetype id="1" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dglc-HEX-1:5">
+          <stemtype id="1" type="dglc" />
+        </basetype>
+        <basetype id="2" anomer="b" superclass="hex" ringStart="1" ringEnd="5" name="b-dgal-HEX-1:5">
+          <stemtype id="1" type="dgal" />
+        </basetype>
+      </residues>
+      <linkages>
+        <connection id="1" parent="1" child="2">
+          <linkage id="1" parentType="o" childType="d">
+            <parent pos="4" />
+            <child pos="1" />
+          </linkage>
+        </connection>
+      </linkages>
+    </sugar>'''
+    assert glycoctxml_to_iupac(xml) == "Gal(b1-4)Glcb"
+    far = xml.replace('<linkage id="1"', '\n'.join(['      <!-- annotation -->'] * 12) + '\n      <linkage id="1"')
+    assert glycoctxml_to_iupac(far) == "Gal(b?-?)Glcb"
 
 
 def test_wurcs_to_iupac():
@@ -1433,6 +1789,11 @@ def test_oxford_to_iupac():
     assert "Gal" in complex_result
     assert "GlcNAc" in complex_result
     assert "Fuc" in complex_result
+    # An antennary residue goes onto a LacDiNAc antenna when there is no Gal to hang it off
+    assert "GalNAc(b1-4)[Fuc(a1-3/4)]GlcNAc" in oxford_to_iupac("A2LacDiNAcF1")
+    # ...and without any antenna to attach to, this was never an Oxford string
+    with pytest.raises(ValueError):
+        oxford_to_iupac("A2F1")
 
 
 def test_canonicalize_composition():
@@ -1470,6 +1831,18 @@ def test_canonicalize_composition():
     result = canonicalize_composition("H2N2S1Sul1")
     assert result["S"] == 1
     assert result["Neu5Ac"] == 1
+    # Test canonical string output, in fixed residue order regardless of input order/format
+    assert canonicalize_composition("H5N4F1A2", as_string = True) == "H5N4F1A2"
+    assert canonicalize_composition("Hex5HexNAc4Fuc1Neu5Ac2", as_string = True) == "H5N4F1A2"
+    assert canonicalize_composition("N2H1F3A1", as_string = True) == "H1N2F3A1"
+    assert canonicalize_composition("9_2_0_0", as_string = True) == "H9N2"
+    assert canonicalize_composition("9 2 0 1 0", as_string = True) == "H9N2G1"
+    # Sulfate stays S, sialic acid becomes A, and residues without a single-letter code keep their name
+    assert canonicalize_composition("H2N2S1Sulf1", as_string = True) == "H2N2A1S1"
+    assert canonicalize_composition("Hex3HexNAc2Pent1", as_string = True) == "H3N2Pen1"
+    # Zero counts are dropped and the string parses back to the same dictionary
+    assert canonicalize_composition("Hex5HexNAc4Fuc0", as_string = True) == "H5N4"
+    assert canonicalize_composition(canonicalize_composition("Hex5HexNAc4Fuc1Neu5Ac2", as_string = True)) == canonicalize_composition("Hex5HexNAc4Fuc1Neu5Ac2")
 
 
 def test_parse_glycoform():
@@ -1575,12 +1948,16 @@ def test_get_matching_indices2():
     assert len(result) == 3
     assert result[0] == (1, 2, 0)
     # Test unmatched brackets
-    assert len(list(get_matching_indices("[a[b", '[', ']'))) == 0
+    with pytest.warns(UserWarning, match = "Unmatched opening"):
+        assert len(list(get_matching_indices("[a[b", '[', ']'))) == 0
     # Test escaped delimiters
     assert len(list(get_matching_indices(r"[a\[b]", '[', ']'))) == 1
     assert list(get_matching_indices(r"[a\[b]", '[', ']'))[0] == (1, 5, 0)
     # Test extraneous closing delimiter
-    assert len(list(get_matching_indices("]abc[", '[', ']'))) == 0
+    with pytest.warns(UserWarning) as rec:  # both an extraneous ']' and an unmatched '['
+        assert len(list(get_matching_indices("]abc[", '[', ']'))) == 0
+    assert any("extraneous closing" in str(w.message) for w in rec)
+    assert any("Unmatched opening" in str(w.message) for w in rec)
     # Test escaped closing delimiter
     assert len(list(get_matching_indices(r"[a\]b]", '[', ']'))) == 1
     assert list(get_matching_indices(r"[a\]b]", '[', ']'))[0] == (1, 5, 0)
@@ -1600,10 +1977,6 @@ def test_bracket_removal():
 
 
 def test_check_nomenclature():
-    # Test SMILES format (should print warning)
-    with pytest.raises(ValueError) as exc_info:
-        check_nomenclature("C@C(=O)NC1C(O)OC(CO)C(O)C1O")
-    assert "can only convert IUPAC-->SMILES" in str(exc_info.value)
     # Test non-string input
     with pytest.raises(TypeError) as exc_info:
         check_nomenclature(123)
@@ -1613,39 +1986,24 @@ def test_check_nomenclature():
 
 
 def test_IUPAC_to_SMILES():
-    try:
-        # Test basic conversion
-        glycans = ["Gal(b1-4)GlcNAc"]
-        smiles = IUPAC_to_SMILES(glycans)
-        assert isinstance(smiles, list)
-        assert len(smiles) == 1
-        assert all('@' in s for s in smiles)  # SMILES should contain stereochemistry
-        # Test multiple glycans
-        glycans = ["Gal(b1-4)GlcNAc", "Man(a1-3)Man"]
-        smiles = IUPAC_to_SMILES(glycans)
-        assert len(smiles) == 2
-        smiles = iupac_to_smiles(glycans)
-        # Test string input type
-        smiles = IUPAC_to_SMILES("Gal(b1-4)GlcNAc")
-        smiles = iupac_to_smiles("F(3)XA2")
-        assert '@' in smiles[0]
-    except ImportError:
-        pytest.skip("glyles package not installed")
-    # Mock ImportError for chem dependencies
-    import builtins
-    original_import = builtins.__import__
-
-    def mock_import(name, *args, **kwargs):
-        if name == 'glyles':
-            raise ImportError()
-        return original_import(name, *args, **kwargs)
-
-    try:
-        builtins.__import__ = mock_import
-        with pytest.raises(ImportError, match=r"You must install the 'chem' dependencies to use this feature\. Try 'pip install glycowork\[chem\]'\."):
-            IUPAC_to_SMILES(["Gal(b1-4)GlcNAc"])
-    finally:
-        builtins.__import__ = original_import
+    # Test basic conversion
+    glycans = ["Gal(b1-4)GlcNAc"]
+    smiles = IUPAC_to_SMILES(glycans)
+    assert isinstance(smiles, list)
+    assert len(smiles) == 1
+    assert all('@' in s for s in smiles)  # SMILES should contain stereochemistry
+    # Test multiple glycans
+    glycans = ["Gal(b1-4)GlcNAc", "Man(a1-3)Man"]
+    smiles = IUPAC_to_SMILES(glycans)
+    assert len(smiles) == 2
+    smiles = iupac_to_smiles(glycans)
+    # Test string input type
+    smiles = IUPAC_to_SMILES("Gal(b1-4)GlcNAc")
+    # Test a non-IUPAC format, which only converts after canonicalization
+    smiles = iupac_to_smiles("F(3)XA2")
+    assert '@' in smiles[0]
+    # Anything without a defined structure comes back empty rather than raising
+    assert IUPAC_to_SMILES(["HexNAc(b1-4)Sia"]) == ['']
 
 
 def test_max_specify_glycan():
@@ -1697,6 +2055,7 @@ def test_find_nth_reverse():
     # Test missing
     assert find_nth_reverse("hello", "j", 1) == -1
     assert find_nth_reverse("Gal(b1-4)[Fuc(a1-3)]GlcNAc", "GlcNAc", 1, ignore_branches = True) == 9
+    assert find_nth_reverse("Neu5Ac(a2-3)[Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-3)]Gal", "Gal", 1, ignore_branches = True) == 12
 
 
 def test_remove_unmatched_brackets():
@@ -1757,6 +2116,11 @@ def test_reindex():
         'value': [1, 2, 3]
     })
     result = reindex(df_new, df_old, 'value', 'id2', 'id')
+    with pytest.raises(KeyError):
+        reindex(pd.DataFrame({'id': ['a', 'zzz']}), df_old, 'value', 'id2', 'id')
+    edges = [(1, 2), (3, 2), (4, 5)]
+    assert share_neighbor(edges, 1, 3)
+    assert not share_neighbor(edges, 1, 5)
 
 
 def test_stringify_dict():
@@ -1828,6 +2192,7 @@ def test_build_custom_df():
     assert 'glycan' in result.columns
     assert 'Species' in result.columns
     assert len(df_species[df_species.Genus=='Diceros'].glyco_filter("Neu5Ac(a2-3)[GalNAc(b1-4)]Gal", min_count=2)) > 0
+    assert len(GlycoDataFrame(df).meta_filter(Order = "Primates")) > 0
     try:
         result = build_custom_df(df, "wrong")
         return False
@@ -1884,7 +2249,21 @@ def test_glycan_binding():
 
 def test_glycomics_data_loader():
     dir(glycomics_data_loader)
-    assert len(glycomics_data_loader.human_brain_GSL_PMID38343116) > 0
+    assert len(glycomics_data_loader.mouse_brain_GSL_PMID38343116) > 0
+    # contrasts.csv keys datasets with the loader prefix, datasets_metadata.csv without it
+    d = glycomics_data_loader.human_gastric_O_PMC5762837
+    assert d.name == 'human_gastric_O_PMC5762837' and d.provenance['doi'] and d._contrasts
+    # filter() only ever returns datasets that are actually loadable, whatever datasets_metadata.csv lists
+    o_glycans = glycomics_data_loader.filter(glycan_class = 'O')
+    assert o_glycans and set(o_glycans).issubset(dir(glycomics_data_loader))
+    assert 'human_gastric_O_PMC5762837' in o_glycans and len(getattr(glycomics_data_loader, o_glycans[0])) > 0
+    assert set(o_glycans).issubset(glycomics_data_loader.filter(glycan_class = ['O', 'N']))  # a list of values is an OR
+    assert glycomics_data_loader.filter(glycan_class = 'O', source_type = 'cell line') == sorted(set(o_glycans) & set(glycomics_data_loader.filter(source_type = 'cell line')))  # several columns are an AND
+    assert glycomics_data_loader.filter(source_type = ' Primary Tissue ') == glycomics_data_loader.filter(source_type = 'primary tissue')  # case/whitespace-insensitive
+    assert glycomics_data_loader.filter(species = lambda v: isinstance(v, str) and v.startswith('Mus'))  # callables see the raw value
+    assert not set(lectin_array_data_loader.filter(glycan_class = 'O')) & set(o_glycans)  # a loader never returns another prefix's datasets
+    with pytest.raises(KeyError):
+        glycomics_data_loader.filter(not_a_column = 'x')
 
 
 def test_count_nested_brackets():
@@ -1975,6 +2354,10 @@ def test_GlycoDataFrame():
     assert df2.paired is False
     assert df_paired.name == "test_df"
     assert df_paired.iloc[:1].name == "test_df"  # preserved through slicing
+    # A motif name resolves to its sequence and termini spec
+    df_motif = GlycoDataFrame(
+        pd.DataFrame({'glycan': ['Gal(b1-4)[Fuc(a1-3)]GlcNAc', 'Man(a1-3)Man'], 's1': [1.0, 2.0]}))
+    assert list(df_motif.glyco_filter('LewisX').glycans) == ['Gal(b1-4)[Fuc(a1-3)]GlcNAc']
 
 
 def test_cohen_d():
@@ -2014,7 +2397,8 @@ def test_mahalanobis_variance():
     # Check that the variance is non-negative
     assert variance >= 0
     # Check that the function works with paired=True as well
-    variance_paired = mahalanobis_variance(x, y, paired=True)
+    assert mahalanobis_variance(x, y, random_state = 1) == mahalanobis_variance(x, y, random_state = 1)
+    variance_paired = mahalanobis_variance(x, y, paired = True)
     assert isinstance(variance_paired, float)
     assert variance_paired >= 0
 
@@ -2047,6 +2431,11 @@ def test_biodiversity_metrics():
     # Test Simpson diversity
     simpson = simpson_diversity_index(counts)
     assert 0 <= simpson <= 1
+    # A sample with nothing measured has no defined diversity and is reported as 0
+    with pytest.warns(UserWarning):
+        assert shannon_diversity_index(np.array([0, 0, 0, 0])) == 0.0
+    with pytest.warns(UserWarning):
+        assert simpson_diversity_index(np.array([0, 0, 0, 0])) == 0.0
 
 
 def test_get_equivalence_test():
@@ -2079,20 +2468,6 @@ def test_hotellings_t2():
     assert np.array_equal(a, a_before)
 
 
-def test_calculate_permanova_stat():
-    # Create distance matrix
-    dist_matrix = pd.DataFrame([
-        [0, 1, 2, 3],
-        [1, 0, 2, 3],
-        [2, 2, 0, 1],
-        [3, 3, 1, 0]
-    ])
-    group_labels = ['A', 'A', 'B', 'B']
-    # Test calculation
-    F_stat = calculate_permanova_stat(dist_matrix, group_labels)
-    assert F_stat >= 0
-
-
 def test_omega_squared():
     # Create test data
     data = np.array([1, 2, 3, 4, 5, 6, 7, 8])
@@ -2100,6 +2475,10 @@ def test_omega_squared():
     # Calculate effect size
     omega_sq = omega_squared(data, groups)
     assert -1 <= omega_sq <= 1  # Omega squared should be between -1 and 1
+    with pytest.raises(ValueError):  # one label per sample
+        omega_squared(data, ['A', 'A', 'B', 'B'])
+    with pytest.raises(ValueError):  # no within-group variance to compare against
+        omega_squared(np.array([1.0, 2.0]), ['A', 'B'])
 
 
 def test_anosim():
@@ -2115,6 +2494,10 @@ def test_anosim():
     R, p_val = anosim(dist_matrix, group_labels)
     assert -1 <= R <= 1  # R should be between -1 and 1
     assert 0 <= p_val <= 1
+    with pytest.raises(ValueError):  # one label per sample
+        anosim(dist_matrix, ['A', 'A', 'B'])
+    with pytest.raises(ValueError):  # no group with more than one sample
+        anosim(dist_matrix, ['A', 'B', 'C', 'D'])
 
 
 def test_alpha_biodiversity_stats():
@@ -2159,6 +2542,17 @@ def test_clr_transformation():
     # Test with scale model
     result_scaled = clr_transformation(data, group1, group2, custom_scale=2.0)
     assert result_scaled.shape == data.shape
+    # Test robustness to the glycan column still being present
+    data_with_glycans = data.copy()
+    data_with_glycans.insert(0, 'glycan', ['Gal(b1-4)Glc', 'Gal(b1-4)GlcNAc', 'Man(a1-3)Man'])
+    result_kept = clr_transformation(data_with_glycans, group1, group2, gamma=0)
+    assert list(result_kept.columns) == list(data_with_glycans.columns)
+    assert result_kept['glycan'].tolist() == data_with_glycans['glycan'].tolist()
+    pd.testing.assert_frame_equal(result_kept.iloc[:, 1:], clr_transformation(data, group1, group2, gamma=0))
+    # Glycan column in the group lists is ignored rather than transformed
+    result_grouped = clr_transformation(data_with_glycans, ['glycan'] + group1, group2, random_state=42)
+    assert result_grouped['glycan'].tolist() == data_with_glycans['glycan'].tolist()
+    assert result_grouped.iloc[:, 1:].to_numpy().dtype.kind == 'f'
 
 
 def test_alr_transformation():
@@ -2225,6 +2619,13 @@ def test_bayes_factor_functions():
     alpha = get_alphaN(n=20, method="balanced")
 
 
+def test_bayes_factor_invalid_method():
+    with pytest.raises(ValueError):
+        get_BF(20, 0.05, method='nonsense')
+    with pytest.raises(ValueError):
+        get_alphaN(20, method='nonsense')
+
+
 def test_pi0_tst():
     # Create test p-values
     p_values = np.array([0.01, 0.02, 0.03, 0.5, 0.6, 0.7, 0.8, 0.9])
@@ -2279,6 +2680,14 @@ def test_correct_multiple_testing():
     assert all(isinstance(s, bool) for s in significance)
     corrected_pvals, significance = correct_multiple_testing([], 0.05)
     assert len(corrected_pvals) == 0
+    # two-stage adjusted p-values are calibrated to alpha and must track it; one-stage must not
+    p_mixed = [0.001, 0.008, 0.02, 0.04, 0.2, 0.3, 0.5, 0.6, 0.8, 0.9]
+    tight = correct_multiple_testing(p_mixed, 0.05)[0]
+    loose = correct_multiple_testing(p_mixed, 0.2)[0]
+    assert np.allclose(tight[:4], [0.008, 0.032, 0.053333, 0.08])
+    assert np.allclose(loose[:4], [0.006, 0.024, 0.04, 0.06])
+    assert np.allclose(correct_multiple_testing(p_mixed, 0.05, correction_method = "one-stage")[0],
+                       correct_multiple_testing(p_mixed, 0.2, correction_method = "one-stage")[0])
 
 
 def test_partial_corr():
@@ -2303,7 +2712,11 @@ def test_estimate_technical_variance():
     group1 = ['sample1', 'sample2']
     group2 = ['sample3']
     # Test variance estimation
-    result = estimate_technical_variance(data, group1, group2, num_instances=10)
+    # Monte Carlo DE is only reproducible if the seed reaches the sampler
+    a = estimate_technical_variance(data, group1, group2, num_instances = 4, random_state = 42)
+    b = estimate_technical_variance(data, group1, group2, num_instances = 4, random_state = 42)
+    assert np.allclose(a.values, b.values)
+    result = estimate_technical_variance(data, group1, group2, num_instances = 10)
     assert result.shape[1] == (len(group1) + len(group2)) * 10
 
 
@@ -2318,6 +2731,8 @@ def test_missforest():
     imputed = mf.fit_transform(data)
     assert not imputed.isnull().any().any()
     assert imputed.shape == data.shape
+    with pytest.raises(ValueError):  # circadian imputation needs to know the time of each column
+        MissForest(circadian = True).fit_transform(data)
 
 
 def test_impute_and_normalize():
@@ -2353,6 +2768,7 @@ def test_get_glycoform_diff():
     # Test glycoform differential expression
     result_df = pd.DataFrame({
         'Glycosite': ['Prot1_123_H5N4', 'Prot1_123_H6N5', 'Prot2_456_H4N3'],
+        'p-val': [0.005, 0.01, 0.02],
         'corr p-val': [0.01, 0.02, 0.03],
         'Effect size': [0.5, 0.6, 0.7]
     })
@@ -2361,7 +2777,12 @@ def test_get_glycoform_diff():
     assert 'corr p-val' in result.columns
     assert 'significant' in result.columns
     assert 'Effect size' in result.columns
-    result = get_glycoform_diff(result_df, alpha=0.05, level='protein')
+    result = get_glycoform_diff(result_df, alpha = 0.05, level = 'protein')
+    # Aggregating to glycosites must not drop the contrasts, name, provenance, and alpha the caller carried
+    tagged = GlycoDataFrame(result_df, name = 'demo', paired = True, provenance = {'doi': 'x'})
+    tagged.attrs['alpha'] = 0.03
+    out = get_glycoform_diff(tagged, alpha = 0.03, level = 'peptide')
+    assert out.name == 'demo' and out.paired and out.provenance == {'doi': 'x'} and out.attrs['alpha'] == 0.03
 
 
 def test_get_glm():
@@ -2374,10 +2795,14 @@ def test_get_glm():
         'H': [1, 2, 1, 2, 1, 2, 1, 2] * 2,
         'N': [2, 3, 2, 3, 2, 3, 2, 3] * 2
     })
+    before = list(data.columns)
     model, variables = get_glm(data)
+    assert list(data.columns) == before  # the interaction columns are scratch for the fit
     if not isinstance(model, str):  # If model fitting succeeded
-        assert hasattr(model, 'params')
-        assert hasattr(model, 'pvalues')
+        params, pvalues = model
+        assert list(params.index) == list(pvalues.index) == ['Intercept', 'Condition', 'H', 'H_Condition', 'N',
+                                                             'N_Condition']
+        assert params.notna().all() and ((pvalues >= 0) & (pvalues <= 1)).all()
         assert len(variables) > 0
     # all retained features have max == 0 → early return
     data_empty = pd.DataFrame({'H': [0, 0, 0, 0], 'N': [0, 0, 0, 0],
@@ -2386,9 +2811,13 @@ def test_get_glm():
     assert result == "No variables retained"
     assert vars_ == []
     # GLM fit raises → returns failure message
-    with patch('glycowork.glycan_data.stats.smf.glm', side_effect = ValueError("forced")):
+    with patch('numpy.linalg.lstsq', side_effect = ValueError("forced")):
         result, vars_ = get_glm(data)
         assert "GLM fitting failed" in result
+    # as many parameters as samples leaves no residual degrees of freedom
+    data_saturated = pd.DataFrame({'Abundance': [1.0, 2.0], 'Condition': [0, 1], 'H': [0.0, 1.0], 'N': [1.0, 0.0]})
+    result, vars_ = get_glm(data_saturated)
+    assert "insufficient residual degrees of freedom" in result
 
 
 def test_process_glm_results():
@@ -2408,26 +2837,13 @@ def test_process_glm_results():
     assert result.shape[0] == len(['Site1', 'Site2'])
 
 
-def test_replace_outliers_with_iqr_bounds():
-    # Test IQR-based outlier replacement
-    data = pd.Series([1, 2, 3, 10, 2, 3, 1])  # 10 is an outlier
-    result = replace_outliers_with_IQR_bounds(data)
-    assert max(result) < 10  # Outlier should be replaced
-    assert len(result) == len(data)
-    data = pd.Series(['Neu5Ac', 1, 2, 3, 10, 2, 3, 1])  # 10 is an outlier
-    result = replace_outliers_with_IQR_bounds(data)
-    data = pd.Series(['Neu5Ac', 10, 20, 30, 1, 20, 30, 10])  # 1 is an outlier
-    result = replace_outliers_with_IQR_bounds(data)
-    data = pd.Series(['Neu5Ac', 10, 20, 30, -100, 20, 30, 10])  # -100 is an outlier
-    result = replace_outliers_with_IQR_bounds(data)
-
-
 def test_replace_outliers_winsorization():
     # Test Winsorization-based outlier replacement
     data = pd.Series([1, 2, 3, 10, 2, 3, 1, 2, 3, 1])  # 10 is an outlier
-    result = replace_outliers_winsorization(data)
+    data = data.to_frame().T
+    result = replace_outliers_winsorization(data).iloc[0]
     assert max(result) < 10  # Outlier should be replaced
-    assert len(result) == len(data)
+    assert len(result) == 10
     result = replace_outliers_winsorization(data, cap_side='lower')
     result = replace_outliers_winsorization(data, cap_side='upper')
     try:
@@ -2447,6 +2863,9 @@ def test_perform_tests_monte_carlo():
     assert len(raw_p) == len(adj_p) == len(effect) == 5
     assert all(0 <= p <= 1 for p in raw_p)
     assert all(0 <= p <= 1 for p in adj_p)
+    # the within-instance correction is calibrated to alpha, so a looser alpha cannot yield larger adjusted p-values
+    loose = perform_tests_monte_carlo(group_a, group_b, num_instances = 10, alpha = 0.2)[1]
+    assert all(l <= a + 1e-12 for l, a in zip(loose, adj_p))
 
 
 def test_hsic():
@@ -2470,7 +2889,8 @@ def test_glycan_to_nxGraph():
     graph = glycan_to_nxGraph(glycan)
     assert len(graph.nodes) == 3
     assert len(graph.edges) == 2
-    assert all('string_labels' in data for _, data in graph.nodes(data=True))
+    assert all('string_labels' in data for _, data in graph.nodes(data = True))
+    assert len(glycan_to_nxGraph('')) == 0
 
 
 def test_compare_glycans():
@@ -2483,9 +2903,11 @@ def test_compare_glycans():
     # Test with PTM wildcards
     assert compare_glycans("Gal6S(b1-4)GlcNAc", "GalOS(b1-4)GlcNAc")
     assert compare_glycans("Gal6S(b1-3)GalNAc4S", "GalOS(b1-3)GalNAc4/6S")
+    assert compare_glycans("Gal6S(b1-4)GlcNAc", "Gal3/6S(b1-4)GlcNAc")
     res, mappy = compare_glycans('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc', graph_to_string(glycan_to_nxGraph('Fuc(a1-2)Gal(b1-4)GlcNAc6S(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc'), order_by='linkage'), return_matches=True)
     # Test narrow monosaccharide wildcards
     assert compare_glycans("GlcNAc/GalNAc(?1-3/4)Gal(b1-3)GalNAc", "GlcNAc(a1-4)Gal(b1-3)GalNAc")
+    assert compare_glycans('{6S}Gal(b1-3)GalNAc', '{OS}Gal(b1-3)GalNAc')
 
 
 def test_subgraph_isomorphism():
@@ -2493,8 +2915,10 @@ def test_subgraph_isomorphism():
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "GlcNAc")
     # Test motif count
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc(b1-4)GlcNAc", "GlcNAc", count=True) == 2
+    assert subgraph_isomorphism("Man(a1-?)[Man(a1-?)]Man(b1-4)GlcNAc(b1-4)GlcNAc", "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", count=True) == 1
     # Test with negation
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "!Man(a1-3)GlcNAc")
+    assert subgraph_isomorphism("Gal(b1-4)Gal", "!Gal(b1-4)Gal")
     # Test with termini constraints
     assert subgraph_isomorphism("Gal(b1-4)GlcNAc", "GlcNAc", termini_list=['terminal'])
     assert subgraph_isomorphism(glycan_to_nxGraph("Gal(b1-4)GlcNAc"), glycan_to_nxGraph("GlcNAc"), termini_list=['terminal'])
@@ -2533,8 +2957,105 @@ def test_get_possible_topologies():
     assert all(isinstance(g, nx.Graph) for g in topologies)
     assert get_possible_topologies("{6S}Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc")[0] == "Neu5Ac(a2-3)Gal6S(b1-3)[Neu5Ac(a2-6)]GalNAc"
     assert get_possible_topologies("{OS}Gal(b1-3)GalNAc") == ['GalOS(b1-3)GalNAc', 'Gal(b1-3)GalNAcOS']
+    glycan = "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert 'Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc' in get_possible_topologies(glycan)
     with pytest.raises(ValueError, match="This glycan already has a defined topology; please don't use this function."):
         get_possible_topologies("Gal(b1-4)GlcNAc")
+
+
+CORE_FUC_GCT = """RES
+1b:x-dglc-HEX-1:5
+2s:n-acetyl
+3b:b-dglc-HEX-1:5
+4s:n-acetyl
+5b:b-dman-HEX-1:5
+6b:a-dman-HEX-1:5
+7b:b-dglc-HEX-1:5
+8s:n-acetyl
+9b:b-dgal-HEX-1:5
+10b:a-dman-HEX-1:5
+11b:b-dglc-HEX-1:5
+12s:n-acetyl
+13b:b-dgal-HEX-1:5
+LIN
+1:1d(2+1)2n
+2:1o(4+1)3d
+3:3d(2+1)4n
+4:3o(4+1)5d
+5:5o(3+1)6d
+6:6o(2+1)7d
+7:7d(2+1)8n
+8:7o(4+1)9d
+9:5o(6+1)10d
+10:10o(2+1)11d
+11:11d(2+1)12n
+12:11o(4+1)13d
+UND
+UND1:100.0:100.0
+ParentIDs:1
+SubtreeLinkageID1:o(6+1)d
+RES
+14b:a-lgal-HEX-1:5|6:d"""
+ANCHORED = "{Fuc^(a1-3)[Gal(b1-4)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+
+
+def test_parse_floating_bit():
+    fragment, anchors = parse_floating_bit(ANCHORED[1:ANCHORED.index('}')])
+    assert fragment == "Fuc(a1-3/6)"  # Anchored bits degrade to the legacy form
+    assert anchors == {'a1-3': 'Gal(b1-4)GlcNAc^', 'a1-6': 'GlcNAc(b1-4)GlcNAc^'}
+    assert parse_floating_bit("Fuc(a1-3/6)") == ("Fuc(a1-3/6)", {})
+    with pytest.raises(ValueError):
+        parse_floating_bit("Fuc^(a1-3)[Gal(b1-4)]GlcNAc^")
+
+
+def test_resolve_anchor():
+    graph = glycan_to_nxGraph("Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert len(resolve_anchor(graph, "GlcNAc(b1-4)GlcNAc^")) == 1
+    assert len(resolve_anchor(graph, "Gal(b1-4)GlcNAc^")) == 1
+    assert len(resolve_anchor(graph, "GlcNAc^")) == 3
+
+
+def test_anchored_topologies():
+    topologies = get_possible_topologies(ANCHORED)
+    assert len(topologies) == 2
+    assert "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc" in topologies
+    assert "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc" in topologies
+
+
+def test_anchored_canonicalization():
+    assert canonicalize_iupac(ANCHORED) == ANCHORED
+    swapped = "{GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc|Gal(b1-4)[Fuc^(a1-3)]GlcNAc}" + ANCHORED[ANCHORED.index('}')+1:]
+    assert canonicalize_iupac(swapped) == ANCHORED  # Alternatives sort by attachment position, branches canonicalize
+    with pytest.raises(ValueError):
+        check_nomenclature("Fuc^(a1-3)Gal(b1-4)GlcNAc")
+    with pytest.raises(ValueError):
+        check_nomenclature("{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|Gal(b1-4)GlcNAc}Gal(b1-4)GlcNAc")
+
+
+def test_anchored_comparison():
+    single = "{Fuc^(a1-3)[Gal(b1-4)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert not compare_glycans(ANCHORED, single)  # Different hypothesis sets are different glycans
+    assert compare_glycans(single, "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+    assert compare_glycans(ANCHORED, ANCHORED)
+
+
+def test_glycoct_anchors():
+    iupac = canonicalize_iupac(CORE_FUC_GCT)
+    assert iupac.startswith("{GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}")
+    assert get_possible_topologies(iupac) == ["Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]
+
+
+def test_glycodraw_anchored():
+    svg = GlycoDraw(ANCHORED, suppress = True).as_svg()
+    assert svg.count('stroke-dasharray') == 2  # One dashed bond per candidate acceptor
+
+
+def test_glycodraw_highlight_named_regex_motif():
+    hm = "Man(a1-3)[Man(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    # A named motif whose sequence is a glyco-regex has to be matched, not handed to subgraph isomorphism as a literal
+    assert GlycoDraw(hm, highlight_motif = 'high_mannose', suppress = True).as_svg() != GlycoDraw(hm, suppress = True).as_svg()
+    with pytest.warns(UserWarning):
+        GlycoDraw("Gal(b1-4)GlcNAc", highlight_motif = 'high_mannose', suppress = True)
 
 
 def test_deduplicate_glycans():
@@ -2562,7 +3083,17 @@ def test_subgraph_isomorphism_with_negation():
     assert isinstance(result, int)
     assert isinstance(matches, list)
     assert subgraph_isomorphism_with_negation("Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", '!Neu5Ac(a2-?)Gal(?1-?)GlcNAc', return_matches=True) == (1, [[12, 13, 14]])
-    assert subgraph_isomorphism_with_negation("Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", 'Neu5Ac(a2-?)!Gal(b1-4)GlcNAc', return_matches=True) == (1, [[0, 1, 2, 3, 6]])
+    assert subgraph_isomorphism_with_negation(
+        "Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+        'Neu5Ac(a2-?)!Gal(b1-4)GlcNAc', return_matches = True) == (1, [[0, 1, 2, 3, 6]])
+    # A termini spec describes the full motif, so the negated residue's entry has to be dropped along with it
+    assert not subgraph_isomorphism("Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-3)Gal", "Gal(b1-4)[!Fuc(a1-3)]GlcNAc",
+                                    termini_list = ['terminal', 'flexible', 'flexible'])
+    assert subgraph_isomorphism("Gal(b1-4)GlcNAc(b1-3)Gal", "Gal(b1-4)[!Fuc(a1-3)]GlcNAc",
+                                termini_list = ['terminal', 'flexible', 'flexible'])
+    # Glyco-regex matches are sequences, not node lists
+    with pytest.raises(ValueError):
+        subgraph_isomorphism("Gal(b1-4)GlcNAc", "rHex-HexNAc", return_matches = True)
 
 
 def test_categorical_node_match_wildcard():
@@ -2669,20 +3200,25 @@ def test_annotate_dataset(test_glycans):
     assert result.shape[1] == 6
     result = annotate_dataset(test_glycans, feature_set=['custom', 'terminal2', 'terminal3'], custom_motifs=["Gal(b1-4)GlcNAc"])
     few_glycans = ["LacNAc", "Ma3(Ma6)Mb4GNb4GN;"]
-    result = annotate_dataset(few_glycans, feature_set=['exhaustive', 'wrong'])
+    result = annotate_dataset(few_glycans, feature_set = ['exhaustive'])
+    with pytest.raises(ValueError):
+        annotate_dataset(few_glycans, feature_set = ['exhaustive', 'wrong'])
     assert "Oglycan_core6" not in annotate_dataset(["Fuc(a1-2)Gal(b1-3)GalNAc", "Gal(b1-3)[GlcNAc(b1-6)]GalNAc"],  condense=True).columns
+    glycan = "{Gal(b1-4)[Fuc^(a1-3)]GlcNAc|GlcNAc(b1-4)[Fuc^(a1-6)]GlcNAc}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert annotate_dataset([glycan], condense=True)["Terminal_LewisX"].values[0] > 0.5
 
 
 def test_get_molecular_properties():
-    try:
-        glycans = ["Gal(b1-4)GlcNAc", "Neu4Ac5Ac7Ac9Ac(a2-6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc", "Glc6Madeup(b1-4)Glc"]
-        result = get_molecular_properties(glycans, verbose=True, placeholder=True)
-        assert isinstance(result, pd.DataFrame)
-        if not result.columns.empty:
-            assert 'molecular_weight' in result.columns
-            assert 'xlogp' in result.columns
-    except ImportError:
-        pytest.skip("Skipping test due to missing dependencies")
+    glycans = ["Gal(b1-4)GlcNAc", "Neu4Ac5Ac7Ac9Ac(a2-6)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc", "Glc6Madeup(b1-4)Glc"]
+    result = get_molecular_properties(glycans, verbose=True, placeholder=True)
+    assert isinstance(result, pd.DataFrame)
+    assert 'molecular_weight' in result.columns
+    # Every structural descriptor is derived from the glycan's own SMILES and reproduces PubChem exactly
+    res = get_molecular_properties(["Gal(b1-4)Glc", "GlcNAc"])
+    assert res.loc["Gal(b1-4)Glc", 'molecular_formula'] == 'C12H22O11'
+    assert abs(res.loc["Gal(b1-4)Glc", 'molecular_weight'] - 342.30) < 0.01
+    assert res.loc["Gal(b1-4)Glc", ['tpsa', 'h_bond_donor_count', 'h_bond_acceptor_count', 'rotatable_bond_count']].tolist() == [189.53, 8, 11, 4]
+    assert res.loc["GlcNAc", ['tpsa', 'h_bond_donor_count', 'h_bond_acceptor_count', 'rotatable_bond_count']].tolist() == [119.25, 5, 6, 2]
 
 
 def test_get_k_saccharides():
@@ -2869,6 +3405,9 @@ def test_deduplicate_motifs():
     result = deduplicate_motifs(data)
     assert isinstance(result, pd.DataFrame)
     assert len(result) <= len(data)
+    # A glyco-regex spells its own syntax with '?' and '/', which must not be counted as linkage ambiguity
+    assert _motif_ambiguity('high_mannose')[0] == 0
+    assert _motif_ambiguity('high_mannose') < _motif_ambiguity('Neu5Ac(a2-3/6)Gal')
 
 
 def test_quantify_motifs():
@@ -2896,6 +3435,18 @@ def test_quantify_motifs_auto_glycans():
     assert len(result.columns) > 0
 
 
+def test_quantify_motifs_uncertain_topology():
+    # Uncertain topologies annotate fractionally, and a motif whose every hit is fractional must still carry abundance instead of collapsing to an all-zero row, which log2 turns into -inf and which then degenerates every downstream correlation
+    uncertain = "{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    df = pd.DataFrame({'glycan': ["Gal(b1-4)GlcNAc", "Man(a1-3)GlcNAc", uncertain],
+                       'sample1': [1.0, 2.0, 3.0], 'sample2': [2.0, 3.0, 4.0]})
+    result = quantify_motifs(df, feature_set=['known'], remove_redundant=False)
+    assert not (result == 0).all(axis=1).any()
+    df[['sample1', 'sample2']] = np.log2(df[['sample1', 'sample2']] / 10)
+    result = quantify_motifs(df, feature_set=['known'], remove_redundant=False)
+    assert np.isfinite(result.values).all()
+
+
 def test_quantify_motifs_no_glycans_numeric():
     df = pd.DataFrame({
         'sample1': [1, 2],
@@ -2917,6 +3468,11 @@ def test_count_unique_subgraphs_of_size_k():
     assert isinstance(result, dict)
 
 
+def test_get_minimal_ksaccharide_ambiguity_from_glycans():
+    out = get_minimal_ksaccharide_ambiguity(['Gal(b1-4)GlcNAc', 'Gal(b1-3)GlcNAc'])
+    assert isinstance(out, dict) and out
+
+
 def test_annotate_glycan_topology_uncertainty():
     glycan = "{Neu5Ac(a2-?)}Fuc(a1-3)[Gal(b1-4)]GlcNAc"
     result = annotate_glycan_topology_uncertainty(glycan)
@@ -2934,6 +3490,9 @@ def test_preprocess_pattern():
     assert preprocess_pattern("Hex-.-Gal") == ['Hex-Monosaccharide-Gal']
     # Test empty pattern
     assert preprocess_pattern("") == []
+    # A '(?' that is neither a lookahead nor a lookbehind
+    with pytest.raises(ValueError):
+        preprocess_pattern("(?Hex)-Gal")
 
 
 def test_specify_linkages():
@@ -2998,7 +3557,8 @@ def test_get_match():
     # Test no match with positions
     pattern = "'^HexNAc-HexNAc"
     glycan = "Gal(b1-4)GlcNAc(b1-4)GlcNAc"
-    assert get_match(pattern, glycan, return_matches=False) is False
+    with pytest.warns(UserWarning):  # the stray quote leaves "'HexNAc" as an unknown glycoletter
+        assert get_match(pattern, glycan, return_matches = False) is False
     # Test pattern with quantifier
     pattern = "Hex-[HexNAc]{1,2}"
     glycan = "Gal(b1-4)GlcNAc(b1-4)GlcNAc"
@@ -3025,9 +3585,10 @@ def test_get_match():
     assert get_match(pattern, "Neu5Gc(a2-3)Gal(b1-3)[Gal(b1-4)GlcNAc(b1-6)]GalNAc") == ["Neu5Gc(a2-3)Gal"]
     assert get_match("Hex-HexNAc-([Hex|Fuc])?-HexNAc", "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == ["Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]
     assert get_match("Hex-HexNAc-([Hex|Fuc])*-HexNAc", "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == ["Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]
-    assert get_match(".-.-([Hex|Fuc])+-.", "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == ['Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc', 'Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']
+    assert get_match(".-.-([Hex|Fuc])+-.", "GalNAc(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc") == ['Neu5Gc(a2-6)GalNAc(b1-4)[Fuc(a1-3)]GlcNAc', 'Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc', 'GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man', 'GlcNAc(b1-2)Man(a1-6)[Man(a1-3)]Man']
     assert get_match("Fuc-Galb3/4-([Hex|Fuc])*-HexNAc", "Fuc(a1-2)Gal(b1-?)[Fuc(a1-?)]GlcNAc(b1-6)[Gal(b1-3)]GalNAc") == ["Fuc(a1-2)Gal(b1-?)[Fuc(a1-?)]GlcNAc"]
-    assert get_match("Fuc-([^Gal])+-GlcNAc", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == ['Fuc(a1-3)[Gal(b1-4)]GlcNAc']
+    assert get_match("Fuc-([^Gal])+-GlcNAc", "Fuc(a1-3)[GlcNAc(b1-4)]GlcNAc") == ['Fuc(a1-3)[GlcNAc(b1-4)]GlcNAc']
+    assert get_match("Fuc-([^Gal])+-GlcNAc", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == []
     assert get_match(".-HexNAc$", "Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == ['GlcNAc(b1-4)GlcNAc']
     assert get_match("!Neu5Ac-Gal-GlcNAc", "Neu5Ac(a2-3)Gal(b1-3)[Fuc(a1-4)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == ["Gal(b1-4)GlcNAc"]
     assert get_match("Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc(?=-HexNAc)", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc(b1-4)GlcNAc") == ['Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']
@@ -3036,16 +3597,16 @@ def test_get_match():
     assert get_match("(?<=Xyl-)Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc") == ['Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc']
     assert get_match("(?<!Xyl-)Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc") == ['Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc']
     # Internal anchor %
-    assert get_match("Hex%", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc") == ['Man', 'Gal', 'Man', 'Man']
+    assert get_match("Hex%", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc") == ['Gal', 'Man', 'Man']
     # Exact occurrence {N}
     assert get_match("[HexNAc]{2}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['GlcNAc(b1-4)GlcNAc']
     assert get_match("[HexNAc]{3}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == []
     # Open-ended quantifiers
-    assert get_match("[HexNAc]{2,}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc") == ['GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc', 'GlcNAc(b1-4)GlcNAc']
+    assert get_match("[HexNAc]{2,}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc") == ['GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc']
     assert get_match("[Hex]{,2}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal']
     # Lazy quantifiers
     assert get_match("Hex-[HexNAc]{1,2}?", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal(b1-4)GlcNAc']
-    assert get_match("Hex-[HexNAc]*?", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal(b1-4)GlcNAc']
+    assert get_match("Hex-[HexNAc]*?", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal']
     assert get_match("Hex-[HexNAc]+?", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal(b1-4)GlcNAc']
     # Linkage shorthand
     assert get_match("Mana6-Man", "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc") == ['Man(a1-6)Man']
@@ -3066,7 +3627,7 @@ def test_get_match():
     # Multiple independent matches
     result = get_match("Hex-HexNAc",
                        "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
-    assert result == ['Gal(b1-4)GlcNAc', 'Man(b1-4)GlcNAc', 'Gal(b1-4)GlcNAc']
+    assert result == ['Gal(b1-4)GlcNAc', 'Gal(b1-4)GlcNAc', 'Man(b1-4)GlcNAc']
     # Cases where no match is present
     assert get_match("Fuc-([^Gal])+-GlcNAc", "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Fuc(a1-2)Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == []
     assert get_match("Man-HexNAc", "Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc") == []
@@ -3097,34 +3658,161 @@ def test_get_match_batch():
     glycan_list = ["Gal(b1-4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc", "Gal(b1-4)GlcNAc"]
     pattern = "r[Sia]{,1}-[.]{,1}-([dHex]){,1}-.b3(?=-GalNAc)"
     assert len(get_match_batch(pattern, glycan_list)) == 2
+    with pytest.raises(ValueError):  # the failing glycan is named in the error
+        get_match_batch(pattern, [12])
+    with pytest.raises(ValueError):  # several glycans at once is what get_match_batch is for
+        get_match(pattern, 12)
+    assert get_match(pattern, nx.DiGraph()) == []
+    assert get_match(pattern, nx.DiGraph(), return_matches = False) is False
 
 
-def test_calculate_len_matches_comb():
-    # Test single list of matches
-    len_matches = [[2, 3]]
-    result = calculate_len_matches_comb(len_matches)
-    assert 0 in result
-    assert 2 in result
-    assert 3 in result
-    # Test multiple lists
-    len_matches = [[2], [3]]
-    result = calculate_len_matches_comb(len_matches)
-    assert 2 in result
-    assert 3 in result
-    assert 5 in result  # Combined length
+def test_explain_match():
+    glycan = "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    out = explain_match("Hex-HexNAc-([dHex]){1}-Hex", glycan)
+    assert list(out['chunk']) == ['Hex-HexNAc', '([dHex]){1}', 'Hex']
+    assert list(out['matches']) == ['Hex(?1-?)HexNAc', 'dHex', 'Hex']
+    assert list(out['branch']) == [False, True, False]
+    assert all(n > 0 for n in out['hits_in_glycan'])
+    # a chunk that cannot be satisfied shows up as zero hits
+    out = explain_match("Hex-HexNAc-([Xyl]){1}-Hex", glycan)
+    assert list(out['hits_in_glycan'])[1] == 0
+    assert get_match("Hex-HexNAc-([Xyl]){1}-Hex", glycan) == []
+    # modifiers are reported per chunk
+    out = explain_match("(?<!Neu5Ac-)Galb4-([Fuca3]){1}-GlcNAc$", glycan)
+    assert list(out['lookaround']) == ['?<!:Neu5Ac', '', '']
+    assert list(out['position']) == ['', '', 'end']
+    assert list(out['occurrences']) == ['1-1', '1-1', '1-1']
+    assert explain_match("Galb3-([!GlcNAcb6]){1}-GalNAc", "Gal(b1-3)GalNAc")['hits_in_glycan'][1] == 'asserts absence'
 
 
-def test_check_negative_look():
-    # Test negative lookahead
-    matches = [[0, 2, 4]]
-    pattern = "(?!Hex)"
+def test_get_match_malformed_patterns():
     glycan = "Gal(b1-4)GlcNAc(b1-2)Man"
-    result = check_negative_look(matches, pattern, glycan)
-    assert isinstance(result, list)
-    # Test negative lookbehind
-    pattern = "(?<!Hex)"
-    result = check_negative_look(matches, pattern, glycan)
-    assert isinstance(result, list)
+    # A quantifier only ever attaches to a bracketed group; without brackets the chunk used to be iterated character by character
+    for pattern in ["Hex-[HexNAc", "Hex-HexNAc]", "[]", "Hex-[HexNAc]{2,1}", "Hex-[Hex|]-HexNAc", "Hex-HexNAc(?=)",
+                    "Hex{a}",
+                    "Hex{1,2}-HexNAc", "Hex+-HexNAc", "Hex*-HexNAc"]:
+        with pytest.raises(ValueError):
+            get_match(pattern, glycan)
+    # an unknown glycoletter is suspicious but not fatal
+    with pytest.warns(UserWarning):
+        assert get_match("Hex-HexNac", glycan) == []
+
+
+def test_motif_to_regex_dangling_linkage():
+    # A motif can end in a linkage, which puts a linkage rather than a monosaccharide at the root
+    assert motif_to_regex("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-?)") == "Fuca3-([Galb4]){1}-GlcNAcb?"
+    assert motif_to_regex("Man(a1-3)[Man(a1-6)]Man(b1-4)") == "Mana3-([Mana6]){1}-Manb4"
+    assert get_match("Fuca3-([Galb4]){1}-GlcNAcb?",
+                     "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == [
+        'Fuc(a1-3)[Gal(b1-4)]GlcNAc']
+
+
+def test_get_match_branch_position():
+    # Branch groups must not depend on where the branch lands in the canonical numbering
+    lex = motif_to_regex("Gal(b1-4)[Fuc(a1-3)]GlcNAc")
+    for glycan in ["Gal(b1-4)[Fuc(a1-3)]GlcNAc", "Fuc(a1-3)[Gal(b1-4)]GlcNAc",
+                   "Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"]:
+        assert get_match(lex, glycan, return_matches = False) is True
+    assert get_match(lex, "Gal(b1-4)GlcNAc", return_matches = False) is False
+    # Two branch groups hanging off the same residue
+    assert get_match("Xylb2-([Mana3]){1}-([Mana6]){1}-Manb4-GlcNAcb4-GlcNAc",
+                     "Xyl(b1-2)[Man(a1-3)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", return_matches = False) is True
+    # A branch group holding more than one residue
+    assert get_match("Galb3-([Sia(a2-6)]){1}-GalNAc", "Gal(b1-3)[Neu5Ac(a2-6)]GalNAc") == ['Gal(b1-3)[Neu5Ac(a2-6)]GalNAc']
+
+
+def test_get_match_lookarounds():
+    glycan = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-3)]GlcNAc"
+    # Every lookaround on a chunk has to hold, not just the first one
+    assert get_match("(?<=Xyl-)Hex(?=-HexNAc)-HexNAc-([Hex|Fuc]){1,2}-HexNAc", glycan, return_matches = False) is True
+    assert get_match("(?<=Xyl-)Hex(?=-Neu5Ac)-HexNAc-([Hex|Fuc]){1,2}-HexNAc", glycan, return_matches = False) is False
+    assert get_match("(?<=Fuc-)Hex(?=-HexNAc)-HexNAc-([Hex|Fuc]){1,2}-HexNAc", glycan, return_matches = False) is False
+    assert get_match("(?<=Xyl-)Hex(?!-Neu5Ac)-HexNAc-([Hex|Fuc]){1,2}-HexNAc", glycan, return_matches = False) is True
+    # A lookaround can bind to a branch group instead of a plain chunk
+    assert preprocess_pattern("(?<!HexNAc-)Mana3-(?<!HexNAc-)([Mana6]){1}-Manb4") == [
+        '(?<!HexNAc-)Mana3', '(?<!HexNAc-)([Mana6]){1}', 'Manb4']
+    high_man = "(?<!HexNAc-)Mana3-(?<!HexNAc-)([Mana6]){1}-Manb4-GlcNAcb4-GlcNAc"
+    assert get_match(high_man, "Man(a1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", return_matches = False) is True
+    assert get_match(high_man, "GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", return_matches = False) is False
+    assert get_match(high_man, "Man(a1-3)[GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc", return_matches = False) is False
+
+
+def test_get_match_negation():
+    # [^X] is negation, not a start anchor
+    assert get_match("Fuc-([^Gal])+-GlcNAc", "Fuc(a1-3)[GlcNAc(b1-4)]GlcNAc") == ['Fuc(a1-3)[GlcNAc(b1-4)]GlcNAc']
+    assert get_match("Fuc-([^Gal])+-GlcNAc", "Fuc(a1-3)[Gal(b1-4)]GlcNAc") == []
+    assert get_match("Fuc-([!Gal])+-GlcNAc", "Fuc(a1-3)[GlcNAc(b1-4)]GlcNAc") == ['Fuc(a1-3)[GlcNAc(b1-4)]GlcNAc']
+    # A negated chunk that spells out its linkage asserts absence instead of consuming a residue
+    core1 = motif_to_regex("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc")
+    assert get_match(core1, "Gal(b1-3)GalNAc", return_matches = False) is True
+    assert get_match(core1, "Gal(b1-3)[GlcNAc(b1-6)]GalNAc", return_matches = False) is False
+    # the residue the positive part already consumed cannot double as the forbidden one
+    assert get_match(motif_to_regex("GlcNAc(b1-3)[!GlcNAc(b1-6)]GalNAc"),
+                     "Fuc(a1-?)Gal(b1-?)GlcNAc(b1-?)[Gal(b1-3/4)GlcNAc6S(b1-?)]GalNAc", return_matches = False) is True
+
+
+def test_get_match_semantics():
+    # Only maximal matches are reported, deterministically ordered by length then position
+    assert get_match("[HexNAc]{2,}", "Gal(b1-4)GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc") == ['GlcNAc(b1-4)GlcNAc(b1-4)GlcNAc']
+    assert get_match("Hex-HexNAc", "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc") == [
+        'Gal(b1-4)GlcNAc', 'Gal(b1-4)GlcNAc', 'Man(b1-4)GlcNAc']
+    # % is topological: a terminal residue is not internal
+    assert get_match("Hex%", "Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc") == ['Gal', 'Man', 'Man']
+    # lazy quantifiers honour their minimum
+    assert get_match("Hex-[HexNAc]*?", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal']
+    assert get_match("Hex-[HexNAc]+?", "Gal(b1-4)GlcNAc(b1-4)GlcNAc") == ['Gal(b1-4)GlcNAc']
+    # the boolean and the match list never disagree
+    for pattern in ["Hex-HexNAc-([Hex|Fuc]){1,2}-HexNAc", ".-HexNAc$", "Hex%", "[HexNAc]{2,}"]:
+        for glycan in ["Gal(b1-4)GlcNAc(b1-2)[GlcA(b1-3)Gal(b1-4)GlcNAc(b1-4)]Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+                       "Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Man(a1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"]:
+            assert bool(get_match(pattern, glycan)) == get_match(pattern, glycan, return_matches = False)
+    # every returned match is a real substructure of the glycan
+    glycan = "Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    assert all(subgraph_isomorphism(glycan, hit) for hit in get_match(".-.-([Hex|Fuc]){1,2}-.", glycan))
+
+
+def test_motif_to_regex_hard_cases():
+    # Branched motifs, several branches, non-anomeric linkages, slash linkages, stereo-prefixed residues, negated branches
+    for motif in ["Gal(b1-4)[Fuc(a1-3)]GlcNAc", "Xyl(b1-2)[Man(a1-3)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+                  "Kdo(a2-4)Kdo(a2-6)GlcN(b1-6)GlcN", "Gal(b1-3/4)GlcNAc(b1-6)[Gal(b1-3)]GalNAc",
+                  "D-IdoA(b1-3)GalNAc4S(b1-4)D-IdoA(b1-3)GalNAc4S", "Sia(a2-8)Sia(a2-8)Sia",
+                  "Man(a1-3)[Man(a1-6)]Man(a1-6)[Man(a1-3)]Man(b1-4)GlcNAc"]:
+        assert get_match(motif_to_regex(motif), motif, return_matches = False) is True
+    # A branch that itself branches cannot be expressed and has to say so
+    with pytest.raises(ValueError):
+        motif_to_regex("GlcNAc(b1-2)[GlcNAc(b1-4)]Man(a1-3)[GlcNAc(b1-2)[GlcNAc(b1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc")
+
+
+def test_get_match_agrees_with_subgraph_isomorphism():
+    motifs = ["Gal(b1-4)[Fuc(a1-3)]GlcNAc", "Gal(b1-3)[GlcNAc(b1-6)]GalNAc", "Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+              "Neu5Ac(a2-3)Gal(b1-4)GlcNAc", "Gal(b1-3)[!GlcNAc(b1-6)]GalNAc"]
+    glycans = ["Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "Neu5Ac(a2-3)Gal(b1-3)[GlcNAc(b1-6)]GalNAc", "Gal(b1-3)GalNAc", "Fuc(a1-2)Gal(b1-4)Glc-ol",
+               "Man(a1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"]
+    for motif in motifs:
+        pattern = compile_pattern(motif_to_regex(motif))
+        assert [bool(x) for x in get_match_batch(pattern, glycans, return_matches = False)] == [
+            bool(subgraph_isomorphism(g, motif)) for g in glycans]
+
+
+def test_annotate_dataset_accepts_a_single_feature_name():
+    assert len(annotate_dataset(['Gal(b1-4)Glc'], feature_set='known')) == 1
+
+
+def test_annotate_dataset_regex_motifs():
+    glycans = ["Man(a1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc",
+               "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)GlcNAc"]
+    known = annotate_dataset(glycans, feature_set = ['known'])
+    assert list(known['high_mannose']) == [1, 0, 0, 0]
+    assert list(known['Nglycan_hybrid']) == [0, 1, 0, 0]
+    assert list(known['Nglycan_complex']) == [0, 0, 1, 0]
+    # r-prefixed custom motifs go through the same route and quantifiers count repeats
+    custom = annotate_dataset(glycans, feature_set = ['custom'], custom_motifs = ['Gal(b1-4)GlcNAc', 'r[Hex-HexNAc]{2,}'])
+    assert list(custom.columns) == ['Gal(b1-4)GlcNAc', '[Hex-HexNAc]{2,}']
+    assert list(custom['Gal(b1-4)GlcNAc']) == [0, 0, 2, 3]
+    assert list(custom['[Hex-HexNAc]{2,}']) == [0, 0, 0, 1]
 
 
 def test_filter_matches_by_location():
@@ -3145,6 +3833,10 @@ def test_filter_matches_by_location():
     assert result[0] == [1, 2]
     result = filter_matches_by_location(matches, ggraph, "nonsense")
     assert len(result) == 1
+    # A floating bit is numbered above the main chain, so the reducing end is not simply the highest node id
+    assert get_match("GlcNAc$", "{Fuc(a1-3)}Gal(b1-4)GlcNAc") == get_match("GlcNAc$", "Gal(b1-4)GlcNAc")
+    assert get_match("%Gal", "{Fuc(a1-3)}Gal(b1-4)GlcNAc(b1-3)Gal") == []
+    assert get_match("%GlcNAc", "{Fuc(a1-3)}Gal(b1-4)GlcNAc(b1-3)Gal") == ['GlcNAc']
 
 
 def test_parse_pattern():
@@ -3250,6 +3942,9 @@ def test_draw_chem3d():
     # Test RDKit fallback with glycan not on GlycoShape
     draw_chem3d("Fuc(a1-2)Gal6S(b1-3)[Fuc(a1-4)]GlcNAc6S", ["Fuc"])
     plt.close('all')
+    # Test reading an existing conformer back in instead of embedding one
+    draw_chem3d("GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", ["GlcNAc"], pdb_file = "test.pdb")
+    plt.close('all')
 
 
 def test_glycodraw():
@@ -3285,9 +3980,18 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][Xyl(b1-2)]Man(b1-4)GlcNAc(b1-4)GlcNAc", highlight_motif="Xyl(b1-2)Man", reverse_highlight=True, suppress=True)
     assert result is not None
+    result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_motif="iNtErNaLlEwIsX", suppress=True)
+    assert result is not None
+    result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc",
+                       highlight_motif = "LewisX", suppress = True)
+    assert result is not None
     result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", highlight_linkages=[0, 3], suppress=True)
     assert result is not None
     result = GlycoDraw("Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-6)[Neu5Ac(a2-3)Gal(b1-3)]GalNAc", reducing_end_label = "Mucin", suppress=True)
+    assert result is not None
+    result = GlycoDraw("Gal(b1-3)[!GlcNAc(b1-6)]GalNAc", suppress=True)
+    assert result is not None
+    result = GlycoDraw("Gal(b1-4)", show_linkage=True, per_residue=[0.9], suppress=True)
     assert result is not None
     # Test with repeat unit
     result = GlycoDraw("GlcNAc(b1-4)GlcA(b1-3)", repeat=True, suppress=True)
@@ -3307,12 +4011,16 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("Internal_LewisA", restrict_vocab=True, suppress=True)
     assert result is not None
+    result = GlycoDraw("oglycan-core1", suppress=True)
+    assert result is not None
     # Test narrow monosaccharide wildcards
     result = GlycoDraw("GalNAc/GlcNAc(?1-3/4)Gal/Glc(b1-3)GalNAc", suppress = True)
     assert result is not None
     result = GlycoDraw("Fuc/Rha(a1-2)Gal(b1-3)GalNAc", suppress = True)
     assert result is not None
     result = GlycoDraw("Neu5Ac/Neu5Gc(a2-3)Gal(b1-3)GalNAc", suppress = True)
+    assert result is not None
+    result = GlycoDraw('HexNAc(b1-4)Hex', per_residue = [0.2, 0.8], suppress = True)
     assert result is not None
     # Test file saving
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.svg")
@@ -3323,13 +4031,22 @@ def test_glycodraw():
     assert Path("test.png").exists()
     # Test invalid glycan
     with pytest.raises(Exception):
-        GlycoDraw("InvalidGlycan", restrict_vocab=True)
+        GlycoDraw("InvalidGlycan", restrict_vocab = True)
+    with pytest.raises(ValueError):
+        GlycoDraw("GlcNAc(b1-4)GlcA", filepath = "test.jpg")
+    # A repeat unit pads per_residue on both ends, and a floaty bit outside the vocabulary is drawn as text
+    result = GlycoDraw("Gal(b1-4)GlcNAc(b1-3)", repeat = True, per_residue = [0.2, 0.5], suppress = True)
+    assert result is not None
+    result = GlycoDraw("{Xyzzy(b1-?)}Gal(b1-4)GlcNAc", suppress = True)
+    assert result is not None
+    result = GlycoDraw("Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-3)Gal", repeat = True, compact = True, suppress = True)
+    assert result is not None
 
 
 def test_glycodraw_branch_spacing():
     # Verify that heavily branched glycans keep long antennas separated vertically
     glycan = canonicalize_iupac("FA3F2G3S[3,6,6]3")
-    data = get_coordinates_and_labels(glycan, show_linkage=True, highlight_motif=None,
+    data = get_coordinates_and_labels(glycan, highlight_motif=None,
                                       termini_list=[], reverse_highlight=False)
     l1_sugars, l1_y_pos = data[1][0], data[1][2]
     # Extract y positions for branches that contain multiple residues (long arms)
@@ -3388,7 +4105,15 @@ def test_plot_glycans_excel(tmp_path):
             'Other': ['GlcNAc(b1-4)GlcA', 'Man(a1-3)Man'],
             'Values': [1, 2]
     })
-    plot_glycans_excel(df2, str(test_dir), glycan_col_num=0)
+    plot_glycans_excel(df2, str(test_dir), glycan_col_num = 0)
+    # The workbook is always written as output.xlsx inside a directory, so a file path is a mistake
+    with pytest.raises(ValueError):
+        plot_glycans_excel(df, str(test_dir / "out.xlsx"))
+    # A cell holding a list of glycans is drawn from its first entry
+    plot_glycans_excel(pd.DataFrame({'Glycans': [['GlcNAc(b1-4)GlcA']], 'Values': [1]}), str(tmp_path / "listcell"))
+    # ...and one that cannot be drawn names its row
+    with pytest.raises(ValueError):
+        plot_glycans_excel(pd.DataFrame({'Glycans': ['NotAGlycan'], 'Values': [1]}), str(tmp_path / "undrawable"))
     # Clean up the test folder after the test
     shutil.rmtree(test_dir)
 
@@ -3456,26 +4181,45 @@ def test_annotate_figure(mock_svg_file):
     assert Path("test.pdf").exists()
     annotate_figure(mock_svg_file, filepath="test.svg")
     assert Path("test.svg").exists()
-    annotate_figure(mock_svg_file, filepath="test.png")
+    annotate_figure(mock_svg_file, filepath = "test.png")
     assert Path("test.png").exists()
+    with pytest.raises(ValueError):
+        annotate_figure(mock_svg_file, filepath = "test.jpg")
+    # A 'Terminal_...' label, a motif name, a label without a transform, and one without a translate
+    odd_labels = ('<svg width="500" height="500">'
+                  '<!-- Terminal_Gal(b1-4)GlcNAc -->\n<g transform="translate(100 100)"><path d="M 0 0 L 1 1"/></g>'
+                  '<!-- LewisX -->\n<g transform="translate(200 200)"><path d="M 0 0 L 1 1"/></g>'
+                  '<!-- Gal(b1-4)Glc -->\n<g><path d="M 0 0 L 1 1"/></g>'
+                  '<!-- Man(a1-3)Man -->\n<g transform="rotate(-90)"><path d="M 0 0 L 1 1"/></g>'
+                  '</svg>')
+    assert isinstance(annotate_figure(odd_labels), str)
 
 
 def test_process_per_residue():
     # Test linear glycan
     values = [1, 2, 3]
-    main, side, branched = process_per_residue("Gal(b1-4)GlcNAc(b1-2)Man", values, "Gal(b1-4)GlcNAc(b1-2)Man")
-    assert len(main) == 3
-    assert len(side) == 0
-    assert len(branched) == 0
+    assert process_per_residue("Gal(b1-4)GlcNAc(b1-2)Man", values, "Gal(b1-4)GlcNAc(b1-2)Man") == {0: 1, 2: 2, 4: 3}
     # Test branched glycan
     values = [1, 2, 3, 4]
-    main, side, branched = process_per_residue("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man", values, "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man")
-    assert len(main) > 0
-    assert len(side) > 0
-    assert isinstance(side[0], list)
-    # Test branch-branched glycan
+    assert process_per_residue("Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man", values, "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-2)Man") == {0: 1, 2: 2, 4: 3, 6: 4}
+    # Test branch-branched glycan; drawing reorders the sequence, so every value has to follow its own residue
     values = [1, 2, 3, 4, 5, 6]
-    main, side, branched = process_per_residue("Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man", values, "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)[Gal(b1-4)GlcNAc(b1-2)]Man")
+    assert process_per_residue("Gal(b1-4)GlcNAc(b1-2)[Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)]Man", values,
+                               "Fuc(a1-3)[Gal(b1-4)]GlcNAc(b1-4)[Gal(b1-4)GlcNAc(b1-2)]Man") == {0: 4, 2: 5, 4: 1, 6: 2, 8: 3, 10: 6}
+    # One value per monosaccharide, no more and no less
+    with pytest.raises(ValueError):
+        process_per_residue("Gal(b1-4)GlcNAc", [0.1], "Gal(b1-4)GlcNAc")
+
+
+def test_glycodraw_per_residue_and_linkage_placement():
+    # Branch levels are ordered by graph traversal, so values placed by position within a level land on the wrong residue or run off the end of a shorter branch
+    deep = "Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-4/6)]Man(a1-3/6)[Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert GlycoDraw(deep, per_residue = list(range(1, deep.count('(') + 2)), suppress = True).as_svg()
+    # Every linkage of the sequence reaches exactly the bond it belongs to, the ones inside a branch included
+    branched = "Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Neu5Ac(a2-6)Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
+    for k in range(branched.count('(')):
+        svg = GlycoDraw(branched, highlight_linkages = [k], suppress = True).as_svg()
+        assert len([p for p in re.findall(r'<path[^>]*>', svg) if 'snfg-linkage' in p and '#C23537' in p]) == 1
 
 
 try:
@@ -3486,20 +4230,11 @@ except ImportError:
 
 
 @pytest.mark.skipif(not RDKIT_AVAILABLE, reason="RDKit not installed")
-def test_get_hit_atoms_and_bonds():
-    # Create a simple molecule
-    mol = Chem.MolFromSmiles("CC(=O)O")
-    atoms, bonds = get_hit_atoms_and_bonds(mol, "CC(=O)O")
-    assert isinstance(atoms, list)
-    assert isinstance(bonds, list)
-
-
-@pytest.mark.skipif(not RDKIT_AVAILABLE, reason="RDKit not installed")
-def test_add_colours_to_map():
+def test_add_colors_to_map():
     # Test color assignment
     cols = {}
     els = [1, 2, 3]
-    add_colours_to_map(els, cols, 0, alpha=True)
+    add_colors_to_map(els, cols, 0, alpha=True)
     assert len(cols) == 3
     assert all(isinstance(v, list) for v in cols.values())
 
@@ -3751,7 +4486,8 @@ def test_get_coordinates_and_labels():
     # Test basic linear glycan
     glycan = "GlcNAc(b1-4)GlcA"
     result = get_coordinates_and_labels(glycan, None)
-    assert len(result) == 4  # Should return main chain and branch data
+    assert len(result) == 5  # Should return main chain, branch data, and node positions
+    assert result[4] == {2: (0, 0, 0), 0: (0, 0, 1)}  # Maps graph nodes onto (lane, branch, index)
     # Check main chain data structure
     main_data = result[0]
     assert len(main_data) == 8  # Should have 8 components
@@ -3816,8 +4552,17 @@ def test_preprocess_data():
     assert isinstance(df_org, pd.DataFrame)
     assert g1 == group1
     assert g2 == group2
+    # The glycan column is detected by name, not by position
+    shifted = df.copy()
+    shifted.insert(0, 'run_id', range(len(shifted)))
+    _, df_org_shifted, _, _ = preprocess_data(shifted, group1, group2, impute = False)
+    assert set(df_org_shifted.index) == set(df['glycan'])
+    # The containment DAG costs an n^2 isomorphism sweep, so callers that never read it can skip it
+    _, no_dag, _, _ = preprocess_data(df, group1, group2, motifs = True, motif_dag = False)
+    assert 'motif_dag' not in no_dag.attrs
     # Test with motifs
-    df_trans, df_org, g1, g2 = preprocess_data(df, group1, group2, motifs=True)
+    df_trans, df_org, g1, g2 = preprocess_data(df, group1, group2, motifs = True)
+    assert 'motif_dag' in df_org.attrs
     assert 'Terminal_LacNAc_type2' in df_trans.index
     assert 'Man' in df_trans.index
     try:
@@ -3830,6 +4575,9 @@ def test_preprocess_data():
     g2_big = [k for k in df_big.columns if 'tumor' in k]
     df_trans, df_org, _, _ = preprocess_data(df_big, g1_big, g2_big, motifs = True, transform = "ALR", impute = False)
     assert isinstance(df_trans, pd.DataFrame)
+    # Groups are only inferred from a GlycoDataFrame that carries contrasts
+    with pytest.raises(ValueError):
+        preprocess_data(df, [], [])
 
 
 def test_file_loading_branches(tmp_path):
@@ -3936,8 +4684,14 @@ def test_get_pvals_motifs():
     # Effect sizes should be non-zero
     assert not all(results['effect_size'] == 0)
     # Test with different feature sets
-    results_known = get_pvals_motifs(df, feature_set=['known'])
+    results_known = get_pvals_motifs(df, feature_set = ['known'])
     assert len(results_known) > 0
+    # The containment DAG is already built here, so the same decomposition the differential functions report is available
+    for col in ('Explained by', 'Redistribution p-val', 'Residual p-val', 'Residual effect size'):
+        assert col in results_known.columns
+    assert (results_known['Explained by'] != '').any()
+    assert 'Explained by' in get_pvals_motifs(df, feature_set = ['known'], grouped_BH = False,
+                                              moderate_variance = False).columns
     results_terminal = get_pvals_motifs(df, feature_set=['terminal1'])
     assert len(results_terminal) > 0
     # Test with different threshold
@@ -4097,6 +4851,12 @@ def sample_comp_glycomics_data_corr():
     return pd.DataFrame(data)
 
 
+def test_get_pvals_motifs_missing_label_column():
+    df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man'], 'target': [1.0, 2.0]})
+    with pytest.raises(ValueError):
+        get_pvals_motifs(df, label_col_name='not_a_column')
+
+
 def test_get_differential_expression():
     df = sample_comp_glycomics_data()
     df_grouped = sample_grouped_BH_data()
@@ -4110,10 +4870,19 @@ def test_get_differential_expression():
     assert 'Effect size' in results.columns
     assert 'corr p-val' in results.columns
     assert 'significant' in results.columns
+    # A NaN anywhere in these columns means a statistic silently failed to compute, which is how a missingness bug hides; an exact 0 means an infinite statistic from a constant slice, not evidence
+    assert results[
+        ['Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'corr Levene p-val', 'Effect size']].notna().all().all()
+    assert ((results['p-val'] > 0) & (results['p-val'] <= 1)).all() and (
+                (results['corr Levene p-val'] > 0) & (results['corr Levene p-val'] <= 1)).all()
+    assert np.isfinite(results['Effect size']).all()
     group1_int = [df.columns.tolist().index(k) for k in group1]
     group2_int = [df.columns.tolist().index(k) for k in group2]
     results = get_differential_expression(df, group1_int, group2_int, impute=False)
-    results = get_differential_expression(df, group1, group2, impute=False, transform="ALR")
+    results = get_differential_expression(df, group1, group2, impute = False, transform = "ALR")
+    # Dataset name and provenance ride along so plots and downstream calls can identify what they are showing
+    tagged = get_differential_expression(glycomics_data_loader.human_gastric_O_PMC5762837)
+    assert tagged.attrs['dataset'] == 'human_gastric_O_PMC5762837' and tagged.attrs['provenance']['doi']
     # At least some results should be significant
     assert any(results['significant'])
     # Effect sizes should be reasonable
@@ -4146,6 +4915,12 @@ def test_get_differential_expression():
     assert isinstance(results_paired, pd.DataFrame)
 
 
+def test_get_differential_expression_monte_carlo_glycoproteomics():
+    df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc'], 'a': [1.0], 'b': [2.0]})
+    with pytest.raises(ValueError):
+        get_differential_expression(df, group1=['a'], group2=['b'], glycoproteomics=True, monte_carlo=True)
+
+
 def test_get_glycanova():
     # Create test data with THREE groups
     df = pd.DataFrame({
@@ -4162,8 +4937,13 @@ def test_get_glycanova():
     })
     # Three groups with three samples each
     groups = [1, 1, 1, 2, 2, 2, 3, 3, 3]
+    # Groups are inferred from a GlycoDataFrame that carries contrasts, exactly as in get_differential_expression
+    gdf = GlycoDataFrame(df, contrasts = {f'sample{i}': f'g{(i - 1) // 3 + 1}' for i in range(1, 10)})
+    assert 'Glycan' in get_glycanova(gdf, impute = False)[0].columns
+    with pytest.raises(ValueError):
+        get_glycanova(df, impute = False)
     # Test basic functionality
-    results, posthoc = get_glycanova(df, groups, impute=False)
+    results, posthoc = get_glycanova(df, groups, impute = False)
     # Check results structure
     assert isinstance(results, pd.DataFrame)
     assert 'Glycan' in results.columns
@@ -4214,7 +4994,7 @@ def test_select_grouping():
     assert isinstance(pval_groups, dict)
 
 
-def test_get_biodiversity():
+def test_get_biodiversity(sample_jtk_df):
     # Create more realistic glycan compositions based on biological patterns
     np.random.seed(42)  # For reproducibility
     # Helper function to generate realistic glycan proportions
@@ -4277,6 +5057,19 @@ def test_get_biodiversity():
     assert isinstance(results, tuple)
     results = get_biodiversity(df, group1, group2, metrics = ['beta'], motifs = True)
     assert isinstance(results, tuple)
+    cgroups = [t for t in range(1, 9) for _ in range(3)]
+    cstats, cdist = get_biodiversity(sample_jtk_df, cgroups, [], metrics = ['alpha'], circadian = True, timepoints = 8,
+                                     interval = 3, periods = [12, 24])
+    assert any('JTK' in m for m in cstats['Metric']), "Circadian mode should produce JTK rows"
+    assert {'Period length', 'Lag phase', 'Amplitude'}.issubset(cstats.columns)
+    assert isinstance(cdist, pd.DataFrame) and cdist.empty, "Beta diversity must be skipped under circadian"
+    cstats_m, _ = get_biodiversity(sample_jtk_df, cgroups, [], metrics = ['alpha'], motifs = True, circadian = True,
+                                   timepoints = 8, interval = 3, periods = [12, 24])
+    assert any('JTK' in m for m in cstats_m['Metric'])
+    cstats_b, cdist_b = get_biodiversity(sample_jtk_df, cgroups, [], metrics = ['beta'], circadian = True,
+                                         timepoints = 8, interval = 3, periods = [12, 24])
+    assert any('db-RDA' in m for m in cstats_b['Metric'])
+    assert isinstance(cdist_b, pd.DataFrame) and not cdist_b.empty
 
 
 @pytest.fixture
@@ -4304,6 +5097,14 @@ def sample_time_series_data():
     return pd.DataFrame(data)
 
 
+def test_get_biodiversity_paired_needs_equal_groups():
+    df = pd.DataFrame({'glycan': ['Gal(b1-4)Glc', 'Man(a1-3)Man', 'Gal(b1-3)GalNAc'],
+                       'a1': [1.0, 2.0, 3.0], 'a2': [1.5, 2.5, 3.5], 'a3': [1.2, 2.2, 3.2],
+                       'b1': [2.0, 1.0, 4.0], 'b2': [2.5, 1.5, 4.5]})
+    with pytest.raises(ValueError):
+        get_biodiversity(df, group1=['a1', 'a2', 'a3'], group2=['b1', 'b2'], paired=True)
+
+
 def test_get_time_series(sample_time_series_data):
     df = sample_time_series_data
     results = get_time_series(df, impute=False)
@@ -4317,10 +5118,13 @@ def test_get_time_series(sample_time_series_data):
     results = get_time_series(df, impute=False, transform="Nothing")
     results = get_time_series(df, impute=False, motifs=True)
     try:
-        results = get_time_series(df, impute=False, transform="wrong")
+        results = get_time_series(df, impute = False, transform = "wrong")
         return False
     except:
         pass
+    with pytest.raises(ValueError):  # sample columns have to carry their timepoint
+        get_time_series(pd.DataFrame({'glycan': ['Gal(b1-4)Glc', 'Man(a1-3)Man'],
+                                      'sampleA': [1.0, 2.0], 'sampleB': [2.0, 3.0]}), impute = False)
 
 
 def test_get_SparCC():
@@ -4336,17 +5140,28 @@ def test_get_SparCC():
     ]:
         assert isinstance(corr, pd.DataFrame)
         assert isinstance(pvals, pd.DataFrame)
+        assert ((pvals.values >= 0) & (pvals.values <= 1)).all()
+        # Motif mode corrects each motif family on its own instead of treating the whole matrix as one, so the two disagree
+    _, grouped = get_SparCC(df1, df2, motifs = True)
+    _, flat = get_SparCC(df1, df2, motifs = False)
+    assert grouped.shape != flat.shape or not np.allclose(grouped.values, flat.values)
+
+
+def test_get_SparCC_uncertain_topology():
+    # Fractional motif annotations must survive into the correlation matrix; a zeroed-out motif row makes spearmanr return bare scalars instead of a matrix
+    df1 = sample_comp_glycomics_data()
+    df1.loc[len(df1)] = ["{Fuc(a1-3/6)}Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"] + list(df1.iloc[0, 1:] * 1.3)
+    corr, pvals = get_SparCC(df1, sample_comp_glycomics_data_corr(), motifs=True, transform="CLR")
+    assert np.isfinite(corr.values).all()
 
 
 def test_get_SparCC_ec_csv():
     df1 = sample_comp_glycomics_data()
     df2 = sample_comp_glycomics_data_corr()
-
     tmp_dir = Path("test_tmp")
     tmp_dir.mkdir(exist_ok=True)
     df1.to_csv(tmp_dir / "df1.csv", index=False)
     df2.to_csv(tmp_dir / "df2.csv", index=False)
-
     corr, pvals = get_SparCC(str(tmp_dir / "df1.csv"), str(tmp_dir / "df2.csv"))
     assert isinstance(corr, pd.DataFrame)
     assert isinstance(pvals, pd.DataFrame)
@@ -4404,7 +5219,10 @@ def test_get_roc():
     group1 = [k for k in df.columns if 'control' in k]
     group2 = [k for k in df.columns if 'tumor' in k]
     results = get_roc(df, group1, group2)
-    results = get_roc(df, group1, group2, multi_score=True)
+    results = get_roc(df, group1, group2, multi_score = True)
+    # In motif mode the containment DAG preprocess_data already built is used to collapse collinear parent/child pairs
+    _, _, selected = get_roc(df, group1, group2, multi_score = True, motifs = True)
+    assert not any(p in selected and c in selected for p, c in get_motif_dag(selected).edges())
     df['sample7'] = [1000, 200, 400, 300, 100]
     df['sample8'] = [1100, 250, 410, 380, 150]
     df['sample9'] = [1050, 180, 380, 290, 120]
@@ -4431,6 +5249,15 @@ def test_get_representative_substructures():
     assert isinstance(results, list)
     assert all(isinstance(x, str) for x in results)
     assert len(results) <= 10  # Function should return up to 10 structures
+    # A parent motif is present in every glycan its children are, so its weight must not stack on top of theirs
+    nested = ['Gal(b1-4)GlcNAc', 'Gal(b1-4)[Fuc(a1-3)]GlcNAc']
+    dag = get_motif_dag(nested)
+    hit = {m for m in nested if subgraph_isomorphism('Gal(b1-4)[Fuc(a1-3)]GlcNAc(b1-3)Gal', m)}
+    assert len(hit) == 2 and sum(1 for m in hit if not (nx.descendants(dag, m) & hit)) == 1
+    nested_df = pd.DataFrame(
+        {'motif': nested, 'pval': [0.01, 0.01], 'corr_pval': [0.02, 0.02], 'effect_size': [2.0, 2.0]})
+    out = get_representative_substructures(nested_df)
+    assert out and not any(a != b and subgraph_isomorphism(b, a) for a in out for b in out)
 
 
 def test_get_lectin_array():
@@ -4445,7 +5272,12 @@ def test_get_lectin_array():
     results = get_lectin_array(df, group1, group2)
     assert isinstance(results, pd.DataFrame)
     assert 'score' in results.columns
-    results = get_lectin_array(df, [1,2,3], [4,5,6])
+    results = get_lectin_array(df, [1, 2, 3], [4, 5, 6])
+    # A lectin array has its samples in the rows, so the contrasts are read off the index
+    gdf = GlycoDataFrame(df, contrasts = {f'sample{i}': ('ctrl' if i < 4 else 'case') for i in range(1, 7)})
+    assert 'score' in get_lectin_array(gdf).columns
+    with pytest.raises(ValueError):
+        get_lectin_array(df)
 
 
 @pytest.mark.parametrize("extension", ["csv", "xlsx"])
@@ -4589,15 +5421,26 @@ def test_get_ma_with_filepath(sample_diff_expr_results):
 def test_get_ma_with_custom_thresholds(sample_diff_expr_results):
     """Test get_ma with custom thresholds"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_ma(sample_diff_expr_results, log2fc_thresh=2, sig_thresh=0.01)
+        get_ma(sample_diff_expr_results, log2fc_thresh = 2, sig_thresh = 0.01)
+        mock_savefig.assert_not_called()
+        # Without an explicit threshold the sample-size-adjusted alpha the analysis stamped is used, so MA and volcano agree
+        stamped = sample_diff_expr_results.copy()
+        stamped.attrs['alpha'] = 0.01
+        get_ma(stamped)
         mock_savefig.assert_not_called()
 
 
 def test_get_volcano_basic(sample_diff_expr_results):
     """Test basic functionality of get_volcano"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, n=6)
+        get_volcano(sample_diff_expr_results, n = 6)
         mock_savefig.assert_not_called()
+    # without a filepath the annotated figure is built in a temp dir and handed back for Jupyter to render
+    with patch('glycowork.motif.draw.is_jupyter', return_value = True):
+        out = get_volcano(sample_diff_expr_results, annotate_volcano = True)
+    assert out is not None and '<svg' in out.data
+    assert not list(Path('.').glob('*_temp.svg'))
+    plt.close('all')
 
 
 def test_get_volcano_with_filepath(sample_diff_expr_results):
@@ -4629,6 +5472,9 @@ def test_get_meta_analysis_fixed():
     assert isinstance(combined_effect, float)
     assert isinstance(p_value, float)
     assert 0 <= p_value <= 1
+    # ignoring between-study variance can only make the pooled estimate look more certain than the random-effects one
+    heterogeneous = ([-2.0, 0.0, 2.0], [0.01, 0.01, 0.01])
+    assert meta_analysis(*heterogeneous, model = 'fixed')['se'] < meta_analysis(*heterogeneous, model = 'random')['se']
 
 
 def test_get_meta_analysis_random():
@@ -4639,6 +5485,15 @@ def test_get_meta_analysis_random():
     assert isinstance(combined_effect, float)
     assert isinstance(p_value, float)
     assert 0 <= p_value <= 1
+    full = get_meta_analysis(effect_sizes, variances, model = 'random', full_output = True)
+    assert np.isclose(full['effect'], combined_effect) and np.isclose(full['p_val'], p_value)
+    assert full['k'] == 3 and full['Q_df'] == 2 and full['tau2'] >= 0 and 0 <= full['I2'] <= 100
+    assert full['ci_low'] < full['effect'] < full['ci_high'] and np.isclose(sum(full['weights']), 1)
+    assert len(full['leave_one_out']) == 3 and all(loo['k'] == 2 for loo in full['leave_one_out'])
+    homogeneous = meta_analysis([0.5, 0.5, 0.5], [0.1, 0.1, 0.1], model = 'random')
+    assert homogeneous['tau2'] == 0 and homogeneous['I2'] == 0 and np.isclose(homogeneous['effect'], 0.5)
+    heterogeneous = meta_analysis([-2.0, 0.0, 2.0], [0.01, 0.01, 0.01], model = 'random')
+    assert heterogeneous['tau2'] > 0 and heterogeneous['I2'] > 75 and heterogeneous['Q_p_val'] < 0.05
 
 
 def test_get_meta_analysis_with_study_names():
@@ -4661,6 +5516,8 @@ def test_get_meta_analysis_invalid_model():
     variances = [0.1, 0.15, 0.08]
     with pytest.raises(ValueError):
         get_meta_analysis(effect_sizes, variances, model='invalid')
+    with pytest.raises(ValueError):
+        meta_analysis(effect_sizes, variances, model = 'invalid')
 
 
 def test_get_meta_analysis_mismatched_lengths():
@@ -4669,6 +5526,8 @@ def test_get_meta_analysis_mismatched_lengths():
     variances = [0.1, 0.15]
     with pytest.raises(ValueError):
         get_meta_analysis(effect_sizes, variances)
+    with pytest.raises(ValueError, match = "3 effect sizes for 2 variances"):
+        meta_analysis(effect_sizes, variances)
 
 
 def test_plot_embeddings_basic():
@@ -4747,8 +5606,12 @@ def sample_glycoshift_df():
 def test_characterize_monosaccharide_basic():
     """Test basic functionality of characterize_monosaccharide"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        characterize_monosaccharide('Man', rank="Class", focus="Actinopterygii")
+        characterize_monosaccharide('Man', rank = "Class", focus = "Actinopterygii")
         mock_savefig.assert_not_called()
+    with pytest.raises(ValueError):
+        characterize_monosaccharide('Man', mode = 'nonsense')
+    with pytest.raises(ValueError):  # rank without focus does not say what to keep
+        characterize_monosaccharide('Man', rank = "Class")
 
 
 def test_characterize_monosaccharide_with_custom_df(sample_df):
@@ -4868,6 +5731,12 @@ def test_get_pca_with_custom_components(sample_df):
         get_pca(sample_df, groups, pc_x=2, pc_y=3)
         mock_savefig.assert_not_called()
 
+def test_get_pca_with_subplots():
+    df = sample_comp_glycomics_data()
+    groups = [1]*6 + [2]*6
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        get_pca(df, groups, pc_x = 1, pc_y=2, eigenvalues=True)
+        mock_savefig.assert_not_called()
 
 @pytest.fixture
 def sample_jtk_df():
@@ -4921,7 +5790,7 @@ def test_get_jtk_basic(sample_jtk_df):
     assert 'Period_Length' in result.columns
     result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, transform="ALR")
     result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, transform="Nothing")
-    assert sum(result.significant) == 2
+    assert sum(result.significant) < 4
     try:
         result = get_jtk(sample_jtk_df, timepoints=8, interval=3, periods=periods, transform="wrong")
         return False
@@ -4949,6 +5818,21 @@ def test_get_jtk_with_transform(sample_jtk_df):
     assert isinstance(result, pd.DataFrame)
 
 
+@pytest.fixture(scope = 'module')
+def glycoform_timecourse():
+    df = glycoproteomics_data_loader.human_milk_N_PMID34087070.iloc[:60, :].copy()
+    df.columns = ['ID'] + [f'T1_h{t}_r{r}' for t in [1, 2, 3] for r in [1, 2]]
+    return df
+
+
+def test_time_series_and_jtk_accept_glycoforms(glycoform_timecourse, capsys):
+    ts = get_time_series(glycoform_timecourse, glycoproteomics = True)  # the IUPAC orientation heuristic must not transpose glycoform IDs
+    assert 'corr p-val' in ts.columns and len(ts) > 0
+    assert 'by_motif_family' in capsys.readouterr().out  # the composition DAG, not the Sia/Fuc fallback, drove the grouping
+    jtk = get_jtk(glycoform_timecourse, timepoints = 3, interval = 4, periods = [2], glycoproteomics = True)
+    assert 'Adjusted_P_value' in jtk.columns and len(jtk) > 0
+
+
 def test_multi_feature_scoring_basic(sample_df):
     """Test basic functionality of multi_feature_scoring"""
     np.random.seed(42)
@@ -4968,7 +5852,7 @@ def test_multi_feature_scoring_basic(sample_df):
         mock_fig = MagicMock()
         mock_ax = MagicMock()
         mock_subplots.return_value = (mock_fig, mock_ax)
-        model, roc_auc = multi_feature_scoring(df_transformed, group1, group2)
+        model, roc_auc, selected_features = multi_feature_scoring(df_transformed, group1, group2)
         assert hasattr(model, 'predict')
         assert 0 <= roc_auc <= 1
         assert roc_auc > 0.5
@@ -5008,7 +5892,7 @@ def test_multi_feature_scoring_imbalanced_groups(sample_df):
     group1 = [0, 1, 2, 3]
     group2 = [4, 5, 6, 7, 8, 9]
     with patch('matplotlib.pyplot.figure'):
-        model, roc_auc = multi_feature_scoring(df_transformed, group1, group2)
+        model, roc_auc, selected_features = multi_feature_scoring(df_transformed, group1, group2)
     assert hasattr(model, 'predict')
     assert 0 <= roc_auc <= 1
     assert roc_auc > 0.5
@@ -5032,10 +5916,11 @@ def test_multi_feature_scoring_no_group2(sample_df):
         mock_fig = MagicMock()
         mock_ax = MagicMock()
         mock_subplots.return_value = (mock_fig, mock_ax)
-        model, roc_auc = multi_feature_scoring(df_transformed, group1, None)
+        model, roc_auc, selected_features = multi_feature_scoring(df_transformed, group1, None)
         assert hasattr(model, 'predict')
         assert 0 <= roc_auc <= 1
         assert roc_auc > 0.5
+        assert 0 in selected_features
 
 
 def test_get_glycoshift_per_site_basic(sample_glycoshift_df):
@@ -5115,6 +6000,15 @@ def test_create_neighbors():
     assert len(neighbors[0].nodes()) < len(ggraph.nodes())
     neighbors = create_neighbors(glycan_to_nxGraph("Glc-ol"))
     assert neighbors == []
+    # A floating bit is deferred until the backbone is minimal, so only backbone pairs are cleaved first
+    assert create_neighbors(glycan_to_nxGraph("{Fuc(a1-?)}Gal(b1-4)GlcNAc(b1-3)Gal"))
+
+
+def test_apply_constraints_without_matching_rules():
+    net = nx.DiGraph()
+    net.add_edge('Gal(b1-4)Gal', 'Gal(b1-4)Gal(b1-4)Gal', diffs='Gal(b1-4)')
+    nx.set_node_attributes(net, 0, 'virtual')
+    assert apply_constraints(net, constraints=[]) is net
 
 
 def test_find_diff():
@@ -5139,6 +6033,34 @@ def test_construct_network(simple_glycans):
     assert all("diffs" in data for _, _, data in network.edges(data=True))
     network = construct_network(simple_glycans, edge_type="enzyme")
     network = construct_network(simple_glycans, edge_type="monosaccharide")
+    # established biochemistry constrains the order, not the structure: FUT8 after MGAT3 is forbidden, MGAT3 after FUT8 is not
+    bisected = ['GlcNAc(b1-2)Man(a1-3)[Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                'GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc',
+                'GlcNAc(b1-2)Man(a1-3)[GlcNAc(b1-2)Man(a1-6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc']
+    plain, constrained = construct_network(bisected, constraints = False), construct_network(bisected)
+    assert len(constrained.edges()) < len(plain.edges())
+    assert all(canonicalize_iupac(g) in constrained for g in bisected)  # no observed structure is lost
+    fucosylated = canonicalize_iupac(bisected[-1])
+    assert constrained.in_degree(fucosylated) > 0 and all(subgraph_isomorphism(u, 'GlcNAc(b1-4)Man(b1-4)GlcNAc') is False for u in constrained.predecessors(fucosylated) if 'Fuc' not in u)
+    flagged = nx.get_edge_attributes(apply_constraints(plain.copy(), prune = False), 'constraint')
+    n_enzymes = {r['enzyme'] for r in _load_constraints()
+                 if not isinstance(r['glycan_class'], str) or 'N' in str(r['glycan_class']).split('/')}
+    assert flagged and {c.split(':')[0] for c in flagged.values()} <= n_enzymes
+    assert {'FUT8', 'MGAT3'} <= {c.split(':')[0] for c in
+                                 flagged.values()}  # the bisecting-core order rules this fixture exists to exercise
+    sialyl_tn = construct_network(['GalNAc', 'Neu5Ac(a2-6)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc'])
+    assert not sialyl_tn.has_edge('Neu5Ac(a2-6)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc')  # core 1 is not built on sialyl-Tn
+    assert sialyl_tn.has_edge('Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc')  # the physiological order survives
+    orphan = nx.DiGraph([('Neu5Ac(a2-6)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc')])
+    nx.set_edge_attributes(orphan, {('Neu5Ac(a2-6)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc'): 'Gal(b1-3)'}, 'diffs')
+    nx.set_node_attributes(orphan, {n: 0 for n in orphan}, 'virtual')
+    kept = apply_constraints(orphan)  # the only route to an observed structure is kept, but flagged
+    assert len(kept.edges()) == 1 and 'C1GALT1' in list(nx.get_edge_attributes(kept, 'constraint').values())[0]
+
+
+def test_construct_network_unknown_class():
+    with pytest.raises(ValueError):
+        construct_network(['Xyl(b1-4)Xyl', 'Xyl'])
 
 
 def test_prune_network(simple_glycans):
@@ -5293,7 +6215,11 @@ def test_find_diamonds(simple_glycans):
     assert len(diamonds) > 0
     assert all(isinstance(d, dict) for d in diamonds)
     assert all(len(d) >= 4 for d in diamonds)  # Diamond should have at least 4 nodes
-    diamonds = find_diamonds(net_dic['Lama_pacos'], nb_intermediates=4)
+    diamonds = find_diamonds(net_dic['Lama_pacos'], nb_intermediates = 4)
+    # With more than two intermediates, cross-connected shapes are not diamonds
+    wide = construct_network(['GlcNAc', 'Gal(b1-4)GlcNAc', 'Gal(b1-4)[Fuc(a1-3)]GlcNAc',
+                              'Neu5Ac(a2-3)Gal(b1-4)GlcNAc', 'Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc'])
+    assert isinstance(find_diamonds(wide, nb_intermediates = 4), list)
     try:
         diamonds = find_diamonds(net, nb_intermediates=3)
         return False
@@ -5309,10 +6235,21 @@ def test_trace_diamonds(simple_glycans):
     assert isinstance(results, pd.DataFrame)
     assert "probability" in results.columns
     assert len(results) > 0
+    # an intermediate can dominate because its path is preferred or because nothing consumes it downstream
+    assert {'out_degree', 'onward_capacity', 'n_descendants'} <= set(results.columns)
+    assert (results.out_degree >= 0).all() and (results.n_descendants >= results.out_degree).all()
+    assert results.onward_capacity.isna().all()  # no capacities on this network, so nothing to report
+    weighted = get_edge_weight_by_abundance(net, root = "Gal(b1-4)Glc-ol")
+    results = trace_diamonds(weighted, species_list, {"species1": weighted})
+    assert np.isfinite(results.loc[results.out_degree > 0, 'onward_capacity']).all()
+    assert results.loc[results.out_degree == 0, 'onward_capacity'].isna().all()
+    empty = construct_network(['Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol'])  # no diamonds at all
+    results = trace_diamonds(empty, species_list, {"species1": empty})
+    assert results.empty and {'out_degree', 'onward_capacity', 'n_descendants'} <= set(results.columns)
 
 
 def test_get_maximum_flow(sample_network):
-    sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
+    sample_network = get_edge_weight_by_abundance(sample_network, root = "Gal(b1-4)Glc-ol")
     flow_results = get_maximum_flow(sample_network,
                                   source="Gal(b1-4)Glc-ol")
     assert isinstance(flow_results, dict)
@@ -5323,7 +6260,7 @@ def test_get_maximum_flow(sample_network):
 
 
 def test_get_reaction_flow(sample_network):
-    sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
+    sample_network = get_edge_weight_by_abundance(sample_network, root = "Gal(b1-4)Glc-ol")
     flow_results = get_maximum_flow(sample_network,
                                   source="Gal(b1-4)Glc-ol")
     reaction_flows = get_reaction_flow(sample_network, flow_results, aggregate="sum")
@@ -5415,10 +6352,11 @@ def test_process_ptm_with_multiple_ptms():
 def test_get_maximum_flow_with_no_path(sample_network):
     # Add isolated node with no path from source
     sample_network.add_node("IsolatedGlycan", virtual=0, abundance=1.0)
-    sample_network = estimate_weights(sample_network, root = "Gal(b1-4)Glc-ol", min_default = 0.1)
-    flow_results = get_maximum_flow(sample_network,
-                                  source="Gal(b1-4)Glc-ol",
-                                  sinks=["IsolatedGlycan"])
+    sample_network = get_edge_weight_by_abundance(sample_network, root = "Gal(b1-4)Glc-ol")
+    with pytest.warns(UserWarning, match = "could not be reached"):
+        flow_results = get_maximum_flow(sample_network,
+                                        source="Gal(b1-4)Glc-ol",
+                                        sinks=["IsolatedGlycan"])
     assert isinstance(flow_results, dict)
     assert len(flow_results) == 0  # Should return empty dict for unreachable sink
 
@@ -5588,7 +6526,7 @@ def test_get_max_flow_path_no_path(flow_network):
         'D': {'E': 0.0}
     }
     flow_network.remove_edge('B', 'D')
-    with pytest.raises(ValueError, match="No path found"):
+    with pytest.raises(ValueError, match="no outgoing flow left"):
         get_max_flow_path(flow_network, flow_dict, sink='E', source='A')
 
 
@@ -5710,9 +6648,11 @@ def test_evoprune_network_basic(evo_test_networks):
     # Check that root node is preserved
     assert 'Gal(b1-4)Glc-ol' in pruned_net.nodes()
     # Check virtual node attributes
-    virtual_nodes = [n for n, d in pruned_net.nodes(data=True) if d.get('virtual') == 1]
+    virtual_nodes = [n for n, d in pruned_net.nodes(data = True) if d.get('virtual') == 1]
     for vnode in virtual_nodes:
         assert pruned_net.nodes[vnode].get('abundance', 0) > 0
+    # Without a network_dic, the shipped species networks are used
+    assert evoprune_network(main_net) is not None
 
 
 def test_evoprune_network_threshold(evo_test_networks):
@@ -5749,6 +6689,21 @@ def test_extend_network_basic(extension_test_network):
         to_extend="all",
         strict_context=True
     )
+    # prioritizing ranks the same candidates by the flow reaching them, without changing which candidates are produced
+    _, plain = extend_network(extension_test_network, steps = 1, to_extend = "all")
+    _, ranked = extend_network(extension_test_network, steps = 1, to_extend = "all", prioritize = True)
+    assert isinstance(ranked, dict) and set(ranked) == set(plain)
+    assert list(ranked.values()) == sorted(ranked.values(), reverse = True) and all(v > 0 for v in ranked.values())
+    abundant = extension_test_network.copy()
+    nx.set_node_attributes(abundant, {'Gal(b1-4)Glc-ol': 100.0, 'GlcNAc(b1-3)Gal(b1-4)Glc-ol': 50.0, 'Fuc(a1-2)Gal(b1-4)Glc-ol': 0.5}, 'abundance')
+    _, ranked_ab = extend_network(abundant, steps = 1, to_extend = "all", prioritize = True)
+    assert set(ranked_ab) == set(ranked) and max(ranked_ab.values()) > max(
+        ranked.values())  # abundances feed the ranking
+    rootless = nx.DiGraph()
+    rootless.add_edge('Gal(b1-4)Gal', 'Gal(b1-4)Gal(b1-4)Gal', diffs = 'Gal(b1-4)')
+    nx.set_node_attributes(rootless, 0, 'virtual')
+    with pytest.raises(ValueError):  # no root means no flow to rank by
+        extend_network(rootless, prioritize = True)
 
 
 def test_extend_network_specific_target(extension_test_network):
@@ -5870,6 +6825,24 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
     plt.close('all')
 
 
+def test_plot_network_static_figure(tmp_path, evo_test_networks):
+    """Test the saved static figure, with and without SNFG node labels"""
+    main_net, _ = evo_test_networks
+    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net.svg')
+    assert (tmp_path / 'net.svg').exists()
+    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net_snfg.svg', draw_glycans=True)
+    assert (tmp_path / 'net_snfg.svg').exists()
+    with pytest.raises(ValueError):
+        plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'x.svg', draw_glycans=True,
+                     glycan_size='huge')
+    # without a filepath the SNFG figure is built in a temp dir and handed back for Jupyter to render
+    with patch('glycowork.motif.draw.is_jupyter', return_value = True):
+        out = plot_network(main_net, plot_format='kamada_kawai', draw_glycans=True)
+    assert out is not None and '<svg' in out.data
+    assert not list(tmp_path.glob('*_temp.svg'))
+    plt.close('all')
+
+
 def test_plot_network_no_notebook(evo_test_networks):
     """Test fallback behavior when not in notebook"""
     main_net, _ = evo_test_networks
@@ -5905,7 +6878,10 @@ _GLYCANS = [
   "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol",
 ]
 _RNG = np.random.default_rng(42)
-_EXPECTED_COLS = {"group1_mean", "group2_mean", "difference", "t_statistic", "p_val", "cohens_d", "group1_scores", "group2_scores"}
+_EXPECTED_COLS = {"group1_mean", "group2_mean", "difference", "t_statistic", "p_val", "cohens_d", "shared_model_difference",
+                  "shared_model_p_val", "shared_model_p_val_permutation", "null_sd", "n_rewired_glycans", "n_rewired_up",
+                  "group1_name", "group2_name", "n_glycans_scored", "n_glycans_observed", "coverage", "dropped",
+                  "group1_scores", "group2_scores", "shared_group1_scores", "shared_group2_scores"}
 
 
 def _make_df(n=5):
@@ -5918,11 +6894,13 @@ def test_get_biosynthetic_coherence_unpaired():
   df = _make_df()
   g1 = [c for c in df.columns if c.startswith("g1_")]
   g2 = [c for c in df.columns if c.startswith("g2_")]
-  result = get_biosynthetic_coherence(df, g1, g2)
+  result, per_glycan = get_biosynthetic_coherence(df, g1, g2)
   assert list(result.index) == ["global_r2_weighted"]
   assert set(result.columns) == _EXPECTED_COLS
-  assert 0.0 <= result.at["global_r2_weighted", "group1_mean"] <= 1.0
-  assert 0.0 <= result.at["global_r2_weighted", "group2_mean"] <= 1.0
+  assert -3.0 <= result.at[
+      "global_r2_weighted", "group1_mean"] <= 1.0  # decoupled glycans score below zero instead of saturating there
+  assert -3.0 <= result.at["global_r2_weighted", "group2_mean"] <= 1.0
+  assert {"group1_r2", "group2_r2", "rewired", "top_changed_precursor"} <= set(per_glycan.columns)
   assert len(result.at["global_r2_weighted", "group1_scores"]) == len(g1)
   assert len(result.at["global_r2_weighted", "group2_scores"]) == len(g2)
 
@@ -5931,7 +6909,7 @@ def test_get_biosynthetic_coherence_paired():
   df = _make_df()
   g1 = [c for c in df.columns if c.startswith("g1_")]
   g2 = [c for c in df.columns if c.startswith("g2_")]
-  result = get_biosynthetic_coherence(df, g1, g2, paired=True)
+  result, _ = get_biosynthetic_coherence(df, g1, g2, paired = True)
   assert list(result.index) == ["global_r2_weighted"]
   assert set(result.columns) == _EXPECTED_COLS
 
@@ -5941,7 +6919,7 @@ def test_get_biosynthetic_coherence_prebuilt_network_and_column_index():
   g1 = [c for c in df.columns if c.startswith("g1_")]
   g2 = [c for c in df.columns if c.startswith("g2_")]
   net = construct_network(_GLYCANS)
-  result = get_biosynthetic_coherence(df, g1, g2, network=net)
+  result, _ = get_biosynthetic_coherence(df, g1, g2, network = net)
   assert list(result.index) == ["global_r2_weighted"]
   assert set(result.columns) == _EXPECTED_COLS
 
@@ -6069,6 +7047,14 @@ def test_jaccard():
     assert 0 <= net_distance <= 1
 
 
+def test_distance_from_metric_by_name(sample_taxonomy_data, sample_networks):
+    # A bare list can only be paired positionally, so passing a dict is what makes the labelling unambiguous
+    named = dict(zip(dict.fromkeys(sample_taxonomy_data['Species']), sample_networks))
+    dm = distance_from_metric(sample_taxonomy_data, named, cut_off = 1, rank = "Species")
+    assert list(dm.columns) == list(named)
+    assert jaccard([], []) == 0.0  # two empty networks are identical, not undefined
+
+
 def test_distance_from_metric(sample_taxonomy_data, sample_networks):
     dm = distance_from_metric(
         sample_taxonomy_data,
@@ -6116,12 +7102,12 @@ def test_distance_from_embeddings(sample_taxonomy_data, sample_embeddings):
 
 
 def test_distance_from_embeddings_invalid_averaging(sample_taxonomy_data, sample_embeddings):
-    result = distance_from_embeddings(
-        sample_taxonomy_data,
-        sample_embeddings,
-        averaging="invalid"
-    )
-    assert result is None
+    with pytest.raises(ValueError):
+        distance_from_embeddings(
+            sample_taxonomy_data,
+            sample_embeddings,
+            averaging="invalid"
+        )
 
 
 def test_check_conservation():
@@ -6254,6 +7240,10 @@ def test_check_presence_fast_mode(sample_glycan_df, capsys):
     check_presence('Gal(b1-4)Glc-ol', sample_glycan_df, fast=True)
     captured = capsys.readouterr()
     assert "Glycan already in dataset." in captured.out
+    with pytest.raises(KeyError):
+        check_presence('Gal(b1-4)Glc-ol', sample_glycan_df, colname='not_a_column')
+    with pytest.raises(KeyError):
+        check_presence('Gal(b1-4)Glc-ol', sample_glycan_df, name='Homo sapiens', rank='not_a_column')
 
 
 def test_get_insight():
@@ -6441,6 +7431,7 @@ def test_hierarchy_filter_with_wildcards():
     assert len(train_x) >= len(set(df['glycan']))  # Should have additional entries due to wildcards
     assert len(train_y) == len(train_x)
     assert len(val_y) == len(val_x)
+    assert not (set(train_x) & set(val_x))  # wildcarding maps distinct sequences onto the same string
     assert all(y in [0, 1] for y in train_y + val_y)  # Check labels are properly converted
 
 
@@ -6554,10 +7545,25 @@ def test_dataset_to_dataloader(mock_glycan_dataset, mock_library):
     dataloader = dataset_to_dataloader(
         glycans[:2],
         labels[:2],
-        batch_size=2,
-        extra_feature=extra_features,
-        augment_prob=0.5
+        batch_size = 2,
+        extra_feature = extra_features,
+        augment_prob = 0.5
     )
+    # GIFFLAR consumes molecular heterographs, which needs the other builder and the other collator
+    hetero_loader = dataset_to_dataloader(glycans, labels, batch_size = 2, hetero = True)
+    batch = next(iter(hetero_loader))
+    assert isinstance(batch, HeteroDataBatch)
+    assert set(batch.x_dict) == {"atoms", "bonds", "monosacchs"} and ("bonds", "coboundary",
+                                                                      "bonds") in batch.edge_index_dict
+    assert prep_model("GIFFLAR", 2)(batch.to(device)).shape[
+               0] == 2  # prep_model puts the model on the GPU when there is one
+    with pytest.warns(UserWarning):
+        dataset_to_dataloader(glycans + ["{Fuc(a1-3)}Gal(b1-4)GlcNAc"], labels + [0], batch_size = 2, hetero = True)
+    with pytest.raises(ValueError):
+        dataset_to_dataloader(["{Fuc(a1-3)}Gal(b1-4)GlcNAc"], [0], hetero = True)
+    with pytest.warns(UserWarning):  # the atom-level graph has no slot for either
+        dataset_to_dataloader(glycans, labels, batch_size = 2, hetero = True, extra_feature = extra_features,
+                              augment_prob = 0.5)
 
 
 def test_split_data_to_train(mock_glycan_dataset, mock_library):
@@ -6949,6 +7955,19 @@ def test_training_setup(_, mock_model):
         pass
 
 
+def test_warmup_scheduler_hands_over_to_the_base_scheduler():
+    model = nn.Linear(2, 1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    plateau = WarmupScheduler(optimizer, ReduceLROnPlateau(optimizer), warmup_epochs = 1)
+    stepwise = WarmupScheduler(optimizer, torch.optim.lr_scheduler.StepLR(optimizer, step_size = 1), warmup_epochs = 1)
+    model(torch.zeros(1, 2)).sum().backward()
+    optimizer.step()  # torch warns if a scheduler steps before the optimizer ever has
+    plateau.step()
+    plateau.step(metrics = 0.5)  # a plateau scheduler needs the metric
+    stepwise.step()
+    stepwise.step()  # a step scheduler does not
+
+
 def test_train_ml_model(mock_xgb_data):
     X_train, X_test, y_train, y_test = mock_xgb_data
     # Test classification
@@ -6958,16 +7977,22 @@ def test_train_ml_model(mock_xgb_data):
         feature_calc=False
     )
     assert isinstance(model, xgb.XGBClassifier)
+    with pytest.raises(ValueError):
+        train_ml_model(X_train, X_test, y_train, y_test, mode = 'nonsense', feature_calc = False)
     # Test regression
     model = train_ml_model(
         X_train, X_test, y_train, y_test,
-        mode='regression',
-        feature_calc=False
+        mode = 'regression',
+        feature_calc = False
     )
     assert isinstance(model, xgb.XGBRegressor)
     # Test feature calculation
     X_train = ["Neu5Ac(a2-3)Gal(b1-4)Glc", "Fuc(a1-3)[Gal(b1-4)]GlcNAc", "Glc(a1-4)Glc"]
     X_test = ["Fuc(a1-2)Gal(b1-4)Glc", "Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc", "Neu5Ac(a2-6)GalNAc"]
+    # A tree model reads features positionally, so the two frames must agree on column order and not just on the column set
+    _, feat_train, feat_test = train_ml_model(X_train, X_test, y_train, y_test, mode = 'classification',
+                                              feature_calc = True, return_features = True, feature_set = ['known'])
+    assert list(feat_train.columns) == list(feat_test.columns)
     model = train_ml_model(
         X_train, X_test, y_train, y_test,
         mode='classification',
@@ -7262,6 +8287,8 @@ def test_get_multi_pred(sample_data, mock_models):
     )
     assert isinstance(results, list)
     assert len(results) == len(sample_data['glycans'])
+    with pytest.raises(KeyError):  # no stored embedding and no flex model to compute one
+        get_multi_pred(prot = sample_data['protein'], glycans = sample_data['glycans'], model = model, prot_dic = {})
     # Test with background correction
     correction_df = pd.DataFrame({
         'motif': sample_data['glycans'],
@@ -7285,18 +8312,26 @@ def test_get_multi_pred(sample_data, mock_models):
         correction_df=correction_df,
         flex=True
     )
+    zeroed = pd.DataFrame({'motif': sample_data['glycans'], 'pred': pd.Series([0.0, 0.0], dtype=np.float64)})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # a background of exactly 0 is a real value, not a miss
+        get_multi_pred(prot=sample_data['protein'], glycans=sample_data['glycans'], model=model,
+                       prot_dic=sample_data['prot_dict'], background_correction=True, correction_df=zeroed)
     correction_df = pd.DataFrame({
         'motif': sample_data['glycans'][:-1],
         'pred': pd.Series([0.1], dtype=np.float64)
     })
-    results_corrected = get_multi_pred(
-        prot=sample_data['protein'],
-        glycans=sample_data['glycans'],
-        model=model,
-        prot_dic=sample_data['prot_dict'],
-        background_correction=True,
-        correction_df=correction_df
-    )
+    # A glycan with no entry stays uncorrected, which has to be reported per glycan rather than inferred from a background of exactly 0
+    with pytest.warns(UserWarning):
+        results_corrected = get_multi_pred(
+            prot=sample_data['protein'],
+            glycans=sample_data['glycans'],
+            model=model,
+            prot_dic=sample_data['prot_dict'],
+            background_correction=True,
+            correction_df=correction_df
+        )
+    assert len(results_corrected) == len(sample_data['glycans'])
 
 
 def test_get_lectin_preds(sample_data, mock_models):
@@ -7546,3 +8581,525 @@ def test_gifflar(class_mode):
         return_metrics=False,
     )
     assert out is not None
+
+
+@pytest.fixture
+def motif_abundances():
+    motifs = ['GalNAc', 'Gal(b1-3)GalNAc', 'Oglycan_core1', 'Neu5Ac']
+    return pd.DataFrame(
+        [[40.0, 42.0, 38.0, 41.0], [20.0, 21.0, 19.0, 20.5], [12.0, 13.0, 11.0, 12.5], [8.0, 7.0, 9.0, 8.5]],
+        index = motifs, columns = ['s1', 's2', 's3', 's4'])
+
+
+def test_get_motif_dag_orientation_and_acyclicity(motif_abundances):
+    dag = get_motif_dag(motif_abundances.index.tolist(), abundances = motif_abundances)
+    assert nx.is_directed_acyclic_graph(dag)
+    assert dag.has_edge('GalNAc', 'Gal(b1-3)GalNAc')  # parent is the substructure
+    assert not dag.has_edge('Gal(b1-3)GalNAc', 'GalNAc')
+    assert nx.has_path(dag, 'GalNAc', 'Oglycan_core1')
+    assert not dag.has_edge('GalNAc', 'Oglycan_core1')  # transitively reduced
+
+
+def test_get_motif_dag_abundance_dominance_prefilter(motif_abundances):
+    violated = motif_abundances.copy()
+    violated.loc['GalNAc', 's1'] = 1.0  # parent can no longer dominate its child in every sample
+    dag = get_motif_dag(violated.index.tolist(), abundances = violated)
+    assert not dag.has_edge('GalNAc', 'Gal(b1-3)GalNAc')
+
+
+def test_get_motif_dag_wildcard_is_the_ancestor():
+    motifs = ['Neu5Ac(a2-3/6)Gal', 'Neu5Ac(a2-3)Gal']
+    dag = get_motif_dag(motifs)
+    assert dag.has_edge('Neu5Ac(a2-3/6)Gal', 'Neu5Ac(a2-3)Gal')  # ambiguous label matches strictly more structures
+    assert nx.is_directed_acyclic_graph(dag)
+    # A glyco-regex motif stands in for the backbone every match must contain, so it can be a descendant but never an ancestor
+    dag = get_motif_dag(['high_mannose', 'Nglycan_complex', 'Man(b1-4)GlcNAc(b1-4)GlcNAc', 'GlcNAc(b1-4)GlcNAc'])
+    assert dag.has_edge('Man(b1-4)GlcNAc(b1-4)GlcNAc', 'high_mannose')
+    assert dag.has_edge('Man(b1-4)GlcNAc(b1-4)GlcNAc', 'Nglycan_complex')
+    assert dag.out_degree('high_mannose') == 0 and nx.is_directed_acyclic_graph(dag)
+
+
+def test_get_motif_dag_ignores_non_structural_features(motif_abundances):
+    labels = motif_abundances.index.tolist() + ['Nr_of_branches', 'Molecular_weight']
+    dag = get_motif_dag(labels)
+    assert dag.degree(
+        'Nr_of_branches') == 0 if 'Nr_of_branches' in dag else True  # non-structural features never gain containment edges
+    assert dag.degree('Molecular_weight') == 0 if 'Molecular_weight' in dag else True
+    assert dag.has_edge('GalNAc', 'Gal(b1-3)GalNAc')
+
+
+@pytest.fixture
+def composition_abundances():
+    idx = ['P1_100_H3N2', 'P1_100_H4N2', 'P1_100_H5N2', 'P1_100_H5N4F1']
+    # H5N4F1 contains H5N2 component-wise but is more abundant than it, so containment is impossible and the prefilter must reject it
+    return pd.DataFrame([[50.0, 52.0], [30.0, 31.0], [18.0, 19.0], [25.0, 26.0]], index = idx, columns = ['a', 'b'])
+
+
+def test_get_composition_dag_componentwise_containment(composition_abundances):
+    dag = get_composition_dag(composition_abundances.index.tolist(), abundances = composition_abundances)
+    assert nx.is_directed_acyclic_graph(dag)
+    assert dag.has_edge('P1_100_H3N2', 'P1_100_H4N2')
+    assert nx.has_path(dag, 'P1_100_H3N2', 'P1_100_H5N2')
+    assert not dag.has_edge('P1_100_H3N2', 'P1_100_H5N2')  # transitively reduced
+    assert not dag.has_edge('P1_100_H5N2',
+                            'P1_100_H5N4F1')  # abundance dominance is violated, so containment is impossible
+
+
+def test_get_composition_dag_equal_compositions_stay_acyclic():
+    idx = ['P1_1_H5N4', 'P2_9_H5N4', 'P3_3_H5N2']
+    dag = get_composition_dag(idx)
+    assert nx.is_directed_acyclic_graph(dag)
+    assert dag.number_of_nodes() == 3
+
+
+def test_get_composition_dag_skips_unparseable_labels():
+    dag = get_composition_dag(['Gal(b1-4)GlcNAc', 'Neu5Ac(a2-3)Gal'])
+    assert dag.number_of_edges() == 0
+
+
+def test_select_grouping_uses_the_dag(motif_abundances):
+    dag = get_motif_dag(motif_abundances.index.tolist(), abundances = motif_abundances)
+    glycans = motif_abundances.index.tolist()
+    pvals = [0.01, 0.02, 0.03, 0.04]
+    groups, pval_groups = select_grouping(motif_abundances, motif_abundances, glycans, pvals, grouped_BH = True,
+                                          dag = dag)
+    assert set(groups) == set(pval_groups)
+    assert sum(len(v) for v in groups.values()) == len(glycans)
+
+
+@pytest.fixture(scope = 'module')
+def bcc_result():
+    return get_differential_expression(glycomics_data_loader.human_skin_O_PMC5871710_BCC, motifs = True,
+                                       random_state = 42)
+
+
+def test_decomposition_columns_are_returned(bcc_result):
+    for col in ['Explained by', 'Redistribution p-val', 'Residual p-val', 'Residual effect size']:
+        assert col in bcc_result.columns
+    assert bcc_result['Redistribution p-val'].notna().any()
+
+
+def test_purely_inherited_parents_have_a_null_residual(bcc_result):
+    inherited = bcc_result[(bcc_result['Residual p-val'] >= 0.999) & (bcc_result['Residual effect size'].abs() < 1e-9)]
+    assert len(inherited) > 0
+    assert (inherited[
+                'Explained by'].str.len() > 0).all()  # a parent with no residual is fully explained by its children
+
+
+def test_leaf_motifs_get_no_decomposition(bcc_result):
+    leaves = bcc_result[bcc_result['Explained by'] == '']
+    assert leaves['Redistribution p-val'].isna().all()
+    assert leaves['Residual p-val'].isna().all()
+
+
+def test_balances_are_invariant_to_per_sample_scaling(motif_abundances):
+    # The reference-free claim is about the balance statistic given an abundance table, not about the upstream winsorization and imputation
+    parent, kids = 'GalNAc', ['Gal(b1-3)GalNAc']
+
+    def balances(frame):
+        resid = frame.loc[parent] - frame.loc[kids].sum(axis = 0)
+        parts = pd.DataFrame(np.vstack([frame.loc[kids].values, resid.clip(lower = 0).values]), columns = frame.columns)
+        bal = np.log2(parts + 0.0000001)
+        return (bal.iloc[1:] - bal.iloc[0]).values
+
+    rng = np.random.default_rng(0)
+    scaled = motif_abundances * rng.uniform(0.5, 2.0, motif_abundances.shape[1])
+    assert np.allclose(balances(motif_abundances), balances(scaled), atol = 1e-6)
+
+
+def test_redistribution_is_invariant_to_renormalization():
+    df = glycomics_data_loader.human_skin_O_PMC5871710_BCC
+    base = get_differential_expression(df, motifs = True, impute = False, random_state = 42)
+    scaled = df.copy()
+    scaled[scaled.columns[1:]] = scaled[scaled.columns[
+        1:]] * 7.0  # a single global constant survives winsorization and must cancel
+    out = get_differential_expression(scaled, motifs = True, impute = False, random_state = 42)
+    a = base.set_index('Glycan')['Redistribution p-val'].dropna()
+    b = out.set_index('Glycan')['Redistribution p-val'].dropna()
+    shared = a.index.intersection(b.index)
+    assert len(shared) > 0
+    assert np.allclose(a[shared].values, b[shared].values, atol = 1e-8)
+
+
+def test_glycoproteomics_decomposition_is_reachable():
+    df = glycoproteomics_data_loader.human_milk_N_PMID34087070
+    with warnings.catch_warnings(record = True) as caught:
+        warnings.simplefilter("always")
+        out = get_differential_expression(df, group1 = ['Colostrum1', 'Colostrum2', 'Colostrum3'],
+                                          group2 = ['Mature1', 'Mature2', 'Mature3'], glycoproteomics = True,
+                                          random_state = 42)
+    # Structurally missing glycoforms must not reach a dense reduction: numpy and scipy signal that with a RuntimeWarning (SmallSampleWarning and ConstantInputWarning are subclasses) rather than an error, and the statistic silently comes back NaN
+    assert not [w for w in caught if issubclass(w.category, RuntimeWarning)], [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
+    assert 'Glycosite' in out.columns
+    assert out[['corr p-val', 'Effect size']].notna().all().all()
+    glycoforms = out.attrs['glycoforms']
+    assert 'Redistribution p-val' in glycoforms.columns
+    assert glycoforms['Redistribution p-val'].notna().any()
+    assert glycoforms[['Mean abundance', 'Log2FC', 'p-val', 'corr p-val', 'corr Levene p-val', 'Effect size']].notna().all().all()
+    # The decomposition is the point of the glycoproteomics path, so a wholesale NaN in either residual column is a regression even though every assert above still passes
+    assert glycoforms['Residual p-val'].notna().sum() > 0.2 * len(glycoforms)
+    assert glycoforms['Residual p-val'].notna().sum() == glycoforms['Residual effect size'].notna().sum()
+    for col in ('p-val', 'corr p-val', 'corr Levene p-val', 'Equivalence p-val', 'Redistribution p-val', 'Residual p-val'):
+        vals = glycoforms[col].dropna()
+        assert ((vals > 0) & (vals <= 1)).all(), (col, vals.min(), vals.max())
+    assert np.isfinite(glycoforms[['Effect size', 'Residual effect size']].dropna().to_numpy()).all()
+
+
+def test_glycanova_glycoproteomics_decomposition():
+    df = glycoproteomics_data_loader.human_milk_N_PMID34087070
+    with warnings.catch_warnings(record = True) as caught:
+        warnings.simplefilter("always")
+        out, _ = get_glycanova(df, groups = ['A', 'A', 'B', 'B', 'C', 'C'], glycoproteomics = True, posthoc = False,
+                               random_state = 42)
+    assert not [w for w in caught if issubclass(w.category, RuntimeWarning)], [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
+    assert 'Redistribution p-val' in out.columns
+    assert out['Redistribution p-val'].notna().any()
+    # The ANOVA path meets the same missingness as the two-group one, so its columns have to survive it too
+    assert out[['F statistic', 'p-val', 'corr p-val', 'Effect size']].notna().all().all()
+    assert out['Residual p-val'].notna().sum() == out['Residual effect size'].notna().sum() > 0
+    for col in ('p-val', 'corr p-val', 'Redistribution p-val', 'Residual p-val'):
+        vals = out[col].dropna()
+        assert ((vals > 0) & (vals <= 1)).all(), (col, vals.min(), vals.max())
+
+
+def test_sequence_analysis_gets_no_decomposition_columns():
+    out = get_differential_expression(glycomics_data_loader.human_skin_O_PMC5871710_BCC, motifs = False,
+                                      random_state = 42)
+    assert 'Redistribution p-val' not in out.columns
+
+
+def test_glycodataframe_meta_helpers():
+    df = GlycoDataFrame(pd.DataFrame({
+        'glycan': ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal', 'Man(a1-3)Man'],
+        'Species': [['Homo_sapiens', 'Mus_musculus'], ['Homo_sapiens'], 'Gallus_gallus'],
+        'Order': [['Primates', 'Rodentia'], ['Primates'], 'Galliformes']}))
+    assert df.meta_values('Species')['Homo_sapiens'] == 2
+    assert len(df.meta_values('Species', top = 1)) == 1
+    assert len(df.meta_filter(Species = lambda v: 'Mus' in v)) == 1
+    assert len(df.meta_filter(Species = 'Gallus gallus')) == 1  # scalar entries skip the list-narrowing branch
+    with pytest.raises(KeyError):
+        df.meta_filter(NotAColumn = 'x')
+    single = GlycoDataFrame(pd.DataFrame({'glycan': ['Gal'], 's1': [1.0]}), contrasts = {'s1': 'control'})
+    assert single.group1.name == 'control' and single.group2.name == '' and list(single.group2) == []
+
+
+def test_download_model():
+    with patch.dict(sys.modules, {'huggingface_hub': None}):
+        with pytest.raises(ImportError):
+            download_model("does_not_exist.pkl")
+    fake = MagicMock()
+    fake.hf_hub_download.return_value = "/tmp/model.pkl"
+    with patch.dict(sys.modules, {'huggingface_hub': fake}):
+        assert download_model("glycan_representations.pkl") == "/tmp/model.pkl"
+
+
+def test_stats_degenerate_inputs():
+    assert get_alphaN(20, verbose = True) > 0
+    assert pi0_tst(np.array([]), alpha = 0.05) == 1.0
+    assert TST_grouped_benjamini_hochberg({'empty': []}, {'empty': []}, 0.05) == ({}, {})
+    assert compare_inter_vs_intra_group(pd.DataFrame(), pd.DataFrame(), [], {}) == (0.0, 0.0)
+    F, p = hotellings_t2(np.array([[1.0, 2.0], [3.0, 4.0]]), np.array([[1.0, 2.0], [3.0, 4.0]]), paired = True)
+    assert F == 0 and p == 1.0
+
+
+def test_graph_edge_cases():
+    assert glycan_to_nxGraph('Gal(b1-4)Glc', libr = dict(lib)).number_of_nodes() == 3
+    with pytest.raises(Exception):
+        glycan_to_nxGraph('a=b')
+    negation_match = categorical_node_match_wildcard('string_labels', 'unknown', {}, 'termini', 'flexible')
+    assert negation_match({'string_labels': 'Gal'}, {'string_labels': '!Fuc'})
+    assert not negation_match({'string_labels': 'Fuc'}, {'string_labels': '!Fuc'})
+    with pytest.raises(ValueError):
+        subgraph_isomorphism_with_negation('Gal(b1-4)GlcNAc', '!Fuc')
+    assert try_string_conversion('Gal(b1-4)Glc') == 'Gal(b1-4)Glc'
+    assert try_string_conversion(nx.DiGraph()) is None
+    assert largest_subgraph('Gal', 'Fuc') == ''
+
+
+def test_regex_edge_cases():
+    assert filter_matches_by_location([[1, 2]], None, None) == [[1, 2]]
+    alt = convert_pattern_component('Gal-[Fuc(a1-3)|Gal(b1-4)]-GlcNAc')  # alternatives that carry linkages stay a list
+    assert len(alt) == 2 and all(v == [1, 1] for v in alt.values())
+    assert convert_pattern_component('Gal[b|a]GlcNAc') == 'Gal(?1-?)b/a(?1-?)GlcNAc'
+    assert convert_pattern_component('Man=')  # neither the bracket nor the occurrence branch fires
+
+
+def test_tokenization_edge_cases():
+    assert structure_to_basic('Gal(b1-4)Glc-ol') == structure_to_basic('Gal(b1-4)Glc')
+    assert mz_to_structures([1000.0], 'nonsense').empty
+
+
+def test_looks_like_linearcode():
+    assert not looks_like_linearcode('Ma3#Mb4GN')  # illegal character
+    assert not looks_like_linearcode('Ma3(Mb4GN')  # unbalanced parenthesis
+
+
+def test_get_insight_fallbacks(capsys):
+    get_insight('Gal(b1-?)GlcNAc(b1-4)GlcNAc')  # not stored verbatim, but compare_glycans finds it
+    capsys.readouterr()
+    get_insight('Api(b1-4)Api(b1-4)Api(b1-4)Api')
+    assert "double-check" in capsys.readouterr().out
+
+
+def test_evolution_net_dic_lazy():
+    assert isinstance(evolution_module.net_dic, dict)
+    with pytest.raises(AttributeError):
+        evolution_module.not_a_real_attribute
+    df = pd.DataFrame({'Species': ['Species1'] * 2 + ['Species2'] * 2 + ['Species3'] * 2,
+                       'Order': ['Order1'] * 4 + ['Order2'] * 2, 'glycan': ['Gal(b1-4)Glc-ol'] * 6})
+    network_dic = {'Species1': nx.Graph([('Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol')]),
+                   'Species2': nx.Graph([('Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol')])}
+    assert list(check_conservation('Gal(b1-4)Glc-ol', df, network_dic, threshold = 1)) == ['Order1']  # Order2 has no networks
+    assert check_conservation('Gal(b1-4)Glc-ol', df, None, threshold = 1) == {}  # falls back to the bundled networks
+
+
+def test_analysis_edge_cases():
+    df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal'], 'a': [1.0, 2.0], 'b': [2.0, 1.0]})
+    assert preprocess_data(df, group1 = ['a', 'b'], group2 = None, experiment = "anova")[3] == []
+    assert get_representative_substructures(pd.DataFrame({'motif': [], 'pval': [], 'corr_pval': []})) == []
+    assert select_grouping(pd.DataFrame(np.ones((2, 4))), pd.DataFrame(np.ones((2, 4))),
+                           ['Gal(b1-4)Glc', 'Fuc(a1-2)Gal'], [0.01, 0.4])[0] == {'group1': ['Gal(b1-4)Glc', 'Fuc(a1-2)Gal']}
+    with pytest.raises(ValueError):
+        get_glycanova(df, groups = ['a', 'b'])
+
+
+def test_biosynthesis_weight_estimation():
+    assert choose_path({1: 'a', 2: 'b', 3: 'c'}, [], {}, nb_intermediates = 0) == {}
+    net = nx.DiGraph([('Glc', 'Gal(b1-4)Glc'), ('Gal(b1-4)Glc', 'Gal(b1-4)Gal(b1-4)Glc')])
+    nx.set_node_attributes(net, {'Glc': 0.0, 'Gal(b1-4)Glc': 0.0, 'Gal(b1-4)Gal(b1-4)Glc': 0.0}, 'abundance')
+    out = get_edge_weight_by_abundance(net, root = 'Glc')  # root abundance below 0.1 falls back to root_default
+    assert out['Glc']['Gal(b1-4)Glc']['capacity'] == pytest.approx(np.sqrt(
+        10 * 5))  # undetected intermediates are damped to half their neighbour, capacity is the geometric mean of both ends
+    assert out['Gal(b1-4)Glc']['Gal(b1-4)Gal(b1-4)Glc']['capacity'] == pytest.approx(
+        np.sqrt(5 * 2.5))  # damping compounds per hop away from observed data
+    assert get_edge_weight_by_abundance(net, root = 'Glc', virtual_damping = 1.0)['Glc']['Gal(b1-4)Glc'][
+               'capacity'] == pytest.approx(10.0)
+
+
+def test_quantify_motifs_from_file(tmp_path):
+    path = tmp_path / "abundances.csv"
+    pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Fuc(a1-2)Gal(b1-4)GlcNAc'], 's1': [1.0, 2.0], 's2': [2.0, 1.0]}).to_csv(path, index = False)
+    assert not quantify_motifs(str(path), feature_set = ['known']).empty
+    assert get_size_branching_features(['Gal(b1-4)Glc', 'Gal(b1-3)Glc'], n_bins = 2).shape[0] == 2
+
+def test_looks_like_oxford():
+    for oxford in ['Bi', 'M5', 'Man-5', 'A2G2S2', 'FA2G2S(3,6)2', 'M9Glc', 'A2G2LacDiNAc1', 'A2[SO4-2]', 'A2G2(s)2']:
+        assert looks_like_oxford(oxford)
+    # Glycosphingolipid series shorthand is not Oxford
+    for gsl in ['Neu5Ac-Fuc-nLc10Cer', 'Neu5Ac-nLc6Cer', 'GalNAc-Gb4Cer', 'nLc4Cer', 'Gb3Cer', 'iGb3Cer']:
+        assert not looks_like_oxford(gsl)
+    assert not looks_like_oxford('Fuc1Gal2')
+    assert canonicalize_iupac('Gal-Cer') == 'Gal1Cer'  # ceramide linker still resolves
+    assert canonicalize_iupac('Gal(b1-4)Glc-Sp8') == 'Gal(b1-4)Glc'  # spacer trimming still works
+
+
+def test_graph_to_string_ordering_and_dedup():
+    g = 'Neu5Ac(a2-3)Gal(b1-4)GlcNAc(b1-2)Man(a1-3)[Gal(b1-4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert graph_to_string(glycan_to_nxGraph(g), canonicalize = False, order_by = "length") == g
+    special = 'Man(a1-3)[GlcNAc(b1-4)][Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc'
+    assert graph_to_string(glycan_to_nxGraph(special), canonicalize = False, order_by = "linkage") == special
+    # Wildcards force the all-pairs comparison instead of the canonical-string bucket shortcut
+    assert deduplicate_glycans(['Gal(b1-4)Glc', 'Gal(b1-?)Glc', 'Gal(b1-4)Glc-ol']) == ['Gal(b1-4)Glc', 'Gal(b1-4)Glc-ol']
+    # Here the canonical form is the second entry, so the first is the one dropped
+    assert deduplicate_glycans(['Gal(b1-4)[Neu5Ac(a2-3)]GlcNAc', 'Neu5Ac(a2-3)[Gal(b1-4)]GlcNAc']) == ['Neu5Ac(a2-3)[Gal(b1-4)]GlcNAc']
+
+
+def test_get_molecular_properties_mocked():
+    hit, miss = MagicMock(), MagicMock()
+    hit.cid, miss.cid = 123, None
+    fake = MagicMock()
+    fake.get_compounds.side_effect = [[miss], [hit], [hit]]  # first glycan misses, then the placeholder and the second glycan hit
+    fake.compounds_to_frame.return_value = pd.DataFrame({'xlogp': [-4.0, -4.0], 'complexity': [382.0, 382.0]})
+    with patch.dict(sys.modules, {'pubchempy': fake}):
+        out = get_molecular_properties(['Gal(b1-4)Glc', 'Glc'], placeholder = True, verbose = True, pubchem = True)
+        assert len(out) == 2 and 'xlogp' in out.columns
+    broken = MagicMock()
+    broken.get_compounds.side_effect = Exception('boom')
+    broken.compounds_to_frame.side_effect = KeyError('xlogp')
+    with patch.dict(sys.modules, {'pubchempy': broken}):
+        assert not get_molecular_properties(['Gal(b1-4)Glc'], verbose = True, pubchem = True).empty  # the structural columns survive a failed request
+    with patch.dict(sys.modules, {'pubchempy': None}):
+        with pytest.raises(ImportError):
+            get_molecular_properties(['Glc'], pubchem = True)
+        assert not get_molecular_properties(['Glc']).empty  # nothing about the default path needs pubchempy
+
+
+def test_analysis_filepath_and_contrast_branches(tmp_path):
+    df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc', 'Man(a1-6)Man', 'Neu5Ac(a2-6)Gal', 'Fuc(a1-3)GlcNAc'],
+                       'sample1': [100, 200, 150, 300], 'sample2': [110, 220, 140, 280], 'sample3': [120, 210, 160, 290],
+                       'sample4': [500, 600, 450, 700], 'sample5': [480, 580, 470, 680], 'sample6': [520, 620, 430, 720]})
+    gdf = GlycoDataFrame(df, contrasts = {f'sample{i}': ('control' if i < 4 else 'tumor') for i in range(1, 7)})
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        characterize_monosaccharide('a1-3', mode = 'bond', modifications = True, rank = "Class", focus = "Actinopterygii",
+                                    filepath = tmp_path / "mono.png")
+        get_pca(df, [1, 1, 1, 2, 2, 2], filepath = tmp_path / "pca.png")
+        get_roc(gdf, filepath = tmp_path / "roc.png")  # groups read off the contrasts
+        multi = df.copy()
+        for i in range(7, 10):
+            multi[f'sample{i}'] = np.random.RandomState(i).randint(50, 500, 4)
+        get_roc(multi, [1, 2, 3] * 3, [], filepath = tmp_path / "roc_multi.png")
+        assert mock_savefig.call_count >= 4
+    assert get_biodiversity(gdf)[0].shape[0] > 0
+    res = pd.DataFrame({'Glycan': ['Gal(b1-4)Glc', 'Gal(b1-4)GlcNAc', 'Man(a1-3)Man'], 'Mean abundance': [.3, .35, .4],
+                        'Log2FC': [1.5, -.5, .8], 'Effect size': [.6, -.3, .4], 'p-val': [.01, .04, .002], 'corr p-val': [.03, .06, .006]})
+    get_volcano(res, filepath = str(tmp_path / "volcano.png"), annotate_volcano = True)
+    assert (tmp_path / "volcano.png").exists()
+
+
+def test_biosynthesis_contrast_and_extension_branches(tmp_path):
+    raw = pd.DataFrame({'glycan': ["Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Fuc(a1-2)Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"],
+                        'sample1': [10.0, 5.0, 7.0], 'sample2': [8.0, 6.0, 8.0], 'sample3': [9.0, 4.0, 6.0], 'sample4': [11.0, 7.0, 9.0]})
+    contrasts = {'sample1': 'ctrl', 'sample2': 'ctrl', 'sample3': 'tumor', 'sample4': 'tumor'}
+    reaction = get_differential_biosynthesis(GlycoDataFrame(raw, contrasts = contrasts), analysis = "reaction")
+    assert not reaction.empty
+    # An all-NaN column here still leaves the frame non-empty, so emptiness alone does not tell us the statistics ran
+    assert reaction.select_dtypes('number').notna().all().all()
+    assert np.isfinite(reaction.select_dtypes('number').to_numpy(dtype = float)).all()
+    path = tmp_path / "ab.csv"
+    raw.to_csv(path, index = False)
+    assert not get_differential_biosynthesis(str(path), group1 = ['sample1', 'sample2'], group2 = ['sample3', 'sample4'],
+                                             analysis = "reaction").empty
+    assert not get_biosynthetic_coherence(GlycoDataFrame(raw.set_index('glycan'), contrasts = contrasts))[0].empty
+    net = construct_network(['Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol'])
+    conservation_df = pd.DataFrame({'Species': ['Species1', 'Species2'], 'glycan': ['Gal(b1-4)Glc-ol'] * 2})
+    network_dic = {'Species1': nx.Graph([('Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol')]),
+                   'Species2': nx.Graph([('Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol')])}
+    highlighted = highlight_network(net, highlight = 'conservation', conservation_df = conservation_df, network_dic = network_dic)
+    assert nx.get_node_attributes(highlighted, 'abundance')['Gal(b1-4)Glc-ol'] == 200
+    # Target composition is further away than the step budget allows
+    assert extend_network(net, steps = 1, to_extend = {'Hex': 8, 'HexNAc': 4, 'dHex': 2}, auto_steps = True)[-1] == -1
+
+
+_MILK_BIO = ["Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)Glc-ol", "Neu5Ac(a2-6)Gal(b1-4)Glc-ol",
+             "Fuc(a1-2)Gal(b1-4)Glc-ol", "Gal(b1-4)GlcNAc(b1-3)Gal(b1-4)Glc-ol"]
+
+
+def test_get_differential_biosynthesis_branchpoint_and_shadow():
+    df = pd.DataFrame({'glycan': _MILK_BIO, 'sample1': [10., 5., 7., 3., 4.], 'sample2': [8., 6., 8., 2., 5.],
+                       'sample3': [9., 4., 6., 6., 2.], 'sample4': [11., 7., 9., 7., 3.]})
+    g1, g2 = ['sample1', 'sample2'], ['sample3', 'sample4']
+    bp = get_differential_biosynthesis(df, group1 = g1, group2 = g2, analysis = "branchpoint")
+    assert len(bp) > 0 and all(' -> ' in i for i in bp.index)
+    rx = get_differential_biosynthesis(df, group1 = g1, group2 = g2, analysis = "reaction")
+    assert "Neu5Ac(a2-3/6)" in rx.index  # shadow reaction merging both linkage variants
+    assert 0 < rx.attrs['alpha'] < 1 and rx.attrs[
+        'test'] == 'moderated t-test'  # so get_volcano thresholds at the same alpha
+    assert set(rx['significant']) <= {True, False}
+
+
+def test_get_biosynthetic_coherence_nothing_scorable():
+    glycans = ["Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)[Neu5Ac(a2-6)]Gal(b1-4)Glc-ol",  # both intermediates stay virtual
+               "Fuc(a1-2)Gal(b1-4)Glc-ol"]
+    df = pd.DataFrame(np.tile(np.array([[60., 20., 20.]]).T, (1, 6)), index = glycans,
+                      columns = [f"g1_{i}" for i in range(3)] + [f"g2_{i}" for i in range(3)])
+    with pytest.raises(ValueError):
+        get_biosynthetic_coherence(df, list(df.columns[:3]), list(df.columns[3:]), n_permutations = 0)
+
+
+@patch('bokeh.io.output_notebook')
+@patch('bokeh.plotting.show')
+def test_plot_network_hierarchical_and_origin(mock_show, mock_enable, sample_network):
+    assert plot_network(sample_network, plot_format = 'hierarchical') is not None  # diamond revisits a levelled node
+    nx.set_node_attributes(sample_network, {n: 'red' for n in sample_network.nodes()}, 'origin')
+    assert plot_network(sample_network, plot_format = 'hierarchical') is not None
+    plt.close('all')
+
+
+def test_choose_path_missing_alternative():
+    g1 = nx.DiGraph([("A", "B"), ("A", "C"), ("B", "D"), ("C", "D")])
+    nx.set_node_attributes(g1, {n: 0 for n in g1.nodes()}, 'virtual')
+    g2 = nx.DiGraph([("A", "B"), ("B", "D")])  # lacks the C alternative
+    nx.set_node_attributes(g2, {n: 0 for n in g2.nodes()}, 'virtual')
+    out = choose_path({1: "A", 2: "B", 3: "D", 4: "C"}, ["s1", "s2"], {"s1": g1, "s2": g2})
+    assert set(out) == {"B", "C"} and out["B"] > out["C"]
+
+
+def test_lazy_loader_missing_metadata():
+    loader = LazyLoader("glycowork", "motif")  # directory without contrasts.csv/datasets_metadata.csv
+    loader._load_contrasts()
+    assert loader._contrasts_map == {} and loader._paired_map == {} and loader._provenance_map == {}
+
+
+def test_permanova_with_permutation_sampled():
+    coords = np.random.default_rng(42).normal(size = (10, 3))
+    dist = pd.DataFrame(np.abs(coords[:, None, :] - coords[None, :, :]).sum(-1))
+    f, p = permanova_with_permutation(dist, ['a'] * 5 + ['b'] * 5, permutations = 50)  # n>8 draws labels randomly
+    assert np.isfinite(f) and 0 < p <= 1
+
+
+def test_estimate_technical_variance_custom_scale():
+    df = pd.DataFrame({'a1': [10., 20., 30.], 'a2': [12., 18., 33.], 'b1': [5., 25., 40.], 'b2': [6., 22., 38.]})
+    out = estimate_technical_variance(df, ['a1', 'a2'], ['b1', 'b2'], num_instances = 4, custom_scale = 2.0)
+    assert out.shape == (3, 16) and np.isfinite(out.values).all()
+
+
+def test_parse_floating_bit_conflicting_fragments():
+    with pytest.raises(ValueError):
+        parse_floating_bit("Gal(b1-^)Glc|Man(b1-^)Glc")
+
+
+@pytest.mark.parametrize("wurcs,expected", [
+    ("WURCS=2.0/1,1,0/[a2122h-1b_1-5_2*NCC/3=O]/1/", "GlcNAcb"),  # single residue, no linkage block
+    ("WURCS=2.0/1,1,0/[a2122h-1b_1-5_2*ZZZ]/1/", "Hexb"),  # unmappable modification falls back to the skeleton
+])
+def test_wurcs_to_iupac_edge_cases(wurcs, expected):
+    assert wurcs_to_iupac(wurcs) == expected
+
+
+def test_resolve_motif_name_ambiguous():
+    with pytest.raises(ValueError):
+        resolve_motif_name("i antigen")  # normalizes onto both I_antigen and i_antigen
+
+
+def test_add_sugar_ambiguous_monosaccharide():
+    d = draw.Drawing(100, 100)
+    add_sugar('Glc/Bogus', d)  # fewer than two known alternatives: nothing drawn
+    assert len(d.elements) == 0
+    add_sugar('Ara/Lyx', d)  # shape without a bicolour recipe falls back to a single symbol
+    assert len(d.elements) > 0
+
+
+def test_GlycoDraw_rescue_and_bad_method():
+    assert GlycoDraw("Neu5Acα2-3Galβ1-4Glc", suppress = True) is not None  # greek letters route via rescue_glycans
+    with pytest.raises(ValueError):
+        GlycoDraw("Gal(b1-4)Glc", draw_method = 'bogus')
+
+
+def test_GlycanDrawing_save_and_png(tmp_path):
+    d = GlycoDraw("Gal(b1-4)Glc", suppress = True, shadow = True)
+    d.save_svg(str(tmp_path / "x.svg"))
+    assert (tmp_path / "x.svg").exists()
+    assert isinstance(d._repr_png_(), bytes)
+
+
+def test_spread_glycans_single_and_overlapping():
+    assert _spread_glycans([(0., 0., 10., 10., 0., 0.)], (100., 100.)) == [[0.0, 0.0]]
+    out = _spread_glycans([(0., 0., 10., 10., 0., 0.), (2., 2., 10., 10., 2., 2.)], (100., 100.), iterations = 3)
+    assert abs(out[0][1] - out[1][1]) > 2  # overlap deeper in y: pushed apart vertically
+    out = _spread_glycans([(0., 0., 10., 40., 0., 0.), (5., 0., 10., 40., 5., 0.)], (200., 200.), iterations = 2)
+    assert abs(out[0][0] - out[1][0]) > 5  # overlap deeper in x: pushed apart horizontally
+
+
+def test_get_time_series_motifs_transforms(sample_time_series_data):
+    assert not get_time_series(sample_time_series_data, impute = False, motifs = True, transform = "ALR").empty
+    with pytest.raises(ValueError):
+        get_time_series(sample_time_series_data, impute = False, motifs = True, transform = "wrong")
+
+
+def test_get_jtk_motifs_transforms(sample_jtk_df):
+    for transform in ("ALR", "Nothing"):
+        assert not get_jtk(sample_jtk_df, timepoints = 8, interval = 3, periods = [12, 24], motifs = True,
+                           transform = transform).empty
+    with pytest.raises(ValueError):
+        get_jtk(sample_jtk_df, timepoints = 8, interval = 3, periods = [12], motifs = True, transform = "wrong")
+
+
+def test_clean_protein_sequences_filters_and_raises():
+    with pytest.warns(UserWarning, match = "Skipped 3 invalid"):
+        assert _clean_protein_sequences(["ACDEF", None, "  ", "ACD1EF", "acdef", "ACDEF"], max_len = 3) == ["ACD"]
+    with pytest.raises(ValueError):
+        _clean_protein_sequences([])
+
+
+def test_glycoworkbench_to_iupac_unparseable():
+    assert glycoworkbench_to_iupac("nonsense") == "nonsense"

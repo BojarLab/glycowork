@@ -1,0 +1,31 @@
+name: Coding Standard
+
+on:
+  pull_request:
+    branches: [master, dev]
+  push:
+    branches: [master, dev]
+  workflow_dispatch:
+
+jobs:
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pycodestyle
+      - name: Check style of changed lines
+        if: github.actor != 'Bribak'
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin ${{ github.base_ref }}
+            BASE=origin/${{ github.base_ref }}
+          else
+            BASE="${{ github.event.before }}"
+            git cat-file -e "$BASE^{commit}" 2>/dev/null || BASE=$(git rev-parse HEAD~1)
+          fi
+          python .github/scripts/check_style.py --diff $BASE...HEAD glycowork tests bin

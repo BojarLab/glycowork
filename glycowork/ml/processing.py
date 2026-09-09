@@ -1,4 +1,5 @@
 import networkx as nx
+import warnings
 from copy import deepcopy
 from random import getrandbits, random
 from typing import Any
@@ -15,17 +16,11 @@ try:
     from torch_geometric.transforms.base_transform import BaseTransform
 except ImportError:
     raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
-try:
-    import glyles
-    from glyles.glycans.factory.factory import MonomerFactory
-    from glyles.glycans.poly.merger import Merger
-    from rdkit import Chem
-    from rdkit.Chem import rdDepictor
-except ImportError:
-    raise ImportError("<rdkit missing; you need to do 'pip install glycowork[all]' to use the GIFFLAR model>")
-
-atom_map = {6: 1, 7: 2, 8: 3, 15: 3, 16: 5}
-bond_map = {Chem.BondDir.BEGINDASH: 1, Chem.BondDir.BEGINWEDGE: 2, Chem.BondDir.NONE: 3}
+# One list, since the collator, the model and the builder must agree; the ring relation was missing from the first two, so every ring the builder encoded was silently dropped
+GIFFLAR_EDGE_TYPES = [("atoms", "coboundary", "atoms"), ("atoms", "to", "bonds"), ("bonds", "to", "monosacchs"),
+                      ("bonds", "boundary", "bonds"), ("bonds", "coboundary", "bonds"), ("monosacchs", "boundary", "monosacchs")]
+atom_map = {'C': 1, 'N': 2, 'O': 3, 'P': 4, 'S': 5}
+bond_map = {'@': 1, '@@': 2, '': 3}  # chirality of the bond's first atom, replacing the wedge/dash of a 2D depiction
 
 
 def augment_glycan(glycan_data: torch.utils.data.Dataset, # glycan as a networkx graph
@@ -61,7 +56,7 @@ class AugmentedGlycanDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int) -> torch.utils.data.Dataset:
         glycan_data = self.dataset[idx]
         if random() < self.augment_prob:
-            glycan_data = augment_glycan(glycan_data, self.libr, self.generalization_prob)
+            glycan_data = augment_glycan(glycan_data, libr = self.libr, generalization_prob = self.generalization_prob)
         return glycan_data
 
 
@@ -79,7 +74,7 @@ def dataset_to_graphs(glycan_list: list[str], # list of IUPAC-condensed glycan s
         if glycan not in glycan_cache:
             nx_graph = glycan_to_nxGraph(glycan, libr = libr)
             pyg_data = from_networkx(nx_graph)
-            glycan_cache[glycan] = pyg_data
+            glycan_cache[glycan], pyg_data = pyg_data, pyg_data.clone()
         else:
             # Reuse cached data for duplicate glycan
             pyg_data = glycan_cache[glycan].clone()
@@ -97,12 +92,36 @@ def dataset_to_dataloader(glycan_list: list[str], # list of IUPAC-condensed glyc
                           drop_last: bool = False, # drop last batch
                           extra_feature: list[float] | None = None, # additional input features
                           label_type: torch.dtype = torch.long, # tensor type for label
-                          augment_prob: float = 0., # probability of data augmentation
-                          generalization_prob: float = 0.2 # probability of wildcarding
-                          ) -> torch.utils.data.DataLoader: # dataloader for training
+                          augment_prob: float = 0.,  # probability of data augmentation
+                          generalization_prob: float = 0.2,  # probability of wildcarding
+                          hetero: bool = False
+                          # build atom-level molecular heterographs for GIFFLAR instead of monosaccharide graphs
+                          ) -> torch.utils.data.DataLoader:  # dataloader for training
     "wrapper function to convert glycans and labels to a torch_geometric DataLoader"
     if libr is None:
         libr = lib
+    if hetero:
+        if extra_feature is not None or augment_prob:
+            warnings.warn(
+                "extra_feature and augment_prob are ignored when hetero=True; GIFFLAR's molecular heterographs have no extra feature slot and AugmentedGlycanDataset wildcards monosaccharide nodes, which the atom-level graph does not carry")
+        # GIFFLAR convolves over atoms, bonds, and monosaccharides, so it needs the molecular heterograph and its own collator rather than the monosaccharide graph
+        data = []
+        for glycan, label in zip(glycan_list, labels):
+            point = iupac2mol(glycan)
+            if point is None:
+                continue  # an ambiguous linkage or a floating bit has no defined molecular graph
+            point["y"] = torch.tensor([label],
+                                      dtype = label_type)  # kept one-dimensional, since the collator spots empty fields via len() and a 0-dim tensor has none
+            data.append(point)
+        if not data:
+            raise ValueError(
+                "None of the glycans could be converted into a molecular graph; GIFFLAR needs fully specified sequences, without '{', '?', or '/'.")
+        if len(data) < len(glycan_list):
+            warnings.warn(
+                f"{len(glycan_list) - len(data)} of {len(glycan_list)} glycans have no defined molecular graph and were dropped from this dataloader")
+        return torch.utils.data.DataLoader(HeteroDataset(data), batch_size = batch_size, shuffle = shuffle,
+                                           drop_last = drop_last or (shuffle and len(HeteroDataset(data)) % batch_size == 1),
+                                           collate_fn = hetero_collate)
     # Converting glycans and labels to PyTorch Geometric Data objects
     glycan_graphs = dataset_to_graphs(glycan_list, labels, libr = libr, label_type = label_type)
     # Adding (optional) extra feature to the Data objects
@@ -110,8 +129,9 @@ def dataset_to_dataloader(glycan_list: list[str], # list of IUPAC-condensed glyc
         for graph, feature in zip(glycan_graphs, extra_feature):
             graph.train_idx = torch.tensor(feature, dtype = torch.float)
     augmented_dataset = AugmentedGlycanDataset(glycan_graphs, libr, augment_prob = augment_prob, generalization_prob = generalization_prob)
-    # Generating the dataloader from the data objects
-    return DataLoader(augmented_dataset, batch_size = batch_size, shuffle = shuffle, drop_last = drop_last)
+    # Generating the dataloader from the data objects; a trailing batch of one sample makes every BatchNorm1d in the models raise while training, so it can never be kept when shuffling
+    return DataLoader(augmented_dataset, batch_size = batch_size, shuffle = shuffle,
+                      drop_last = drop_last or (shuffle and len(augmented_dataset) % batch_size == 1))
 
 
 def split_data_to_train(glycan_list_train: list[str], # training glycans
@@ -124,9 +144,11 @@ def split_data_to_train(glycan_list_train: list[str], # training glycans
                         extra_feature_train: list[float] | None = None, # additional training features
                         extra_feature_val: list[float] | None = None, # additional validation features
                         label_type: torch.dtype = torch.long, # tensor type for label
-                        augment_prob: float = 0., # probability of data augmentation
-                        generalization_prob: float = 0.2 # probability of wildcarding
-                        ) -> dict[str, torch.utils.data.DataLoader]: # dictionary of train/val dataloaders
+                        augment_prob: float = 0.,  # probability of data augmentation
+                        generalization_prob: float = 0.2,  # probability of wildcarding
+                        hetero: bool = False
+                        # build atom-level molecular heterographs for GIFFLAR instead of monosaccharide graphs
+                        ) -> dict[str, torch.utils.data.DataLoader]:  # dictionary of train/val dataloaders
     "wrapper function to convert split training/test data into dictionary of dataloaders"
     if libr is None:
         libr = lib
@@ -134,11 +156,14 @@ def split_data_to_train(glycan_list_train: list[str], # training glycans
     train_loader = dataset_to_dataloader(glycan_list_train, labels_train, libr = libr,
                                          batch_size = batch_size, shuffle = True,
                                          drop_last = drop_last, extra_feature = extra_feature_train,
-                                         label_type = label_type, augment_prob = augment_prob, generalization_prob = generalization_prob)
+                                         label_type = label_type, augment_prob = augment_prob,
+                                         generalization_prob = generalization_prob,
+                                         hetero = hetero)
     val_loader = dataset_to_dataloader(glycan_list_val, labels_val, libr = libr,
                                        batch_size = batch_size, shuffle = False,
                                        drop_last = drop_last, extra_feature = extra_feature_val,
-                                       label_type = label_type, augment_prob = 0., generalization_prob = 0.)
+                                       label_type = label_type, augment_prob = 0., generalization_prob = 0.,
+                                       hetero = hetero)
     return {'train': train_loader, 'val': val_loader}
 
 
@@ -180,7 +205,7 @@ def hetero_collate(data: list[list[HeteroData]] | list[HeteroData] | None,  # li
         data = data[0]
     # Extract all valid node types and edge types
     node_types = ["atoms", "bonds", "monosacchs"]
-    edge_types = [("atoms", "coboundary", "atoms"), ("atoms", "to", "bonds"), ("bonds", "to", "monosacchs"), ("bonds", "boundary", "bonds"), ("monosacchs", "boundary", "monosacchs")]
+    edge_types = GIFFLAR_EDGE_TYPES
     # Setup empty fields for the most important attributes of the resulting batch
     x_dict, batch_dict, edge_index_dict, edge_attr_dict = {}, {}, {}, {}
     # Store the node counts to offset edge indices when collating
@@ -242,17 +267,20 @@ class GIFFLARTransform(BaseTransform):
                 ) -> HeteroData:  # transformed data
         """Transform the data into a GIFFLAR format. This means to compute the simplex network and create a heterogenous graph from it"""
         # Set up the atom information
-        data["atoms"].x = torch.tensor([atom_map.get(atom.GetAtomicNum(), 1) for atom in data["mol"].GetAtoms()])
+        molecule = data["mol"]
+        data["atoms"].x = torch.tensor([atom_map.get(element, 0) for element, charge, chirality in molecule.atoms])
         data["atoms"].num_nodes = len(data["atoms"].x)
         # Prepare all data that can be extracted from one iteration over all bonds
         bonds_x, atoms_coboundary, atoms_to_bonds, bonds_to_monosacchs = [], [], [], []
+        incident = [[] for _ in molecule.atoms]  # which bonds meet at each atom, for the bond boundaries below
         # Fill all bond-related information
-        for bond in data["mol"].GetBonds():
-            bonds_x.append(bond_map.get(bond.GetBondDir(), 1))
-            b_idx, e_idx, idx = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), bond.GetIdx()
+        for idx, ((b_idx, e_idx, order), mono_id) in enumerate(zip(molecule.bonds, molecule.bond_monos)):
+            bonds_x.append(bond_map.get(molecule.atoms[b_idx][2], 0))
             atoms_coboundary.extend([(b_idx, e_idx), (e_idx, b_idx)])
             atoms_to_bonds.extend([(b_idx, idx), (e_idx, idx)])
-            bonds_to_monosacchs.append((idx, bond.GetIntProp("mono_id")))
+            bonds_to_monosacchs.append((idx, mono_id))
+            incident[b_idx].append(idx)
+            incident[e_idx].append(idx)
         # Transform the data into tensors
         data["bonds"].x = torch.tensor(bonds_x)
         data["bonds"].num_nodes = len(bonds_x)
@@ -260,10 +288,14 @@ class GIFFLARTransform(BaseTransform):
         data["atoms", "to", "bonds"].edge_index = torch.tensor(atoms_to_bonds, dtype = torch.long).t()
         data["bonds", "to", "monosacchs"].edge_index = torch.tensor(bonds_to_monosacchs, dtype = torch.long).t()
         # Compute both types of linkages between bonds
-        data["bonds", "boundary", "bonds"].edge_index = torch.tensor([(bond1.GetIdx(), bond2.GetIdx()) for atom in data["mol"].GetAtoms() for bond1 in atom.GetBonds() for bond2 in atom.GetBonds() if bond1.GetIdx() != bond2.GetIdx()], dtype = torch.long).t()
-        data["bonds", "coboundary", "bonds"].edge_index = torch.tensor([(bond1, bond2) for ring in data["mol"].GetRingInfo().BondRings() for bond1 in ring for bond2 in ring if bond1 != bond2], dtype = torch.long).t()
+        data["bonds", "boundary", "bonds"].edge_index = torch.tensor(
+            [(bond1, bond2) for at_atom in incident for bond1 in at_atom for bond2 in at_atom if bond1 != bond2],
+            dtype = torch.long).t()
+        data["bonds", "coboundary", "bonds"].edge_index = torch.tensor(
+            [(bond1, bond2) for ring in molecule.rings for bond1 in ring for bond2 in ring if bond1 != bond2],
+            dtype = torch.long).t()
         # Set up the monosaccharide information; This does not make sense. The monomer-ids are categorical features
-        data["monosacchs"].x = torch.tensor([lib.get(data["tree"].nodes[node]["name"], 1) for node in data["tree"].nodes])
+        data["monosacchs"].x = torch.tensor([lib.get(data["tree"].nodes[node]["name"], len(lib)) for node in data["tree"].nodes])
         data["monosacchs"].num_nodes = len(data["monosacchs"].x)
         monosacchs_boundary = [(a, b) for a, b in data["tree"].edges] + [(b, a) for a, b in data["tree"].edges]
         data["monosacchs", "boundary", "monosacchs"].edge_index = torch.tensor(monosacchs_boundary, dtype = torch.long).t()
@@ -286,60 +318,26 @@ class HeteroDataset(Dataset):
         return self.data_list[idx]
 
 
-def nx2mol(G: nx.Graph,  # graph representing a molecule
-           sanitize: bool = True  # bool flag indicating to sanitize the resulting molecule (should be True for "production mode" and False when debugging this function)
-           ) -> Chem.Mol:  # converted, sanitized molecules in RDKit represented by the input graph
-    """Convert a molecules from a networkx.Graph to RDKit"""
-    # Create the molecule
-    mol = Chem.RWMol()
-    # Create all atoms based on their representing nodes
-    node_to_idx = {}
-    for node, attrs in G.nodes(data = True):
-        a = Chem.Atom(attrs['atomic_num'])
-        a.SetChiralTag(attrs['chiral_tag'])
-        a.SetFormalCharge(attrs['formal_charge'])
-        a.SetIsAromatic(attrs['is_aromatic'])
-        a.SetIntProp("mono_id", attrs['mono_id'])
-        node_to_idx[node] = mol.AddAtom(a)
-    # Connect the atoms based on the edges from the graph
-    for first, second, attrs in G.edges(data = True):
-        idx = mol.AddBond(node_to_idx[first], node_to_idx[second], attrs['bond_type']) - 1
-        mol.GetBondWithIdx(idx).SetIntProp("mono_id", attrs['mono_id'])
-    if sanitize:
-        Chem.SanitizeMol(mol)
-    return mol
-
-
-def clean_tree(tree: nx.Graph  # tree to clean
-               ) -> nx.Graph | None:  # cleaned tree
-    """Clean the tree from unnecessary node features and store only the IUPAC name"""
-    for node in tree.nodes:
-        attrs = deepcopy(tree.nodes[node])
-        if "type" in attrs and isinstance(attrs["type"], glyles.glycans.mono.monomer.Monomer): # type: ignore
-            tree.nodes[node].clear()
-            tree.nodes[node].update({"iupac": "".join([x[0] for x in attrs["type"].recipe]), "name": attrs["type"].name, "recipe": attrs["type"].recipe})
-        else:
-            return None
-    return tree
-
-
 def iupac2mol(iupac: str  # IUPAC-condensed string of the glycan to convert
-              ) -> HeteroData | None:  # HeteroData object containing the IUPAC string, the SMILES representation, the RDKit molecule, and the monosaccharide tree
-    """Convert a glycan stored given as IUPAC-condensed string into an RDKit molecule while keeping the information of which atom and which bond belongs to which monosaccharide"""
+              ) -> HeteroData | None:  # HeteroData object containing the IUPAC string, the SMILES representation, the molecular graph, and the monosaccharide tree
+    """Convert a glycan given as IUPAC-condensed string into a molecular graph while keeping the information of which atom and which bond belongs to which monosaccharide"""
+    from glycowork.motif.smiles import glycan_to_molecule, GlycanSMILESError
     if "{" in iupac or "?" in iupac or "/" in iupac:
         return None
-    # Convert the IUPAC string using GlyLES
-    glycan = glyles.Glycan(iupac)
-    # Get its underlying monosaccharide-tree
-    tree = glycan.parse_tree
-    # Re-merge the monosaccharide tree using networkx graphs to keep the assignment of atoms and bonds to monosacchs.
-    _, merged = Merger(MonomerFactory()).merge(tree, glycan.root_orientation, glycan.start, smiles_only = False)
-    mol = nx2mol(merged)
-    if not mol.GetNumConformers():
-        rdDepictor.Compute2DCoords(mol)
-    Chem.WedgeMolBonds(mol, mol.GetConformer())
-    smiles = Chem.MolToSmiles(mol)
-    if len(smiles) < 10 or not isinstance(tree, nx.Graph):
+    try:
+        molecule = glycan_to_molecule(iupac)
+    except GlycanSMILESError:
         return None
-    tree = clean_tree(tree)
-    return HeteroData(IUPAC = iupac, smiles = smiles, mol = mol, tree = tree) if tree else None
+    if len(molecule.smiles) < 10:
+        return None
+    graph = glycan_to_nxGraph(iupac)
+    index = {node: i for i, node in enumerate(sorted(set(molecule.atom_monos)))}  # renumbered 0..n-1, as GIFFLARTransform indexes them
+    molecule = molecule._replace(atom_monos = [index[owner] for owner in molecule.atom_monos], bond_monos = [index[owner] for owner in molecule.bond_monos])
+    tree = nx.Graph()
+    for node, i in index.items():
+        tree.add_node(i, iupac = graph.nodes[node]['string_labels'], name = graph.nodes[node]['string_labels'])
+    for node in index:
+        for linkage in graph.successors(node):
+            for child in graph.successors(linkage):
+                tree.add_edge(index[node], index[child], linkage = graph.nodes[linkage]['string_labels'])
+    return HeteroData(IUPAC = iupac, smiles = molecule.smiles, mol = molecule, tree = tree)

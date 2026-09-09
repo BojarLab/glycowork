@@ -1,0 +1,71 @@
+dataset,publication,doi,repository,accession,species,tissue,source_type,tumor_entity,glycan_class,ion_mode,derivatization,separation
+HIV_gagtransfection_N_PMID35112714,PMID:35112714,10.1002/bit.28051,GlycoPOST,GPST000169,Homo sapiens,kidney,cell line,,N,negative,reduced,PGC-LC
+HIV_gagtransfection_O_PMID35112714,PMID:35112714,10.1002/bit.28051,GlycoPOST,GPST000169,Homo sapiens,kidney,cell line,,O,negative,reduced,PGC-LC
+cell_lines_gRNA_GPST000463,,,GlycoPOST,GPST000463,Homo sapiens,,cell line,,O,negative,,
+celllines_colorectal_GSL_PMID35489554,PMID:35489554,10.1016/j.mcpro.2022.100239,GlycoPOST,GPST000239,Homo sapiens,colorectal,cell line,colorectal carcinoma,lipid,negative,reduced,PGC-LC
+celllines_colorectal_O_PMID32236654,PMID:32236654,10.1007/s00018-020-03504-z,GlycoPOST,GPST000035,Homo sapiens,colorectal,cell line,colorectal carcinoma,O,negative,reduced,PGC-LC
+fish_gill_infection_O_PMID41435595,PMID:41435595,10.1016/j.fsi.2025.111087,GlycoPOST,GPST000506,Sparus aurata,gill,primary tissue,,O,negative,reduced,PGC-LC
+fish_intestine_infection_O_10_2139ssrn_7005880,,10.2139/ssrn.7005880,GlycoPOST,GPST000619,Sparus aurata,intestine,primary tissue,,O,negative,reduced,PGC-LC
+mouse_brain_GSL_PMID38343116,PMID:38343116,10.1021/acs.analchem.3c04928,PRIDE,PXD046012,Mus musculus,brain,primary tissue,,lipid,negative,reduced,PGC-LC
+human_brain_GSL_PMID40207879,PMID:40207879,10.1093/glycob/cwaf022,GlycoPOST,GPST000446,Homo sapiens,brain,primary tissue,,lipid,positive,none,RP-LC
+mouse_brain_N_PMID38343116,PMID:38343116,10.1021/acs.analchem.3c04928,PRIDE,PXD046012,Mus musculus,brain,primary tissue,,N,negative,reduced,PGC-LC
+mouse_brain_O_PMID38343116,PMID:38343116,10.1021/acs.analchem.3c04928,PRIDE,PXD046012,Mus musculus,brain,primary tissue,,O,negative,reduced,PGC-LC
+human_celllines_N_PMID38022636,PMID:38022636,10.3389/fimmu.2023.1258518,,,Homo sapiens,,cell line,,N,negative,reduced,PGC-LC
+human_colorectal_N_PMID26085185,PMID:26085185,10.1093/glycob/cwv042,,,Homo sapiens,colorectal,primary tissue,colorectal carcinoma,N,negative,reduced,PGC-LC
+human_colorectal_N_PMID39947398,PMID:39947398,10.1016/j.mcpro.2025.100927,,,Homo sapiens,colorectal,primary tissue,colorectal carcinoma,N,negative,reduced,PGC-LC
+human_colorectal_O_PMC9254241,PMC9254241,10.7150/thno.72818,GlycoPOST,,Homo sapiens,colorectal,primary tissue,colorectal carcinoma,O,negative,reduced,PGC-LC
+human_colorectal_O_PMID19152289,PMID:19152289,10.1021/pr800740j,,,Homo sapiens,colorectal,primary tissue,colorectal carcinoma,O,negative,,
+human_colorectal_butyrate_O_PMID36669592,PMID:36669592,10.1016/j.mcpro.2023.100501,GlycoPOST,GPST000256,Homo sapiens,colorectal,cell line,colorectal carcinoma,O,negative,reduced,PGC-LC
+human_gastric_O_PMC4816881,PMC4816881,10.1016/j.dib.2016.03.022,,,Homo sapiens,gastric,cell line,gastric carcinoma,O,negative,reduced,PGC-LC
+human_gastric_O_PMC5762837,PMC5762837,10.1038/s41598-017-18299-6,UniCarb-DB,344,Homo sapiens,gastric,primary tissue,gastric carcinoma,O,negative,reduced,PGC-LC
+human_gastric_O_PMC7226152,PMC7226152,10.3390/cancers12040861,,,Homo sapiens,gastric,cell line,gastric carcinoma,O,positive,CORA+permethylated,RP-LC
+human_gastric_O_PMID28461410,PMID:28461410,10.1074/mcp.M117.067983,,,Homo sapiens,gastric,primary tissue,gastric carcinoma,O,negative,reduced,PGC-LC
+human_interstitialfluid_N_GPST000651,,10.1038/s41598-026-51768-5,GlycoPOST,GPST000651,Homo sapiens,interstitialfluid,body fluid,,N,negative,2-AB,HILIC-LC
+human_keratinocyte_st3galko_N_PMID42275133,PMID:42275133,10.1093/glycob/cwag044,,,Homo sapiens,skin,cell line,,N,negative,reduced,PGC-LC
+human_keratinocyte_st3galko_O_PMID42275133,PMID:42275133,10.1093/glycob/cwag044,,,Homo sapiens,skin,cell line,,O,negative,reduced,PGC-LC
+human_keratinocyte_st3galko_GSL_PMID42275133,PMID:42275133,10.1093/glycob/cwag044,,,Homo sapiens,skin,cell line,,lipid,negative,reduced,PGC-LC
+human_leukemia_GSL_PMID36788594,PMID:36788594,10.1186/s13578-023-00981-0,GlycoPOST,GPST000238,Homo sapiens,leukemia,cell line,acute myeloid leukemia,lipid,negative,reduced,PGC-LC
+human_leukemia_N_PMID34646384,PMID:34646384,10.7150/thno.65398,GlycoPOST,,Homo sapiens,bone marrow,primary cells,B-cell precursor acute lymphoblastic leukemia,N,negative,reduced,PGC-LC
+human_leukemia_N_PMID36788594,PMID:36788594,10.1186/s13578-023-00981-0,GlycoPOST,GPST000214,Homo sapiens,leukemia,cell line,acute myeloid leukemia,N,negative,reduced,PGC-LC
+human_leukemia_O_PMID34646384,PMID:34646384,10.7150/thno.65398,GlycoPOST,,Homo sapiens,bone marrow,primary cells,B-cell precursor acute lymphoblastic leukemia,O,negative,reduced,PGC-LC
+human_leukemia_O_PMID36788594,PMID:36788594,10.1186/s13578-023-00981-0,GlycoPOST,GPST000214,Homo sapiens,leukemia,cell line,acute myeloid leukemia,O,negative,reduced,PGC-LC
+human_liver_O_PMC5383776,PMC5383776,10.1074/mcp.M116.062414,,,Homo sapiens,liver,primary tissue,hepatocellular carcinoma,O,negative,reduced,PGC-LC
+human_liver_O_PMC9254241,PMC9254241,10.7150/thno.72818,GlycoPOST,,Homo sapiens,liver,primary tissue,colorectal cancer liver metastasis,O,negative,reduced,PGC-LC
+human_macrophages_N_2024_11_28_625934,,10.1101/2024.11.28.625934,GlycoPOST,GPST000502,Homo sapiens,macrophages,primary cells,,N,negative,reduced,PGC-LC
+human_macrophages_O_2024_11_28_625934,,10.1101/2024.11.28.625934,GlycoPOST,GPST000502,Homo sapiens,macrophages,primary cells,,O,negative,reduced,PGC-LC
+human_neutrophils_N_PMID37639587,PMID:37639587,10.1073/pnas.2303867120,GlycoPOST,GPST000315,Homo sapiens,neutrophils,primary cells,,N,negative,reduced,PGC-LC
+human_ovarian_O_PMC4468167,PMC4468167,10.1371/journal.pone.0130197,,,Homo sapiens,ovarian,primary tissue,epithelial ovarian tumor,O,negative,reduced,PGC-LC
+human_pbmc_cancer_N_PMID39947398,PMID:39947398,10.1016/j.mcpro.2025.100927,PRIDE,PXD051907,Homo sapiens,pbmc,primary cells,colorectal carcinoma,N,negative,reduced,PGC-LC
+human_platelets_N_PMID36952551,PMID:36952551,10.1182/bloodadvances.2022007084,,,Homo sapiens,platelets,primary cells,,N,positive,permethylated,MALDI
+human_platelets_O_PMID36952551,PMID:36952551,10.1182/bloodadvances.2022007084,,,Homo sapiens,platelets,primary cells,,O,positive,permethylated,RP-LC
+human_prostate_N_PMC8010466,PMC8010466,10.1074/mcp.RA120.002320,MassIVE,MSV000083727,Homo sapiens,prostate,primary tissue,prostate adenocarcinoma,N,negative,reduced,PGC-LC
+human_prostate_O_PMC8010466,PMC8010466,10.1074/mcp.RA120.002320,,,Homo sapiens,prostate,primary tissue,prostate adenocarcinoma,O,negative,reduced,PGC-LC
+human_retina_GSL_PMC5173345,PMC5173345,10.1371/journal.pone.0168794,,,Homo sapiens,retina,primary tissue,,lipid,negative,none,HILIC-LC
+human_serum_N_PMID39877544,PMID:39877544,10.1016/j.bbadva.2025.100138,GlycoPOST,GPST000503,Homo sapiens,serum,body fluid,,N,negative,reduced,PGC-LC
+human_serum_bacteremia_N_PMID33535571,PMID:33535571,10.3390/jcm10030516,GlycoPOST,GPST000157,Homo sapiens,serum,body fluid,,N,negative,reduced,PGC-LC
+human_serum_gangliosidosis_GSL_PMID39190143,PMID:39190143,10.1007/s00216-024-05487-3,,,Homo sapiens,serum,body fluid,,lipid,negative,none,RP-LC
+human_serum_ovarian_N_PMID41366864,PMID:41366864,10.1021/acs.jproteome.5c00442,GlycoPOST,GPST000583,Homo sapiens,serum,body fluid,ovarian carcinoma,N,positive,permethylated,MALDI
+human_serum_parkinson_GSL_PMID40379659,PMID:40379659,10.1038/s41467-025-59755-6,MassIVE,MSV000097015,Homo sapiens,serum,body fluid,,lipid,negative,none,RP-LC
+human_skin_O_PMC5871710,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal/squamous cell carcinoma,O,negative,reduced,PGC-LC
+human_skin_O_PMC5871710_BCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal cell carcinoma,O,negative,reduced,PGC-LC
+human_skin_O_PMC5871710_SCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,squamous cell carcinoma,O,negative,reduced,PGC-LC
+macaque_brain_N_GPST000309,,10.1126/sciadv.adg2615,GlycoPOST,GPST000309,Macaca mulatta,brain,primary tissue,,N,,2-AB,HILIC-LC
+mouse_brain_GSL_PMID39375371,PMID:39375371,10.1038/s41467-024-53032-8,,,Mus musculus,brain,primary tissue,,lipid,positive,none,RP-LC
+mouse_brain_tango2ko_GSL_10_1002pgr2_70042,,10.1002/pgr2.70042,,,Mus musculus,brain,primary tissue,,lipid,negative,reduced,PGC-LC
+mouse_brain_tango2ko_N_10_1002pgr2_70042,,10.1002/pgr2.70042,,,Mus musculus,brain,primary tissue,,N,negative,reduced,PGC-LC
+mouse_brain_tango2ko_O_10_1002pgr2_70042,,10.1002/pgr2.70042,,,Mus musculus,brain,primary tissue,,O,negative,reduced,PGC-LC
+mouse_gastric_O_PMID40667878,PMID:40667878,10.1080/21505594.2025.2530173,,,Mus musculus,gastric,primary tissue,,O,negative,reduced,PGC-LC
+mouse_platelet_N_101161ATVBAHA126324757,,10.1161/ATVBAHA.126.324757,,,Mus musculus,platelet,primary cells,,N,negative,reduced,PGC-LC
+mouse_taysachs_N_PMID41460292,PMID:41460292,10.1007/s10719-025-10203-z,,,Mus musculus,neuroglial cells,primary cells,,N,,,
+mouse_taysachs_O_PMID41460292,PMID:41460292,10.1007/s10719-025-10203-z,,,Mus musculus,neuroglial cells,primary cells,,O,,,
+time_series_HMO_PMID22649065,PMID:22649065,10.1152/ajpendo.00175.2012,,,Homo sapiens,milk,body fluid,,free,,2-AB,
+time_series_N_PMID32149347,PMID:32149347,10.1093/glycob/cwaa020,,,Homo sapiens,macrophages,primary cells,,N,negative,reduced,PGC-LC
+time_series_O_PMID32149347,PMID:32149347,10.1093/glycob/cwaa020,,,Homo sapiens,macrophages,primary cells,,O,negative,reduced,PGC-LC
+human_keratinocytes_N_PMID37956981,PMID:37956981,10.1021/acs.analchem.3c03626,,,Homo sapiens,skin,cell line,,N,positive,none,RP-LC
+human_lipoproteins_PMC9218963,PMC9218963,10.1039/d2ra02294j,,,Homo sapiens,plasma,body fluid,,N/O,positive,none,RP-LC
+human_milk_N_PMID34087070,PMID:34087070,10.1021/acs.jafc.0c07998,,,Homo sapiens,milk,body fluid,,N,positive,none,RP-LC
+sorghum_N_PMID39137587,PMID:39137587,10.1016/j.bbrc.2024.150509,,,Sorghum bicolor,,plant tissue,,N,positive,none,RP-LC
+A549_influenza_PMID33046650,PMID:33046650,10.1073/pnas.2008203117,Synapse,syn21975628,Homo sapiens,lung,cell line,lung adenocarcinoma,,,,
+HEK_XBP1_PMID30305426,PMID:30305426,10.1073/pnas.1805425115,,,Homo sapiens,kidney,cell line,,,,,
+bacteria_PMID20973590,PMID:20973590,10.1021/ac1022309,,,Escherichia coli; Enterobacter cloacae; Staphylococcus aureus; Bacillus subtilis,,bacteria,,,,,
+Arabidopsis_thaliana_roots_PMID37608048,PMID:37608048,10.1038/s41526-023-00312-0,NASA OSDR,OSD-615,Arabidopsis thaliana,root,plant tissue,,cell wall,,,

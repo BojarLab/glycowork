@@ -25,10 +25,11 @@ To run `nbdev_prepare` later on, you'll need Quarto installed. If you don't have
 
 ## PR submission guidelines
 
-* Before submitting a PR, run these commands locally to check that all tests are passing:
+* Before submitting a PR, run these commands locally to check that all tests are passing and that your changes follow the coding standard:
 
 ```
 nbdev-prepare
+python .github/scripts/check_style.py --diff origin/dev...HEAD glycowork tests bin
 cd tests
 pytest
 ```
@@ -65,7 +66,7 @@ pytest
 
 ## Do you want to contribute to the documentation?
 
-* Docs are automatically created from the notebooks in the nbs folder.
+* Docs are automatically created from the notebooks in the repository root (`index.ipynb`, `00_core.ipynb`, ... `05_examples.ipynb`).
 
 ## Wishlist for future glycowork updates (last update: 2025-03-25)
 

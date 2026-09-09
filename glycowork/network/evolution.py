@@ -3,20 +3,31 @@ import pickle
 import numpy as np
 import pandas as pd
 import networkx as nx
-import matplotlib.pyplot as plt
 from typing import Callable
-from scipy.spatial.distance import cosine, squareform
-from scipy.cluster.hierarchy import dendrogram, linkage
+from functools import lru_cache
+from glycowork.glycan_data.loader import GlycoList, resolve_motif_name
 from glycowork.motif.graph import subgraph_isomorphism
 
 # Get the directory and filename of the current script
 this_dir = Path(__file__).parent
 this_filename = Path(__file__).name
 
-# Construct the path to the data file and load it
+# Construct the path to the data file; unpickled lazily on first use
 data_path = this_dir / 'milk_networks_exhaustive.pkl'
-with open(data_path, 'rb') as f:
-    net_dic = pickle.load(f)
+
+
+@lru_cache(maxsize = 1)
+def _load_net_dic() -> dict[str, nx.Graph]: # Species:biosynthetic network mapping
+    "Lazily load and cache the bundled milk biosynthetic networks"
+    with open(data_path, 'rb') as f:
+        return pickle.load(f)
+
+
+def __getattr__(name):
+    if name == "net_dic":
+        return dict(
+            _load_net_dic())  # hand out a copy, or a caller adding a species edits the cached bundle for the rest of the process
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def calculate_distance_matrix(to_compare: dict[str, list] | list, # Objects to compare - dict values must be lists
@@ -52,9 +63,9 @@ def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) a
                              averaging: str = 'median' # How to average embeddings: median/mean
                              ) -> pd.DataFrame: # Rank x rank distance matrix
     "Calculate cosine distance matrix from learned embeddings"
+    from scipy.spatial.distance import cosine
     if averaging not in ['mean', 'median']:
-        print("Only 'median' and 'mean' are permitted averaging choices.")
-        return
+        raise ValueError(f"averaging = '{averaging}' is not supported; please use 'mean' or 'median'.")
     # Subset df to only contain ranks with a minimum number of data points
     value_counts = df[rank].value_counts()
     valid_ranks = value_counts.index[value_counts >= cut_off]
@@ -63,24 +74,24 @@ def distance_from_embeddings(df: pd.DataFrame, # DataFrame with glycans (rows) a
     embeddings_filtered = embeddings.loc[df_filtered.index]
     grouped = df_filtered.groupby(rank)
     avg_embeddings = grouped.apply(lambda g: embeddings_filtered.loc[g.index].agg(averaging), include_groups = False).reset_index()
-    if isinstance(avg_embeddings.iloc[0, 0], str):
-        avg_embeddings = avg_embeddings.set_index(avg_embeddings.columns[0])
+    avg_embeddings = avg_embeddings.set_index(avg_embeddings.columns[0])  # reset_index always puts the group key in column 0, whatever its dtype; leaving it in place feeds the label itself to the distance metric
     avg_values = np.vstack(avg_embeddings.values)
     # Get the distance matrix
-    return calculate_distance_matrix(avg_values, cosine, label_list = valid_ranks)
+    return calculate_distance_matrix(avg_values, cosine, label_list = avg_embeddings.index.tolist())
 
 
 def jaccard(list1: list | nx.Graph, # First list/network to compare
             list2: list | nx.Graph # Second list/network to compare
             ) -> float: # Jaccard distance
     "Calculate Jaccard distance between two lists/networks"
-    intersection = len(set(list1).intersection(list2))
-    union = (len(list1) + len(list2)) - intersection
-    return 1 - float(intersection) / union
+    s1, s2 = set(list1), set(list2)
+    union = len(s1 | s2)  # taken on the sets, so a repeated glycan in a list input no longer inflates the denominator
+    return 0.0 if not union else 1 - len(s1 & s2) / union  # two empty networks are identical, not undefined
 
 
 def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and taxonomic info (columns)
-                         networks: list[nx.Graph], # List of networkx networks
+                         networks: list[nx.Graph] | dict[str, nx.Graph],
+                         # Networks, ideally as {rank value: network} so they cannot be mispaired
                          metric: str = "Jaccard", # Distance metric to use
                          cut_off: int = 10, # Minimum glycans per rank to be included; default:10
                          rank: str = "Species" # Taxonomic rank for grouping; default:Species
@@ -92,11 +103,13 @@ def distance_from_metric(df: pd.DataFrame, # DataFrame with glycans (rows) and t
     if dist_func is None:
         raise ValueError("Not a defined metric. At the moment, only 'Jaccard' is available as a metric.")
     # Get all objects to calculate distance between
-    value_counts = df[rank].value_counts()
-    valid_ranks = value_counts.index[value_counts >= cut_off]
-    valid_networks = [net for spec, net in zip(value_counts.index, networks) if spec in valid_ranks]
+    counts = df[rank].value_counts()
+    if not isinstance(networks, dict):
+        # A bare list can only be paired positionally, and value_counts is frequency-ordered, so pair against the frame's own order of appearance instead
+        networks = dict(zip(dict.fromkeys(df[rank]), networks))
+    valid = [(k, v) for k, v in networks.items() if counts.get(k, 0) >= cut_off]
     # Get distance matrix
-    return calculate_distance_matrix(valid_networks, dist_func, label_list = valid_ranks.tolist())
+    return calculate_distance_matrix([v for _, v in valid], dist_func, label_list = [k for k, _ in valid])
 
 
 def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.g., from distance_from_embeddings)
@@ -104,6 +117,9 @@ def dendrogram_from_distance(dm: pd.DataFrame, # Rank x rank distance matrix (e.
                              filepath: str = '' # Path to save plot including filename
                              ) -> None: # Displays or saves dendrogram plot
     "Plot dendrogram from distance matrix"
+    from scipy.cluster.hierarchy import dendrogram, linkage
+    from scipy.spatial.distance import squareform
+    import matplotlib.pyplot as plt
     # Hierarchical clustering on the distance matrix
     Z = linkage(squareform(dm.values))
     plt.figure(figsize = (10, 10))
@@ -134,7 +150,7 @@ def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
                        ) -> dict[str, float]: # Taxonomic group-to-conservation mapping
     "Estimate evolutionary conservation of glycans via biosynthetic networks"
     if network_dic is None:
-        network_dic = net_dic
+        network_dic = _load_net_dic()
     # Subset species with at least the threshold-number of glycans
     species_counts = df['Species'].value_counts()
     valid_species = species_counts.index[species_counts >= threshold]
@@ -149,20 +165,24 @@ def check_conservation(glycan: str, # Glycan or motif in IUPAC-condensed format
     for r in valid_ranks:
         rank_df = df_filtered[df_filtered[rank] == r]
         rank_species = rank_df['Species'].unique()
-        rank_networks = [filtered_network_dic[spec] for spec in rank_species]
+        rank_networks = [filtered_network_dic[spec] for spec in rank_species if spec in filtered_network_dic]
         rank_nodes = [list(net.nodes()) for net in rank_networks]
+        if not rank_nodes:
+            continue
         if motif:
-            if glycan[-1] == ')':
-                conserved[r] = sum(glycan in "".join(nodes) for nodes in rank_nodes) / len(rank_nodes)
-            else:
-                conserved[r] =  sum(any(subgraph_isomorphism(node, glycan) for node in nodes) for nodes in rank_nodes) / len(rank_nodes)
+            seq, termini = resolve_motif_name(glycan) or (glycan, [])
+            conserved[r] = sum(
+                any(subgraph_isomorphism(node, seq, termini_list = termini) for node in nodes) for nodes in
+                rank_nodes) / len(
+                rank_nodes)
         else:
-            conserved[r] = sum(glycan in nodes for nodes in rank_nodes) / len(rank_nodes)
+            conserved[r] = sum(glycan in GlycoList(nodes) for nodes in rank_nodes) / len(rank_nodes)
     return conserved
 
 
 def get_communities(network_list: list[nx.Graph], # List of undirected biosynthetic networks
-                    label_list: list[str] | None = None # Labels for community names, running_number + _ + label_list[k]  for network_list[k]; default:range(len(graph_list))
+                    label_list: list[str] | None = None, # Labels for community names, running_number + _ + label_list[k]  for network_list[k]; default:range(len(graph_list))
+                    random_state: int = 42 # Random seed for reproducible community detection
                     ) -> dict[str, list[str]]: # Community-to-glycan list mapping
     "Find communities for each graph in list of graphs"
     if label_list is None:
@@ -170,7 +190,7 @@ def get_communities(network_list: list[nx.Graph], # List of undirected biosynthe
     final_comm_dict = {}
     # Label the communities by species name and running number to distinguish them afterwards
     for i, network in enumerate(network_list):
-        communities = nx.algorithms.community.louvain.louvain_communities(network)
+        communities = nx.algorithms.community.louvain.louvain_communities(network, seed = random_state)
         for comm_index, community in enumerate(communities):
             comm_name = f"{comm_index}_{label_list[i]}"
             final_comm_dict[comm_name] = list(community)

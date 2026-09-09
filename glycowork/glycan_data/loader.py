@@ -13,7 +13,7 @@ from typing import Any
 
 with resources.files("glycowork.glycan_data").joinpath("glycan_motifs.csv").open(encoding = 'utf-8-sig') as f:
     motif_list = pd.read_csv(f)
-
+_MOTIF_IDX, _MOTIF_NORM_IDX = {}, {}
 # Get the directory and filename of the current script
 this_dir = Path(__file__).parent
 this_filename = Path(__file__).name
@@ -41,11 +41,23 @@ class NamedGroups(list):
 
 
 class GlycoDataFrame(pd.DataFrame):
-    _metadata = ['_contrasts', '_paired', '_name']
+    _metadata = ['_contrasts', '_paired', '_glyco_name', '_provenance']
+    _meta_groups = [('Species', 'Genus', 'Family', 'Order', 'Class', 'Phylum', 'Kingdom', 'Domain', 'ref'),
+                    ('disease_association', 'disease_id', 'disease_sample', 'disease_direction', 'disease_ref', 'disease_species'),
+                    ('tissue_sample', 'tissue_id', 'tissue_ref', 'tissue_species')]
 
     @property
     def _constructor(self):
         return GlycoDataFrame
+
+    def __finalize__(self, other, method = None, **kwargs):
+        super().__finalize__(other, method = method, **kwargs)
+        if method == "concat":  # pandas hands __finalize__ a _Concatenator here, not an NDFrame, so its _metadata branch never runs and the result would silently lose its contrasts
+            src = next((o for o in getattr(other, 'objs', ()) if isinstance(o, GlycoDataFrame)), None)
+            if src is not None:
+                for name in self._metadata:
+                    object.__setattr__(self, name, getattr(src, name, None))
+        return self
 
     @property
     def _glycan_col(self):
@@ -61,6 +73,10 @@ class GlycoDataFrame(pd.DataFrame):
             return GlycoList(list(self[col]))
         if self.index.dtype != float and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
             return GlycoList(list(self.index))
+        first = [v for v in self.iloc[:, 0] if isinstance(v, str)]
+        cols = [c for c in self.columns if isinstance(c, str) and '(' in c]
+        if len(cols) > sum(1 for v in first if '(' in v):
+            return GlycoList(cols)
         return GlycoList(list(self.iloc[:, 0]))
 
     @property
@@ -70,6 +86,9 @@ class GlycoDataFrame(pd.DataFrame):
             return self.drop(columns = col)
         if self.index.dtype != float and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
             return self
+        cols = [c for c in self.columns if isinstance(c, str) and '(' in c]
+        if len(cols) > sum(1 for v in self.iloc[:, 0] if isinstance(v, str) and '(' in v):
+            return self[cols].T  # the transposed layout .glycans now recognizes; every other branch hands back glycans as rows
         return self.iloc[:, 1:]
 
     @property
@@ -97,7 +116,10 @@ class GlycoDataFrame(pd.DataFrame):
         """Sample columns for the second group, with .name for group label"""
         if not self._contrasts:
             return NamedGroup('', [])
-        name = list(dict.fromkeys(self._contrasts.values()))[1]
+        names = list(dict.fromkeys(self._contrasts.values()))
+        if len(names) < 2:
+            return NamedGroup('', [])
+        name = names[1]
         return NamedGroup(name, [col for col in self.columns if self._contrasts.get(col) == name])
 
     @property
@@ -106,12 +128,17 @@ class GlycoDataFrame(pd.DataFrame):
 
     @property
     def name(self):
-        return self._name
+        return self._glyco_name
+
+    @property
+    def provenance(self):
+        return self._provenance
 
     def __init__(self, *args, **kwargs):
         contrasts = kwargs.pop('contrasts', None)
         paired = kwargs.pop('paired', None)
         name = kwargs.pop('name', None)
+        self._provenance = kwargs.pop('provenance', {})
         super().__init__(*args, **kwargs)
         if contrasts is not None:
             self._contrasts = contrasts
@@ -122,17 +149,94 @@ class GlycoDataFrame(pd.DataFrame):
         elif not hasattr(self, '_paired'):
             self._paired = False
         if name is not None:
-            self._name = name
-        elif not hasattr(self, '_name'):
-            self._name = ''
+            self._glyco_name = name
+        elif not hasattr(self, '_glyco_name'):
+            self._glyco_name = ''
 
-    def glyco_filter(self, motif: str | nx.DiGraph, # Glycan motif sequence or graph
-                     termini_list: list = [], # List of monosaccharide positions from terminal/internal/flexible
-                     min_count: int | None = 1 # Minimum number of times motif needs to be present to pass
+    def glyco_filter(self, motif: str | nx.DiGraph,
+                     # Motif sequence, motif name (e.g., 'Internal_LewisX'), glyco-regular expression, or graph
+                     termini_list: list = [],  # List of monosaccharide positions from terminal/internal/flexible
+                     min_count: int | None = 1  # Minimum number of times motif needs to be present to pass
                      ) -> 'GlycoDataFrame':
+        "Keeps only the records whose glycans contain the motif, by subgraph isomorphism rather than string matching"
         from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
-        indices = [i for i, g in enumerate(self.glycans) if isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list, count = True) >= min_count]
+        if isinstance(motif, str) and (hit := resolve_motif_name(motif)) is not None:
+            motif, termini_list = hit[0], termini_list or hit[1]
+        glycans = list(self.glycans)
+        indices = [i for i, g in enumerate(glycans) if
+                   isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list = termini_list, count = True) >= (
+                       1 if min_count is None else min_count)]
+        if not self._glycan_col and glycans == [c for c in self.columns if isinstance(c, str) and '(' in c]:
+            return self[[glycans[i] for i in indices]]  # a transposed frame keeps its glycans in the columns, so .glycans enumerates that axis and slicing rows would return unrelated samples
+        if not self._glycan_col and self.index.dtype != float and any(isinstance(v, str) and '(' in v for v in self.index[:3]):
+            return self.iloc[indices, :]  # the glycans live in the index here, so resetting it would discard the very labels that were filtered on
         return self.iloc[indices, :].reset_index(drop = True)
+
+    def meta_filter(self, narrow: bool = True,
+                    # Restrict positionally aligned metadata lists (e.g., Species/Family/ref) to the matching records
+                    match_all: bool = False,  # Require all values of a criterion to be present, instead of any of them
+                    **criteria
+                    # column = value, list of values (OR), or callable; multiple columns are combined with AND
+                    ) -> 'GlycoDataFrame':
+        "Keeps only the records matching all metadata criteria, e.g., df_species.meta_filter(Order = 'Fabales', Kingdom = 'Plantae')"
+        norm = lambda v: v.strip().lower().replace(' ', '_') if isinstance(v, str) else v
+        specs = {}
+        for col, want in criteria.items():
+            if col not in self.columns:
+                raise KeyError(f"'{col}' is not a column of this DataFrame")
+            if callable(want):
+                specs[col] = (want, None)
+            else:
+                wanted = {norm(v) for v in (want if isinstance(want, (list, tuple, set)) else [want])}
+                specs[col] = (lambda v, wanted = wanted: norm(v) in wanted, wanted)
+        groups = [[c for c in g if c in self.columns] for g in self._meta_groups if
+                  any(c in specs for c in g)] if narrow else []
+        data = {c: self[c].tolist() for c in set(specs) | {c for g in groups for c in g}}
+        keep, narrowed = [], []
+        for i in range(len(self)):
+            masks, ok = {}, True
+            for col, (test, wanted) in specs.items():
+                val = data[col][i]
+                vals = val if isinstance(val, list) else ([] if val is None or val != val else [val])
+                mask = [bool(test(v)) for v in vals]
+                if not any(mask) or (
+                        match_all and wanted is not None and len({norm(v) for v, m in zip(vals, mask) if m}) < len(
+                        wanted)):
+                    ok = False
+                    break
+                masks[col] = mask
+            if not ok:
+                continue
+            sub = {}
+            for group in groups:
+                hits = [c for c in group if c in masks and isinstance(data[c][i], list)]
+                if not hits:
+                    continue
+                n = len(data[hits[0]][i])
+                idxs = [j for j in range(n) if all(masks[c][j] for c in hits)]
+                if not idxs:
+                    # criteria on one aligned group matched different records, so no single record satisfies all of them
+                    ok = False
+                    break
+                if len(idxs) < n:
+                    for c in group:
+                        if isinstance(data[c][i], list) and len(data[c][i]) == n:
+                            sub[c] = [data[c][i][j] for j in idxs]
+            if not ok:
+                continue
+            keep.append(i)
+            narrowed.append(sub)
+        out = self.iloc[keep, :].reset_index(drop = True)
+        for col in {c for sub in narrowed for c in sub}:
+            out[col] = [sub.get(col, v) for sub, v in zip(narrowed, out[col])]
+        return out
+
+    def meta_values(self, column: str,  # Column whose (list or scalar) entries should be tallied
+                    top: int | None = None  # Only return the n most frequent values
+                    ) -> pd.Series:
+        vals = [v.strip() if isinstance(v, str) else v for val in self[column] for v in
+                (val if isinstance(val, list) else ([] if val is None or val != val else [val]))]
+        return pd.Series(vals, dtype = object).value_counts().head(top)
 
 
 class GlycoList(list):
@@ -152,6 +256,8 @@ class GlycoList(list):
         raise ValueError(f"{value} is not in list")
 
     def __contains__(self, value):
+        if isinstance(value, str) and list.__contains__(self, value):
+            return True
         return any(self._compare(item, value) for item in self)
 
     def count(self, value):
@@ -213,9 +319,17 @@ class LazyLoader:
             except FileNotFoundError:
                 self._contrasts_map = {}
                 self._paired_map = {}
+            try:
+                with resources.files(f"{self.package}.{self.directory}").joinpath("datasets_metadata.csv").open(
+                        encoding = 'utf-8-sig') as f:
+                    self._provenance_map = pd.read_csv(f).set_index('dataset').to_dict(orient = 'index')
+            except FileNotFoundError:
+                self._provenance_map = {}
         return
 
     def __getattr__(self, name):
+        if name.startswith('_'):  # a private lookup on a not-yet-populated instance (unpickling, copy) must not re-enter this method through self._datasets
+            raise AttributeError(name)
         if name not in self._datasets:
             filename = f"{self.prefix}{name}.csv"
             try:
@@ -228,15 +342,38 @@ class LazyLoader:
                     dataset_key = f"{self.prefix}{name}"
                     contrasts = self._contrasts_map.get(dataset_key, {})
                     paired = self._paired_map.get(dataset_key, False)
-                    self._datasets[name] = GlycoDataFrame(_df, contrasts = contrasts, paired = paired, name = name)
+                    # contrasts.csv keys datasets with the loader prefix, datasets_metadata.csv without it, so accept either spelling
+                    self._datasets[name] = GlycoDataFrame(_df, contrasts = contrasts, paired = paired, name = name,
+                                                          provenance = self._provenance_map.get(
+                                                              dataset_key) or self._provenance_map.get(name, {}))
             except FileNotFoundError:
                 raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
         return self._datasets[name]
 
     def __dir__(self):
         files = resources.files(f"{self.package}.{self.directory}").iterdir()
-        dataset_names = [file.name[len(self.prefix):-4] for file in files if file.name.startswith(self.prefix) and file.suffix.lower() == '.csv']
+        dataset_names = [file.name[len(self.prefix):-4] for file in files if
+                         file.name.startswith(self.prefix) and file.suffix.lower() == '.csv']
         return dataset_names
+
+    def filter(self, **criteria
+               # column = value, list of values (OR), or callable; multiple columns are combined with AND
+               ) -> list[str]:  # names of datasets whose metadata matches all criteria
+        "Select datasets by their metadata, e.g., glycomics_data_loader.filter(glycan_class = 'O', source_type = ['primary tissue', 'body fluid'])"
+        self._load_contrasts()
+        norm = lambda v: v.strip().lower().replace(' ', '_') if isinstance(v, str) else v
+        available, tests = set(self.__dir__()), {}
+        for col, want in criteria.items():
+            if not any(col in prov for prov in self._provenance_map.values()):
+                raise KeyError(
+                    f"'{col}' is not a metadata column of {self.directory}; available columns are {sorted({c for prov in self._provenance_map.values() for c in prov})}")
+            tests[col] = want if callable(want) else (
+                lambda v, w = {norm(x) for x in (want if isinstance(want, (list, tuple, set)) else [want])}: norm(
+                    v) in w)
+        # datasets_metadata.csv keys datasets without the loader prefix, contrasts.csv with it, so accept either spelling
+        out = [n[len(self.prefix):] if n.startswith(self.prefix) else n for n in self._provenance_map]
+        return sorted(n for n, prov in zip(out, self._provenance_map.values()) if
+                      n in available and all(test(prov.get(col)) for col, test in tests.items()))
 
 
 glycomics_data_loader = LazyLoader("glycowork", "glycan_data.datasets")
@@ -260,6 +397,31 @@ Pen = {'Ara', 'Xyl', 'Rib', 'Lyx', 'Pen'}
 Sia = {'Neu5Ac', 'Neu5Gc', 'Kdn', 'Sia'}
 modification_map = {'6S': {'GlcNAc', 'Gal'}, '3S': {'Gal'}, '4S': {'GalNAc'},
                     'OS': {'GlcNAc', 'Gal', 'GalNAc'}}
+
+
+def resolve_motif_name(name: str # candidate motif_list name, e.g., 'Internal_LewisX', 'lewis x', or 'high_mannose'
+                       ) -> tuple[str, list] | None: # (motif sequence, termini spec), or None if name is not a known motif
+    "Maps a motif_list name to its sequence and termini spec, tolerating case/underscore/space/hyphen differences"
+    if not _MOTIF_IDX:  # built on first use, so importing the package does not pay for it
+        names = motif_list.motif_name.values.tolist()
+        _MOTIF_IDX.update({n: i for i, n in enumerate(names)})
+        for i, n in enumerate(names):
+            _MOTIF_NORM_IDX.setdefault(re.sub(r'[\s_-]', '', n.lower()), []).append(i)
+    idx = _MOTIF_IDX.get(name)
+    if idx is None:
+        key = re.sub(r'[\s_-]', '', name.lower())
+        hits = _MOTIF_NORM_IDX.get(key, [])
+        if len(hits) > 1:
+            raise ValueError(f"Motif name '{name}' is ambiguous between {[motif_list.motif_name.values[i] for i in hits]}; please use exact capitalization.")
+        if not hits:
+            generic = sorted(_MOTIF_NORM_IDX.get(f'terminal{key}', []) + _MOTIF_NORM_IDX.get(f'internal{key}', []))
+            if not generic:
+                return None
+            # A position-less name (e.g., 'LewisX') means the motif wherever it sits, so take the variant without positional negations and relax its termini
+            idx = min(generic, key = lambda i: motif_list.motif.values[i].count('!'))
+            return motif_list.motif.values[idx], ['flexible'] * len(ast.literal_eval(motif_list.termini_spec.values[idx]))
+        idx = hits[0]
+    return motif_list.motif.values[idx], ast.literal_eval(motif_list.termini_spec.values[idx])
 
 
 def unwrap(nested_list: list[Any] # list to be flattened
@@ -353,7 +515,15 @@ def reindex(df_new: pd.DataFrame, # dataframe with new row order
     "Returns columns values in order of new dataframe rows"
     if ind_col != inp_col:
         print("Mismatching column names for ind_col and inp_col. Doesn't mean it's wrong but pay attention.")
-    return [df_old[out_col].values.tolist()[df_old[ind_col].values.tolist().index(k)] for k in df_new[inp_col].values.tolist()]
+    out_vals = df_old[out_col].tolist()
+    pos = {}
+    for i, k in enumerate(df_old[ind_col].tolist()):
+        pos.setdefault(k, i)
+    new_keys = df_new[inp_col].tolist()
+    if missing := [k for k in new_keys if k not in pos]:
+        raise KeyError(
+            f"{len(missing)} value(s) of df_new['{inp_col}'] have no match in df_old['{ind_col}'], e.g., {missing[:3]}")
+    return [out_vals[pos[k]] for k in new_keys]
 
 
 def stringify_dict(dicty: dict[Any, Any] # dictionary to convert
@@ -419,7 +589,10 @@ def build_custom_df(df: pd.DataFrame, # df_glycan / sugarbase
 def download_model(file_id: str # Filename in the HuggingFace repo
                    ) -> str:  # file path to cached model
     "Download the model weights file from HuggingFace Hub"
-    from huggingface_hub import hf_hub_download
+    try:
+        from huggingface_hub import hf_hub_download
+    except ImportError:
+        raise ImportError("<huggingface_hub missing; did you do 'pip install glycowork[ml]'?>")
     file_path = hf_hub_download(repo_id = "DBojar/glycowork_models", filename = file_id, etag_timeout = 30)
     print("Download completed.")
     return file_path

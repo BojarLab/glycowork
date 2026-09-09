@@ -1,3 +1,4 @@
+from glycowork.motif.processing import canonicalize_iupac
 from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
 import copy
 import random
@@ -8,11 +9,14 @@ def seed_wildcard_hierarchy(glycans: list[str], # list of IUPAC-condensed glycan
                             labels: list[float |  int | str], # list of prediction labels
                             wildcard_list: list[str], # glycoletters covered by wildcard
                             wildcard_name: str, # name for wildcard in IUPAC nomenclature
-                            r: float = 0.1 # rate of replacement
-                            ) -> tuple[list[str], list[float | int | str]]: # glycans and labels with wildcards
+                            r: float = 0.1,  # rate of replacement
+                            random_state: int | None = 42
+                            # optional random state for reproducibility, matching the splits this feeds
+                            ) -> tuple[list[str], list[float | int | str]]:  # glycans and labels with wildcards
     "adds dataframe rows in which glycan parts have been replaced with the appropriate wildcards"
+    local_rng = random.Random(random_state)
     added_glycans_labels = [(glycan.replace(j, wildcard_name), label) for glycan, label in zip(glycans, labels)
-                            for j in wildcard_list if j in glycan and random.uniform(0, 1) < r]
+                            for j in wildcard_list if j in glycan and local_rng.uniform(0, 1) < r]
     if added_glycans_labels:
         added_glycans, added_labels = zip(*added_glycans_labels)
         return glycans + list(added_glycans), labels + list(added_labels)
@@ -33,37 +37,43 @@ def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and ta
     # Get all non-selected ranks and drop from df
     rank_list = ['Species', 'Genus', 'Family', 'Order', 'Class', 'Phylum', 'Kingdom', 'Domain']
     rank_list.remove(rank)
-    df.drop(rank_list, axis = 1, inplace = True)
+    df.drop([c for c in rank_list if c in df.columns], axis = 1, inplace = True)
     # Get unique classes in rank
-    class_list = list(set(df[rank].values.tolist()))
-    class_list = [k for k in class_list if k != 'undetermined']
+    class_list = sorted(set(df[rank].values.tolist()) - {'undetermined'})
     temp = []
     # For each class in rank, get unique set of glycans
     for classy in class_list:
         t = df[df[rank] == classy]
-        t = t.drop_duplicates('glycan', keep = 'first')
+        t = t.drop_duplicates(col, keep = 'first')
         temp.append(t)
     df = pd.concat(temp).reset_index(drop = True)
     # Only keep classes in rank with minimum number of glycans
     counts = df[rank].value_counts()
-    allowed_classes = [counts.index.tolist()[k] for k in range(len(counts.index.tolist())) if (counts >= min_seq).values.tolist()[k]]
+    allowed_classes = counts.index[counts >= min_seq].tolist()
     df = df[df[rank].isin(allowed_classes)]
     # Map string classes to integers
     class_list = list(sorted(list(set(df[rank].values.tolist()))))
     class_converter = {class_list[k]: k for k in range(len(class_list))}
     df[rank] = [class_converter[k] for k in df[rank]]
     # Split each class proportionally
-    sss = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2)
-    sss.get_n_splits(df[col].values.tolist(), df[rank].values.tolist())
-    for i, j in sss.split(df[col].values.tolist(), df[rank].values.tolist()):
-        train_x = [df[col].values.tolist()[k] for k in i]
-        train_y = [df[rank].values.tolist()[k] for k in i]
+    all_x, all_y = df[col].values.tolist(), df[rank].values.tolist()
+    sss = StratifiedShuffleSplit(n_splits = 1, test_size = 0.2, random_state = 42)
+    sss.get_n_splits(all_x, all_y)
+    for i, j in sss.split(all_x, all_y):
+        train_x = [all_x[k] for k in i]
+        train_y = [all_y[k] for k in i]
         if wildcard_seed:
-            train_x, train_y = seed_wildcard_hierarchy(train_x, train_y, wildcard_list = wildcard_list, wildcard_name = wildcard_name, r = r)
-        val_x = [df[col].values.tolist()[k] for k in j]
-        val_y = [df[rank].values.tolist()[k] for k in j]
+            train_x, train_y = seed_wildcard_hierarchy(train_x, train_y, wildcard_list = wildcard_list,
+                                                       wildcard_name = wildcard_name, r = r)
+        val_x = [all_x[k] for k in j]
+        val_y = [all_y[k] for k in j]
         if wildcard_seed:
-            val_x, val_y = seed_wildcard_hierarchy(val_x, val_y, wildcard_list = wildcard_list, wildcard_name = wildcard_name, r = r)
+            val_x, val_y = seed_wildcard_hierarchy(val_x, val_y, wildcard_list = wildcard_list,
+                                                   wildcard_name = wildcard_name, r = r)
+        # Duplicates are only dropped within a class, so a glycan of two classes otherwise reaches both splits; wildcarding can additionally map distinct sequences onto the same string
+        train_set = set(train_x)
+        keep = [k for k, g in enumerate(val_x) if g not in train_set]
+        val_x, val_y = [val_x[k] for k in keep], [val_y[k] for k in keep]
         id_val = list(range(len(val_x)))
         len_val_x = [len(k) for k in val_x]
         id_val = [[id_val[k]] * len_val_x[k] for k in range(len(len_val_x))]
@@ -84,12 +94,13 @@ def prepare_multilabel(df: pd.DataFrame, # dataframe with one glycan-association
                        glycan_col: str = 'glycan' # column with glycan sequences
                        ) -> tuple[list[str], list[list[float]]]: # unique glycans and their label vectors
     "converts a one row per glycan-species/tissue/disease association file to a format of one glycan - all associations"
-    glycans = list(set(df[glycan_col].values.tolist()))
+    df = df.copy()
+    df[glycan_col] = [canonicalize_iupac(g) for g in df[glycan_col]]
+    glycans = list(dict.fromkeys(df[glycan_col].values.tolist()))
     class_list = sorted(list(set(df[rank].values.tolist())))
-    labels = [[0.]*len(class_list) for k in range(len(glycans))]
+    labels = [[0.] * len(class_list) for k in range(len(glycans))]
+    row_of, col_of = {g: k for k, g in enumerate(glycans)}, {c: k for k, c in enumerate(class_list)}
     # Get all class occurrences of glycan to construct multi-label
-    for k, glyc in enumerate(glycans):
-        sub_classes = df[df[glycan_col] == glyc][rank].values.tolist()
-        for j in sub_classes:
-            labels[k][class_list.index(j)] = 1.
+    for g, c in zip(df[glycan_col], df[rank]):
+        labels[row_of[g]][col_of[c]] = 1.
     return glycans, labels
