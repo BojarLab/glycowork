@@ -4617,7 +4617,7 @@ def test_file_loading_branches(tmp_path):
     res_df.to_csv(tmp_path / "res.csv", index=False)
     get_pval_distribution(str(tmp_path / "res.csv"))
     get_ma(str(tmp_path / "res.csv"))
-    get_volcano(str(tmp_path / "res.csv"))
+    get_volcano(str(tmp_path / "res.csv"), annotate_volcano = False)
     cov_df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc'], 's1': [10.0], 's2': [0.0]})
     cov_df.to_csv(tmp_path / "cov.csv", index=False)
     cov_df.to_csv(tmp_path / "cov.tsv", index=False, sep="\t")
@@ -5444,11 +5444,11 @@ def test_get_ma_with_custom_thresholds(sample_diff_expr_results):
 def test_get_volcano_basic(sample_diff_expr_results):
     """Test basic functionality of get_volcano"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, n = 6)
+        get_volcano(sample_diff_expr_results, n = 6, annotate_volcano = False)
         mock_savefig.assert_not_called()
     # without a filepath the annotated figure is built in a temp dir and handed back for Jupyter to render
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
-        out = get_volcano(sample_diff_expr_results, annotate_volcano = True)
+        out = get_volcano(sample_diff_expr_results)
     assert out is not None and '<svg' in out.data
     assert not list(Path('.').glob('*_temp.svg'))
     plt.close('all')
@@ -5457,21 +5457,21 @@ def test_get_volcano_basic(sample_diff_expr_results):
 def test_get_volcano_with_filepath(sample_diff_expr_results):
     """Test get_volcano with filepath saving"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, filepath='test.png')
+        get_volcano(sample_diff_expr_results, filepath='test.png', annotate_volcano = False)
         mock_savefig.assert_called_once()
 
 
 def test_get_volcano_with_custom_thresholds(sample_diff_expr_results):
     """Test get_volcano with custom thresholds"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, y_thresh=0.01, x_thresh=1.0)
+        get_volcano(sample_diff_expr_results, y_thresh=0.01, x_thresh=1.0, annotate_volcano = False)
         mock_savefig.assert_not_called()
 
 
 def test_get_volcano_with_effect_size(sample_diff_expr_results):
     """Test get_volcano using effect size instead of Log2FC"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, x_metric='Effect size')
+        get_volcano(sample_diff_expr_results, x_metric='Effect size', annotate_volcano = False)
         mock_savefig.assert_not_called()
 
 
@@ -6764,13 +6764,13 @@ def test_extend_network_specific_leaf(extension_test_network):
 def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
     """Test basic network plotting functionality"""
     main_net, _ = evo_test_networks
-    plot = plot_network(main_net, plot_format='kamada_kawai')
+    plot = plot_network(main_net, plot_format='kamada_kawai', draw_glycans=False)
     # Check that plot was created
     assert plot is not None
     # Check renderer properties
     assert len(plot.renderers) > 0
     # Test without edge labels
-    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=False)
+    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=False, draw_glycans=False)
     assert plot is not None
     plt.close('all')
 
@@ -6779,13 +6779,13 @@ def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
 @patch('bokeh.plotting.show')
 def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
     """Test basic network plotting functionality for N-glycans"""
-    plot = plot_network(n_glycan_network, plot_format='spring')
+    plot = plot_network(n_glycan_network, plot_format='spring', draw_glycans=False)
     # Check that plot was created
     assert plot is not None
     # Check renderer properties
     assert len(plot.renderers) > 0
     # Test without edge labels
-    plot = plot_network(n_glycan_network, plot_format='spring', edge_label_draw=False)
+    plot = plot_network(n_glycan_network, plot_format='spring', edge_label_draw=False, draw_glycans=False)
     assert plot is not None
     plt.close('all')
 
@@ -6795,7 +6795,7 @@ def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
 def test_plot_network_with_edge_labels(mock_show, mock_enable, evo_test_networks):
     """Test network plotting with edge labels"""
     main_net, _ = evo_test_networks
-    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True)
+    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True, draw_glycans=False)
     # Check for edge labels
     assert plot is not None
     plt.close('all')
@@ -6807,7 +6807,7 @@ def test_plot_network_with_lfc(mock_show, mock_enable, evo_test_networks):
     """Test network plotting with log fold change data"""
     lfc_dict = {'Fuc(a1-2)': 1.5, 'GlcNAc(b1-3)': -0.5}
     main_net, _ = evo_test_networks
-    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True, lfc_dict=lfc_dict)
+    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True, lfc_dict=lfc_dict, draw_glycans=False)
     # Verify plot was created
     assert plot is not None
     # Check for renderers
@@ -6823,13 +6823,13 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
     safe_layouts = ['kamada_kawai', 'spring']
     main_net, _ = evo_test_networks
     for layout in safe_layouts:
-        plot = plot_network(main_net, plot_format=layout)
+        plot = plot_network(main_net, plot_format=layout, draw_glycans=False)
         assert plot is not None
         plt.close('all')
     # Test pydot2 layout with proper error handling
     try:
         with suppress_pydot_warnings():
-            plot = plot_network(main_net, plot_format='pydot2')
+            plot = plot_network(main_net, plot_format='pydot2', draw_glycans=False)
             assert plot is not None
     except (ImportError, FileNotFoundError):
         print("Graphviz not installed, skipping pydot2 layout test")
@@ -6839,16 +6839,15 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
 def test_plot_network_static_figure(tmp_path, evo_test_networks):
     """Test the saved static figure, with and without SNFG node labels"""
     main_net, _ = evo_test_networks
-    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net.svg')
+    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net.svg', draw_glycans=False)
     assert (tmp_path / 'net.svg').exists()
-    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net_snfg.svg', draw_glycans=True)
+    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net_snfg.svg')
     assert (tmp_path / 'net_snfg.svg').exists()
     with pytest.raises(ValueError):
-        plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'x.svg', draw_glycans=True,
-                     glycan_size='huge')
+        plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'x.svg', glycan_size='huge')
     # without a filepath the SNFG figure is built in a temp dir and handed back for Jupyter to render
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
-        out = plot_network(main_net, plot_format='kamada_kawai', draw_glycans=True)
+        out = plot_network(main_net, plot_format='kamada_kawai')
     assert out is not None and '<svg' in out.data
     assert not list(tmp_path.glob('*_temp.svg'))
     plt.close('all')
@@ -6859,7 +6858,7 @@ def test_plot_network_no_notebook(evo_test_networks):
     main_net, _ = evo_test_networks
     with patch('bokeh.io.output_notebook', side_effect=Exception):
         with patch('bokeh.plotting.show') as mock_show:
-            plot = plot_network(main_net, plot_format='kamada_kawai')
+            plot = plot_network(main_net, plot_format='kamada_kawai', draw_glycans=False)
             # Even with notebook initialization failing, should still return a plot
             assert plot is not None
     plt.close('all')
@@ -6942,7 +6941,7 @@ def test_infer_network(mock_show, mock_enable):
     spec_dic = {"test": construct_network(["GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"]), "org": net}
     net2 = infer_network(net, "org", ["test", "org"], spec_dic)
     assert nx.get_node_attributes(net2, "virtual")["GlcNAc(b1-3)Gal(b1-4)Glc-ol"] == 2
-    plot = plot_network(net2)
+    plot = plot_network(net2, draw_glycans=False)
     plt.close('all')
 
 
@@ -9010,9 +9009,9 @@ def test_get_biosynthetic_coherence_nothing_scorable():
 @patch('bokeh.io.output_notebook')
 @patch('bokeh.plotting.show')
 def test_plot_network_hierarchical_and_origin(mock_show, mock_enable, sample_network):
-    assert plot_network(sample_network, plot_format = 'hierarchical') is not None  # diamond revisits a levelled node
+    assert plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False) is not None  # diamond revisits a levelled node
     nx.set_node_attributes(sample_network, {n: 'red' for n in sample_network.nodes()}, 'origin')
-    assert plot_network(sample_network, plot_format = 'hierarchical') is not None
+    assert plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False) is not None
     plt.close('all')
 
 

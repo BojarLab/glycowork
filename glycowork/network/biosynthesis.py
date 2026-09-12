@@ -477,7 +477,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                  plot_format: str = 'hierarchical', # Layout type: hierarchical/pydot2/kamada_kawai/spring
                  edge_label_draw: bool = True, # Whether to draw edge labels
                  lfc_dict: dict[str, float] | None = None,  # Enzyme:log2FC mapping for edge width
-                 draw_glycans: bool = False,  # Replace node labels with SNFG drawings, in a static figure
+                 draw_glycans: bool = True,  # Replace node labels with SNFG drawings, in a static figure
                  filepath: str | Path = '',  # Path to save the static figure (.svg/.pdf/.png) instead of showing the interactive plot; required for draw_glycans
                  compact: bool = False,  # Use compact SNFG style
                  glycan_size: str = 'small',  # Glycan size preset ('small', 'medium', 'large')

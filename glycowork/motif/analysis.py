@@ -1160,7 +1160,7 @@ def get_volcano(
         n: int | None = None,  # Sample size for Bayesian-Adaptive Alpha
         label_changed: bool = True,  # Add text labels to significant points
         x_metric: str = 'Log2FC',  # x-axis metric: 'Log2FC' or 'Effect size'
-        annotate_volcano: bool = False,  # Annotate dots with SNFG images
+        annotate_volcano: bool = True,  # Annotate dots with SNFG images
         filepath: str | Path = '',  # Path to save plot
         title: str | None = None,  # Plot title; default: the dataset name the analysis stamped on df_res, '' for none
         **kwargs: Any  # Keyword args passed to seaborn scatterplot
