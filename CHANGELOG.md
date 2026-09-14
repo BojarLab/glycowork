@@ -6,7 +6,7 @@
 ### glycan_data
 #### loader
 ##### Added ✨
-- Added new curated glycomics datasets to `glycomics_data_loader`: `human_influenza_N_10_648982026_02_02_703422`, `human_influenza_O_10_648982026_02_02_703422` ()
+- Added new curated glycomics datasets to `glycomics_data_loader`: `human_influenza_N_10_648982026_02_02_703422`, `human_influenza_O_10_648982026_02_02_703422` (f91d6b4)
 
 ### motif
 #### tokenization
@@ -21,13 +21,17 @@
 
 #### analysis
 ##### Changed 🔄
-- `annotate_figure` in `get_volcano` is now default-True instead of default-False ()
+- `annotate_figure` in `get_volcano` is now default-True instead of default-False (f91d6b4)
 
 #### draw
 ##### Added ✨
 - `GlycoDraw` and `display_svg_with_matplotlib` have received the new `sticker` keyword argument, to output die cut sticker style drawings of glycans (257ba7b)
 
+#### annotate
+##### Fixed 🐛
+- Fixed `get_k_saccharides` outputting disaccharides if `size` > 2 and `up_to=False` ()
+
 ### network
 #### biosynthesis
 ##### Changed 🔄
-- `draw_glycans` in `plot_network` is now default-True instead of default-False ()
+- `draw_glycans` in `plot_network` is now default-True instead of default-False (f91d6b4)

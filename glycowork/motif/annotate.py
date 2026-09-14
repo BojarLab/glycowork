@@ -629,7 +629,7 @@ def get_k_saccharides(
                 wga_letter[cls] = wga_letter[member_cols].fillna(0).sum(axis = 1) + wga_letter[cls].fillna(0)
     counts_dict = {}
     ggraphs = [glycan_to_nxGraph(g) for g in glycans]
-    for s in range(2, size + 1):
+    for s in (range(2, size + 1) if up_to else (size,)):
         frags = [count_unique_subgraphs_of_size_k(g, size = s, terminal = terminal) for g in ggraphs]
         vocab = sorted({f for d in frags for f in d})
         vgraphs = {f: glycan_to_nxGraph(f) for f in vocab}
