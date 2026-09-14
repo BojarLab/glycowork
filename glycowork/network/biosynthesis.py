@@ -1433,16 +1433,19 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
         if not roots:
             raise ValueError(
                 f"No biosynthetic root of this glycan class is present in the network (e.g., from '{next(iter(network.nodes()))}'), so candidates cannot be ranked by flow.")
-        root = min(roots, key = len) if '-ol' in roots[0] else max(roots, key = len)
-        weighted = get_edge_weight_by_abundance(network, root = root)
-        caps = nx.get_edge_attributes(weighted, 'capacity')
-        # a candidate reached through a single edge can carry no more than that edge or the flow arriving at its parent, so the solve is per parent, not per candidate
-        simple = {g: next(iter(weighted.predecessors(g))) for g in new_glycans if weighted.in_degree(g) == 1}
-        parent_flows = get_maximum_flow(weighted, source = root, sinks = sorted(set(simple.values())))
-        flows = {g: {'flow_value': min(parent_flows[p]['flow_value'], caps.get((p, g), 0.0))} for g, p in simple.items()
-                 if p in parent_flows}
-        flows.update(get_maximum_flow(weighted, source = root, sinks = sorted(set(new_glycans) - set(simple))))
-        new_glycans = dict(sorted(((g, v['flow_value']) for g, v in flows.items()), key = lambda kv: -kv[1]))
+        scores = {g: 0.0 for g in new_glycans}  # a candidate the solve cannot reach scores zero rather than dropping out of the ranking entirely
+        for root in roots:  # a network can carry more than one root (Gal1Cer and Glc1Cer in glycosphingolipids) and a single-root solve discards everything the other root feeds
+            weighted = get_edge_weight_by_abundance(network, root = root)
+            caps = nx.get_edge_attributes(weighted, 'capacity')
+            # a candidate reached through a single edge can carry no more than that edge or the flow arriving at its parent, so the solve is per parent, not per candidate
+            simple = {g: next(iter(weighted.predecessors(g))) for g in new_glycans if weighted.in_degree(g) == 1}
+            parent_flows = get_maximum_flow(weighted, source = root, sinks = sorted(set(simple.values())))
+            flows = {g: {'flow_value': min(parent_flows[p]['flow_value'], caps.get((p, g), 0.0))} for g, p in simple.items()
+                     if p in parent_flows}
+            flows.update(get_maximum_flow(weighted, source = root, sinks = sorted(set(new_glycans) - set(simple))))
+            for g, v in flows.items():
+                scores[g] = max(scores[g], v['flow_value'])
+        new_glycans = dict(sorted(scores.items(), key = lambda kv: -kv[1]))
     return (network, new_glycans) if not auto_steps else (network, new_glycans, steps)
 
 

@@ -29,9 +29,12 @@
 
 #### annotate
 ##### Fixed 🐛
-- Fixed `get_k_saccharides` outputting disaccharides if `size` > 2 and `up_to=False` ()
+- Fixed `get_k_saccharides` outputting disaccharides if `size` > 2 and `up_to=False` (a523286)
 
 ### network
 #### biosynthesis
 ##### Changed 🔄
 - `draw_glycans` in `plot_network` is now default-True instead of default-False (f91d6b4)
+
+##### Fixed 🐛
+- Fixed `extend_network(prioritize=True)` handling of multi-root networks ()
