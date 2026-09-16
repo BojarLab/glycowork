@@ -375,7 +375,7 @@ def graph_to_smiles(graph: nx.DiGraph, # Glycan graph, as produced by glycan_to_
             if onto_anomeric and depth:
                 raise GlycanSMILESError(f"'{labels[node]}' cannot use its anomeric oxygen for both its own linkage and '{link}'")
             piece, piece_owners = build(child, link[0], depth + 1)
-            if onto_anomeric:  # onto the anomeric center# : the two residues share that one oxygen
+            if onto_anomeric:  # onto the anomeric center: the two residues share that one oxygen
                 fragment = 'O(' + piece[1:] + ')' + fragment[1:]
                 owners = owners[:1] * 2 + piece_owners[1:] + owners[:1] + owners[1:]
                 continue
@@ -503,9 +503,9 @@ def _parity(written: list, # Neighbors in the order the SMILES writes them
             ) -> int: # 1 if the reordering is even, -1 if it is odd
     "Sign of the permutation that takes one neighbor ordering to another, which is what flips a chirality tag"
     order, sign = [written.index(atom) for atom in target], 1
-    for i, ord in enumerate(order):
+    for i, oi in enumerate(order):
         for j in range(i + 1, len(order)):
-            if ord > order[j]:
+            if oi > order[j]:
                 sign = -sign
     return sign
 

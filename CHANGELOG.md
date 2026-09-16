@@ -35,7 +35,9 @@
 #### biosynthesis
 ##### Changed 🔄
 - `draw_glycans` in `plot_network` is now default-True instead of default-False (f91d6b4)
+- `construct_network` can now also use dataframes with a glycan column as input (in addition to the standard list of glycans) ()
+- `get_maximum_flow` and `get_max_flow_path` no longer default to milk oligosaccharide roots in `source` but rather infer the default root from the provided network ()
 
 ##### Fixed 🐛
 - Fixed `extend_network(prioritize=True)` handling of multi-root networks (a5121ae)
-- Fixed auto-inferring of group contrasts in `get_differential_biosynthesis` if `longitudinal=True` ()
+- Fixed auto-inferring of group contrasts in `get_differential_biosynthesis` if `longitudinal=True` (3e0133b)

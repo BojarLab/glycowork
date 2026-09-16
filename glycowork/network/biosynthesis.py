@@ -234,6 +234,17 @@ def infer_roots(glycans: frozenset[str] # Set of glycans
     print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or 1Cer")
     return frozenset()
 
+def infer_network_root(network: nx.DiGraph  # Biosynthetic network
+                       ) -> str:  # Single root node to route flow from
+    "Pick the biosynthetic root of the network's glycan class that is actually one of its nodes"
+    roots = sorted(infer_roots(frozenset(network.nodes())))
+    roots = [r for r in roots if
+             r in network] or roots  # unsuffixed milk glycans get both lactose and LacNAc as candidate roots, but only the one they actually end in becomes a node
+    if not roots:
+        raise ValueError(
+            f"Could not detect the glycan class (e.g., from '{next(iter(network.nodes()), '')}'), so no biosynthetic root can be inferred; glycans should end in '-ol' (free), 'GalNAc' (O-linked), 'GlcNAc' (N-linked), or '1Cer'/'Ins' (glycolipid).")
+    return max(roots, key = len) if '-ol' not in roots[0] else min(roots, key = len)
+
 
 def add_high_man_removal(network: nx.DiGraph # Biosynthetic network
                          ) -> nx.DiGraph: # Network with high-mannose removal
@@ -304,7 +315,7 @@ def build_network_from_glycans(glycans: list[str], # Observed glycans
 
 
 @rescue_glycans
-def construct_network(glycans: list[str], # List of glycans
+def construct_network(glycans: list[str] | pd.DataFrame, # List of glycans, or an abundance frame (glycans as first column or index, samples as columns)
                       allowed_ptms: frozenset[str] = allowed_ptms, # Set of allowed PTMs
                       edge_type: str = 'monolink', # Edge label type: monolink/monosaccharide/enzyme
                       permitted_roots: frozenset[str] | None = None, # Allowed root nodes
@@ -313,6 +324,11 @@ def construct_network(glycans: list[str], # List of glycans
                       # Apply established biochemical constraints on reaction order; False to disable, or pass custom rules
                       ) -> nx.DiGraph: # Biosynthetic network
     "Construct glycan biosynthetic network"
+    if isinstance(glycans, pd.DataFrame):
+        frame = GlycoDataFrame(glycans)
+        ab = frame.abundance.fillna(0)
+        abundances = abundances or (ab.div(ab.sum(axis = 0).replace(0, 1)) * 100).mean(axis = 1).tolist()  # share-normalized per sample first, so one high-signal sample cannot dominate the mean
+        glycans = list(frame.glycans)
     # Canonicalize all input strings upfront so string equality == graph isomorphism throughout
     glycans = [canonicalize_iupac(g) for g in glycans]
     abundance_mapping = dict(zip(glycans, abundances)) if abundances else {}  # zipped in the caller's order, before sorting and deduplication
@@ -982,11 +998,13 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
 
 
 def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
-                                 root: str = "Gal(b1-4)Glc-ol", # Root node
+                                 root: str | None = None,
+                                 # Root node; default: inferred from the network's glycan class
                                  root_default: float = 10.0,  # Root abundance
                                  virtual_damping: float = 0.5  # Per-hop abundance decay for undetected intermediates
                                  ) -> nx.DiGraph:  # Network with edge capacities
     "Estimate reaction capacity (edge attribute) from node abundances"
+    root = root or infer_network_root(network_in)
     network = network_in.copy()
     abundance_dict = nx.get_node_attributes(network, 'abundance')
     if abundance_dict.get(root, 1) < 0.1:
@@ -1015,10 +1033,15 @@ def get_edge_weight_by_abundance(network_in: nx.DiGraph, # Biosynthetic network
 
 
 def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
-                     source: str = "Gal(b1-4)Glc-ol", # Source node
-                     sinks: list[str] | None = None # Target nodes; default:all terminal nodes
-                     ) -> dict[str, dict[str, float | dict[str, dict[str, float]]]]: # Flow results; sink: {maximum flow value, flow path dictionary}
+                     source: str | None = None,  # Source node; default: inferred from the network's glycan class
+                     sinks: list[str] | None = None  # Target nodes; default:all terminal nodes
+                     ) -> dict[str, dict[
+    str, float | dict[str, dict[str, float]]]]:  # Flow results; sink: {maximum flow value, flow path dictionary}
     "Estimate maximum flow and flow paths between source and sinks"
+    source = source or infer_network_root(network)
+    if not nx.get_edge_attributes(network, 'capacity'):
+        network = get_edge_weight_by_abundance(network,
+                                               root = source)  # an edge without a capacity attribute is infinite to networkx, so a raw construct_network output would make every flow unbounded
     path_lengths = nx.single_source_shortest_path_length(network, source)
     if sinks is None:
         sinks = [node for node, out_degree in network.out_degree() if out_degree == 0 and node in path_lengths]
@@ -1047,9 +1070,10 @@ def get_maximum_flow(network: nx.DiGraph, # Biosynthetic network
 def get_max_flow_path(network: nx.DiGraph, # Biosynthetic network
                       flow_dict: dict[str, dict[str, float]], # Flow dictionary as returned by get_maximum_flow
                       sink: str, # Target node
-                      source: str = "Gal(b1-4)Glc-ol" # Source node
-                      ) -> list[tuple[str, str]]: # Path edge list
+                      source: str | None = None  # Source node; default: inferred from the network's glycan class
+                      ) -> list[tuple[str, str]]:  # Path edge list
     "Get path giving maximum flow value"
+    source = source or infer_network_root(network)
     path = []
     current_node = source
     abundance_dict = nx.get_node_attributes(network, 'abundance')
@@ -1142,12 +1166,8 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         df_analysis = df_analysis.T
     # Network analysis
     df_analysis = df_analysis.set_axis([canonicalize_iupac(g) for g in df_analysis.index])  # construct_network canonicalizes its node names, so the abundance keys have to be canonical too
-    root = sorted(infer_roots(frozenset(df_analysis.index.tolist())))
-    if not root:
-        raise ValueError(
-            f"Could not detect the glycan class (e.g., from '{df_analysis.index[0]}'), so no biosynthetic root can be inferred; glycans should end in '-ol' (free), 'GalNAc' (O-linked), 'GlcNAc' (N-linked), or '1Cer'/'Ins' (glycolipid).")
-    root = max(root, key = len) if '-ol' not in root[0] else min(root, key = len)
     core_net = construct_network(df_analysis.index.tolist(), edge_type = edge_type)
+    root = infer_network_root(core_net)
     nets, features = {}, []
     for col in df_analysis.columns:
         temp = deepcopy(core_net)
