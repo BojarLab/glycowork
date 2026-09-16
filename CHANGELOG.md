@@ -37,4 +37,5 @@
 - `draw_glycans` in `plot_network` is now default-True instead of default-False (f91d6b4)
 
 ##### Fixed 🐛
-- Fixed `extend_network(prioritize=True)` handling of multi-root networks ()
+- Fixed `extend_network(prioritize=True)` handling of multi-root networks (a5121ae)
+- Fixed auto-inferring of group contrasts in `get_differential_biosynthesis` if `longitudinal=True` ()

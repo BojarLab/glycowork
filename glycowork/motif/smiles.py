@@ -194,7 +194,7 @@ def _free_slots(template: str, # Residue template, possibly already partly subst
 
 
 def _anomeric_position(token: str # Monosaccharide token
-                       ) -> int: # 1 for an aldose, 2 for a ketose or ulosonic acid, None if there is no anomeric centre
+                       ) -> int: # 1 for an aldose, 2 for a ketose or ulosonic acid, None if there is no anomeric center
     "Which carbon carries the anomeric oxygen, i.e. the one a glycosidic bond may leave from"
     skeleton, _, _, reduced = _split_token(token)
     if reduced or skeleton == 'Ins':
@@ -228,7 +228,7 @@ def _split_token(token: str # Monosaccharide token such as 'GlcNAc6S' or 'LDManH
 
 
 def _residue(token: str, # Monosaccharide token
-             anomer: str, # 'a', 'b', or anything else for an undefined anomeric centre
+             anomer: str, # 'a', 'b', or anything else for an undefined anomeric center
              ring: str, # Ring-closure digit for this residue
              bridge: str, # Second ring-closure digit, for a pyruvate ketal
              taken: set # Positions the linkages of this residue will need
@@ -283,7 +283,7 @@ def _residue(token: str, # Monosaccharide token
             if position is None:
                 raise GlycanSMILESError(f"'{token}' has nowhere to put '{mod}'")
         anomeric = 2 if '[C@{a}]' in template else 1
-        if position == 1 and anomeric == 2 and URONIC in template:  # C1 of an ulosonic acid is its carboxyl, not its anomeric centre
+        if position == 1 and anomeric == 2 and URONIC in template:  # C1 of an ulosonic acid is its carboxyl, not its anomeric center
             if mod in ('Am', 'NAm', 'N'):
                 template = template.replace(URONIC, AMIDATED)
             elif mod in ESTERIFIED:
@@ -375,7 +375,7 @@ def graph_to_smiles(graph: nx.DiGraph, # Glycan graph, as produced by glycan_to_
             if onto_anomeric and depth:
                 raise GlycanSMILESError(f"'{labels[node]}' cannot use its anomeric oxygen for both its own linkage and '{link}'")
             piece, piece_owners = build(child, link[0], depth + 1)
-            if onto_anomeric:  # onto the anomeric centre: the two residues share that one oxygen
+            if onto_anomeric:  # onto the anomeric center# : the two residues share that one oxygen
                 fragment = 'O(' + piece[1:] + ')' + fragment[1:]
                 owners = owners[:1] * 2 + piece_owners[1:] + owners[:1] + owners[1:]
                 continue
@@ -503,9 +503,9 @@ def _parity(written: list, # Neighbors in the order the SMILES writes them
             ) -> int: # 1 if the reordering is even, -1 if it is odd
     "Sign of the permutation that takes one neighbor ordering to another, which is what flips a chirality tag"
     order, sign = [written.index(atom) for atom in target], 1
-    for i in range(len(order)):
+    for i, ord in enumerate(order):
         for j in range(i + 1, len(order)):
-            if order[i] > order[j]:
+            if ord > order[j]:
                 sign = -sign
     return sign
 
@@ -515,7 +515,7 @@ def _neighbor_key(atom: int | str, # Neighbor to sort, or 'H'
                    ring_oxygen: int, # The ring oxygen of this residue
                    elements: list # Element of every atom
                    ) -> tuple: # Sort key placing ring atoms first, then substituents, then hydrogen
-    "Canonical order of a stereocentre's neighbors: around the ring first, then what hangs off it"
+    "Canonical order of a stereocenter's neighbors: around the ring first, then what hangs off it"
     if atom == 'H':
         return (3, 0)
     if atom == ring_oxygen:
@@ -525,20 +525,20 @@ def _neighbor_key(atom: int | str, # Neighbor to sort, or 'H'
     return (2, {'O': 0, 'N': 1}.get(elements[atom], 2))
 
 
-def _chirality(centre: int, # Atom to describe
+def _chirality(center: int, # Atom to describe
                atoms: list, # Atoms of the molecule
                neighbors: list, # Written neighbor order per atom
                number: dict, # {atom: carbon number} for this residue
                ring_oxygen: int # The ring oxygen of this residue
-               ) -> str: # '@', '@@' or '' when the centre carries no tag
+               ) -> str: # '@', '@@' or '' when the center carries no tag
     "Rewrite an atom's chirality tag in terms of a canonical neighbor order, so it can be compared between molecules"
-    tag = atoms[centre][2]
+    tag = atoms[center][2]
     if not tag:
         return ''
     elements = [element for element, charge, chirality in atoms]
-    written = list(neighbors[centre])
+    written = list(neighbors[center])
     if len(written) != 4:
-        raise GlycanSMILESError(f'stereocentre at atom {centre} has {len(written)} neighbors instead of 4')
+        raise GlycanSMILESError(f'stereocenter at atom {center} has {len(written)} neighbors instead of 4')
     target = sorted(written, key = lambda atom: _neighbor_key(atom, number, ring_oxygen, elements))
     return tag if _parity(written, target) == 1 else ('@@' if tag == '@' else '@')
 
@@ -696,7 +696,7 @@ def _signature_table() -> dict: # {signature: {chirality: (skeleton, anomer)}}
             except (GlycanSMILESError, IndexError, StopIteration):
                 continue
             previous = best.get((key, chirality))
-            if previous and previous[0] == token:  # a skeleton without stereocentres cannot tell its anomers apart
+            if previous and previous[0] == token:  # a skeleton without stereocenters cannot tell its anomers apart
                 best[(key, chirality)] = (token, '?', free, fixed)
             elif not previous or free > previous[2]:  # prefer the plain skeleton over one that bakes a substituent in
                 best[(key, chirality)] = (token, anomer, free, fixed)

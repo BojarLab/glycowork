@@ -776,7 +776,7 @@ def get_pca(
         plt.show()
         plt.close()
     else:
-        fig, ax = plt.subplots()
+        _, ax = plt.subplots()
         ax = sns.scatterplot(x = pc_x - 1, y = pc_y - 1, data = df_pca, hue = color, style = shape, size = size)
         ax.set(xlabel = f'PC{pc_x}: {percent_var[pc_x - 1]}% variance',
                ylabel = f'PC{pc_y}: {percent_var[pc_y - 1]}% variance')

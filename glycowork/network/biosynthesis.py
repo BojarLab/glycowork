@@ -1094,7 +1094,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
     "Compare biosynthetic patterns between conditions/timepoints"
     from scipy.stats import t as tdist
     from scipy.stats import f as f_dist
-    if group1 is None and isinstance(df, GlycoDataFrame) and df._contrasts:
+    if group1 is None and not longitudinal and isinstance(df, GlycoDataFrame) and df._contrasts:
         group1, group2 = list(df.group1), list(df.group2)
     in_name, in_prov = getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {})
     paired = df.paired if paired is None and isinstance(df, GlycoDataFrame) else bool(paired)
@@ -1114,16 +1114,21 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         columns_list = df.columns.tolist()
         group1 = [columns_list[k] for k in group1]
         group2 = [columns_list[k] for k in group2]
-    all_groups = group1 + (group2 or [])
     # Prepare data for analysis
     if longitudinal:
-        df['participant'] = df[id_column].apply(lambda x: x.split('_')[0])
-        df['time_point'] = df[id_column].apply(lambda x: x.split('_')[1])
+        df = df.assign(participant = df[id_column].str.split('_').str[0], time_point = df[id_column].str.split('_').str[1])  # assign, not item-setting, so the caller's frame doesn't gain helper columns
+        time_points = list(dict.fromkeys(df['time_point'])) if time_points is None else list(time_points)
         assert all(tp in df['time_point'].unique() for tp in time_points), "Not all specified time points found in the data"
+        try:
+            time_points = sorted(time_points, key = lambda tp: float(tp[1:]))  # same timepoint parsing as get_time_series; string order would put 'd14' before 'd2'
+        except ValueError:
+            pass
         df = df.set_index(id_column)
         glycan_columns = [col for col in df.columns if col not in [id_column, 'participant', 'time_point']]
         df_analysis = df[df['time_point'].isin(time_points)].copy()
+        all_groups = df_analysis.index.tolist()
     else:
+        all_groups = group1 + group2
         glycan_columns = all_groups
         df_analysis = df.set_index(GlycoDataFrame(df)._glycan_col or df.columns.tolist()[0])
     df_analysis = df_analysis.loc[:, glycan_columns].fillna(0)
@@ -1236,7 +1241,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         for reaction in features:
             reaction_data = res_df[[id_column, 'participant', 'time_point', reaction]]
             reaction_data = reaction_data.groupby(['participant', 'time_point'])[reaction].mean().reset_index()
-            reaction_data['time_numeric'] = pd.Categorical(reaction_data['time_point']).codes
+            reaction_data['time_numeric'] = pd.Categorical(reaction_data['time_point'], categories = time_points, ordered = True).codes
             # Calculate the average slope for each participant
             slopes = reaction_data.groupby('participant').apply(lambda x: np.polyfit(x['time_numeric'], x[reaction], 1)[0], include_groups = False)
             average_slope = slopes.mean()
@@ -1308,7 +1313,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
         out = pd.DataFrame({'Glycan': features, 'Mean abundance': mean_abundance, 'Log2FC': log2fc, 'p-val': pvals,
                             'corr p-val': corrpvals, 'significant': significance, 'Effect size': effect_sizes})
     out = out.set_index('Glycan')
-    out.attrs.update({'alpha': get_alphaN(len(all_groups)), 'n': len(all_groups), 'test': 'moderated t-test',
+    out.attrs.update({'alpha': get_alphaN(len(all_groups)), 'n': len(all_groups), 'test': 'repeated-measures F-test' if longitudinal else 'moderated t-test',
                       'transform': None, 'paired': paired, 'dataset': in_name, 'provenance': in_prov})
     return out.dropna().sort_values(by = 'p-val')
 

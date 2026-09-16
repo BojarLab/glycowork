@@ -341,7 +341,10 @@ def canonicalize_composition(comp: str, # Composition in Hex5HexNAc4Fuc1Neu5Ac2 
     "Converts composition from any common format to standardized dictionary or canonical shorthand string"
     if '_' in comp:
         values = comp.split('_')
-        temp = {"Hex": int(values[0]), "HexNAc": int(values[1]), "Neu5Ac": int(values[2]), "dHex": int(values[3])}
+        if len(values) not in (4, 5):
+            raise ValueError(f"'{comp}' is an underscore-separated positional composition, read as Hex/HexNAc/Neu5Ac/dHex or Hex/HexNAc/Neu5Ac/Neu5Gc/dHex, so it needs exactly four or five fields.")
+        keys = ("Hex", "HexNAc", "Neu5Ac", "dHex") if len(values) == 4 else ("Hex", "HexNAc", "Neu5Ac", "Neu5Gc", "dHex")
+        temp = {k: int(v) for k, v in zip(keys, values)}
         comp_dict = {k: v for k, v in temp.items() if v}
     elif comp.isdigit():
         if len(comp) != 4:
@@ -350,11 +353,21 @@ def canonicalize_composition(comp: str, # Composition in Hex5HexNAc4Fuc1Neu5Ac2 
         temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
         comp_dict = {k: v for k, v in temp.items() if v}
     elif comp and comp[0].isdigit():
-        comp = comp.replace(' ', '')
-        if len(comp) < 5:
-            temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+        toks = comp.split()
+        if len(toks) > 1 and all(t.isdigit() for t in toks):
+            if len(toks) not in (4, 5):
+                raise ValueError(
+                    f"'{comp}' is a whitespace-separated positional composition, read as Hex/HexNAc/Neu5Ac/dHex or Hex/HexNAc/Neu5Ac/Neu5Gc/dHex, so it needs exactly four or five fields.")
+            keys = ("Hex", "HexNAc", "Neu5Ac", "dHex") if len(toks) == 4 else ("Hex", "HexNAc", "Neu5Ac", "Neu5Gc",
+                                                                               "dHex")
+            temp = {k: int(v) for k, v in zip(keys, toks)}
         else:
-            temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "Neu5Gc": int(comp[3]), "dHex": int(comp[4])}
+            comp = comp.replace(' ', '')
+            if len(comp) < 5:
+                temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+            else:
+                temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "Neu5Gc": int(comp[3]),
+                        "dHex": int(comp[4])}
         comp_dict = {k: v for k, v in temp.items() if v}
     else:
         comp_dict = {}
@@ -926,10 +939,10 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
                 iupac = iupac.replace("Man(a1-6)]", "Man(a1-3)[Man(a1-6)]Man(a1-6)]")
             else:
                 iupac = iupac.replace("Man(a1-6)]", "Man(a1-3)[Man(a1-6)]Man(a1-6)]")
-                for m in range(M_count - 2):
+                for _ in range(M_count - 2):
                     floaty += "{Man(a1-2/3/6)}"
         else:
-            for m in range(M_count):
+            for _ in range(M_count):
                 floaty += "{Man(a1-2/3/6)}"
     oxford_wo_branches = bracket_removal(oxford)
     branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A") + 1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A") + 1] != "c" else 0}
