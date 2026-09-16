@@ -1356,9 +1356,12 @@ def edges_for_extension(leaf_glycans: set[str], # Terminal glycans in a network
                         ) -> tuple[list[tuple[str, str]], list[str]]: # (New edges, Labels)
     "Create edges connecting leaf and extended glycans"
     new_edges, new_edge_labels = [], []
+    leaves_by_fp = defaultdict(list)  # isomorphism is only attempted within a topology bucket, as in build_network_from_glycans, since scanning every leaf per precursor is quadratic once a targeted step has produced thousands of leaves
+    for leaf in leaf_glycans:
+        leaves_by_fp[_graph_fp(safe_index(leaf, graphs))].append(leaf)
     for new_g in new_glycans:
         for prec_graph in create_neighbors(safe_index(new_g, graphs), min_size = 1):
-            match = next((leaf for leaf in leaf_glycans if safe_compare(safe_index(leaf, graphs), prec_graph)), None)
+            match = next((leaf for leaf in leaves_by_fp.get(_graph_fp(prec_graph), []) if safe_compare(safe_index(leaf, graphs), prec_graph)), None)
             if match:
                 new_edges.append((match, new_g))
                 new_edge_labels.append(find_diff(match, new_g))
@@ -1373,7 +1376,7 @@ def choose_leaves_to_extend(leaf_glycans: set[str], # Terminal glycans in a netw
 
     def score_glycan(glycan: str):
         comp = Counter(glycan_to_composition(glycan))
-        if not set(comp.keys()).issubset(target_comp.keys()):
+        if not set(comp.keys()).issubset(target_comp.keys()) or any(v > target_comp[k] for k, v in comp.items()):  # a leaf that already overshoots the target in any monosaccharide can never be extended into it
             return float('inf')
         return sum((target_comp - comp).values())
 
@@ -1419,8 +1422,8 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
                                                                                                          network.nodes(
                                                                                                              data = 'virtual')
                                                                                                          if
-                                                                                                         v == 0 and network.in_degree(
-                                                                                                             x) > 0}
+                                                                                                         v == 0 and network.degree(
+                                                                                                             x) > 0}  # the root is measured too and has no precursor, so in_degree would drop it and leave every one-step extension of it unreachable
     if isinstance(to_extend, str) and is_composition(to_extend):
         to_extend = canonicalize_composition(to_extend)
     if isinstance(to_extend, dict):
@@ -1433,7 +1436,7 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
         reactions = {r for r in reactions if map_to_basic(r.split('(')[0]) in to_extend.keys()}
         if auto_steps:
             target_comp = Counter(to_extend)
-            min_score = min(sum((target_comp - Counter(glycan_to_composition(g))).values()) for g in leaf_glycans)
+            min_score = min((sum((target_comp - Counter(glycan_to_composition(g))).values()) for g in leaf_glycans), default = float('inf'))
             if min_score > steps:
                 print(f"auto_steps: {min_score} step(s) needed but max steps is {steps}; aborting.")
                 return network, set(), -1
