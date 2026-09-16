@@ -97,7 +97,7 @@ from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, 
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
                      get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings, get_pval_distribution,
-                     characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site
+                     characterize_monosaccharide, get_heatmap, get_distance_matrix, get_pca, get_pcoa, get_jtk, multi_feature_scoring, get_glycoshift_per_site
 )
 from glycowork.network.biosynthesis import (safe_compare, safe_index, create_neighbors, apply_constraints, _load_constraints,
                          find_diff, construct_network, prune_network, network_alignment, export_network,
@@ -5051,7 +5051,9 @@ def test_get_biodiversity(sample_jtk_df):
     assert len(results) == 2, "Results should be consist of two DataFrames"
     stats, dist_matrix = results
     assert isinstance(stats, pd.DataFrame)
-    assert isinstance(dist_matrix, np.ndarray)
+    assert isinstance(dist_matrix, pd.DataFrame) and list(dist_matrix.columns) == group1 + group2
+    _, dist_matrix_bc = get_biodiversity(df, group1 = group1, group2 = group2, metrics = ['beta'], dist_func = 'braycurtis')
+    assert not np.allclose(dist_matrix_bc.values, dist_matrix.values)
     assert 'Metric' in stats.columns, "Stats results should have a Metric column"
     assert 'p-val' in stats.columns, "Results should have a p-val column"
     # Additional assertions to verify realistic results
@@ -5679,6 +5681,53 @@ def test_get_heatmap_basic(sample_df):
     get_heatmap(df_renamed)
     df_transposed = sample_df.set_index('glycan').T
     get_heatmap(df_transposed)
+    plt.close('all')
+
+
+def test_get_distance_matrix(sample_df):
+    """Test get_distance_matrix against the manual quantify_motifs -> clr_transformation -> calculate_distance_matrix route"""
+    dm = get_distance_matrix(sample_df)
+    assert dm.shape == (3, 3) and list(dm.columns) == ['sample1', 'sample2', 'sample3']
+    assert np.allclose(dm.values, dm.values.T) and np.allclose(np.diag(dm), 0)
+    dm_features = get_distance_matrix(sample_df, dist_func = 'cosine', compare = 'features', transform = '')
+    assert list(dm_features.index) == sample_df['glycan'].tolist()
+    motif_df = clr_transformation(quantify_motifs(sample_df, feature_set = ['exhaustive']) + 1e-7, [], [], gamma = 0)
+    manual = calculate_distance_matrix(motif_df.to_dict(orient = 'list'), lambda x, y: np.linalg.norm(np.subtract(x, y)))
+    assert np.allclose(get_distance_matrix(sample_df, motifs = True, feature_set = ['exhaustive']).values, manual.values)
+    assert get_distance_matrix(sample_df.set_index('glycan').T, transform = 'ALR').shape == (3, 3)
+    comp_df = pd.DataFrame({'glycan': ['Hex5HexNAc4', 'Hex5HexNAc4Neu5Ac1', 'Hex3HexNAc4dHex1'], 's1': [10.0, 20.0, 5.0], 's2': [15.0, 25.0, 4.0], 's3': [12.0, 22.0, 9.0]})
+    assert list(get_distance_matrix(comp_df, transform = None).columns) == ['s1', 's2', 's3']
+    assert list(get_heatmap(comp_df, return_plot = True)[1]) == ['s1', 's2', 's3']
+    plt.close('all')
+    for kwargs in [{'compare': 'rows'}, {'transform': 'log'}, {'dist_func': 'not_a_metric'}]:
+        with pytest.raises(ValueError):
+            get_distance_matrix(sample_df, **kwargs)
+
+
+def test_get_heatmap_dist_func(sample_df):
+    """Test get_heatmap clustering with a custom distance"""
+    g, _, _ = get_heatmap(sample_df, transform = 'CLR', dist_func = 'euclidean', return_plot = True)
+    assert g.dendrogram_col.linkage.shape == (2, 4) and g.dendrogram_row.linkage.shape == (2, 4)
+    get_heatmap(sample_df, dist_func = lambda x, y: np.abs(x - y).sum(), method = 'complete', return_plot = True)
+    plt.close('all')
+
+
+def test_get_pcoa(sample_df):
+    """Test PCoA from abundances and from a precomputed distance matrix"""
+    df = sample_df.copy()
+    df['sample4'], df['sample5'], df['sample6'] = [30.0, 20.0, 10.0], [35.0, 25.0, 12.0], [28.0, 22.0, 9.0]
+    groups = [1, 1, 1, 2, 2, 2]
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        coords = get_pcoa(df, groups = groups, permutations = 99, random_state = 42)
+        mock_savefig.assert_not_called()
+    dm = get_distance_matrix(df)
+    assert list(coords.index) == list(dm.columns) and 'permanova' in coords.attrs
+    recon = np.sqrt(((coords.values[:, None, :] - coords.values[None, :, :]) ** 2).sum(axis = 2))
+    assert np.allclose(recon, dm.values)
+    assert np.allclose(np.abs(get_pcoa(dm, groups = groups, permutations = 99, random_state = 42).values), np.abs(coords.values))
+    get_pcoa(df, dist_func = 'braycurtis', transform = '')
+    with pytest.raises(ValueError):
+        get_pcoa(df, groups = [1, 2])
     plt.close('all')
 
 

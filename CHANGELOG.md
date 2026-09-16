@@ -20,8 +20,14 @@
 ##### Deprecated ⚠️
 
 #### analysis
+##### Added ✨
+- Added `get_distance_matrix` to compute sample-sample or glycan/motif-glycan/motif distance matrices directly from abundance dataframes ()
+- Added the new `dist_func` keyword argument to `get_heatmap` and `get_biodiversity`, to customize the distance function used for clustering ()
+- Added the new `get_pcoa` function to perform principal coordinate analysis (PCoA) ()
+
 ##### Changed 🔄
 - `annotate_figure` in `get_volcano` is now default-True instead of default-False (f91d6b4)
+- Changed the output type of `get_biodiversity`'s beta distance matrix from `ndarray` to `pd.DataFrame` ()
 
 #### draw
 ##### Added ✨
@@ -35,8 +41,8 @@
 #### biosynthesis
 ##### Changed 🔄
 - `draw_glycans` in `plot_network` is now default-True instead of default-False (f91d6b4)
-- `construct_network` can now also use dataframes with a glycan column as input (in addition to the standard list of glycans) ()
-- `get_maximum_flow` and `get_max_flow_path` no longer default to milk oligosaccharide roots in `source` but rather infer the default root from the provided network ()
+- `construct_network` can now also use dataframes with a glycan column as input (in addition to the standard list of glycans) (4791cc1)
+- `get_maximum_flow` and `get_max_flow_path` no longer default to milk oligosaccharide roots in `source` but rather infer the default root from the provided network (4791cc1)
 
 ##### Fixed 🐛
 - Fixed `extend_network(prioritize=True)` handling of multi-root networks (a5121ae)

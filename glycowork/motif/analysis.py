@@ -15,7 +15,7 @@ plt.rcParams.update({
                                   ['#2D6A9F', '#C84B55', '#3A9268', '#E8863A', '#7B5EA7', '#C4843A', '#4AADA8'])
 })
 from collections import Counter
-from typing import Any
+from typing import Any, Callable
 from scipy.stats import ttest_ind, ttest_rel, levene, f, f_oneway, spearmanr, t as t_dist
 from scipy.spatial.distance import squareform, pdist
 
@@ -335,7 +335,7 @@ def get_pvals_motifs(
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
             bp_i, bn_i = np.where(pos[cols_b])[0], np.where(neg[cols_b])[0]
             bal_p = hotellings_t2(bal[:, bn_i].T, bal[:, bp_i].T)[1] if 0 < len(bal) < min(len(bp_i), len(bn_i)) else np.nan
-            explained = _explained_by(p, kids, eff, top_explained)
+            explained = _explained_by(p, kids, eff, top = top_explained)
             okp, okn = usable[pos_i], usable[neg_i]
             if okp.sum() < 2 or okn.sum() < 2:
                 rows[p] = (explained, 1.0, 0.0,
@@ -431,6 +431,7 @@ def get_heatmap(
         return_plot: bool = False,  # Return plot object
         show_all: bool = False,  # Show all tick labels
         title: str | None = None,  # Plot title; None for none, as before
+        dist_func: str | Callable | None = None,  # scipy.spatial.distance metric name or callable on two vectors to cluster rows and columns with; None keeps seaborn's default euclidean
         **kwargs: Any  # Keyword args passed to seaborn clustermap
 ) -> tuple[Any, list[
     str], pd.DataFrame] | None:  # None or (plot object, column names, transformed dataframe) if return_plot=True
@@ -440,12 +441,12 @@ def get_heatmap(
         df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
             df).suffix.lower() == ".tsv" else pd.read_excel(df)
     gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
-    if gcol:
-        df = df.set_index(gcol)
-    elif isinstance(df.iloc[0, 0], str):
-        df = df.set_index(df.columns[0])
-    if not isinstance(df.index[0], str) or (
-            isinstance(df.index[0], str) and ('(' not in df.index[0] or '-' not in df.index[0])):
+    set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
+    if set_idx:
+        df = df.set_index(gcol or df.columns[0])
+    # Glycans as columns get transposed; a feature column lifted into the index is otherwise trusted, since compositions carry no linkages to recognize them by
+    if sum(isinstance(c, str) and '(' in c for c in df.columns) > sum(isinstance(k, str) and '(' in k for k in df.index) or (
+            not set_idx and (not isinstance(df.index[0], str) or '(' not in df.index[0])):
         df = df.T
     df = df.fillna(0)
     if transform:
@@ -480,6 +481,11 @@ def get_heatmap(
     else:
         center = 0
     # Cluster the abundances
+    if dist_func is not None:
+        from scipy.cluster.hierarchy import linkage
+        method = kwargs.pop('method', 'average')
+        kwargs = {'row_linkage': linkage(pdist(df.values, metric = dist_func), method = method),
+                  'col_linkage': linkage(pdist(df.values.T, metric = dist_func), method = method), **kwargs}
     ticklabels = {'yticklabels': True, 'xticklabels': True} if show_all else {}
     combined_kwargs = {**ticklabels, **kwargs}
     g = sns.clustermap(df, center = center, **combined_kwargs)
@@ -497,6 +503,52 @@ def get_heatmap(
         return g, df.columns.tolist(), df
     else:
         plt.show()
+
+
+def get_distance_matrix(
+        df: pd.DataFrame | str | Path,  # Input dataframe or filepath (.csv/.tsv/.xlsx), glycans as rows and samples as columns
+        dist_func: str | Callable[[list, list], float] = 'euclidean',  # scipy.spatial.distance metric name or callable on two lists; euclidean on CLR data is the Aitchison distance
+        compare: str = 'samples',  # What to compare pairwise: 'samples' or 'features' (glycans/motifs)
+        motifs: bool = False,  # Analyze motifs instead of sequences
+        feature_set: list[str] = ['known'],
+        # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
+        custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
+        transform: str | None = 'CLR',  # Transform data before comparing: 'CLR', 'ALR', or None
+        index_col: str = 'glycan'  # Column to use as index
+) -> pd.DataFrame:  # Square distance matrix, e.g., for dendrogram_from_distance
+    "Calculates pairwise distances between samples or glycans/motifs from an abundance dataframe, with optional motif quantification and compositional transformation"
+    from scipy.spatial import distance
+    from glycowork.network.evolution import calculate_distance_matrix
+    if compare not in ('samples', 'features'):
+        raise ValueError(f"compare = '{compare}' is not supported; please use 'samples' or 'features'.")
+    if transform not in ('CLR', 'ALR', '', None):
+        raise ValueError(f"transform = '{transform}' is not supported; please use 'CLR', 'ALR', or None.")
+    if isinstance(dist_func, str):
+        if not callable(getattr(distance, dist_func, None)):
+            raise ValueError(f"dist_func = '{dist_func}' is not a scipy.spatial.distance metric.")
+        dist_func = getattr(distance, dist_func)
+    if isinstance(df, (str, Path)):
+        df = pd.read_csv(df) if Path(df).suffix.lower() == ".csv" else pd.read_csv(df, sep = "\t") if Path(
+            df).suffix.lower() == ".tsv" else pd.read_excel(df)
+    gcol = index_col if index_col in df.columns else GlycoDataFrame(df)._glycan_col
+    set_idx = bool(gcol) or isinstance(df.iloc[0, 0], str)
+    if set_idx:
+        df = df.set_index(gcol or df.columns[0])
+    # Glycans as columns get transposed; a feature column lifted into the index is otherwise trusted, since compositions carry no linkages to recognize them by
+    if sum(isinstance(c, str) and '(' in c for c in df.columns) > sum(isinstance(k, str) and '(' in k for k in df.index) or (
+            not set_idx and (not isinstance(df.index[0], str) or '(' not in df.index[0])):
+        df = df.T
+    df = df.fillna(0)
+    if motifs:
+        df = quantify_motifs(df, glycans = df.index.tolist(), feature_set = feature_set, custom_motifs = custom_motifs)
+    # Quantify on raw abundances and transform the (motif) composition, as get_heatmap does
+    if transform == "CLR":
+        df = clr_transformation(df + 1e-7, [], [], gamma = 0)
+    elif transform == "ALR":
+        df = get_additive_logratio_transformation(df.reset_index(), df.columns.tolist(), [], paired = False, gamma = 0)
+        df = df.set_index(df.columns[0])
+    df = df if compare == 'features' else df.T
+    return calculate_distance_matrix(dict(zip(df.index, df.values.tolist())), dist_func)
 
 
 def plot_embeddings(
@@ -792,6 +844,75 @@ def get_pca(
         plt.close()
 
 
+def get_pcoa(
+        df: pd.DataFrame | str | Path,
+        # Abundance dataframe or filepath (glycans as rows, samples as columns) or a square distance matrix, e.g., from get_distance_matrix or get_biodiversity
+        groups: list[str | int] | None = None,
+        # Group label per sample for coloring and PERMANOVA; default: from the frame's contrasts
+        dist_func: str | Callable[[list, list], float] = 'euclidean',
+        # scipy.spatial.distance metric name or callable on two lists; euclidean on CLR data is the Aitchison distance
+        motifs: bool = False,  # Analyze motifs instead of sequences
+        feature_set: list[str] = ['known', 'exhaustive'],
+        # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
+        custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
+        transform: str = 'CLR',  # Transform data before computing distances: 'CLR', 'ALR', or '' for none
+        pco_x: int = 1,  # Principal coordinate for x-axis
+        pco_y: int = 2,  # Principal coordinate for y-axis
+        permutations: int = 999,  # Number of permutations for PERMANOVA
+        random_state: int | np.random.Generator | None = None,  # optional random state for reproducibility
+        filepath: str | Path = '',  # Path to save plot
+        title: str | None = None  # Plot title; None for none
+) -> pd.DataFrame:  # Sample coordinates on all principal coordinates, explained variance and PERMANOVA in .attrs
+    "Performs principal coordinate analysis (PCoA) on any sample distance matrix with group-based visualization and PERMANOVA"
+    import seaborn as sns
+    if isinstance(df, pd.DataFrame) and df.shape[0] == df.shape[1] and df.index.equals(df.columns):
+        dm = df
+    else:
+        if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
+            groups = list(df.groups)
+        dm = get_distance_matrix(df, dist_func = dist_func, motifs = motifs, feature_set = feature_set,
+                                 custom_motifs = custom_motifs, transform = transform)
+    n = len(dm)
+    if groups is not None and len(groups) != n:
+        raise ValueError(
+            f"get_pcoa got {len(groups)} group labels for {n} samples; exactly one label per sample is required.")
+    # Classic multidimensional scaling: eigendecomposition of the Gower-centered squared distances
+    J = np.eye(n) - np.ones((n, n)) / n
+    vals, vecs = np.linalg.eigh(-0.5 * J @ np.square(dm.to_numpy(dtype = float)) @ J)
+    vals, vecs = vals[::-1], vecs[:, ::-1]
+    keep = vals > 1e-10 * max(vals[0],
+                              1e-12)  # non-euclidean metrics such as braycurtis yield negative eigenvalues, which have no real coordinates
+    if keep.sum() < max(pco_x, pco_y):
+        raise ValueError(
+            f"Only {keep.sum()} principal coordinates carry variance, so pco_x = {pco_x} and pco_y = {pco_y} cannot both be plotted.")
+    coords = pd.DataFrame(vecs[:, keep] * np.sqrt(vals[keep]), index = dm.index,
+                          columns = [f'PCo{i + 1}' for i in range(keep.sum())])
+    coords.attrs['explained_variance'] = vals[keep] / vals[keep].sum()
+    _, ax = plt.subplots()
+    sns.scatterplot(x = coords.iloc[:, pco_x - 1].values, y = coords.iloc[:, pco_y - 1].values,
+                    hue = [str(g) for g in groups] if groups is not None else None, ax = ax)
+    ax.set(xlabel = f'PCo{pco_x}: {coords.attrs["explained_variance"][pco_x - 1] * 100:.1f}% variance',
+           ylabel = f'PCo{pco_y}: {coords.attrs["explained_variance"][pco_y - 1] * 100:.1f}% variance')
+    if groups is not None:
+        counts = Counter(groups)
+        if len(counts) > 1 and all(c > 1 for c in counts.values()):
+            coords.attrs['permanova'] = permanova_with_permutation(dm, group_labels = groups,
+                                                                   permutations = permutations,
+                                                                   random_state = random_state)
+            ax.text(0.02, 0.98,
+                    f'PERMANOVA F = {coords.attrs["permanova"][0]:.2f}, p = {coords.attrs["permanova"][1]:.3g}',
+                    transform = ax.transAxes, va = 'top')
+        ax.legend(bbox_to_anchor = (1.05, 1), loc = 'upper left', borderaxespad = 0)
+    if title is not None:
+        ax.set_title(title)
+    sns.despine()
+    if filepath:
+        plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')
+    plt.show()
+    plt.close()
+    return coords
+
+
 def select_grouping(
         cohort_b: pd.DataFrame,  # Case samples dataframe
         cohort_a: pd.DataFrame,  # Control samples dataframe
@@ -1066,7 +1187,7 @@ def get_differential_expression(
             bal = bal[bal.std(axis = 1, ddof = 1) > 1e-9] if len(bal) and len(cols_b) > 1 else bal[:0]
             bal_p = hotellings_t2(bal[:, b1].T, bal[:, b2].T, paired = paired)[1] if 0 < len(bal) < min(len(b1),
                                                                                                         len(b2)) else np.nan
-            explained = _explained_by(p, kids, fc, top_explained)
+            explained = _explained_by(p, kids, fc, top = top_explained)
             ok1, ok2 = usable[g1i], usable[g2i]
             pair_ok = ok1 & ok2 if paired else None
             if (pair_ok.sum() if paired else min(ok1.sum(), ok2.sum())) < 2:
@@ -1352,7 +1473,7 @@ def get_glycanova(
             bal_p = permanova_with_permutation(squareform(pdist(bal.T, metric = 'euclidean')), group_labels = grp_b,
                                                permutations = 999, random_state = random_state)[1] if len(
                 bal) and len(set(grp_b)) > 1 else np.nan
-            explained = _explained_by(p, kids, eff, top_explained)
+            explained = _explained_by(p, kids, eff, top = top_explained)
             if min((usable & (garr == g)).sum() for g in levels) < 2:
                 rows[p] = (explained, 1.0, 0.0,
                            bal_p)  # parent occurs only inside its children: no context of its own left to test
@@ -1639,6 +1760,7 @@ def get_biodiversity(
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
         permutations: int = 999,  # Number of permutations for ANOSIM/PERMANOVA
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
+        dist_func: str | Callable | None = None,  # scipy.spatial.distance metric name or callable for beta diversity; default: braycurtis if transform = "Nothing", else euclidean (Aitchison distance on log-ratios)
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)
@@ -1712,13 +1834,13 @@ def get_biodiversity(
     if 'beta' in metrics:
         if not isinstance(df.index[0], str):
             df = df.set_index(df.columns[0])
-        distance_matrix = squareform(
-            pdist(df.values.T, metric = 'braycurtis' if transform == "Nothing" else 'euclidean'))
+        distance_matrix = pd.DataFrame(squareform(pdist(df.values.T, metric = dist_func or (
+            'braycurtis' if transform == "Nothing" else 'euclidean'))), index = df.columns, columns = df.columns)
         if circadian:
             n = distance_matrix.shape[0]
             tvec = np.repeat(np.arange(timepoints) * interval, n // timepoints)[:n].astype(float)
             J = np.eye(n) - np.ones((n, n)) / n
-            G = -0.5 * J @ (distance_matrix ** 2) @ J  # Gower-centered distances for db-RDA
+            G = -0.5 * J @ (distance_matrix.to_numpy() ** 2) @ J  # Gower-centered distances for db-RDA
             rng = np.random.default_rng(random_state) if not isinstance(random_state,
                                                                         np.random.Generator) else random_state
             for period in periods:
@@ -1735,16 +1857,13 @@ def get_biodiversity(
                 shopping_cart.append(pd.DataFrame(
                     {'Metric': f'Beta diversity rhythm {period}h (db-RDA)', 'p-val': p_val, 'Period length': period,
                      'Effect size': f_obs}, index = [0]))
-            distance_matrix = pd.DataFrame(distance_matrix, index = range(n), columns = range(n))
         elif all(count > 1 for count in group_counts.values()):
-            beta_df_out = pd.DataFrame(distance_matrix, index = range(len(df.columns)),
-                                       columns = range(len(df.columns)))
-            r, p = anosim(beta_df_out, group_labels_in = group_sizes, permutations = permutations,
+            r, p = anosim(distance_matrix, group_labels_in = group_sizes, permutations = permutations,
                           random_state = random_state)
             b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (ANOSIM)', 'p-val': p, 'Effect size': r},
                                         index = [0])
             shopping_cart.append(b_test_stats)
-            f, p = permanova_with_permutation(beta_df_out, group_labels = group_sizes, permutations = permutations,
+            f, p = permanova_with_permutation(distance_matrix, group_labels = group_sizes, permutations = permutations,
                                               random_state = random_state)
             b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (PERMANOVA)', 'p-val': p, 'Effect size': f},
                                         index = [0])
