@@ -428,7 +428,9 @@ def construct_network(glycans: list[str] | pd.DataFrame, # List of glycans, or a
                     if edge_type == 'monosaccharide':
                         elem['diffs'] = edge.split('(')[0]
                     elif edge_type == 'enzyme':
-                        elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme, glycan_class = net_class, product = v)
+                        elem['diffs'] = monolink_to_glycoenzyme(edge, df_enzyme, glycan_class = net_class,
+                                                                product = max(u, v, key = lambda n: len(
+                                                                    safe_index(n, graph_dic))))
     # Make network directed
     network = prune_directed_edges(network.to_directed())
     if constraints is not False:

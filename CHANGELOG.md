@@ -32,7 +32,7 @@
 #### draw
 ##### Added ✨
 - `GlycoDraw` and `display_svg_with_matplotlib` have received the new `sticker` keyword argument, to output die cut sticker style drawings of glycans (257ba7b)
-- `GlycoDraw` can now also draw compositions, such as `GlycoDraw("H3N4A2")`, supporting all composition formats via Universal Input ()
+- `GlycoDraw` can now also draw compositions, such as `GlycoDraw("H3N4A2")`, supporting all composition formats via Universal Input (81ad77a)
 
 #### annotate
 ##### Fixed 🐛
@@ -42,6 +42,7 @@
 #### biosynthesis
 ##### Added ✨
 - Added more literature-known enzyme constraints to make `construct_network` outputs more physiological if `constraints=True` (573cf04)
+- Added more literature-known substrate specificities to `monolink_to_enzyme` for more physiological edge labeling in `plot_network` ()
 
 ##### Changed 🔄
 - `draw_glycans` in `plot_network` is now default-True instead of default-False (f91d6b4)
