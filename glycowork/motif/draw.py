@@ -3,7 +3,7 @@ from glycowork.glycan_data.loader import unwrap, resolve_motif_name, lib
 from glycowork.motif.regex import get_match
 from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compare_glycans, graph_to_string, resolve_anchor
 from glycowork.motif.tokenization import get_core, get_modification
-from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit
+from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER
 import warnings
 import hashlib
 from io import BytesIO
@@ -1322,9 +1322,62 @@ class GlycanDrawing:
                                   sticker = self.sticker, background = (1.0, 1.0, 1.0))
 
 
+def _finish_drawing(
+        d: draw.Group, # Drawn content, in user space
+        in_glycan: str, # Glycan as passed by the caller, for filenames
+        alt_text: str, # ALT text for accessibility
+        id_key: tuple, # Everything that makes this drawing distinct, hashed into its element IDs
+        vertical: bool = False, # Draw vertically
+        dim: float = 50, # Base dimension for scaling
+        filepath: str | Path | None = None, # Output file path
+        suppress: bool = False, # Suppress display
+        shadow: bool = False, # Draw a soft drop shadow under the monosaccharide symbols
+        sticker: bool = False # Cut the whole structure out as a die-cut sticker
+) -> Any: # Drawing object
+    "Crops, saves, and returns a finished GlycoDraw canvas, shared by structures and compositions"
+    # Canvas: crop to what was actually drawn, since a formula over sugar positions cannot know how far labels, brackets and highlight halos reach
+    boxes = _drawn_extent(d, [])
+    x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
+    x1, y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
+    if vertical:
+        # Rotating about the content center keeps the crop a plain transpose of the box, instead of forcing the square canvas a canvas-centred rotation would need
+        c_x, c_y = (x0 + x1) / 2, (y0 + y1) / 2
+        d.args['transform'] = f'rotate(90 {c_x} {c_y})'
+        x0, y0, x1, y1 = c_x - (y1 - y0) / 2, c_y - (x1 - x0) / 2, c_x + (y1 - y0) / 2, c_y + (x1 - x0) / 2
+    margin = dim * (0.45 if sticker else 0.2)
+    # Namespace the element IDs per drawing, so that several GlycoDraw SVGs inlined into one HTML document do not resolve each other's <use> references
+    tag = hashlib.blake2s(repr(id_key).encode(), digest_size = 4).hexdigest()
+    d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin),
+                      id_prefix = f'g{tag}_')
+    d2.append(d)
+    if filepath:
+        filepath = Path(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
+        suffix = filepath.suffix.lower()
+        if suffix not in {'.svg', '.pdf', '.png'}:
+            raise ValueError(f"Cannot save to '{filepath.name}': filepath has to end in .svg, .pdf, or .png")
+        filepath.parent.mkdir(parents = True, exist_ok = True)
+        data = d2.as_svg()
+        data = data.replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
+        if suffix == '.svg':
+            if shadow or sticker:  # drawsvg has no cut layer of its own, so route the SVG through glycorender as well
+                from glycorender.render import pdf_to_svg_bytes
+                data = pdf_to_svg_bytes(data, shadow = shadow, sticker = sticker).replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
+            with open(filepath, 'w', encoding = "utf-8") as f:
+                f.write(_flatten_text_paths(data))
+        elif suffix == '.pdf':
+            convert_svg_to_pdf, _ = _get_glycorender()
+            convert_svg_to_pdf(data, str(filepath), shadow = shadow, sticker = sticker)
+        else:
+            _, convert_svg_to_png = _get_glycorender()
+            convert_svg_to_png(data, str(filepath), shadow = shadow, sticker = sticker)
+    return GlycanDrawing(d2, shadow = shadow,
+                         sticker = sticker) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
+        d2, shadow = shadow, sticker = sticker)
+
+
 @rescue_glycans
 def GlycoDraw(
-        glycan: str, # IUPAC-condensed glycan sequence
+        glycan: str, # IUPAC-condensed glycan sequence or composition (e.g., H5N4F1A2, Hex5HexNAc4Fuc1Neu5Ac2)
         vertical: bool = False, # Draw vertically
         compact: bool = False, # Use compact style
         show_linkage: bool = True, # Show linkage labels
@@ -1358,6 +1411,23 @@ def GlycoDraw(
     motif_hit = resolve_motif_name(glycan)
     if motif_hit:
         glycan = motif_hit[0]
+    elif is_composition(glycan) and not sugar_dict.keys().isdisjoint(comp := canonicalize_composition(glycan)):
+        # Compositions have no topology to lay out, so each monosaccharide gets its symbol followed by its count, and substituents like S or P are spelled out
+        d, cursor, row = draw.Group(), 0.0, 0.0
+        for mono, count in sorted(comp.items(), key = lambda x: (_COMP_ORDER.get(x[0], len(_COMP_ORDER)), x[0])):
+            if mono in sugar_dict:
+                shape, color, furanose = sugar_dict[mono]
+                draw_shape(shape, color, x_pos = -(cursor + 0.5), y_pos = row, col_dict = col_dict_base, drawing = d, furanose = furanose, dim = dim)
+                cursor += 1.2
+            else:
+                d.append(draw.Text(mono, dim * 0.5, (cursor + 0.5) * dim, (row + 0.18) * dim, text_anchor = 'middle', fill = col_dict_base['black']))
+                cursor += max(1.2, 0.28 * len(mono) + 0.2)
+            d.append(draw.Text(str(count), dim * 0.5, cursor * dim, (row + 0.18) * dim, text_anchor = 'start', fill = col_dict_base['black']))
+            # Vertical compositions are stacked row by row instead of rotated, so the counts stay upright and readable
+            cursor, row = (0.0, row + 1.25) if vertical else (cursor + 0.28 * len(str(count)) + 0.45, row)
+        if alt_text is None:
+            alt_text = f"SNFG composition diagram of {glycan}: " + ", ".join(f"{count} {mono}" for mono, count in comp.items()) + "."
+        return _finish_drawing(d, in_glycan, alt_text, (in_glycan, compact, vertical, dim), dim = dim, filepath = filepath, suppress = suppress, shadow = shadow, sticker = sticker)
     if repeat and not repeat_range:
         _backbone = re.findall(r'.*\((?!.*\()', glycan)[0]
         _conn = re.sub(r'\)(.*)', '', re.sub(r'.*\((?!.*\()', '', glycan))
@@ -1621,46 +1691,7 @@ def GlycoDraw(
             draw_bracket(bracket_open, bracket_y_open, d, direction = 'right', dim = dim, highlight = highlight, deg = open_deg)
             draw_bracket(bracket_close, bracket_y_close, d, direction = 'left', dim = dim, highlight = highlight, deg = 0)
             add_sugar('text', d, x_pos = text_x, y_pos = text_y, modification = repeat_annot, compact = compact, dim = dim, text_anchor = 'start', highlight = highlight)
-    # Canvas: crop to what was actually drawn, since a formula over sugar positions cannot know how far labels, brackets and highlight halos reach
-    boxes = _drawn_extent(d, [])
-    x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
-    x1, y1 = max(b[2] for b in boxes), max(b[3] for b in boxes)
-    if vertical:
-        # Rotating about the content centre keeps the crop a plain transpose of the box, instead of forcing the square canvas a canvas-centred rotation would need
-        c_x, c_y = (x0 + x1) / 2, (y0 + y1) / 2
-        d.args['transform'] = f'rotate(90 {c_x} {c_y})'
-        x0, y0, x1, y1 = c_x - (y1 - y0) / 2, c_y - (x1 - x0) / 2, c_x + (y1 - y0) / 2, c_y + (x1 - x0) / 2
-    margin = dim * (0.45 if sticker else 0.2)
-    # Namespace the element IDs per drawing, so that several GlycoDraw SVGs inlined into one HTML document do not resolve each other's <use> references
-    tag = hashlib.blake2s(repr(
-        (in_glycan, highlight_motif, highlight_termini_list, compact, vertical, dim, per_residue, repeat,
-         reducing_end_label)).encode(), digest_size = 4).hexdigest()
-    d2 = draw.Drawing(x1 - x0 + 2 * margin, y1 - y0 + 2 * margin, origin = (x0 - margin, y0 - margin),
-                      id_prefix = f'g{tag}_')
-    d2.append(d)
-    if filepath:
-        filepath = Path(str(filepath).replace(in_glycan, re.sub(r'[<>:"/\\|?*]', '_', in_glycan)))
-        suffix = filepath.suffix.lower()
-        if suffix not in {'.svg', '.pdf', '.png'}:
-            raise ValueError(f"Cannot save to '{filepath.name}': filepath has to end in .svg, .pdf, or .png")
-        filepath.parent.mkdir(parents = True, exist_ok = True)
-        data = d2.as_svg()
-        data = data.replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
-        if suffix == '.svg':
-            if shadow or sticker:  # drawsvg has no cut layer of its own, so route the SVG through glycorender as well
-                from glycorender.render import pdf_to_svg_bytes
-                data = pdf_to_svg_bytes(data, shadow = shadow, sticker = sticker).replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
-            with open(filepath, 'w', encoding = "utf-8") as f:
-                f.write(_flatten_text_paths(data))
-        elif suffix == '.pdf':
-            convert_svg_to_pdf, _ = _get_glycorender()
-            convert_svg_to_pdf(data, str(filepath), shadow = shadow, sticker = sticker)
-        else:
-            _, convert_svg_to_png = _get_glycorender()
-            convert_svg_to_png(data, str(filepath), shadow = shadow, sticker = sticker)
-    return GlycanDrawing(d2, shadow = shadow,
-                         sticker = sticker) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
-        d2, shadow = shadow, sticker = sticker)
+    return _finish_drawing(d, in_glycan, alt_text, (in_glycan, highlight_motif, highlight_termini_list, compact, vertical, dim, per_residue, repeat, reducing_end_label), vertical = vertical, dim = dim, filepath = filepath, suppress = suppress, shadow = shadow, sticker = sticker)
 
 
 def _drawable(glycan: str, # Candidate label
