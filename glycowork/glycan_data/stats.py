@@ -223,7 +223,7 @@ class MissForest:
 def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences in first col and abundances in subsequent cols
                          groups: list[list[str]], # nested list of column name lists, one list per group
                          impute: bool = True, # replaces zeroes with predictions from MissForest
-                         min_samples: float = 0.1,  # percent of samples that need non-zero values for glycan to be kept
+                         min_samples: float = 0.1,  # fraction (0-1) of samples that need non-zero values for glycan to be kept
                          protect: pd.DataFrame | None = None,  # boolean frame in the shape/order of the abundance block, marking cells that were never measured and must stay NaN
                          circadian: bool = False,  # inject sin/cos time features into MissForest
                          timepoints: int | list | np.ndarray | None = None, # number of timepoints, or explicit time values per column (only relevant if circadian)
@@ -233,6 +233,9 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
                          random_state: int | np.random.Generator | None = None # optional random state for reproducibility
                          ) -> pd.DataFrame:  # normalized dataframe in same style as input
     "discards rows with too many missings, imputes the rest, and normalizes"
+    if not 0 <= min_samples <= 1:
+        raise ValueError(
+            f"min_samples is a fraction between 0 and 1 (e.g., 0.1 for 10% of samples), got {min_samples}.")
     df = df_in.copy()
     if min_samples:
         min_count = max(np.floor((df.shape[1] - 1) * min_samples), 1)
@@ -781,7 +784,10 @@ def get_additive_logratio_transformation(df: pd.DataFrame, # dataframe with feat
                                          ) -> pd.DataFrame: # ALR-transformed dataframe
     "Identifies ALR reference component and transforms data according to ALR"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
-    scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired, custom_scale = custom_scale, random_state = local_rng)
+    if group1 and isinstance(group1[0], int):
+        group1, group2 = [df.columns[k] for k in group1], [df.columns[k] for k in group2]
+    scores, procrustes_corr, variances = get_procrustes_scores(df, group1, group2, paired = paired,
+                                                               custom_scale = custom_scale, random_state = local_rng)
     ref_component = np.argmax(scores)
     ref_component_string = df.iloc[:, 0].values[ref_component]
     print(f"Reference component for ALR is {ref_component_string}, with Procrustes correlation of {procrustes_corr[ref_component]} and variance of {variances[ref_component]}")

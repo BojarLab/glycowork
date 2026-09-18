@@ -162,6 +162,8 @@ class GlycoDataFrame(pd.DataFrame):
         from glycowork.motif.graph import subgraph_isomorphism  # Lazy import to avoid circular dependencies
         if isinstance(motif, str) and (hit := resolve_motif_name(motif)) is not None:
             motif, termini_list = hit[0], termini_list or hit[1]
+        elif isinstance(motif, str) and '(' not in motif and motif not in lib:
+            raise ValueError(f"'{motif}' is neither a motif name from motif_list nor a glycan sequence.")
         glycans = list(self.glycans)
         indices = [i for i, g in enumerate(glycans) if
                    isinstance(g, str) and subgraph_isomorphism(g, motif, termini_list = termini_list, count = True) >= (
@@ -347,7 +349,8 @@ class LazyLoader:
                                                           provenance = self._provenance_map.get(
                                                               dataset_key) or self._provenance_map.get(name, {}))
             except FileNotFoundError:
-                raise AttributeError(f"No dataset named {name} available under {self.directory} with prefix {self.prefix}.")
+                raise AttributeError(
+                    f"No dataset named {name} available under {self.directory} with prefix {self.prefix}")
         return self._datasets[name]
 
     def __dir__(self):

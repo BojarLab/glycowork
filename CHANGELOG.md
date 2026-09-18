@@ -2,6 +2,7 @@
 
 ## [1.10.1]
 - Bumped `glycorender` requirement to `0.4.1` to support `GlycoDraw` die cut stickers (257ba7b)
+- Added more error messages throughout the package ()
 
 ### glycan_data
 #### loader
@@ -42,7 +43,7 @@
 #### biosynthesis
 ##### Added ✨
 - Added more literature-known enzyme constraints to make `construct_network` outputs more physiological if `constraints=True` (573cf04)
-- Added more literature-known substrate specificities to `monolink_to_enzyme` for more physiological edge labeling in `plot_network` ()
+- Added more literature-known substrate specificities to `monolink_to_enzyme` for more physiological edge labeling in `plot_network` (c4910e9)
 
 ##### Changed 🔄
 - `draw_glycans` in `plot_network` is now default-True instead of default-False (f91d6b4)

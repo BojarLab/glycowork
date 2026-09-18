@@ -320,7 +320,8 @@ def get_match(pattern: str | list[str], # Expression or pre-compiled pattern; e.
               ) -> bool | list[str]: # Match results
     "Find matches for glyco-regular expression in glycan"
     if isinstance(glycan, str):
-        if any(k in glycan for k in (';', '-D-', 'RES', '=', 'α', 'β')):
+        if any(k in glycan for k in (';', '-D-', 'RES', '=', 'α', 'β')) or (
+                '(' not in glycan and re.search(r'[ab?][12]-', glycan)):
             glycan = canonicalize_iupac(glycan)
         ggraph = glycan_to_nxGraph(glycan)
     elif isinstance(glycan, nx.Graph):
@@ -359,6 +360,7 @@ def get_match_batch(pattern: str | list[str], # Expression or pre-compiled patte
                     ) -> list[bool] | list[list[str]]: # Match results for each glycan
     "Find glyco-regular expression matches in list of glycans"
     pattern = compile_pattern(pattern) if isinstance(pattern, str) else pattern
+    glycan_list = [glycan_list] if isinstance(glycan_list, (str, nx.Graph)) else glycan_list
     out = []
     for g in glycan_list:
         try:

@@ -316,6 +316,9 @@ def expand_termini_list(motif: str | nx.DiGraph, # Glycan motif sequence or grap
     "Convert monosaccharide-only termini list into full termini list"
     mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
     termini_list = [mapping.get(t, t) for t in termini_list]
+    if unknown := set(termini_list) - {'terminal', 'internal', 'flexible'}:
+        raise ValueError(
+            f"Unrecognized termini_list entries {sorted(unknown)}; use 'terminal', 'internal', or 'flexible'.")
     num_linkages = motif.count('(') if isinstance(motif, str) else len(motif) - len(termini_list)
     result = ['flexible'] * (len(termini_list) + num_linkages)
     result[::2] = termini_list

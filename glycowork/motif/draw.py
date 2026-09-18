@@ -5,6 +5,7 @@ from glycowork.motif.graph import glycan_to_nxGraph, subgraph_isomorphism, compa
 from glycowork.motif.tokenization import get_core, get_modification
 from glycowork.motif.processing import min_process_glycans, rescue_glycans, in_lib, expand_lib, get_matching_indices, parse_floating_bit, is_composition, canonicalize_composition, _COMP_ORDER
 import warnings
+import html
 import hashlib
 from io import BytesIO
 from typing import Any
@@ -634,6 +635,9 @@ def get_highlight_attribute(
         motif = glycan_to_nxGraph(motif_string, termini = 'provided' if termini_list else None, termini_list = termini_list)
         _, mappings = subgraph_isomorphism(glycan_graph, motif, termini_list = termini_list, return_matches = True)
         matched = set(unwrap(mappings))
+        if not matched:
+            warnings.warn(
+                f"highlight_motif '{motif_string}' does not occur in {graph_to_string(glycan_graph)}, so nothing is highlighted.")
         in_label, out_label = ('hide', 'show') if reverse_highlight else ('show', 'hide')
         mapping_show = {node: in_label if node in matched else out_label for node in glycan_graph.nodes()}
     else:
@@ -1089,6 +1093,9 @@ def process_per_linkage(
         glycan: str, # original IUPAC-condensed glycan sequence
 ) -> dict[int, bool]: # Flag per linkage node of the drawn sequence
     "Maps which linkages to highlight onto the linkage nodes of the drawn sequence"
+    if any(not 0 <= i < glycan.count('(') for i in highlight_linkages):
+        raise ValueError(
+            f"highlight_linkages {highlight_linkages} has to index the {glycan.count('(')} linkages of {glycan}, starting from 0")
     per_linkage = [i in highlight_linkages for i in range(glycan.count('('))]
     if glycan != draw_this:
         g1 = glycan_to_nxGraph(glycan)
@@ -1335,6 +1342,7 @@ def _finish_drawing(
         sticker: bool = False # Cut the whole structure out as a die-cut sticker
 ) -> Any: # Drawing object
     "Crops, saves, and returns a finished GlycoDraw canvas, shared by structures and compositions"
+    alt_text = html.escape(alt_text)
     # Canvas: crop to what was actually drawn, since a formula over sugar positions cannot know how far labels, brackets and highlight halos reach
     boxes = _drawn_extent(d, [])
     x0, y0 = min(b[0] for b in boxes), min(b[1] for b in boxes)
@@ -1542,11 +1550,11 @@ def GlycoDraw(
         orientation = "vertical" if vertical else "horizontal"
         style = "compact" if compact else "standard"
         linkage_info = "with" if show_linkage else "without"
-        alt_text = f"SNFG diagram of {glycan} drawn in {orientation} {style} style {linkage_info} linkage labels."
+        alt_text = f"SNFG diagram of {in_glycan} drawn in {orientation} {style} style {linkage_info} linkage labels."
         if highlight_motif:
             alt_text += f" The motif {highlight_motif} is highlighted."
         if repeat:
-            alt_text += f" Contains repeat unit (n={repeat if isinstance(repeat, (str, int)) and repeat is not True else ''})."
+            alt_text += f" Contains repeat unit{f' (n={repeat})' if repeat is not True else ''}."
     # Draw
     d = draw.Group()
     if reducing_end_label:

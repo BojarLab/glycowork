@@ -52,7 +52,8 @@ def annotate_glycan(
         motifs = motif_list
     # Check whether termini are specified
     if not termini_list and isinstance(motifs, pd.DataFrame):
-        termini_list = list(map(eval, motifs.termini_spec))
+        termini_list = list(map(eval, motifs.termini_spec)) if 'termini_spec' in motifs.columns else [
+            ['flexible'] * (1 + m.count('(') - m.endswith(')')) for m in motifs.motif]
     if gmotifs is None:
         termini = 'provided' if termini_list else 'ignore'
         partial_glycan_to_nxGraph = partial(glycan_to_nxGraph, termini = termini)
@@ -85,7 +86,8 @@ def annotate_glycan_topology_uncertainty(
         feasibles = set(loader.df_species[loader.df_species.Class == "Mammalia"].glycan.values.tolist())
     # Check whether termini are specified
     if not termini_list and isinstance(motifs, pd.DataFrame):
-        termini_list = list(map(eval, motifs.termini_spec))
+        termini_list = list(map(eval, motifs.termini_spec)) if 'termini_spec' in motifs.columns else [
+            ['flexible'] * (1 + m.count('(') - m.endswith(')')) for m in motifs.motif]
     if gmotifs is None:
         termini = 'provided' if termini_list else 'ignore'
         partial_glycan_to_nxGraph = partial(glycan_to_nxGraph, termini = termini)
@@ -260,6 +262,8 @@ def annotate_dataset(
     glycans = [g[:-3] if g.endswith('-ol') and not _STRUCTURAL_ALDITOL.search(g) else g for g in glycans]
     if isinstance(feature_set, str):
         feature_set = [feature_set]
+    if isinstance(custom_motifs, str):
+        custom_motifs = [custom_motifs]
     valid_features = {'known', 'graph', 'terminal', 'terminal1', 'terminal2', 'terminal3', 'custom', 'chemical',
                       'exhaustive', 'size_branch'}
     if invalid_features := set(feature_set) - valid_features:
@@ -269,7 +273,8 @@ def annotate_dataset(
         motifs = motif_list
     # Checks whether termini information is provided
     if not termini_list:
-        termini_list = list(map(eval, motifs.termini_spec))
+        termini_list = list(map(eval, motifs.termini_spec)) if 'termini_spec' in motifs.columns else [
+            ['flexible'] * (1 + m.count('(') - m.endswith(')')) for m in motifs.motif]
     shopping_cart = []
     if 'known' in feature_set:
         termini = 'provided' if termini_list else 'ignore'
@@ -901,5 +906,6 @@ def get_glycan_similarity(
 ) -> float: # Cosine similarity between glycan1 and glycan2
     "Calculates cosine similarity between two glycans based on their motif count fingerprints"
     from scipy.spatial.distance import cosine
-    fp = annotate_dataset([glycan1, glycan2], motifs = motifs, feature_set = feature_set)
+    fp = annotate_dataset([graph_to_string(glycan1), graph_to_string(glycan2)], motifs = motifs,
+                          feature_set = feature_set)
     return 1 - cosine(fp.iloc[0].values, fp.iloc[1].values)

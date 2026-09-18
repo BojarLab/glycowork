@@ -897,7 +897,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
                     iupac = prefix + bracket_before_a1_3 + f'Man(a1-{long_num})' + '[' + match.group(4) + f'Man(a1-{short_num})' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
         return iupac
 
-    match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
+    match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)(?:GlcNAc2)?$', oxford, re.IGNORECASE)
     if match:
         oxford = f'M{match.group(1)}'
     oxford = oxford.replace("(s)", "Sulf")
@@ -1649,6 +1649,8 @@ def parse_glycoform(glycoform: str | dict[str, int], # Composition in H5N4F1A2 f
                     glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'] # Features to extract
                     ) -> dict[str, int]: # Dictionary of feature counts
     "Convert composition like H5N4F1A2 into monosaccharide counts"
+    if isinstance(glycoform, str) and not re.fullmatch(r'(?:[HNAFG]\d+)+', glycoform):
+        glycoform = canonicalize_composition(glycoform)
     if isinstance(glycoform, dict):
         if not any(f in glycoform.keys() for f in glycan_features):
             mapping = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G'}
@@ -1710,7 +1712,7 @@ def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
                        species: str = "Homo_sapiens" # Species for biosynthetic inferences
                        ) -> str: # Maximally inferred glycan string
     "Infers sequence ambiguities/uncertainties via biosynthetic invariances"
-    tax = loader.df_species[loader.df_species['Species'] == species].iloc[0, 2:9].to_dict()
+    tax = loader.df_species[loader.df_species['Species'] == species.replace(' ', '_')].iloc[0, 2:9].to_dict()
     if glycan.endswith("GlcNAc(b1-?)GlcNAc"):
         glycan = glycan.replace("GlcNAc(b1-?)GlcNAc", "GlcNAc(b1-4)GlcNAc")
     if tax['Kingdom'] == 'Animalia':

@@ -54,7 +54,7 @@ def preprocess_data(
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
         impute: bool = True,  # Replace zeros with Random Forest model
-        min_samples: float = 0.1,  # Min percent of non-zero samples required
+        min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0,
@@ -87,6 +87,11 @@ def preprocess_data(
     if glycoproteomics and gamma == 0.1:
         gamma = 0.25  # a glycosite subcomposition has few parts, so the CLR-is-a-valid-reference assumption is much weaker than for a whole glycome; only raised when the caller left the glycomics default
     prov = (getattr(df, '_glyco_name', ''), getattr(df, '_provenance', {}))
+    missing = [c for c in group1 + group2 if (
+        c not in df.columns if isinstance(c, str) else not 0 < c < len(df.columns))] if experiment == "diff" else []
+    if missing:
+        raise ValueError(
+            f"Samples {missing} are not in the input; group1/group2 take sample column names (e.g., {', '.join(map(str, df.columns[1:4]))}) or column indices from 1 to {len(df.columns) - 1}.")
     if not isinstance(group1[0], str) and experiment == "diff":
         columns_list = df.columns.tolist()
         group1 = [columns_list[k] for k in group1]
@@ -491,8 +496,8 @@ def get_heatmap(
     g = sns.clustermap(df, center = center, **combined_kwargs)
     if max(len(str(label)) for label in df.index) > 100:
         g.ax_heatmap.set_yticklabels(g.ax_heatmap.get_yticklabels(), fontsize = 6)
-    plt.xlabel('Samples')
-    plt.ylabel('Glycans' if not motifs else 'Motifs')
+    g.ax_heatmap.set_xlabel('Samples')
+    g.ax_heatmap.set_ylabel('Glycans' if not motifs else 'Motifs')
     if title is not None:
         g.fig.suptitle(title)
     plt.tight_layout()
@@ -992,7 +997,7 @@ def get_differential_expression(
         sets: bool = False,  # Identify clusters of correlated glycans
         set_thresh: float = 0.9,  # Correlation threshold for clusters
         effect_size_variance: bool = False,  # Calculate effect size variance
-        min_samples: float = 0.1,  # Min percent of non-zero samples required
+        min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
         grouped_BH: bool | None = None,  # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
@@ -1023,6 +1028,9 @@ def get_differential_expression(
                                                  paired = paired, gamma = gamma, custom_scale = custom_scale,
                                                  custom_motifs = custom_motifs,
                                                  monte_carlo = monte_carlo, random_state = random_state)
+    if paired and len(group1) != len(group2):
+        raise ValueError(
+            f"For paired samples, group1 and group2 have to be the same size; got {len(group1)} and {len(group2)}.")
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(group1 + group2))
     # Variance-based filtering of features
@@ -1061,8 +1069,6 @@ def get_differential_expression(
     else:
         log2fc = np.nanmean(df_b.values - df_a.values, axis = 1) if paired else (
                     df_b.mean(axis = 1) - df_a.mean(axis = 1))
-        if paired:
-            assert len(group1) == len(group2), "For paired samples, the size of group1 and group2 should be the same"
         if monte_carlo:
             pvals, corrpvals, effect_sizes = perform_tests_monte_carlo(df_a, df_b, paired = paired, alpha = alpha)
             significance = [cp < alpha for cp in corrpvals]
@@ -1351,7 +1357,7 @@ def get_glycanova(
         motifs: bool = False,  # Analyze motifs instead of sequences
         feature_set: list[str] = ['exhaustive', 'known'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
-        min_samples: float = 0.1,  # Min percent of non-zero samples required
+        min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
         posthoc: bool = True,  # Perform Tukey's HSD test post-hoc
         grouped_BH: bool | None = None,  # Use two-stage adaptive Benjamini-Hochberg; None infers True for motifs (DAG-grouped families) and False for sequences
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
@@ -1510,7 +1516,9 @@ def get_meta_analysis(
     combined_effect_size, p_value = res['effect'], res['p_val']
     # Check whether Forest plot should be constructed and saved
     if filepath:
-        df_temp = pd.DataFrame({'Study': study_names, 'EffectSize': effect_sizes, 'EffectSizeVariance': variances})
+        df_temp = pd.DataFrame(
+            {'Study': study_names or [f'Study {i + 1}' for i in range(len(effect_sizes))], 'EffectSize': effect_sizes,
+             'EffectSizeVariance': variances})
         # sort studies by effect size
         df_temp = df_temp.sort_values(by = 'EffectSize', key = abs, ascending = False)
         # calculate standard error
@@ -1569,7 +1577,7 @@ def get_time_series(
         feature_set: list[str] = ['known', 'exhaustive'],
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         degree: int = 1,  # Polynomial degree for regression
-        min_samples: float = 0.1,  # Min percent of non-zero samples required
+        min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
         grouped_BH: bool | None = None,  # Family-grouped two-stage Benjamini-Hochberg via the motif DAG; None infers True for motifs and False for sequences
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"; None auto-decides
@@ -1683,6 +1691,9 @@ def get_jtk(
             df_in).suffix.lower() == ".tsv" else pd.read_excel(df_in)
     else:
         df = df_in.copy(deep = True)
+    if (df.shape[1] - 1) % timepoints:
+        raise ValueError(
+            f"{df.shape[1] - 1} sample columns cannot be split into {timepoints} timepoints with the same number of replicates each; check timepoints and that the first column holds the glycans.")
     replicates = (df.shape[1] - 1) // timepoints
     alpha = get_alphaN(df.shape[1] - 1)
     jtk = JTKTest(timepoints, periods, interval, replicates)
@@ -1868,6 +1879,9 @@ def get_biodiversity(
             b_test_stats = pd.DataFrame({'Metric': 'Beta diversity (PERMANOVA)', 'p-val': p, 'Effect size': f},
                                         index = [0])
             shopping_cart.append(b_test_stats)
+    if not shopping_cart:
+        raise ValueError(
+            f"No diversity test could be run: metrics has to contain 'alpha' and/or 'beta' (got {metrics}), and each group needs at least two samples (three for alpha diversity across more than two groups).")
     df_out = pd.concat(shopping_cart, axis = 0).reset_index(drop = True)
     corrpvals, significance = correct_multiple_testing(df_out['p-val'], alpha)
     df_out["corr p-val"] = corrpvals
@@ -1900,6 +1914,9 @@ def get_SparCC(
         common_columns = df1.columns.intersection(df2.columns)
         df1 = df1[common_columns]
         df2 = df2[common_columns]
+    if df1.shape[1] != df2.shape[1]:
+        raise ValueError(
+            f"df1 has {df1.shape[1] - 1} samples but df2 has {df2.shape[1] - 1}; SparCC correlates the two datasets sample by sample, so both need the same samples in the same order.")
     df1, df2 = df1.copy(), df2.copy()
     df1.iloc[:, 0] = strip_suffixes(df1.iloc[:, 0])
     df2.iloc[:, 0] = strip_suffixes(df2.iloc[:, 0])
@@ -2056,7 +2073,7 @@ def get_roc(
         # Feature sets to use; exhaustive, known, terminal1, terminal2, terminal3, chemical, graph, custom, size_branch
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
         impute: bool = True,  # Replace zeros with Random Forest model
-        min_samples: float = 0.1,  # Min percent of non-zero samples required
+        min_samples: float = 0.1,  # Min fraction (0-1) of non-zero samples required
         custom_motifs: list[str] = [],  # Custom motifs if using 'custom' feature set
         transform: str | None = None,  # Transformation type: "CLR" or "ALR"
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
@@ -2246,7 +2263,7 @@ def get_glycoshift_per_site(
         group2: list[str | int] | None = None,  # Second group indices/names; default: from the frame's contrasts
         paired: bool | None = None,  # Whether samples are paired; default: from the frame
         impute: bool = True,  # Replace zeros with Random Forest model
-        min_samples: float = 0.2,  # Min percent of non-zero samples required
+        min_samples: float = 0.2,  # Min fraction (0-1) of non-zero samples required
         gamma: float = 0.1,  # Uncertainty parameter for CLR transform
         custom_scale: float | dict = 0,
         # Ratio of total signal in group2/group1 for an informed scale model (or group_idx: mean(group)/min(mean(groups)) signal dict for multivariate)

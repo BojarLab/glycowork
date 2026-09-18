@@ -496,7 +496,7 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
                  edge_label_draw: bool = True, # Whether to draw edge labels
                  lfc_dict: dict[str, float] | None = None,  # Enzyme:log2FC mapping for edge width
                  draw_glycans: bool = True,  # Replace node labels with SNFG drawings, in a static figure
-                 filepath: str | Path = '',  # Path to save the static figure (.svg/.pdf/.png) instead of showing the interactive plot; required for draw_glycans
+                 filepath: str | Path = '',  # Path to save the static figure (.svg/.pdf/.png) instead of showing the interactive plot
                  compact: bool = False,  # Use compact SNFG style
                  glycan_size: str = 'small',  # Glycan size preset ('small', 'medium', 'large')
                  title: str | None = None  # Plot title; None for none, as before
@@ -633,6 +633,9 @@ def plot_network(network: nx.DiGraph, # Biosynthetic network
         if svg and is_jupyter():
             from IPython.display import SVG
             return SVG(svg)
+        if svg and not filepath:
+            from glycowork.motif.draw import display_svg_with_matplotlib
+            display_svg_with_matplotlib(svg)
         return
     from bokeh.plotting import figure, show
     from bokeh.io import output_notebook
@@ -992,7 +995,7 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
     # Add the degree of evolutionary conervation as 'abundance' node attribute used for node size scaling
     elif highlight == 'conservation':
         species_list = conservation_df['Species'].unique().tolist()
-        spec_nodes = {k: set(network_dic[k].nodes()) for k in species_list}
+        spec_nodes = {k: set(network_dic[k].nodes()) for k in species_list if k in network_dic}
         node_counts = Counter(node for nodes in spec_nodes.values() for node in nodes)
         node_conservation = {k: node_counts[k] * 100 for k in network_out.nodes()}
         nx.set_node_attributes(network_out, node_conservation, name = 'abundance')
@@ -1433,7 +1436,7 @@ def extend_network(network: nx.DiGraph, # Biosynthetic network
         if existing:
             print(
                 "Target composition already present in network; skipping extension and instead returning matching structures from network.")
-            return network, existing
+            return (network, existing, 0) if auto_steps else (network, existing)
         leaf_glycans = choose_leaves_to_extend(leaf_glycans, to_extend)
         reactions = {r for r in reactions if map_to_basic(r.split('(')[0]) in to_extend.keys()}
         if auto_steps:
