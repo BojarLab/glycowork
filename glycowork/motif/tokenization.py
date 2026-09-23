@@ -44,17 +44,17 @@ METHYL_MASS = 14.01565
 modification_mass_dict = {'reduced': 2 * HYDROGEN_MASS, '2AA': 121.0528, '2AB': 120.0688, 'procainamide': 219.1736}
 
 
-def constrain_prot(proteins: list[str], # List of protein sequences
+def constrain_prot(proteins: str | list[str], # Protein sequence(s)
                    libr: dict[str, int] | None = None # Dictionary mapping amino acids to indices
                    ) -> list[str]: # List of filtered protein sequences
     """Ensure only characters from library are present in proteins"""
     if libr is None:
         libr = chars
     # Check whether any character is not in libr and replace it with a 'z' placeholder character
-    return [''.join(c if c in libr else 'z' for c in protein) for protein in proteins]
+    return [''.join(c if c in libr else 'z' for c in protein) for protein in ([proteins] if isinstance(proteins, str) else proteins)]
 
 
-def prot_to_coded(proteins: list[str], # List of protein sequences
+def prot_to_coded(proteins: str | list[str], # Protein sequence(s)
                   libr: dict[str, int] | None = None, # Dictionary mapping amino acids to indices
                   pad_len: int = 1000 # Length for padding sequences
                   ) -> list[list[int]]: # List of encoded protein sequences
@@ -63,7 +63,7 @@ def prot_to_coded(proteins: list[str], # List of protein sequences
         libr = chars
     pad_label = len(libr) - 1
     # Cut off protein sequence above pad_len
-    prots = [protein[:pad_len] for protein in proteins]
+    prots = [protein[:pad_len] for protein in ([proteins] if isinstance(proteins, str) else proteins)]
     # Replace forbidden characters with 'z'
     prots = constrain_prot([protein.upper() for protein in prots], libr = libr)
     # Pad up to a length of pad_len
@@ -287,7 +287,7 @@ def condense_composition_matching(matched_composition: list[str] # List of match
 
 
 @rescue_compositions
-def compositions_to_structures(composition_list: list[dict[str, int]], # List of compositions like {'Hex': 1, 'HexNAc': 1}
+def compositions_to_structures(composition_list: str | dict[str, int] | list[str | dict[str, int]], # Composition(s) like {'Hex': 1, 'HexNAc': 1} or 'H1N1'
                                glycan_class: str = 'N', # Glycan class: N/O/lipid/free
                                kingdom: str = 'Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
                                abundances: pd.DataFrame | None = None, # Sample abundances matrix
@@ -295,6 +295,7 @@ def compositions_to_structures(composition_list: list[dict[str, int]], # List of
                                verbose: bool = False # Whether to print non-matching compositions
                                ) -> pd.DataFrame: # DataFrame of structures x intensities
     """Map compositions to structures, supporting accompanying relative intensities"""
+    composition_list = [composition_list] if isinstance(composition_list, (str, dict)) else composition_list
     if abundances is None:
         abundances = pd.DataFrame([range(len(composition_list))] * 2).T
     abundances_values = abundances.iloc[:, 1:].values.tolist()

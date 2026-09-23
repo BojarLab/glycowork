@@ -458,7 +458,7 @@ def get_heatmap(
         df = df[(df > 0).sum(axis = 1) >= np.max([np.round(rarity_filter * df.shape[1]), 1])]
         df = df.replace(0, 1e-6)
     if motifs:
-        if 'custom' in feature_set and len(feature_set) == 1 and len(custom_motifs) < 2:
+        if list(np.atleast_1d(feature_set)) == ['custom'] and len(np.atleast_1d(custom_motifs)) < 2:
             raise ValueError("A heatmap needs to have at least two motifs.")
         if datatype == 'response':
             df = quantify_motifs(df, glycans = df.index.tolist(), feature_set = feature_set,

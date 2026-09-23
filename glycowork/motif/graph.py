@@ -311,11 +311,11 @@ def compare_glycans(glycan_a: str | nx.DiGraph, # First glycan to compare
 
 
 def expand_termini_list(motif: str | nx.DiGraph, # Glycan motif sequence or graph
-                        termini_list: list[str] # List of monosaccharide/linkage positions from terminal/internal/flexible
-                        ) -> tuple[str]: # Expanded termini list including linkages
+                        termini_list: str | list[str] # Monosaccharide/linkage position(s) from terminal/internal/flexible
+                        ) -> tuple[str]:  # Expanded termini list including linkages
     "Convert monosaccharide-only termini list into full termini list"
     mapping = {'t': 'terminal', 'i': 'internal', 'f': 'flexible'}
-    termini_list = [mapping.get(t, t) for t in termini_list]
+    termini_list = [mapping.get(t, t) for t in ([termini_list] if isinstance(termini_list, str) else termini_list)]
     if unknown := set(termini_list) - {'terminal', 'internal', 'flexible'}:
         raise ValueError(
             f"Unrecognized termini_list entries {sorted(unknown)}; use 'terminal', 'internal', or 'flexible'.")
@@ -357,11 +357,12 @@ def handle_negation(original_func: Callable # Function to wrap
 @handle_negation
 def subgraph_isomorphism(glycan: str | nx.DiGraph, # Glycan sequence or graph
                          motif: str | nx.DiGraph, # Glycan motif sequence or graph
-                         termini_list: list = [], # List of monosaccharide positions from terminal/internal/flexible
-                         count: bool = False, # Whether to return count instead of presence/absence
-                         return_matches: bool = False # Whether to return matched subgraphs as node lists
-                         ) -> bool | int | tuple[int, list[list[int]]]: # Boolean presence, count, or (count, matches)
+                         termini_list: str | list = [],  # Monosaccharide position(s) from terminal/internal/flexible
+                         count: bool = False,  # Whether to return count instead of presence/absence
+                         return_matches: bool = False  # Whether to return matched subgraphs as node lists
+                         ) -> bool | int | tuple[int, list[list[int]]]:  # Boolean presence, count, or (count, matches)
     "Check if motif exists as subgraph in glycan"
+    termini_list = [termini_list] if isinstance(termini_list, str) else termini_list
     if isinstance(glycan, str) and isinstance(motif, str):
         if motif.count('(') > glycan.count('('):
             return (0, []) if return_matches else 0 if count else False

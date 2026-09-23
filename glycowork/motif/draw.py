@@ -1131,9 +1131,10 @@ chem_cols_alpha = ['#0385AE', '#0385AE', '#0385AE',     # blue
 
 def get_mono_atoms(
         draw_this: str, # IUPAC-condensed glycan sequence
-        mono_list: list[str] # List of monosaccharides to highlight
-) -> tuple[str, dict[int, int]]: # (SMILES, {atom index: index into mono_list})
+        mono_list: str | list[str]  # Monosaccharide(s) to highlight
+) -> tuple[str, dict[int, int]]:  # (SMILES, {atom index: index into mono_list})
     "Maps every atom of a glycan's SMILES onto the monosaccharide it was built from"
+    mono_list = [mono_list] if isinstance(mono_list, str) else mono_list
     from glycowork.motif.smiles import glycan_to_smiles
     smiles, owners = glycan_to_smiles(draw_this, mapping = True)
     graph = glycan_to_nxGraph(draw_this)

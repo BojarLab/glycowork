@@ -182,18 +182,18 @@ def min_process_glycans(glycan_list: str | list[str] # Glycan(s) in IUPAC-conden
          if x] for k in glycan_list]
 
 
-def get_lib(glycan_list: list[str] # List of IUPAC-condensed glycan sequences
+def get_lib(glycan_list: str | list[str] # Glycan(s) in IUPAC-condensed nomenclature
             ) -> dict[str, int]: # Dictionary of glycoletter:index mappings
     "Returns dictionary mapping glycoletters to indices"
     # Convert to glycoletters & flatten & get unique vocab
-    lib = sorted(set(unwrap(min_process_glycans(set(glycan_list)))))
+    lib = sorted(set(unwrap(min_process_glycans({glycan_list} if isinstance(glycan_list, str) else set(glycan_list)))))
     # Convert to dict
     return {k: i for i, k in enumerate(lib)}
 
 
 def expand_lib(libr_in: dict[str, int], # Existing dictionary of glycoletter:index
-               glycan_list: list[str] # List of IUPAC-condensed glycan sequences
-               ) -> dict[str, int]: # Updated dictionary with new glycoletters
+               glycan_list: str | list[str]  # Glycan(s) in IUPAC-condensed nomenclature
+               ) -> dict[str, int]:  # Updated dictionary with new glycoletters
     "Updates libr with newly introduced glycoletters"
     libr = dict(libr_in)
     new_libr = get_lib(glycan_list)
@@ -1117,17 +1117,17 @@ def pglyco_to_iupac(glycan: str # Glycan in pGlyco nested-tree nomenclature
     return render(root, 'GlcNAc' if root[0] == 'N' else _PGLYCO_MONO[root[0]], 'core0' if root[0] == 'N' else 'end')
 
 
-def glytoucan_to_glycan(ids: list[str], # List of GlyTouCan IDs or glycans
+def glytoucan_to_glycan(ids: str | list[str], # GlyTouCan ID(s) or glycan(s)
                         revert: bool = False, # Whether to map glycans to IDs; default:False
                         verbose: bool = True # Whether to print missing entries; default:True
-                        ) -> list[str]: # List of glycans or IDs
+                        ) -> str | list[str]: # Glycan(s) or ID(s), a single string for a single string input
     "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
     if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
         glytoucan_to_glycan.glycan_dict = dict(zip(loader.df_glycan.glytoucan_id, loader.df_glycan.glycan))
         glytoucan_to_glycan.id_dict = dict(zip(loader.df_glycan.glycan, loader.df_glycan.glytoucan_id))
     lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
     result, not_found = [], []
-    for item in ids:
+    for item in ([ids] if isinstance(ids, str) else ids):
         if item in lookup:
             result.append(lookup[item])
         else:
@@ -1137,7 +1137,7 @@ def glytoucan_to_glycan(ids: list[str], # List of GlyTouCan IDs or glycans
     if not_found and verbose:
         msg = 'glycans' if revert else 'IDs'
         print(f'These {msg} are not in our database: {not_found}')
-    return result
+    return result[0] if isinstance(ids, str) else result
 
 
 def GAG_disaccharide_to_iupac(input_dsc: str # Disaccharide structural code (DSC) for GAGs
