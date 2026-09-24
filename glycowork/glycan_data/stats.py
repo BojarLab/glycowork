@@ -700,7 +700,7 @@ def permanova_with_permutation(df: pd.DataFrame, # square distance matrix
     codes, ug = pd.factorize(np.asarray(group_labels))
     n = len(codes)
     # The labelling depends only on the design, so it is built once and reused by every feature tested against it; the observed labelling rides along as row 0 so that a draw reproducing it stays a bitwise tie
-    P = _permutation_labels(tuple(codes.tolist()), permutations, seed)
+    P = _permutation_labels(tuple(codes.tolist()), permutations, seed = seed)
     ss_within = np.zeros(len(P))
     for g in range(len(ug)):
         M = (P == g).astype(float)

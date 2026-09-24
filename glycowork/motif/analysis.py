@@ -1343,6 +1343,9 @@ def get_volcano(
         if svg and is_jupyter():
             from IPython.display import SVG
             return SVG(svg)
+        if svg and not filepath:
+            from glycowork.motif.draw import display_svg_with_matplotlib
+            display_svg_with_matplotlib(svg)
         return
     if filepath:
         plt.savefig(filepath, format = Path(filepath).suffix[1:], dpi = 300, bbox_inches = 'tight')

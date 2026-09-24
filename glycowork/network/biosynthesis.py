@@ -236,6 +236,7 @@ def infer_roots(glycans: frozenset[str] # Set of glycans
     print("Glycan class not detected; depending on the class, glycans should end in -ol, GalNAc, GlcNAc, or 1Cer")
     return frozenset()
 
+
 def infer_network_root(network: nx.DiGraph  # Biosynthetic network
                        ) -> str:  # Single root node to route flow from
     "Pick the biosynthetic root of the network's glycan class that is actually one of its nodes"
@@ -344,8 +345,8 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
         if not permitted_roots:
             raise ValueError(
                 f"Could not detect the glycan class (e.g., from '{glycans[0] if glycans else ''}'), so no biosynthetic roots can be inferred; glycans should end in '-ol' (free), 'GalNAc' (O-linked), 'GlcNAc' (N-linked), or '1Cer'/'Ins' (glycolipid), or pass permitted_roots explicitly.")
-        elif isinstance(permitted_roots, str):
-            permitted_roots = frozenset([permitted_roots])
+    elif isinstance(permitted_roots, str):
+        permitted_roots = frozenset([permitted_roots])
     # Generating graph from adjacency of observed glycans
     min_size = min(k.count('(') for k in permitted_roots) + 1
     add_to_virtuals = [r for r in permitted_roots if r not in glycans and any(g.endswith(r) for g in glycans)]
@@ -1332,7 +1333,7 @@ def get_differential_biosynthesis(df: pd.DataFrame | str, # Glycan abundance dat
             eff, dfree, scale = df_b.values.mean(axis = 1) - df_a.values.mean(axis = 1), na + nb - 2, 1 / na + 1 / nb
             s2 = ((na - 1) * df_a.values.var(axis = 1, ddof = 1) + (nb - 1) * df_b.values.var(axis = 1,
                                                                                               ddof = 1)) / dfree
-        s2_mod, df_post = moderated_variance(s2, dfree, neighbors)
+        s2_mod, df_post = moderated_variance(s2, dfree, neighbors = neighbors)
         pvals = np.maximum(2 * tdist.sf(np.abs(eff / np.sqrt(s2_mod * scale)), df_post), np.finfo(float).tiny)
         # Shadow reactions are averages of their own variants, so testing both in one family nearly doubles it with redundant hypotheses; two-stage grouped BH gives each family its own pi0 instead of correcting them as unrelated runs
         alpha = get_alphaN(len(all_groups))
@@ -1630,7 +1631,7 @@ def get_biosynthetic_coherence(
             eff, dfree, scale = B.mean(axis = 1) - A.mean(axis = 1), na + nb - 2, 1 / na + 1 / nb
             resid_var = ((na - 1) * A.var(axis = 1, ddof = 1) + (nb - 1) * B.var(axis = 1, ddof = 1)) / dfree
         # A handful of R2 values per group leaves each glycan's variance dominated by noise; neighbors in the biosynthetic graph share precursors and so make a local prior
-        s2_mod, df_post = moderated_variance(resid_var, dfree, dag_neighbors(list(per_glycan_df.index), network))
+        s2_mod, df_post = moderated_variance(resid_var, dfree, neighbors = dag_neighbors(list(per_glycan_df.index), network))
         per_glycan_df['p_val'] = np.maximum(2 * tdist.sf(np.abs(eff / np.sqrt(s2_mod * scale)), df_post),
                                             np.finfo(float).tiny)
         per_glycan_df['corr_p_val'], per_glycan_df['rewired'] = correct_multiple_testing(per_glycan_df.p_val,

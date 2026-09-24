@@ -137,8 +137,9 @@ def _get_glycorender():
 
 
 def _flatten_text_paths(
-        data: str # SVG code as emitted by drawsvg
-) -> str: # SVG code with every label as plainly positioned text
+        data: str,  # SVG code as emitted by drawsvg
+        turn: float = 0  # Rotation the drawing gets on top of the labels, in degrees (90 in vertical mode)
+) -> str:  # SVG code with every label as plainly positioned text
     "Rewrites text-on-a-path as absolutely positioned, rotated text, since vector editors such as Affinity Designer silently drop <textPath>"
     lines = {m[4]: [float(k) for k in m[:4]] for m in _SVG_LINE_PATH.findall(data)}
 
@@ -150,7 +151,18 @@ def _flatten_text_paths(
         length = np.hypot(x1 - x0, y1 - y0)
         frac = float(offset[:-1]) / 100 if offset.endswith('%') else (float(offset) / length if length else 0)
         size = float(re.search(r'font-size="([\d.eE+-]+)"', attrs).group(1))
-        return '<text%s transform="translate(%.4f,%.4f) rotate(%.4f)" x="0" y="%.4f">%s</text>' % (attrs, x0 + frac * (x1 - x0), y0 + frac * (y1 - y0), np.degrees(np.arctan2(y1 - y0, x1 - x0)), float(dy[:-2]) * size, label)
+        angle, shift = np.degrees(np.arctan2(y1 - y0, x1 - x0)), float(dy[:-2]) * size
+        if np.cos(np.radians(angle + turn)) < -1e-6:
+            # Runs right-to-left once drawn, so turn it upright on the same side of the line; 0.75 em is the cap height of the label fonts
+            angle, shift = angle + 180, 0.75 * size - shift
+        # Match glycorender: no gap in linkages, bold modifications, italic furanose f
+        label = label.replace(' ', '')
+        if dy == '0.5em' and label.endswith('f'):
+            label = label[:-1] + '<tspan font-style="italic">f</tspan>'
+        attrs += ' font-weight="bold"' if dy == '-3.15em' else ''
+        x, y = x0 + frac * (x1 - x0), y0 + frac * (y1 - y0)
+        return (f'<text{attrs} transform="translate({x:.4f},{y:.4f}) rotate({angle:.4f})" '
+                f'x="0" y="{shift:.4f}">{label}</text>')
 
     return _SVG_TEXT_PATH.sub(_place, data).replace('<text ',
                                                     "<text font-family=\"'Century Gothic', Comfortaa, sans-serif\" ")
@@ -485,7 +497,10 @@ def add_bond(
     y_scaling = 0.6 if compact else 1
     x_start, x_stop = [-x * scaling_factor * dim for x in (x_start, x_stop)]
     y_start, y_stop = [y * y_scaling * dim for y in (y_start, y_stop)]
-    final_width = 0.12*dim if color_highlight else 0.08*dim
+    if abs(x_start - x_stop) < 1e-9 and y_stop > y_start:
+        # A vertical bond always runs upwards, so its label reads bottom-to-top on its left whether the branch hangs above or below, and turns upright in vertical mode
+        y_start, y_stop = y_stop, y_start
+    final_width = 0.12 * dim if color_highlight else 0.08 * dim
     if dashed:  # A fixed dash period vanishes on the short bonds of compact mode, so scale it to the bond
         length = ((x_stop - x_start) ** 2 + (y_stop - y_start) ** 2) ** 0.5
         segment = length / (2 * max(3, round(length / (0.4 * dim))))
@@ -1311,23 +1326,29 @@ def draw_chem3d(
 
 
 class GlycanDrawing:
-    def __init__(self, drawing_obj, shadow = False, sticker = False):
+    def __init__(self, drawing_obj, shadow = False, sticker = False, vertical = False):
         self.drawing_obj = drawing_obj
         self.shadow = shadow
         self.sticker = sticker
+        self.vertical = vertical
+
     def as_svg(self):
         return self.drawing_obj.as_svg()
+
     def save_svg(self, filepath):
         data = self.drawing_obj.as_svg()
         if self.shadow or self.sticker:
             from glycorender.render import pdf_to_svg_bytes
             data = pdf_to_svg_bytes(data, shadow = self.shadow, sticker = self.sticker)
         with open(filepath, 'w', encoding = "utf-8") as f:
-            f.write(_flatten_text_paths(data))
+            f.write(_flatten_text_paths(data, turn = 90 if self.vertical else 0))
+
     def _repr_png_(self):
         _, convert_svg_to_png = _get_glycorender()
-        return convert_svg_to_png(self.as_svg(), None, return_bytes = True, shadow = self.shadow,
-                                  sticker = self.sticker, background = (1.0, 1.0, 1.0))
+        # Rendered at twice its size but displayed at its size, so high-DPI screens show it crisp
+        png = convert_svg_to_png(self.as_svg(), None, scale = 2.0, return_bytes = True, shadow = self.shadow,
+                                 sticker = self.sticker, background = (1.0, 1.0, 1.0))
+        return png, {'width': self.drawing_obj.width, 'height': self.drawing_obj.height}
 
 
 def _finish_drawing(
@@ -1372,15 +1393,14 @@ def _finish_drawing(
                 from glycorender.render import pdf_to_svg_bytes
                 data = pdf_to_svg_bytes(data, shadow = shadow, sticker = sticker).replace('<svg ', f'<svg aria-label="{alt_text}" role="img" ', 1)
             with open(filepath, 'w', encoding = "utf-8") as f:
-                f.write(_flatten_text_paths(data))
+                f.write(_flatten_text_paths(data, turn = 90 if vertical else 0))
         elif suffix == '.pdf':
             convert_svg_to_pdf, _ = _get_glycorender()
             convert_svg_to_pdf(data, str(filepath), shadow = shadow, sticker = sticker)
         else:
             _, convert_svg_to_png = _get_glycorender()
-            convert_svg_to_png(data, str(filepath), shadow = shadow, sticker = sticker)
-    return GlycanDrawing(d2, shadow = shadow,
-                         sticker = sticker) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
+            convert_svg_to_png(data, str(filepath), scale = 300 / 72, shadow = shadow, sticker = sticker)  # print resolution; glycorender records the 300 dpi, so the physical size still matches the PDF
+    return GlycanDrawing(d2, shadow = shadow, sticker = sticker, vertical = vertical) if is_jupyter() or suppress or filepath else display_svg_with_matplotlib(
         d2, shadow = shadow, sticker = sticker)
 
 
@@ -1817,7 +1837,8 @@ def annotate_figure(
             edit_svg = True
         try:
             glycan = resolve_motif_name(current_label)[0]
-            if _drawable(glycan) or "!" in glycan:
+            if not glycan.startswith('r') and (_drawable(
+                    glycan) or "!" in glycan):  # glyco-regex motifs (r-prefixed) have no structure to draw, and their '!' is a lookbehind, not a negation
                 edit_svg = True
         except Exception:
             pass

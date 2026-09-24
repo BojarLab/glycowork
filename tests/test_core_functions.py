@@ -4227,6 +4227,9 @@ def test_annotate_figure(mock_svg_file):
     # Test with compact mode
     result = annotate_figure(mock_svg_file, compact=True)
     assert isinstance(result, str)
+    # A glyco-regex motif, whose '!' is a lookbehind rather than a negation, stays a text label instead of crashing GlycoDraw
+    result = annotate_figure(mock_svg_file.replace('nontransfected_1', 'Nglycan_hybrid'))
+    assert '<!-- Nglycan_hybrid -->' in result
     # Test with differential expression results
     de_results = pd.DataFrame({
         'Glycan': ['Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc',
@@ -4643,7 +4646,7 @@ def test_preprocess_data():
     # Sample names that are not columns, or indices past the last column, are named in the error
     for bad in [['sample3', 'typo'], [3, 40]]:
         with pytest.raises(ValueError, match = "are not in the input"):
-            preprocess_data(df, group1, bad, impute = False)
+            preprocess_data(df, group1 = group1, group2 = bad, impute = False)
 
 
 def test_file_loading_branches(tmp_path):
@@ -4980,7 +4983,7 @@ def test_get_differential_expression():
                                                  paired = True, impute = False)
     assert isinstance(results_paired, pd.DataFrame)
     with pytest.raises(ValueError, match = "same size"):
-        get_differential_expression(df, group1, group2[:-1], paired = True, impute = False)
+        get_differential_expression(df, group1 = group1, group2 = group2[:-1], paired = True, impute = False)
 
 
 def test_get_differential_expression_monte_carlo_glycoproteomics():
@@ -5513,27 +5516,32 @@ def test_get_volcano_basic(sample_diff_expr_results):
         out = get_volcano(sample_diff_expr_results)
     assert out is not None and '<svg' in out.data
     assert not list(Path('.').glob('*_temp.svg'))
+    # ...and outside Jupyter it is shown through matplotlib instead of vanishing
+    with patch('glycowork.motif.draw.is_jupyter', return_value = False), patch(
+            'glycowork.motif.draw.display_svg_with_matplotlib') as mock_display:
+        get_volcano(sample_diff_expr_results)
+    mock_display.assert_called_once()
     plt.close('all')
 
 
 def test_get_volcano_with_filepath(sample_diff_expr_results):
     """Test get_volcano with filepath saving"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, filepath='test.png', annotate_volcano = False)
+        get_volcano(sample_diff_expr_results, filepath = 'test.png', annotate_volcano = False)
         mock_savefig.assert_called_once()
 
 
 def test_get_volcano_with_custom_thresholds(sample_diff_expr_results):
     """Test get_volcano with custom thresholds"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, y_thresh=0.01, x_thresh=1.0, annotate_volcano = False)
+        get_volcano(sample_diff_expr_results, y_thresh = 0.01, x_thresh = 1.0, annotate_volcano = False)
         mock_savefig.assert_not_called()
 
 
 def test_get_volcano_with_effect_size(sample_diff_expr_results):
     """Test get_volcano using effect size instead of Log2FC"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, x_metric='Effect size', annotate_volcano = False)
+        get_volcano(sample_diff_expr_results, x_metric = 'Effect size', annotate_volcano = False)
         mock_savefig.assert_not_called()
 
 
@@ -6188,6 +6196,10 @@ def test_construct_network(simple_glycans):
 def test_construct_network_unknown_class():
     with pytest.raises(ValueError):
         construct_network(['Xyl(b1-4)Xyl', 'Xyl'])
+    # a single root passed as a bare string is one root, not a set of its characters
+    milk = ['Neu5Ac(a2-3)Gal(b1-4)Glc-ol', 'Gal(b1-4)Glc-ol']
+    assert set(construct_network(milk, permitted_roots = 'Gal(b1-4)Glc-ol')) == set(
+        construct_network(milk, permitted_roots = frozenset({'Gal(b1-4)Glc-ol'})))
 
 
 def test_prune_network(simple_glycans):
@@ -6880,13 +6892,13 @@ def test_extend_network_specific_leaf(extension_test_network):
 def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
     """Test basic network plotting functionality"""
     main_net, _ = evo_test_networks
-    plot = plot_network(main_net, plot_format='kamada_kawai', draw_glycans=False)
+    plot = plot_network(main_net, plot_format = 'kamada_kawai', draw_glycans = False)
     # Check that plot was created
     assert plot is not None
     # Check renderer properties
     assert len(plot.renderers) > 0
     # Test without edge labels
-    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=False, draw_glycans=False)
+    plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = False, draw_glycans = False)
     assert plot is not None
     plt.close('all')
 
@@ -6895,13 +6907,13 @@ def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
 @patch('bokeh.plotting.show')
 def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
     """Test basic network plotting functionality for N-glycans"""
-    plot = plot_network(n_glycan_network, plot_format='spring', draw_glycans=False)
+    plot = plot_network(n_glycan_network, plot_format = 'spring', draw_glycans = False)
     # Check that plot was created
     assert plot is not None
     # Check renderer properties
     assert len(plot.renderers) > 0
     # Test without edge labels
-    plot = plot_network(n_glycan_network, plot_format='spring', edge_label_draw=False, draw_glycans=False)
+    plot = plot_network(n_glycan_network, plot_format = 'spring', edge_label_draw = False, draw_glycans = False)
     assert plot is not None
     plt.close('all')
 
@@ -6911,7 +6923,7 @@ def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
 def test_plot_network_with_edge_labels(mock_show, mock_enable, evo_test_networks):
     """Test network plotting with edge labels"""
     main_net, _ = evo_test_networks
-    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True, draw_glycans=False)
+    plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = True, draw_glycans = False)
     # Check for edge labels
     assert plot is not None
     plt.close('all')
@@ -6923,7 +6935,7 @@ def test_plot_network_with_lfc(mock_show, mock_enable, evo_test_networks):
     """Test network plotting with log fold change data"""
     lfc_dict = {'Fuc(a1-2)': 1.5, 'GlcNAc(b1-3)': -0.5}
     main_net, _ = evo_test_networks
-    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True, lfc_dict=lfc_dict, draw_glycans=False)
+    plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = True, lfc_dict = lfc_dict, draw_glycans = False)
     # Verify plot was created
     assert plot is not None
     # Check for renderers
@@ -6939,13 +6951,13 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
     safe_layouts = ['kamada_kawai', 'spring']
     main_net, _ = evo_test_networks
     for layout in safe_layouts:
-        plot = plot_network(main_net, plot_format=layout, draw_glycans=False)
+        plot = plot_network(main_net, plot_format = layout, draw_glycans = False)
         assert plot is not None
         plt.close('all')
     # Test pydot2 layout with proper error handling
     try:
         with suppress_pydot_warnings():
-            plot = plot_network(main_net, plot_format='pydot2', draw_glycans=False)
+            plot = plot_network(main_net, plot_format = 'pydot2', draw_glycans = False)
             assert plot is not None
     except (ImportError, FileNotFoundError):
         print("Graphviz not installed, skipping pydot2 layout test")
@@ -6955,15 +6967,15 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
 def test_plot_network_static_figure(tmp_path, evo_test_networks):
     """Test the saved static figure, with and without SNFG node labels"""
     main_net, _ = evo_test_networks
-    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net.svg', draw_glycans=False)
+    plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'net.svg', draw_glycans = False)
     assert (tmp_path / 'net.svg').exists()
-    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net_snfg.svg')
+    plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'net_snfg.svg')
     assert (tmp_path / 'net_snfg.svg').exists()
     with pytest.raises(ValueError):
-        plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'x.svg', glycan_size='huge')
+        plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'x.svg', glycan_size = 'huge')
     # without a filepath the SNFG figure is built in a temp dir and handed back for Jupyter to render
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
-        out = plot_network(main_net, plot_format='kamada_kawai')
+        out = plot_network(main_net, plot_format = 'kamada_kawai')
     assert out is not None and '<svg' in out.data
     assert not list(tmp_path.glob('*_temp.svg'))
     # ...and outside Jupyter it is shown through matplotlib instead of vanishing
@@ -6979,7 +6991,7 @@ def test_plot_network_no_notebook(evo_test_networks):
     main_net, _ = evo_test_networks
     with patch('bokeh.io.output_notebook', side_effect=Exception):
         with patch('bokeh.plotting.show') as mock_show:
-            plot = plot_network(main_net, plot_format='kamada_kawai', draw_glycans=False)
+            plot = plot_network(main_net, plot_format = 'kamada_kawai', draw_glycans = False)
             # Even with notebook initialization failing, should still return a plot
             assert plot is not None
     plt.close('all')
@@ -7062,7 +7074,7 @@ def test_infer_network(mock_show, mock_enable):
     spec_dic = {"test": construct_network(["GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"]), "org": net}
     net2 = infer_network(net, "org", ["test", "org"], spec_dic)
     assert nx.get_node_attributes(net2, "virtual")["GlcNAc(b1-3)Gal(b1-4)Glc-ol"] == 2
-    plot = plot_network(net2, draw_glycans=False)
+    plot = plot_network(net2, draw_glycans = False)
     plt.close('all')
 
 
@@ -9026,6 +9038,9 @@ def test_looks_like_oxford():
     for gsl in ['Neu5Ac-Fuc-nLc10Cer', 'Neu5Ac-nLc6Cer', 'GalNAc-Gb4Cer', 'nLc4Cer', 'Gb3Cer', 'iGb3Cer']:
         assert not looks_like_oxford(gsl)
     assert not looks_like_oxford('Fuc1Gal2')
+    # HN-style compositions are not Oxford either: oxford_to_iupac cannot read Hex/HexNAc counts and returned the bare core for them
+    for comp in ['H9N2', 'H3N3S1', 'H5N4F1A2']:
+        assert not looks_like_oxford(comp) and canonicalize_iupac(comp) == comp
     assert canonicalize_iupac('Gal-Cer') == 'Gal1Cer'  # ceramide linker still resolves
     assert canonicalize_iupac('Gal(b1-4)Glc-Sp8') == 'Gal(b1-4)Glc'  # spacer trimming still works
 
@@ -9215,11 +9230,17 @@ def test_GlycanDrawing_save_and_png(tmp_path):
     d = GlycoDraw("Gal(b1-4)Glc", suppress = True, shadow = True)
     d.save_svg(str(tmp_path / "x.svg"))
     assert (tmp_path / "x.svg").exists()
-    assert isinstance(d._repr_png_(), bytes)
+    png, md = d._repr_png_()
+    assert isinstance(png, bytes) and md['width'] > 0
     s = GlycoDraw("Gal(b1-4)Glc", suppress = True, sticker = {'edge': 1.2})
     s.save_svg(str(tmp_path / "cut.svg"))
     assert 'feDropShadow' in (tmp_path / "cut.svg").read_text(encoding = "utf-8")  # cut layer drawn by glycorender
-    assert isinstance(s._repr_png_(), bytes)
+    assert isinstance(s._repr_png_()[0], bytes)
+    # the returned object flattens vertical labels exactly like saving through filepath, upside-down diagonal linkage labels included
+    GlycoDraw("Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", vertical = True, filepath = str(tmp_path / "v_file.svg"))
+    GlycoDraw("Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", vertical = True, suppress = True).save_svg(str(tmp_path / "v_obj.svg"))
+    assert re.findall(r'rotate\(([-\d.]+)\)" x', (tmp_path / "v_file.svg").read_text(encoding = "utf-8")) == re.findall(
+        r'rotate\(([-\d.]+)\)" x', (tmp_path / "v_obj.svg").read_text(encoding = "utf-8"))
     # ALT text is escaped for the aria-label and describes the glycan as passed, not its internal rewrite
     GlycoDraw("Gal(b1-4)Glc", alt_text = 'Sialyl "LacNAc" & more', filepath = str(tmp_path / "alt.svg"))
     assert 'aria-label="Sialyl &quot;LacNAc&quot; &amp; more"' in (tmp_path / "alt.svg").read_text(encoding = "utf-8")

@@ -1297,6 +1297,8 @@ def looks_like_oxford(glycan: str) -> bool:
         return True
     if not OXFORD_HAS_NONZERO_DIGIT.search(glycan):
         return False
+    if re.search(r'(?<![A-Za-z])[HN]\d', glycan):  # Hex/HexNAc counts mark a composition (H9N2, H5N4F1A2); oxford_to_iupac has no reading for them and would silently return a bare core
+        return False
     if OXFORD_FORBIDDEN_LINKAGE.search(glycan):
         return False
     if OXFORD_FORBIDDEN_IUPAC.search(glycan):
