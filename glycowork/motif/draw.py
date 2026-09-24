@@ -1629,7 +1629,7 @@ def GlycoDraw(
                 [add_bond(floaty_sugar_x_pos[k + 1], floaty_sugar_x_pos[k], floaty_sugar_y_pos[k + 1], floaty_sugar_y_pos[k], d, label = floaty_bond[k], dim = dim, compact = compact, highlight = floaty_bond_label[k]) for k in range(len(floaty_sugar) - 1)]
                 [add_sugar(floaty_sugar[k], d, x_pos = floaty_sugar_x_pos[k], y_pos = floaty_sugar_y_pos[k], modification = floaty_sugar_modification[k], conf = floaty_conf[k], compact = compact, dim = dim, highlight = floaty_sugar_label[k]) for k in range(len(floaty_sugar))]
             else:
-                add_sugar('text', d, x_pos = min(floaty_sugar_x_pos) - 0.3, y_pos = floaty_sugar_y_pos[-1], modification = floaty_bits[j].translate(str.maketrans("123456789", "\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089")).replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
+                add_sugar('text', d, x_pos = min(floaty_sugar_x_pos) - 0.3, y_pos = floaty_sugar_y_pos[-1], modification = floaty_bits[j].replace('blank', ''), compact = compact, dim = dim, text_anchor = 'end', highlight = highlight)
             if fb_count[floaty_bits[j]] > 1:
                 x_offset = 0.5 if not compact else 0.75
                 add_sugar('text', d, x_pos = max(floaty_sugar_x_pos) + x_offset, y_pos = floaty_sugar_y_pos[-1], modification = f"{fb_count[floaty_bits[j]]}x", compact = compact, dim = dim, highlight = highlight)

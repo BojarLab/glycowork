@@ -176,7 +176,7 @@ def min_process_glycans(glycan_list: str | list[str] # Glycan(s) in IUPAC-conden
     "Convert list of glycans into a nested lists of glycoletters"
     if isinstance(glycan_list, str):
         glycan_list = [glycan_list]
-    glycan_list = [FLOATY_ALT.sub(lambda m: '{' + parse_floating_bit(m.group(1))[0] + '}', k) if '^' in k else k for k in glycan_list]
+    glycan_list = [(FLOATY_ALT.sub(lambda m: '{' + parse_floating_bit(m.group(1))[0] + '}', k) if '^' in k else k) if isinstance(k, str) else '' for k in glycan_list]
     return [
         [x for x in k.replace('[', '').replace(']', '').replace('{', '(').replace('}', ')').replace(')', '(').split('(')
          if x] for k in glycan_list]
