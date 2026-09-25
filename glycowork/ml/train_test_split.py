@@ -34,9 +34,11 @@ def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and ta
                      ) -> tuple[list[str], list[str], list[int], list[int], list[int], list[str], dict[str, int]]: # train/val splits and mappings
     "stratified data split in train/test at the taxonomic level, removing duplicate glycans and infrequent classes"
     df = copy.deepcopy(df_in)
+    if wildcard_seed and (not wildcard_list or not wildcard_name):
+        raise ValueError("wildcard_seed = True requires wildcard_list and wildcard_name.")
     # Get all non-selected ranks and drop from df
-    rank_list = ['Species', 'Genus', 'Family', 'Order', 'Class', 'Phylum', 'Kingdom', 'Domain']
-    rank_list.remove(rank)
+    rank_list = [c for c in ['Species', 'Genus', 'Family', 'Order', 'Class', 'Phylum', 'Kingdom', 'Domain'] if
+                 c != rank]
     df.drop([c for c in rank_list if c in df.columns], axis = 1, inplace = True)
     # Get unique classes in rank
     class_list = sorted(set(df[rank].values.tolist()) - {'undetermined'})

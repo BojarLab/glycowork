@@ -42,7 +42,7 @@ def sigmoid(x: float  # input value
     return 1 / (1 + math.exp(-x))
 
 
-def glycans_to_emb(glycans: list[str],  # list of glycans in IUPAC-condensed
+def glycans_to_emb(glycans: str | list[str],  # glycan(s) in IUPAC-condensed
                    model: torch.nn.Module,  # trained graph neural network for analyzing glycans
                    libr: dict[str, int] | None = None,  # dictionary of form glycoletter:index
                    batch_size: int = 32,  # batch size used during training
@@ -53,6 +53,7 @@ def glycans_to_emb(glycans: list[str],  # list of glycans in IUPAC-condensed
     "Returns a dataframe of learned representations for a list of glycans"
     if libr is None:
         libr = lib
+    glycans = [glycans] if isinstance(glycans, str) else glycans
     # Preparing dataset for PyTorch
     glycan_loader = dataset_to_dataloader(glycans, range(len(glycans)), libr = libr, batch_size = batch_size,
                                           shuffle = False)
@@ -72,7 +73,7 @@ def glycans_to_emb(glycans: list[str],  # list of glycans in IUPAC-condensed
 def get_multi_pred(prot: str,  # protein amino acid sequence
                    glycans: list[str],  # list of glycans in IUPAC-condensed
                    model: torch.nn.Module,  # trained LectinOracle-type model
-                   prot_dic: dict[str, list[float]],  # dict of protein sequence:ESM1b representation
+                   prot_dic: dict[str, list[float]],  # dict of protein sequence:ESMC representation
                    background_correction: bool = False,  # whether to correct predictions for background
                    correction_df: pd.DataFrame | None = None,  # background prediction for glycans
                    batch_size: int = 128,  # batch size used during training
@@ -130,7 +131,7 @@ def get_multi_pred(prot: str,  # protein amino acid sequence
 
 
 def get_lectin_preds(prot: str,  # protein amino acid sequence
-                     glycans: list[str],  # list of glycans in IUPAC-condensed
+                     glycans: str | list[str],  # glycan(s) in IUPAC-condensed
                      model: torch.nn.Module,  # trained LectinOracle-type model
                      prot_dic: dict[str, list[float]] | None = None,  # dict of protein sequence:ESMC representation
                      background_correction: bool = False,  # whether to correct predictions for background
@@ -143,6 +144,7 @@ def get_lectin_preds(prot: str,  # protein amino acid sequence
     "Wrapper that uses LectinOracle-type model for predicting binding of protein to glycans"
     if libr is None:
         libr = lib
+    glycans = [glycans] if isinstance(glycans, str) else glycans
     if correction_df is None and background_correction:
         with resources.files("glycowork.ml").joinpath("glycowork_lectinoracle_background_correction.csv").open(
                 encoding = 'utf-8-sig') as f:
@@ -189,13 +191,13 @@ def _clean_protein_sequences(prots: list[str],  # protein sequences to filter
     return unique
 
 
-def get_esmc_representations(prots: list[str],  # list of protein sequences to convert
+def get_esmc_representations(prots: str | list[str],  # protein sequence(s) to convert
                              model: torch.nn.Module,  # trained ESMC model
                              ) -> dict[str, list[float]]:  # dict of protein sequence:ESMC-300M representation
     "Retrieves ESMC-300M representations of protein for using them as input for LectinOracle"
     # from esm.models.esmc import ESMC
     # model = ESMC.from_pretrained("esmc_300m").to(device)
-    prots = _clean_protein_sequences(prots)
+    prots = _clean_protein_sequences([prots] if isinstance(prots, str) else prots)
     try:
         from esm.sdk.api import ESMProtein, LogitsConfig
         use_esm_api = True
@@ -219,11 +221,12 @@ def get_esmc_representations(prots: list[str],  # list of protein sequences to c
     return {p: prot_to_ESMC(p) for p in prots}
 
 
-def get_Nsequon_preds(prots: list[str],  # 20 AA + N + 20 AA sequences; replace missing with 'z'
+def get_Nsequon_preds(prots: str | list[str],  # 20 AA + N + 20 AA sequence(s); replace missing with 'z'
                       model: torch.nn.Module,  # trained NSequonPred-type model
                       prot_dic: dict[str, list[float]]  # dict of protein sequence:ESM1b representation
                       ) -> pd.DataFrame:  # protein sequences and predicted likelihood
     "Predicts whether an N-sequon will be glycosylated"
+    prots = [prots] if isinstance(prots, str) else prots
     reps = [prot_dic[k] for k in prots]
     # Preparing dataset for PyTorch
     dataset = SimpleDataset(reps, [0] * len(reps))

@@ -49,6 +49,8 @@ human_serum_parkinson_GSL_PMID40379659,PMID:40379659,10.1038/s41467-025-59755-6,
 human_skin_O_PMC5871710,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal/squamous cell carcinoma,O,negative,reduced,PGC-LC
 human_skin_O_PMC5871710_BCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,basal cell carcinoma,O,negative,reduced,PGC-LC
 human_skin_O_PMC5871710_SCC,PMC5871710,10.3389/fonc.2018.00070,,,Homo sapiens,skin,primary tissue,squamous cell carcinoma,O,negative,reduced,PGC-LC
+human_influenza_N_10_648982026_02_02_703422,,10.1038/s42003-026010759-y,,,Homo sapiens,lung,cell line,lung adenocarcinoma,N,negative,reduced,PGC-LC
+human_influenza_O_10_648982026_02_02_703422,,10.1038/s42003-026010759-y,,,Homo sapiens,lung,cell line,lung adenocarcinoma,O,negative,reduced,PGC-LC
 macaque_brain_N_GPST000309,,10.1126/sciadv.adg2615,GlycoPOST,GPST000309,Macaca mulatta,brain,primary tissue,,N,,2-AB,HILIC-LC
 mouse_brain_GSL_PMID39375371,PMID:39375371,10.1038/s41467-024-53032-8,,,Mus musculus,brain,primary tissue,,lipid,positive,none,RP-LC
 mouse_brain_tango2ko_GSL_10_1002pgr2_70042,,10.1002/pgr2.70042,,,Mus musculus,brain,primary tissue,,lipid,negative,reduced,PGC-LC
@@ -56,8 +58,8 @@ mouse_brain_tango2ko_N_10_1002pgr2_70042,,10.1002/pgr2.70042,,,Mus musculus,brai
 mouse_brain_tango2ko_O_10_1002pgr2_70042,,10.1002/pgr2.70042,,,Mus musculus,brain,primary tissue,,O,negative,reduced,PGC-LC
 mouse_gastric_O_PMID40667878,PMID:40667878,10.1080/21505594.2025.2530173,,,Mus musculus,gastric,primary tissue,,O,negative,reduced,PGC-LC
 mouse_platelet_N_101161ATVBAHA126324757,,10.1161/ATVBAHA.126.324757,,,Mus musculus,platelet,primary cells,,N,negative,reduced,PGC-LC
-mouse_taysachs_N_PMID41460292,PMID:41460292,10.1007/s10719-025-10203-z,,,Mus musculus,neuroglial cells,primary cells,,N,,,
-mouse_taysachs_O_PMID41460292,PMID:41460292,10.1007/s10719-025-10203-z,,,Mus musculus,neuroglial cells,primary cells,,O,,,
+mouse_taysachs_N_PMID41460292,PMID:41460292,10.1007/s10719-025-10203-z,,,Mus musculus,neuroglial cells,primary cells,,N,negative,reduced,PGC-LC
+mouse_taysachs_O_PMID41460292,PMID:41460292,10.1007/s10719-025-10203-z,,,Mus musculus,neuroglial cells,primary cells,,O,negative,reduced,PGC-LC
 time_series_HMO_PMID22649065,PMID:22649065,10.1152/ajpendo.00175.2012,,,Homo sapiens,milk,body fluid,,free,,2-AB,
 time_series_N_PMID32149347,PMID:32149347,10.1093/glycob/cwaa020,,,Homo sapiens,macrophages,primary cells,,N,negative,reduced,PGC-LC
 time_series_O_PMID32149347,PMID:32149347,10.1093/glycob/cwaa020,,,Homo sapiens,macrophages,primary cells,,O,negative,reduced,PGC-LC
