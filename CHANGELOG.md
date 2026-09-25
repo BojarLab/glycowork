@@ -1,7 +1,7 @@
 # Changelog
 
 ## [1.10.1]
-- Bumped `glycorender` requirement to `0.4.2` to support `GlycoDraw` die cut stickers, 300 dpi PNG export, and upright linkage labels (257ba7b, )
+- Bumped `glycorender` requirement to `0.4.2` to support `GlycoDraw` die cut stickers, 300 dpi PNG export, and upright linkage labels (257ba7b, d8c4da5)
 - Added more error messages throughout the package (4f9ae4c)
 
 ### glycan_data
@@ -32,7 +32,7 @@
 ##### Fixed 🐛
 - Fixed `get_heatmap` placing its axis labels on the colorbar instead of the heatmap (4f9ae4c)
 - Fixed `get_meta_analysis` crashing when saving a forest plot without `study_names` (4f9ae4c)
-- Fixed `get_volcano(annotate_volcano = True)` showing nothing outside of Jupyter when no `filepath` is given ()
+- Fixed `get_volcano(annotate_volcano = True)` showing nothing outside of Jupyter when no `filepath` is given (d8c4da5)
 
 #### draw
 ##### Added ✨
@@ -42,12 +42,12 @@
 ##### Changed 🔄
 - `get_mono_atoms` now also accepts single string inputs in addition to lists (60b3d6d)
 - `GlycoDraw` now warns if `highlight_motif` does not occur in the glycan (4f9ae4c)
-- SVGs saved by `GlycoDraw` now match its PDF/PNG output: linkage labels read upright (also in vertical mode), modifications are bold, furanose *f* is italic, and linkages have no gaps ()
-- `GlycoDraw` PNG exports are now rendered at 300 dpi at the same physical size as the PDF, and Jupyter previews at 2x for crisp display on high-DPI screens ()
+- SVGs saved by `GlycoDraw` now match its PDF/PNG output: linkage labels read upright (also in vertical mode), modifications are bold, furanose *f* is italic, and linkages have no gaps (d8c4da5)
+- `GlycoDraw` PNG exports are now rendered at 300 dpi at the same physical size as the PDF, and Jupyter previews at 2x for crisp display on high-DPI screens (d8c4da5)
 
 ##### Fixed 🐛
 - Fixed display of floating sulfate positional indicators (e6971ee)
-- Fixed `annotate_figure` (and thereby `get_volcano`) crashing on glyco-regex motifs such as `Nglycan_hybrid`, which now stay text labels ()
+- Fixed `annotate_figure` (and thereby `get_volcano`) crashing on glyco-regex motifs such as `Nglycan_hybrid`, which now stay text labels (d8c4da5)
 
 #### annotate
 ##### Fixed 🐛
@@ -76,7 +76,7 @@
 - `max_specify_glycan` now also accepts species names with spaces instead of underscores (4f9ae4c)
 
 ##### Fixed 🐛
-- Fixed `canonicalize_iupac` silently turning compositions such as `H9N2` or `H3N3S1` into bare N-glycan cores by misreading them as Oxford nomenclature; they are now returned unchanged ()
+- Fixed `canonicalize_iupac` silently turning compositions such as `H9N2` or `H3N3S1` into bare N-glycan cores by misreading them as Oxford nomenclature; they are now returned unchanged (d8c4da5)
 
 ### network
 #### biosynthesis
