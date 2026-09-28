@@ -17,7 +17,7 @@ from typing import NamedTuple
 import networkx as nx
 from glycowork.motif.graph import glycan_to_nxGraph, graph_to_string, glycan_graph_memoize
 
-CERAMIDE = 'OC[C@@H](NC(=O)CCCCCCCCCCCCCCC)[C@H](O)/C=C/CCCCCCCCCCCCC'  # d18:1/16:0, the placeholder used whenever a sequence just says 'Cer'
+CERAMIDE = 'OC[C@H](NC(=O)CCCCCCCCCCCCCCC)[C@H](O)/C=C/CCCCCCCCCCCCC'  # d18:1/16:0, the placeholder used whenever a sequence just says 'Cer'
 UNKNOWN_POSITION = 'lowest'  # where a modification without a position number goes; 'lowest' free slot reproduces what GlyLES did
 
 SKELETONS = {  # monosaccharide: (template, alpha tag, {position: heteroatom})
@@ -31,8 +31,8 @@ SKELETONS = {  # monosaccharide: (template, alpha tag, {position: heteroatom})
     'Acef': ('O[C@{a}H]{r}O[C@@H](C)[C@]({p3})(C(=O)O)[C@@H]{r}{p2}', '@', {2: 'O', 3: 'O'}),
     'Aci': ('O[C@{a}]{r}(C(=O)O)C[C@H]({p4})[C@@H]({p5})[C@H]([C@@H]({p7})[C@@H]({p8})C)O{r}', '', {4: 'O', 5: 'N', 7: 'N', 8: 'O'}),
     'Aco': ('O[C@{a}H]{r}O[C@@H](C)[C@H]({p4})[C@@H]({p3}C)[C@H]{r}{p2}', '@', {2: 'O', 3: 'O', 4: 'O'}),
-    'All': ('O[C@{a}H]{r}O[C@H](C{p6})[C@@H]({p4})[C@@H]({p3})[C@H]{r}{p2}', '', {2: 'O', 3: 'O', 4: 'O', 6: 'O'}),
-    'Allf': ('O[C@{a}H]{r}O[C@H]([C@H]({p5})C{p6})[C@@H]({p3})[C@H]{r}{p2}', '', {2: 'O', 3: 'O', 5: 'O', 6: 'O'}),
+    'All': ('O[C@{a}H]{r}O[C@@H](C{p6})[C@H]({p4})[C@H]({p3})[C@@H]{r}{p2}', '@', {2: 'O', 3: 'O', 4: 'O', 6: 'O'}),
+    'Allf': ('O[C@{a}H]{r}O[C@@H]([C@@H]({p5})C{p6})[C@H]({p3})[C@@H]{r}{p2}', '@', {2: 'O', 3: 'O', 5: 'O', 6: 'O'}),
     'Alt': ('O[C@{a}H]{r}O[C@@H](C{p6})[C@H]({p4})[C@H]({p3})[C@H]{r}{p2}', '@', {2: 'O', 3: 'O', 4: 'O', 6: 'O'}),
     'Altf': ('O[C@{a}H]{r}O[C@@H]([C@@H]({p5})C{p6})[C@H]({p3})[C@H]{r}{p2}', '@', {2: 'O', 3: 'O', 5: 'O', 6: 'O'}),
     'Api': ('O[C@{a}H]{r}OC[C@]({p3})(CO)[C@H]{r}{p2}', '@', {2: 'O', 3: 'O'}),
@@ -137,11 +137,14 @@ ALDITOLS = {  # open-chain form of a reduced sugar ('-ol'), numbered like the pa
     'Tal': ('OC[C@@H]({p2})[C@@H]({p3})[C@@H]({p4})[C@H]({p5})C{p6}', {2: 'O', 3: 'O', 4: 'O', 5: 'O', 6: 'O'}),
     'Thre': ('OC[C@@H]({p2})[C@H]({p3})C{p4}', {2: 'O', 3: 'O', 4: 'O'}),
     'Xyl': ('OC[C@H]({p2})[C@@H]({p3})[C@H]({p4})C{p5}', {2: 'O', 3: 'O', 4: 'O', 5: 'O'}),
+    'Hex': ('OCC({p2})C({p3})C({p4})C({p5})C{p6}', {2: 'O', 3: 'O', 4: 'O', 5: 'O', 6: 'O'}),
+    'dHex': ('OCC({p2})C({p3})C({p4})C({p5})C', {2: 'O', 3: 'O', 4: 'O', 5: 'O'}),
+    'Pen': ('OCC({p2})C({p3})C({p4})C{p5}', {2: 'O', 3: 'O', 4: 'O', 5: 'O'}),
 }
 
 # default enantiomer of each skeleton, so that an explicit D-/L- prefix knows when to mirror
 ENANTIOMER = {'4eLeg': 'D', '6dAlt': 'L', '6dAltf':
-              'L', '6dGul': 'D', '6dTal': 'D', 'Abe': 'D', 'Abef': 'D', 'Acef': 'L', 'Aci': 'D', 'Aco': 'D', 'All': 'D', 'Allf': 'D', 'Alt': 'L',
+              'L', '6dGul': 'D', '6dTal': 'D', 'Abe': 'D', 'Abef': 'D', 'Acef': 'L', 'Aci': 'D', 'Aco': 'D', 'All': 'L', 'Allf': 'L', 'Alt': 'L',
               'Altf': 'L', 'Api': 'L', 'Apif': 'L', 'Ara': 'L', 'Araf': 'L', 'Asc': 'L', 'Bac': 'D', 'Col': 'L', 'DDAltHep': 'L', 'DDGlcHep': 'D',
               'DDManHep': 'D', 'DLGlcHep': 'L', 'Dha': 'D', 'Dig': 'D', 'Erwiniose': 'D', 'Eryf': 'D', 'Fru': 'D', 'Fruf': 'D', 'Fuc': 'L', 'Fucf':
               'L', 'Fus': 'L', 'Gal': 'D', 'GalHep': 'D', 'Galf': 'D', 'Glc': 'D', 'GlcHep': 'D', 'Glcf': 'D', 'Gul': 'D', 'Gulf': 'D', 'Ido': 'L',
@@ -157,28 +160,38 @@ SUBSTITUENTS = {  # modification: (form replacing a hydroxyl, form replacing an 
     'Et': ('OCC', 'NCC'), 'Am': ('OC(C)=N', 'NC(C)=N'), 'Gro': ('OCC(O)CO', None), 'SH': ('S', None),
     'PEtN': ('OP(=O)(O)OCCN', None), 'PCho': ('OP(=O)([O-])OCC[N+](C)(C)C', None), 'PGro': ('OP(=O)(O)OCC(O)CO', None),
     'PPEtN': ('OP(=O)(O)OP(=O)(O)OCCN', None), 'Aep': ('OP(=O)(O)CCN', None), 'Cm': ('OCC(=O)O', 'NCC(=O)O'),
-    'Lac': ('O[C@@H](C)C(=O)O', 'N[C@@H](C)C(=O)O'), 'Pyr': ('OC(=O)C(C)=O', None), 'Cer': (CERAMIDE, None),
+    'Lac': ('O[C@H](C)C(=O)O', 'N[C@H](C)C(=O)O'), 'Pyr': ('OC(=O)C(C)=O', None), 'Cer': (CERAMIDE, None),
     'N': ('N', 'N'), 'NAc': ('NC(C)=O', 'NC(C)=O'), 'NGc': ('NC(=O)CO', 'NC(=O)CO'), 'NS': ('NS(=O)(=O)O', 'NS(=O)(=O)O'),
     'NMe': ('NC', 'NC'), 'NFo': ('NC=O', 'NC=O'), 'NAm': ('NC(C)=N', 'NC(C)=N'), 'NP': ('NP(=O)(O)O', 'NP(=O)(O)O'),
     'NBut': ('NC(=O)CCC', 'NC(=O)CCC'), 'NSuc': ('NC(=O)CCC(=O)O', 'NC(=O)CCC(=O)O'), 'NCm': ('NCC(=O)O', 'NCC(=O)O'),
-    'NAla': ('NC(=O)[C@@H](C)N', 'NC(=O)[C@@H](C)N'), 'NGly': ('NC(=O)CN', 'NC(=O)CN'),
-    'NSer': ('NC(=O)[C@@H](CO)N', 'NC(=O)[C@@H](CO)N'), 'NThr': ('NC(=O)[C@@H]([C@@H](C)O)N', 'NC(=O)[C@@H]([C@@H](C)O)N'),
+    'NAla': ('NC(=O)[C@H](C)N', 'NC(=O)[C@H](C)N'), 'NGly': ('NC(=O)CN', 'NC(=O)CN'),
+    'NSer': ('NC(=O)[C@H](CO)N', 'NC(=O)[C@H](CO)N'), 'NThr': ('NC(=O)[C@H]([C@@H](C)O)N', 'NC(=O)[C@H]([C@@H](C)O)N'),
 }
+SUBSTITUENTS |= {  # acyl chains as in lipid A or Glc1Ole6Ac, and halogens that replace a hydroxyl outright as in Fuc2F
+    'But': ('OC(=O)CCC', 'NC(=O)CCC'), 'Suc': ('OC(=O)CCC(=O)O', 'NC(=O)CCC(=O)O'), 'Dco': ('OC(=O)' + 'C' * 9, 'NC(=O)' + 'C' * 9),
+    'Lau': ('OC(=O)' + 'C' * 11, 'NC(=O)' + 'C' * 11), 'Myr': ('OC(=O)' + 'C' * 13, 'NC(=O)' + 'C' * 13), 'Pam': ('OC(=O)' + 'C' * 15, 'NC(=O)' + 'C' * 15),
+    'Mar': ('OC(=O)' + 'C' * 16, 'NC(=O)' + 'C' * 16), 'Ste': ('OC(=O)' + 'C' * 17, 'NC(=O)' + 'C' * 17),
+    'Ole': ('OC(=O)CCCCCCC/C=C\\CCCCCCCC', 'NC(=O)CCCCCCC/C=C\\CCCCCCCC'), 'F': ('F', None), 'Cl': ('Cl', None), 'Br': ('Br', None), 'I': ('I', None),
+}
+SUBSTITUENTS |= {'N' + name: (SUBSTITUENTS[name][1],) * 2 for name in ('Dco', 'Lau', 'Myr', 'Pam', 'Mar', 'Ste', 'Ole')}  # also written without a position, as in GlcNPam
 ANOMERIC = {  # what a modification on the anomeric position replaces that whole anomeric oxygen with
     'S': 'OS(=O)(=O)O', 'P': 'OP(=O)(O)O', 'PP': 'OP(=O)(O)OP(=O)(O)O', 'Me': 'CO', 'Ac': 'CC(=O)O', 'Et': 'CCO',
     'Gc': 'OCC(=O)O', 'Fo': 'C(=O)O', 'Gro': 'OCC(O)CO', 'PEtN': 'NCCOP(=O)(O)O', 'PCho': 'C[N+](C)(C)CCOP(=O)([O-])O',
-    'PGro': 'OCC(O)COP(=O)(O)O', 'PPEtN': 'NCCOP(=O)(O)OP(=O)(O)O', 'Cer': 'CCCCCCCCCCCCC/C=C/[C@@H](O)[C@H](NC(=O)CCCCCCCCCCCCCCC)CO',
+    'PGro': 'OCC(O)COP(=O)(O)O', 'PPEtN': 'NCCOP(=O)(O)OP(=O)(O)O', 'Cer': 'CCCCCCCCCCCCC/C=C/[C@@H](O)[C@@H](NC(=O)CCCCCCCCCCCCCCC)CO',
     'N': 'N', 'NAc': 'CC(=O)N', 'NMe': 'CN', 'NGc': 'OCC(=O)N', 'NS': 'OS(=O)(=O)N', 'NFo': 'C(=O)N',
+    'F': 'F', 'Cl': 'Cl', 'Br': 'Br', 'I': 'I', 'But': 'CCCC(=O)O', 'Lau': 'C' * 11 + 'C(=O)O', 'Myr': 'C' * 13 + 'C(=O)O',
+    'Pam': 'C' * 15 + 'C(=O)O', 'Ste': 'C' * 17 + 'C(=O)O', 'Ole': 'CCCCCCCC/C=C\\CCCCCCCC(=O)O',
 }
-ESTERIFIED = {'Me': 'C', 'Et': 'CC'}  # what a modification on the carbon of a uronic acid does to that acid
-URONIC = 'C(=O)O'  # what 'A' does to the primary alcohol: oxidize it to a carboxylic acid
-AMIDATED = 'C(=O)N'  # what 'Am', 'NAm' or 'N' then does to that acid
+ESTERIFIED = {'Me': 'OC', 'Et': 'OCC'}  # what a modification on the carbon of a uronic acid does to that acid's hydroxyl
+URONIC = 'C(=O){A}'  # what 'A' does to the primary alcohol: oxidize it to a carboxylic acid, whose hydroxyl stays a slot until the end
+ULOSONIC = '{r}(C(=O)O)'  # C1 of an ulosonic acid, which is its carboxyl rather than its anomeric center
 WILDCARDS = {'Sia', 'dNon', 'ddNon', 'ddHex', 'Monosaccharide', 'Unknown', 'Assigned'}  # 'Hex', 'dHex' and 'Pen' are stereochemistry-free skeletons instead
 _MOD_NAMES = set(SUBSTITUENTS) | {'A'} | {'O' + m for m in SUBSTITUENTS if m[0] not in 'ON'}  # an 'O' prefix means the position is unknown
 _SKELETON_RE = re.compile('|'.join(sorted(set(SKELETONS) | set(ALDITOLS), key = len, reverse = True)))
 _MOD_RE = re.compile(r'(\d*)(' + '|'.join(sorted(_MOD_NAMES, key = len, reverse = True)) + r')')
 _ATOM_RE = re.compile(r'\[[^\]]*\]|Br|Cl|[BCNOPSFI]')
 _SLOT_RE = re.compile(r'\{p(\d)\}')
+_HOLDERS = ('O', 'N', 'S', 'F', 'Cl', 'Br', 'I')  # elements that can sit on a numbered carbon in place of its hydroxyl
 
 
 class GlycanSMILESError(ValueError):
@@ -194,10 +207,12 @@ def _free_slots(template: str, # Residue template, possibly already partly subst
 
 
 def _anomeric_position(token: str # Monosaccharide token
-                       ) -> int: # 1 for an aldose, 2 for a ketose or ulosonic acid, None if there is no anomeric center
-    "Which carbon carries the anomeric oxygen, i.e. the one a glycosidic bond may leave from"
+                       ) -> int:  # 1 for an aldose or an alditol, 2 for a ketose or ulosonic acid, None if there is no anomeric center
+    "Which carbon carries the oxygen a template is rooted at, i.e. the one a glycosidic or phosphodiester bond may leave from"
     skeleton, _, _, reduced = _split_token(token)
-    if reduced or skeleton == 'Ins':
+    if reduced:  # the O1 of an alditol is written first just like an anomeric oxygen, as in Gal(b1-1)Rib-ol or Rib-ol(1-5)Rib5P-ol
+        return 1
+    if skeleton == 'Ins':
         return None
     if skeleton not in SKELETONS:
         raise GlycanSMILESError(f"'{skeleton}' only exists as an alditol; write it as '{skeleton}-ol'")
@@ -261,9 +276,9 @@ def _residue(token: str, # Monosaccharide token
             continue
         if acid is not None and (position == acid or (position is None and mod in ('Am', 'NAm'))):
             if mod in ('Am', 'NAm', 'N'):
-                template = template.replace(URONIC, AMIDATED)
+                template = template.replace('{A}', 'N')
             elif mod in ESTERIFIED:
-                template = template.replace(URONIC, URONIC + ESTERIFIED[mod])
+                template = template.replace('{A}', ESTERIFIED[mod])
             else:
                 raise GlycanSMILESError(f"'{mod}' is not defined on the carboxyl of '{token}'")
             continue
@@ -277,17 +292,17 @@ def _residue(token: str, # Monosaccharide token
         if position is None and mod[0] != 'N':  # where a sulfate or phosphate goes is only decided once the linkages are known
             pending.append((mod, group))
             continue
-        if position is None:  # an N-acyl belongs on the amine of the sugar, or on its lowest free position
-            free = [p for p in _free_slots(template, hetero) if p != 1 and (mod != 'N' or p not in taken)]
+        if position is None:  # an N-acyl belongs on the amine of the sugar, or on its lowest position that no linkage or numbered acyl needs
+            free = [p for p in _free_slots(template, hetero) if p != 1 and p not in taken and (mod == 'N' or all(q != p for q, m in mods))]
             position = next((p for p in free if hetero[p] == 'N'), free[0] if free else None)
             if position is None:
                 raise GlycanSMILESError(f"'{token}' has nowhere to put '{mod}'")
         anomeric = 2 if '[C@{a}]' in template else 1
-        if position == 1 and anomeric == 2 and URONIC in template:  # C1 of an ulosonic acid is its carboxyl, not its anomeric center
+        if position == 1 and anomeric == 2 and ULOSONIC in template:
             if mod in ('Am', 'NAm', 'N'):
-                template = template.replace(URONIC, AMIDATED)
+                template = template.replace(ULOSONIC, '{r}(C(=O)N)')
             elif mod in ESTERIFIED:
-                template = template.replace(URONIC, URONIC + ESTERIFIED[mod])
+                template = template.replace(ULOSONIC, '{r}(C(=O)%s)' % ESTERIFIED[mod])
             else:
                 raise GlycanSMILESError(f"'{mod}' is not defined on the carboxyl of '{token}'")
             continue
@@ -313,7 +328,7 @@ def _residue(token: str, # Monosaccharide token
         template = template.replace('{a}', '@' if alpha == '' else '')
     else:
         template = template.replace('[C@{a}H]', 'C').replace('[C@{a}]', 'C')
-    return template.replace('{r}', ring), hetero, pending
+    return template.replace('{r}', ring).replace('{A}', 'O'), hetero, pending
 
 
 def _place(token: str, # Monosaccharide token, for error messages
@@ -379,6 +394,8 @@ def graph_to_smiles(graph: nx.DiGraph, # Glycan graph, as produced by glycan_to_
             if onto_anomeric and depth:
                 raise GlycanSMILESError(f"'{labels[node]}' cannot use its anomeric oxygen for both its own linkage and '{link}'")
             piece, piece_owners = build(child, link[0], depth + 1)
+            if piece[0] not in 'ON':  # an ester, halide, or aglycon on the anomeric oxygen leaves nothing to bond to the parent with
+                raise GlycanSMILESError(f"'{labels[child]}' already carries a group on its anomeric oxygen and cannot also form linkage '{link}'")
             if onto_anomeric:  # onto the anomeric center: the two residues share that one oxygen
                 fragment = 'O(' + piece[1:] + ')' + fragment[1:]
                 owners = owners[:1] * 2 + piece_owners[1:] + owners[:1] + owners[1:]
@@ -478,6 +495,14 @@ def parse_smiles(smiles: str # SMILES string
             previous, order = index, 1
     if pending_rings:
         raise GlycanSMILESError(f'unclosed ring bond {sorted(pending_rings)}')
+    shrunk = True
+    while shrunk:  # a ring closed around a fused neighbor, such as a pyruvate ketal, runs round both; trade it for the smaller cycle
+        shrunk = False
+        for i, j in ((i, j) for i in range(len(rings)) for j in range(len(rings)) if len(rings[i]) < len(rings[j])):
+            merged = set(rings[i]) ^ set(rings[j])
+            if len(merged) < len(rings[j]) and set(rings[i]) & set(rings[j]):
+                rings[j], shrunk = tuple(merged), True
+                break
     return atoms, bonds, rings, neighbors
 
 
@@ -621,9 +646,9 @@ def _slot_kind(carbon: int, # Numbered carbon of a residue
            for other in adjacency[carbon]) and sum(elements[other] in 'ON' for other in adjacency[carbon]) > 1:
         return 'acid', None
     exocyclic = [other for other in adjacency[carbon]
-                 if elements[other] in 'ON' and other not in ring and other != root_oxygen]
-    if len(exocyclic) == 1:
-        return elements[exocyclic[0]], exocyclic[0]
+                 if elements[other] in _HOLDERS and other not in ring and other != root_oxygen]
+    if len(exocyclic) == 1:  # a thiol or a halogen takes the place of a hydroxyl, so the skeleton still has an 'O' there
+        return 'N' if elements[exocyclic[0]] == 'N' else 'O', exocyclic[0]
     return '-', None
 
 
@@ -747,17 +772,17 @@ def _modification_table() -> dict: # {heteroatom: {canonical fragment: modificat
     "Invert the substituent table by serializing every group the way perception will see it"
     if _MODIFICATIONS:
         return _MODIFICATIONS
-    _MODIFICATIONS.update({'O': {}, 'N': {}})
+    _MODIFICATIONS.update({element: {} for element in _HOLDERS})
     for name, forms in SUBSTITUENTS.items():
         short = name[1:] if name.startswith('N') and len(name) > 1 else name  # the leading N is put back only where the skeleton lacks one
-        for element, form in zip('ON', forms):
-            if form is None or form[0] != element:
+        for form in forms:
+            if form is None:
                 continue
             atoms, bonds, rings, neighbors = parse_smiles(form)
             adjacency, orders = _adjacency(atoms, bonds), {}
             for first, second, order in bonds:
                 orders[(first, second)] = orders[(second, first)] = order
-            _MODIFICATIONS[element].setdefault(_fragment_key(0, None, atoms, adjacency, orders, set()), short)
+            _MODIFICATIONS[atoms[0][0]].setdefault(_fragment_key(0, None, atoms, adjacency, orders, set()), short)
     return _MODIFICATIONS
 
 
@@ -780,7 +805,7 @@ def _holders(number: dict, # {atom: carbon number}
     "Find the oxygen or nitrogen sitting at every numbered position of a residue"
     elements, holders, carbons = [element for element, charge, chirality in atoms], {}, {}
     for carbon, position in number.items():
-        holder = max((other for other in adjacency[carbon] if elements[other] in 'ON' and other not in ring and other != root),
+        holder = max((other for other in adjacency[carbon] if elements[other] in _HOLDERS and other not in ring and other != root),
                      key = lambda other: (len(adjacency[other]), elements[other] == 'N', -other), default = None)
         if holder is not None:
             holders[position], carbons[position] = holder, carbon
@@ -823,6 +848,8 @@ def _name_modification(residue: dict, # Perceived residue
     carbon = next(atom for atom, spot in residue['number'].items() if spot == position)
     default = next((spot for spot in _free_slots(template, hetero) if spot != 1), None)
     if len([other for other in adjacency[holder] if other != carbon]) == 0:  # nothing hangs off it
+        if elements[holder] not in 'ON':  # a thiol or a halogen, as in Gal6F
+            return position, _modification_table()[elements[holder]].get(elements[holder])
         if elements[holder] != 'N' or hetero.get(position) == 'N':
             return position, None
         return (None if position == default else position), 'N'
@@ -831,7 +858,7 @@ def _name_modification(residue: dict, # Perceived residue
         return position, name
     if position == default:  # written without a number, as in GlcNAc or MurNAc, so the N has to be spelt out
         return None, 'N' + name
-    return position, name if hetero.get(position) == 'N' else 'N' + name  # a numbered position on a sugar that already has the nitrogen, as in Neu5Ac
+    return position, name if hetero.get(position) == 'N' and name in SUBSTITUENTS else 'N' + name  # a numbered position on a sugar that already has the nitrogen, as in Neu5Ac
 
 
 def _residue_graph(residues: list, # Perceived residues
@@ -905,6 +932,8 @@ def smiles_to_iupac(smiles: str, # SMILES string of a glycan
         for position in sorted(residue['fragments']):
             if position not in residue['fixed']:  # a group the skeleton's own name already covers, such as the lactyl of muramic acid
                 residue['mods'].append(_name_modification(residue, position, atoms, adjacency))
+                if residue['mods'][-1][1] is None:  # whatever hangs off an unnamed position has to pass the coverage check on its own
+                    residue['holders'].pop(position)
         _link_through_root(residues, index, of_root, atoms, adjacency, orders)
     for index, residue in enumerate(residues):  # two residues sharing one anomeric oxygen are linked to each other, as in trehalose
         twin = next((other for other, host in enumerate(residues) if other != index and host['root'] == residue['root']), None)
@@ -927,14 +956,22 @@ def _check_coverage(residues: list, # Perceived residues
     covered = set()
     for residue in residues:
         covered |= set(residue['number']) | residue['ring'] | set(residue['holders'].values()) | {residue['root']}
+    for residue in residues:  # only once every residue is in, so that walking a named group cannot run on into another residue
         named = any(name for position, name in residue['mods'] if position == residue['anomeric'])
         for holder in list(residue['holders'].values()) + ([residue['root']] if named else []):
             _fragment_key(holder, None, atoms, adjacency, orders, covered)
-    elements = [element for element, charge, chirality in atoms]
-    left = [atom for atom in range(len(atoms)) if atom not in covered]
-    sugary = [atom for atom in left if elements[atom] == 'C' and any(elements[other] == 'O' for other in adjacency[atom])]
-    if len(sugary) >= 3:
-        raise GlycanSMILESError('part of this molecule looks like a residue but could not be named; an open-chain sugar perhaps')
+    elements, left = [element for element, charge, chirality in atoms], set(range(len(atoms))) - covered
+    while left:  # each leftover piece on its own, so that several small unnamed groups never add up to a residue
+        piece, stack = set(), [left.pop()]
+        while stack:
+            atom = stack.pop()
+            piece.add(atom)
+            stack += adjacency[atom] & left
+            left -= adjacency[atom]
+        if sum(elements[atom] == 'C' and any(elements[other] == 'O' for other in adjacency[atom]) for atom in
+               piece) >= 3:
+            raise GlycanSMILESError(
+                'part of this molecule looks like a residue but could not be named; an open-chain sugar perhaps')
 
 
 def _link_through_root(residues: list, # Perceived residues
@@ -947,10 +984,11 @@ def _link_through_root(residues: list, # Perceived residues
     "Read what hangs off a residue's own anomeric oxygen: an aglycon, a phosphate, or a phosphodiester to its parent"
     residue = residues[index]
     carbon = next(atom for atom, position in residue['number'].items() if position == residue['anomeric'])
-    beyond = [other for other in adjacency[residue['root']] if other != carbon]
+    beyond, elements = [other for other in adjacency[residue['root']] if other != carbon], [element for element, charge, chirality in atoms]
     if not beyond:
+        if elements[residue['root']] == 'N':  # a glycosylamine, as in GlcNAc1N
+            residue['mods'].append((residue['anomeric'], 'N'))
         return
-    elements = [element for element, charge, chirality in atoms]
     bridge = beyond[0]
     if elements[bridge] == 'P':  # a phosphodiester: the phosphate belongs to this residue and the bond to its parent
         for oxygen in adjacency[bridge]:
@@ -963,7 +1001,8 @@ def _link_through_root(residues: list, # Perceived residues
                         host['children'].append(index)
                         residue['mods'].append((residue['anomeric'], 'P'))
                         return
-    residue['mods'].append((residue['anomeric'], _modification_table()['O'].get(_fragment_key(residue['root'], carbon, atoms, adjacency, orders, set()))))
+    name = _modification_table()[elements[residue['root']]].get(_fragment_key(residue['root'], carbon, atoms, adjacency, orders, set()))
+    residue['mods'].append((residue['anomeric'], 'N' + name if name and elements[residue['root']] == 'N' else name))
 
 
 _IUPAC_LINKAGE = re.compile(r'\([ab?][0-9?]')

@@ -47,7 +47,7 @@ from glycowork.motif.processing import (
     bracket_removal, check_nomenclature, IUPAC_to_SMILES, get_mono, iupac_to_smiles,
     max_specify_glycan, parse_floating_bit, check_nomenclature
 )
-from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, GlycanSMILESError,
+from glycowork.motif.smiles import (SKELETONS, ALDITOLS, SUBSTITUENTS, ENANTIOMER, CERAMIDE, GlycanSMILESError,
                                     glycan_to_smiles, glycan_to_molecule, smiles_to_iupac, looks_like_smiles,
                                     parse_smiles, _split_token, _anomeric_position)
 from glycowork.glycan_data.loader import (
@@ -1025,6 +1025,10 @@ def test_enantiomer_prefix_mirrors():
     Chem = pytest.importorskip('rdkit.Chem')
     mirrored = Chem.CanonSmiles(glycan_to_smiles('D-Fuc(a1-2)Gal').replace('@@', '\x00').replace('@', '@@').replace('\x00', '@'))
     assert mirrored == Chem.CanonSmiles(glycan_to_smiles('Fuc(a1-2)L-Gal'))
+    from glycowork.motif.processing import COMMON_ENANTIOMER
+    for prefixed, bare in COMMON_ENANTIOMER.items():  # a bare name is whichever enantiomer canonicalize_iupac strips the prefix from
+        donor = _anomeric_position(bare)
+        assert Chem.CanonSmiles(glycan_to_smiles(f'{bare}(b{donor}-4)Glc')) == Chem.CanonSmiles(glycan_to_smiles(f'{prefixed}(b{donor}-4)Glc')), bare
 
 
 def test_atom_mapping_covers_every_atom():
@@ -1040,7 +1044,7 @@ def test_token_splitting():
     assert _split_token('LDManHepOPEtN') == ('LDManHep', [(None, 'OPEtN')], '', False)
     assert _split_token('D-Fuc') == ('Fuc', [], 'D', False)
     assert _split_token('GlcNAc-ol') == ('Glc', [(None, 'NAc')], '', True)
-    assert _anomeric_position('Neu5Ac') == 2 and _anomeric_position('Glc') == 1 and _anomeric_position('Glc-ol') is None
+    assert _anomeric_position('Neu5Ac') == 2 and _anomeric_position('Glc') == 1 and _anomeric_position('Glc-ol') == 1 and _anomeric_position('Ins') is None
 
 
 @pytest.mark.parametrize('glycan, message', [
@@ -1055,7 +1059,8 @@ def test_token_splitting():
     ('GlcA6S', 'not defined on the carboxyl'),
     ('Gal1Aep', 'cannot sit on the anomeric oxygen'),
     ('GlcN2Gro', 'not defined for the amine at position'),
-    ('Fuc2Ac3Ac4AcNAc', 'no free position'),
+    ('Fuc2Ac3Ac4AcNAc', 'nowhere to put'),
+    ('Glc(b1-2)Glc1Pam(b1-4)Glc', 'already carries a group on its anomeric oxygen'),
 ])
 def test_refuses_what_it_cannot_build(glycan, message):
     with pytest.raises(GlycanSMILESError) as error:
@@ -1069,6 +1074,57 @@ def test_diester_linkage_leaves_from_the_substituent():
     assert glycan_to_smiles('Gal(b1-6)Man6P') == 'OC1O[C@H](COP(=O)(O)O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@@H](O)[C@H](O)[C@@H]1O'
     assert glycan_to_smiles('Gal(b1-6)Man6S') == 'OC1O[C@H](COS(=O)(=O)O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@@H](O)[C@H](O)[C@@H]1O'
     assert glycan_to_smiles('GlcNAc(b1-6)Man6P').count('P') == 1
+
+
+def test_stereocenters_of_substituents():
+    Chem = pytest.importorskip('rdkit.Chem')
+    from rdkit.Chem import rdCIPLabeler
+
+    def cip(smiles):
+        mol = Chem.MolFromSmiles(smiles)
+        rdCIPLabeler.AssignCIPLabels(mol)
+        return [atom.GetProp('_CIPCode') for atom in mol.GetAtoms() if atom.HasProp('_CIPCode')]
+
+    assert cip(CERAMIDE) == ['S', 'R']  # D-erythro, (2S,3R)
+    assert Chem.CanonSmiles(glycan_to_smiles('GlcNAc3Lac')) == Chem.CanonSmiles(glycan_to_smiles('MurNAc'))
+    assert cip('C' + SUBSTITUENTS['NAla'][0]) == ['S'] and cip('C' + SUBSTITUENTS['NThr'][0]) == ['S',
+                                                                                                  'R']  # L-Ala, L-Thr
+
+
+def test_uronic_derivatives_leave_other_carboxyls_alone():
+    assert glycan_to_smiles('GlcA3Lac6Me').count('C(=O)OC') == 1
+    assert glycan_to_smiles('KdoAN').count('C(=O)N') == 1
+    assert glycan_to_smiles('Neu5NSuc1Me').count('C(=O)OC') == 1
+
+
+@pytest.mark.parametrize('glycan', ['GlcNAc1N', 'Glc1NAc', 'Gal6F(b1-4)Glc', 'Glc6SH', 'Vio4NBut', 'GlcNPam',
+                                    'Gal(b1-4)GlcNAc1N'])
+def test_round_trip_of_less_common_groups(glycan):
+    smiles = glycan_to_smiles(glycan)
+    assert glycan_to_smiles(smiles_to_iupac(
+        smiles)) == smiles  # the same molecule, even where the name comes back as a synonym such as Vio4But
+
+
+def test_reading_does_not_depend_on_atom_order():
+    Chem = pytest.importorskip('rdkit.Chem')
+    for glycan in ['Gal4Pyr6Pyr(b1-3)Gal(b1-4)Glc', 'Neu5Ac(a2-3)Gal(b1-4)[Fuc(a1-3)]GlcNAc']:
+        smiles = glycan_to_smiles(glycan)
+        for _ in range(5):
+            shuffled = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), doRandom = True, canonical = False)
+            assert smiles_to_iupac(shuffled) == smiles_to_iupac(smiles), shuffled
+
+
+@pytest.mark.parametrize('glycan',
+                         ['Gal(b1-1)Rib-ol', '[Glc(b1-2)]Rib5P-ol(1-5)Rib5P-ol', 'Neu5Ac(a2-3)Gal(b1-3)HexNAc-ol',
+                          'D-RhaNAc(a1-2)D-RhaNAc', 'GlcN2Myr3Myr4P(b1-6)GlcN1P2Myr3Myr', 'Fuc2F(a1-2)Gal'])
+def test_builds_what_used_to_be_refused(glycan):
+    Chem = pytest.importorskip('rdkit.Chem')
+    assert Chem.MolFromSmiles(glycan_to_smiles(glycan)) is not None
+
+
+def test_refuses_to_drop_an_alditol_it_cannot_name():
+    with pytest.raises(GlycanSMILESError):
+        smiles_to_iupac(glycan_to_smiles('Glc-ol(1-6)Gal'))
 
 
 def test_strict_refuses_to_guess_a_position():

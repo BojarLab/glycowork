@@ -62,6 +62,11 @@ WILDCARD = {  # a Hex/dHex/Pen in a sequence states a ring size and nothing abou
     'dHex': ('OC{r}OC(C)C({p4})C({p3})C{r}{p2}', {2: 'O', 3: 'O', 4: 'O'}),
     'Pen': ('OC{r}OCC({p4})C({p3})C{r}{p2}', {2: 'O', 3: 'O', 4: 'O'}),
 }
+WILDCARD_ALDITOLS = {  # ...and their reduced ends, as in the HexNAc-ol of an O-glycomics run
+    'Hex': ('OCC({p2})C({p3})C({p4})C({p5})C{p6}', {2: 'O', 3: 'O', 4: 'O', 5: 'O', 6: 'O'}),
+    'dHex': ('OCC({p2})C({p3})C({p4})C({p5})C', {2: 'O', 3: 'O', 4: 'O', 5: 'O'}),
+    'Pen': ('OCC({p2})C({p3})C({p4})C{p5}', {2: 'O', 3: 'O', 4: 'O', 5: 'O'}),
+}
 
 
 def number_atoms(mol):
@@ -245,6 +250,7 @@ def build():
     for name in ALDITOLS:
         source, kwargs = SPEC[name]
         alditols[name.rstrip('f') if name in ('Eryf', 'Thref') else name] = open_chain(anomers(source, **kwargs)[1])
+    alditols.update(WILDCARD_ALDITOLS)
     return skeletons, alditols, enantiomer
 
 
