@@ -302,6 +302,10 @@ def _residue(token: str, # Monosaccharide token
                 raise GlycanSMILESError(f"'{token}' has no free position {position} for '{mod}'")
             hetero[position] = 'N'
             continue
+        if mod in ('P',
+                   'S') and position in taken:  # a phospho- or sulfodiester: the child leaves from the group's own oxygen, not from the ring carbon
+            group = (group[0][:-1] + '{p%d}' % position,
+                     None if group[1] is None else group[1][:-1] + '{p%d}' % position)
         template, hetero = _place(token, template, hetero, position, mod, group)
     if anomer == 'a':
         template = template.replace('{a}', alpha)
