@@ -176,24 +176,24 @@ def min_process_glycans(glycan_list: str | list[str] # Glycan(s) in IUPAC-conden
     "Convert list of glycans into a nested lists of glycoletters"
     if isinstance(glycan_list, str):
         glycan_list = [glycan_list]
-    glycan_list = [FLOATY_ALT.sub(lambda m: '{' + parse_floating_bit(m.group(1))[0] + '}', k) if '^' in k else k for k in glycan_list]
+    glycan_list = [(FLOATY_ALT.sub(lambda m: '{' + parse_floating_bit(m.group(1))[0] + '}', k) if '^' in k else k) if isinstance(k, str) else '' for k in glycan_list]
     return [
         [x for x in k.replace('[', '').replace(']', '').replace('{', '(').replace('}', ')').replace(')', '(').split('(')
          if x] for k in glycan_list]
 
 
-def get_lib(glycan_list: list[str] # List of IUPAC-condensed glycan sequences
+def get_lib(glycan_list: str | list[str] # Glycan(s) in IUPAC-condensed nomenclature
             ) -> dict[str, int]: # Dictionary of glycoletter:index mappings
     "Returns dictionary mapping glycoletters to indices"
     # Convert to glycoletters & flatten & get unique vocab
-    lib = sorted(set(unwrap(min_process_glycans(set(glycan_list)))))
+    lib = sorted(set(unwrap(min_process_glycans({glycan_list} if isinstance(glycan_list, str) else set(glycan_list)))))
     # Convert to dict
     return {k: i for i, k in enumerate(lib)}
 
 
 def expand_lib(libr_in: dict[str, int], # Existing dictionary of glycoletter:index
-               glycan_list: list[str] # List of IUPAC-condensed glycan sequences
-               ) -> dict[str, int]: # Updated dictionary with new glycoletters
+               glycan_list: str | list[str]  # Glycan(s) in IUPAC-condensed nomenclature
+               ) -> dict[str, int]:  # Updated dictionary with new glycoletters
     "Updates libr with newly introduced glycoletters"
     libr = dict(libr_in)
     new_libr = get_lib(glycan_list)
@@ -341,7 +341,10 @@ def canonicalize_composition(comp: str, # Composition in Hex5HexNAc4Fuc1Neu5Ac2 
     "Converts composition from any common format to standardized dictionary or canonical shorthand string"
     if '_' in comp:
         values = comp.split('_')
-        temp = {"Hex": int(values[0]), "HexNAc": int(values[1]), "Neu5Ac": int(values[2]), "dHex": int(values[3])}
+        if len(values) not in (4, 5):
+            raise ValueError(f"'{comp}' is an underscore-separated positional composition, read as Hex/HexNAc/Neu5Ac/dHex or Hex/HexNAc/Neu5Ac/Neu5Gc/dHex, so it needs exactly four or five fields.")
+        keys = ("Hex", "HexNAc", "Neu5Ac", "dHex") if len(values) == 4 else ("Hex", "HexNAc", "Neu5Ac", "Neu5Gc", "dHex")
+        temp = {k: int(v) for k, v in zip(keys, values)}
         comp_dict = {k: v for k, v in temp.items() if v}
     elif comp.isdigit():
         if len(comp) != 4:
@@ -350,11 +353,21 @@ def canonicalize_composition(comp: str, # Composition in Hex5HexNAc4Fuc1Neu5Ac2 
         temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
         comp_dict = {k: v for k, v in temp.items() if v}
     elif comp and comp[0].isdigit():
-        comp = comp.replace(' ', '')
-        if len(comp) < 5:
-            temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+        toks = comp.split()
+        if len(toks) > 1 and all(t.isdigit() for t in toks):
+            if len(toks) not in (4, 5):
+                raise ValueError(
+                    f"'{comp}' is a whitespace-separated positional composition, read as Hex/HexNAc/Neu5Ac/dHex or Hex/HexNAc/Neu5Ac/Neu5Gc/dHex, so it needs exactly four or five fields.")
+            keys = ("Hex", "HexNAc", "Neu5Ac", "dHex") if len(toks) == 4 else ("Hex", "HexNAc", "Neu5Ac", "Neu5Gc",
+                                                                               "dHex")
+            temp = {k: int(v) for k, v in zip(keys, toks)}
         else:
-            temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "Neu5Gc": int(comp[3]), "dHex": int(comp[4])}
+            comp = comp.replace(' ', '')
+            if len(comp) < 5:
+                temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "dHex": int(comp[3])}
+            else:
+                temp = {"Hex": int(comp[0]), "HexNAc": int(comp[1]), "Neu5Ac": int(comp[2]), "Neu5Gc": int(comp[3]),
+                        "dHex": int(comp[4])}
         comp_dict = {k: v for k, v in temp.items() if v}
     else:
         comp_dict = {}
@@ -884,7 +897,7 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
                     iupac = prefix + bracket_before_a1_3 + f'Man(a1-{long_num})' + '[' + match.group(4) + f'Man(a1-{short_num})' + ']' + (match.group(6) or '') + match.group(7) + iupac[match.end():]
         return iupac
 
-    match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)$', oxford, re.IGNORECASE)
+    match = re.fullmatch(r'^(?:M|Man)[-]?(\d+)(?:GlcNAc2)?$', oxford, re.IGNORECASE)
     if match:
         oxford = f'M{match.group(1)}'
     oxford = oxford.replace("(s)", "Sulf")
@@ -926,10 +939,10 @@ def oxford_to_iupac(oxford: str # Glycan in Oxford format
                 iupac = iupac.replace("Man(a1-6)]", "Man(a1-3)[Man(a1-6)]Man(a1-6)]")
             else:
                 iupac = iupac.replace("Man(a1-6)]", "Man(a1-3)[Man(a1-6)]Man(a1-6)]")
-                for m in range(M_count - 2):
+                for _ in range(M_count - 2):
                     floaty += "{Man(a1-2/3/6)}"
         else:
-            for m in range(M_count):
+            for _ in range(M_count):
                 floaty += "{Man(a1-2/3/6)}"
     oxford_wo_branches = bracket_removal(oxford)
     branches = {"A": int(oxford_wo_branches[oxford_wo_branches.index("A") + 1]) if "A" in oxford_wo_branches and oxford_wo_branches[oxford_wo_branches.index("A") + 1] != "c" else 0}
@@ -1104,17 +1117,17 @@ def pglyco_to_iupac(glycan: str # Glycan in pGlyco nested-tree nomenclature
     return render(root, 'GlcNAc' if root[0] == 'N' else _PGLYCO_MONO[root[0]], 'core0' if root[0] == 'N' else 'end')
 
 
-def glytoucan_to_glycan(ids: list[str], # List of GlyTouCan IDs or glycans
+def glytoucan_to_glycan(ids: str | list[str], # GlyTouCan ID(s) or glycan(s)
                         revert: bool = False, # Whether to map glycans to IDs; default:False
                         verbose: bool = True # Whether to print missing entries; default:True
-                        ) -> list[str]: # List of glycans or IDs
+                        ) -> str | list[str]: # Glycan(s) or ID(s), a single string for a single string input
     "Convert between GlyTouCan IDs and IUPAC-condensed glycans"
     if not hasattr(glytoucan_to_glycan, 'glycan_dict'):
         glytoucan_to_glycan.glycan_dict = dict(zip(loader.df_glycan.glytoucan_id, loader.df_glycan.glycan))
         glytoucan_to_glycan.id_dict = dict(zip(loader.df_glycan.glycan, loader.df_glycan.glytoucan_id))
     lookup = glytoucan_to_glycan.id_dict if revert else glytoucan_to_glycan.glycan_dict
     result, not_found = [], []
-    for item in ids:
+    for item in ([ids] if isinstance(ids, str) else ids):
         if item in lookup:
             result.append(lookup[item])
         else:
@@ -1124,7 +1137,7 @@ def glytoucan_to_glycan(ids: list[str], # List of GlyTouCan IDs or glycans
     if not_found and verbose:
         msg = 'glycans' if revert else 'IDs'
         print(f'These {msg} are not in our database: {not_found}')
-    return result
+    return result[0] if isinstance(ids, str) else result
 
 
 def GAG_disaccharide_to_iupac(input_dsc: str # Disaccharide structural code (DSC) for GAGs
@@ -1283,6 +1296,8 @@ def looks_like_oxford(glycan: str) -> bool:
     if OXFORD_MANN_ONLY.fullmatch(glycan):
         return True
     if not OXFORD_HAS_NONZERO_DIGIT.search(glycan):
+        return False
+    if re.search(r'(?<![A-Za-z])[HN]\d', glycan):  # Hex/HexNAc counts mark a composition (H9N2, H5N4F1A2); oxford_to_iupac has no reading for them and would silently return a bare core
         return False
     if OXFORD_FORBIDDEN_LINKAGE.search(glycan):
         return False
@@ -1636,6 +1651,8 @@ def parse_glycoform(glycoform: str | dict[str, int], # Composition in H5N4F1A2 f
                     glycan_features: list[str] = ['H', 'N', 'A', 'F', 'G'] # Features to extract
                     ) -> dict[str, int]: # Dictionary of feature counts
     "Convert composition like H5N4F1A2 into monosaccharide counts"
+    if isinstance(glycoform, str) and not re.fullmatch(r'(?:[HNAFG]\d+)+', glycoform):
+        glycoform = canonicalize_composition(glycoform)
     if isinstance(glycoform, dict):
         if not any(f in glycoform.keys() for f in glycan_features):
             mapping = {'Hex': 'H', 'HexNAc': 'N', 'dHex': 'F', 'Neu5Ac': 'A', 'Neu5Gc': 'G'}
@@ -1697,7 +1714,7 @@ def max_specify_glycan(glycan: str, # Glycan in IUPAC-condensed nomenclature
                        species: str = "Homo_sapiens" # Species for biosynthetic inferences
                        ) -> str: # Maximally inferred glycan string
     "Infers sequence ambiguities/uncertainties via biosynthetic invariances"
-    tax = loader.df_species[loader.df_species['Species'] == species].iloc[0, 2:9].to_dict()
+    tax = loader.df_species[loader.df_species['Species'] == species.replace(' ', '_')].iloc[0, 2:9].to_dict()
     if glycan.endswith("GlcNAc(b1-?)GlcNAc"):
         glycan = glycan.replace("GlcNAc(b1-?)GlcNAc", "GlcNAc(b1-4)GlcNAc")
     if tax['Kingdom'] == 'Animalia':

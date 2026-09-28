@@ -134,7 +134,7 @@ def build_signatures(paths):
             pos = args.posonlyargs + args.args
             required = len(pos) - len(args.defaults)
             if pos and pos[0].arg in ('self', 'cls'):
-                required -= 1
+                continue  # a method is only ever called as an attribute, which GW3 skips, and one named like a builtin (GlycoDataFrame.filter) must not claim bare filter() calls
             sigs[node.name].add(max(required, 0))
     return {k: (None if None in v else max(v)) for k, v in sigs.items()}
 
@@ -155,7 +155,10 @@ def run_pycodestyle(files):
     if not files:
         return []
     cmd = [sys.executable, '-m', 'pycodestyle', f'--select={PYCODESTYLE_SELECT}'] + [str(f) for f in files]
-    raw = subprocess.run(cmd, capture_output = True, text = True).stdout
+    proc = subprocess.run(cmd, capture_output = True, text = True)
+    if proc.returncode and not proc.stdout:  # pycodestyle missing or crashed: failing loudly beats a silent 'Style check passed' without the E/W rules
+        sys.exit(proc.stderr.strip())
+    raw = proc.stdout
     out = []
     for line in raw.splitlines():
         m = re.match(r'^(.*?):(\d+):\d+: (\S+) (.*)$', line)

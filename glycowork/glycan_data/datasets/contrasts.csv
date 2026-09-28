@@ -148,3 +148,9 @@ glycomics_human_keratinocyte_st3galko_GSL_PMID42275133,ST3GAL3_KO,"ST3GAL3_1,ST3
 glycomics_human_keratinocyte_st3galko_GSL_PMID42275133,ST3GAL4_KO,"ST3GAL4_1,ST3GAL4+6_1,ST3GAL4_2,ST3GAL4+6_2,ST3GAL4_3,ST3GAL4+6_3",FALSE
 glycomics_human_keratinocyte_st3galko_GSL_PMID42275133,ST3GAL5_KO,"ST3GAL5_1,ST3GAL5_2",FALSE
 glycomics_human_keratinocyte_st3galko_GSL_PMID42275133,ST3GAL6_KO,"ST3GAL6_1,ST3GAL4+6_1,ST3GAL6_2,ST3GAL4+6_2,ST3GAL6_3,ST3GAL4+6_3",FALSE
+glycomics_human_influenza_N_10_648982026_02_02_703422,mock,"mock_1,mock_2,mock_3,mock_4",FALSE
+glycomics_human_influenza_N_10_648982026_02_02_703422,A/Puerto Rico/8/1934,"PR8_1,PR8_2,PR8_3,PR8_4",FALSE
+glycomics_human_influenza_N_10_648982026_02_02_703422,A/X-31,"x31_1,x31_2,x31_3,x31_4",FALSE
+glycomics_human_influenza_O_10_648982026_02_02_703422,mock,"mock_1,mock_2,mock_3,mock_4",FALSE
+glycomics_human_influenza_O_10_648982026_02_02_703422,A/Puerto Rico/8/1934,"PR8_1,PR8_2,PR8_3,PR8_4",FALSE
+glycomics_human_influenza_O_10_648982026_02_02_703422,A/X-31,"x31_1,x31_2,x31_3,x31_4",FALSE

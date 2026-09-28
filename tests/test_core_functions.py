@@ -97,7 +97,7 @@ from glycowork.motif.draw import (process_bonds, draw_hex, process_per_residue, 
 from glycowork.motif.analysis import (preprocess_data, get_pvals_motifs, select_grouping, get_glycanova, get_differential_expression,
                      get_biodiversity, get_time_series, get_SparCC, get_roc, get_ma, get_volcano, get_meta_analysis,
                      get_representative_substructures, get_lectin_array, get_coverage, plot_embeddings, get_pval_distribution,
-                     characterize_monosaccharide, get_heatmap, get_pca, get_jtk, multi_feature_scoring, get_glycoshift_per_site
+                     characterize_monosaccharide, get_heatmap, get_distance_matrix, get_pca, get_pcoa, get_jtk, multi_feature_scoring, get_glycoshift_per_site
 )
 from glycowork.network.biosynthesis import (safe_compare, safe_index, create_neighbors, apply_constraints, _load_constraints,
                          find_diff, construct_network, prune_network, network_alignment, export_network,
@@ -500,6 +500,7 @@ def test_canonicalize_iupac():
     assert canonicalize_iupac("A2BG1S(3,6,8)3") == "Neu5Ac(a2-8)Neu5Ac(a2-3)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3/6)[Neu5Ac(a2-6)GlcNAc(b1-2)Man(a1-3/6)][GlcNAc(b1-4)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac("A2G2S(Ac)2") == "Neu5AcOAc(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-3)[Neu5AcOAc(a2-3/6)Gal(b1-3/4)GlcNAc(b1-2)Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac('M12d21)XYZ') == 'M12d21)XYZ'
+    assert canonicalize_iupac('Man9GlcNAc2') == "Man(a1-2)Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-3)[Man(a1-2)Man(a1-6)]Man(a1-6)]Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert canonicalize_iupac('D0H0') == '4uHexA(?1-?)GlcN'
     assert canonicalize_iupac('D2S9') == '4uHexA2S(?1-?)GlcNS3S6S'
     assert canonicalize_iupac('D2a4') == '4uHexA2S(?1-?)GalNAc4S'
@@ -1334,6 +1335,9 @@ def test_mz_to_composition():
     )
     expected = [{'Neu5Ac': 1, 'Hex': 1, 'HexNAc': 1}]
     assert result == expected
+    # The tolerance unit is case-insensitive, so 'da' is not read as ppm
+    assert mz_to_composition(675, max_charge = -2, glycan_class = 'O', mass_tolerance = 0.5, tolerance_unit = 'da',
+                             modification = "reduced", filter_out = {'Kdn'}) == expected
     result = mz_to_composition(
         675,
         max_charge=-2,
@@ -1494,8 +1498,11 @@ def test_composition_to_mass():
     aa_mass = composition_to_mass(comp, modification = '2AA')
     assert aa_mass > base_mass
     assert abs(aa_mass - base_mass - 121.0528) < 0.01
-    # Unknown modification should add nothing
-    assert composition_to_mass(comp, modification = 'nonexistent') == base_mass
+    # An unknown modification or monosaccharide spelling has no mass, so it raises instead of silently adding 0 Da
+    with pytest.raises(ValueError):
+        composition_to_mass(comp, modification = 'nonexistent')
+    with pytest.raises(ValueError):
+        composition_to_mass({'Hex': 5, 'HexNAc': 4, 'Fuc': 1})
     # Permethylated reduced should add extra methyl (ring-opening creates methylatable OH at C5)
     comp = {'Hex': 5, 'HexNAc': 2}
     base_perm = composition_to_mass(comp, sample_prep = 'permethylated')
@@ -1794,6 +1801,8 @@ def test_oxford_to_iupac():
     # ...and without any antenna to attach to, this was never an Oxford string
     with pytest.raises(ValueError):
         oxford_to_iupac("A2F1")
+    # ManXGlcNAc2 is the same high-mannose shorthand as MX
+    assert oxford_to_iupac("Man9GlcNAc2") == oxford_to_iupac("M9")
 
 
 def test_canonicalize_composition():
@@ -1861,6 +1870,8 @@ def test_parse_glycoform():
     print(result)
     assert result["complex"] == 1
     assert result["high_Man"] == 0
+    # Long-form composition strings go through canonicalize_composition instead of parsing to all zeros
+    assert parse_glycoform("Hex5HexNAc4dHex1NeuAc2") == parse_glycoform("H5N4F1A2")
 
 
 def test_presence_to_matrix():
@@ -2013,6 +2024,8 @@ def test_max_specify_glycan():
     assert max_specify_glycan("Fuc(a1-?)[Gal(b1-?)]GlcNAc(b1-2)Man(a1-3/6)[Man(a1-?)Man(a1-3/6)Man(b1-4)GlcNAc(b1-4)GlcNAc") == "Fuc(a1-3/4)[Gal(b1-3/4)]GlcNAc(b1-2)Man(a1-3/6)[Man(a1-2/3/6)Man(a1-3/6)Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert max_specify_glycan("Man(b1-4)GlcNAc(b1-?)GlcNAc") == "Man(b1-4)GlcNAc(b1-4)GlcNAc"
     assert max_specify_glycan("Man(b1-4)GlcNAc(b1-4)[Fuc(a1-?)]GlcNAc") == "Man(b1-4)GlcNAc(b1-4)[Fuc(a1-6)]GlcNAc"
+    assert max_specify_glycan("Fuc(a1-?)Gal(b1-4)Glc",
+                              species = "Homo sapiens") == "Fuc(a1-2)Gal(b1-4)Glc"  # species written with a space
 
 
 def test_unwrap():
@@ -2264,6 +2277,8 @@ def test_glycomics_data_loader():
     assert not set(lectin_array_data_loader.filter(glycan_class = 'O')) & set(o_glycans)  # a loader never returns another prefix's datasets
     with pytest.raises(KeyError):
         glycomics_data_loader.filter(not_a_column = 'x')
+    with pytest.raises(AttributeError, match = r"prefix glycomics_$"):
+        glycomics_data_loader.not_a_dataset
 
 
 def test_count_nested_brackets():
@@ -2358,6 +2373,8 @@ def test_GlycoDataFrame():
     df_motif = GlycoDataFrame(
         pd.DataFrame({'glycan': ['Gal(b1-4)[Fuc(a1-3)]GlcNAc', 'Man(a1-3)Man'], 's1': [1.0, 2.0]}))
     assert list(df_motif.glyco_filter('LewisX').glycans) == ['Gal(b1-4)[Fuc(a1-3)]GlcNAc']
+    with pytest.raises(ValueError):  # a misspelled motif name is neither a motif nor a glycan
+        df_motif.glyco_filter('LewisXX')
 
 
 def test_cohen_d():
@@ -2606,6 +2623,9 @@ def test_get_additive_logratio_transformation():
     # Test ALR transformation with reference selection
     result = get_additive_logratio_transformation(data, group1, group2)
     assert 'glycan' in result.columns
+    # Column indices are as good as column names
+    assert get_additive_logratio_transformation(data, [1, 2], [3, 4], random_state = 0).equals(
+        get_additive_logratio_transformation(data, group1, group2, random_state = 0))
 
 
 def test_bayes_factor_functions():
@@ -2750,6 +2770,8 @@ def test_impute_and_normalize():
     assert abs(result.iloc[:, 1:].sum().sum() - 300) < 1e-5  # Check normalization to 100%
     data.columns = [0] + data.columns.tolist()[1:]
     result = impute_and_normalize(data, groups)
+    with pytest.raises(ValueError):  # min_samples is a fraction, not a percentage
+        impute_and_normalize(data, groups, min_samples = 10)
 
 
 def test_variance_based_filtering():
@@ -3056,6 +3078,9 @@ def test_glycodraw_highlight_named_regex_motif():
     assert GlycoDraw(hm, highlight_motif = 'high_mannose', suppress = True).as_svg() != GlycoDraw(hm, suppress = True).as_svg()
     with pytest.warns(UserWarning):
         GlycoDraw("Gal(b1-4)GlcNAc", highlight_motif = 'high_mannose', suppress = True)
+    with pytest.warns(UserWarning,
+                      match = "nothing is highlighted"):  # a motif that does not occur must not silently gray out everything
+        GlycoDraw("Gal(b1-4)GlcNAc", highlight_motif = 'LewisXX', suppress = True)
 
 
 def test_deduplicate_glycans():
@@ -3126,6 +3151,8 @@ def test_expand_termini_list():
     assert 'terminal' in result
     assert 'internal' in result
     assert 'flexible' in result
+    with pytest.raises(ValueError):  # a typo would otherwise never match anything
+        subgraph_isomorphism("Gal(b1-4)GlcNAc", "Gal(b1-4)GlcNAc", termini_list = ['terminl', 'flexible'])
 
 
 def test_ensure_graph():
@@ -3158,6 +3185,11 @@ def test_annotate_glycan():
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
     assert result.index[0] == glycan
+    # A custom motif table only needs name + sequence; missing termini_spec means no positional constraint
+    custom = pd.DataFrame({'motif_name': ['LN', 'Sia'], 'motif': ['Gal(b1-4)GlcNAc', 'Neu5Ac(a2-3)Gal']})
+    assert annotate_glycan("Neu5Ac(a2-3)Gal(b1-4)GlcNAc", motifs = custom).values.tolist() == [[1, 1]]
+    assert annotate_dataset(["Neu5Ac(a2-3)Gal(b1-4)GlcNAc", glycan], motifs = custom).values.tolist() == [[1, 1],
+                                                                                                          [1, 0]]
 
 
 @pytest.fixture
@@ -3379,7 +3411,13 @@ def test_create_lectin_and_motif_mappings():
 
 
 def test_get_glycan_similarity():
-    assert get_glycan_similarity("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Ac(a2-6)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc") > get_glycan_similarity("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Gc(a2-6)Gal(b1-3)[Neu5Gc(a2-6)]GalNAc")
+    assert get_glycan_similarity("Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc",
+                                 "Neu5Ac(a2-6)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc") > get_glycan_similarity(
+        "Neu5Ac(a2-3)Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", "Neu5Gc(a2-6)Gal(b1-3)[Neu5Gc(a2-6)]GalNAc")
+    # Graphs are accepted just like strings
+    assert get_glycan_similarity(glycan_to_nxGraph("Neu5Ac(a2-3)Gal(b1-4)GlcNAc"),
+                                 glycan_to_nxGraph("Gal(b1-4)GlcNAc")) == get_glycan_similarity(
+        "Neu5Ac(a2-3)Gal(b1-4)GlcNAc", "Gal(b1-4)GlcNAc")
 
 
 def test_lectin_motif_scoring():
@@ -3479,6 +3517,8 @@ def test_annotate_glycan_topology_uncertainty():
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
     assert result.index[0] == glycan
+    custom = pd.DataFrame({'motif_name': ['LewisX'], 'motif': ['Fuc(a1-3)[Gal(b1-4)]GlcNAc']})
+    assert annotate_glycan_topology_uncertainty(glycan, motifs = custom).loc[glycan, 'LewisX'] == 1
 
 
 def test_preprocess_pattern():
@@ -3664,6 +3704,10 @@ def test_get_match_batch():
         get_match(pattern, 12)
     assert get_match(pattern, nx.DiGraph()) == []
     assert get_match(pattern, nx.DiGraph(), return_matches = False) is False
+    # A single glycan is not iterated character by character
+    assert get_match_batch("Neu5Ac-Gal", "Neu5Ac(a2-3)Gal") == [["Neu5Ac(a2-3)Gal"]]
+    # IUPAC written without parentheses is canonicalized first
+    assert get_match("Neu5Ac-Gal", "Neu5Aca2-3Galb1-4GlcNAc") == ["Neu5Ac(a2-3)Gal"]
 
 
 def test_explain_match():
@@ -3796,7 +3840,10 @@ def test_get_match_agrees_with_subgraph_isomorphism():
 
 
 def test_annotate_dataset_accepts_a_single_feature_name():
-    assert len(annotate_dataset(['Gal(b1-4)Glc'], feature_set='known')) == 1
+    assert len(annotate_dataset(['Gal(b1-4)Glc'], feature_set = 'known')) == 1
+    # ...and a single custom motif string
+    assert annotate_dataset(['Gal(b1-4)GlcNAc'], feature_set = ['custom'], custom_motifs = 'Gal(b1-4)GlcNAc')[
+               'Gal(b1-4)GlcNAc'].iloc[0] == 1
 
 
 def test_annotate_dataset_regex_motifs():
@@ -3965,6 +4012,8 @@ def test_glycodraw():
     assert result is not None
     result = GlycoDraw("{Neu5Ac(a2-3)}{Neu5Ac(a2-6)}Gal", suppress=True)
     assert result is not None
+    result = GlycoDraw("H5N3F1", suppress = True)
+    assert result is not None
     # Test vertical orientation
     result = GlycoDraw("GlcNAc(b1-4)GlcA", vertical=True, suppress=True)
     assert result is not None
@@ -4028,6 +4077,16 @@ def test_glycodraw():
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.pdf")
     assert Path("test.pdf").exists()
     GlycoDraw("GlcNAc(b1-4)GlcA", filepath="test.png")
+    assert Path("test.png").exists()
+    # Die-cut sticker: the cut border widens the canvas and reaches every backend
+    assert GlycoDraw("GlcNAc(b1-4)GlcA", sticker = True, suppress = True).drawing_obj.width > \
+           GlycoDraw("GlcNAc(b1-4)GlcA", suppress = True).drawing_obj.width
+    GlycoDraw("GlcNAc(b1-4)GlcA", filepath = "test.svg", sticker = True)
+    cut_svg = Path("test.svg").read_text(encoding = "utf-8")
+    assert 'feDropShadow' in cut_svg and 'aria-label=' in cut_svg  # glycorender route, alt text kept
+    GlycoDraw("GlcNAc(b1-4)GlcA", filepath = "test.pdf", sticker = True)
+    assert Path("test.pdf").exists()
+    GlycoDraw("GlcNAc(b1-4)GlcA", filepath = "test.png", sticker = {'edge': 1.5})
     assert Path("test.png").exists()
     # Test invalid glycan
     with pytest.raises(Exception):
@@ -4168,6 +4227,9 @@ def test_annotate_figure(mock_svg_file):
     # Test with compact mode
     result = annotate_figure(mock_svg_file, compact=True)
     assert isinstance(result, str)
+    # A glyco-regex motif, whose '!' is a lookbehind rather than a negation, stays a text label instead of crashing GlycoDraw
+    result = annotate_figure(mock_svg_file.replace('nontransfected_1', 'Nglycan_hybrid'))
+    assert '<!-- Nglycan_hybrid -->' in result
     # Test with differential expression results
     de_results = pd.DataFrame({
         'Glycan': ['Neu5Ac(a2-3)Gal(b1-3)GalNAc', 'Gal(b1-3)[Neu5Ac(a2-6)]GalNAc',
@@ -4220,6 +4282,8 @@ def test_glycodraw_per_residue_and_linkage_placement():
     for k in range(branched.count('(')):
         svg = GlycoDraw(branched, highlight_linkages = [k], suppress = True).as_svg()
         assert len([p for p in re.findall(r'<path[^>]*>', svg) if 'snfg-linkage' in p and '#C23537' in p]) == 1
+    with pytest.raises(ValueError):  # an index past the last linkage would otherwise highlight nothing
+        GlycoDraw(branched, highlight_linkages = [branched.count('(')], suppress = True)
 
 
 try:
@@ -4318,6 +4382,7 @@ def test_display_svg_with_matplotlib():
     old_plt = plt
     plt = MockPlt()
     display_svg_with_matplotlib(test_svg)
+    display_svg_with_matplotlib(test_svg, sticker = True)
     plt = old_plt
 
 
@@ -4578,6 +4643,10 @@ def test_preprocess_data():
     # Groups are only inferred from a GlycoDataFrame that carries contrasts
     with pytest.raises(ValueError):
         preprocess_data(df, [], [])
+    # Sample names that are not columns, or indices past the last column, are named in the error
+    for bad in [['sample3', 'typo'], [3, 40]]:
+        with pytest.raises(ValueError, match = "are not in the input"):
+            preprocess_data(df, group1 = group1, group2 = bad, impute = False)
 
 
 def test_file_loading_branches(tmp_path):
@@ -4606,7 +4675,7 @@ def test_file_loading_branches(tmp_path):
     res_df.to_csv(tmp_path / "res.csv", index=False)
     get_pval_distribution(str(tmp_path / "res.csv"))
     get_ma(str(tmp_path / "res.csv"))
-    get_volcano(str(tmp_path / "res.csv"))
+    get_volcano(str(tmp_path / "res.csv"), annotate_volcano = False)
     cov_df = pd.DataFrame({'glycan': ['Gal(b1-4)GlcNAc'], 's1': [10.0], 's2': [0.0]})
     cov_df.to_csv(tmp_path / "cov.csv", index=False)
     cov_df.to_csv(tmp_path / "cov.tsv", index=False, sep="\t")
@@ -4911,8 +4980,10 @@ def test_get_differential_expression():
                                                  effect_size_variance=True)
     # Test with paired samples
     results_paired = get_differential_expression(df, group1, group2,
-                                              paired=True, impute=False)
+                                                 paired = True, impute = False)
     assert isinstance(results_paired, pd.DataFrame)
+    with pytest.raises(ValueError, match = "same size"):
+        get_differential_expression(df, group1 = group1, group2 = group2[:-1], paired = True, impute = False)
 
 
 def test_get_differential_expression_monte_carlo_glycoproteomics():
@@ -5040,7 +5111,9 @@ def test_get_biodiversity(sample_jtk_df):
     assert len(results) == 2, "Results should be consist of two DataFrames"
     stats, dist_matrix = results
     assert isinstance(stats, pd.DataFrame)
-    assert isinstance(dist_matrix, np.ndarray)
+    assert isinstance(dist_matrix, pd.DataFrame) and list(dist_matrix.columns) == group1 + group2
+    _, dist_matrix_bc = get_biodiversity(df, group1 = group1, group2 = group2, metrics = ['beta'], dist_func = 'braycurtis')
+    assert not np.allclose(dist_matrix_bc.values, dist_matrix.values)
     assert 'Metric' in stats.columns, "Stats results should have a Metric column"
     assert 'p-val' in stats.columns, "Results should have a p-val column"
     # Additional assertions to verify realistic results
@@ -5102,7 +5175,9 @@ def test_get_biodiversity_paired_needs_equal_groups():
                        'a1': [1.0, 2.0, 3.0], 'a2': [1.5, 2.5, 3.5], 'a3': [1.2, 2.2, 3.2],
                        'b1': [2.0, 1.0, 4.0], 'b2': [2.5, 1.5, 4.5]})
     with pytest.raises(ValueError):
-        get_biodiversity(df, group1=['a1', 'a2', 'a3'], group2=['b1', 'b2'], paired=True)
+        get_biodiversity(df, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2'], paired = True)
+    with pytest.raises(ValueError, match = "No diversity test could be run"):
+        get_biodiversity(df, group1 = ['a1', 'a2', 'a3'], group2 = ['b1', 'b2'], metrics = ['shannon'])
 
 
 def test_get_time_series(sample_time_series_data):
@@ -5195,9 +5270,10 @@ def test_get_SparCC_ec_col_mismatch():
 def test_get_SparCC_ec_inval_transform():
     df1 = sample_comp_glycomics_data()
     df2 = sample_comp_glycomics_data_corr()
-    df1.drop(columns=df1.columns[1], inplace=True)
     with pytest.raises(ValueError):
-        get_SparCC(df1, df2, transform="Invalid")
+        get_SparCC(df1, df2, transform = "Invalid")
+    with pytest.raises(ValueError, match = "samples but df2 has"):
+        get_SparCC(df1.drop(columns = df1.columns[1]), df2)
 
 
 def test_get_roc():
@@ -5433,34 +5509,39 @@ def test_get_ma_with_custom_thresholds(sample_diff_expr_results):
 def test_get_volcano_basic(sample_diff_expr_results):
     """Test basic functionality of get_volcano"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, n = 6)
+        get_volcano(sample_diff_expr_results, n = 6, annotate_volcano = False)
         mock_savefig.assert_not_called()
     # without a filepath the annotated figure is built in a temp dir and handed back for Jupyter to render
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
-        out = get_volcano(sample_diff_expr_results, annotate_volcano = True)
+        out = get_volcano(sample_diff_expr_results)
     assert out is not None and '<svg' in out.data
     assert not list(Path('.').glob('*_temp.svg'))
+    # ...and outside Jupyter it is shown through matplotlib instead of vanishing
+    with patch('glycowork.motif.draw.is_jupyter', return_value = False), patch(
+            'glycowork.motif.draw.display_svg_with_matplotlib') as mock_display:
+        get_volcano(sample_diff_expr_results)
+    mock_display.assert_called_once()
     plt.close('all')
 
 
 def test_get_volcano_with_filepath(sample_diff_expr_results):
     """Test get_volcano with filepath saving"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, filepath='test.png')
+        get_volcano(sample_diff_expr_results, filepath = 'test.png', annotate_volcano = False)
         mock_savefig.assert_called_once()
 
 
 def test_get_volcano_with_custom_thresholds(sample_diff_expr_results):
     """Test get_volcano with custom thresholds"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, y_thresh=0.01, x_thresh=1.0)
+        get_volcano(sample_diff_expr_results, y_thresh = 0.01, x_thresh = 1.0, annotate_volcano = False)
         mock_savefig.assert_not_called()
 
 
 def test_get_volcano_with_effect_size(sample_diff_expr_results):
     """Test get_volcano using effect size instead of Log2FC"""
     with patch('matplotlib.pyplot.savefig') as mock_savefig:
-        get_volcano(sample_diff_expr_results, x_metric='Effect size')
+        get_volcano(sample_diff_expr_results, x_metric = 'Effect size', annotate_volcano = False)
         mock_savefig.assert_not_called()
 
 
@@ -5506,8 +5587,10 @@ def test_get_meta_analysis_with_study_names():
         mock_ax = MagicMock()
         mock_subplots.return_value = (mock_fig, mock_ax)
         with patch('matplotlib.pyplot.savefig') as mock_savefig:
-            get_meta_analysis(effect_sizes, variances, study_names=study_names, filepath='test.png')
+            get_meta_analysis(effect_sizes, variances, study_names = study_names, filepath = 'test.png')
             mock_savefig.assert_called_once()
+            get_meta_analysis(effect_sizes, variances, filepath = 'test.png')  # study names default to Study 1..k
+            assert mock_savefig.call_count == 2
 
 
 def test_get_meta_analysis_invalid_model():
@@ -5641,8 +5724,11 @@ def test_get_heatmap_basic(sample_df):
     """Test basic functionality of get_heatmap"""
     result = get_heatmap(sample_df)
     # Add tests for return_plot=True
-    result_with_plot = get_heatmap(sample_df, return_plot=True)
+    result_with_plot = get_heatmap(sample_df, return_plot = True)
     assert result_with_plot is not None
+    # Axis labels belong to the heatmap, not the colorbar
+    assert (result_with_plot[0].ax_heatmap.get_xlabel(), result_with_plot[0].ax_heatmap.get_ylabel()) == ('Samples',
+                                                                                                          'Glycans')
     # Add test for filepath saving
     result_with_save = get_heatmap(sample_df, filepath="test.png")
     presence_df = pd.DataFrame({
@@ -5668,6 +5754,53 @@ def test_get_heatmap_basic(sample_df):
     get_heatmap(df_renamed)
     df_transposed = sample_df.set_index('glycan').T
     get_heatmap(df_transposed)
+    plt.close('all')
+
+
+def test_get_distance_matrix(sample_df):
+    """Test get_distance_matrix against the manual quantify_motifs -> clr_transformation -> calculate_distance_matrix route"""
+    dm = get_distance_matrix(sample_df)
+    assert dm.shape == (3, 3) and list(dm.columns) == ['sample1', 'sample2', 'sample3']
+    assert np.allclose(dm.values, dm.values.T) and np.allclose(np.diag(dm), 0)
+    dm_features = get_distance_matrix(sample_df, dist_func = 'cosine', compare = 'features', transform = '')
+    assert list(dm_features.index) == sample_df['glycan'].tolist()
+    motif_df = clr_transformation(quantify_motifs(sample_df, feature_set = ['exhaustive']) + 1e-7, [], [], gamma = 0)
+    manual = calculate_distance_matrix(motif_df.to_dict(orient = 'list'), lambda x, y: np.linalg.norm(np.subtract(x, y)))
+    assert np.allclose(get_distance_matrix(sample_df, motifs = True, feature_set = ['exhaustive']).values, manual.values)
+    assert get_distance_matrix(sample_df.set_index('glycan').T, transform = 'ALR').shape == (3, 3)
+    comp_df = pd.DataFrame({'glycan': ['Hex5HexNAc4', 'Hex5HexNAc4Neu5Ac1', 'Hex3HexNAc4dHex1'], 's1': [10.0, 20.0, 5.0], 's2': [15.0, 25.0, 4.0], 's3': [12.0, 22.0, 9.0]})
+    assert list(get_distance_matrix(comp_df, transform = None).columns) == ['s1', 's2', 's3']
+    assert list(get_heatmap(comp_df, return_plot = True)[1]) == ['s1', 's2', 's3']
+    plt.close('all')
+    for kwargs in [{'compare': 'rows'}, {'transform': 'log'}, {'dist_func': 'not_a_metric'}]:
+        with pytest.raises(ValueError):
+            get_distance_matrix(sample_df, **kwargs)
+
+
+def test_get_heatmap_dist_func(sample_df):
+    """Test get_heatmap clustering with a custom distance"""
+    g, _, _ = get_heatmap(sample_df, transform = 'CLR', dist_func = 'euclidean', return_plot = True)
+    assert g.dendrogram_col.linkage.shape == (2, 4) and g.dendrogram_row.linkage.shape == (2, 4)
+    get_heatmap(sample_df, dist_func = lambda x, y: np.abs(x - y).sum(), method = 'complete', return_plot = True)
+    plt.close('all')
+
+
+def test_get_pcoa(sample_df):
+    """Test PCoA from abundances and from a precomputed distance matrix"""
+    df = sample_df.copy()
+    df['sample4'], df['sample5'], df['sample6'] = [30.0, 20.0, 10.0], [35.0, 25.0, 12.0], [28.0, 22.0, 9.0]
+    groups = [1, 1, 1, 2, 2, 2]
+    with patch('matplotlib.pyplot.savefig') as mock_savefig:
+        coords = get_pcoa(df, groups = groups, permutations = 99, random_state = 42)
+        mock_savefig.assert_not_called()
+    dm = get_distance_matrix(df)
+    assert list(coords.index) == list(dm.columns) and 'permanova' in coords.attrs
+    recon = np.sqrt(((coords.values[:, None, :] - coords.values[None, :, :]) ** 2).sum(axis = 2))
+    assert np.allclose(recon, dm.values)
+    assert np.allclose(np.abs(get_pcoa(dm, groups = groups, permutations = 99, random_state = 42).values), np.abs(coords.values))
+    get_pcoa(df, dist_func = 'braycurtis', transform = '')
+    with pytest.raises(ValueError):
+        get_pcoa(df, groups = [1, 2])
     plt.close('all')
 
 
@@ -5801,6 +5934,8 @@ def test_get_jtk_basic(sample_jtk_df):
                            't1': [1.0, 2.0], 't2': [2.0, 1.0], 't3': [1.5, 1.5]})
     result = get_jtk(odd_df, timepoints = 3, interval = 1, periods = [2])
     assert isinstance(result, pd.DataFrame)
+    with pytest.raises(ValueError, match = "cannot be split"):  # 16 samples do not divide into 5 timepoints
+        get_jtk(sample_jtk_df, timepoints = 5, interval = 3, periods = periods)
 
 
 def test_get_jtk_with_motifs(sample_jtk_df):
@@ -6061,6 +6196,10 @@ def test_construct_network(simple_glycans):
 def test_construct_network_unknown_class():
     with pytest.raises(ValueError):
         construct_network(['Xyl(b1-4)Xyl', 'Xyl'])
+    # a single root passed as a bare string is one root, not a set of its characters
+    milk = ['Neu5Ac(a2-3)Gal(b1-4)Glc-ol', 'Gal(b1-4)Glc-ol']
+    assert set(construct_network(milk, permitted_roots = 'Gal(b1-4)Glc-ol')) == set(
+        construct_network(milk, permitted_roots = frozenset({'Gal(b1-4)Glc-ol'})))
 
 
 def test_prune_network(simple_glycans):
@@ -6753,13 +6892,13 @@ def test_extend_network_specific_leaf(extension_test_network):
 def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
     """Test basic network plotting functionality"""
     main_net, _ = evo_test_networks
-    plot = plot_network(main_net, plot_format='kamada_kawai')
+    plot = plot_network(main_net, plot_format = 'kamada_kawai', draw_glycans = False)
     # Check that plot was created
     assert plot is not None
     # Check renderer properties
     assert len(plot.renderers) > 0
     # Test without edge labels
-    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=False)
+    plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = False, draw_glycans = False)
     assert plot is not None
     plt.close('all')
 
@@ -6768,13 +6907,13 @@ def test_plot_network_basic(mock_show, mock_enable, evo_test_networks):
 @patch('bokeh.plotting.show')
 def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
     """Test basic network plotting functionality for N-glycans"""
-    plot = plot_network(n_glycan_network, plot_format='spring')
+    plot = plot_network(n_glycan_network, plot_format = 'spring', draw_glycans = False)
     # Check that plot was created
     assert plot is not None
     # Check renderer properties
     assert len(plot.renderers) > 0
     # Test without edge labels
-    plot = plot_network(n_glycan_network, plot_format='spring', edge_label_draw=False)
+    plot = plot_network(n_glycan_network, plot_format = 'spring', edge_label_draw = False, draw_glycans = False)
     assert plot is not None
     plt.close('all')
 
@@ -6784,7 +6923,7 @@ def test_plot_network_n(mock_show, mock_enable, n_glycan_network):
 def test_plot_network_with_edge_labels(mock_show, mock_enable, evo_test_networks):
     """Test network plotting with edge labels"""
     main_net, _ = evo_test_networks
-    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True)
+    plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = True, draw_glycans = False)
     # Check for edge labels
     assert plot is not None
     plt.close('all')
@@ -6796,7 +6935,7 @@ def test_plot_network_with_lfc(mock_show, mock_enable, evo_test_networks):
     """Test network plotting with log fold change data"""
     lfc_dict = {'Fuc(a1-2)': 1.5, 'GlcNAc(b1-3)': -0.5}
     main_net, _ = evo_test_networks
-    plot = plot_network(main_net, plot_format='kamada_kawai', edge_label_draw=True, lfc_dict=lfc_dict)
+    plot = plot_network(main_net, plot_format = 'kamada_kawai', edge_label_draw = True, lfc_dict = lfc_dict, draw_glycans = False)
     # Verify plot was created
     assert plot is not None
     # Check for renderers
@@ -6812,13 +6951,13 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
     safe_layouts = ['kamada_kawai', 'spring']
     main_net, _ = evo_test_networks
     for layout in safe_layouts:
-        plot = plot_network(main_net, plot_format=layout)
+        plot = plot_network(main_net, plot_format = layout, draw_glycans = False)
         assert plot is not None
         plt.close('all')
     # Test pydot2 layout with proper error handling
     try:
         with suppress_pydot_warnings():
-            plot = plot_network(main_net, plot_format='pydot2')
+            plot = plot_network(main_net, plot_format = 'pydot2', draw_glycans = False)
             assert plot is not None
     except (ImportError, FileNotFoundError):
         print("Graphviz not installed, skipping pydot2 layout test")
@@ -6828,18 +6967,22 @@ def test_plot_network_layouts(mock_show, mock_enable, evo_test_networks):
 def test_plot_network_static_figure(tmp_path, evo_test_networks):
     """Test the saved static figure, with and without SNFG node labels"""
     main_net, _ = evo_test_networks
-    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net.svg')
+    plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'net.svg', draw_glycans = False)
     assert (tmp_path / 'net.svg').exists()
-    plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'net_snfg.svg', draw_glycans=True)
+    plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'net_snfg.svg')
     assert (tmp_path / 'net_snfg.svg').exists()
     with pytest.raises(ValueError):
-        plot_network(main_net, plot_format='kamada_kawai', filepath=tmp_path / 'x.svg', draw_glycans=True,
-                     glycan_size='huge')
+        plot_network(main_net, plot_format = 'kamada_kawai', filepath = tmp_path / 'x.svg', glycan_size = 'huge')
     # without a filepath the SNFG figure is built in a temp dir and handed back for Jupyter to render
     with patch('glycowork.motif.draw.is_jupyter', return_value = True):
-        out = plot_network(main_net, plot_format='kamada_kawai', draw_glycans=True)
+        out = plot_network(main_net, plot_format = 'kamada_kawai')
     assert out is not None and '<svg' in out.data
     assert not list(tmp_path.glob('*_temp.svg'))
+    # ...and outside Jupyter it is shown through matplotlib instead of vanishing
+    with patch('glycowork.motif.draw.is_jupyter', return_value = False), patch(
+            'glycowork.motif.draw.display_svg_with_matplotlib') as mock_display:
+        plot_network(main_net, plot_format = 'kamada_kawai')
+    mock_display.assert_called_once()
     plt.close('all')
 
 
@@ -6848,7 +6991,7 @@ def test_plot_network_no_notebook(evo_test_networks):
     main_net, _ = evo_test_networks
     with patch('bokeh.io.output_notebook', side_effect=Exception):
         with patch('bokeh.plotting.show') as mock_show:
-            plot = plot_network(main_net, plot_format='kamada_kawai')
+            plot = plot_network(main_net, plot_format = 'kamada_kawai', draw_glycans = False)
             # Even with notebook initialization failing, should still return a plot
             assert plot is not None
     plt.close('all')
@@ -6931,7 +7074,7 @@ def test_infer_network(mock_show, mock_enable):
     spec_dic = {"test": construct_network(["GlcNAc(b1-3)Gal(b1-4)Glc-ol", "Gal(b1-4)Glc-ol"]), "org": net}
     net2 = infer_network(net, "org", ["test", "org"], spec_dic)
     assert nx.get_node_attributes(net2, "virtual")["GlcNAc(b1-3)Gal(b1-4)Glc-ol"] == 2
-    plot = plot_network(net2)
+    plot = plot_network(net2, draw_glycans = False)
     plt.close('all')
 
 
@@ -7329,6 +7472,10 @@ def test_hierarchy_filter_basic():
     assert all(isinstance(y, int) for y in train_y + val_y)
     assert len(class_list) == len(set(df['Domain']))
     assert len(class_converter) == len(class_list)
+    # Any column can be the rank, not only the taxonomic ones
+    _, _, _, _, _, class_list, _ = hierarchy_filter(df.rename(columns = {'Domain': 'tissue_sample'}),
+                                                    rank = 'tissue_sample', min_seq = 1)
+    assert class_list == ['d1', 'd2']
 
 
 def test_hierarchy_filter_min_seq():
@@ -7433,6 +7580,8 @@ def test_hierarchy_filter_with_wildcards():
     assert len(val_y) == len(val_x)
     assert not (set(train_x) & set(val_x))  # wildcarding maps distinct sequences onto the same string
     assert all(y in [0, 1] for y in train_y + val_y)  # Check labels are properly converted
+    with pytest.raises(ValueError):  # wildcard_seed needs something to wildcard
+        hierarchy_filter(df, rank = 'Domain', min_seq = 1, wildcard_seed = True)
 
 
 @pytest.fixture
@@ -8889,6 +9038,9 @@ def test_looks_like_oxford():
     for gsl in ['Neu5Ac-Fuc-nLc10Cer', 'Neu5Ac-nLc6Cer', 'GalNAc-Gb4Cer', 'nLc4Cer', 'Gb3Cer', 'iGb3Cer']:
         assert not looks_like_oxford(gsl)
     assert not looks_like_oxford('Fuc1Gal2')
+    # HN-style compositions are not Oxford either: oxford_to_iupac cannot read Hex/HexNAc counts and returned the bare core for them
+    for comp in ['H9N2', 'H3N3S1', 'H5N4F1A2']:
+        assert not looks_like_oxford(comp) and canonicalize_iupac(comp) == comp
     assert canonicalize_iupac('Gal-Cer') == 'Gal1Cer'  # ceramide linker still resolves
     assert canonicalize_iupac('Gal(b1-4)Glc-Sp8') == 'Gal(b1-4)Glc'  # spacer trimming still works
 
@@ -8964,10 +9116,19 @@ def test_biosynthesis_contrast_and_extension_branches(tmp_path):
     conservation_df = pd.DataFrame({'Species': ['Species1', 'Species2'], 'glycan': ['Gal(b1-4)Glc-ol'] * 2})
     network_dic = {'Species1': nx.Graph([('Gal(b1-4)Glc-ol', 'Fuc(a1-2)Gal(b1-4)Glc-ol')]),
                    'Species2': nx.Graph([('Gal(b1-4)Glc-ol', 'GlcNAc(b1-3)Gal(b1-4)Glc-ol')])}
-    highlighted = highlight_network(net, highlight = 'conservation', conservation_df = conservation_df, network_dic = network_dic)
+    highlighted = highlight_network(net, highlight = 'conservation', conservation_df = conservation_df,
+                                    network_dic = network_dic)
+    assert nx.get_node_attributes(highlighted, 'abundance')['Gal(b1-4)Glc-ol'] == 200
+    # Species without a network in network_dic are skipped instead of raising a KeyError
+    conservation_df = pd.concat(
+        [conservation_df, pd.DataFrame({'Species': ['Species3'], 'glycan': ['Gal(b1-4)Glc-ol']})])
+    highlighted = highlight_network(net, highlight = 'conservation', conservation_df = conservation_df,
+                                    network_dic = network_dic)
     assert nx.get_node_attributes(highlighted, 'abundance')['Gal(b1-4)Glc-ol'] == 200
     # Target composition is further away than the step budget allows
     assert extend_network(net, steps = 1, to_extend = {'Hex': 8, 'HexNAc': 4, 'dHex': 2}, auto_steps = True)[-1] == -1
+    # Target composition already in the network: auto_steps still returns three values, with 0 steps
+    assert extend_network(net, steps = 1, to_extend = {'Hex': 2}, auto_steps = True) == (net, {'Gal(b1-4)Glc-ol'}, 0)
 
 
 _MILK_BIO = ["Gal(b1-4)Glc-ol", "Neu5Ac(a2-3)Gal(b1-4)Glc-ol", "Neu5Ac(a2-6)Gal(b1-4)Glc-ol",
@@ -8999,9 +9160,9 @@ def test_get_biosynthetic_coherence_nothing_scorable():
 @patch('bokeh.io.output_notebook')
 @patch('bokeh.plotting.show')
 def test_plot_network_hierarchical_and_origin(mock_show, mock_enable, sample_network):
-    assert plot_network(sample_network, plot_format = 'hierarchical') is not None  # diamond revisits a levelled node
+    assert plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False) is not None  # diamond revisits a levelled node
     nx.set_node_attributes(sample_network, {n: 'red' for n in sample_network.nodes()}, 'origin')
-    assert plot_network(sample_network, plot_format = 'hierarchical') is not None
+    assert plot_network(sample_network, plot_format = 'hierarchical', draw_glycans = False) is not None
     plt.close('all')
 
 
@@ -9069,7 +9230,23 @@ def test_GlycanDrawing_save_and_png(tmp_path):
     d = GlycoDraw("Gal(b1-4)Glc", suppress = True, shadow = True)
     d.save_svg(str(tmp_path / "x.svg"))
     assert (tmp_path / "x.svg").exists()
-    assert isinstance(d._repr_png_(), bytes)
+    png, md = d._repr_png_()
+    assert isinstance(png, bytes) and md['width'] > 0
+    s = GlycoDraw("Gal(b1-4)Glc", suppress = True, sticker = {'edge': 1.2})
+    s.save_svg(str(tmp_path / "cut.svg"))
+    assert 'feDropShadow' in (tmp_path / "cut.svg").read_text(encoding = "utf-8")  # cut layer drawn by glycorender
+    assert isinstance(s._repr_png_()[0], bytes)
+    # the returned object flattens vertical labels exactly like saving through filepath, upside-down diagonal linkage labels included
+    GlycoDraw("Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", vertical = True, filepath = str(tmp_path / "v_file.svg"))
+    GlycoDraw("Gal(b1-3)[Neu5Ac(a2-6)]GalNAc", vertical = True, suppress = True).save_svg(str(tmp_path / "v_obj.svg"))
+    assert re.findall(r'rotate\(([-\d.]+)\)" x', (tmp_path / "v_file.svg").read_text(encoding = "utf-8")) == re.findall(
+        r'rotate\(([-\d.]+)\)" x', (tmp_path / "v_obj.svg").read_text(encoding = "utf-8"))
+    # ALT text is escaped for the aria-label and describes the glycan as passed, not its internal rewrite
+    GlycoDraw("Gal(b1-4)Glc", alt_text = 'Sialyl "LacNAc" & more', filepath = str(tmp_path / "alt.svg"))
+    assert 'aria-label="Sialyl &quot;LacNAc&quot; &amp; more"' in (tmp_path / "alt.svg").read_text(encoding = "utf-8")
+    GlycoDraw("GlcA(b1-3)GlcNAc(b1-4)", repeat = True, filepath = str(tmp_path / "rep.svg"))
+    assert 'aria-label="SNFG diagram of GlcA(b1-3)GlcNAc(b1-4) drawn in horizontal standard style with linkage labels. Contains repeat unit."' in (
+                tmp_path / "rep.svg").read_text(encoding = "utf-8")
 
 
 def test_spread_glycans_single_and_overlapping():

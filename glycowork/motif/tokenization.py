@@ -44,17 +44,17 @@ METHYL_MASS = 14.01565
 modification_mass_dict = {'reduced': 2 * HYDROGEN_MASS, '2AA': 121.0528, '2AB': 120.0688, 'procainamide': 219.1736}
 
 
-def constrain_prot(proteins: list[str], # List of protein sequences
+def constrain_prot(proteins: str | list[str], # Protein sequence(s)
                    libr: dict[str, int] | None = None # Dictionary mapping amino acids to indices
                    ) -> list[str]: # List of filtered protein sequences
     """Ensure only characters from library are present in proteins"""
     if libr is None:
         libr = chars
     # Check whether any character is not in libr and replace it with a 'z' placeholder character
-    return [''.join(c if c in libr else 'z' for c in protein) for protein in proteins]
+    return [''.join(c if c in libr else 'z' for c in protein) for protein in ([proteins] if isinstance(proteins, str) else proteins)]
 
 
-def prot_to_coded(proteins: list[str], # List of protein sequences
+def prot_to_coded(proteins: str | list[str], # Protein sequence(s)
                   libr: dict[str, int] | None = None, # Dictionary mapping amino acids to indices
                   pad_len: int = 1000 # Length for padding sequences
                   ) -> list[list[int]]: # List of encoded protein sequences
@@ -63,7 +63,7 @@ def prot_to_coded(proteins: list[str], # List of protein sequences
         libr = chars
     pad_label = len(libr) - 1
     # Cut off protein sequence above pad_len
-    prots = [protein[:pad_len] for protein in proteins]
+    prots = [protein[:pad_len] for protein in ([proteins] if isinstance(proteins, str) else proteins)]
     # Replace forbidden characters with 'z'
     prots = constrain_prot([protein.upper() for protein in prots], libr = libr)
     # Pad up to a length of pad_len
@@ -209,7 +209,7 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     adduct_mass = mass_dict['Acetate'] if max_charge < 0 else mass_dict['Na+']
     # Theoretical m/z offset for proton ionization: [M-H]- or [M+H]+
     ion_offset = -PROTON_MASS if max_charge < 0 else PROTON_MASS
-    tol = mass_tolerance if tolerance_unit == "Da" else mz_value * mass_tolerance / 1e6
+    tol = mass_tolerance if tolerance_unit.lower() == "da" else mz_value * mass_tolerance / 1e6
     comp_pool = [dict(t) for t in dict.fromkeys(tuple(d.items()) for d in df_use.Composition)]
     masses = [(comp, composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep,
                                          modification = modification)) for comp in comp_pool if
@@ -287,7 +287,7 @@ def condense_composition_matching(matched_composition: list[str] # List of match
 
 
 @rescue_compositions
-def compositions_to_structures(composition_list: list[dict[str, int]], # List of compositions like {'Hex': 1, 'HexNAc': 1}
+def compositions_to_structures(composition_list: str | dict[str, int] | list[str | dict[str, int]], # Composition(s) like {'Hex': 1, 'HexNAc': 1} or 'H1N1'
                                glycan_class: str = 'N', # Glycan class: N/O/lipid/free
                                kingdom: str = 'Animalia', # Taxonomic kingdom filter for choosing a subset of glycans to consider
                                abundances: pd.DataFrame | None = None, # Sample abundances matrix
@@ -295,6 +295,7 @@ def compositions_to_structures(composition_list: list[dict[str, int]], # List of
                                verbose: bool = False # Whether to print non-matching compositions
                                ) -> pd.DataFrame: # DataFrame of structures x intensities
     """Map compositions to structures, supporting accompanying relative intensities"""
+    composition_list = [composition_list] if isinstance(composition_list, (str, dict)) else composition_list
     if abundances is None:
         abundances = pd.DataFrame([range(len(composition_list))] * 2).T
     abundances_values = abundances.iloc[:, 1:].values.tolist()
@@ -524,15 +525,19 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
             dict_comp[new_key] = dict_comp.pop(old_key)
     # O-acetylation adds acetyl minus H (net +C2H2O = 42.0106 monoisotopic), not full acetate (59 Da)
     ac_count = dict_comp.pop('Ac', 0)
-    if missing := [k for k in dict_comp if pd.isna(mass_dict_in.get(k, 0))]:
-        raise ValueError(f"{missing} have no {mass_key} mass in mz_to_composition.csv, so no mass can be calculated for this composition.")
+    if missing := [k for k in dict_comp if pd.isna(mass_dict_in.get(k)) and not k.startswith(('+', '-'))]:
+        raise ValueError(
+            f"{missing} have no {mass_key} mass in mz_to_composition.csv, so no mass can be calculated for this composition")
     total_mass = sum(v * (mass_dict_in.get(k) or calculate_adduct_mass(k, mass_value = mass_value, enforce_sign = True))
                      for k, v in dict_comp.items()) + mass_dict_in['red_end'] + ac_count * calculate_adduct_mass(
         'C2H2O', mass_value = mass_value)
     if adduct:
         total_mass += calculate_adduct_mass(adduct, mass_value = mass_value) if isinstance(adduct, str) else adduct
     if modification:
-        mod_mass = modification_mass_dict.get(modification, 0)
+        if modification not in modification_mass_dict:
+            raise ValueError(
+                f"Unknown reducing-end modification {modification!r}; choose one of {list(modification_mass_dict)} or pass a label mass via adduct.")
+        mod_mass = modification_mass_dict[modification]
         if modification == 'reduced' and sample_prep == 'permethylated':
             mod_mass += METHYL_MASS # ring-opening creates one additional free OH (at C5, previously the ring oxygen) that gets methylated
         total_mass += mod_mass
