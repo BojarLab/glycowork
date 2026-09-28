@@ -5,7 +5,7 @@
 ### motif
 #### smiles
 ##### Added ✨
-- Added support for phospho-/sulfodiester in SMILES conversion ()
+- Added support for phospho-/sulfodiester in SMILES conversion (e5e8631)
 
 ##### Changed 🔄
 

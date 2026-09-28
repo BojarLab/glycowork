@@ -1046,7 +1046,6 @@ def test_token_splitting():
 @pytest.mark.parametrize('glycan, message', [
     ('Sia(a2-3)Gal', 'wildcard'),
     ('Nonsense(b1-4)Glc', 'no skeleton'),
-    ('Gal(b1-6)Man6P', 'no free position'),
     ('Fru(b1-4)Glc', 'anomeric carbon'),
     ('{Fuc(a1-?)}Gal(b1-4)Glc', 'disconnected'),
     ('Nonsense-ol', 'no skeleton'),
@@ -1062,6 +1061,14 @@ def test_refuses_what_it_cannot_build(glycan, message):
     with pytest.raises(GlycanSMILESError) as error:
         glycan_to_smiles(glycan)
     assert message in str(error.value)
+
+
+def test_diester_linkage_leaves_from_the_substituent():
+    assert glycan_to_smiles('Man6P') == 'OC1O[C@H](COP(=O)(O)O)[C@@H](O)[C@H](O)[C@@H]1O'
+    assert glycan_to_smiles('Man6S') == 'OC1O[C@H](COS(=O)(=O)O)[C@@H](O)[C@H](O)[C@@H]1O'
+    assert glycan_to_smiles('Gal(b1-6)Man6P') == 'OC1O[C@H](COP(=O)(O)O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@@H](O)[C@H](O)[C@@H]1O'
+    assert glycan_to_smiles('Gal(b1-6)Man6S') == 'OC1O[C@H](COS(=O)(=O)O[C@@H]2O[C@H](CO)[C@H](O)[C@H](O)[C@H]2O)[C@@H](O)[C@H](O)[C@@H]1O'
+    assert glycan_to_smiles('GlcNAc(b1-6)Man6P').count('P') == 1
 
 
 def test_strict_refuses_to_guess_a_position():
