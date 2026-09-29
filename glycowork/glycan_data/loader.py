@@ -2,6 +2,7 @@ import os
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 import re
 import ast
+import gc
 import json
 import pickle
 import pandas as pd
@@ -129,6 +130,11 @@ class GlycoDataFrame(pd.DataFrame):
     @property
     def name(self):
         return self._glyco_name
+
+    @name.setter
+    def name(self,
+             value):  # pandas assigns .name to every group handed to groupby.apply, so a read-only property made that raise on any GlycoDataFrame, e.g., df_species
+        self._glyco_name = value
 
     @property
     def provenance(self):
@@ -715,17 +721,16 @@ class DataFrameSerializer:
     def deserialize(cls, path: str # file path to load serialized data
                     ) -> pd.DataFrame: # DataFrame with restored data types
         "Deserialize a DataFrame from JSON"
-        with open(path, 'r') as f:
-            data = json.load(f)
-        deserialized_data = []
-        for row in data['data']:
-            deserialized_row = [cls._deserialize_cell(cell) for cell in row]
-            deserialized_data.append(deserialized_row)
-        return pd.DataFrame(
-            data = deserialized_data,
-            columns = data['columns'],
-            index = data['index']
-        )
+        gc_was_enabled = gc.isenabled()
+        gc.disable()  # the load allocates >1M small containers that can never form cycles, and the collector rescanning all of them over and over took ~80% of df_glycan's load time
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+            deserialized_data = [[cls._deserialize_cell(cell) for cell in row] for row in data['data']]
+            return pd.DataFrame(data = deserialized_data, columns = data['columns'], index = data['index'])
+        finally:
+            if gc_was_enabled:
+                gc.enable()
 
 
 serializer = DataFrameSerializer()
@@ -757,12 +762,11 @@ def share_neighbor(edges, node1, node2):
 
 class HashableDict(dict):
     def __hash__(self):
-        return hash(tuple(sorted(self.items())))
+        return hash(
+            len(self))  # equal dicts always share their length and __eq__ settles the rest, so lru_cache lookups keyed on a 2,000-entry lib no longer sort it every call
 
     def __eq__(self, other):
-        if isinstance(other, HashableDict):
-            return tuple(sorted(self.items())) == tuple(sorted(other.items()))
-        return False
+        return isinstance(other, HashableDict) and dict.__eq__(self, other)
 
 
 def parse_lines(excel_column_content: list | str # content of an Excel column pasted into a list and bookended by triple quotes

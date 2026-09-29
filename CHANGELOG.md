@@ -21,27 +21,38 @@
 
 #### draw
 ##### Added ✨
-- Added the new `plot_glycans_grid` function to draw glycans with a shared symbol size into a grid ()
-- `GlycoDraw` now also accepts alternative composition formats (e.g., `{'Hex': 5}`) ()
-- `GlycoDraw` now accepts lists as input, which are fed into the new `plot_glycans_grid` ()
-- `plot_glycans_excel` can now pass on styling keyword arguments (e.g., `compact`, `vertical`, etc) to `GlycoDraw` ()
+- Added the new `plot_glycans_grid` function to draw glycans with a shared symbol size into a grid (0967d8a)
+- `GlycoDraw` now also accepts alternative composition formats (e.g., `{'Hex': 5}`) (0967d8a)
+- `GlycoDraw` now accepts lists as input, which are fed into the new `plot_glycans_grid` (0967d8a)
+- `plot_glycans_excel` can now pass on styling keyword arguments (e.g., `compact`, `vertical`, etc) to `GlycoDraw` (0967d8a)
 
 ##### Changed 🔄
-- Black elements in `.svg` `GlycoDraw` outputs are now also charcoal (`#1C1917`), just like any other format ()
-- Symbols in vertical mode are no longer rotated in `GlycoDraw`, in accordance with SNFG ()
-- `GlycoDraw` outputs now also carry metadata in notebook outputs as well as Excel cells ()
-- The `folder_filepath` argument in `plot_glycans_excel` can now also be used to specify a desired output file name ()
-- Better layouting of complex floating bits in `GlycoDraw` ()
+- Black elements in `.svg` `GlycoDraw` outputs are now also charcoal (`#1C1917`), just like any other format (0967d8a)
+- Symbols in vertical mode are no longer rotated in `GlycoDraw`, in accordance with SNFG (0967d8a)
+- `GlycoDraw` outputs now also carry metadata in notebook outputs as well as Excel cells (0967d8a)
+- The `folder_filepath` argument in `plot_glycans_excel` can now also be used to specify a desired output file name (0967d8a)
+- Better layouting of complex floating bits in `GlycoDraw` (0967d8a)
 
 ##### Fixed 🐛
-- Fixed `Altf` and `Tagf` not being recognized as furanoses by `GlycoDraw` ()
-- Fixed `NS` not being recognized as a joint modification by `GlycoDraw` ()
-- Fixed `draw_method='chem2d', filepath='x.png'` not saving a `png` ()
+- Fixed `Altf` and `Tagf` not being recognized as furanoses by `GlycoDraw` (0967d8a)
+- Fixed `NS` not being recognized as a joint modification by `GlycoDraw` (0967d8a)
+- Fixed `draw_method='chem2d', filepath='x.png'` not saving a `png` (0967d8a)
 
 #### tokenization
 ##### Changed 🔄
-- `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` ()
+- `get_core` and `get_modification` can now better deal with cases such as `Neu5,9Ac2` (0967d8a)
+- `map_to_basic` is now cached, making functions that call it repeatedly (e.g., `structure_to_basic`) about 2x faster ()
+- `mz_to_composition` and related functions are now faster ()
 
 #### processing
 ##### Changed 🔄
-- `canonicalize_composition` now also accepts dictionary compositions as inputs ()
+- `canonicalize_composition` now also accepts dictionary compositions as inputs (0967d8a)
+
+#### annotate
+##### Changed 🔄
+- Motif annotation is now generally faster ()
+- Motif annotations with `feature_set` `terminal` are now ~10x faster ()
+
+#### analysis
+##### Changed 🔄
+- `get_glycanova` is now faster ()

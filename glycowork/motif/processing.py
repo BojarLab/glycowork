@@ -1692,7 +1692,7 @@ def process_for_glycoshift(df: pd.DataFrame # Dataset with protein_site_composit
         df['Glycoform'] = [canonicalize_composition(k.split('_')[-1]) for k in df.index]
         glycan_features = sorted(set(unwrap([list(c.keys()) for c in df.Glycoform])))
     org_cols = df.columns.tolist()
-    df = df.join(df['Glycoform'].apply(parse_glycoform, glycan_features = glycan_features).apply(pd.Series))
+    df = pd.concat([df, pd.DataFrame([parse_glycoform(g, glycan_features = glycan_features) for g in df['Glycoform']], index = df.index)], axis = 1)  # positional, so a duplicated index does not multiply rows
     if seqs is not None:
         # the composition heuristics are only a stand-in for these, and core versus antennary fucose has no composition-level expression at all
         ant = [subgraph_isomorphism(s, 'GlcNAc(b1-2)Man') for s in seqs]

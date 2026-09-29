@@ -287,7 +287,7 @@ def build_network_from_glycans(glycans: list[str], # Observed glycans
     queue = list(glycans)
     seen = set(glycans)
     observed_by_fp = defaultdict(list)
-    edge_diffs = {}
+    edge_diffs, match_of = {}, {}
     for g in glycans:
         observed_by_fp[_graph_fp(safe_index(g, graph_dic))].append(g)
     while queue:
@@ -299,13 +299,16 @@ def build_network_from_glycans(glycans: list[str], # Observed glycans
             if prec_str.startswith('('):
                 continue
             graph_dic.setdefault(prec_str, prec_graph)
-            fp = _graph_fp(prec_graph)
             # Fast path: canonical string directly identifies observed glycan; fallback: graph isomorphism for wildcard cases
             if prec_str in observed:
                 match = prec_str
+            elif prec_str in match_of:
+                # buckets only ever grow at the end, so a precursor reached again from another parent resolves to the same first match
+                match = match_of[prec_str]
             else:
-                match = next((g for g in observed_by_fp.get(fp, []) if safe_compare(safe_index(g, graph_dic), prec_graph)),
-                             prec_str)
+                fp = _graph_fp(prec_graph)
+                match = match_of[prec_str] = next((g for g in observed_by_fp.get(fp, []) if safe_compare(safe_index(g, graph_dic), prec_graph)),
+                                                  prec_str)
             network.add_edge(glycan, match)
             diff = graph_to_string_int(ggraph.subgraph({term_node, link_node}))
             edge_diffs[(glycan, match)] = 'disregard' if any(ptm in sia_re.sub('', diff) for ptm in allowed_ptms) else diff
@@ -360,18 +363,20 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
     # Connect post-translational modifications
     suffix = '-ol' if '-ol' in ''.join(glycans) else '1Cer' if '1Cer' in ''.join(glycans) else ''
     virtual_nodes = [x for x, y in network.nodes(data = True) if y['virtual'] == 1]
-    real_strings_by_size = defaultdict(set)
+    real_strings_by_size, real_fps = defaultdict(set), {}
     for x, y in network.nodes(data = True):
         if y['virtual'] == 0:
             real_strings_by_size[len(safe_index(x, graph_dic))].add(x)
+            real_fps[x] = _graph_fp(safe_index(x, graph_dic))
     to_remove_v = []
     for v in virtual_nodes:
         vg = safe_index(v, graph_dic)
         vsize = len(vg)
-        # Fast path: node name is canonical string so direct set lookup suffices; fallback: graph isomorphism for wildcard cases
+        vfp = _graph_fp(vg) if real_strings_by_size.get(vsize) else None
+        # Fast path: node name is canonical string so direct set lookup suffices; fallback: graph isomorphism for wildcard cases, which needs an identical topology unless an anchored floating bit is involved
         if not in_lib(v, lib) or v in real_strings_by_size.get(vsize, set()) or \
                 any(
-                    compare_glycans(vg, safe_index(r, graph_dic)) for r in real_strings_by_size.get(vsize, set()) if r != v):
+                    compare_glycans(vg, safe_index(r, graph_dic)) for r in real_strings_by_size.get(vsize, set()) if r != v and (real_fps[r] == vfp or '^' in v + r)):
             to_remove_v.append(v)
     network.remove_nodes_from(to_remove_v)
     ptm_links = process_ptm(list(network.nodes()), graph_dic, stem_lib, allowed_ptms = allowed_ptms, suffix = suffix)
@@ -400,7 +405,7 @@ def construct_network(glycans: str | list[str] | pd.DataFrame, # Glycan(s), or a
             rs = {}
             for term_node in (nd for nd in g.nodes() if g.out_degree(nd) == 0 and g.in_degree(nd) > 0):
                 link_node = next(g.predecessors(term_node))
-                sub = g.subgraph(set(g.nodes()) - {term_node, link_node})
+                sub = g.subgraph(set(g.nodes()) - {term_node, link_node}).copy()
                 rs[graph_to_string(sub)] = _graph_fp(sub)
             for n_small in candidates:
                 hit = n_small in rs
@@ -474,18 +479,23 @@ def apply_constraints(network: nx.DiGraph, # Biosynthetic network with 'diffs' e
     rules = [r for r in rules if not isinstance(r.get('glycan_class'), str) or net_class in str(r['glycan_class']).split('/')]
     if not rules:
         return network
-    motifs = {m for r in rules for m in [r['product']] + str(r['context']).split('|')}
     # an O-acetylated sialic acid is still the sialic acid a rule speaks about, and Sia wildcards do not match modified tokens
     cores = {n: sia_re.sub(lambda t: get_core(t.group()), n) for n in network.nodes()}
-    # one subgraph search per (node, motif) instead of per edge, since every node takes part in several edges
-    has = {m: {n: subgraph_isomorphism(cores[n], m) for n in network.nodes()} for m in motifs}
+    # at most one subgraph search per (node, motif) instead of per edge, and a context is only searched in precursors whose edge installs the product
+    has = {}
+
+    def hit(n, m):
+        if (n, m) not in has:
+            has[(n, m)] = subgraph_isomorphism(cores[n], m)
+        return has[(n, m)]
+
     violations = {}
     for u, v in network.edges():
         for r in rules:
             # the rule only speaks to the edge that installs its product, not to every edge downstream of it
-            if not has[r['product']].get(v, False) or has[r['product']].get(u, False):
+            if not hit(v, r['product']) or hit(u, r['product']):
                 continue
-            if any(has[c].get(u, False) for c in str(r['context']).split('|')) == (r['kind'] == 'forbids'):
+            if any(hit(u, c) for c in str(r['context']).split('|')) == (r['kind'] == 'forbids'):
                 violations[(u, v)] = ': '.join(r[k] for k in ('enzyme', 'rationale') if isinstance(r.get(k),
                                                                                                    str)) or f"{r['product']} {r['kind']} {r['context']}"
     network = network.copy()
@@ -719,7 +729,8 @@ def infer_virtual_nodes(network_a: nx.DiGraph, # First network
     "Identify virtual nodes observed in other species"
     # Perform network alignment if not provided
     if combined is None:
-        combined = network_alignment(network_a, network_b)
+        # only the aligned node attributes are read, so align edge-free views instead of copying (and deep-copying the attributes of) every edge
+        combined = network_alignment(*(nx.subgraph_view(g, filter_edge = lambda *e: False) for g in (network_a, network_b)))
     # Find virtual nodes in network_a that are observed in network_b and vice versa
     virtual_a = {k for k, v in network_a.nodes(data = True) if v.get('virtual', 0) == 1}
     virtual_b = {k for k, v in network_b.nodes(data = True) if v.get('virtual', 0) == 1}
@@ -821,12 +832,12 @@ def choose_path(diamond: dict[int, str], # Diamond node positions mapping to gly
     # For each species, check whether an alternative has been observed
     for species in ([species_list] if isinstance(species_list, str) else species_list):
         temp_network = network_dic[species]
-        temp_network_nodes = set(temp_network.nodes())
-        if source in temp_network_nodes and target in temp_network_nodes:
-            lookup_dic = nx.get_node_attributes(temp_network, 'virtual') if mode == 'presence' else nx.get_node_attributes(temp_network, 'abundance')
+        # membership and attribute lookups straight on the graph, since materializing every node set and attribute map per diamond and species dominated trace_diamonds
+        if source in temp_network and target in temp_network:
+            attr = 'virtual' if mode == 'presence' else 'abundance'
             for alt in alternatives:
-                if set(alt).issubset(temp_network_nodes):
-                    alts[alt].append(np.mean([lookup_dic.get(node, 0) for node in alt]))
+                if all(node in temp_network for node in alt):
+                    alts[alt].append(np.mean([temp_network.nodes[node].get(attr, 0) for node in alt]))
                 else:
                     alts[alt].append(1 if mode == 'presence' else 0)
     alts = {k: ((1 - np.mean(v)) if mode == 'presence' else np.mean(v)) if v else 0.0 for k, v in
@@ -998,9 +1009,28 @@ def highlight_network(network: nx.DiGraph, # Biosynthetic network
     elif highlight == 'abundance':
         abundance_dict = dict(zip(abundance_df[glycan_col], abundance_df[intensity_col] * 100))
         abundance_keys = GlycoList(list(abundance_dict))
-        node_abundance = {
-            node: abundance_dict[abundance_keys[abundance_keys.index(node)]] if node in abundance_keys else 50 for node
-            in network_out.nodes()}
+        # compare_glycans rejects two unanchored strings with different linkage counts before parsing either, and otherwise needs identical topologies,
+        # so a node is only compared against same-size keys sharing its fingerprint plus the anchored or non-string keys, still in key order as GlycoList.index does
+        by_size, fps, node_abundance = defaultdict(list), {}, {}
+        for i, k in enumerate(abundance_keys):
+            by_size[k.count('(') if isinstance(k, str) and '^' not in k else None].append(i)
+
+        def fp(g):
+            if g not in fps:
+                try:
+                    fps[g] = _graph_fp(glycan_to_nxGraph(g))
+                except Exception:
+                    fps[g] = None
+            return fps[g]
+
+        for node in network_out.nodes():
+            if not isinstance(node, str) or '^' in node:
+                idx = range(len(abundance_keys))
+            else:
+                nfp = fp(node)
+                idx = sorted([i for i in by_size[node.count('(')] if nfp is None or fp(abundance_keys[i]) in (nfp, None)] + by_size[None])
+            i = next((i for i in idx if abundance_keys._compare(abundance_keys[i], node)), None)
+            node_abundance[node] = abundance_dict[abundance_keys[i]] if i is not None else 50
         nx.set_node_attributes(network_out, node_abundance, name = 'abundance')
     # Add the degree of evolutionary conervation as 'abundance' node attribute used for node size scaling
     elif highlight == 'conservation':

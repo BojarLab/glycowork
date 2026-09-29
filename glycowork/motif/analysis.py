@@ -150,13 +150,14 @@ def preprocess_data(
                                 contrasts = getattr(df, '_contrasts', {}), paired = paired,
                                 name = getattr(df, '_glyco_name', ''))
         else:
-            df.iloc[:, 1:] = df.iloc[:, 1:] + 0.0000001
+            # Assigned as arrays: the labels already match, and a frame value is realigned column by column, which dominated this branch on wide cohorts
+            df.iloc[:, 1:] = (df.iloc[:, 1:] + 0.0000001).to_numpy()
             clr_group1 = (group1 + group2) if paired else group1
             df.iloc[:, 1:] = clr_transformation(df.iloc[:, 1:],
                                                 clr_group1 if experiment == "diff" else df.columns[1:].tolist(),
                                                 [] if paired else group2, gamma = gamma,
                                                 custom_scale = 0 if paired else custom_scale,
-                                                random_state = random_state)
+                                                random_state = random_state).to_numpy()
     if motifs:
         # Motif extraction and quantification
         df_org = quantify_motifs(df_org, feature_set = feature_set, custom_motifs = custom_motifs)
@@ -1050,7 +1051,7 @@ def get_differential_expression(
         # Testing differential expression of each set/cluster
         for cluster in clusters:
             if len(cluster) > 1:
-                cluster = list(cluster)
+                cluster = [g for g in df.index if g in cluster]  # a set iterates in string-hash order, which changes with every interpreter, so the member order, and with it the multivariate statistics down to the last bits, was not reproducible even with random_state
                 glycans.append(cluster)
                 gp1, gp2 = df_a.loc[cluster, :], df_b.loc[cluster, :]
                 mean_abundance_c.append(mean_abundance.loc[cluster].mean())
@@ -1376,7 +1377,7 @@ def get_glycanova(
 ) -> tuple[GlycoDataFrame, dict[
     str, pd.DataFrame]]:  # (ANOVA results with F-stats and omega-squared effect sizes, post-hoc results)
     "Performs one-way ANOVA with omega-squared effect size calculation and optional Tukey's HSD post-hoc testing on glycomics data across multiple groups"
-    from scipy.stats import tukey_hsd
+    from scipy.stats import studentized_range
     grouped_BH = (motifs or glycoproteomics) if grouped_BH is None else grouped_BH
     if groups is None and isinstance(df, GlycoDataFrame) and df._contrasts:
         groups = list(df.groups)
@@ -1417,19 +1418,27 @@ def get_glycanova(
         p_values = f.sf(f_values, len(ug) - 1, dfp)
     results = list(zip(df.index, f_values, p_values))
     if posthoc:
-        ug_ph = np.unique(garr)
+        ug_ph, srd = np.unique(garr), {}
+        iu = np.triu_indices(len(ug_ph), k = 1)
         for i, glycan in enumerate(df.index):
             if p_values[i] < alpha:
                 cols_ph = [X[i][(garr == g) & np.isfinite(X[i])] for g in ug_ph]
                 if min(len(c) for c in cols_ph) < 2:
-                    continue  # tukey_hsd has no nan_policy, so an unmeasured cell would turn every pairwise p-value into NaN
-                res_ph = tukey_hsd(*cols_ph)
-                ci_ph = res_ph.confidence_interval(1 - alpha)
+                    continue  # Tukey's HSD has no nan_policy, so an unmeasured cell would turn every pairwise p-value into NaN
+                # Tukey's HSD computed as scipy.stats.tukey_hsd does, except that the studentized range, a numerical double integral per cell, is only integrated for the pairs reported instead of the full k x k matrix, and its critical value, which depends only on the design, once per design instead of once per glycan
+                n_ph = np.asarray([c.size for c in cols_ph])
+                dof = np.sum(n_ph) - len(ug_ph)
+                mse = np.sum(np.asarray([np.var(c, ddof = 1) for c in cols_ph]) * (n_ph - 1)) / dof
+                se_ph = np.broadcast_to(np.sqrt((2 / n_ph[0] if np.unique(n_ph).size == 1 else 1 / n_ph + 1 / n_ph[None].T) * mse / 2), (len(ug_ph),) * 2)
+                means_ph = np.asarray([np.mean(c) for c in cols_ph])
+                md = (means_ph[None].T - means_ph)[iu]
+                pv = studentized_range.sf(np.abs(md) / se_ph[iu], len(ug_ph), dof)
+                if dof not in srd:
+                    srd[dof] = studentized_range.ppf(1 - alpha, len(ug_ph), dof)
+                rad = srd[dof] * se_ph[iu]
                 posthoc_results[glycan] = pd.DataFrame(
-                    [{'group1': ug_ph[a], 'group2': ug_ph[b], 'meandiff': -res_ph.statistic[a, b],
-                      'p-adj': res_ph.pvalue[a, b], 'lower': -ci_ph.high[a, b], 'upper': -ci_ph.low[a, b],
-                      'reject': res_ph.pvalue[a, b] < alpha}
-                     for a in range(len(ug_ph)) for b in range(a + 1, len(ug_ph))])
+                    [{'group1': ug_ph[a], 'group2': ug_ph[b], 'meandiff': -md[j], 'p-adj': pv[j], 'lower': -(md[j] + rad[j]),
+                      'upper': -(md[j] - rad[j]), 'reject': pv[j] < alpha} for j, (a, b) in enumerate(zip(*iu))])
     df_out = GlycoDataFrame(results, columns = ["Glycan", "F statistic", "p-val"])
     dag = df_org.attrs.get('motif_dag') if motifs or glycoproteomics else None
     if grouped_BH:
@@ -1736,9 +1745,9 @@ def get_jtk(
         elif transform != "Nothing":
             raise ValueError("Only ALR and CLR are valid transforms for now.")
     results = []
-    for _, row in df.iterrows():
-        p_val, period, phase, tau = jtk.test(row.iloc[1:].values.astype(float))
-        results.append([row.iloc[0], p_val, period, phase, abs(tau)])
+    for name, values in zip(df.iloc[:, 0].tolist(), df.iloc[:, 1:].to_numpy(dtype = float)):  # plain rows instead of a mixed-dtype Series per iterrows step
+        p_val, period, phase, tau = jtk.test(values)
+        results.append([name, p_val, period, phase, abs(tau)])
     df_out = GlycoDataFrame(results,
                             columns = ['Molecule_Name', 'Adjusted_P_value', 'Period_Length', 'Lag_Phase', 'Amplitude'])
     if grouped_BH and dag is not None:
@@ -1803,9 +1812,10 @@ def get_biodiversity(
     # Sample-size aware alpha via Bayesian-Adaptive Alpha Adjustment
     alpha = get_alphaN(len(group_sizes))
     if 'alpha' in metrics:
-        unique_counts = df_org.apply(sequence_richness)
-        shan_div = df_org.apply(shannon_diversity_index)
-        simp_div = df_org.apply(simpson_diversity_index)
+        per_sample = np.ascontiguousarray(df_org.to_numpy(dtype = float).T)  # one contiguous row per sample, so each index sees exactly the column DataFrame.apply handed it, minus a Series construction per sample
+        unique_counts = pd.Series([sequence_richness(v) for v in per_sample], index = df_org.columns)
+        shan_div = pd.Series([shannon_diversity_index(v) for v in per_sample], index = df_org.columns)
+        simp_div = pd.Series([simpson_diversity_index(v) for v in per_sample], index = df_org.columns)
         a_df = pd.DataFrame({'species_richness': unique_counts,
                              'shannon_diversity': shan_div, 'simpson_diversity': simp_div}).T
         if circadian:

@@ -12,7 +12,7 @@ try:
     from torch.utils.data import Dataset
     from torch_geometric.loader import DataLoader
     from torch_geometric.utils.convert import from_networkx
-    from torch_geometric.data import HeteroData
+    from torch_geometric.data import Data, HeteroData
     from torch_geometric.transforms.base_transform import BaseTransform
 except ImportError:
     raise ImportError("<torch or torch_geometric missing; did you do 'pip install glycowork[ml]'?>")
@@ -73,7 +73,13 @@ def dataset_to_graphs(glycan_list: list[str], # list of IUPAC-condensed glycan s
     for glycan, label in zip(glycan_list, labels):
         if glycan not in glycan_cache:
             nx_graph = glycan_to_nxGraph(glycan, libr = libr)
-            pyg_data = from_networkx(nx_graph)
+            nodes = list(nx_graph.nodes(data = True))
+            if not nodes:
+                pyg_data = from_networkx(nx_graph)
+            else:  # from_networkx fills edge_index one element at a time and tries torch.as_tensor on every attribute, which dominated this loop; it also rejected the graph of an anchored floating bit, whose 'anchors' spec sits on one node only
+                idx = {n: i for i, (n, _) in enumerate(nodes)}
+                pyg_data = Data(edge_index = torch.tensor([[idx[u] for u, _ in nx_graph.edges()], [idx[v] for _, v in nx_graph.edges()]], dtype = torch.long),
+                                labels = torch.tensor([d['labels'] for _, d in nodes]), string_labels = [d['string_labels'] for _, d in nodes], num_nodes = len(nodes))
             glycan_cache[glycan], pyg_data = pyg_data, pyg_data.clone()
         else:
             # Reuse cached data for duplicate glycan

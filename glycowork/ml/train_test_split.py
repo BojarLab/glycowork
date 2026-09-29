@@ -2,6 +2,7 @@ from glycowork.motif.processing import canonicalize_iupac
 from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
 import copy
 import random
+import numpy as np
 import pandas as pd
 
 
@@ -42,13 +43,10 @@ def hierarchy_filter(df_in: pd.DataFrame, # dataframe of glycan sequences and ta
     df.drop([c for c in rank_list if c in df.columns], axis = 1, inplace = True)
     # Get unique classes in rank
     class_list = sorted(set(df[rank].values.tolist()) - {'undetermined'})
-    temp = []
-    # For each class in rank, get unique set of glycans
-    for classy in class_list:
-        t = df[df[rank] == classy]
-        t = t.drop_duplicates(col, keep = 'first')
-        temp.append(t)
-    df = pd.concat(temp).reset_index(drop = True)
+    # For each class in rank, get unique set of glycans; one stable sort by class replaces a full-frame mask per class, which was quadratic at Genus/Species level
+    order = {c: k for k, c in enumerate(class_list)}
+    df = df[[c in order for c in df[rank].tolist()]].drop_duplicates([rank, col], keep = 'first')
+    df = df.iloc[np.argsort([order[c] for c in df[rank].tolist()], kind = 'stable')].reset_index(drop = True)
     # Only keep classes in rank with minimum number of glycans
     counts = df[rank].value_counts()
     allowed_classes = counts.index[counts >= min_seq].tolist()

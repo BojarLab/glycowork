@@ -5,7 +5,7 @@ import re
 from random import sample
 from importlib import resources
 from collections import Counter, defaultdict
-from functools import reduce
+from functools import lru_cache, reduce
 
 from glycowork.glycan_data import loader
 from glycowork.glycan_data.loader import lib, unwrap, Hex, dHex, HexA, HexN, HexNAc, Pen, linkages, multireplace
@@ -33,10 +33,13 @@ _SPECIAL_MODS = {
 }
 _VALID_COMPONENTS = {'Hex', 'dHex', 'HexNAc', 'HexN', 'HexA', 'Neu5Ac', 'Neu5Gc', 'Kdn', 'Pen', 'Me', 'S', 'P', 'PCho', 'PEtN', 'Ac', '-H2O', '+N3', '-OH'}
 _COMPOSITION_INDEX = {}
+_MZ_POOL = {}  # (kingdom, glycan_class) -> (source frame, unique composition item-tuples) for the default mz_to_composition database
+_MASS_CACHE = {}  # (composition item-tuple, mass_value, sample_prep, modification) -> composition_to_mass result
 
 with resources.files("glycowork.motif").joinpath("mz_to_composition.csv").open(encoding = 'utf-8-sig') as f:
     mapping_file = pd.read_csv(f)
 mass_dict = dict(zip(mapping_file.composition, mapping_file["underivatized_monoisotopic"]))
+_MASS_DICTS = {col: dict(zip(mapping_file.composition, mapping_file[col])) for col in mapping_file.columns[1:]} | {"underivatized_monoisotopic": mass_dict}
 HYDROGEN_MASS = 1.007825
 ELECTRON_MASS = 0.000548580
 PROTON_MASS = HYDROGEN_MASS - ELECTRON_MASS  # charge carrier; the H atom is 0.55 mDa heavier
@@ -136,8 +139,9 @@ def get_stem_lib(libr: dict[str, int] # Dictionary mapping glycoletters to indic
 
 stem_lib = get_stem_lib(lib)
 _STEM_LIB = stem_lib
-_STEM_LIB_SORTED = sorted(_STEM_LIB.keys(), key = len, reverse = True)
 _STEM_LIB_VALUES = set(_STEM_LIB.values())
+_STEM_LIB_RANK = {k: (-len(k), i) for i, k in enumerate(_STEM_LIB) if '-' not in k}  # application order of stemify_glycan: longest first, ties in dict order
+_CUSTOM_STEM = [None, None, None]  # (items, rank, clean values) of the last custom stem_lib passed to stemify_glycan
 
 
 def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
@@ -151,14 +155,20 @@ def stemify_glycan(glycan: str, # Glycan in IUPAC-condensed format
     if '(' not in glycan:
         return get_core(glycan)
     if stem_lib is _STEM_LIB:
-        sorted_keys, clean_values = _STEM_LIB_SORTED, _STEM_LIB_VALUES
-    else:
-        sorted_keys, clean_values = sorted(stem_lib.keys(), key = len, reverse = True), set(stem_lib.values())
-    for key in sorted_keys:
-        if key in glycan and '-' not in key:
-            glycan = glycan.replace(key, stem_lib[key])
-            if set(min_process_glycans([glycan])[0]).issubset(clean_values):
-                return glycan
+        rank, clean_values = _STEM_LIB_RANK, _STEM_LIB_VALUES
+    else:  # derived lookups of a custom stem_lib are kept for as long as its content is unchanged, as stemify_dataset passes the same one for every glycan
+        if _CUSTOM_STEM[0] != (items := list(stem_lib.items())):
+            _CUSTOM_STEM[:] = [items, {k: (-len(k), i) for i, (k, _) in enumerate(items) if '-' not in k},
+                               set(stem_lib.values())]
+        rank, clean_values = _CUSTOM_STEM[1], _CUSTOM_STEM[2]
+    pos = (float('-inf'),)
+    # Apply keys longest first, each time the next one occurring in the current glycan; glycoletters never span a bracket, so only in-token substrings are looked up
+    while cands := [(r, s) for t in set(re.split(r'[()\[\]{}]', glycan)) for i in range(len(t)) for j in
+                    range(i + 1, len(t) + 1) if (r := rank.get(s := t[i:j])) and r > pos]:
+        pos, key = min(cands)
+        glycan = glycan.replace(key, stem_lib[key])
+        if set(min_process_glycans([glycan])[0]).issubset(clean_values):
+            return glycan
     return glycan
 
 
@@ -200,13 +210,16 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
                       mass_tag: float | None = None, # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA, 219.21 for 2AB+procA), subtracted from mz_value
                       ) -> list[dict[str, int]]: # List of matching compositions
     """Map m/z value to matching monosaccharide composition"""
-    if df_use is None:
-        if glycan_class == "all":
-            df_use = loader.df_glycan[loader.df_glycan.Kingdom.apply(lambda x: kingdom in x)]
-        else:
-            df_use = loader.df_glycan[(loader.df_glycan.glycan_type == glycan_class) & (loader.df_glycan.Kingdom.apply(lambda x: kingdom in x))]
-    elif glycan_class != "all":
-        df_use = df_use[df_use.glycan_type == glycan_class] if 'glycan_type' in df_use.columns else df_use
+    if df_use is None:  # the default pool is filtered from SugarBase once per kingdom/class; re-filtered whenever the source frame has been swapped out
+        source = loader.df_glycan
+        if (entry := _MZ_POOL.get((kingdom, glycan_class))) is None or entry[0] is not source:
+            keep = source.Kingdom.apply(lambda x: kingdom in x) if glycan_class == "all" else (source.glycan_type == glycan_class) & (source.Kingdom.apply(lambda x: kingdom in x))
+            entry = _MZ_POOL[(kingdom, glycan_class)] = (source, list(dict.fromkeys(tuple(d.items()) for d in source.Composition[keep])))
+        comp_pool = entry[1]
+    else:
+        if glycan_class != "all":
+            df_use = df_use[df_use.glycan_type == glycan_class] if 'glycan_type' in df_use.columns else df_use
+        comp_pool = dict.fromkeys(tuple(d.items()) for d in df_use.Composition)
     if filter_out is None:
         filter_out = set()
     if deprioritized is None:
@@ -219,10 +232,9 @@ def mz_to_composition(mz_value: float, # m/z value from mass spec
     # Theoretical m/z offset for proton ionization: [M-H]- or [M+H]+
     ion_offset = -PROTON_MASS if max_charge < 0 else PROTON_MASS
     tol = mass_tolerance if tolerance_unit.lower() == "da" else mz_value * mass_tolerance / 1e6
-    comp_pool = [dict(t) for t in dict.fromkeys(tuple(d.items()) for d in df_use.Composition)]
-    masses = [(comp, composition_to_mass(comp, mass_value = mass_value, sample_prep = sample_prep,
-                                         modification = modification)) for comp in comp_pool if
-              not filter_out.intersection(comp.keys())]
+    masses = [(dict(t), _MASS_CACHE[key] if (key := (t, mass_value, sample_prep, modification)) in _MASS_CACHE else
+               _MASS_CACHE.setdefault(key, composition_to_mass(dict(t), mass_value = mass_value, sample_prep = sample_prep, modification = modification)))
+              for t in comp_pool if filter_out.isdisjoint(k for k, _ in t)]
     # Ionization scenarios in Occam order (lower charge first, proton before adduct), each generalized to z protons or one adduct plus z-1 protons
     scenarios = [('proton', z) for z in range(1, abs(max_charge) + 1)] + (
         [('adduct', z) for z in range(1, abs(max_charge) + 1)] if "adduct" in extras else [])
@@ -251,16 +263,12 @@ def match_composition_relaxed(composition: dict[str, int], # Dictionary indicati
                               df_use: pd.DataFrame | None = None # Custom glycan database
                               ) -> list[str]: # List of matching glycans
     """Map coarse-grained composition to matching glycans"""
-    if df_use is None:
-        key = (glycan_class, kingdom)
-        source = loader.df_glycan
-        df_use = source[(source.glycan_type == glycan_class) & (source.Kingdom.apply(lambda x: kingdom in x))]
-    else:
-        key = id(df_use)
-        source = df_use
+    key, source = ((glycan_class, kingdom), loader.df_glycan) if df_use is None else (id(df_use), df_use)
     # Index the database by composition once; re-index whenever the source frame has been swapped out
     entry = _COMPOSITION_INDEX.get(key)
     if entry is None or entry[0] is not source:
+        if df_use is None:  # SugarBase is only filtered when its index has to be (re)built, not on every lookup
+            df_use = source[(source.glycan_type == glycan_class) & (source.Kingdom.apply(lambda x: kingdom in x))]
         index = defaultdict(list)
         for glycan in df_use.glycan.values.tolist():
             index[frozenset(glycan_to_composition(glycan).items())].append(glycan)
@@ -348,7 +356,7 @@ def mz_to_structures(mz_list: list[float], # List of precursor masses
                      mass_tag: float | None = None # Mass in Da of a reducing-end label (e.g., 137.14 for 2AA), subtracted from each m/z before matching
                      ) -> pd.DataFrame | list: # DataFrame of structures x intensities or empty list
     """Map precursor masses to structures, supporting accompanying relative intensities"""
-    if df_use is None:
+    if df_use is None and glycan_class == 'all':  # every real class is left to the cached default pools of mz_to_composition and match_composition_relaxed, which filter identically
         df_use = loader.df_glycan[(loader.df_glycan.glycan_type == glycan_class) & (loader.df_glycan.Kingdom.apply(lambda x: kingdom in x))]
     if filter_out is None:
         filter_out = set()
@@ -392,15 +400,23 @@ def mask_rare_glycoletters(glycans: list[str], # List of IUPAC-condensed glycans
          for x, count in Counter(rare_elements[i]).items() if count <= thresholds[i]}
         for i in range(2)
     ]
-    out = []
+    out, rare_monos = [], list(rare_dict[0])
+    rank = {k: i for i, k in enumerate(rare_monos)}
     # For each glycan, check whether they have rare monosaccharides/linkages and mask them
     for glycan in glycans:
-        for k, v in rare_dict[0].items():
-            # Replace rare monosaccharides
-            if k in glycan and f'-{k}' not in glycan:
-                glycan = glycan.replace(f'{k}(', f'{v}(')
-                if glycan.endswith(k):
-                    glycan = glycan[:-len(k)] + v
+        pos, todo = -1, None
+        # Replace rare monosaccharides, visiting (in dict order) only those occurring in the glycan, re-collected after every change; glycoletters never span a bracket, so in-token substrings suffice
+        while todo is None or todo:
+            if todo is None:
+                todo = sorted({r for t in set(re.split(r'[()\[\]{}]', glycan)) for i in range(len(t)) for j in range(i + 1, len(t) + 1) if (r := rank.get(t[i:j], -1)) > pos})
+                continue
+            pos = todo.pop(0)
+            k, v = rare_monos[pos], rare_dict[0][rare_monos[pos]]
+            if f'-{k}' not in glycan:
+                masked = glycan.replace(f'{k}(', f'{v}(')
+                masked = masked[:-len(k)] + v if masked.endswith(k) else masked
+                if masked != glycan:
+                    glycan, todo = masked, None
         # Replace rare linkages
         for k, v in rare_dict[1].items():
             glycan = glycan.replace(f'({k})', f'({v})')
@@ -408,6 +424,7 @@ def mask_rare_glycoletters(glycans: list[str], # List of IUPAC-condensed glycans
     return out
 
 
+@lru_cache(maxsize = 4096)
 def map_to_basic(glycoletter: str, # Monosaccharide or linkage
                  obfuscate_ptm: bool = True # Whether to remove PTM position specificity
                  ) -> str: # Base monosaccharide/linkage
@@ -480,7 +497,7 @@ def glycan_to_composition(glycan: str, # Glycan in IUPAC-condensed format
         raise ValueError(
             f"Cannot map the glycoletter(s) {unknown} of glycan '{glycan}' onto a core monosaccharide; check their spelling or pass an extended stem_libr via get_stem_lib(expand_lib(lib, [glycan])).")
     composition = Counter(sorted(
-        [map_to_basic(stem_libr.get(key := re.sub(r"/\d", "", k), get_core(key)) if '/' in k else stem_libr[k]) for k in
+        [map_to_basic((stem_libr[key] if (key := re.sub(r"/\d", "", k)) in stem_libr else get_core(key)) if '/' in k else stem_libr[k]) for k in
          letters]))
     composition.update(diff_moieties)
     for mod in ('Me', 'PCho', 'PEtN'):
@@ -528,7 +545,7 @@ def composition_to_mass(dict_comp_in: dict[str, int], # Composition dictionary o
     """Calculate theoretical mass from composition"""
     dict_comp = dict_comp_in.copy()
     mass_key = f"{sample_prep}_{mass_value}"
-    mass_dict_in = mass_dict if mass_key == "underivatized_monoisotopic" else dict(zip(mapping_file.composition, mapping_file[mass_key]))
+    mass_dict_in = _MASS_DICTS[mass_key] if mass_key in _MASS_DICTS else dict(zip(mapping_file.composition, mapping_file[mass_key]))
     for old_key, new_key in {'S': 'Sulphate', 'P': 'Phosphate', 'Me': 'Methyl'}.items():
         if old_key in dict_comp:
             dict_comp[new_key] = dict_comp.pop(old_key)

@@ -4325,6 +4325,10 @@ def test_plot_glycans_excel(tmp_path):
     assert (test_dir / "out.xlsx").exists()
     with pytest.raises(ValueError):
         plot_glycans_excel(df, str(test_dir / "out.csv"))
+    # An existing folder whose name contains a dot is still a folder
+    (tmp_path / "run.v2").mkdir()
+    plot_glycans_excel(df, str(tmp_path / "run.v2"))
+    assert (tmp_path / "run.v2" / "output.xlsx").exists()
     # A cell holding a list of glycans is drawn from its first entry
     plot_glycans_excel(pd.DataFrame({'Glycans': [['GlcNAc(b1-4)GlcA']], 'Values': [1]}), str(tmp_path / "listcell"))
     # ...and one that cannot be drawn names its row

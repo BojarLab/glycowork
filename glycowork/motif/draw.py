@@ -804,7 +804,7 @@ def get_coordinates_and_labels(
         parsed_sugars[idx] = (normalized_label, ('!' + modification_text) if negated else modification_text)
     root = max(graph.nodes())
     leaves = [n for n in graph.nodes() if graph.out_degree(n) == 0 and n != root] if len(graph) > 1 else [0]
-    main_chain = nx.shortest_path(graph.reverse(), leaves[0], root) if leaves else []
+    main_chain = nx.shortest_path(graph.reverse(copy = False), leaves[0], root) if leaves else []
     main_label_sugar = [node for node in main_chain if node % 2 == 0]
     main_entries = [parsed_sugars[node] for node in main_chain if node % 2 == 0]
     main_sugar, main_sugar_modification = map(list, zip(*reversed(main_entries)))
@@ -2301,11 +2301,11 @@ def plot_glycans_excel(
     image_column_number = df.columns.tolist().index("SNFG") + 1
     # Convert df_out to Excel; a directory gets the workbook as 'output.xlsx', an .xlsx path names it
     out = Path(folder_filepath)
-    if out.suffix and out.suffix.lower() != '.xlsx':
+    if out.suffix and out.suffix.lower() != '.xlsx' and not out.is_dir():  # an existing folder such as 'run.v2' is still a folder
         raise ValueError(
             f"folder_filepath has to be a directory (the workbook is then written as 'output.xlsx' inside it) "
             f"or an .xlsx file (got '{folder_filepath}').")
-    out = out if out.suffix else out / "output.xlsx"
+    out = out if out.suffix and not out.is_dir() else out / "output.xlsx"
     out.parent.mkdir(parents = True, exist_ok = True)
     writer = pd.ExcelWriter(out, engine = "openpyxl")
     df.to_excel(writer, index = False)

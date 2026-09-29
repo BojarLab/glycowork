@@ -159,7 +159,7 @@ class MissForest:
         mad_c = ((logX - med_c).abs().median(axis = 0) * 1.4826).replace(0, np.nan).fillna(logX.std(axis = 0, ddof = 1)).fillna(1.0)
         b = norm.cdf(-1.6)
         mnar = pd.DataFrame(np.nan, index = X.index, columns = X.columns, dtype = float)
-        for col in X.columns:
+        for col in X.columns[X_nan.any().values]:  # a column without missing cells gets no censored draws, and on a wide cohort looking that up per column dominated this loop
             idx = X_nan.index[X_nan[col].values]
             if not len(idx):
                 continue
@@ -182,9 +182,9 @@ class MissForest:
                 for col in phase_cols:
                     X_transform[col] = X[col].fillna(phase_medians)
             # Fall back to global row median if all same-phase values are also NaN
-            X_transform = X_transform.apply(lambda col: col.fillna(row_medians))
+            X_transform = X_transform.where(X_transform.notna(), row_medians, axis = 0).copy()
         else:
-            X_transform = X.apply(lambda col: col.fillna(row_medians))
+            X_transform = X.where(~X_nan, row_medians, axis = 0).copy()  # the row-aligned fill in one pass instead of one fillna per sample column; the copy consolidates the result into one block, as apply did, since downstream reductions depend on that layout
         # Start the iterations from the MNAR-aware prior, so the forest is not anchored at the far-too-high feature median for censored values
         X_transform = X_transform.mask(X_nan, pd.DataFrame(
             np.exp2(wv * np.log2(mnar.values) + (1 - wv) * np.log2(np.maximum(X_transform.values, 1e-9))),
@@ -246,7 +246,7 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
     colname = df.columns[0]
     glycans = df[colname]
     df = df.iloc[:, 1:]
-    df = df.astype(float)
+    df = df.astype(float).copy()  # a deep copy consolidates the one-block-per-column frame pandas 3 reads a csv into, which every frame-wide operation below and in MissForest would otherwise loop over
     if protect is not None:
         protect = protect.set_axis(df.index).set_axis(df.columns, axis = 1).astype(bool)
         df = df.mask(
@@ -256,8 +256,9 @@ def impute_and_normalize(df_in: pd.DataFrame, # dataframe with glycan sequences 
         group_data = df[group]
         all_zero_mask = (group_data.fillna(0) == 0).all(axis = 1) & group_data.notna().any(
             axis = 1)  # only a group that was measured as all-zero earns a floor, not one that was never measured
-        df.loc[all_zero_mask, group] = df.loc[
-                                           all_zero_mask, group] + floor  # observed cells here are exactly 0 so this is the old assignment, but NaN + floor stays NaN
+        if all_zero_mask.any():  # an empty selection changes nothing, but assigning to it still costs a column-by-column pass
+            df.loc[all_zero_mask, group] = df.loc[
+                                               all_zero_mask, group] + floor  # observed cells here are exactly 0 so this is the old assignment, but NaN + floor stays NaN
     old_cols = df.columns if isinstance(colname, int) else []
     if len(old_cols):
         df.columns = df.columns.astype(str)
@@ -296,6 +297,10 @@ class JTKTest:
         self.timepoint_periods = np.array(periods) / interval
         self.variance = (self.n**2 * (2 * self.n + 3) - (squared_sizes * (2 * self.group_sizes + 3)).sum()) / 72
         self.waveforms = self._generate_reference_waveforms(timepoints)
+        # The (period, phase) pairs test() scores, in its order, with their waveforms stacked so that one product scores them all
+        self._candidates = [(period, phase) for period in self.periods for phase in range(len(self.waveforms[period])) if not (
+                phase > 0 and (period + (phase * self.interval) in self.periods or period - (phase * self.interval) in self.periods))]
+        self._candidate_waveforms = np.array([self.waveforms[period][phase] for period, phase in self._candidates])
 
     def _generate_reference_waveforms(self, timepoints: int) -> dict[int, list[np.ndarray]]:
         timerange = np.arange(timepoints) * self.interval
@@ -316,21 +321,18 @@ class JTKTest:
     def test(self, values: np.ndarray) -> tuple[float, int, int, float]:
         signs = np.sign(np.subtract.outer(values, values))[np.tril_indices(len(values), k = -1)]
         best_stats = (1.0, self.periods[0], 0, 0)
-        for period in self.periods:
-            waveforms_period = self.waveforms[period]
-            for phase, waveform_phase in enumerate(waveforms_period):
-                if phase > 0 and (period+(phase*self.interval) in self.periods or period-(phase*self.interval) in self.periods):
-                    continue
-                S = (signs * waveform_phase).sum()
-                if S == 0:
-                    continue
-                jtk = (abs(S) + self.max_stat) / 2
-                p_val = 2 * norm.cdf(-(jtk - 0.5), -self.max_stat/2, np.sqrt(self.variance))
-                if p_val < best_stats[0]:
-                    # The reference waveform is shifted backwards, and |S| makes an antiphase match score identically, so the reported lag has to be un-mirrored and offset by half a period when S is negative
-                    best_stats = (p_val, period,
-                                  (period - phase * self.interval - (0 if S > 0 else period / 2)) % period,
-                                  S / self.max_stat)
+        # Signs and waveforms are all -1, 0, or 1, so every S is an exact integer whatever the summation order, and scoring all candidates in one product and one cdf call gives the per-candidate values bit for bit
+        S_all = self._candidate_waveforms @ signs
+        scored = np.flatnonzero(S_all != 0)
+        p_all = 2 * norm.cdf(-((np.abs(S_all[scored]) + self.max_stat) / 2 - 0.5), -self.max_stat/2, np.sqrt(self.variance))
+        if (p_all < best_stats[0]).any():
+            # The first candidate reaching the minimum, as the strict < of a sequential scan keeps
+            j = np.argmin(np.where(p_all < best_stats[0], p_all, np.inf))
+            (period, phase), S = self._candidates[scored[j]], S_all[scored[j]]
+            # The reference waveform is shifted backwards, and |S| makes an antiphase match score identically, so the reported lag has to be un-mirrored and offset by half a period when S is negative
+            best_stats = (p_all[j], period,
+                          (period - phase * self.interval - (0 if S > 0 else period / 2)) % period,
+                          S / self.max_stat)
         return best_stats
 
 
@@ -469,7 +471,7 @@ def replace_outliers_winsorization(df: pd.DataFrame, # features as rows, all but
     "Replaces outlier values using Winsorization"
     if cap_side not in ('both', 'lower', 'upper'):
         raise ValueError("cap_side must be 'both', 'lower', or 'upper'")
-    num = df.select_dtypes('number')
+    num = df.set_axis(range(df.shape[1]), axis = 1).select_dtypes('number')  # positional labels, so the numeric columns can be written back by position below
     V = num.to_numpy(float)
     n = V.shape[1]
     nan_mask = np.isnan(V)
@@ -485,7 +487,7 @@ def replace_outliers_winsorization(df: pd.DataFrame, # features as rows, all but
     out = np.clip(V, lower, upper)
     out[nan_mask] = np.nan
     res = df.copy()
-    res[num.columns] = out
+    res.isetitem(num.columns.tolist(), out)  # replaces the columns like res[cols] = out did, but as one block instead of one assignment per column, which dominated on wide cohorts
     return res
 
 
@@ -638,11 +640,14 @@ def anosim(df: pd.DataFrame, # square distance matrix
     if len(set(group_labels)) < 2 or max(Counter(group_labels).values()) < 2:
         raise ValueError(
             f"anosim needs at least two groups and at least one group with more than one sample, otherwise within- or between-group distances are empty; got {dict(Counter(group_labels))}.")
-    condensed_dist = df.values[np.tril_indices(n, k = -1)]
+    tril = np.tril_indices(n, k = -1)
+    condensed_dist = df.values[tril]
     ranks = rankdata(condensed_dist, method = 'average')
     # Boolean array for within and between group comparisons
     group_matrix = np.equal.outer(group_labels, group_labels)
-    within_group_indices = group_matrix[np.tril_indices(n, k = -1)]
+    within_group_indices = group_matrix[tril]
+    # Shuffling positions draws the same swaps as shuffling the labels themselves, and comparing integer group codes at the lower triangle's endpoints tests only the pairs that are used, instead of rebuilding the index arrays and the full n x n label matrix per permutation
+    codes, order = pd.factorize(np.asarray(group_labels))[0], list(range(n))
     # Mean ranks for within and between groups
     mean_rank_within = np.mean(ranks[within_group_indices])
     mean_rank_between = np.mean(ranks[~within_group_indices])
@@ -652,9 +657,9 @@ def anosim(df: pd.DataFrame, # square distance matrix
     # Permutation test
     permuted_Rs = np.zeros(permutations)
     for i in range(permutations):
-        local_rng.shuffle(group_labels)
-        permuted_group_matrix = np.equal.outer(group_labels, group_labels)
-        permuted_within_group_indices = permuted_group_matrix[np.tril_indices(n, k = -1)]
+        local_rng.shuffle(order)
+        permuted_codes = codes[order]
+        permuted_within_group_indices = permuted_codes[tril[0]] == permuted_codes[tril[1]]
         perm_mean_rank_within = np.mean(ranks[permuted_within_group_indices])
         perm_mean_rank_between = np.mean(ranks[~permuted_within_group_indices])
         permuted_Rs[i] = (perm_mean_rank_between - perm_mean_rank_within) / divisor
@@ -720,28 +725,28 @@ def alr_transformation(df: pd.DataFrame, # dataframe with features as rows and s
                        ) -> pd.DataFrame: # ALR-transformed dataframe
     "Given a reference feature, performs additive log-ratio transformation (ALR) on the data"
     local_rng = np.random.default_rng(random_state) if random_state is not None else rng
-    reference_values = df.iloc[reference_component_index, :]
+    # Plain arrays, since get_procrustes_scores calls this once per feature and label-aligned pandas arithmetic dominated that loop
+    X = df.to_numpy(dtype = float)
+    reference_values = X[reference_component_index]
     alr_transformed = np.zeros(df.shape, dtype = float)
     group1i = [df.columns.get_loc(c) for c in group1]
     group2i = [df.columns.get_loc(c) for c in group2] if group2 else group1i
     if not isinstance(custom_scale, dict):
         if custom_scale:
-            alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = len(group1i)), axis = 1)
+            alr_transformed[:, group1i] = X[:, group1i] - (reference_values[group1i] - norm.rvs(loc = np.log2(1), scale = gamma, random_state = local_rng, size = len(group1i)))
         else:
-            alr_transformed[:, group1i] = df.iloc[:, group1i].subtract(reference_values.iloc[group1i])
+            alr_transformed[:, group1i] = X[:, group1i] - reference_values[group1i]
         scale_adjustment = np.log2(custom_scale) if custom_scale else 0
-        alr_transformed[:, group2i] = df.iloc[:, group2i].subtract(reference_values.iloc[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, random_state = local_rng, size = len(group2i)), axis = 1)
+        alr_transformed[:, group2i] = X[:, group2i] - (reference_values[group2i] - norm.rvs(loc = scale_adjustment, scale = gamma, random_state = local_rng, size = len(group2i)))
     else:
         gamma = max(gamma, 0.1)
         for idx in range(df.shape[1]):
             group_id = group1[idx] if isinstance(group1[0], int) else group1[idx].split('_')[1]
             scale_factor = custom_scale.get(group_id, 1)
-            reference_adjusted = reference_values.iloc[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = local_rng)
-            alr_transformed[:, idx] = df.iloc[:, idx] - reference_adjusted
-    alr_transformed = pd.DataFrame(alr_transformed, index = df.index, columns = df.columns)
-    alr_transformed = alr_transformed.drop(index = reference_values.name)
-    alr_transformed = alr_transformed.reset_index(drop = True)
-    return alr_transformed
+            reference_adjusted = reference_values[idx] - norm.rvs(loc = np.log2(scale_factor), scale = gamma, random_state = local_rng)
+            alr_transformed[:, idx] = X[:, idx] - reference_adjusted
+    # Drops the reference row by label and resets the index, as .drop(index = ...).reset_index(drop = True) did, and column-major so the frame holds its block in the layout drop's take produced
+    return pd.DataFrame(np.asfortranarray(alr_transformed[~df.index.isin([df.index[reference_component_index]])]), columns = df.columns)
 
 
 def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows and samples as columns
@@ -769,8 +774,10 @@ def get_procrustes_scores(df: pd.DataFrame, # dataframe with features as rows an
             variances = abs(var_group1 - var_group2)
     else:
         variances = abs(df[group1].var(axis = 1))
-    procrustes_corr = [1 - procrustes(ref_matrix.drop(ref_matrix.index[i]),
-                                      alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng))[2] for i in range(df.shape[0])]
+    ref_values = ref_matrix.to_numpy()
+    # Arrays instead of frames, column-major as the frames' values were, since procrustes' column reductions round by memory layout
+    procrustes_corr = [1 - procrustes(np.asfortranarray(ref_values[~ref_matrix.index.isin([ref_matrix.index[i]])]),
+                                      alr_transformation(df, i, group1, group2, gamma = 0.01, custom_scale = custom_scale, random_state = local_rng).to_numpy())[2] for i in range(df.shape[0])]
     return [a / max(b, 1e-8) for a, b in zip(procrustes_corr, variances)], procrustes_corr, variances
 
 
